@@ -1,0 +1,31 @@
+finish randomisation of initial vsids values
+finish assumption (interface)
+
+make a testing framework so that it is easier later to evaluate changes and correctness
+
+only allow the assignments_integer to create predicates
+
+better clause data structure
+binary watches
+custom vectors
+clause minimisation
+
+better watch list data structure
+lazy explanations
+lifting can be problematic given the updates of literals wrt to the domains
+add views for variables
+
+move file reading outside Pumpkin?
+
+add integration with MiniZinc (@Maarten?)
+  this may imply preprocessing of CP models, need to see how to do this properly
+
+clean up copying in the code, and replace with references where appropriate (not sure it would make a difference in the cases that are left)
+  e.g., when passing a predicate or when returning predicates or trail entries
+
+could investigate adding explanation clauses permanently, as learned clauses, or not all. For now we do not add them to the problem.
+
+implement .iter() for propositional conjunction, currently it has an into_iter but it is not working as intended
+
+currently if you create integer variables, do some solving, and then add a propagator over those variables, the bounds of the variables will not be correctly stored
+  this is an exotic use case but could fix this later

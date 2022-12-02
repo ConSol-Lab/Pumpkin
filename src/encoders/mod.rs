@@ -1,0 +1,4 @@
+mod generalised_totaliser_encoder;
+
+pub use generalised_totaliser_encoder::EncodingStatus;
+pub use generalised_totaliser_encoder::GeneralisedTotaliserEncoder;
