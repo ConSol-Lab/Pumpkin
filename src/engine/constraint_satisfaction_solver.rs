@@ -36,7 +36,7 @@ impl ConstraintSatisfactionSolver {
             sat_cp_mediator: SATCPMediator::new(),
             seen: vec![],
             counters: Counters::new(
-                argument_handler.get_integer_argument("num-conflicts-per-restart") as u64,
+                argument_handler.get_integer_argument("num-conflicts-per-restart"),
             ),
             internal_parameters: ConstraintSatisfactionSolverInternalParameters::new(
                 argument_handler,
@@ -190,6 +190,9 @@ impl ConstraintSatisfactionSolver {
         self.stopwatch.reset(time_limit_in_seconds);
         self.sat_data_structures.assumptions = assumptions.to_owned();
         self.seen.resize(num_propositional_variables, false);
+
+        self.counters.num_conflicts_until_restart =
+            self.internal_parameters.num_conflicts_per_restart as i64;
     }
 
     fn solve_internal(&mut self) -> CSPSolverExecutionFlag {
@@ -203,7 +206,7 @@ impl ConstraintSatisfactionSolver {
 
             if self.state.no_conflict() {
                 if self.should_restart() {
-                    self.perform_restart_during_search()
+                    self.backtrack(0);
                 }
 
                 self.sat_data_structures
@@ -350,21 +353,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn should_restart(&self) -> bool {
-        self.counters.num_conflicts_until_restart == 0
-    }
-
-    fn perform_restart_during_search(&mut self) {
-        pumpkin_assert_simple!(self.get_decision_level() > 0);
-
-        self.backtrack(0);
-
-        self.sat_data_structures
-            .shrink_learned_clause_database_if_needed();
-
-        self.counters.num_conflicts_until_restart =
-            self.internal_parameters.num_conflicts_per_restart;
-
-        self.counters.num_conflicts += 1;
+        pumpkin_assert_moderate!(
+            self.counters.num_conflicts_until_restart > 0 || self.get_decision_level() > 0
+        );
+        self.counters.num_conflicts_until_restart <= 0
     }
 
     fn is_conflict_clause_set(&self) -> bool {
@@ -391,6 +383,16 @@ impl ConstraintSatisfactionSolver {
                 &mut self.cp_data_structures.assignments_integer,
             );
             self.cp_propagators[propagator_id].synchronise(&domains);
+        }
+
+        if backtrack_level == 0 {
+            self.sat_data_structures
+                .shrink_learned_clause_database_if_needed();
+
+            self.counters.num_conflicts_until_restart =
+                self.internal_parameters.num_conflicts_per_restart as i64;
+
+            self.counters.num_restarts += 1;
         }
     }
 
@@ -609,7 +611,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         self.counters.num_conflicts += self.state.conflict_detected() as u64;
-        self.counters.num_conflicts_until_restart -= self.state.conflict_detected() as u64;
+        self.counters.num_conflicts_until_restart -= self.state.conflict_detected() as i64;
 
         self.counters.num_propagations +=
             self.sat_data_structures
@@ -815,12 +817,12 @@ struct Counters {
     pub num_conflicts: u64,
     pub num_propagations: u64,
     pub num_unit_clauses_learned: u64,
-    pub num_conflicts_until_restart: u64,
+    pub num_conflicts_until_restart: i64, //in case the solver gets into a chain of conflicts, this value could go get negative
     pub num_restarts: u64,
 }
 
 impl Counters {
-    fn new(num_conflicts_until_restart: u64) -> Counters {
+    fn new(num_conflicts_until_restart: i64) -> Counters {
         Counters {
             num_decisions: 0,
             num_conflicts: 0,
