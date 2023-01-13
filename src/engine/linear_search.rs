@@ -129,6 +129,12 @@ impl LinearSearch {
             }
         }
 
+        //this was introduced to eliminate the randomness caused by the hashmap that is internally used in 'Function'
+        //  hashmaps internally use randomisation when sorting keys, which influences the order in which elements are tranversed when going through all elements in the hashmap
+        //  this can in turn have an impact on the solver since the order in which literals are stored influences the encoding
+        //  todo this can be seen as a temporary solution, need to rethink if there is a better way and whether other hashmaps in the solver can cause similar problems
+        weighted_literals.sort_by_key(|wl| wl.literal.to_u32());
+
         weighted_literals
     }
 }
