@@ -99,7 +99,7 @@ impl Function {
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) -> u64 {
-        let mut value: u64 = 0;
+        let mut value: u64 = self.constant_term;
         //add the contribution of the propositional part
         for term in self.get_weighted_literals() {
             let literal = *term.0;

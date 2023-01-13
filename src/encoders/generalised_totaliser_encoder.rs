@@ -371,7 +371,9 @@ impl GeneralisedTotaliserEncoder {
         new_k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> EncodingStatus {
-        pumpkin_assert_simple!(self.has_encoding() && new_k < self.internal_k);
+        pumpkin_assert_simple!(
+            self.has_encoding() && new_k < self.internal_k + self.unavoidable_violations
+        );
         pumpkin_assert_simple!(self.index_last_added_weighted_literal > 0);
         pumpkin_assert_simple!(self.unavoidable_violations <= new_k); //not an error per-se but in the current implementation it would be odd to have this assert fail
         pumpkin_assert_simple!(

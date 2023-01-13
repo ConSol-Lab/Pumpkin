@@ -50,8 +50,10 @@ impl LinearSearch {
 
             csp_solver.restore_state_at_root();
 
-            let encoding_status =
-                upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
+            let encoding_status = upper_bound_encoder.constrain_at_most_k(
+                best_objective_value - 1 - objective_function.get_constant_term(),
+                csp_solver,
+            );
 
             //in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
