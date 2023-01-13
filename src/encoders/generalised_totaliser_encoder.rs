@@ -6,10 +6,14 @@ use crate::{
     pumpkin_asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
 };
 
+//encodes the constraint \sum w_i x_i <= k
+
+//implementation is done based on the paper:
+//"Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben Martins, and Vasco Manquinho.  CP'15.
 pub struct GeneralisedTotaliserEncoder {
-    initial_weighted_literals: Vec<WeightedLiteral>,
-    internal_k: u64,
-    unavoidable_violations: u64,
+    initial_weighted_literals: Vec<WeightedLiteral>, //original weighted literals as provided by the input function (without any preprocessing)
+    internal_k: u64,      //the 'k' value after subtracting the root fixed cost
+    root_fixed_cost: u64, //internal value that represents the left hands side at the root level
     index_last_added_weighted_literal: usize,
     layers: Vec<Layer>,
     num_clauses_added: usize,
@@ -25,7 +29,7 @@ impl GeneralisedTotaliserEncoder {
         GeneralisedTotaliserEncoder {
             initial_weighted_literals,
             internal_k: u64::MAX,
-            unavoidable_violations: function.get_constant_term(),
+            root_fixed_cost: function.get_constant_term(),
             index_last_added_weighted_literal: usize::MAX,
             layers: vec![],
             num_clauses_added: 0,
@@ -320,9 +324,10 @@ impl GeneralisedTotaliserEncoder {
         //literals that are assigned at the root level can be removed from the encoding
         //  literals that evaluate to false can be ignored
         //  literals that evaluate to true can be removed from consideration, but the k value needs to be updated accordingly
-        //  here we compute the violations cause by literals assigned to true at the root
-        //      note: during initialisation, we took into account the constant term of the function in unavoidable_violations, so here we only need to add the penalties associated with the root violations
-        self.unavoidable_violations += self
+
+        //  here we compute the left hand side value cause by literals assigned to true at the root level
+        //      note: during initialisation, we took into account the constant term of the input function (see 'new'), so here we only need to add the root cost associated with root literals
+        self.root_fixed_cost += self
             .initial_weighted_literals
             .iter()
             .filter_map(|p| {
@@ -336,15 +341,15 @@ impl GeneralisedTotaliserEncoder {
                 }
             })
             .sum::<u64>();
-        //k is then updated to take into account the violations
+
         //  if the violations at the root make the constraint infeasible, report and stop
-        if self.unavoidable_violations > input_k {
+        if self.root_fixed_cost > input_k {
             return None;
         }
-        //  otherwise update k
-        self.internal_k = input_k - self.unavoidable_violations;
+        //k is then updated to take into account the root fixed cost
+        self.internal_k = input_k - self.root_fixed_cost;
 
-        //set unassigned terms whose violation would exceed k
+        //propagate unassigned terms whose violation would exceed k
         for term in &self.initial_weighted_literals {
             if term.weight > self.internal_k
                 && csp_solver
@@ -387,16 +392,16 @@ impl GeneralisedTotaliserEncoder {
         //  the internal_k is computed as input_k - unavoidable_violations
         //  recall that unavoidable violations refer to the constant term in the original function and any violations at the root level
         pumpkin_assert_simple!(
-            self.has_encoding() && new_k - self.unavoidable_violations < self.internal_k,
+            self.has_encoding() && new_k - self.root_fixed_cost < self.internal_k,
             "We expect k will be strictly decreasing!"
         );
         pumpkin_assert_simple!(self.index_last_added_weighted_literal > 0);
-        pumpkin_assert_simple!(self.unavoidable_violations <= new_k); //not an error per-se but in the current implementation it would be odd to have this assert fail
+        pumpkin_assert_simple!(self.root_fixed_cost <= new_k); //not an error per-se but in the current implementation it would be odd to have this assert fail
         pumpkin_assert_simple!(
             !self.layers.is_empty() && self.layers.last().unwrap().nodes.len() == 1
         );
 
-        self.internal_k = new_k - self.unavoidable_violations;
+        self.internal_k = new_k - self.root_fixed_cost;
 
         //the literals in each layer are sorted by weight
         //  this is a by-product of the above implementation
