@@ -42,11 +42,9 @@ impl Pumpkin {
         );
 
         //set phasing saving to an optimistic version, where objective literals are being set to zero
-        let optimistic_phases: Vec<Literal> =
-            LinearSearch::convert_function_into_weighted_literals(
-                &self.objective_function,
-                &self.csp_solver,
-            )
+        let optimistic_phases: Vec<Literal> = self
+            .objective_function
+            .get_function_as_weighted_literals_vector(&self.csp_solver)
             .iter()
             .map(|wl| !wl.literal)
             .collect();

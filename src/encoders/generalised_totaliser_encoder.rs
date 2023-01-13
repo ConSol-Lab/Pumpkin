@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
-    basic_types::{ClauseAdditionOutcome, Literal, WeightedLiteral},
+    basic_types::{ClauseAdditionOutcome, Function, Literal, WeightedLiteral},
     engine::ConstraintSatisfactionSolver,
     pumpkin_asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
 };
@@ -16,11 +16,16 @@ pub struct GeneralisedTotaliserEncoder {
 }
 
 impl GeneralisedTotaliserEncoder {
-    pub fn new(initial_weighted_literals: Vec<WeightedLiteral>) -> GeneralisedTotaliserEncoder {
+    pub fn new(
+        function: &Function,
+        csp_solver: &ConstraintSatisfactionSolver,
+    ) -> GeneralisedTotaliserEncoder {
+        let initial_weighted_literals =
+            function.get_function_as_weighted_literals_vector(csp_solver);
         GeneralisedTotaliserEncoder {
             initial_weighted_literals,
             internal_k: u64::MAX,
-            unavoidable_violations: 0,
+            unavoidable_violations: function.get_constant_term(),
             index_last_added_weighted_literal: usize::MAX,
             layers: vec![],
             num_clauses_added: 0,
@@ -69,6 +74,9 @@ impl GeneralisedTotaliserEncoder {
                 "c initial encoding took {} seconds.",
                 time_start.elapsed().as_secs()
             );
+
+            println!("c encoding detected conflict at the root!");
+
             return EncodingStatus::ConflictDetected;
         }
 
@@ -81,7 +89,7 @@ impl GeneralisedTotaliserEncoder {
 
         //special case when violations cannot exceed k
         //  in this case nothing needs to be done
-        if processed_terms.iter().map(|p| p.weight).sum::<u64>() <= k {
+        if processed_terms.iter().map(|p| p.weight).sum::<u64>() <= self.internal_k {
             println!(
                 "c encoding added {} clauses to the solver.",
                 self.num_clauses_added
@@ -89,6 +97,9 @@ impl GeneralisedTotaliserEncoder {
             println!(
                 "c initial encoding took {} seconds.",
                 time_start.elapsed().as_secs()
+            );
+            println!(
+                "c encoder detected that the constraint is too lose, not totaliser tree needs to be encoded!"
             );
             return EncodingStatus::NoConflictDetected;
         }
@@ -299,18 +310,19 @@ impl GeneralisedTotaliserEncoder {
         input_k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> Option<Vec<WeightedLiteral>> {
-        //note that the code could potentially be implemented more efficiently, e.g., doing initialisation in one loop as opposed to several
+        //note that the code could potentially be implemented more efficiently, e.g., doing initialisation in one loop as opposed to several loops
         //  however not sure if that is a bottleneck
 
         //it may be beneficial to consider negating the literals
         //  for simplicity we ignore this, could revisit later
-        //  in that case when strengthening the constraint incrementality, we would need to take into account whether or not negation took place!
+        //  in that case, when strengthening the constraint incrementality, we would need to take into account whether or not negation took place!
 
         //literals that are assigned at the root level can be removed from the encoding
         //  literals that evaluate to false can be ignored
         //  literals that evaluate to true can be removed from consideration, but the k value needs to be updated accordingly
         //  here we compute the violations cause by literals assigned to true at the root
-        self.unavoidable_violations = self
+        //      note: during initialisation, we took into account the constant term of the function in unavoidable_violations, so here we only need to add the penalties associated with the root violations
+        self.unavoidable_violations += self
             .initial_weighted_literals
             .iter()
             .filter_map(|p| {
@@ -323,7 +335,7 @@ impl GeneralisedTotaliserEncoder {
                     None
                 }
             })
-            .sum();
+            .sum::<u64>();
         //k is then updated to take into account the violations
         //  if the violations at the root make the constraint infeasible, report and stop
         if self.unavoidable_violations > input_k {
@@ -371,8 +383,12 @@ impl GeneralisedTotaliserEncoder {
         new_k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> EncodingStatus {
+        //note that there is a discrepancy between new_k (k given as input) and the internal_k
+        //  the internal_k is computed as input_k - unavoidable_violations
+        //  recall that unavoidable violations refer to the constant term in the original function and any violations at the root level
         pumpkin_assert_simple!(
-            self.has_encoding() && new_k < self.internal_k + self.unavoidable_violations
+            self.has_encoding() && new_k - self.unavoidable_violations < self.internal_k,
+            "We expect k will be strictly decreasing!"
         );
         pumpkin_assert_simple!(self.index_last_added_weighted_literal > 0);
         pumpkin_assert_simple!(self.unavoidable_violations <= new_k); //not an error per-se but in the current implementation it would be odd to have this assert fail
