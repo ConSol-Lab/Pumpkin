@@ -359,7 +359,7 @@ impl SATEngineDataStructures {
 
     pub fn is_clausal_propagation_at_fixed_point(&self) -> bool {
         self.clausal_propagator
-            .is_propagation_complete(self.assignments_propositional.trail.len() as usize)
+            .is_propagation_complete(self.assignments_propositional.trail.len())
     }
 
     //does simple preprocessing, modifying the input vector of literals

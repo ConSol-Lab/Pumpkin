@@ -37,8 +37,8 @@ impl ArgumentHandler {
         println!("Displaying argument help information.");
         for entry in &self.categories {
             println!("----------------------");
-            println!("Category: {}. {}", *entry.0, (*entry.1).short_description);
-            for arg in &(*entry.1).arguments {
+            println!("Category: {}. {}", *entry.0, entry.1.short_description);
+            for arg in &entry.1.arguments {
                 match arg.data_type {
                     DataType::Integer => {
                         let arg_info = self.arguments_integer.get(&arg.name).unwrap();
@@ -93,7 +93,7 @@ impl ArgumentHandler {
         for entry in &self.categories {
             println!("----------------------");
             println!("Category: {}.", *entry.0);
-            for arg in &(*entry.1).arguments {
+            for arg in &entry.1.arguments {
                 match arg.data_type {
                     DataType::Integer => {
                         let arg_info = self.arguments_integer.get(&arg.name).unwrap();
@@ -124,7 +124,7 @@ impl ArgumentHandler {
         for entry in &self.categories {
             println!("----------------------");
             println!("Category: {}.", *entry.0);
-            for arg in &(*entry.1).arguments {
+            for arg in &entry.1.arguments {
                 match arg.data_type {
                     DataType::Integer => {
                         let arg_info = self.arguments_integer.get(&arg.name).unwrap();
