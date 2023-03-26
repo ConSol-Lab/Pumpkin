@@ -1,8 +1,8 @@
+use log::debug;
 use std::{
     fs::{self},
     time::Instant,
 };
-use log::{debug};
 
 use crate::{
     arguments::ArgumentHandler,
@@ -99,10 +99,14 @@ impl Pumpkin {
 //methods for reading files
 //  perhaps in the future these should be moved outside the solver?
 impl Pumpkin {
-    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) -> std::io::Result<()> {
+    pub fn read_file(
+        &mut self,
+        file_location: &str,
+        file_format: FileFormat,
+    ) -> std::io::Result<()> {
         let time_start = Instant::now();
 
-        let _ = match file_format {
+        match file_format {
             FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
             FileFormat::WcnfDimacsPLine => self.read_wcnf_p_line(file_location),
             FileFormat::MaxSAT2022 => todo!(),
@@ -317,7 +321,10 @@ impl Pumpkin {
     }
 
     //this is purely for testing purposes
-    fn read_cnf_p_line_into_simple_linear_inequality_propagator(&mut self, file_location: &str) -> std::io::Result<()> {
+    fn read_cnf_p_line_into_simple_linear_inequality_propagator(
+        &mut self,
+        file_location: &str,
+    ) -> std::io::Result<()> {
         let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
@@ -457,19 +464,19 @@ impl Pumpkin {
             "verbose",
             "General",
             "Enables complete logging output",
-            false
+            false,
         );
         argument_handler.define_bool_argument(
             "omit-timestamp",
             "General",
             "Removes the timestamps from the logging lines",
-            false
+            false,
         );
         argument_handler.define_bool_argument(
             "omit-call-site",
             "General",
             "Removes the call site from the logging lines",
-            false
+            false,
         );
 
         argument_handler

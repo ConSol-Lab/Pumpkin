@@ -8,13 +8,15 @@ mod propagators;
 mod pumpkin_asserts;
 mod result;
 
-use log::{error, info, LevelFilter, warn};
 use basic_types::*;
 use engine::*;
+use log::{error, info, warn, LevelFilter};
 
-use std::io::Write;
-use crate::result::PumpkinError::{FileReadingError, InconsistentObjective, InconsistentSolution, MissingFileError};
+use crate::result::PumpkinError::{
+    FileReadingError, InconsistentObjective, InconsistentSolution, MissingFileError,
+};
 use crate::result::PumpkinResult;
+use std::io::Write;
 
 fn debug_check_feasibility_and_objective_value(
     file_location: &str,
@@ -43,8 +45,16 @@ fn debug_check_feasibility_and_objective_value(
     Ok(())
 }
 
-fn configure_logging(verbose: bool, omit_timestamp: bool, omit_call_site: bool) -> std::io::Result<()> {
-    let level_filter = if verbose { LevelFilter::Debug } else { LevelFilter::Warn };
+fn configure_logging(
+    verbose: bool,
+    omit_timestamp: bool,
+    omit_call_site: bool,
+) -> std::io::Result<()> {
+    let level_filter = if verbose {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Warn
+    };
     env_logger::Builder::new()
         .format(move |buf, record| {
             write!(buf, "c ")?;
@@ -53,9 +63,12 @@ fn configure_logging(verbose: bool, omit_timestamp: bool, omit_call_site: bool) 
             }
             write!(buf, "{} ", record.level())?;
             if !omit_call_site {
-                write!(buf, "[{}:{}] ",
-                       record.file().unwrap_or("unknown"),
-                       record.line().unwrap_or(0))?;
+                write!(
+                    buf,
+                    "[{}:{}] ",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0)
+                )?;
             }
             writeln!(buf, "{}", record.args())
         })
@@ -68,7 +81,7 @@ fn configure_logging(verbose: bool, omit_timestamp: bool, omit_call_site: bool) 
 fn main() {
     match run() {
         Ok(()) => {}
-        Err(e) => error!("Execution failed, error: {}", e)
+        Err(e) => error!("Execution failed, error: {}", e),
     }
 }
 
@@ -93,7 +106,7 @@ fn run() -> PumpkinResult<()> {
     configure_logging(
         argument_handler.get_bool_argument("verbose"),
         argument_handler.get_bool_argument("omit-timestamp"),
-        argument_handler.get_bool_argument("omit-call-site")
+        argument_handler.get_bool_argument("omit-call-site"),
     )?;
 
     let file_location = argument_handler.get_string_argument("file-location");
@@ -121,7 +134,10 @@ fn run() -> PumpkinResult<()> {
     let pumpkin_output = pumpkin.solve();
 
     match pumpkin_output {
-        PumpkinExecutionFlag::Feasible { ref feasible_solution, objective_value } => {
+        PumpkinExecutionFlag::Feasible {
+            ref feasible_solution,
+            objective_value,
+        } => {
             println!("s SATISFIABLE");
             println!("v {}", stringify_solution(feasible_solution));
             debug_check_feasibility_and_objective_value(
@@ -131,10 +147,13 @@ fn run() -> PumpkinResult<()> {
                 objective_value,
             )?;
         }
-        PumpkinExecutionFlag::Optimal { ref optimal_solution, objective_value } => {
+        PumpkinExecutionFlag::Optimal {
+            ref optimal_solution,
+            objective_value,
+        } => {
             println!("s OPTIMAL");
             println!("o {}", objective_value);
-            println!("v {}", stringify_solution(&optimal_solution));
+            println!("v {}", stringify_solution(optimal_solution));
             debug_check_feasibility_and_objective_value(
                 file_location.as_str(),
                 file_format,
