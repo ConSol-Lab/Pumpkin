@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+env_logger = "0.10.0"
+thiserror = "1.0.39"
+log = "0.4.17"
 
 [profile.rel-with-debug]
 inherits = "release"

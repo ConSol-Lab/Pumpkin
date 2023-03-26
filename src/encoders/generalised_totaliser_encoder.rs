@@ -1,4 +1,5 @@
 use std::{collections::HashMap, time::Instant};
+use log::{debug, warn};
 
 use crate::{
     basic_types::{ClauseAdditionOutcome, Function, Literal, WeightedLiteral},
@@ -48,7 +49,7 @@ impl GeneralisedTotaliserEncoder {
             "Can only add encodings at the root level."
         );
 
-        println!("c GTE k = {k}");
+        debug!("Invoked generalized totaliser encoding with k = {k}");
 
         if self.has_encoding() {
             self.decrease_k(k, csp_solver)
@@ -69,18 +70,15 @@ impl GeneralisedTotaliserEncoder {
         let weighted_literals = self.initialise(k, csp_solver);
 
         if weighted_literals.is_none() {
-            println!(
-                "c encoding added {} clauses to the solver.",
+            warn!("Encoding detected conflict at the root!");
+            debug!(
+                "Encoding added {} clauses to the solver.",
                 self.num_clauses_added
             );
-
-            println!(
-                "c initial encoding took {} seconds.",
+            debug!(
+                "Initial encoding took {} seconds.",
                 time_start.elapsed().as_secs()
             );
-
-            println!("c encoding detected conflict at the root!");
-
             return EncodingStatus::ConflictDetected;
         }
 
@@ -94,16 +92,16 @@ impl GeneralisedTotaliserEncoder {
         //special case when violations cannot exceed k
         //  in this case nothing needs to be done
         if processed_terms.iter().map(|p| p.weight).sum::<u64>() <= self.internal_k {
-            println!(
-                "c encoding added {} clauses to the solver.",
+            debug!(
+                "Encoding added {} clauses to the solver.",
                 self.num_clauses_added
             );
-            println!(
-                "c initial encoding took {} seconds.",
+            debug!(
+                "Initial encoding took {} seconds.",
                 time_start.elapsed().as_secs()
             );
-            println!(
-                "c encoder detected that the constraint is too lose, not totaliser tree needs to be encoded!"
+            debug!(
+                "Encoder detected that the constraint is too lose, not totaliser tree needs to be encoded!"
             );
             return EncodingStatus::NoConflictDetected;
         }
@@ -114,8 +112,8 @@ impl GeneralisedTotaliserEncoder {
         //standard case
         self.encode_at_most_k_standard_case(processed_terms, csp_solver);
 
-        println!(
-            "c initial encoding took {} seconds.",
+        debug!(
+            "Initial encoding took {} seconds.",
             time_start.elapsed().as_secs()
         );
 
@@ -298,8 +296,8 @@ impl GeneralisedTotaliserEncoder {
 
         self.index_last_added_weighted_literal = self.layers.last().unwrap().nodes[0].len();
 
-        println!(
-            "c encoding added {} clauses to the solver.",
+        debug!(
+            "Encoding added {} clauses to the solver.",
             self.num_clauses_added
         );
     }

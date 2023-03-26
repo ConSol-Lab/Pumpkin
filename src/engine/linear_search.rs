@@ -1,3 +1,4 @@
+use log::info;
 use crate::{
     basic_types::{CSPSolverExecutionFlag, Function, Solution, SolutionValuePair, Stopwatch},
     encoders::{EncodingStatus, GeneralisedTotaliserEncoder},
@@ -32,8 +33,9 @@ impl LinearSearch {
             csp_solver.get_propositional_assignments(),
             csp_solver.get_integer_assignments(),
         );
+
         println!("o {}", best_objective_value);
-        println!("c t = {} s", stopwatch.get_elapsed_time());
+        info!("Current objective is {} after {} seconds", best_objective_value, stopwatch.get_elapsed_time());
 
         let mut upper_bound_encoder =
             GeneralisedTotaliserEncoder::new(objective_function, csp_solver);
@@ -80,7 +82,7 @@ impl LinearSearch {
                     );
 
                     println!("o {}", best_objective_value);
-                    println!("c t = {} s", stopwatch.get_elapsed_time());
+                    info!("Current objective is {} after {} seconds", best_objective_value, stopwatch.get_elapsed_time());
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return SolutionValuePair::new(best_solution, best_objective_value);

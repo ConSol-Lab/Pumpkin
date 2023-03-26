@@ -48,7 +48,7 @@ impl Instance {
 }
 
 impl Instance {
-    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) {
+    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) -> std::io::Result<()> {
         assert!(self.is_empty());
         match file_format {
             FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
@@ -57,13 +57,11 @@ impl Instance {
         }
     }
 
-    fn read_cnf_p_line(&mut self, file_location: &str) {
+    fn read_cnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
         //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
         //  but for now it will do
 
-        let file_contents = fs::read_to_string(file_location).unwrap_or_else(|_| {
-            panic!("Unable to read file with path: {}", file_location);
-        });
+        let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
         //  comments are lines that star with 'c'
@@ -107,15 +105,14 @@ impl Instance {
             num_clauses == num_clauses_read,
             "Num of clauses in the file does not match the header."
         );
+        Ok(())
     }
 
-    fn read_wcnf_p_line(&mut self, file_location: &str) {
+    fn read_wcnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
         //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
         //  but for now it will do
 
-        let file_contents = fs::read_to_string(file_location).unwrap_or_else(|_| {
-            panic!("Unable to read file with path: {}", file_location);
-        });
+        let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
         //  comments are lines that star with 'c'
@@ -201,6 +198,7 @@ impl Instance {
             num_clauses == num_clauses_read,
             "Num of clauses in the file does not match the header."
         );
+        Ok(())
     }
 }
 

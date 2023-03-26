@@ -2,6 +2,7 @@ use std::{
     fs::{self},
     time::Instant,
 };
+use log::{debug};
 
 use crate::{
     arguments::ArgumentHandler,
@@ -36,8 +37,8 @@ impl Pumpkin {
     pub fn solve(&mut self) -> PumpkinExecutionFlag {
         pumpkin_assert_simple!(self.csp_solver.get_state().is_ready());
 
-        println!(
-            "c basic initialisation took {} seconds.",
+        debug!(
+            "Basic initialisation took {} seconds.",
             self.stopwatch.get_elapsed_time()
         );
 
@@ -64,8 +65,8 @@ impl Pumpkin {
             return PumpkinExecutionFlag::Timeout;
         }
 
-        println!(
-            "c initial solution took {} seconds",
+        debug!(
+            "Initial solution took {} seconds",
             self.stopwatch.get_elapsed_time()
         );
 
@@ -98,22 +99,24 @@ impl Pumpkin {
 //methods for reading files
 //  perhaps in the future these should be moved outside the solver?
 impl Pumpkin {
-    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) {
+    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) -> std::io::Result<()> {
         let time_start = Instant::now();
 
-        match file_format {
+        let _ = match file_format {
             FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
             FileFormat::WcnfDimacsPLine => self.read_wcnf_p_line(file_location),
             FileFormat::MaxSAT2022 => todo!(),
-        }
+        }?;
 
-        println!(
-            "c reading file took {} seconds.",
+        debug!(
+            "Reading file took {} seconds.",
             time_start.elapsed().as_secs()
         );
+
+        Ok(())
     }
 
-    fn read_wcnf_p_line(&mut self, file_location: &str) {
+    fn read_wcnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
         pumpkin_assert_simple!(
             self.objective_function.is_empty(),
             "Expected an empty objective function."
@@ -122,9 +125,7 @@ impl Pumpkin {
         //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
         //  but for now it will do
 
-        let file_contents = fs::read_to_string(file_location).unwrap_or_else(|_| {
-            panic!("Unable to read file with path: {}", file_location);
-        });
+        let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
         //  comments are lines that star with 'c'
@@ -145,10 +146,10 @@ impl Pumpkin {
             .map(|_i| self.csp_solver.create_new_propositional_variable())
             .collect();
 
-        println!("c reading file: {}", file_location);
-        println!("c num variables: {}", num_variables);
-        println!("c num clauses: {}", num_clauses);
-        println!("c top weight: {}", top_weight);
+        debug!("Reading file: {}", file_location);
+        debug!("Number of variables: {}", num_variables);
+        debug!("Number of clauses: {}", num_clauses);
+        debug!("Top weight: {}", top_weight);
 
         let mut num_clauses_read = 0;
         //read clauses one by one
@@ -252,15 +253,14 @@ impl Pumpkin {
             num_clauses == num_clauses_read,
             "Num of clauses in the file does not match the header."
         );
+        Ok(())
     }
 
-    fn read_cnf_p_line(&mut self, file_location: &str) {
+    fn read_cnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
         //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
         //  but for now it will do
 
-        let file_contents = fs::read_to_string(file_location).unwrap_or_else(|_| {
-            panic!("Unable to read file with path: {}", file_location);
-        });
+        let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
         //  comments are lines that star with 'c'
@@ -280,9 +280,9 @@ impl Pumpkin {
             .map(|_i| self.csp_solver.create_new_propositional_variable())
             .collect();
 
-        println!("c reading file: {}", file_location);
-        println!("c num variables: {}", num_variables);
-        println!("c num clauses: {}", num_clauses);
+        debug!("Reading file: {}", file_location);
+        debug!("Number of variables: {}", num_variables);
+        debug!("Number of clauses: {}", num_clauses);
 
         let mut num_clauses_read = 0;
         //read clauses one by one
@@ -313,13 +313,12 @@ impl Pumpkin {
             num_clauses == num_clauses_read,
             "Num of clauses in the file does not match the header."
         );
+        Ok(())
     }
 
     //this is purely for testing purposes
-    fn read_cnf_p_line_into_simple_linear_inequality_propagator(&mut self, file_location: &str) {
-        let file_contents = fs::read_to_string(file_location).unwrap_or_else(|_| {
-            panic!("Unable to read file with path: {}", file_location);
-        });
+    fn read_cnf_p_line_into_simple_linear_inequality_propagator(&mut self, file_location: &str) -> std::io::Result<()> {
+        let file_contents = fs::read_to_string(file_location)?;
 
         //skip comments
         //  comments are lines that star with 'c'
@@ -339,9 +338,9 @@ impl Pumpkin {
             .map(|_i| self.csp_solver.create_new_integer_variable(0, 1))
             .collect();
 
-        println!("c reading file: {}", file_location);
-        println!("c num variables: {}", num_variables);
-        println!("c num clauses: {}", num_clauses);
+        debug!("Reading file: {}", file_location);
+        debug!("Number of variables: {}", num_variables);
+        debug!("Number of clauses: {}", num_clauses);
 
         let mut num_clauses_read = 0;
         //read clauses one by one
@@ -393,6 +392,7 @@ impl Pumpkin {
             num_clauses == num_clauses_read,
             "Num of clauses in the file does not match the header."
         );
+        Ok(())
     }
 }
 
@@ -451,6 +451,25 @@ impl Pumpkin {
             -2,
             -2,
             i64::MAX,
+        );
+
+        argument_handler.define_bool_argument(
+            "verbose",
+            "General",
+            "Enables complete logging output",
+            false
+        );
+        argument_handler.define_bool_argument(
+            "omit-timestamp",
+            "General",
+            "Removes the timestamps from the logging lines",
+            false
+        );
+        argument_handler.define_bool_argument(
+            "omit-call-site",
+            "General",
+            "Removes the call site from the logging lines",
+            false
         );
 
         argument_handler

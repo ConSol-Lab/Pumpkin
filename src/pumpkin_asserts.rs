@@ -8,7 +8,7 @@ pub(crate) const PUMPKIN_ASSERT_EXTREME: u8 = 4;
 macro_rules! print_pumpkin_assert_warning_message {
     () => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
-            println!("WARNING(PERFORMANCE DEGRADATION): the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
+            warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
         };
     };
 }

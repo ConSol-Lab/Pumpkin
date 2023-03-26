@@ -1,4 +1,5 @@
 use std::iter::once;
+use log::{debug, warn};
 
 use crate::{
     basic_types::{Predicate, PropagationStatusCP, PropagatorIdentifier, PropositionalConjunction},
@@ -43,7 +44,7 @@ impl DebugHelper {
             if let PropagationStatusCP::ConflictDetected { ref failure_reason } =
                 propagation_status_cp
             {
-                println!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.1.name(), propagator.0, failure_reason);
+                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.1.name(), propagator.0, failure_reason);
                 panic!();
             }
 
@@ -287,7 +288,7 @@ impl DebugHelper {
                 DomainOperationOutcome::Failure => {
                     //trivial failure, this is unexpected
                     //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
-                    println!(
+                    debug!(
                         "Trivial failure detected in the given reason.\n
                                 The reported failure: {}\n
                                 Failure detected after trying to apply '{}'.",
