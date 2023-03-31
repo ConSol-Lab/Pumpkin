@@ -1,7 +1,9 @@
 use super::cp::CPEngineDataStructures;
 use super::sat::SATEngineDataStructures;
-use super::{AssignmentsInteger, AssignmentsPropositional, SATCPMediator};
-use crate::arguments::ArgumentHandler;
+use super::{
+    AssignmentsInteger, AssignmentsPropositional, SATCPMediator,
+    SATDataStructuresInternalParameters,
+};
 use crate::basic_types::{
     BranchingDecision, CSPSolverExecutionFlag, ClauseAdditionOutcome, ClauseReference,
     IntegerVariable, Literal, PropagationStatusCP, PropagationStatusClausal,
@@ -21,26 +23,30 @@ pub struct ConstraintSatisfactionSolver {
     sat_cp_mediator: SATCPMediator,
     seen: Vec<bool>,
     counters: Counters,
-    internal_parameters: ConstraintSatisfactionSolverInternalParameters,
+    internal_parameters: SatisfactionSolverOptions,
     stopwatch: Stopwatch,
+}
+
+pub struct SatisfactionSolverOptions {
+    /// The number of conflicts after which a restart is triggered.
+    pub conflicts_per_restart: i64,
 }
 
 //methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(argument_handler: &ArgumentHandler) -> ConstraintSatisfactionSolver {
+    pub fn new(
+        sat_options: SATDataStructuresInternalParameters,
+        solver_options: SatisfactionSolverOptions,
+    ) -> ConstraintSatisfactionSolver {
         let mut csp_solver = ConstraintSatisfactionSolver {
             state: CSPSolverState::new(),
-            sat_data_structures: SATEngineDataStructures::new(argument_handler),
-            cp_data_structures: CPEngineDataStructures::new(argument_handler),
+            sat_data_structures: SATEngineDataStructures::new(sat_options),
+            cp_data_structures: CPEngineDataStructures::new(),
             cp_propagators: vec![],
             sat_cp_mediator: SATCPMediator::new(),
             seen: vec![],
-            counters: Counters::new(
-                argument_handler.get_integer_argument("num-conflicts-per-restart"),
-            ),
-            internal_parameters: ConstraintSatisfactionSolverInternalParameters::new(
-                argument_handler,
-            ),
+            counters: Counters::new(solver_options.conflicts_per_restart),
+            internal_parameters: solver_options,
             stopwatch: Stopwatch::new(i64::MAX),
         };
 
@@ -191,8 +197,7 @@ impl ConstraintSatisfactionSolver {
         self.sat_data_structures.assumptions = assumptions.to_owned();
         self.seen.resize(num_propositional_variables, false);
 
-        self.counters.num_conflicts_until_restart =
-            self.internal_parameters.num_conflicts_per_restart as i64;
+        self.counters.num_conflicts_until_restart = self.internal_parameters.conflicts_per_restart;
     }
 
     fn solve_internal(&mut self) -> CSPSolverExecutionFlag {
@@ -390,7 +395,7 @@ impl ConstraintSatisfactionSolver {
                 .shrink_learned_clause_database_if_needed();
 
             self.counters.num_conflicts_until_restart =
-                self.internal_parameters.num_conflicts_per_restart as i64;
+                self.internal_parameters.conflicts_per_restart;
 
             self.counters.num_restarts += 1;
         }
@@ -988,18 +993,10 @@ impl CSPSolverState {
     }
 }
 
-pub struct ConstraintSatisfactionSolverInternalParameters {
-    pub num_conflicts_per_restart: u64,
-}
-
-impl ConstraintSatisfactionSolverInternalParameters {
-    pub fn new(
-        argument_handler: &ArgumentHandler,
-    ) -> ConstraintSatisfactionSolverInternalParameters {
-        ConstraintSatisfactionSolverInternalParameters {
-            num_conflicts_per_restart: argument_handler
-                .get_integer_argument("num-conflicts-per-restart")
-                as u64,
+impl Default for SatisfactionSolverOptions {
+    fn default() -> Self {
+        SatisfactionSolverOptions {
+            conflicts_per_restart: 4000,
         }
     }
 }

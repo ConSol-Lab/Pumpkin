@@ -12,6 +12,9 @@ pub enum PumpkinError {
     IOError(#[from] std::io::Error),
     #[error("Failed to read file {1}, more details: {0}")]
     FileReadingError(std::io::Error, String),
+    #[error("The supplied path is not supported.")]
+    InvalidInstanceFile,
     #[error("No file location given")]
-    MissingFileError
+    MissingFileError,
 }
+

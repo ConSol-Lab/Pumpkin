@@ -1,5 +1,4 @@
 use crate::{
-    arguments::ArgumentHandler,
     basic_types::{IntegerVariable, Predicate, PropagatorIdentifier},
     propagators::ConstraintProgrammingPropagator,
 };
@@ -13,7 +12,7 @@ pub struct CPEngineDataStructures {
 }
 
 impl CPEngineDataStructures {
-    pub fn new(_argument_handler: &ArgumentHandler) -> CPEngineDataStructures {
+    pub fn new() -> CPEngineDataStructures {
         CPEngineDataStructures {
             assignments_integer: AssignmentsInteger::new(),
             watch_list_cp: WatchListCP::new(),

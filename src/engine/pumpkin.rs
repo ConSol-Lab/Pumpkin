@@ -1,11 +1,10 @@
 use log::debug;
 use std::{
     fs::{self},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use crate::{
-    arguments::ArgumentHandler,
     basic_types::{
         CSPSolverExecutionFlag, FileFormat, Function, IntegerVariable, Literal,
         PropositionalVariable, PumpkinExecutionFlag, Stopwatch,
@@ -15,7 +14,10 @@ use crate::{
     pumpkin_asserts::pumpkin_assert_simple,
 };
 
-use super::LinearSearch;
+use super::{
+    constraint_satisfaction_solver::SatisfactionSolverOptions, LinearSearch,
+    SATDataStructuresInternalParameters,
+};
 
 pub struct Pumpkin {
     csp_solver: ConstraintSatisfactionSolver,
@@ -25,12 +27,20 @@ pub struct Pumpkin {
 }
 
 impl Pumpkin {
-    pub fn new(argument_handler: &ArgumentHandler) -> Pumpkin {
+    pub fn new(
+        sat_options: SATDataStructuresInternalParameters,
+        solver_options: SatisfactionSolverOptions,
+        time_limit: Option<Duration>,
+    ) -> Pumpkin {
         Pumpkin {
-            csp_solver: ConstraintSatisfactionSolver::new(argument_handler),
+            csp_solver: ConstraintSatisfactionSolver::new(sat_options, solver_options),
             linear_search: LinearSearch::new(),
             objective_function: Function::new(),
-            stopwatch: Stopwatch::new(argument_handler.get_integer_argument("time-limit")),
+            stopwatch: Stopwatch::new(
+                time_limit
+                    .map(|duration| duration.as_secs() as i64)
+                    .unwrap_or(i64::MAX),
+            ),
         }
     }
 
@@ -107,10 +117,10 @@ impl Pumpkin {
         let time_start = Instant::now();
 
         match file_format {
-            FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
-            FileFormat::WcnfDimacsPLine => self.read_wcnf_p_line(file_location),
+            FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location)?,
+            FileFormat::WcnfDimacsPLine => self.read_wcnf_p_line(file_location)?,
             FileFormat::MaxSAT2022 => todo!(),
-        }?;
+        };
 
         debug!(
             "Reading file took {} seconds.",
@@ -400,85 +410,5 @@ impl Pumpkin {
             "Num of clauses in the file does not match the header."
         );
         Ok(())
-    }
-}
-
-impl Pumpkin {
-    pub fn create_argument_handler() -> ArgumentHandler {
-        let mut argument_handler = ArgumentHandler::new();
-
-        argument_handler.define_new_category("General", "todo");
-
-        argument_handler.define_string_argument(
-            "file-location",
-            "General",
-            "If non-empty, reads the instance given in the file into the solver.",
-            "",
-            &[],
-        );
-
-        argument_handler.define_integer_argument(
-            "time-limit",
-            "General",
-            "Maximum runtime in seconds. In the current implementation should be used for indicative purposes only, todo.",
-            i64::MAX,
-            0,
-            i64::MAX
-        );
-
-        argument_handler.define_integer_argument(
-            "num-conflicts-per-restart",
-            "General",
-            "Number of conflicts before each restart. This is a fixed-length restart strategy.",
-            4000,
-            0,
-            1 << 60,
-        );
-
-        argument_handler.define_integer_argument
-        ("threshold-learned-clauses",
-        "General",
-        "Threshold indicating the target number of learned clauses to be kept in the solver. This number could be exceeded temporarily but occassionally the solver will delete learned clauses.", 
-        4000,
-        0,
-        1 << 60);
-
-        argument_handler.define_string_argument(
-            "learned-clause-sorting-strategy",
-            "General",
-            "Decides which clauses will be removed when cleaning up learned clauses todo.",
-            "lbd",
-            &["lbd", "activity"],
-        );
-
-        argument_handler.define_integer_argument(
-            "random-seed",
-            "General",
-            "Influences initial order of variables. todo example.",
-            -2,
-            -2,
-            i64::MAX,
-        );
-
-        argument_handler.define_bool_argument(
-            "verbose",
-            "General",
-            "Enables complete logging output",
-            false,
-        );
-        argument_handler.define_bool_argument(
-            "omit-timestamp",
-            "General",
-            "Removes the timestamps from the logging lines",
-            false,
-        );
-        argument_handler.define_bool_argument(
-            "omit-call-site",
-            "General",
-            "Removes the call site from the logging lines",
-            false,
-        );
-
-        argument_handler
     }
 }

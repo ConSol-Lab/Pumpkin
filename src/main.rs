@@ -1,6 +1,5 @@
 #![allow(dead_code)] //turn off dead code warnings for now, later to be removed
 
-mod arguments;
 mod basic_types;
 mod encoders;
 mod engine;
@@ -9,14 +8,58 @@ mod pumpkin_asserts;
 mod result;
 
 use basic_types::*;
+use clap::Parser;
 use engine::*;
 use log::{error, info, warn, LevelFilter};
+use result::PumpkinResult;
+use std::{io::Write, path::PathBuf};
 
-use crate::result::PumpkinError::{
-    FileReadingError, InconsistentObjective, InconsistentSolution, MissingFileError,
-};
-use crate::result::PumpkinResult;
-use std::io::Write;
+use crate::result::PumpkinError;
+
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// The instance to solve. The file should have one of the following extensions:
+    ///  * '.cnf' for SAT instances, given in the DIMACS format,
+    ///  * '.wcnf' for MaxSAT instances, given in the WDIMACS format.
+    instance_path: PathBuf,
+
+    /// The number of learned clauses that can be added to the clause database before clause
+    /// deletion is triggered. This number could be exceeded temporarily but occasionally the
+    /// solver will delete learned clauses.
+    #[arg(long = "threshold-learned-clauses", default_value_t = 4000)]
+    threshold_learned_clauses: u64,
+
+    /// Decides which clauses will be removed when cleaning up the learned clauses.
+    #[arg(short = 'l', long = "learned-clause-sorting-strategy", default_value_t = LearnedClauseSortingStrategy::Lbd, value_parser = learned_clause_sorting_strategy_parser)]
+    learned_clause_sorting_strategy: LearnedClauseSortingStrategy,
+
+    /// The number of conflicts before a restart is triggered. This is a fixed-length restart
+    /// strategy.
+    #[arg(long = "conflicts-per-restart", default_value_t = 4000)]
+    conflicts_per_restart: i64,
+
+    /// The time budget for the solver, given in seconds.
+    #[arg(short = 't', long = "time-limit")]
+    time_limit: Option<u64>,
+
+    /// The random seed to use for the PRNG. This influences the initial order of the variables.
+    #[arg(long = "random-seed", default_value_t = -2)]
+    random_seed: i64,
+
+    /// Enables log message output from the solver
+    #[arg(short = 'v', long = "verbose", default_value_t = false)]
+    verbose: bool,
+
+    /// If `--verbose` is enabled removes the timestamp information from the log messages
+    #[arg(long = "omit-timestamp", default_value_t = false)]
+    omit_timestamp: bool,
+
+    /// If `--verbose` is enabled removes the call site information from the log messages.
+    /// Call site is the file and line in it that originated the message.
+    #[arg(long = "omit-call-site", default_value_t = false)]
+    omit_call_site: bool,
+}
 
 fn debug_check_feasibility_and_objective_value(
     file_location: &str,
@@ -28,7 +71,7 @@ fn debug_check_feasibility_and_objective_value(
     instance.read_file(file_location, file_format)?;
 
     if instance.are_hard_clauses_violated(solution) {
-        return Err(InconsistentSolution);
+        return Err(PumpkinError::InconsistentSolution);
     }
 
     let recomputed_objective_value = instance.compute_soft_clause_violation(solution);
@@ -36,7 +79,7 @@ fn debug_check_feasibility_and_objective_value(
         std::cmp::Ordering::Less => warn!("Reported objective value is greater than the actual cost. In older versions this was fine, but not sure in new version."),
         std::cmp::Ordering::Equal => {} //this is okay
         std::cmp::Ordering::Greater => {
-            return Err(InconsistentObjective);
+            return Err(PumpkinError::InconsistentObjective);
         }
     }
 
@@ -88,48 +131,33 @@ fn main() {
 fn run() -> PumpkinResult<()> {
     pumpkin_asserts::print_pumpkin_assert_warning_message!();
 
-    let mut argument_handler = Pumpkin::create_argument_handler();
+    let args = Args::parse();
 
-    //argument_handler.set_string_argument("file-location", "instances\\v100c500.cnf");
-    argument_handler.set_string_argument("file-location", "instances\\BrazilInstance1.xml.wcnf");
-    //argument_handler.set_string_argument("file-location", "instances\\ItalyInstance1.xml.wcnf");
+    configure_logging(args.verbose, args.omit_timestamp, args.omit_call_site)?;
 
-    //argument_handler.print_if_empty_arguments_and_exit();
-
-    argument_handler.print_help_summary_if_needed_and_exit();
-
-    argument_handler.parse_command_line_arguments();
-
-    //argument_handler.print_argument_values();
-    argument_handler.print_arguments_different_from_default();
-
-    configure_logging(
-        argument_handler.get_bool_argument("verbose"),
-        argument_handler.get_bool_argument("omit-timestamp"),
-        argument_handler.get_bool_argument("omit-call-site"),
-    )?;
-
-    let file_location = argument_handler.get_string_argument("file-location");
-
-    info!("File location: {file_location}");
-
-    if file_location.is_empty() {
-        return Err(MissingFileError);
-    }
-
-    let file_format = if file_location.ends_with(".cnf") {
-        FileFormat::CnfDimacsPLine
-    } else if file_location.ends_with(".wcnf") {
-        FileFormat::WcnfDimacsPLine
-    } else {
-        return Err(MissingFileError);
+    let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
+        Some("cnf") => FileFormat::CnfDimacsPLine,
+        Some("wcnf") => FileFormat::WcnfDimacsPLine,
+        _ => return Err(PumpkinError::InvalidInstanceFile),
     };
 
-    let mut pumpkin = Pumpkin::new(&argument_handler);
-    if let Err(e) = pumpkin.read_file(file_location.as_str(), file_format) {
-        return Err(FileReadingError(e, file_location));
-    }
-    pumpkin.reset_variable_selection(argument_handler.get_integer_argument("random-seed"));
+    let sat_options = SATDataStructuresInternalParameters {
+        num_learned_clauses_max: args.threshold_learned_clauses,
+        learned_clause_sorting_strategy: args.learned_clause_sorting_strategy,
+        ..Default::default()
+    };
+
+    let solver_options = SatisfactionSolverOptions {
+        conflicts_per_restart: args.conflicts_per_restart,
+    };
+
+    let mut pumpkin = Pumpkin::new(sat_options, solver_options, None);
+    let path = args
+        .instance_path
+        .to_str()
+        .ok_or(PumpkinError::InvalidInstanceFile)?;
+    pumpkin.read_file(path, file_format)?;
+    pumpkin.reset_variable_selection(args.random_seed);
 
     let pumpkin_output = pumpkin.solve();
 
@@ -141,7 +169,7 @@ fn run() -> PumpkinResult<()> {
             println!("s SATISFIABLE");
             println!("v {}", stringify_solution(feasible_solution));
             debug_check_feasibility_and_objective_value(
-                file_location.as_str(),
+                path,
                 file_format,
                 feasible_solution,
                 objective_value,
@@ -155,7 +183,7 @@ fn run() -> PumpkinResult<()> {
             println!("o {}", objective_value);
             println!("v {}", stringify_solution(optimal_solution));
             debug_check_feasibility_and_objective_value(
-                file_location.as_str(),
+                path,
                 file_format,
                 optimal_solution,
                 objective_value,
@@ -178,4 +206,23 @@ fn stringify_solution(solution: &Solution) -> String {
             }
         })
         .collect::<String>()
+}
+
+fn learned_clause_sorting_strategy_parser(s: &str) -> Result<LearnedClauseSortingStrategy, String> {
+    match s {
+        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd),
+        "activity" => Ok(LearnedClauseSortingStrategy::Activity),
+        value => Err(format!(
+            "'{value}' is not a valid learned clause sorting strategy"
+        )),
+    }
+}
+
+impl std::fmt::Display for LearnedClauseSortingStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            LearnedClauseSortingStrategy::Lbd => write!(f, "lbd"),
+            LearnedClauseSortingStrategy::Activity => write!(f, "activity"),
+        }
+    }
 }

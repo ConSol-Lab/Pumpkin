@@ -1,5 +1,4 @@
 use crate::{
-    arguments::ArgumentHandler,
     basic_types::{
         BranchingDecision, ClauseAdditionOutcome, ClauseReference, Literal,
         PropagationStatusClausal,
@@ -28,8 +27,21 @@ pub struct SATEngineDataStructures {
     clause_bump_increment: f32,
 }
 
+pub struct SATDataStructuresInternalParameters {
+    pub num_learned_clauses_max: u64,
+    pub max_clause_activity: f32,
+    pub clause_activity_decay_factor: f32,
+    pub learned_clause_sorting_strategy: LearnedClauseSortingStrategy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LearnedClauseSortingStrategy {
+    Activity,
+    Lbd,
+}
+
 impl SATEngineDataStructures {
-    pub fn new(argument_handler: &ArgumentHandler) -> SATEngineDataStructures {
+    pub fn new(parameters: SATDataStructuresInternalParameters) -> SATEngineDataStructures {
         SATEngineDataStructures {
             assignments_propositional: AssignmentsPropositional::new(),
             clausal_propagator: ClausalPropagator::new(),
@@ -40,7 +52,7 @@ impl SATEngineDataStructures {
             propositional_variable_selector: PropositionalVariableSelector::new(),
             propositional_value_selector: PropositionalValueSelector::new(),
             assumptions: vec![],
-            parameters: SATDataStructuresInternalParameters::new(argument_handler),
+            parameters,
             clause_bump_increment: 1.0,
         }
     }
@@ -435,43 +447,19 @@ impl SATEngineDataStructures {
     }
 }
 
-struct SATDataStructuresInternalParameters {
-    pub num_learned_clauses_max: u64,
-    pub max_clause_activity: f32,
-    pub clause_activity_decay_factor: f32,
-    pub learned_clause_sorting_strategy: LearnedClauseSortingStrategy,
+impl Default for SATEngineDataStructures {
+    fn default() -> Self {
+        SATEngineDataStructures::new(SATDataStructuresInternalParameters::default())
+    }
 }
 
-impl SATDataStructuresInternalParameters {
-    fn new(argument_handler: &ArgumentHandler) -> SATDataStructuresInternalParameters {
+impl Default for SATDataStructuresInternalParameters {
+    fn default() -> Self {
         SATDataStructuresInternalParameters {
-            num_learned_clauses_max: argument_handler
-                .get_integer_argument("threshold-learned-clauses")
-                as u64,
+            num_learned_clauses_max: 4000,
             max_clause_activity: 1e20,
             clause_activity_decay_factor: 0.99,
-            learned_clause_sorting_strategy:
-                SATDataStructuresInternalParameters::parse_learned_clause_sorting_strategy(
-                    argument_handler,
-                ),
+            learned_clause_sorting_strategy: LearnedClauseSortingStrategy::Lbd,
         }
     }
-
-    fn parse_learned_clause_sorting_strategy(
-        argument_handler: &ArgumentHandler,
-    ) -> LearnedClauseSortingStrategy {
-        let param = argument_handler.get_string_argument("learned-clause-sorting-strategy");
-        match param.as_str() {
-            "activity" => LearnedClauseSortingStrategy::Activity,
-            "lbd" => LearnedClauseSortingStrategy::Lbd,
-            _ => panic!("Unknown parameter given for the learned clause strategy: {}. See parameters for more details.", param)
-        }
-    }
-}
-
-#[derive(Default)]
-pub enum LearnedClauseSortingStrategy {
-    Activity,
-    #[default]
-    Lbd,
 }

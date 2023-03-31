@@ -48,7 +48,11 @@ impl Instance {
 }
 
 impl Instance {
-    pub fn read_file(&mut self, file_location: &str, file_format: FileFormat) -> std::io::Result<()> {
+    pub fn read_file(
+        &mut self,
+        file_location: &str,
+        file_format: FileFormat,
+    ) -> std::io::Result<()> {
         assert!(self.is_empty());
         match file_format {
             FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
