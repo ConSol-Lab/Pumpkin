@@ -1,6 +1,6 @@
 use log::debug;
 use std::{
-    fs::{self},
+    fs,
     time::{Duration, Instant},
 };
 
@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    constraint_satisfaction_solver::SatisfactionSolverOptions, LinearSearch,
-    SATDataStructuresInternalParameters,
+    linear_search::UpperBoundEncoding, LinearSearch, SATDataStructuresInternalParameters,
+    SatisfactionSolverOptions,
 };
 
 pub struct Pumpkin {
@@ -30,17 +30,18 @@ impl Pumpkin {
     pub fn new(
         sat_options: SATDataStructuresInternalParameters,
         solver_options: SatisfactionSolverOptions,
+        upper_bound_encoding: UpperBoundEncoding,
         time_limit: Option<Duration>,
     ) -> Pumpkin {
         Pumpkin {
             csp_solver: ConstraintSatisfactionSolver::new(sat_options, solver_options),
-            linear_search: LinearSearch::new(),
             objective_function: Function::new(),
             stopwatch: Stopwatch::new(
                 time_limit
                     .map(|duration| duration.as_secs() as i64)
                     .unwrap_or(i64::MAX),
             ),
+            linear_search: LinearSearch::new(upper_bound_encoding),
         }
     }
 
@@ -82,7 +83,7 @@ impl Pumpkin {
 
         //simple preprocessing on the objective function
 
-        let output = LinearSearch::solve(
+        let output = self.linear_search.solve(
             &mut self.csp_solver,
             &self.objective_function,
             &self.stopwatch,

@@ -1,20 +1,34 @@
-use log::info;
 use crate::{
     basic_types::{CSPSolverExecutionFlag, Function, Solution, SolutionValuePair, Stopwatch},
-    encoders::{EncodingStatus, GeneralisedTotaliserEncoder},
+    encoders::{
+        CardinalityNetworkEncoder, EncodingStatus, GeneralisedTotaliserEncoder, UpperBoundEncoder,
+    },
     pumpkin_asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
 };
+use log::info;
 
 use super::ConstraintSatisfactionSolver;
 
-pub struct LinearSearch {}
+pub struct LinearSearch {
+    upper_bound_encoding: UpperBoundEncoding,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[allow(clippy::upper_case_acronyms)]
+pub enum UpperBoundEncoding {
+    GTE,
+    CNE,
+}
 
 impl LinearSearch {
-    pub fn new() -> LinearSearch {
-        LinearSearch {}
+    pub fn new(upper_bound_encoding: UpperBoundEncoding) -> LinearSearch {
+        LinearSearch {
+            upper_bound_encoding,
+        }
     }
 
     pub fn solve(
+        &self,
         csp_solver: &mut ConstraintSatisfactionSolver,
         objective_function: &Function,
         stopwatch: &Stopwatch,
@@ -35,10 +49,22 @@ impl LinearSearch {
         );
 
         println!("o {}", best_objective_value);
-        info!("Current objective is {} after {} seconds", best_objective_value, stopwatch.get_elapsed_time());
+        info!(
+            "Current objective is {} after {} seconds",
+            best_objective_value,
+            stopwatch.get_elapsed_time()
+        );
 
-        let mut upper_bound_encoder =
-            GeneralisedTotaliserEncoder::new(objective_function, csp_solver);
+        let mut upper_bound_encoder: Box<dyn UpperBoundEncoder> = match self.upper_bound_encoding {
+            UpperBoundEncoding::GTE => Box::new(GeneralisedTotaliserEncoder::new(
+                objective_function,
+                csp_solver,
+            )),
+            UpperBoundEncoding::CNE => Box::new(CardinalityNetworkEncoder::from_function(
+                objective_function,
+                csp_solver,
+            )),
+        };
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {

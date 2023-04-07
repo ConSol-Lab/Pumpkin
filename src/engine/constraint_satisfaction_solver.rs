@@ -127,6 +127,11 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
+        std::iter::from_fn(|| Some(self.create_new_propositional_variable()))
+            .map(|var| Literal::new(var, true))
+    }
+
     pub fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
         &self.sat_data_structures.assignments_propositional
     }
@@ -998,5 +1003,14 @@ impl Default for SatisfactionSolverOptions {
         SatisfactionSolverOptions {
             conflicts_per_restart: 4000,
         }
+    }
+}
+
+impl Default for ConstraintSatisfactionSolver {
+    fn default() -> Self {
+        ConstraintSatisfactionSolver::new(
+            SATDataStructuresInternalParameters::default(),
+            SatisfactionSolverOptions::default(),
+        )
     }
 }

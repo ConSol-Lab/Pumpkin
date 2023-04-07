@@ -7,6 +7,8 @@ use crate::{
     pumpkin_asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
 };
 
+use super::EncodingStatus;
+
 //encodes the constraint \sum w_i x_i <= k
 
 //implementation is done based on the paper:
@@ -429,11 +431,6 @@ impl GeneralisedTotaliserEncoder {
         }
         EncodingStatus::NoConflictDetected
     }
-}
-
-pub enum EncodingStatus {
-    NoConflictDetected,
-    ConflictDetected,
 }
 
 struct Layer {
