@@ -46,23 +46,26 @@ impl DomainManager<'_> {
             .get_upper_bound_predicate(integer_variable)
     }
 
-    pub fn get_lower_bound_predicates(
+    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
         &self,
-        integer_variables: &[IntegerVariable],
+        integer_variables: I,
     ) -> Vec<Predicate> {
         self.assignments_integer
             .get_lower_bound_predicates(integer_variables)
     }
 
-    pub fn get_upper_bound_predicates(
+    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
         &self,
-        integer_variables: &[IntegerVariable],
+        integer_variables: I,
     ) -> Vec<Predicate> {
         self.assignments_integer
             .get_upper_bound_predicates(integer_variables)
     }
 
-    pub fn get_bound_predicates(&self, integer_variables: &[IntegerVariable]) -> Vec<Predicate> {
+    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+        &self,
+        integer_variables: I,
+    ) -> Vec<Predicate> {
         self.assignments_integer
             .get_bound_predicates(integer_variables)
     }

@@ -121,33 +121,35 @@ impl AssignmentsInteger {
         }
     }
 
-    pub fn get_lower_bound_predicates(
+    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
         &self,
-        integer_variables: &[IntegerVariable],
+        integer_variables: I,
     ) -> Vec<Predicate> {
         integer_variables
-            .iter()
             .map(|i| self.get_lower_bound_predicate(*i))
             .collect()
     }
 
-    pub fn get_upper_bound_predicates(
+    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
         &self,
-        integer_variables: &[IntegerVariable],
+        integer_variables: I,
     ) -> Vec<Predicate> {
         integer_variables
-            .iter()
             .map(|i| self.get_upper_bound_predicate(*i))
             .collect()
     }
 
-    pub fn get_bound_predicates(&self, integer_variables: &[IntegerVariable]) -> Vec<Predicate> {
-        self.get_lower_bound_predicates(integer_variables)
-            .into_iter()
-            .chain(
-                self.get_upper_bound_predicates(integer_variables)
-                    .into_iter(),
-            )
+    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+        &self,
+        integer_variables: I,
+    ) -> Vec<Predicate> {
+        integer_variables
+            .flat_map(|integer_variable| {
+                [
+                    self.get_lower_bound_predicate(*integer_variable),
+                    self.get_upper_bound_predicate(*integer_variable),
+                ]
+            })
             .collect()
     }
 
