@@ -73,7 +73,7 @@ impl Instance {
 
         //read the header line
         //  the format is 'p cnf [num variables] [num clauses]
-        let mut header = lines.next().unwrap().split(' ');
+        let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
         assert!(temp == Some("p"));
         temp = header.next();
@@ -85,7 +85,7 @@ impl Instance {
         //read clauses one by one
         for line in lines {
             let literals: Vec<Literal> = line
-                .split(' ')
+                .split_whitespace()
                 .filter_map(|s| {
                     let variable_index = s.parse::<i64>().unwrap();
                     match variable_index.cmp(&0) {
@@ -124,7 +124,7 @@ impl Instance {
 
         //read the header line
         //  the format is 'p wcnf [num variables] [num clauses] [top weight]
-        let mut header = lines.next().unwrap().split(' ');
+        let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
         assert!(temp == Some("p"));
         temp = header.next();
@@ -137,7 +137,7 @@ impl Instance {
         //read clauses one by one
         for line in lines {
             let mut raw_integers = line
-                .split(' ')
+                .split_whitespace()
                 .filter_map(|s| {
                     if s.is_empty() {
                         return None;

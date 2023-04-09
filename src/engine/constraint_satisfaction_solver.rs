@@ -10,10 +10,12 @@ use crate::basic_types::{
     PropagationStatusOneStepCP, PropagatorIdentifier, PropositionalConjunction,
     PropositionalVariable, Stopwatch,
 };
-
 use crate::engine::{DebugHelper, DomainManager};
 use crate::propagators::ConstraintProgrammingPropagator;
 use crate::pumpkin_asserts::*;
+use log::warn;
+use std::fs::File;
+use std::io::Write;
 
 pub struct ConstraintSatisfactionSolver {
     state: CSPSolverState,
@@ -30,6 +32,8 @@ pub struct ConstraintSatisfactionSolver {
 pub struct SatisfactionSolverOptions {
     /// The number of conflicts after which a restart is triggered.
     pub conflicts_per_restart: i64,
+    /// Certificate output file or None if certificate output is disabled.
+    pub certificate_file: Option<File>,
 }
 
 //methods that offer basic functionality
@@ -307,10 +311,35 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    fn write_to_certificate(
+        &mut self,
+        analysis_result: &ConflictAnalysisResult,
+    ) -> std::io::Result<()> {
+        if let Some(cert_file) = &mut self.internal_parameters.certificate_file {
+            for lit in &analysis_result.learned_literals {
+                if lit.is_negative() {
+                    cert_file.write("-".as_bytes())?;
+                }
+                cert_file.write(
+                    format!("{} ", &lit.get_propositional_variable().index().to_string())
+                        .as_bytes(),
+                )?;
+            }
+            cert_file.write("0\n".as_bytes())?;
+        }
+        Ok(())
+    }
+
     //changes the state based on the conflict analysis result given as input
     //i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal, and updates internal data structures for simple moving averages
     //note that no propagation is done, this is left to the solver
     fn process_conflict_analysis_result(&mut self, analysis_result: ConflictAnalysisResult) {
+        if let Err(write_error) = self.write_to_certificate(&analysis_result) {
+            warn!(
+                "Failed to update the certificate file, error message: {}",
+                write_error
+            );
+        }
         //unit clauses are treated in a special way: they are added as decision literals at decision level 0
         if analysis_result.learned_literals.len() == 1 {
             self.backtrack(0);
@@ -1002,6 +1031,7 @@ impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             conflicts_per_restart: 4000,
+            certificate_file: None,
         }
     }
 }

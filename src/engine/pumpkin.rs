@@ -148,7 +148,7 @@ impl Pumpkin {
 
         //read the header line
         //  the format is 'p wcnf [num variables] [num clauses] [top weight]
-        let mut header = lines.next().unwrap().split(' ');
+        let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
         assert!(temp == Some("p"));
         temp = header.next();
@@ -170,7 +170,7 @@ impl Pumpkin {
         //read clauses one by one
         for line in lines {
             let mut raw_integers = line
-                .split(' ')
+                .split_whitespace()
                 .filter_map(|s| {
                     //in case there are double spaces "  ", the split will return an empty string
                     //  should do a more robust file reading algorithm but for now this will do
@@ -283,7 +283,7 @@ impl Pumpkin {
 
         //read the header line
         //  the format is 'p cnf [num variables] [num clauses]
-        let mut header = lines.next().unwrap().split(' ');
+        let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
         assert!(temp == Some("p"));
         temp = header.next();
@@ -303,7 +303,7 @@ impl Pumpkin {
         //read clauses one by one
         for line in lines {
             let literals: Vec<Literal> = line
-                .split(' ')
+                .split_whitespace()
                 .filter_map(|s| {
                     let variable_index = s.parse::<i64>().unwrap();
                     match variable_index.cmp(&0) {
@@ -344,7 +344,7 @@ impl Pumpkin {
 
         //read the header line
         //  the format is 'p cnf [num variables] [num clauses]
-        let mut header = lines.next().unwrap().split(' ');
+        let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
         assert!(temp == Some("p"));
         temp = header.next();
@@ -364,7 +364,7 @@ impl Pumpkin {
         //read clauses one by one
         for line in lines {
             let raw_integers: Vec<i64> = line
-                .split(' ')
+                .split_whitespace()
                 .filter_map(|s| {
                     //in case there are double spaces "  ", the split will return an empty string
                     //  should do a more robust file reading algorithm but for now this will do

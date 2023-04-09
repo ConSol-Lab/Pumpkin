@@ -11,10 +11,11 @@ use basic_types::*;
 use clap::Parser;
 use engine::*;
 use log::{error, info, warn, LevelFilter};
-use result::PumpkinResult;
+use std::fs::OpenOptions;
 use std::{io::Write, path::PathBuf};
 
 use crate::result::PumpkinError;
+use result::PumpkinResult;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -23,6 +24,11 @@ struct Args {
     ///  * '.cnf' for SAT instances, given in the DIMACS format,
     ///  * '.wcnf' for MaxSAT instances, given in the WDIMACS format.
     instance_path: PathBuf,
+
+    /// The output path for the DRAT certificate file. By default does not output any
+    /// certifying information.
+    #[arg(long)]
+    certificate_path: Option<PathBuf>,
 
     /// The number of learned clauses that can be added to the clause database before clause
     /// deletion is triggered. This number could be exceeded temporarily but occasionally the
@@ -151,8 +157,21 @@ fn run() -> PumpkinResult<()> {
         ..Default::default()
     };
 
+    let certificate_file = if let Some(path_buf) = args.certificate_path {
+        Some(
+            OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(path_buf.as_path())?,
+        )
+    } else {
+        None
+    };
+
     let solver_options = SatisfactionSolverOptions {
         conflicts_per_restart: args.conflicts_per_restart,
+        certificate_file,
     };
 
     let mut pumpkin = Pumpkin::new(sat_options, solver_options, args.upper_bound_encoding, None);
