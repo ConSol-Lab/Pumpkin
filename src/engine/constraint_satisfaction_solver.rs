@@ -318,14 +318,14 @@ impl ConstraintSatisfactionSolver {
         if let Some(cert_file) = &mut self.internal_parameters.certificate_file {
             for lit in &analysis_result.learned_literals {
                 if lit.is_negative() {
-                    cert_file.write("-".as_bytes())?;
+                    cert_file.write_all("-".as_bytes())?;
                 }
-                cert_file.write(
+                cert_file.write_all(
                     format!("{} ", &lit.get_propositional_variable().index().to_string())
                         .as_bytes(),
                 )?;
             }
-            cert_file.write("0\n".as_bytes())?;
+            cert_file.write_all("0\n".as_bytes())?;
         }
         Ok(())
     }
