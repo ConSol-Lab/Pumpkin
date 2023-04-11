@@ -12,6 +12,7 @@ use clap::Parser;
 use engine::*;
 use log::{error, info, warn, LevelFilter};
 use std::fs::OpenOptions;
+use std::time::Duration;
 use std::{io::Write, path::PathBuf};
 
 use crate::result::PumpkinError;
@@ -174,7 +175,12 @@ fn run() -> PumpkinResult<()> {
         certificate_file,
     };
 
-    let mut pumpkin = Pumpkin::new(sat_options, solver_options, args.upper_bound_encoding, None);
+    let mut pumpkin = Pumpkin::new(
+        sat_options,
+        solver_options,
+        args.upper_bound_encoding,
+        args.time_limit.map(|secs| Duration::from_secs(secs)),
+    );
     let path = args
         .instance_path
         .to_str()
