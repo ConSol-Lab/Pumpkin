@@ -179,7 +179,7 @@ fn run() -> PumpkinResult<()> {
         sat_options,
         solver_options,
         args.upper_bound_encoding,
-        args.time_limit.map(|secs| Duration::from_secs(secs)),
+        args.time_limit.map(Duration::from_secs),
     );
     let path = args
         .instance_path
