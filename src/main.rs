@@ -3,6 +3,7 @@
 mod basic_types;
 mod encoders;
 mod engine;
+mod parsers;
 mod propagators;
 mod pumpkin_asserts;
 mod result;
