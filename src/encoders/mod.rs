@@ -1,7 +1,9 @@
 mod cardinality_networks_encoder;
 mod generalised_totaliser_encoder;
-mod upper_bound_encoder;
+mod pseudo_boolean_constraint_encoder;
 
 pub use cardinality_networks_encoder::CardinalityNetworkEncoder;
 pub use generalised_totaliser_encoder::GeneralisedTotaliserEncoder;
-pub use upper_bound_encoder::{EncodingStatus, UpperBoundEncoder};
+pub use pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoder;
+pub use pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
+pub use pseudo_boolean_constraint_encoder::PseudoBooleanEncoding;

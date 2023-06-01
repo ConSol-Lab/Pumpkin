@@ -1,3 +1,12 @@
+consider replacing custom error structs like "EncodingStatus" and "ClauseAdditionOutcome" with standard rust error handling.
+  this was we can make use of the ? operator
+  and we can have pumpkin error types in one place?
+
+have a way to track number of clauses added at any point, useful when dealing with encoders
+  should unit clauses be considered as "added clauses"?
+
+add a method to create n literals, should be easier to use than the current new_literals() iterator 
+
 finish randomisation of initial vsids values
 finish assumption (interface)
 

@@ -17,4 +17,3 @@ pub enum PumpkinError {
     #[error("No file location given")]
     MissingFileError,
 }
-

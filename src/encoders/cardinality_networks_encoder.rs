@@ -2,12 +2,14 @@ use std::time::Instant;
 
 use crate::{
     basic_types::{ClauseAdditionOutcome, Literal},
-    encoders::UpperBoundEncoder,
+    encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen,
     engine::ConstraintSatisfactionSolver,
     pumpkin_asserts::{pumpkin_assert_eq_simple, pumpkin_assert_simple},
 };
 
-use super::EncodingStatus;
+use super::{
+    pseudo_boolean_constraint_encoder::EncodingError, PseudoBooleanConstraintEncoderInterface,
+};
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental
@@ -19,8 +21,6 @@ use super::EncodingStatus;
 pub struct CardinalityNetworkEncoder {
     literals: Vec<Literal>,
     output: Vec<Literal>,
-    constant_term: u64,
-    encoding_generated: bool,
     num_clauses_added: usize,
 }
 
@@ -33,66 +33,27 @@ macro_rules! try_add_clause {
     };
 }
 
-impl UpperBoundEncoder for CardinalityNetworkEncoder {
-    fn constrain_at_most_k(
-        &mut self,
+impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
+    fn encode_at_most_k(
+        weighted_literals: Vec<crate::basic_types::WeightedLiteral>,
         k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> EncodingStatus {
-        pumpkin_assert_simple!(
-            k >= self.constant_term,
-            "The upper bound ({k}) should never be less than the constant term {}.",
-            self.constant_term
-        );
-
-        if !self.encoding_generated
-            && self.create_encoding(k, csp_solver) == EncodingStatus::ConflictDetected
-        {
-            return EncodingStatus::ConflictDetected;
-        }
-
-        println!("c CNE k = {k}");
-
-        let k = (k - self.constant_term) as usize;
-
-        if k == 0 && self.literals.is_empty() {
-            return EncodingStatus::NoConflictDetected;
-        }
-
-        pumpkin_assert_simple!(
-            k < self.output.len(),
-            "The upper bound cannot be larger than the greatest possible value."
-        );
-
-        if csp_solver.add_unit_clause(!self.output[k]) == ClauseAdditionOutcome::Infeasible {
-            EncodingStatus::ConflictDetected
-        } else {
-            EncodingStatus::NoConflictDetected
-        }
-    }
-}
-
-impl CardinalityNetworkEncoder {
-    /// Create a new encoder based on a function describing the cardinality constraint.
-    ///
-    /// Panics if the function does not have any variables on the left-hand side, or if the
-    /// function is weighted (i.e. the terms do not have the same weight).
-    pub fn from_function(
-        function: &crate::basic_types::Function,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Self {
-        let literals = function.get_function_as_weighted_literals_vector(csp_solver);
-
-        let literals = match literals.first().map(|wlit| wlit.weight) {
+    ) -> Result<Self, EncodingError>
+    where
+        Self: Sized,
+    {
+        // The CNE only supports unweighted functions. This expression verifies that assumption is
+        // met. If it is not met, and because we cannot return an error condition, we panic.
+        let literals = match weighted_literals.first().map(|wlit| wlit.weight) {
             Some(weight) => {
                 pumpkin_assert_simple!(
-                    literals
+                    weighted_literals
                         .iter()
                         .all(|weighted_lit| weight == weighted_lit.weight),
                     "Sorting network encoding is only supported on unweighted instances."
                 );
 
-                literals
+                weighted_literals
                     .into_iter()
                     .map(|wlit| wlit.literal)
                     .collect::<Vec<_>>()
@@ -100,27 +61,57 @@ impl CardinalityNetworkEncoder {
             None => vec![],
         };
 
-        CardinalityNetworkEncoder::new(literals, function.get_constant_term())
+        CardinalityNetworkEncoder::new(literals, k, csp_solver)
     }
 
-    /// Create a new encoder from the given literals which form the left-hand side, and a constant
-    /// term. The constant term is used when constraining the sum of variables, and it is expected
-    /// the right-hand side will never be below the constant term.
-    pub fn new(literals: Vec<Literal>, constant_term: u64) -> Self {
-        CardinalityNetworkEncoder {
+    fn strengthen_at_most_k(
+        &mut self,
+        k: u64,
+        csp_solver: &mut ConstraintSatisfactionSolver,
+    ) -> Result<(), EncodingError> {
+        if k == 0 && self.output.is_empty() {
+            return Ok(());
+        }
+
+        pumpkin_assert_simple!(
+            k < self.output.len() as u64,
+            "The upper bound cannot be larger than the greatest possible value."
+        );
+
+        println!("c CNE k = {k}");
+
+        if csp_solver.add_unit_clause(!self.output[k as usize]) == ClauseAdditionOutcome::Infeasible
+        {
+            Err(CannotStrenthen)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl CardinalityNetworkEncoder {
+    /// Create a new encoder from the given literals which form the left-hand side.
+    pub fn new(
+        literals: Vec<Literal>,
+        p: u64,
+        csp_solver: &mut ConstraintSatisfactionSolver,
+    ) -> Result<Self, EncodingError> {
+        let mut encoder = CardinalityNetworkEncoder {
             literals,
             output: vec![],
-            constant_term,
-            encoding_generated: false,
             num_clauses_added: 0,
-        }
+        };
+
+        encoder.create_encoding(p, csp_solver)?;
+
+        Ok(encoder)
     }
 
     fn create_encoding(
         &mut self,
         p: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> EncodingStatus {
+    ) -> Result<(), EncodingError> {
         pumpkin_assert_simple!(
             self.output.is_empty(),
             "Can only generate the encoding once."
@@ -128,8 +119,6 @@ impl CardinalityNetworkEncoder {
 
         let time_start = Instant::now();
         let result = self.generate_clauses(p, csp_solver);
-
-        self.encoding_generated = true;
 
         println!(
             "c encoding added {} clauses to the solver.",
@@ -141,8 +130,10 @@ impl CardinalityNetworkEncoder {
             time_start.elapsed().as_secs()
         );
 
-        if result == EncodingStatus::ConflictDetected {
+        if result.is_err() {
             println!("c encoding detected conflict at the root!");
+        } else if !self.output.is_empty() {
+            csp_solver.add_unit_clause(!self.output[p as usize]);
         }
 
         result
@@ -152,11 +143,11 @@ impl CardinalityNetworkEncoder {
         &mut self,
         p: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> EncodingStatus {
+    ) -> Result<(), EncodingError> {
         let n = self.literals.len() as u64;
 
         if n == 0 {
-            return EncodingStatus::NoConflictDetected;
+            return Ok(());
         }
 
         let k = find_next_power_of_two(p);
@@ -169,7 +160,7 @@ impl CardinalityNetworkEncoder {
 
         for &lit in padding_lits.iter() {
             if csp_solver.add_unit_clause(!lit) == ClauseAdditionOutcome::Infeasible {
-                return EncodingStatus::ConflictDetected;
+                return Err(EncodingError::RootPropagationConflict);
             }
         }
 
@@ -182,9 +173,9 @@ impl CardinalityNetworkEncoder {
             .unwrap_or_default();
 
         if self.output.is_empty() {
-            EncodingStatus::ConflictDetected
+            Err(EncodingError::RootPropagationConflict)
         } else {
-            EncodingStatus::NoConflictDetected
+            Ok(())
         }
     }
 
@@ -353,30 +344,16 @@ fn even_literals(lits: &[Literal]) -> Vec<Literal> {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::Function;
-
     use super::*;
 
     #[test]
     fn test_cardinality_constraint_no_input_literals() {
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let mut ub = CardinalityNetworkEncoder::new(vec![], 0);
+        let mut ub =
+            CardinalityNetworkEncoder::new(vec![], 0, &mut csp_solver).expect("valid encoding");
 
-        assert_eq!(
-            EncodingStatus::NoConflictDetected,
-            ub.constrain_at_most_k(0, &mut csp_solver)
-        );
-    }
-
-    #[test]
-    fn test_cardinality_constraint_empty_function() {
-        let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let mut ub = CardinalityNetworkEncoder::from_function(&Function::new(), &mut csp_solver);
-
-        assert_eq!(
-            EncodingStatus::NoConflictDetected,
-            ub.constrain_at_most_k(0, &mut csp_solver)
-        );
+        ub.strengthen_at_most_k(0, &mut csp_solver)
+            .expect("should not fail");
     }
 
     #[test]
@@ -384,11 +361,7 @@ mod tests {
         let mut csp_solver = ConstraintSatisfactionSolver::default();
         let xs = create_variables(&mut csp_solver, 2);
 
-        let mut ub = CardinalityNetworkEncoder::new(xs.clone(), 0);
-        assert_eq!(
-            EncodingStatus::NoConflictDetected,
-            ub.constrain_at_most_k(1, &mut csp_solver)
-        );
+        let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut csp_solver);
 
         assert_eq!(
             ClauseAdditionOutcome::NoConflictDetected,
@@ -406,38 +379,8 @@ mod tests {
         let mut csp_solver = ConstraintSatisfactionSolver::default();
         let xs = create_variables(&mut csp_solver, 3);
 
-        let mut ub = CardinalityNetworkEncoder::new(xs.clone(), 0);
-        assert_eq!(
-            EncodingStatus::NoConflictDetected,
-            ub.constrain_at_most_k(2, &mut csp_solver)
-        );
-
-        assert_eq!(
-            ClauseAdditionOutcome::NoConflictDetected,
-            csp_solver.add_unit_clause(xs[0])
-        );
-
-        assert_eq!(
-            ClauseAdditionOutcome::NoConflictDetected,
-            csp_solver.add_unit_clause(xs[1])
-        );
-
-        assert_eq!(
-            ClauseAdditionOutcome::Infeasible,
-            csp_solver.add_unit_clause(xs[2])
-        );
-    }
-
-    #[test]
-    fn test_constant_term_offsets_k() {
-        let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let xs = create_variables(&mut csp_solver, 3);
-
-        let mut ub = CardinalityNetworkEncoder::new(xs.clone(), 3);
-        assert_eq!(
-            EncodingStatus::NoConflictDetected,
-            ub.constrain_at_most_k(5, &mut csp_solver)
-        );
+        let _ =
+            CardinalityNetworkEncoder::new(xs.clone(), 2, &mut csp_solver).expect("valid encoding");
 
         assert_eq!(
             ClauseAdditionOutcome::NoConflictDetected,
@@ -456,10 +399,9 @@ mod tests {
     }
 
     fn create_variables(csp_solver: &mut ConstraintSatisfactionSolver, n: usize) -> Vec<Literal> {
-        let xs = std::iter::from_fn(|| Some(csp_solver.create_new_propositional_variable()))
+        std::iter::from_fn(|| Some(csp_solver.create_new_propositional_variable()))
             .map(|var| Literal::new(var, true))
             .take(n)
-            .collect::<Vec<_>>();
-        xs
+            .collect::<Vec<_>>()
     }
 }

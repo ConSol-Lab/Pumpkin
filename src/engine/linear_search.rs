@@ -1,8 +1,6 @@
 use crate::{
     basic_types::{CSPSolverExecutionFlag, Function, Solution, SolutionValuePair, Stopwatch},
-    encoders::{
-        CardinalityNetworkEncoder, EncodingStatus, GeneralisedTotaliserEncoder, UpperBoundEncoder,
-    },
+    encoders::{PseudoBooleanConstraintEncoder, PseudoBooleanEncoding},
     pumpkin_asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
 };
 use log::info;
@@ -10,18 +8,11 @@ use log::info;
 use super::ConstraintSatisfactionSolver;
 
 pub struct LinearSearch {
-    upper_bound_encoding: UpperBoundEncoding,
-}
-
-#[derive(Clone, Copy, Debug)]
-#[allow(clippy::upper_case_acronyms)]
-pub enum UpperBoundEncoding {
-    GTE,
-    CNE,
+    upper_bound_encoding: PseudoBooleanEncoding,
 }
 
 impl LinearSearch {
-    pub fn new(upper_bound_encoding: UpperBoundEncoding) -> LinearSearch {
+    pub fn new(upper_bound_encoding: PseudoBooleanEncoding) -> LinearSearch {
         LinearSearch {
             upper_bound_encoding,
         }
@@ -55,16 +46,11 @@ impl LinearSearch {
             stopwatch.get_elapsed_time()
         );
 
-        let mut upper_bound_encoder: Box<dyn UpperBoundEncoder> = match self.upper_bound_encoding {
-            UpperBoundEncoding::GTE => Box::new(GeneralisedTotaliserEncoder::new(
-                objective_function,
-                csp_solver,
-            )),
-            UpperBoundEncoding::CNE => Box::new(CardinalityNetworkEncoder::from_function(
-                objective_function,
-                csp_solver,
-            )),
-        };
+        let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
+            objective_function,
+            csp_solver,
+            self.upper_bound_encoding,
+        );
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
@@ -80,7 +66,7 @@ impl LinearSearch {
 
             //in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
-            if let EncodingStatus::ConflictDetected = encoding_status {
+            if encoding_status.is_err() {
                 return SolutionValuePair::new(best_solution, best_objective_value);
             }
 

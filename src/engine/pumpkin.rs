@@ -9,16 +9,14 @@ use crate::{
         CSPSolverExecutionFlag, FileFormat, Function, IntegerVariable, Literal,
         PumpkinExecutionFlag, Stopwatch,
     },
+    encoders::PseudoBooleanEncoding,
     engine::ConstraintSatisfactionSolver,
     parsers::dimacs::{parse_cnf, parse_wcnf},
     propagators::SimpleLinearInequalityPropagator,
     pumpkin_asserts::pumpkin_assert_simple,
 };
 
-use super::{
-    linear_search::UpperBoundEncoding, LinearSearch, SATDataStructuresInternalParameters,
-    SatisfactionSolverOptions,
-};
+use super::{LinearSearch, SATDataStructuresInternalParameters, SatisfactionSolverOptions};
 
 pub struct Pumpkin {
     csp_solver: ConstraintSatisfactionSolver,
@@ -31,7 +29,7 @@ impl Pumpkin {
     pub fn new(
         sat_options: SATDataStructuresInternalParameters,
         solver_options: SatisfactionSolverOptions,
-        upper_bound_encoding: UpperBoundEncoding,
+        upper_bound_encoding: PseudoBooleanEncoding,
         time_limit: Option<Duration>,
     ) -> Pumpkin {
         Pumpkin {

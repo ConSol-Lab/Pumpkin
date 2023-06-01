@@ -10,6 +10,7 @@ mod result;
 
 use basic_types::*;
 use clap::Parser;
+use encoders::PseudoBooleanEncoding;
 use engine::*;
 use log::{error, info, warn, LevelFilter};
 use std::fs::OpenOptions;
@@ -69,8 +70,8 @@ struct Args {
     omit_call_site: bool,
 
     /// The encoding to use for the upper bound constraint in an optimisation problem.
-    #[arg(long = "upper-bound-encoding", default_value_t = UpperBoundEncoding::GTE, value_parser = upper_bound_encoding_parser)]
-    upper_bound_encoding: UpperBoundEncoding,
+    #[arg(long = "upper-bound-encoding", default_value_t = PseudoBooleanEncoding::GTE, value_parser = upper_bound_encoding_parser)]
+    upper_bound_encoding: PseudoBooleanEncoding,
 }
 
 fn debug_check_feasibility_and_objective_value(
@@ -248,10 +249,10 @@ fn learned_clause_sorting_strategy_parser(s: &str) -> Result<LearnedClauseSortin
     }
 }
 
-fn upper_bound_encoding_parser(s: &str) -> Result<UpperBoundEncoding, String> {
+fn upper_bound_encoding_parser(s: &str) -> Result<PseudoBooleanEncoding, String> {
     match s {
-        "gte" => Ok(UpperBoundEncoding::GTE),
-        "cne" => Ok(UpperBoundEncoding::CNE),
+        "gte" => Ok(PseudoBooleanEncoding::GTE),
+        "cne" => Ok(PseudoBooleanEncoding::CNE),
         value => Err(format!("'{value}' is not a valid upper bound encoding.")),
     }
 }
@@ -265,11 +266,11 @@ impl std::fmt::Display for LearnedClauseSortingStrategy {
     }
 }
 
-impl std::fmt::Display for UpperBoundEncoding {
+impl std::fmt::Display for PseudoBooleanEncoding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UpperBoundEncoding::GTE => write!(f, "gte"),
-            UpperBoundEncoding::CNE => write!(f, "cne"),
+            PseudoBooleanEncoding::GTE => write!(f, "gte"),
+            PseudoBooleanEncoding::CNE => write!(f, "cne"),
         }
     }
 }
