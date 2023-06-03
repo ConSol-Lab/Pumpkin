@@ -1,3 +1,5 @@
+[with time we would slowly phase out this document in favour of JIRA. The points below are some minor points that I did not yet process into JIRA but will eventually hopefully.]
+
 consider replacing custom error structs like "EncodingStatus" and "ClauseAdditionOutcome" with standard rust error handling.
   this was we can make use of the ? operator
   and we can have pumpkin error types in one place?
@@ -7,32 +9,14 @@ have a way to track number of clauses added at any point, useful when dealing wi
 
 add a method to create n literals, should be easier to use than the current new_literals() iterator 
 
-finish randomisation of initial vsids values
-finish assumption (interface)
-
-make a testing framework so that it is easier later to evaluate changes and correctness
-
 only allow the assignments_integer to create predicates
 
-better clause data structure
-binary watches
-custom vectors
-clause minimisation
-
-better watch list data structure
-lazy explanations
 lifting can be problematic given the updates of literals wrt to the domains
-add views for variables
-
-move file reading outside Pumpkin?
-
-add integration with MiniZinc (@Maarten?)
-  this may imply preprocessing of CP models, need to see how to do this properly
 
 clean up copying in the code, and replace with references where appropriate (not sure it would make a difference in the cases that are left)
   e.g., when passing a predicate or when returning predicates or trail entries
 
-could investigate adding explanation clauses permanently, as learned clauses, or not all. For now we do not add them to the problem.
+could investigate adding explanation clauses permanently, as learned clauses, or not all. For now we do not add them to the problem, but this is something we would need to investigate what is the best approach here.
 
 implement .iter() for propositional conjunction, currently it has an into_iter but it is not working as intended
 
