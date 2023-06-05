@@ -165,17 +165,17 @@ impl PseudoBooleanConstraintEncoder {
     }
 
     fn are_strenthening_conditions_met(&self, k: u64) -> bool {
-        if self.k_previous > k {
+        if self.k_previous <= k {
             debug!("The strenthened k value for the right hand side is not smaller than the previous k.");
             return false;
         }
 
-        if k >= self.constant_term {
+        if k < self.constant_term {
             debug!("The k is below the trivial lower bound, probably an error?");
             return false;
         }
 
-        if self.encoder.is_some() {
+        if self.encoder.is_none() {
             debug!("Strenthening to be applied but no encoding?");
             return false;
         }
