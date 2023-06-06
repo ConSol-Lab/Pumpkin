@@ -15,4 +15,12 @@ impl PropagationStatusCP {
     pub fn conflict_detected(&self) -> bool {
         !self.no_conflict()
     }
+
+    pub fn and_then<F: FnOnce() -> PropagationStatusCP>(self, next: F) -> PropagationStatusCP {
+        if self.no_conflict() {
+            next()
+        } else {
+            self
+        }
+    }
 }

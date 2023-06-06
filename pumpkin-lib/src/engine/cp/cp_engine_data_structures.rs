@@ -1,5 +1,5 @@
 use crate::{
-    basic_types::{IntegerVariable, Predicate, PropagatorIdentifier},
+    basic_types::{DomainId, Predicate, PropagatorIdentifier},
     propagators::ConstraintProgrammingPropagator,
 };
 
@@ -33,13 +33,11 @@ impl CPEngineDataStructures {
 impl CPEngineDataStructures {
     pub fn tighten_lower_bound(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_lower_bound: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
-        let old_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
-
         let outcome = self.assignments_integer.tighten_lower_bound_no_notify(
             integer_variable,
             new_lower_bound,
@@ -51,11 +49,8 @@ impl CPEngineDataStructures {
                 self.watch_list_cp
                     .notify_lower_bound_subscribed_propagators(
                         integer_variable,
-                        old_lower_bound,
-                        new_lower_bound,
                         cp_propagators,
                         &mut self.propagator_queue,
-                        &mut self.assignments_integer,
                     );
                 DomainOperationOutcome::Success
             }
@@ -65,13 +60,11 @@ impl CPEngineDataStructures {
 
     pub fn tighten_upper_bound(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_upper_bound: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
-        let old_upper_bound = self.assignments_integer.get_upper_bound(integer_variable);
-
         let outcome = self.assignments_integer.tighten_upper_bound_no_notify(
             integer_variable,
             new_upper_bound,
@@ -83,11 +76,8 @@ impl CPEngineDataStructures {
                 self.watch_list_cp
                     .notify_upper_bound_subscribed_propagators(
                         integer_variable,
-                        old_upper_bound,
-                        new_upper_bound,
                         cp_propagators,
                         &mut self.propagator_queue,
-                        &mut self.assignments_integer,
                     );
                 DomainOperationOutcome::Success
             }
@@ -97,7 +87,7 @@ impl CPEngineDataStructures {
 
     pub fn make_assignment(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         assigned_value: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
@@ -120,11 +110,8 @@ impl CPEngineDataStructures {
                     self.watch_list_cp
                         .notify_lower_bound_subscribed_propagators(
                             integer_variable,
-                            old_lower_bound,
-                            new_lower_bound,
                             cp_propagators,
                             &mut self.propagator_queue,
-                            &mut self.assignments_integer,
                         );
                 }
 
@@ -132,11 +119,8 @@ impl CPEngineDataStructures {
                     self.watch_list_cp
                         .notify_upper_bound_subscribed_propagators(
                             integer_variable,
-                            old_upper_bound,
-                            new_upper_bound,
                             cp_propagators,
                             &mut self.propagator_queue,
-                            &mut self.assignments_integer,
                         );
                 }
                 DomainOperationOutcome::Success
@@ -147,7 +131,7 @@ impl CPEngineDataStructures {
 
     pub fn remove_value_from_domain(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         removed_value_from_domain: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
@@ -171,11 +155,8 @@ impl CPEngineDataStructures {
                     self.watch_list_cp
                         .notify_lower_bound_subscribed_propagators(
                             integer_variable,
-                            old_lower_bound,
-                            new_lower_bound,
                             cp_propagators,
                             &mut self.propagator_queue,
-                            &mut self.assignments_integer,
                         );
                 }
                 //...if the inequality operation was an upper bound change
@@ -183,21 +164,16 @@ impl CPEngineDataStructures {
                     self.watch_list_cp
                         .notify_upper_bound_subscribed_propagators(
                             integer_variable,
-                            old_upper_bound,
-                            new_upper_bound,
                             cp_propagators,
                             &mut self.propagator_queue,
-                            &mut self.assignments_integer,
                         );
                 }
                 //...otherwise the operation created a hole in the domain
                 else {
                     self.watch_list_cp.notify_hole_subscribed_propagators(
                         integer_variable,
-                        removed_value_from_domain,
                         cp_propagators,
                         &mut self.propagator_queue,
-                        &mut self.assignments_integer,
                     );
                 }
                 DomainOperationOutcome::Success

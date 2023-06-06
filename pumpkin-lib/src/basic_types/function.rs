@@ -5,12 +5,12 @@ use crate::{
     pumpkin_assert_moderate,
 };
 
-use super::{IntegerVariable, Literal, Solution, WeightedLiteral};
+use super::{DomainId, Literal, Solution, WeightedLiteral};
 
 #[derive(Clone, Default)]
 pub struct Function {
     weighted_literals: HashMap<Literal, u64>,
-    weighted_integers: HashMap<IntegerVariable, u64>,
+    weighted_integers: HashMap<DomainId, u64>,
     constant_term: u64,
 }
 
@@ -43,7 +43,7 @@ impl Function {
         }
     }
 
-    pub fn add_weighted_integer(&mut self, integer_variable: IntegerVariable, weight: u64) {
+    pub fn add_weighted_integer(&mut self, integer_variable: DomainId, weight: u64) {
         *self.weighted_integers.entry(integer_variable).or_insert(0) += weight;
     }
 
@@ -55,7 +55,7 @@ impl Function {
         self.weighted_literals.iter()
     }
 
-    pub fn get_weighted_integers(&self) -> std::collections::hash_map::Iter<IntegerVariable, u64> {
+    pub fn get_weighted_integers(&self) -> std::collections::hash_map::Iter<DomainId, u64> {
         self.weighted_integers.iter()
     }
 
@@ -154,6 +154,6 @@ impl Function {
 
 #[derive(Clone)]
 pub struct WeightedInteger {
-    pub integer_variable: IntegerVariable,
+    pub integer_variable: DomainId,
     pub weight: u64,
 }

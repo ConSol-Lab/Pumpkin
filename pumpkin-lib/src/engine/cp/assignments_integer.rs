@@ -1,6 +1,6 @@
 use crate::{
     basic_types::{
-        IntegerVariable, IntegerVariableGeneratorIterator, Predicate, PropagatorIdentifier,
+        DomainId, IntegerVariableGeneratorIterator, Predicate, PropagatorIdentifier,
     },
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
@@ -75,11 +75,11 @@ impl AssignmentsInteger {
     //registers the domain of a new integer variable
     //note that this is an internal method that does _not_ allocate additional information necessary for the solver apart from the domain
     //when creating a new integer variable, use create_new_integer_variable in the ConstraintSatisfactionSolver
-    pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> IntegerVariable {
+    pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         self.domains
             .push(IntegerDomainExplicit::new(lower_bound, upper_bound));
 
-        IntegerVariable {
+        DomainId {
             id: self.num_integer_variables() - 1,
         }
     }
@@ -95,27 +95,27 @@ impl AssignmentsInteger {
 
 //methods for getting info about the domains
 impl AssignmentsInteger {
-    pub fn get_lower_bound(&self, integer_variable: IntegerVariable) -> i32 {
+    pub fn get_lower_bound(&self, integer_variable: DomainId) -> i32 {
         self.domains[integer_variable].lower_bound
     }
 
-    pub fn get_upper_bound(&self, integer_variable: IntegerVariable) -> i32 {
+    pub fn get_upper_bound(&self, integer_variable: DomainId) -> i32 {
         self.domains[integer_variable].upper_bound
     }
 
-    pub fn get_assigned_value(&self, integer_variable: IntegerVariable) -> i32 {
+    pub fn get_assigned_value(&self, integer_variable: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_integer_variable_assigned(integer_variable));
         self.domains[integer_variable].lower_bound
     }
 
-    pub fn get_lower_bound_predicate(&self, integer_variable: IntegerVariable) -> Predicate {
+    pub fn get_lower_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
         Predicate::LowerBound {
             integer_variable,
             lower_bound: self.get_lower_bound(integer_variable),
         }
     }
 
-    pub fn get_upper_bound_predicate(&self, integer_variable: IntegerVariable) -> Predicate {
+    pub fn get_upper_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
         let upper_bound = self.get_upper_bound(integer_variable);
         Predicate::UpperBound {
             integer_variable,
@@ -123,7 +123,7 @@ impl AssignmentsInteger {
         }
     }
 
-    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -132,7 +132,7 @@ impl AssignmentsInteger {
             .collect()
     }
 
-    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -141,7 +141,7 @@ impl AssignmentsInteger {
             .collect()
     }
 
-    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -155,7 +155,7 @@ impl AssignmentsInteger {
             .collect()
     }
 
-    pub fn is_value_in_domain(&self, integer_variable: IntegerVariable, value: i32) -> bool {
+    pub fn is_value_in_domain(&self, integer_variable: DomainId, value: i32) -> bool {
         //recall that the data structure is lazy
         //  so we first need to check whether the value falls within the bounds,
         //  and only then check the is_value_in_domain vector
@@ -164,13 +164,13 @@ impl AssignmentsInteger {
             && self.domains[integer_variable].is_value_in_domain[value as usize]
     }
 
-    pub fn is_integer_variable_assigned(&self, integer_variable: IntegerVariable) -> bool {
+    pub fn is_integer_variable_assigned(&self, integer_variable: DomainId) -> bool {
         self.get_lower_bound(integer_variable) == self.get_upper_bound(integer_variable)
     }
 
     pub fn is_integer_variable_assigned_to_value(
         &self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         value: i32,
     ) -> bool {
         self.is_integer_variable_assigned(integer_variable)
@@ -182,7 +182,7 @@ impl AssignmentsInteger {
 impl AssignmentsInteger {
     pub fn tighten_lower_bound_no_notify(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_lower_bound: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
     ) -> DomainOperationOutcome {
@@ -218,7 +218,7 @@ impl AssignmentsInteger {
 
     pub fn tighten_upper_bound_no_notify(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_upper_bound: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
     ) -> DomainOperationOutcome {
@@ -254,7 +254,7 @@ impl AssignmentsInteger {
 
     pub fn make_assignment_no_notify(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         assigned_value: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
     ) -> DomainOperationOutcome {
@@ -293,7 +293,7 @@ impl AssignmentsInteger {
 
     pub fn remove_value_from_domain_no_notify(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         removed_value_from_domain: i32,
         propagator_identifier: Option<PropagatorIdentifier>,
     ) -> DomainOperationOutcome {

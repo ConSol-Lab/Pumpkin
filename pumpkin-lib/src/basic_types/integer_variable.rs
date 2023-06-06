@@ -1,22 +1,22 @@
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
-pub struct IntegerVariable {
+pub struct DomainId {
     pub id: u32,
 }
 
-impl<T> std::ops::Index<IntegerVariable> for Vec<T> {
+impl<T> std::ops::Index<DomainId> for Vec<T> {
     type Output = T;
-    fn index(&self, index_variable: IntegerVariable) -> &T {
+    fn index(&self, index_variable: DomainId) -> &T {
         self.index(index_variable.id as usize)
     }
 }
 
-impl<T> std::ops::IndexMut<IntegerVariable> for Vec<T> {
-    fn index_mut(&mut self, index_variable: IntegerVariable) -> &mut T {
+impl<T> std::ops::IndexMut<DomainId> for Vec<T> {
+    fn index_mut(&mut self, index_variable: DomainId) -> &mut T {
         self.index_mut(index_variable.id as usize)
     }
 }
 
-impl std::fmt::Display for IntegerVariable {
+impl std::fmt::Display for DomainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "x{}", self.id)
     }
@@ -37,14 +37,14 @@ impl IntegerVariableGeneratorIterator {
 }
 
 impl Iterator for IntegerVariableGeneratorIterator {
-    type Item = IntegerVariable;
+    type Item = DomainId;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_index == self.end_index {
             return None;
         }
 
-        let variable = IntegerVariable {
+        let variable = DomainId {
             id: self.current_index,
         };
         self.current_index += 1;

@@ -1,4 +1,4 @@
-use crate::basic_types::{IntegerVariable, Predicate, PropagatorIdentifier};
+use crate::basic_types::{DomainId, Predicate, PropagatorIdentifier};
 
 use super::{assignments_integer::DomainOperationOutcome, AssignmentsInteger};
 
@@ -28,25 +28,25 @@ impl DomainManager<'_> {
 
 //methods for getting info about the domains
 impl DomainManager<'_> {
-    pub fn get_lower_bound(&self, integer_variable: IntegerVariable) -> i32 {
+    pub fn get_lower_bound(&self, integer_variable: DomainId) -> i32 {
         self.assignments_integer.get_lower_bound(integer_variable)
     }
 
-    pub fn get_upper_bound(&self, integer_variable: IntegerVariable) -> i32 {
+    pub fn get_upper_bound(&self, integer_variable: DomainId) -> i32 {
         self.assignments_integer.get_upper_bound(integer_variable)
     }
 
-    pub fn get_lower_bound_predicate(&self, integer_variable: IntegerVariable) -> Predicate {
+    pub fn get_lower_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
         self.assignments_integer
             .get_lower_bound_predicate(integer_variable)
     }
 
-    pub fn get_upper_bound_predicate(&self, integer_variable: IntegerVariable) -> Predicate {
+    pub fn get_upper_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
         self.assignments_integer
             .get_upper_bound_predicate(integer_variable)
     }
 
-    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -54,7 +54,7 @@ impl DomainManager<'_> {
             .get_lower_bound_predicates(integer_variables)
     }
 
-    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -62,7 +62,7 @@ impl DomainManager<'_> {
             .get_upper_bound_predicates(integer_variables)
     }
 
-    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a IntegerVariable>>(
+    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         integer_variables: I,
     ) -> Vec<Predicate> {
@@ -70,12 +70,12 @@ impl DomainManager<'_> {
             .get_bound_predicates(integer_variables)
     }
 
-    pub fn is_value_in_domain(&self, integer_variable: IntegerVariable, value: i32) -> bool {
+    pub fn is_value_in_domain(&self, integer_variable: DomainId, value: i32) -> bool {
         self.assignments_integer
             .is_value_in_domain(integer_variable, value)
     }
 
-    pub fn is_integer_variable_assigned(&self, integer_variable: IntegerVariable) -> bool {
+    pub fn is_integer_variable_assigned(&self, integer_variable: DomainId) -> bool {
         self.assignments_integer
             .is_integer_variable_assigned(integer_variable)
     }
@@ -85,7 +85,7 @@ impl DomainManager<'_> {
 impl DomainManager<'_> {
     pub fn tighten_lower_bound(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_lower_bound: i32,
     ) -> DomainOperationOutcome {
         self.assignments_integer.tighten_lower_bound_no_notify(
@@ -97,7 +97,7 @@ impl DomainManager<'_> {
 
     pub fn tighten_upper_bound(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         new_upper_bound: i32,
     ) -> DomainOperationOutcome {
         self.assignments_integer.tighten_upper_bound_no_notify(
@@ -109,7 +109,7 @@ impl DomainManager<'_> {
 
     pub fn make_assignment(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         assigned_value: i32,
     ) -> DomainOperationOutcome {
         self.assignments_integer.make_assignment_no_notify(
@@ -121,7 +121,7 @@ impl DomainManager<'_> {
 
     pub fn remove_value_from_domain(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         removed_value_from_domain: i32,
     ) -> DomainOperationOutcome {
         self.assignments_integer.remove_value_from_domain_no_notify(

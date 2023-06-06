@@ -20,6 +20,7 @@ mod propositional_variable;
 mod solution;
 mod solution_value_pair;
 mod stopwatch;
+pub mod variables;
 mod weighted_literal;
 
 pub use branching_decision::BranchingDecision;
@@ -31,7 +32,7 @@ pub use enqueue_status::EnqueueStatus;
 pub use file_format::FileFormat;
 pub use function::Function;
 pub use instance::Instance;
-pub use integer_variable::IntegerVariable;
+pub use integer_variable::DomainId;
 pub use integer_variable::IntegerVariableGeneratorIterator;
 pub use key_value_heap::KeyValueHeap;
 pub use literal::Literal;

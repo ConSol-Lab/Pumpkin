@@ -1,5 +1,5 @@
 use crate::basic_types::{
-    ClauseReference, IntegerVariable, Literal, Predicate, PropagatorIdentifier,
+    ClauseReference, DomainId, Literal, Predicate, PropagatorIdentifier,
     PropositionalVariable,
 };
 
@@ -183,7 +183,7 @@ impl SATCPMediator {
         upper_bound: i32,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
-    ) -> IntegerVariable {
+    ) -> DomainId {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Inconsistent bounds.");
         pumpkin_assert_simple!(lower_bound != upper_bound, "During development we ask that the bounds are different, but in principle no issues if the bounds are equal, it just seems strange for now");
         pumpkin_assert_simple!(
@@ -385,7 +385,7 @@ impl SATCPMediator {
 impl SATCPMediator {
     pub fn get_lower_bound_literal(
         &self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         lower_bound: i32,
     ) -> Literal {
         if lower_bound as usize
@@ -402,7 +402,7 @@ impl SATCPMediator {
 
     pub fn get_upper_bound_literal(
         &self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         upper_bound: i32,
     ) -> Literal {
         !self.get_lower_bound_literal(integer_variable, upper_bound + 1)
@@ -410,7 +410,7 @@ impl SATCPMediator {
 
     pub fn get_equality_literal(
         &self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         equality_constant: i32,
     ) -> Literal {
         if equality_constant as usize
@@ -426,7 +426,7 @@ impl SATCPMediator {
 
     pub fn get_inequality_literal(
         &self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         not_equal_constant: i32,
     ) -> Literal {
         !self.get_equality_literal(integer_variable, not_equal_constant)

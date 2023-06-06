@@ -1,21 +1,21 @@
-use super::IntegerVariable;
+use super::DomainId;
 
 #[derive(Clone, PartialEq, Eq, Copy)]
 pub enum Predicate {
     LowerBound {
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         lower_bound: i32,
     },
     UpperBound {
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         upper_bound: i32,
     },
     NotEqual {
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         not_equal_constant: i32,
     },
     Equal {
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         equality_constant: i32,
     },
 }
@@ -72,7 +72,7 @@ impl Predicate {
         }
     }
 
-    pub fn get_integer_variable(&self) -> IntegerVariable {
+    pub fn get_integer_variable(&self) -> DomainId {
         match *self {
             Predicate::LowerBound {
                 integer_variable,
@@ -94,7 +94,7 @@ impl Predicate {
     }
 
     pub fn get_dummy_predicate() -> Predicate {
-        let integer_variable = IntegerVariable { id: u32::MAX };
+        let integer_variable = DomainId { id: u32::MAX };
         Predicate::Equal {
             integer_variable,
             equality_constant: i32::MAX,

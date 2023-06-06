@@ -10,4 +10,4 @@ pub use assignments_integer::DomainOperationOutcome;
 pub use cp_engine_data_structures::CPEngineDataStructures;
 pub use domain_manager::DomainManager;
 pub use propagator_queue::PropagatorQueue;
-pub use watch_list_cp::WatchListCP;
+pub use watch_list_cp::{DomainEvent, WatchListCP, Watchers};

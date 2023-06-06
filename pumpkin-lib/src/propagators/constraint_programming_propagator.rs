@@ -1,8 +1,6 @@
 use crate::{
-    basic_types::{
-        EnqueueStatus, IntegerVariable, Predicate, PropagationStatusCP, PropositionalConjunction,
-    },
-    engine::DomainManager,
+    basic_types::{Predicate, PropagationStatusCP, PropositionalConjunction},
+    engine::{DomainManager, Watchers},
 };
 
 pub trait ConstraintProgrammingPropagator {
@@ -16,34 +14,6 @@ pub trait ConstraintProgrammingPropagator {
     //Called each time the solver backtracks
     //  the propagator can then update its internal data structures given the new variable domains
     fn synchronise(&mut self, domains: &DomainManager);
-
-    //Notifies the propagator that a domain change occured with respect to the variable
-    //  a domain change is always more constraining, e.g., the new lower bound will be greater than the old lower bound
-    //	usually the propagator will update internal data structures to prepare for propagation
-    //The return value indicates if the propagator should be enqueued for propagation
-    //	note: the propagator registers which variables are relevant for it using 'get_integer_variables_to_watch_for_...' (see below)
-    fn notify_lower_bound_integer_variable_change(
-        &mut self,
-        integer_variable: IntegerVariable,
-        old_lower_bound: i32,
-        new_lower_bound: i32,
-        domains: &DomainManager,
-    ) -> EnqueueStatus;
-
-    fn notify_upper_bound_integer_variable_change(
-        &mut self,
-        integer_variable: IntegerVariable,
-        old_upper_bound: i32,
-        new_upper_bound: i32,
-        domains: &DomainManager,
-    ) -> EnqueueStatus;
-
-    fn notify_domain_hole_integer_variable_change(
-        &mut self,
-        integer_variable: IntegerVariable,
-        removed_value_from_domain: i32,
-        domains: &DomainManager,
-    ) -> EnqueueStatus;
 
     //Returns the reason for propagation as a conjunction of predicates that imply the propagation
     //  reason -> predicate
@@ -61,10 +31,8 @@ pub trait ConstraintProgrammingPropagator {
     //  this is a convenience method that is used for printing
     fn name(&self) -> &str;
 
-    //These methods indicates for which variables and which events should the propagator be notified
-    fn get_integer_variables_to_watch_for_lower_bound_changes(&self) -> Vec<IntegerVariable>;
-    fn get_integer_variables_to_watch_for_upper_bound_changes(&self) -> Vec<IntegerVariable>;
-    fn get_integer_variables_to_watch_for_domain_hole_changes(&self) -> Vec<IntegerVariable>;
+    /// Indicate what variables to watch for this propagator.
+    fn register_watches(&self, watchers: &mut Watchers<'_>);
 
     //Initialises the propagator and does root propagation
     //	called only once by the solver when the propagator is added

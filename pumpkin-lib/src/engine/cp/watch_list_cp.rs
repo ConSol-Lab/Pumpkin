@@ -1,14 +1,25 @@
 use crate::{
-    basic_types::{EnqueueStatus, IntegerVariable, PropagatorIdentifier},
+    basic_types::{DomainId, PropagatorIdentifier},
     propagators::ConstraintProgrammingPropagator,
     pumpkin_assert_moderate,
 };
 
-use super::{AssignmentsInteger, DomainManager, PropagatorQueue};
+use super::PropagatorQueue;
 
 #[derive(Default)]
 pub struct WatchListCP {
     watchers: Vec<WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+}
+
+pub struct Watchers<'a> {
+    propagator_id: PropagatorIdentifier,
+    watch_list: &'a mut WatchListCP,
+}
+
+pub enum DomainEvent {
+    Any,
+    LowerBound,
+    UpperBound,
 }
 
 //public functions
@@ -26,40 +37,23 @@ impl WatchListCP {
         propagator: &dyn ConstraintProgrammingPropagator,
         propagator_identifier: PropagatorIdentifier,
     ) {
-        for integer_variable in propagator.get_integer_variables_to_watch_for_lower_bound_changes()
-        {
-            self.watch_lower_bound_domain_changes(integer_variable, propagator_identifier);
-        }
+        let mut watchers = Watchers {
+            propagator_id: propagator_identifier,
+            watch_list: self,
+        };
 
-        for integer_variable in propagator.get_integer_variables_to_watch_for_upper_bound_changes()
-        {
-            self.watch_upper_bound_domain_changes(integer_variable, propagator_identifier);
-        }
-
-        for integer_variable in propagator.get_integer_variables_to_watch_for_domain_hole_changes()
-        {
-            self.watch_hole_domain_changes(integer_variable, propagator_identifier);
-        }
+        propagator.register_watches(&mut watchers);
     }
 
-    pub fn get_lower_bound_watchers(
-        &self,
-        integer_variable: IntegerVariable,
-    ) -> &[PropagatorIdentifier] {
+    pub fn get_lower_bound_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
         &self.watchers[integer_variable].lower_bound_watchers
     }
 
-    pub fn get_upper_bound_watchers(
-        &self,
-        integer_variable: IntegerVariable,
-    ) -> &[PropagatorIdentifier] {
+    pub fn get_upper_bound_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
         &self.watchers[integer_variable].upper_bound_watchers
     }
 
-    pub fn get_hole_domain_watchers(
-        &self,
-        integer_variable: IntegerVariable,
-    ) -> &[PropagatorIdentifier] {
+    pub fn get_hole_domain_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
         &self.watchers[integer_variable].hole_watchers
     }
 }
@@ -68,7 +62,7 @@ impl WatchListCP {
 impl WatchListCP {
     fn watch_lower_bound_domain_changes(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         propagator_id: PropagatorIdentifier,
     ) {
         pumpkin_assert_moderate!(
@@ -85,7 +79,7 @@ impl WatchListCP {
 
     fn watch_upper_bound_domain_changes(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         propagator_id: PropagatorIdentifier,
     ) {
         pumpkin_assert_moderate!(
@@ -102,7 +96,7 @@ impl WatchListCP {
 
     fn watch_hole_domain_changes(
         &mut self,
-        integer_variable: IntegerVariable,
+        integer_variable: DomainId,
         propagator_id: PropagatorIdentifier,
     ) {
         pumpkin_assert_moderate!(
@@ -119,80 +113,59 @@ impl WatchListCP {
 
     pub fn notify_lower_bound_subscribed_propagators(
         &self,
-        integer_variable: IntegerVariable,
-        old_lower_bound: i32,
-        new_lower_bound: i32,
+        integer_variable: DomainId,
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
-        assignments_integer: &mut AssignmentsInteger,
     ) {
         for propagator_identifier in &self.watchers[integer_variable].lower_bound_watchers {
             let propagator = &mut propagators_cp[propagator_identifier.id as usize];
-            let domains =
-                DomainManager::new(propagator_identifier.id as usize, assignments_integer);
-
-            let enqueue_status = propagator.notify_lower_bound_integer_variable_change(
-                integer_variable,
-                old_lower_bound,
-                new_lower_bound,
-                &domains,
-            );
-
-            if let EnqueueStatus::ShouldEnqueue = enqueue_status {
-                propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
-            }
+            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
         }
     }
 
     pub fn notify_upper_bound_subscribed_propagators(
         &self,
-        integer_variable: IntegerVariable,
-        old_upper_bound: i32,
-        new_upper_bound: i32,
+        integer_variable: DomainId,
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
-        assignments_integer: &mut AssignmentsInteger,
     ) {
         for propagator_identifier in &self.watchers[integer_variable].upper_bound_watchers {
             let propagator = &mut propagators_cp[propagator_identifier.id as usize];
-            let domains =
-                DomainManager::new(propagator_identifier.id as usize, assignments_integer);
 
-            let enqueue_status = propagator.notify_upper_bound_integer_variable_change(
-                integer_variable,
-                old_upper_bound,
-                new_upper_bound,
-                &domains,
-            );
-
-            if let EnqueueStatus::ShouldEnqueue = enqueue_status {
-                propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
-            }
+            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
         }
     }
 
     pub fn notify_hole_subscribed_propagators(
         &self,
-        integer_variable: IntegerVariable,
-        removed_value_from_domain: i32,
+        integer_variable: DomainId,
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
-        assignments_integer: &mut AssignmentsInteger,
     ) {
         for propagator_identifier in &self.watchers[integer_variable].hole_watchers {
             let propagator = &mut propagators_cp[propagator_identifier.id as usize];
-            let domains =
-                DomainManager::new(propagator_identifier.id as usize, assignments_integer);
+            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
+        }
+    }
+}
 
-            let enqueue_status = propagator.notify_domain_hole_integer_variable_change(
-                integer_variable,
-                removed_value_from_domain,
-                &domains,
-            );
-
-            if let EnqueueStatus::ShouldEnqueue = enqueue_status {
-                propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
+impl<'a> Watchers<'a> {
+    pub fn watch(&mut self, domain_id: DomainId, event: DomainEvent) {
+        match event {
+            DomainEvent::Any => {
+                self.watch_list
+                    .watch_hole_domain_changes(domain_id, self.propagator_id);
+                self.watch_list
+                    .watch_lower_bound_domain_changes(domain_id, self.propagator_id);
+                self.watch_list
+                    .watch_upper_bound_domain_changes(domain_id, self.propagator_id);
             }
+            DomainEvent::LowerBound => self
+                .watch_list
+                .watch_lower_bound_domain_changes(domain_id, self.propagator_id),
+            DomainEvent::UpperBound => self
+                .watch_list
+                .watch_upper_bound_domain_changes(domain_id, self.propagator_id),
         }
     }
 }

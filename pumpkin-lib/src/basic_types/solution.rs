@@ -3,7 +3,7 @@ use crate::{
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
-use super::{IntegerVariable, Literal, PropositionalVariable};
+use super::{DomainId, Literal, PropositionalVariable};
 
 pub struct Solution {
     truth_values: Vec<bool>,
@@ -107,9 +107,9 @@ impl Solution {
     }
 }
 
-impl std::ops::Index<IntegerVariable> for Solution {
+impl std::ops::Index<DomainId> for Solution {
     type Output = i32;
-    fn index(&self, integer_variable: IntegerVariable) -> &i32 {
+    fn index(&self, integer_variable: DomainId) -> &i32 {
         &self.integer_values[integer_variable]
     }
 }

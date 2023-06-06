@@ -5,10 +5,9 @@ use super::{
     SATDataStructuresInternalParameters,
 };
 use crate::basic_types::{
-    BranchingDecision, CSPSolverExecutionFlag, ClauseAdditionOutcome, ClauseReference,
-    IntegerVariable, Literal, PropagationStatusCP, PropagationStatusClausal,
-    PropagationStatusOneStepCP, PropagatorIdentifier, PropositionalConjunction,
-    PropositionalVariable, Stopwatch,
+    BranchingDecision, CSPSolverExecutionFlag, ClauseAdditionOutcome, ClauseReference, DomainId,
+    Literal, PropagationStatusCP, PropagationStatusClausal, PropagationStatusOneStepCP,
+    PropagatorIdentifier, PropositionalConjunction, PropositionalVariable, Stopwatch,
 };
 use crate::engine::{DebugHelper, DomainManager};
 use crate::propagators::ConstraintProgrammingPropagator;
@@ -120,11 +119,7 @@ impl ConstraintSatisfactionSolver {
             .create_new_propositional_variable(&mut self.sat_data_structures)
     }
 
-    pub fn create_new_integer_variable(
-        &mut self,
-        lower_bound: i32,
-        upper_bound: i32,
-    ) -> IntegerVariable {
+    pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         self.sat_cp_mediator.create_new_integer_variable(
             lower_bound,
             upper_bound,
@@ -142,11 +137,7 @@ impl ConstraintSatisfactionSolver {
         &self.sat_data_structures.assignments_propositional
     }
 
-    pub fn get_lower_bound_literal(
-        &self,
-        integer_variable: IntegerVariable,
-        lower_bound: i32,
-    ) -> Literal {
+    pub fn get_lower_bound_literal(&self, integer_variable: DomainId, lower_bound: i32) -> Literal {
         self.sat_cp_mediator
             .get_lower_bound_literal(integer_variable, lower_bound)
     }
@@ -742,7 +733,10 @@ impl ConstraintSatisfactionSolver {
 
 //methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
-    pub fn add_propagator(&mut self, propagator_to_add: Box<dyn ConstraintProgrammingPropagator>) {
+    pub fn add_propagator(
+        &mut self,
+        propagator_to_add: Box<dyn ConstraintProgrammingPropagator>,
+    ) -> bool {
         pumpkin_assert_simple!(propagator_to_add.priority() <= 3, "The propagator priority exceeds 3. Currently we only support values up to 3, but this can easily be changed if there is a good reason.");
 
         self.sat_data_structures
@@ -764,14 +758,16 @@ impl ConstraintSatisfactionSolver {
             .watch_list_cp
             .add_watches_for_propagator(new_propagator.as_ref(), new_propagator_id);
 
-        new_propagator.initialise_at_root(&mut domains);
+        if new_propagator
+            .initialise_at_root(&mut domains)
+            .conflict_detected()
+        {
+            false
+        } else {
+            self.propagate_enqueued();
 
-        let root_status = new_propagator.initialise_at_root(&mut domains);
-
-        pumpkin_assert_simple!(root_status.no_conflict(), "For now we crash when adding a new propagator that detects a conflict at the root node, even though this is not necessarily an error. Should handle better in the future.");
-
-        self.propagate_enqueued();
-        pumpkin_assert_simple!(self.state.no_conflict(), "Root conflict detected after adding propagator, for now we crash the program but this may not necessarily be an error.");
+            self.state.conflict_detected()
+        }
     }
 
     pub fn add_permanent_clause(&mut self, literals: Vec<Literal>) -> ClauseAdditionOutcome {
