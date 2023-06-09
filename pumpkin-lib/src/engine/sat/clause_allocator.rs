@@ -45,7 +45,7 @@ impl ClauseAllocator {
         } else {
             //reuse a clause reference from the deleted clause pool
             let clause_reference = self.deleted_clause_ids.pop().unwrap();
-            self.allocated_clauses[clause_reference.id as usize] =
+            self.allocated_clauses[clause_reference.id as usize - 1] =
                 Clause::new(literals, is_learned);
 
             pumpkin_assert_simple!(
