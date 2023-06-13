@@ -1,8 +1,11 @@
 use thiserror::Error;
 
+use crate::parsers::dimacs::DimacsParseError;
+
 pub type PumpkinResult<T> = Result<T, PumpkinError>;
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum PumpkinError {
     #[error("Hard clauses violated")]
     InconsistentSolution,
@@ -16,4 +19,6 @@ pub enum PumpkinError {
     InvalidInstanceFile,
     #[error("No file location given")]
     MissingFileError,
+    #[error("The dimacs file was invalid")]
+    InvalidDimacs(#[from] DimacsParseError),
 }

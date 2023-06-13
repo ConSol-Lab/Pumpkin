@@ -1,5 +1,6 @@
 [workspace]
 members = ["./pumpkin-lib", "./pumpkin-cli"]
+resolver = "2"
 
 [profile.rel-with-debug]
 inherits = "release"

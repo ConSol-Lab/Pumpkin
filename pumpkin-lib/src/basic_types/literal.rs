@@ -2,7 +2,7 @@ use crate::pumpkin_assert_moderate;
 
 use super::PropositionalVariable;
 
-#[derive(Default, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Literal {
     code: u32,
 }
