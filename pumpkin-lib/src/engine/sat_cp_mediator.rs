@@ -1,6 +1,5 @@
 use crate::basic_types::{
-    ClauseReference, DomainId, Literal, Predicate, PropagatorIdentifier,
-    PropositionalVariable,
+    ClauseReference, DomainId, Literal, Predicate, PropagatorIdentifier, PropositionalVariable,
 };
 
 use crate::engine::DebugHelper;
@@ -185,25 +184,7 @@ impl SATCPMediator {
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> DomainId {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Inconsistent bounds.");
-        pumpkin_assert_simple!(lower_bound != upper_bound, "During development we ask that the bounds are different, but in principle no issues if the bounds are equal, it just seems strange for now");
-        pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables() as usize
-                == self.mapping_integer_variable_to_lower_bound_literals.len()
-        );
-        pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables() as usize
-                == self.mapping_integer_variable_to_equality_literals.len()
-        );
-        pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables()
-                == cp_data_structures.watch_list_cp.num_integer_variables()
-        );
+        pumpkin_assert_simple!(self.debug_check_consistency(cp_data_structures));
 
         let true_literal = sat_data_structures.assignments_propositional.true_literal;
         let false_literal = sat_data_structures.assignments_propositional.false_literal;
@@ -245,7 +226,10 @@ impl SATCPMediator {
 
             lower_bound_literals.push(Literal::new(propositional_variable, true));
         }
-        pumpkin_assert_simple!(lower_bound_literals.len() == (upper_bound + 1) as usize);
+
+        // Push the literal ~[x >= upper_bound + 1]
+        lower_bound_literals.push(false_literal);
+        pumpkin_assert_simple!(lower_bound_literals.len() == (upper_bound + 2) as usize);
 
         //add clauses to define the variables appropriately
 
@@ -294,32 +278,36 @@ impl SATCPMediator {
 
             equality_literals.push(Literal::new(propositional_variable, true));
         }
-        //  corner case #2: [x == upper_bound] <-> [x >= upper_bound]}
-        equality_literals.push(lower_bound_literals[upper_bound as usize]);
-        //add predicate information to the [x == upper_bound] literal
-        self.add_predicate_information_to_propositional_variable(
-            lower_bound_literals[upper_bound as usize].get_propositional_variable(),
-            Predicate::Equal {
-                integer_variable,
-                equality_constant: upper_bound,
-            },
-        );
+
+        if lower_bound < upper_bound {
+            //  corner case #2: [x == upper_bound] <-> [x >= upper_bound]}
+            equality_literals.push(lower_bound_literals[upper_bound as usize]);
+            //add predicate information to the [x == upper_bound] literal
+            self.add_predicate_information_to_propositional_variable(
+                lower_bound_literals[upper_bound as usize].get_propositional_variable(),
+                Predicate::Equal {
+                    integer_variable,
+                    equality_constant: upper_bound,
+                },
+            );
+        }
 
         pumpkin_assert_simple!(equality_literals.len() == (upper_bound + 1) as usize);
 
         //	define equality literals
-        //		[x == value] <-> [x >= value] AND ~[x >= value]
+        //		[x == value] <-> [x >= value] AND ~[x >= value + 1]
         //		recall from above that [x == lower_bound] and [x == upper_bound] are effectively defined by being set to the corresponding lower bound literals, and so are skipped
         for i in ((lower_bound + 1) as usize)..(upper_bound as usize) {
             //one side of the implication <-
             sat_data_structures.add_permanent_ternary_clause_unchecked(
                 !lower_bound_literals[i],
-                !lower_bound_literals[i + 1],
+                lower_bound_literals[i + 1],
                 equality_literals[i],
             );
             //the other side of the implication ->
             sat_data_structures
                 .add_permanent_implication_unchecked(equality_literals[i], lower_bound_literals[i]);
+
             sat_data_structures.add_permanent_implication_unchecked(
                 equality_literals[i],
                 !lower_bound_literals[i + 1],
@@ -383,11 +371,7 @@ impl SATCPMediator {
 
 //methods for getting simple information on the interface of SAT and CP
 impl SATCPMediator {
-    pub fn get_lower_bound_literal(
-        &self,
-        integer_variable: DomainId,
-        lower_bound: i32,
-    ) -> Literal {
+    pub fn get_lower_bound_literal(&self, integer_variable: DomainId, lower_bound: i32) -> Literal {
         if lower_bound as usize
             >= self.mapping_integer_variable_to_lower_bound_literals[integer_variable].len()
         {
@@ -400,11 +384,7 @@ impl SATCPMediator {
         }
     }
 
-    pub fn get_upper_bound_literal(
-        &self,
-        integer_variable: DomainId,
-        upper_bound: i32,
-    ) -> Literal {
+    pub fn get_upper_bound_literal(&self, integer_variable: DomainId, upper_bound: i32) -> Literal {
         !self.get_lower_bound_literal(integer_variable, upper_bound + 1)
     }
 
@@ -519,5 +499,27 @@ impl SATCPMediator {
 
             sat_data_structures.add_explanation_clause_unchecked(explanation_literals)
         }
+    }
+
+    fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
+        pumpkin_assert_simple!(
+            cp_data_structures
+                .assignments_integer
+                .num_integer_variables() as usize
+                == self.mapping_integer_variable_to_lower_bound_literals.len()
+        );
+        pumpkin_assert_simple!(
+            cp_data_structures
+                .assignments_integer
+                .num_integer_variables() as usize
+                == self.mapping_integer_variable_to_equality_literals.len()
+        );
+        pumpkin_assert_simple!(
+            cp_data_structures
+                .assignments_integer
+                .num_integer_variables()
+                == cp_data_structures.watch_list_cp.num_integer_variables()
+        );
+        true
     }
 }

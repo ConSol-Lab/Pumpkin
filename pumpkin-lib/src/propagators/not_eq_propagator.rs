@@ -75,10 +75,7 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::DomainId,
-        engine::{ConstraintSatisfactionSolver, DomainOperationOutcome},
-    };
+    use crate::engine::ConstraintSatisfactionSolver;
 
     use super::*;
 
@@ -86,7 +83,7 @@ mod tests {
     fn propagator_removes_from_y_the_fixed_value_of_x() {
         let mut solver = ConstraintSatisfactionSolver::default();
         let x = solver.create_new_integer_variable(1, 10);
-        let y = ConstantView(4);
+        let y = solver.create_new_integer_variable(4, 4);
 
         solver.add_propagator(Box::new(NotEq::new(x, y)));
 
@@ -97,77 +94,10 @@ mod tests {
     fn propagator_removes_from_x_the_fixed_value_of_y() {
         let mut solver = ConstraintSatisfactionSolver::default();
         let y = solver.create_new_integer_variable(1, 10);
-        let x = ConstantView(4);
+        let x = solver.create_new_integer_variable(4, 4);
 
         solver.add_propagator(Box::new(NotEq::new(x, y)));
 
         assert!(!solver.get_integer_assignments().is_value_in_domain(y, 4));
-    }
-
-    /// Model a variable as a constant. This does not fully implement the IntVar trait, but should
-    /// be good enough for tests.
-    #[derive(Clone)]
-    pub struct ConstantView(i32);
-
-    impl IntVar for ConstantView {
-        fn lower_bound(&self, _: &DomainManager) -> i32 {
-            self.0
-        }
-
-        fn upper_bound(&self, _: &DomainManager) -> i32 {
-            self.0
-        }
-
-        fn contains(&self, _: &DomainManager, value: i32) -> bool {
-            self.0 == value
-        }
-
-        fn remove(&self, _: &mut DomainManager, _: i32) -> DomainOperationOutcome {
-            todo!()
-        }
-
-        fn equality_predicate(&self, value: i32) -> Predicate {
-            assert_eq!(
-                value, self.0,
-                "Can only create equality predicate if the value {value} matches the constant {}.",
-                self.0
-            );
-
-            Predicate::Equal {
-                integer_variable: DomainId { id: 0 },
-                equality_constant: value,
-            }
-        }
-
-        fn disequality_predicate(&self, value: i32) -> Predicate {
-            assert_ne!(
-                value, self.0,
-                "Can only create disequality predicate if the value {value} differs from the constant {}.",
-                self.0
-            );
-
-            Predicate::NotEqual {
-                integer_variable: DomainId { id: 0 },
-                not_equal_constant: value,
-            }
-        }
-
-        fn watch(&self, _: &mut Watchers<'_>, _: DomainEvent) {}
-
-        fn lower_bound_predicate(&self, _: i32) -> Predicate {
-            todo!()
-        }
-
-        fn upper_bound_predicate(&self, _: i32) -> Predicate {
-            todo!()
-        }
-
-        fn set_lower_bound(&self, _: &mut DomainManager, _: i32) -> DomainOperationOutcome {
-            todo!()
-        }
-
-        fn set_upper_bound(&self, _: &mut DomainManager, _: i32) -> DomainOperationOutcome {
-            todo!()
-        }
     }
 }
