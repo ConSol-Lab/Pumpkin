@@ -112,7 +112,10 @@ fn configure_logging(
 fn main() {
     match run() {
         Ok(()) => {}
-        Err(e) => error!("Execution failed, error: {}", e),
+        Err(e) => {
+            error!("Execution failed, error: {}", e);
+            std::process::exit(1);
+        }
     }
 }
 
@@ -290,7 +293,7 @@ fn time_limit_in_secs(time_limit: Option<Duration>) -> i64 {
 }
 
 fn stringify_solution(solution: &Solution) -> String {
-    (0..solution.num_propositional_variables())
+    (1..solution.num_propositional_variables())
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
             if solution[var] {
@@ -299,6 +302,7 @@ fn stringify_solution(solution: &Solution) -> String {
                 format!("-{} ", var.index())
             }
         })
+        .chain(std::iter::once("0".to_string()))
         .collect::<String>()
 }
 

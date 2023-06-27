@@ -1,5 +1,5 @@
 [workspace]
-members = ["./pumpkin-lib", "./pumpkin-cli"]
+members = ["./pumpkin-lib", "./pumpkin-cli", "./integration-tests"]
 resolver = "2"
 
 [profile.rel-with-debug]
