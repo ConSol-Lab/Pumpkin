@@ -1,3 +1,5 @@
+use log::warn;
+
 use crate::{
     basic_types::{
         BranchingDecision, ClauseReference, ConstraintOperationError, Literal,
@@ -69,6 +71,10 @@ impl SATEngineDataStructures {
         literals: Vec<Literal>,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(self.assignments_propositional.is_at_the_root_level());
+
+        if literals.is_empty() {
+            warn!("Adding empty clause, unusual!");
+        }
 
         let literals =
             SATEngineDataStructures::preprocess_clause(literals, &self.assignments_propositional);

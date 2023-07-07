@@ -224,6 +224,7 @@ where
                         self.start_literal(b, true);
                     }
 
+                    //covers the exotic case of having an empty clause in the dimacs file
                     b'0' => self.finish_clause()?,
 
                     b'-' => self.start_literal(&b'-', false),
