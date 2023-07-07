@@ -1,10 +1,9 @@
 use std::time::Instant;
 
 use crate::{
-    basic_types::{ClauseAdditionOutcome, Literal},
+    basic_types::Literal,
     encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen,
-    engine::ConstraintSatisfactionSolver,
-    pumpkin_assert_eq_simple, pumpkin_assert_simple,
+    engine::ConstraintSatisfactionSolver, pumpkin_assert_eq_simple, pumpkin_assert_simple,
 };
 
 use super::{
@@ -26,7 +25,7 @@ pub struct CardinalityNetworkEncoder {
 
 macro_rules! try_add_clause {
     ($self:ident, $csp_solver:ident, $e:expr) => {
-        if $csp_solver.add_permanent_clause($e) == ClauseAdditionOutcome::Infeasible {
+        if $csp_solver.add_permanent_clause($e).is_err() {
             return None;
         }
         $self.num_clauses_added += 1;
@@ -80,7 +79,9 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
         println!("c CNE k = {k}");
 
-        if csp_solver.add_unit_clause(!self.output[k as usize]) == ClauseAdditionOutcome::Infeasible
+        if csp_solver
+            .add_unit_clause(!self.output[k as usize])
+            .is_err()
         {
             Err(CannotStrenthen)
         } else {
@@ -133,7 +134,10 @@ impl CardinalityNetworkEncoder {
         if result.is_err() {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
-            csp_solver.add_unit_clause(!self.output[p as usize]);
+            let r = csp_solver.add_unit_clause(!self.output[p as usize]);
+            if r.is_err() {
+                return Err(EncodingError::RootPropagationConflict);
+            }
         }
 
         result
@@ -159,7 +163,7 @@ impl CardinalityNetworkEncoder {
             .collect::<Vec<_>>();
 
         for &lit in padding_lits.iter() {
-            if csp_solver.add_unit_clause(!lit) == ClauseAdditionOutcome::Infeasible {
+            if csp_solver.add_unit_clause(!lit).is_err() {
                 return Err(EncodingError::RootPropagationConflict);
             }
         }
@@ -363,15 +367,9 @@ mod tests {
 
         let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut csp_solver);
 
-        assert_eq!(
-            ClauseAdditionOutcome::NoConflictDetected,
-            csp_solver.add_unit_clause(xs[0])
-        );
+        assert!(csp_solver.add_unit_clause(xs[0]).is_ok());
 
-        assert_eq!(
-            ClauseAdditionOutcome::Infeasible,
-            csp_solver.add_unit_clause(xs[1])
-        );
+        assert!(csp_solver.add_unit_clause(xs[1]).is_err());
     }
 
     #[test]
@@ -382,20 +380,9 @@ mod tests {
         let _ =
             CardinalityNetworkEncoder::new(xs.clone(), 2, &mut csp_solver).expect("valid encoding");
 
-        assert_eq!(
-            ClauseAdditionOutcome::NoConflictDetected,
-            csp_solver.add_unit_clause(xs[0])
-        );
-
-        assert_eq!(
-            ClauseAdditionOutcome::NoConflictDetected,
-            csp_solver.add_unit_clause(xs[1])
-        );
-
-        assert_eq!(
-            ClauseAdditionOutcome::Infeasible,
-            csp_solver.add_unit_clause(xs[2])
-        );
+        assert!(csp_solver.add_unit_clause(xs[0]).is_ok());
+        assert!(csp_solver.add_unit_clause(xs[1]).is_ok());
+        assert!(csp_solver.add_unit_clause(xs[2]).is_err());
     }
 
     fn create_variables(csp_solver: &mut ConstraintSatisfactionSolver, n: usize) -> Vec<Literal> {

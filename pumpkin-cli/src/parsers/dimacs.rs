@@ -224,6 +224,8 @@ where
                         self.start_literal(b, true);
                     }
 
+                    b'0' => self.finish_clause()?,
+
                     b'-' => self.start_literal(&b'-', false),
 
                     b => return Err(DimacsParseError::UnexpectedCharacter(*b as char)),
@@ -510,7 +512,7 @@ impl DimacsSink for SolverDimacsSink {
             })
             .collect();
 
-        self.solver.add_permanent_clause(mapped);
+        let _ = self.solver.add_permanent_clause(mapped);
     }
 
     fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
@@ -545,7 +547,7 @@ impl DimacsSink for SolverDimacsSink {
             let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
 
             clause.push(soft_literal);
-            self.solver.add_permanent_clause(clause);
+            let _ = self.solver.add_permanent_clause(clause);
 
             SoftClauseAddition::Added(soft_literal)
         }

@@ -1,11 +1,11 @@
 use crate::{
     basic_types::{
-        BranchingDecision, ClauseAdditionOutcome, ClauseReference, Literal,
+        BranchingDecision, ClauseReference, ConstraintOperationError, Literal,
         PropagationStatusClausal,
     },
     propagators::ClausalPropagator,
     pumpkin_assert_extreme, pumpkin_assert_moderate, pumpkin_assert_ne_moderate,
-    pumpkin_assert_ne_simple, pumpkin_assert_simple,
+    pumpkin_assert_simple,
 };
 
 use super::{
@@ -64,18 +64,18 @@ impl SATEngineDataStructures {
         )
     }
 
-    pub fn add_permanent_clause(&mut self, literals: Vec<Literal>) -> ClauseAdditionOutcome {
-        pumpkin_assert_ne_simple!(literals.len(), 0);
+    pub fn add_permanent_clause(
+        &mut self,
+        literals: Vec<Literal>,
+    ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(self.assignments_propositional.is_at_the_root_level());
-        //pumpkin_assert_simple!(self.is_propagation_complete()); hehe
-        //pumpkin_assert_permanent(state_.IsPropagationComplete(), "Adding clauses is currently only possible once all propagation has been done.");
 
         let literals =
             SATEngineDataStructures::preprocess_clause(literals, &self.assignments_propositional);
 
         //infeasible at the root? Note that we do not add the original clause to the database in this case
         if literals.is_empty() {
-            return ClauseAdditionOutcome::Infeasible;
+            return Err(ConstraintOperationError::InfeasibleClause);
         }
 
         //is unit clause? Unit clauses are added as root assignments, rather than as actual clauses
@@ -83,24 +83,30 @@ impl SATEngineDataStructures {
 
         //add clause unit
         if literals.len() == 1 {
-            pumpkin_assert_simple!(!self
-                .assignments_propositional
-                .is_literal_assigned_false(literals[0]), "Conflict detected at the root level, this is not an error but for now we do not handle this case properly so we abort.");
             if self
+                .assignments_propositional
+                .is_literal_assigned_false(literals[0])
+            {
+                return Err(ConstraintOperationError::InfeasibleClause);
+            } else if self
                 .assignments_propositional
                 .is_literal_unassigned(literals[0])
             {
                 self.assignments_propositional
                     .enqueue_decision_literal(literals[0]);
+
                 let outcome = self.propagate_clauses();
-                pumpkin_assert_simple!(outcome.no_conflict(), "Conflict detected at the root level, this is not an error but for now we do not handle this case properly so we abort.");
+
+                if outcome.conflict_detected() {
+                    return Err(ConstraintOperationError::InfeasibleClause);
+                }
             }
         } else {
             //standard case - the clause has at least two unassigned literals
             self.add_clause_unchecked(literals, false);
         }
 
-        ClauseAdditionOutcome::NoConflictDetected
+        Ok(())
     }
 
     pub fn add_clause_unchecked(
