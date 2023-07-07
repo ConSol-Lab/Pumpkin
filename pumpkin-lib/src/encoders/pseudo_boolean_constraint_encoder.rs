@@ -12,7 +12,7 @@ use thiserror::Error;
 use log::debug;
 
 use crate::{
-    basic_types::{ClauseAdditionOutcome, Function, Literal, WeightedLiteral},
+    basic_types::{Function, Literal, WeightedLiteral},
     engine::ConstraintSatisfactionSolver,
     pumpkin_assert_simple,
 };
@@ -239,10 +239,8 @@ impl PseudoBooleanConstraintEncoder {
                     .get_propositional_assignments()
                     .is_literal_unassigned(term.literal)
             {
-                let status = csp_solver.add_unit_clause(!term.literal);
-
                 //should handle by changing 'add_unit_clause' to return a result
-                if let ClauseAdditionOutcome::Infeasible = status {
+                if csp_solver.add_unit_clause(!term.literal).is_err() {
                     return Err(EncodingError::RootPropagationConflict);
                 }
             }

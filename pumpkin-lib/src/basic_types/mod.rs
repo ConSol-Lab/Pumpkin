@@ -1,7 +1,7 @@
 mod branching_decision;
 mod clause;
-mod clause_addition_outcome;
 mod clause_reference;
+mod constraint_operation_error;
 mod csp_solver_execution_flag;
 mod enqueue_status;
 mod file_format;
@@ -25,8 +25,8 @@ mod weighted_literal;
 
 pub use branching_decision::BranchingDecision;
 pub use clause::Clause;
-pub use clause_addition_outcome::ClauseAdditionOutcome;
 pub use clause_reference::ClauseReference;
+pub use constraint_operation_error::ConstraintOperationError;
 pub use csp_solver_execution_flag::CSPSolverExecutionFlag;
 pub use enqueue_status::EnqueueStatus;
 pub use file_format::FileFormat;

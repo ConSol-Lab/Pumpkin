@@ -2,7 +2,7 @@ use log::debug;
 use std::collections::HashMap;
 
 use crate::{
-    basic_types::{ClauseAdditionOutcome, Literal, WeightedLiteral},
+    basic_types::{Literal, WeightedLiteral},
     engine::ConstraintSatisfactionSolver,
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
@@ -61,11 +61,13 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
         for i in (0..self.index_last_added_weighted_literal).rev() {
             //forbid all literals that exceed k
             if weighted_literals[i].weight > new_k {
-                let status = csp_solver.add_unit_clause(!weighted_literals[i].literal);
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                if let ClauseAdditionOutcome::Infeasible = status {
+                if csp_solver
+                    .add_unit_clause(!weighted_literals[i].literal)
+                    .is_err()
+                {
                     return Err(EncodingError::CannotStrenthen);
                 }
             } else {

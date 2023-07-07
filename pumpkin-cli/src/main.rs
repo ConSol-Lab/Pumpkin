@@ -86,6 +86,7 @@ fn configure_logging(
     } else {
         LevelFilter::Warn
     };
+
     env_logger::Builder::new()
         .format(move |buf, record| {
             write!(buf, "c ")?;

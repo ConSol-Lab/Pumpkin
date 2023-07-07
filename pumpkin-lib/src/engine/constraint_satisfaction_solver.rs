@@ -5,7 +5,7 @@ use super::{
     SATDataStructuresInternalParameters,
 };
 use crate::basic_types::{
-    BranchingDecision, CSPSolverExecutionFlag, ClauseAdditionOutcome, ClauseReference, DomainId,
+    BranchingDecision, CSPSolverExecutionFlag, ClauseReference, ConstraintOperationError, DomainId,
     Literal, PropagationStatusCP, PropagationStatusClausal, PropagationStatusOneStepCP,
     PropagatorIdentifier, PropositionalConjunction, PropositionalVariable, Stopwatch,
 };
@@ -76,7 +76,8 @@ impl ConstraintSatisfactionSolver {
         csp_solver.sat_cp_mediator.true_literal = true_literal;
         csp_solver.sat_cp_mediator.false_literal = !true_literal;
 
-        csp_solver.add_unit_clause(true_literal);
+        let result = csp_solver.add_unit_clause(true_literal);
+        pumpkin_assert_simple!(result.is_ok());
 
         csp_solver
     }
@@ -86,6 +87,10 @@ impl ConstraintSatisfactionSolver {
         assumptions: &[Literal],
         time_limit_in_seconds: i64,
     ) -> CSPSolverExecutionFlag {
+        if self.state.is_infeasible() {
+            return CSPSolverExecutionFlag::Infeasible;
+        }
+
         self.initialise(assumptions, time_limit_in_seconds);
         self.solve_internal()
     }
@@ -770,8 +775,21 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    pub fn add_permanent_clause(&mut self, literals: Vec<Literal>) -> ClauseAdditionOutcome {
-        self.sat_data_structures.add_permanent_clause(literals)
+    pub fn add_permanent_clause(
+        &mut self,
+        literals: Vec<Literal>,
+    ) -> Result<(), ConstraintOperationError> {
+        pumpkin_assert_moderate!(self.is_propagation_complete());
+
+        if self.state.is_infeasible() {
+            return Err(ConstraintOperationError::InfeasibleState);
+        }
+
+        let result = self.sat_data_structures.add_permanent_clause(literals);
+        if result.is_err() {
+            self.state.declare_infeasible()
+        }
+        result
     }
 
     pub fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
@@ -784,7 +802,10 @@ impl ConstraintSatisfactionSolver {
             .add_permanent_ternary_clause_unchecked(a, b, c);
     }
 
-    pub fn add_unit_clause(&mut self, unit_clause: Literal) -> ClauseAdditionOutcome {
+    pub fn add_unit_clause(
+        &mut self,
+        unit_clause: Literal,
+    ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(self.get_decision_level() == 0);
         pumpkin_assert_simple!(self.is_propagation_complete());
 
@@ -801,9 +822,9 @@ impl ConstraintSatisfactionSolver {
             self.propagate_enqueued();
 
             if self.state.conflict_detected() {
-                ClauseAdditionOutcome::Infeasible
+                Err(ConstraintOperationError::InfeasibleClause)
             } else {
-                ClauseAdditionOutcome::NoConflictDetected
+                Ok(())
             }
         }
         //the unit clause is already present, no need to do anything
@@ -812,11 +833,11 @@ impl ConstraintSatisfactionSolver {
             .assignments_propositional
             .is_literal_assigned_true(unit_clause)
         {
-            ClauseAdditionOutcome::NoConflictDetected
+            Ok(())
         }
         //the unit clause is falsified at the root level
         else {
-            ClauseAdditionOutcome::Infeasible
+            Err(ConstraintOperationError::InfeasibleClause)
         }
     }
 }
@@ -925,6 +946,10 @@ impl CSPSolverState {
         )
     }
 
+    pub fn is_infeasible(&self) -> bool {
+        matches!(self.internal_state, CSPSolverStateInternal::Infeasible)
+    }
+
     pub fn is_infeasible_under_assumptions(&self) -> bool {
         matches!(
             self.internal_state,
@@ -976,12 +1001,14 @@ impl CSPSolverState {
     }
 
     fn declare_ready(&mut self) {
-        pumpkin_assert_simple!(self.has_solution());
+        pumpkin_assert_simple!(self.has_solution() && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Ready;
     }
 
     fn declare_solving(&mut self) {
-        pumpkin_assert_simple!(self.is_ready() || self.conflict_detected());
+        pumpkin_assert_simple!(
+            (self.is_ready() || self.conflict_detected()) && !self.is_infeasible()
+        );
         self.internal_state = CSPSolverStateInternal::Solving;
     }
 
@@ -990,26 +1017,31 @@ impl CSPSolverState {
     }
 
     fn declare_clausal_conflict(&mut self, failure_reference: ClauseReference) {
+        pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::ConflictClausal {
             conflict_clause_reference: failure_reference,
         };
     }
 
     fn declare_cp_conflict(&mut self, failure_reason: PropositionalConjunction) {
+        pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::ConflictCP {
             conflict_reason: failure_reason,
         };
     }
 
     fn declare_solution_found(&mut self) {
+        pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::ContainsSolution;
     }
 
     fn declare_timeout(&mut self) {
+        pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Timeout;
     }
 
     fn declare_infeasible_under_assumptions(&mut self, violated_assumption: Literal) {
+        pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         }
