@@ -542,7 +542,7 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
             // The soft clause is a unit clause, we can use the literal in the objective directly without needing an additional selector variable.
-            SoftClauseAddition::Added(clause[0])
+            SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
             let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
