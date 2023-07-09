@@ -2,13 +2,16 @@ use log::{debug, warn};
 use std::iter::once;
 
 use crate::{
-    basic_types::{Predicate, PropagationStatusCP, PropagatorIdentifier, PropositionalConjunction},
+    basic_types::{Predicate, PropagationStatusCP, PropositionalConjunction},
     engine::cp::DomainManager,
-    propagators::ConstraintProgrammingPropagator,
+    propagators::{
+        clausal_propagators::ClausalPropagatorInterface, ConstraintProgrammingPropagator,
+    },
     pumpkin_assert_eq_simple, pumpkin_assert_simple,
 };
 
 use super::{
+    constraint_satisfaction_solver::ClausalPropagator,
     cp::{AssignmentsInteger, DomainOperationOutcome},
     SATEngineDataStructures,
 };
@@ -20,6 +23,7 @@ impl DebugHelper {
     //  the point is to check whether there is a propagation that missed a propagation or failure
     //  additionally checks whether the internal data structures of the clausal propagator are okay and consistent with the assignments_propositional
     pub fn debug_fixed_point_propagation(
+        clausal_propagator: &ClausalPropagator,
         assignments_integer: &AssignmentsInteger,
         sat_data_structures: &SATEngineDataStructures,
         propagators_cp: &[Box<dyn ConstraintProgrammingPropagator>],
@@ -38,7 +42,8 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation =
                 assignments_integer_clone.num_trail_entries();
 
-            let mut domains = DomainManager::new(propagator.0, &mut assignments_integer_clone);
+            let mut domains =
+                DomainManager::new(propagator.0 as u32, &mut assignments_integer_clone);
             let propagation_status_cp = propagator.1.debug_propagate_from_scratch(&mut domains);
 
             if let PropagationStatusCP::ConflictDetected { ref failure_reason } =
@@ -55,7 +60,7 @@ impl DebugHelper {
                     Aborting!", propagator.1.name(), propagator.0, num_missed_propagations);
         }
         //then check the clausal propagator
-        pumpkin_assert_simple!(sat_data_structures.clausal_propagator.debug_check_state(
+        pumpkin_assert_simple!(clausal_propagator.debug_check_state(
             &sat_data_structures.assignments_propositional,
             &sat_data_structures.clause_allocator
         ));
@@ -66,7 +71,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: PropagatorIdentifier,
+        propagator_id: u32,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             assignments_integer,
@@ -89,11 +94,10 @@ impl DebugHelper {
         reason: &PropositionalConjunction,
         assignments_integer: &AssignmentsInteger,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: PropagatorIdentifier,
+        propagator_id: u32,
     ) -> bool {
         if reason
-            .clone()
-            .into_iter()
+            .iter()
             .map(|p| p.get_integer_variable())
             .any(|integer_variable| integer_variable == propagated_predicate.get_integer_variable())
         {
@@ -101,7 +105,7 @@ impl DebugHelper {
             Propagator: {},    
             id: {},
             The reported propagation reason: {},
-            Propagated predicate: {}", propagator.name(), propagator_id.id, reason, propagated_predicate));
+            Propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
         }
 
         //two checks are done
@@ -110,7 +114,7 @@ impl DebugHelper {
             let mut assignments_integer_clone =
                 DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
 
-            let reason_predicates: Vec<Predicate> = reason.clone().into_iter().collect();
+            let reason_predicates: Vec<Predicate> = reason.iter().copied().collect();
             let adding_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_integers(
                     &mut assignments_integer_clone,
@@ -119,25 +123,24 @@ impl DebugHelper {
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut domains =
-                    DomainManager::new(propagator_id.id as usize, &mut assignments_integer_clone);
+                let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut domains);
 
                 assert!(
                     debug_propagation_status_cp.no_conflict(),
                     "{}",
-                    format!("Debug propagation detected a conflict when consider a reason for propagation by the propagator '{}' with id '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id.id, reason, propagated_predicate));
+                    format!("Debug propagation detected a conflict when consider a reason for propagation by the propagator '{}' with id '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
 
                 assert!(
                     assignments_integer_clone.does_predicate_hold(&propagated_predicate),
                     "{}",
-                    format!("Debug propagation could not obtain the propagated predicate given the provided reason.\nPropagator: '{}'\nPropagator id: {}\nReported reason: {}\nReported propagation: {}", propagator.name(), propagator_id.id, reason, propagated_predicate)
+                    format!("Debug propagation could not obtain the propagated predicate given the provided reason.\nPropagator: '{}'\nPropagator id: {}\nReported reason: {}\nReported propagation: {}", propagator.name(), propagator_id, reason, propagated_predicate)
                 );
             } else {
                 //if even adding the predicates failed, the method adding the predicates would have printed debug info already
                 //  so we just need to add more information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a reason was given by the propagator.", propagator.name(), propagator_id.id));
+                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a reason was given by the propagator.", propagator.name(), propagator_id));
             }
         }
 
@@ -149,7 +152,7 @@ impl DebugHelper {
                 DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
 
             let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
-                .chain(reason.clone().into_iter())
+                .chain(reason.iter().copied())
                 .collect();
 
             let adding_predicates_was_successful =
@@ -160,20 +163,19 @@ impl DebugHelper {
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut domains =
-                    DomainManager::new(propagator_id.id as usize, &mut assignments_integer_clone);
+                let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut domains);
 
                 assert!(
                     debug_propagation_status_cp.conflict_detected(),
                     "{}",
-                    format!("Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\nPropagator: '{}'\nPropagator id: '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id.id, reason, propagated_predicate)
+                    format!("Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\nPropagator: '{}'\nPropagator id: '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate)
                 );
             } else {
                 //if even adding the predicates failed, the method adding the predicates would have printed debug info already
                 //  so we just need to add more information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after trying to negate the reason for propagator.", propagator.name(), propagator_id.id));
+                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after trying to negate the reason for propagator.", propagator.name(), propagator_id));
             }
         }
         true
@@ -183,12 +185,12 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: PropagatorIdentifier,
+        propagator_id: u32,
     ) {
         let mut assignments_integer_clone =
             DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
 
-        let reason_predicates: Vec<Predicate> = failure_reason.clone().into_iter().collect();
+        let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful =
             DebugHelper::debug_add_predicates_to_assignment_integers(
                 &mut assignments_integer_clone,
@@ -197,15 +199,14 @@ impl DebugHelper {
 
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
-            let mut domains =
-                DomainManager::new(propagator_id.id as usize, &mut assignments_integer_clone);
+            let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut domains);
 
-            assert!(debug_propagation_status_cp.conflict_detected(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id.id, failure_reason));
+            assert!(debug_propagation_status_cp.conflict_detected(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
         } else {
             //if even adding the predicates failed, the method adding the predicates would have printed debug info already
             //  so we just need to add more information to indicate where the failure happened
-            panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a failure reason was given by the propagator.", propagator.name(), propagator_id.id));
+            panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a failure reason was given by the propagator.", propagator.name(), propagator_id));
         }
     }
 
@@ -213,7 +214,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: PropagatorIdentifier,
+        propagator_id: u32,
     ) {
         //let the failure be: (p1 && p2 && p3) -> failure
         //  then (!p1 || !p2 || !p3) should not lead to immediate failure
@@ -223,7 +224,7 @@ impl DebugHelper {
             return;
         }
 
-        let reason_predicates: Vec<Predicate> = failure_reason.clone().into_iter().collect();
+        let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let mut found_nonconflicting_state_at_root = false;
         for predicate in &reason_predicates {
             let mut assignments_integer_clone =
@@ -235,10 +236,8 @@ impl DebugHelper {
 
             match outcome {
                 DomainOperationOutcome::Success => {
-                    let mut domains = DomainManager::new(
-                        propagator_id.id as usize,
-                        &mut assignments_integer_clone,
-                    );
+                    let mut domains =
+                        DomainManager::new(propagator_id, &mut assignments_integer_clone);
                     let debug_propagation_status_cp =
                         propagator.debug_propagate_from_scratch(&mut domains);
 
@@ -257,7 +256,7 @@ impl DebugHelper {
                 "Negating the reason for failure was still leading to failure for propagator '{}' with id '{}'.\n
                         The reported failure: {}\n",
                         propagator.name(),
-                        propagator_id.id,
+                        propagator_id,
                         failure_reason
             );
         }

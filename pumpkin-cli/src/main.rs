@@ -5,6 +5,7 @@ mod result;
 use clap::Parser;
 use log::{error, info, warn, LevelFilter};
 use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink};
+use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::optimisation::{LinearSearch, OptimisationResult, OptimisationSolver};
 use std::fs::{File, OpenOptions};
@@ -40,10 +41,41 @@ struct Args {
     #[arg(short = 'l', long = "learned-clause-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Lbd.into())]
     learned_clause_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
-    /// The number of conflicts before a restart is triggered. This is a fixed-length restart
-    /// strategy.
-    #[arg(long = "conflicts-per-restart", default_value_t = 4000)]
-    conflicts_per_restart: i64,
+    /// Decides the sequence based on which the restarts are performed.
+    /// To be used in combination with "restarts-base-interval"
+    #[arg(long = "restart-sequence-generator", value_parser = sequence_generator_parser, default_value_t = SequenceGeneratorType::Constant.into())]
+    restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
+
+    /// The base interval length is used as a multiplier to the restart sequence.
+    /// For example, constant restarts with base interval 100 means a retart is triggered every 100 conflicts.
+    #[arg(long = "restart-base-interval", default_value_t = 50)]
+    restart_base_interval: u64,
+
+    #[arg(long = "restart-min-initial-conflicts", default_value_t = 10000)]
+    restarts_min_num_conflicts_before_first_restart: u64,
+
+    /// Used to determine if a restart should be forced (part of Glucose restarts).
+    /// The state is "bad" if the current LBD value is much greater than the global LBD average
+    /// A greater/lower value for lbd-coef means a less/more frequent restart policy
+    #[arg(long = "restart-lbd-coef", default_value_t = 1.25)]
+    restart_lbd_coef: f64,
+
+    /// Used to determine if a restart should be blocked (part of Glucose restarts).
+    /// To be used in combination with "restarts-num-assigned-window".
+    /// A restart is blocked if the number of assigned propositional variables is must greater than the average number of assigned variables in the recent past
+    /// A greater/lower value for num-assigned-coef means fewer/more blocked restarts
+    #[arg(long = "restart-num-assigned-coef", default_value_t = 1.4)]
+    restart_num_assigned_coef: f64,
+
+    /// Used to determine the length of the recent past that should be considered when deciding on blocking restarts (part of Glucose restarts).
+    /// The solver considers the last num-assigned-window conflicts as the reference point for the number of assigned variables
+    #[arg(long = "restart-num-assigned-window", default_value_t = 5000)]
+    restart_num_assigned_window: u64,
+
+    /// The coefficient in the geometric sequence x_i = x_{i-1} * geometric-coef, x_1 = "restarts-base-interval"
+    /// Used only if "restarts-sequence-generator" is assigned to "geometric".
+    #[arg(long = "restart-geometric-coef")]
+    restart_geometric_coef: Option<f64>,
 
     /// The time budget for the solver, given in seconds.
     #[arg(short = 't', long = "time-limit")]
@@ -133,7 +165,7 @@ fn run() -> PumpkinResult<()> {
         _ => return Err(PumpkinError::InvalidInstanceFile),
     };
 
-    let sat_options = SATDataStructuresInternalParameters {
+    let sat_options = SatOptions {
         num_learned_clauses_max: args.threshold_learned_clauses,
         learned_clause_sorting_strategy: args.learned_clause_sorting_strategy.inner,
         ..Default::default()
@@ -152,7 +184,14 @@ fn run() -> PumpkinResult<()> {
     };
 
     let solver_options = SatisfactionSolverOptions {
-        conflicts_per_restart: args.conflicts_per_restart,
+        restart_sequence_generator_type: args.restart_sequence_generator_type.inner,
+        restart_base_interval: args.restart_base_interval,
+        restart_min_num_conflicts_before_first_restart: args
+            .restarts_min_num_conflicts_before_first_restart,
+        restart_lbd_coef: args.restart_lbd_coef,
+        restart_num_assigned_coef: args.restart_num_assigned_coef,
+        restart_num_assigned_window: args.restart_num_assigned_window,
+        restart_geometric_coef: args.restart_geometric_coef,
         certificate_file,
     };
 
@@ -184,7 +223,7 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn wcnf_problem(
-    sat_options: SATDataStructuresInternalParameters,
+    sat_options: SatOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -240,7 +279,7 @@ fn wcnf_problem(
 }
 
 fn cnf_problem(
-    sat_options: SATDataStructuresInternalParameters,
+    sat_options: SatOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -327,6 +366,15 @@ fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>,
     }
 }
 
+fn sequence_generator_parser(s: &str) -> Result<CliArg<SequenceGeneratorType>, String> {
+    match s {
+        "constant" => Ok(SequenceGeneratorType::Constant.into()),
+        "geometric" => Ok(SequenceGeneratorType::Geometric.into()),
+        "luby" => Ok(SequenceGeneratorType::Luby.into()),
+        value => Err(format!("'{value}' is not a valid sequence generator.")),
+    }
+}
+
 #[derive(Debug, Clone)]
 struct CliArg<T> {
     inner: T,
@@ -352,6 +400,16 @@ impl std::fmt::Display for CliArg<PseudoBooleanEncoding> {
         match self.inner {
             PseudoBooleanEncoding::GTE => write!(f, "gte"),
             PseudoBooleanEncoding::CNE => write!(f, "cne"),
+        }
+    }
+}
+
+impl std::fmt::Display for CliArg<SequenceGeneratorType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.inner {
+            SequenceGeneratorType::Constant => write!(f, "constant"),
+            SequenceGeneratorType::Geometric => write!(f, "geometric"),
+            SequenceGeneratorType::Luby => write!(f, "luby"),
         }
     }
 }

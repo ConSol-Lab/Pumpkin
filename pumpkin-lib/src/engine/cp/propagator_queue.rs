@@ -3,12 +3,11 @@ use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use crate::basic_types::PropagatorIdentifier;
 use crate::pumpkin_assert_moderate;
 
 pub struct PropagatorQueue {
-    queues: Vec<VecDeque<PropagatorIdentifier>>,
-    present_propagators: HashSet<PropagatorIdentifier>,
+    queues: Vec<VecDeque<u32>>,
+    present_propagators: HashSet<u32>,
     present_priorities: BinaryHeap<Reverse<u32>>,
 }
 
@@ -25,23 +24,19 @@ impl PropagatorQueue {
         self.present_propagators.is_empty()
     }
 
-    pub fn enqueue_propagator(
-        &mut self,
-        propagator_identifier: PropagatorIdentifier,
-        priority: u32,
-    ) {
+    pub fn enqueue_propagator(&mut self, propagator_id: u32, priority: u32) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 
-        if !self.is_propagator_enqueued(propagator_identifier) {
+        if !self.is_propagator_enqueued(propagator_id) {
             if self.queues[priority as usize].is_empty() {
                 self.present_priorities.push(Reverse(priority));
             }
-            self.queues[priority as usize].push_back(propagator_identifier);
-            self.present_propagators.insert(propagator_identifier);
+            self.queues[priority as usize].push_back(propagator_id);
+            self.present_propagators.insert(propagator_id);
         }
     }
 
-    pub fn pop(&mut self) -> PropagatorIdentifier {
+    pub fn pop(&mut self) -> u32 {
         pumpkin_assert_moderate!(!self.is_empty());
 
         let top_priority = self.present_priorities.peek().unwrap().0 as usize;
@@ -68,7 +63,7 @@ impl PropagatorQueue {
         self.present_priorities.clear();
     }
 
-    fn is_propagator_enqueued(&self, propagator_id: PropagatorIdentifier) -> bool {
+    fn is_propagator_enqueued(&self, propagator_id: u32) -> bool {
         self.present_propagators.contains(&propagator_id)
     }
 }

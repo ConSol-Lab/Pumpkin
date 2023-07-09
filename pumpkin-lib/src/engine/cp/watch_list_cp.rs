@@ -1,7 +1,5 @@
 use crate::{
-    basic_types::{DomainId, PropagatorIdentifier},
-    propagators::ConstraintProgrammingPropagator,
-    pumpkin_assert_moderate,
+    basic_types::DomainId, propagators::ConstraintProgrammingPropagator, pumpkin_assert_moderate,
 };
 
 use super::PropagatorQueue;
@@ -12,7 +10,7 @@ pub struct WatchListCP {
 }
 
 pub struct Watchers<'a> {
-    propagator_id: PropagatorIdentifier,
+    propagator_id: u32,
     watch_list: &'a mut WatchListCP,
 }
 
@@ -35,36 +33,32 @@ impl WatchListCP {
     pub fn add_watches_for_propagator(
         &mut self,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_identifier: PropagatorIdentifier,
+        propagator_id: u32,
     ) {
         let mut watchers = Watchers {
-            propagator_id: propagator_identifier,
+            propagator_id,
             watch_list: self,
         };
 
         propagator.register_watches(&mut watchers);
     }
 
-    pub fn get_lower_bound_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
+    pub fn get_lower_bound_watchers(&self, integer_variable: DomainId) -> &[u32] {
         &self.watchers[integer_variable].lower_bound_watchers
     }
 
-    pub fn get_upper_bound_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
+    pub fn get_upper_bound_watchers(&self, integer_variable: DomainId) -> &[u32] {
         &self.watchers[integer_variable].upper_bound_watchers
     }
 
-    pub fn get_hole_domain_watchers(&self, integer_variable: DomainId) -> &[PropagatorIdentifier] {
+    pub fn get_hole_domain_watchers(&self, integer_variable: DomainId) -> &[u32] {
         &self.watchers[integer_variable].hole_watchers
     }
 }
 
 //private functions
 impl WatchListCP {
-    fn watch_lower_bound_domain_changes(
-        &mut self,
-        integer_variable: DomainId,
-        propagator_id: PropagatorIdentifier,
-    ) {
+    fn watch_lower_bound_domain_changes(&mut self, integer_variable: DomainId, propagator_id: u32) {
         pumpkin_assert_moderate!(
             !self.watchers[integer_variable]
                 .lower_bound_watchers
@@ -77,11 +71,7 @@ impl WatchListCP {
             .push(propagator_id);
     }
 
-    fn watch_upper_bound_domain_changes(
-        &mut self,
-        integer_variable: DomainId,
-        propagator_id: PropagatorIdentifier,
-    ) {
+    fn watch_upper_bound_domain_changes(&mut self, integer_variable: DomainId, propagator_id: u32) {
         pumpkin_assert_moderate!(
             !self.watchers[integer_variable]
                 .upper_bound_watchers
@@ -94,11 +84,7 @@ impl WatchListCP {
             .push(propagator_id);
     }
 
-    fn watch_hole_domain_changes(
-        &mut self,
-        integer_variable: DomainId,
-        propagator_id: PropagatorIdentifier,
-    ) {
+    fn watch_hole_domain_changes(&mut self, integer_variable: DomainId, propagator_id: u32) {
         pumpkin_assert_moderate!(
             !self.watchers[integer_variable]
                 .hole_watchers
@@ -117,9 +103,9 @@ impl WatchListCP {
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
     ) {
-        for propagator_identifier in &self.watchers[integer_variable].lower_bound_watchers {
-            let propagator = &mut propagators_cp[propagator_identifier.id as usize];
-            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
+        for &propagator_id in &self.watchers[integer_variable].lower_bound_watchers {
+            let propagator = &mut propagators_cp[propagator_id as usize];
+            propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
         }
     }
 
@@ -129,10 +115,10 @@ impl WatchListCP {
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
     ) {
-        for propagator_identifier in &self.watchers[integer_variable].upper_bound_watchers {
-            let propagator = &mut propagators_cp[propagator_identifier.id as usize];
+        for &propagator_id in &self.watchers[integer_variable].upper_bound_watchers {
+            let propagator = &mut propagators_cp[propagator_id as usize];
 
-            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
+            propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
         }
     }
 
@@ -142,9 +128,9 @@ impl WatchListCP {
         propagators_cp: &mut [Box<dyn ConstraintProgrammingPropagator>],
         propagator_queue: &mut PropagatorQueue,
     ) {
-        for propagator_identifier in &self.watchers[integer_variable].hole_watchers {
-            let propagator = &mut propagators_cp[propagator_identifier.id as usize];
-            propagator_queue.enqueue_propagator(*propagator_identifier, propagator.priority());
+        for &propagator_id in &self.watchers[integer_variable].hole_watchers {
+            let propagator = &mut propagators_cp[propagator_id as usize];
+            propagator_queue.enqueue_propagator(propagator_id, propagator.priority());
         }
     }
 }
@@ -172,7 +158,7 @@ impl<'a> Watchers<'a> {
 
 #[derive(Default)]
 struct WatcherCP {
-    pub lower_bound_watchers: Vec<PropagatorIdentifier>,
-    pub upper_bound_watchers: Vec<PropagatorIdentifier>,
-    pub hole_watchers: Vec<PropagatorIdentifier>,
+    pub lower_bound_watchers: Vec<u32>,
+    pub upper_bound_watchers: Vec<u32>,
+    pub hole_watchers: Vec<u32>,
 }

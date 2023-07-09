@@ -1,13 +1,17 @@
 mod assignments_propositional;
-mod clause_allocator;
+pub mod clause_allocators;
+mod explanation_clause_manager;
+mod glucose_restart_strategy;
+mod learned_clause_manager;
 mod propositional_value_selector;
 mod propositional_variable_selector;
 mod sat_engine_data_structures;
 
 pub use assignments_propositional::AssignmentsPropositional;
-pub use clause_allocator::ClauseAllocator;
+pub use explanation_clause_manager::ExplanationClauseManager;
+pub use glucose_restart_strategy::GlucoseRestartStrategy;
+pub use learned_clause_manager::LearnedClauseManager;
+pub use learned_clause_manager::SatOptions;
 pub use propositional_value_selector::PropositionalValueSelector;
 pub use propositional_variable_selector::PropositionalVariableSelector;
-pub use sat_engine_data_structures::{
-    LearnedClauseSortingStrategy, SATDataStructuresInternalParameters, SATEngineDataStructures,
-};
+pub use sat_engine_data_structures::{LearnedClauseSortingStrategy, SATEngineDataStructures};

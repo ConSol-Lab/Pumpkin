@@ -1,5 +1,7 @@
-use crate::basic_types::{Literal, PropositionalVariable, PropositionalVariableGeneratorIterator};
-use crate::{pumpkin_assert_moderate, pumpkin_assert_ne_simple, pumpkin_assert_simple};
+use crate::basic_types::{
+    ConstraintReference, Literal, PropositionalVariable, PropositionalVariableGeneratorIterator,
+};
+use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
 pub struct AssignmentsPropositional {
     assignment_info: Vec<PropositionalAssignmentInfo>,
@@ -59,7 +61,7 @@ impl AssignmentsPropositional {
             PropositionalAssignmentInfo::Assigned {
                 truth_value,
                 decision_level: _,
-                reason_code: _,
+                constraint_reference: _,
             } => truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
         }
@@ -70,7 +72,7 @@ impl AssignmentsPropositional {
             PropositionalAssignmentInfo::Assigned {
                 truth_value,
                 decision_level: _,
-                reason_code: _,
+                constraint_reference: _,
             } => !truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
         }
@@ -118,8 +120,8 @@ impl AssignmentsPropositional {
             PropositionalAssignmentInfo::Assigned {
                 truth_value: _,
                 decision_level: _,
-                reason_code,
-            } => reason_code != 0,
+                constraint_reference,
+            } => !constraint_reference.is_null(),
         }
     }
 
@@ -135,7 +137,7 @@ impl AssignmentsPropositional {
             PropositionalAssignmentInfo::Assigned {
                 truth_value: _,
                 decision_level,
-                reason_code: _,
+                constraint_reference: _,
             } => decision_level,
         }
     }
@@ -144,7 +146,10 @@ impl AssignmentsPropositional {
         self.get_variable_assignment_level(literal.get_propositional_variable())
     }
 
-    pub fn get_variable_reason_code(&self, variable: PropositionalVariable) -> u32 {
+    pub fn get_variable_reason_constraint(
+        &self,
+        variable: PropositionalVariable,
+    ) -> ConstraintReference {
         match self.assignment_info[variable] {
             PropositionalAssignmentInfo::Unassigned => {
                 panic!("Unassigned variables do not have reason codes levels");
@@ -152,23 +157,27 @@ impl AssignmentsPropositional {
             PropositionalAssignmentInfo::Assigned {
                 truth_value: _,
                 decision_level: _,
-                reason_code,
-            } => reason_code,
+                constraint_reference,
+            } => constraint_reference,
         }
     }
 
-    pub fn get_literal_reason_code(&self, literal: Literal) -> u32 {
-        self.get_variable_reason_code(literal.get_propositional_variable())
+    pub fn get_literal_reason_constraint(&self, literal: Literal) -> ConstraintReference {
+        self.get_variable_reason_constraint(literal.get_propositional_variable())
     }
 
-    fn make_assignment(&mut self, true_literal: Literal, reason_code: u32) {
+    fn make_assignment(
+        &mut self,
+        true_literal: Literal,
+        constraint_reference: ConstraintReference,
+    ) {
         pumpkin_assert_simple!(self.is_literal_unassigned(true_literal));
 
         self.assignment_info[true_literal.get_propositional_variable()] =
             PropositionalAssignmentInfo::Assigned {
                 truth_value: true_literal.is_positive(),
                 decision_level: self.get_decision_level(),
-                reason_code,
+                constraint_reference,
             };
 
         self.trail.push(true_literal);
@@ -183,14 +192,21 @@ impl AssignmentsPropositional {
     pub fn enqueue_decision_literal(&mut self, decision_literal: Literal) {
         pumpkin_assert_simple!(!self.is_literal_assigned(decision_literal));
 
-        self.make_assignment(decision_literal, 0);
+        self.make_assignment(
+            decision_literal,
+            ConstraintReference::create_null_reference(),
+        );
     }
 
-    pub fn enqueue_propagated_literal(&mut self, propagated_literal: Literal, reason_code: u32) {
+    pub fn enqueue_propagated_literal(
+        &mut self,
+        propagated_literal: Literal,
+        constraint_reference: ConstraintReference,
+    ) {
         pumpkin_assert_simple!(!self.is_literal_assigned(propagated_literal));
-        pumpkin_assert_ne_simple!(reason_code, 0);
+        pumpkin_assert_simple!(!constraint_reference.is_null());
 
-        self.make_assignment(propagated_literal, reason_code);
+        self.make_assignment(propagated_literal, constraint_reference);
     }
 
     pub fn synchronise(&mut self, new_decision_level: u32) {
@@ -211,49 +227,6 @@ impl AssignmentsPropositional {
     pub fn num_assigned_propositional_variables(&self) -> u32 {
         self.trail.len() as u32
     }
-
-    /*
-        inline void Assignments::MakeAssignment(Literal true_literal, int decision_level, uint64_t reason_code)
-    {
-        truth_values_[true_literal.VariableIndex()] = true_literal.IsPositive();
-        info_[true_literal.VariableIndex()].decision_level = decision_level;
-        info_[true_literal.VariableIndex()].reason_code = reason_code;
-    }
-
-        */
-
-    /* pub fn is_literal_decision(&self, literal: Literal) -> bool {
-        self.is_literal_assigned(literal)
-            && self.assignment_info[literal].decision_level != u32::MAX
-    }*/
-
-    /*
-    bool IsUnassigned(PropositionalVariable) const;
-    bool IsUnassigned(Literal) const;
-    bool IsAssigned(PropositionalVariable) const; //reports whether the Boolean variable has been assigned a value (false if undefined, otherwise true)
-    bool IsAssigned(Literal) const; //report whether the literal has been assigned a value (false if not, other true)
-    bool IsInternalBooleanVariableAssigned(int32_t index) const;
-    bool IsAssignedTrue(Literal) const; //reports whether the literal has been assigned true. If the literal is unassigned or evaluates to false, the method returns false.
-    bool IsAssignedTrue(PropositionalVariable) const; //reports whether the variable has been assigned true. If the literal is unassigned or evaluates to false, the method returns false.
-    bool IsAssignedFalse(Literal) const; //reports whether the literal has been assigned false. If the literal is unassigned or evaluates to true, the method returns false
-    bool IsDecision(PropositionalVariable) const;//reports whether the variable has been assigned as a result of a decision.
-    bool IsDecision(Literal) const;
-    bool IsPropagated(PropositionalVariable) const;//reports if the variable has been assigned as a result of a propagation rather than a decision
-    bool IsRootAssignment(Literal) const; //reports whether the literal has been set at the root (level 0), either by propagation or as a unit clause
-
-    Literal GetAssignmentLiteral(const PropositionalVariable) const; //return the literal of the corresponding variable that has been assigned 'true'. Assumes the variable has been assigned a value, i.e. it is not undefined.
-    bool GetAssignment(const PropositionalVariable) const; //return true or false depending on the assignment. Assumes the variable is currently assigned.
-    bool GetAssignment(Literal) const; //returns the truth value (true, false) assigned to the literal. It assumes the corresponding Boolean variable has been assigned a value, i.e. it is not undefined.
-    int  GetAssignmentLevel(PropositionalVariable) const; //return the level when the variable was assigned a value. Assumes the variables has been assigned a value.
-    int  GetAssignmentLevel(Literal) const; //return the level when the variable was assigned a value. Assumes the variables has been assigned a value.
-    uint32_t GetAssignmentReasonCode(PropositionalVariable) const;
-
-    void MakeAssignment(Literal true_literal, int decision_level, uint64_t reason_code);
-    void UnassignVariable(PropositionalVariable variable);
-
-    int NumPropositionalLogicVariables() const;
-
-    */
 }
 
 #[derive(PartialEq)]
@@ -261,7 +234,7 @@ enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,
         decision_level: u32,
-        reason_code: u32,
+        constraint_reference: ConstraintReference,
     },
     Unassigned,
 }

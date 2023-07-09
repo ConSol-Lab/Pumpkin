@@ -21,7 +21,7 @@ use std::{
 use pumpkin_lib::{
     basic_types::{Function, Literal, PropositionalVariable},
     engine::{
-        ConstraintSatisfactionSolver, SATDataStructuresInternalParameters, SATEngineDataStructures,
+        ConstraintSatisfactionSolver, SATEngineDataStructures, SatOptions,
         SatisfactionSolverOptions,
     },
 };
@@ -469,12 +469,12 @@ pub struct SolverDimacsSink {
 /// [`ConstraintSatisfactionSolver::new()`].
 pub struct CSPSolverArgs {
     solver_options: SatisfactionSolverOptions,
-    sat_options: SATDataStructuresInternalParameters,
+    sat_options: SatOptions,
 }
 
 impl CSPSolverArgs {
     pub fn new(
-        sat_options: SATDataStructuresInternalParameters,
+        sat_options: SatOptions,
         solver_options: SatisfactionSolverOptions,
     ) -> CSPSolverArgs {
         CSPSolverArgs {

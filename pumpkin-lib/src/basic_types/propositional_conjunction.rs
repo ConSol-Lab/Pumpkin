@@ -13,6 +13,10 @@ impl PropositionalConjunction {
     pub fn num_predicates(&self) -> u32 {
         self.predicates_in_conjunction.len() as u32
     }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
+        self.predicates_in_conjunction.iter()
+    }
 }
 
 impl From<Vec<Predicate>> for PropositionalConjunction {
@@ -23,14 +27,14 @@ impl From<Vec<Predicate>> for PropositionalConjunction {
     }
 }
 
-impl IntoIterator for PropositionalConjunction {
+/*impl IntoIterator for PropositionalConjunction {
     type Item = Predicate;
     type IntoIter = <Vec<Predicate> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.predicates_in_conjunction.into_iter()
     }
-}
+}*/
 
 impl std::fmt::Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
