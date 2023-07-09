@@ -247,67 +247,11 @@ impl ConstraintSatisfactionSolver {
                     self.restart_during_search();
                 }
 
-                self.sat_data_structures
-                    .assignments_propositional
-                    .increase_decision_level();
-                self.cp_data_structures
-                    .assignments_integer
-                    .increase_decision_level();
+                self.declare_new_decision_level();
 
-                match self.sat_data_structures.get_next_branching_decision() {
-                    Some(branching_decision) => match branching_decision {
-                        BranchingDecision::Assumption { assumption_literal } => {
-                            //Case 1: the assumption is unassigned, assign it
-                            if self
-                                .sat_data_structures
-                                .assignments_propositional
-                                .is_literal_unassigned(assumption_literal)
-                            {
-                                self.sat_data_structures
-                                    .assignments_propositional
-                                    .enqueue_decision_literal(assumption_literal);
-                            //Case 2: the assumption has already been set to true
-                            //  this happens when other assumptions propagated the literal
-                            //  or the assumption is already set to true at the root level
-                            } else if self
-                                .sat_data_structures
-                                .assignments_propositional
-                                .is_literal_assigned_true(assumption_literal)
-                            {
-                                //in this case, do nothing
-                                //  note that the solver will then increase the decision level without enqueuing a decision literal
-                                //  this is necessary because by convention the solver will try to assign the i-th assumption literal at decision level i+1
-                            }
-                            //Case 3: the assumption literal is in conflict with the input assumption
-                            //  which means the instance is infeasible under the current assumptions
-                            else {
-                                pumpkin_assert_moderate!(
-                                    self.sat_data_structures
-                                        .assignments_propositional
-                                        .get_literal_assignment_level(assumption_literal)
-                                        == 0
-                                        || self
-                                            .sat_data_structures
-                                            .assignments_propositional
-                                            .is_literal_propagated(assumption_literal),
-                                );
-
-                                self.state
-                                    .declare_infeasible_under_assumptions(assumption_literal);
-                                return CSPSolverExecutionFlag::InfeasibleUnderAssumptions;
-                            }
-                        }
-                        BranchingDecision::StandardDecision { decision_literal } => {
-                            self.counters.num_decisions += 1;
-                            self.sat_data_structures
-                                .assignments_propositional
-                                .enqueue_decision_literal(decision_literal);
-                        }
-                    },
-                    None => {
-                        self.state.declare_solution_found();
-                        return CSPSolverExecutionFlag::Feasible;
-                    }
+                let branching_result = self.enqueue_next_decision();
+                if let Err(flag) = branching_result {
+                    return flag;
                 }
             } else {
                 if self
@@ -321,8 +265,6 @@ impl ConstraintSatisfactionSolver {
 
                 self.compute_1uip(); //the result is stored in self.analysis_result
 
-                self.counters.num_unit_clauses_learned +=
-                    (self.analysis_result.learned_literals.len() == 1) as u64;
                 self.process_conflict_analysis_result();
 
                 self.state.declare_solving();
@@ -334,6 +276,84 @@ impl ConstraintSatisfactionSolver {
                     .decay_activities();
             }
         }
+    }
+
+    fn enqueue_next_decision(&mut self) -> Result<(), CSPSolverExecutionFlag> {
+        match self.sat_data_structures.get_next_branching_decision() {
+            Some(branching_decision) => match branching_decision {
+                BranchingDecision::Assumption { assumption_literal } => {
+                    let success = self.enqueue_assumption_literal(assumption_literal);
+                    if !success {
+                        return Err(CSPSolverExecutionFlag::InfeasibleUnderAssumptions);
+                    }
+                }
+                BranchingDecision::StandardDecision { decision_literal } => {
+                    self.counters.num_decisions += 1;
+                    self.sat_data_structures
+                        .assignments_propositional
+                        .enqueue_decision_literal(decision_literal);
+                }
+            },
+            None => {
+                self.state.declare_solution_found();
+                return Err(CSPSolverExecutionFlag::Feasible);
+            }
+        }
+        Ok(())
+    }
+
+    // returns true if the assumption was successfully enqueued, and false otherwise
+    fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
+        //Case 1: the assumption is unassigned, assign it
+        if self
+            .sat_data_structures
+            .assignments_propositional
+            .is_literal_unassigned(assumption_literal)
+        {
+            self.sat_data_structures
+                .assignments_propositional
+                .enqueue_decision_literal(assumption_literal);
+            true
+        //Case 2: the assumption has already been set to true
+        //  this happens when other assumptions propagated the literal
+        //  or the assumption is already set to true at the root level
+        } else if self
+            .sat_data_structures
+            .assignments_propositional
+            .is_literal_assigned_true(assumption_literal)
+        {
+            //in this case, do nothing
+            //  note that the solver will then increase the decision level without enqueuing a decision literal
+            //  this is necessary because by convention the solver will try to assign the i-th assumption literal at decision level i+1
+            true
+        }
+        //Case 3: the assumption literal is in conflict with the input assumption
+        //  which means the instance is infeasible under the current assumptions
+        else {
+            pumpkin_assert_moderate!(
+                self.sat_data_structures
+                    .assignments_propositional
+                    .get_literal_assignment_level(assumption_literal)
+                    == 0
+                    || self
+                        .sat_data_structures
+                        .assignments_propositional
+                        .is_literal_propagated(assumption_literal),
+            );
+
+            self.state
+                .declare_infeasible_under_assumptions(assumption_literal);
+            false
+        }
+    }
+
+    fn declare_new_decision_level(&mut self) {
+        self.sat_data_structures
+            .assignments_propositional
+            .increase_decision_level();
+        self.cp_data_structures
+            .assignments_integer
+            .increase_decision_level();
     }
 
     fn write_to_certificate(&mut self) -> std::io::Result<()> {
@@ -386,6 +406,9 @@ impl ConstraintSatisfactionSolver {
             self.sat_data_structures
                 .assignments_propositional
                 .enqueue_decision_literal(unit_clause);
+
+            self.counters.num_unit_clauses_learned +=
+                (self.analysis_result.learned_literals.len() == 1) as u64;
         } else {
             //important to get trail length before the backtrack
             let num_variables_assigned_before_conflict = self
