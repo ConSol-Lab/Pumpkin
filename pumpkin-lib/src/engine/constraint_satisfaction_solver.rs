@@ -263,11 +263,7 @@ impl ConstraintSatisfactionSolver {
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
-                self.compute_1uip(); //the result is stored in self.analysis_result
-
-                self.process_conflict_analysis_result();
-
-                self.state.declare_solving();
+                self.resolve_conflict();
 
                 self.learned_clause_manager.decay_clause_activities();
 
@@ -375,7 +371,11 @@ impl ConstraintSatisfactionSolver {
     //changes the state based on the conflict analysis result given as input
     //i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal, and updates internal data structures for simple moving averages
     //note that no propagation is done, this is left to the solver
-    fn process_conflict_analysis_result(&mut self) {
+    fn resolve_conflict(&mut self) {
+        pumpkin_assert_moderate!(self.state.conflict_detected());
+
+        self.compute_1uip(); //the result is stored in self.analysis_result
+
         if let Err(write_error) = self.write_to_certificate() {
             warn!(
                 "Failed to update the certificate file, error message: {}",
@@ -432,6 +432,8 @@ impl ConstraintSatisfactionSolver {
             self.restart_strategy
                 .notify_conflict(lbd, num_variables_assigned_before_conflict);
         }
+
+        self.state.declare_solving();
     }
 
     //a restart differs from backtracking to level zero
