@@ -45,6 +45,7 @@ impl ClauseReference {
         self.code
     }
 
+    //creates the reference to indicate that propagation was due to the input literal as part of a binary clause
     pub fn create_virtual_binary_clause_reference(literal: Literal) -> ClauseReference {
         pumpkin_assert_moderate!(!literal.to_u32().bit(31));
         let mut code = literal.to_u32();

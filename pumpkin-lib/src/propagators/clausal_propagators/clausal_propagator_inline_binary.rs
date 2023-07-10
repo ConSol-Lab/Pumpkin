@@ -103,11 +103,6 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
                     return Err(ConstraintOperationError::InfeasibleClause);
                 }
             }
-        }
-        //binary clauses have special treatment
-        //  they are not allocated in memory with other clauses but instead inlined in the watch list of the clausal propagator
-        else if literals.len() == 2 {
-            self.start_watching_binary_clause_unchecked(literals[0], literals[1]);
         } else {
             //standard case - the clause has at least two unassigned literals
             self.add_clause_unchecked(literals, false, clause_allocator);
@@ -116,22 +111,58 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
         Ok(())
     }
 
+    fn add_asserting_learned_clause(
+        &mut self,
+        literals: Vec<Literal>,
+        assignments: &mut AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
+    ) -> Option<ClauseReference> {
+        let asserting_literal = literals[0];
+        // binary clause - these have special treatment and are stored directly in the watch lists
+        if literals.len() == 2 {
+            let second_literal = literals[1]; // need to store this in case the clause is binary
+            self.add_clause_unchecked(literals, true, clause_allocator);
+            assignments.enqueue_propagated_literal(
+                asserting_literal,
+                ClauseReference::create_virtual_binary_clause_reference(second_literal).into(),
+            );
+            None
+        }
+        // standard clause
+        else {
+            let clause_reference = self
+                .add_clause_unchecked(literals, true, clause_allocator)
+                .expect("Add clause failed for some reason");
+            assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+            Some(clause_reference)
+        }
+    }
+
     fn add_clause_unchecked(
         &mut self,
         literals: Vec<Literal>,
         is_learned: bool,
         clause_allocator: &mut ClauseAllocator,
-    ) -> ClauseReference {
+    ) -> Option<ClauseReference> {
         pumpkin_assert_moderate!(literals.len() >= 2);
         pumpkin_assert_simple!(!self.is_in_infeasible_state);
 
-        let clause_reference = clause_allocator.create_clause(literals, is_learned);
-        let clause = clause_allocator.get_clause(clause_reference);
+        //binary clauses have special treatment
+        //  they are not allocated in memory with other clauses but instead inlined in the watch list of the clausal propagator
+        if literals.len() == 2 {
+            self.start_watching_binary_clause_unchecked(literals[0], literals[1]);
+            None
+        }
+        //otherwise standard clause allocation takes place
+        else {
+            let clause_reference = clause_allocator.create_clause(literals, is_learned);
+            let clause = clause_allocator.get_clause(clause_reference);
 
-        self.permanent_clauses.push(clause_reference);
-        self.start_watching_clause_unchecked(clause.get_literal_slice(), clause_reference);
+            self.permanent_clauses.push(clause_reference);
+            self.start_watching_clause_unchecked(clause.get_literal_slice(), clause_reference);
 
-        clause_reference
+            Some(clause_reference)
+        }
     }
 
     fn add_permanent_implication_unchecked(

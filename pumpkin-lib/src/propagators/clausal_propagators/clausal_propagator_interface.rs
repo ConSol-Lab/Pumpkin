@@ -24,12 +24,19 @@ pub trait ClausalPropagatorInterface {
         clause_allocator: &mut ClauseAllocator,
     ) -> Result<(), ConstraintOperationError>;
 
+    fn add_asserting_learned_clause(
+        &mut self,
+        literals: Vec<Literal>,
+        assignments: &mut AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
+    ) -> Option<ClauseReference>;
+
     fn add_clause_unchecked(
         &mut self,
         literals: Vec<Literal>,
         is_learned: bool,
         clause_allocator: &mut ClauseAllocator,
-    ) -> ClauseReference;
+    ) -> Option<ClauseReference>;
 
     fn add_permanent_implication_unchecked(
         &mut self,

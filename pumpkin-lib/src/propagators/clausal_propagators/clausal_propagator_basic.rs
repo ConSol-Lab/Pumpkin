@@ -96,12 +96,29 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         Ok(())
     }
 
+    fn add_asserting_learned_clause(
+        &mut self,
+        literals: Vec<Literal>,
+        assignments: &mut AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
+    ) -> Option<ClauseReference> {
+        let asserting_literal = literals[0];
+
+        let clause_reference = self
+            .add_clause_unchecked(literals, true, clause_allocator)
+            .expect("Add clause failed for some reason");
+
+        assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+
+        Some(clause_reference)
+    }
+
     fn add_clause_unchecked(
         &mut self,
         literals: Vec<Literal>,
         is_learned: bool,
         clause_allocator: &mut ClauseAllocator,
-    ) -> ClauseReference {
+    ) -> Option<ClauseReference> {
         pumpkin_assert_moderate!(literals.len() >= 2);
         pumpkin_assert_simple!(!self.is_in_infeasible_state);
 
@@ -111,7 +128,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         self.permanent_clauses.push(clause_reference);
         self.start_watching_clause_unchecked(clause.get_literal_slice(), clause_reference);
 
-        clause_reference
+        Some(clause_reference)
     }
 
     fn add_permanent_implication_unchecked(

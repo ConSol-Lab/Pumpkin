@@ -242,8 +242,8 @@ impl ConstraintSatisfactionSolver {
 
             self.learned_clause_manager
                 .shrink_learned_clause_database_if_needed(
-                    &mut self.clausal_propagator,
                     &mut self.sat_data_structures,
+                    &mut self.clausal_propagator,
                 );
 
             self.propagate_enqueued();
@@ -429,7 +429,8 @@ impl ConstraintSatisfactionSolver {
             self.learned_clause_manager.add_learned_clause(
                 self.analysis_result.learned_literals.clone(), //todo not ideal with clone
                 &mut self.clausal_propagator,
-                &mut self.sat_data_structures,
+                &mut self.sat_data_structures.assignments_propositional,
+                &mut self.sat_data_structures.clause_allocator,
             );
 
             let lbd = self.learned_clause_manager.compute_lbd_for_literals(

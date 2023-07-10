@@ -57,38 +57,31 @@ impl LearnedClauseManager {
         &mut self,
         learned_clause_literals: Vec<Literal>,
         clausal_propagator: &mut ClausalPropagator,
-        sat_data_structures: &mut SATEngineDataStructures,
+        assignments: &mut AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
     ) {
-        let asserting_literal = learned_clause_literals[0];
-
-        let clause_reference = clausal_propagator.add_clause_unchecked(
+        let result = clausal_propagator.add_asserting_learned_clause(
             learned_clause_literals,
-            true,
-            &mut sat_data_structures.clause_allocator,
+            assignments,
+            clause_allocator,
         );
+        //only update if the clause is treated as a standard clause
+        //  note that in case of binary clauses, these may be stored directly in the watch lists and not as a standard clause
+        if let Some(clause_reference) = result {
+            self.update_lbd(clause_reference, assignments, clause_allocator);
 
-        sat_data_structures
-            .assignments_propositional
-            .enqueue_propagated_literal(asserting_literal, clause_reference.into());
-
-        self.update_lbd(
-            clause_reference,
-            &sat_data_structures.assignments_propositional,
-            &mut sat_data_structures.clause_allocator,
-        );
-
-        let lbd = sat_data_structures.clause_allocator[clause_reference].lbd();
-        if lbd <= self.parameters.lbd_threshold {
-            self.learned_clauses.low_lbd.push(clause_reference);
-        } else {
-            self.learned_clauses.high_lbd.push(clause_reference);
+            if clause_allocator[clause_reference].lbd() <= self.parameters.lbd_threshold {
+                self.learned_clauses.low_lbd.push(clause_reference);
+            } else {
+                self.learned_clauses.high_lbd.push(clause_reference);
+            }
         }
     }
 
     pub fn shrink_learned_clause_database_if_needed(
         &mut self,
-        clausal_propagator: &mut ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
+        clausal_propagator: &mut ClausalPropagator,
     ) {
         //only consider clause removals once the threshold is reached
         if self.learned_clauses.high_lbd.len()
@@ -115,7 +108,7 @@ impl LearnedClauseManager {
     fn remove_high_lbd_clauses(
         &mut self,
         sat_data_structures: &mut SATEngineDataStructures,
-        clausal_propagator: &mut crate::propagators::clausal_propagators::ClausalPropagatorBasic,
+        clausal_propagator: &mut ClausalPropagator,
     ) {
         //roughly half of the learned clauses will be removed
 
