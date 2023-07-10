@@ -193,7 +193,7 @@ impl LearnedClauseManager {
                             .partial_cmp(&clause1.get_activity())
                             .unwrap()
                     }
-                    LearnedClauseSortingStrategy::Lbd => {
+                    LearnedClauseSortingStrategy::LBD => {
                         if clause1.lbd() != clause2.lbd() {
                             clause1.lbd().cmp(&clause2.lbd())
                         } else {

@@ -354,7 +354,7 @@ fn learned_clause_sorting_strategy_parser(
     s: &str,
 ) -> Result<CliArg<LearnedClauseSortingStrategy>, String> {
     match s {
-        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd.into()),
+        "lbd" => Ok(LearnedClauseSortingStrategy::LBD.into()),
         "activity" => Ok(LearnedClauseSortingStrategy::Activity.into()),
         value => Err(format!(
             "'{value}' is not a valid learned clause sorting strategy"
@@ -392,28 +392,18 @@ impl<T> From<T> for CliArg<T> {
 
 impl std::fmt::Display for CliArg<LearnedClauseSortingStrategy> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self.inner {
-            LearnedClauseSortingStrategy::Lbd => write!(f, "lbd"),
-            LearnedClauseSortingStrategy::Activity => write!(f, "activity"),
-        }
+        std::fmt::Display::fmt(&self.inner, f)
     }
 }
 
 impl std::fmt::Display for CliArg<PseudoBooleanEncoding> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.inner {
-            PseudoBooleanEncoding::GTE => write!(f, "gte"),
-            PseudoBooleanEncoding::CNE => write!(f, "cne"),
-        }
+        std::fmt::Display::fmt(&self.inner, f)
     }
 }
 
 impl std::fmt::Display for CliArg<SequenceGeneratorType> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.inner {
-            SequenceGeneratorType::Constant => write!(f, "constant"),
-            SequenceGeneratorType::Geometric => write!(f, "geometric"),
-            SequenceGeneratorType::Luby => write!(f, "luby"),
-        }
+        std::fmt::Display::fmt(&self.inner, f)
     }
 }

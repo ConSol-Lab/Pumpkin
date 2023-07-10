@@ -16,9 +16,19 @@ pub struct SATEngineDataStructures {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum LearnedClauseSortingStrategy {
     Activity,
-    Lbd,
+    LBD,
+}
+
+impl std::fmt::Display for LearnedClauseSortingStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            LearnedClauseSortingStrategy::LBD => write!(f, "lbd"),
+            LearnedClauseSortingStrategy::Activity => write!(f, "activity"),
+        }
+    }
 }
 
 impl SATEngineDataStructures {

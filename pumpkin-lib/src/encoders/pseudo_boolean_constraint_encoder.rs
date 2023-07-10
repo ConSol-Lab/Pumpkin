@@ -52,6 +52,15 @@ pub enum PseudoBooleanEncoding {
     CNE,
 }
 
+impl std::fmt::Display for PseudoBooleanEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PseudoBooleanEncoding::GTE => write!(f, "gte"),
+            PseudoBooleanEncoding::CNE => write!(f, "cne"),
+        }
+    }
+}
+
 /// main struct through which encoders are to be used
 pub struct PseudoBooleanConstraintEncoder {
     original_weighted_literals: Vec<WeightedLiteral>,
