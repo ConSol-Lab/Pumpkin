@@ -253,7 +253,9 @@ impl ConstraintSatisfactionSolver {
                 if let Err(flag) = branching_result {
                     return flag;
                 }
-            } else {
+            }
+            //conflict
+            else {
                 if self
                     .sat_data_structures
                     .assignments_propositional
@@ -372,7 +374,7 @@ impl ConstraintSatisfactionSolver {
     //i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal, and updates internal data structures for simple moving averages
     //note that no propagation is done, this is left to the solver
     fn resolve_conflict(&mut self) {
-        pumpkin_assert_moderate!(self.state.conflict_detected());
+        pumpkin_assert_moderate!(self.state.conflicting());
 
         self.compute_1uip(); //the result is stored in self.analysis_result
 
@@ -544,7 +546,7 @@ impl ConstraintSatisfactionSolver {
             } //end match
         }
 
-        self.counters.num_conflicts += self.state.conflict_detected() as u64;
+        self.counters.num_conflicts += self.state.conflicting() as u64;
 
         self.counters.num_propagations +=
             self.sat_data_structures
@@ -554,7 +556,7 @@ impl ConstraintSatisfactionSolver {
 
         //Only check fixed point propagation if there was no reported conflict.
         pumpkin_assert_extreme!(
-            self.state.conflict_detected()
+            self.state.conflicting()
                 || DebugHelper::debug_fixed_point_propagation(
                     &self.clausal_propagator,
                     &self.cp_data_structures.assignments_integer,
@@ -666,7 +668,7 @@ impl ConstraintSatisfactionSolver {
         } else {
             self.propagate_enqueued();
 
-            self.state.conflict_detected()
+            self.state.conflicting()
         }
     }
 
@@ -729,7 +731,7 @@ impl ConstraintSatisfactionSolver {
 
             self.propagate_enqueued();
 
-            if self.state.conflict_detected() {
+            if self.state.conflicting() {
                 Err(ConstraintOperationError::InfeasibleClause)
             } else {
                 Ok(())
@@ -1053,10 +1055,10 @@ impl CSPSolverState {
     }
 
     pub fn no_conflict(&self) -> bool {
-        !self.conflict_detected()
+        !self.conflicting()
     }
 
-    pub fn conflict_detected(&self) -> bool {
+    pub fn conflicting(&self) -> bool {
         matches!(
             self.internal_state,
             CSPSolverStateInternal::Conflict { conflict_info: _ }
@@ -1143,9 +1145,7 @@ impl CSPSolverState {
     }
 
     fn declare_solving(&mut self) {
-        pumpkin_assert_simple!(
-            (self.is_ready() || self.conflict_detected()) && !self.is_infeasible()
-        );
+        pumpkin_assert_simple!((self.is_ready() || self.conflicting()) && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Solving;
     }
 
@@ -1154,7 +1154,7 @@ impl CSPSolverState {
     }
 
     fn declare_conflict(&mut self, conflict_info: ConflictInfo) {
-        pumpkin_assert_simple!(!self.conflict_detected());
+        pumpkin_assert_simple!(!self.conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
 
