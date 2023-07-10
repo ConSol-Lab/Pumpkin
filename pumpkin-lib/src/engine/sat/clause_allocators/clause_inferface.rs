@@ -10,7 +10,7 @@ pub trait ClauseInterface:
     fn is_deleted(&self) -> bool;
 
     fn get_literal_slice(&self) -> &[Literal];
-    fn get_lbd(&self) -> u32;
+    fn lbd(&self) -> u32;
     fn get_activity(&self) -> f32;
 
     //note that this does _not_ delete the clause, it simply marks it as if it was deleted

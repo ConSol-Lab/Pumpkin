@@ -69,7 +69,7 @@ impl ClauseInterface for ClauseInlined {
         }
     }
 
-    fn get_lbd(&self) -> u32 {
+    fn lbd(&self) -> u32 {
         self.lbd_and_flags
             .bit_range(ClauseInlined::bit_lbd_most_significant(), 0)
     }
@@ -282,7 +282,7 @@ mod tests {
         assert!(clause.is_learned());
         assert!(!clause.is_deleted());
         assert!(!clause.is_protected_against_deletion());
-        assert!(clause.get_lbd() == lits.len() as u32);
+        assert!(clause.lbd() == lits.len() as u32);
         assert!(clause.get_activity() == 0.0);
         assert!(clause.len() == 3);
     }
@@ -303,11 +303,11 @@ mod tests {
             true,
         );
 
-        assert!(clause.get_lbd() == lits.len() as u32);
+        assert!(clause.lbd() == lits.len() as u32);
         clause.update_lbd(2);
-        assert!(clause.get_lbd() == 2);
+        assert!(clause.lbd() == 2);
         clause.update_lbd(10);
-        assert!(clause.get_lbd() == 10);
+        assert!(clause.lbd() == 10);
     }
 
     #[test]

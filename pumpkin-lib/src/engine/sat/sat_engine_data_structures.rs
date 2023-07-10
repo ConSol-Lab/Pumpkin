@@ -1,5 +1,5 @@
 use crate::{
-    basic_types::{BranchingDecision, Literal},
+    basic_types::{BranchingDecision, ClauseReference, Literal},
     engine::constraint_satisfaction_solver::ClauseAllocator,
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
@@ -148,5 +148,37 @@ impl SATEngineDataStructures {
         }
 
         literals
+    }
+
+    pub fn is_clause_propagating(&self, clause_reference: ClauseReference) -> bool {
+        pumpkin_assert_simple!(
+            clause_reference.is_allocated_clause(),
+            "Virtual clause support not yet implemented."
+        );
+
+        //we determine whether the clause is propagating by using the following reasoning:
+        //  the literal at position 0 is set to true - this is the convention with the clausal propagator
+        //  the reason for propagation of the literal is the input clause
+
+        //the code could be simplified
+
+        let propagated_literal = self.clause_allocator[clause_reference][0];
+        if self
+            .assignments_propositional
+            .is_literal_assigned_true(propagated_literal)
+        {
+            let reason_constraint = self
+                .assignments_propositional
+                .get_variable_reason_constraint(propagated_literal.get_propositional_variable());
+
+            if reason_constraint.is_clause() {
+                let reason_clause: ClauseReference = reason_constraint.into();
+                reason_clause == clause_reference
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 }

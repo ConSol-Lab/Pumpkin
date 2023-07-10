@@ -240,6 +240,12 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
+            self.learned_clause_manager
+                .shrink_learned_clause_database_if_needed(
+                    &mut self.clausal_propagator,
+                    &mut self.sat_data_structures,
+                );
+
             self.propagate_enqueued();
 
             if self.state.no_conflict() {
@@ -447,12 +453,6 @@ impl ConstraintSatisfactionSolver {
         }
 
         self.backtrack(0);
-
-        self.learned_clause_manager
-            .shrink_learned_clause_database_if_needed(
-                &mut self.clausal_propagator,
-                &mut self.sat_data_structures,
-            );
 
         self.restart_strategy.notify_restart();
     }

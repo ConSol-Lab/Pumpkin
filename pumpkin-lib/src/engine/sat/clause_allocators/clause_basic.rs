@@ -51,7 +51,7 @@ impl ClauseInterface for ClauseBasic {
         &self.literals
     }
 
-    fn get_lbd(&self) -> u32 {
+    fn lbd(&self) -> u32 {
         self.lbd
     }
 

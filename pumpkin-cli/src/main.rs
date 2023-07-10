@@ -8,6 +8,7 @@ use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink};
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::optimisation::{LinearSearch, OptimisationResult, OptimisationSolver};
+use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::time::Duration;
@@ -31,14 +32,16 @@ struct Args {
     #[arg(long)]
     certificate_path: Option<PathBuf>,
 
-    /// The number of learned clauses that can be added to the clause database before clause
-    /// deletion is triggered. This number could be exceeded temporarily but occasionally the
-    /// solver will delete learned clauses.
-    #[arg(long = "threshold-learned-clauses", default_value_t = 4000)]
+    /// The number of high lbd learned clauses that are kept in the database.
+    /// Learned clauses are kept based on the tied system introduced by Chanseok Oh
+    #[arg(long = "learning-clause-threshold", default_value_t = 4000)]
     threshold_learned_clauses: u64,
 
+    #[arg(long = "learning-lbd-threshold", default_value_t = 5)]
+    lbd_threshold: u32,
+
     /// Decides which clauses will be removed when cleaning up the learned clauses.
-    #[arg(short = 'l', long = "learned-clause-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Lbd.into())]
+    #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
     learned_clause_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
     /// Decides the sequence based on which the restarts are performed.
@@ -166,8 +169,9 @@ fn run() -> PumpkinResult<()> {
     };
 
     let sat_options = SatOptions {
-        num_learned_clauses_max: args.threshold_learned_clauses,
-        learned_clause_sorting_strategy: args.learned_clause_sorting_strategy.inner,
+        num_high_lbd_learned_clauses_max: args.threshold_learned_clauses,
+        high_lbd_learned_clause_sorting_strategy: args.learned_clause_sorting_strategy.inner,
+        lbd_threshold: args.lbd_threshold,
         ..Default::default()
     };
 
