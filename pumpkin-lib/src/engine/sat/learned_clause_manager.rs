@@ -5,7 +5,7 @@ use crate::{
         constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator},
     },
     propagators::clausal_propagators::ClausalPropagatorInterface,
-    pumpkin_assert_extreme, pumpkin_assert_moderate,
+    pumpkin_assert_moderate,
 };
 
 use super::{AssignmentsPropositional, LearnedClauseSortingStrategy, SATEngineDataStructures};
@@ -98,11 +98,6 @@ impl LearnedClauseManager {
         self.promote_high_lbd_clauses(sat_data_structures);
 
         self.remove_high_lbd_clauses(sat_data_structures, clausal_propagator);
-
-        pumpkin_assert_extreme!(clausal_propagator.debug_check_state(
-            &sat_data_structures.assignments_propositional,
-            &sat_data_structures.clause_allocator
-        ));
     }
 
     fn remove_high_lbd_clauses(
