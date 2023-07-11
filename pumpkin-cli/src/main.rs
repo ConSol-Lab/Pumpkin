@@ -34,22 +34,22 @@ struct Args {
 
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
-    #[arg(long = "learning-clause-threshold", default_value_t = 4000)]
-    threshold_learned_clauses: u64,
+    #[arg(long = "learning-max-num-clauses", default_value_t = 4000)]
+    learning_max_num_clauses: u64,
 
     /// Learned clauses with this threshold LBD or lower are kept permanently
     /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
     #[arg(long = "learning-lbd-threshold", default_value_t = 5)]
-    lbd_threshold: u32,
+    learning_lbd_threshold: u32,
 
     /// Decides which clauses will be removed when cleaning up the learned clauses.
     #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
-    learned_clause_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
+    learning_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the 1uip
     /// Minimisation is done according to the idea proposed by Van Gelder
     #[arg(long = "learning-minimise", value_parser = learned_clause_minimisation_parser, default_value_t = true.into())]
-    learned_clause_minimisation: CliArg<bool>,
+    learning_clause_minimisation: CliArg<bool>,
 
     /// Decides the sequence based on which the restarts are performed.
     /// To be used in combination with "restarts-base-interval"
@@ -176,9 +176,9 @@ fn run() -> PumpkinResult<()> {
     };
 
     let sat_options = SatOptions {
-        num_high_lbd_learned_clauses_max: args.threshold_learned_clauses,
-        high_lbd_learned_clause_sorting_strategy: args.learned_clause_sorting_strategy.inner,
-        lbd_threshold: args.lbd_threshold,
+        num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
+        high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy.inner,
+        lbd_threshold: args.learning_lbd_threshold,
         ..Default::default()
     };
 
@@ -204,7 +204,7 @@ fn run() -> PumpkinResult<()> {
         restart_num_assigned_window: args.restart_num_assigned_window,
         restart_geometric_coef: args.restart_geometric_coef,
         certificate_file,
-        learning_clause_minimisation: args.learned_clause_minimisation.inner,
+        learning_clause_minimisation: args.learning_clause_minimisation.inner,
     };
 
     let time_limit = args.time_limit.map(Duration::from_secs);
