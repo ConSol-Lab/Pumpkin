@@ -33,16 +33,23 @@ struct Args {
     certificate_path: Option<PathBuf>,
 
     /// The number of high lbd learned clauses that are kept in the database.
-    /// Learned clauses are kept based on the tied system introduced by Chanseok Oh
+    /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
     #[arg(long = "learning-clause-threshold", default_value_t = 4000)]
     threshold_learned_clauses: u64,
 
+    /// Learned clauses with this threshold LBD or lower are kept permanently
+    /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
     #[arg(long = "learning-lbd-threshold", default_value_t = 5)]
     lbd_threshold: u32,
 
     /// Decides which clauses will be removed when cleaning up the learned clauses.
     #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
     learned_clause_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
+
+    /// Decides whether learned clauses are minimised as a post-processing step after computing the 1uip
+    /// Minimisation is done according to the idea proposed by Van Gelder
+    #[arg(long = "learning-minimise", value_parser = learned_clause_minimisation_parser, default_value_t = true.into())]
+    learned_clause_minimisation: CliArg<bool>,
 
     /// Decides the sequence based on which the restarts are performed.
     /// To be used in combination with "restarts-base-interval"
@@ -197,6 +204,7 @@ fn run() -> PumpkinResult<()> {
         restart_num_assigned_window: args.restart_num_assigned_window,
         restart_geometric_coef: args.restart_geometric_coef,
         certificate_file,
+        learning_clause_minimisation: args.learned_clause_minimisation.inner,
     };
 
     let time_limit = args.time_limit.map(Duration::from_secs);
@@ -370,6 +378,18 @@ fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>,
     }
 }
 
+fn learned_clause_minimisation_parser(s: &str) -> Result<CliArg<bool>, String> {
+    if s == "1" || s.to_lowercase() == "true" {
+        Ok(true.into())
+    } else if s == "0" || s.to_lowercase() == "false" {
+        Ok(false.into())
+    } else {
+        Err(format!(
+            "'{s}' is not valid input for the learned clause minimisation parameter."
+        ))
+    }
+}
+
 fn sequence_generator_parser(s: &str) -> Result<CliArg<SequenceGeneratorType>, String> {
     match s {
         "constant" => Ok(SequenceGeneratorType::Constant.into()),
@@ -403,6 +423,12 @@ impl std::fmt::Display for CliArg<PseudoBooleanEncoding> {
 }
 
 impl std::fmt::Display for CliArg<SequenceGeneratorType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.inner, f)
+    }
+}
+
+impl std::fmt::Display for CliArg<bool> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.inner, f)
     }

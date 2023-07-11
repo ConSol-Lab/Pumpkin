@@ -114,6 +114,21 @@ impl AssignmentsPropositional {
         }
     }
 
+    pub fn is_variable_decision(&self, variable: PropositionalVariable) -> bool {
+        match self.assignment_info[variable] {
+            PropositionalAssignmentInfo::Unassigned => false,
+            PropositionalAssignmentInfo::Assigned {
+                truth_value: _,
+                decision_level: _,
+                constraint_reference,
+            } => constraint_reference.is_null(),
+        }
+    }
+
+    pub fn is_literal_decision(&self, literal: Literal) -> bool {
+        self.is_variable_decision(literal.get_propositional_variable())
+    }
+
     pub fn is_variable_propagated(&self, variable: PropositionalVariable) -> bool {
         match self.assignment_info[variable] {
             PropositionalAssignmentInfo::Unassigned => false,

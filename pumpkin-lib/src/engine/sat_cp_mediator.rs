@@ -499,7 +499,14 @@ impl SATCPMediator {
             !sat_data_structures
                 .assignments_propositional
                 .is_literal_root_assignment(propagated_literal),
-            "Reason codes are not kept properly for root propagations."
+            "Reasons are not kept properly for root propagations."
+        );
+
+        pumpkin_assert_moderate!(
+            sat_data_structures
+                .assignments_propositional
+                .is_literal_assigned_true(propagated_literal),
+            "Reason for propagation only makes sense for true literals."
         );
 
         let constraint_reference = sat_data_structures

@@ -3,7 +3,7 @@ use super::cp::CPEngineDataStructures;
 use super::sat::SATEngineDataStructures;
 use super::{
     AssignmentsInteger, AssignmentsPropositional, GlucoseRestartStrategy, LearnedClauseManager,
-    SATCPMediator, SatOptions,
+    LearnedClauseMinimiser, SATCPMediator, SatOptions,
 };
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
@@ -30,6 +30,7 @@ pub struct ConstraintSatisfactionSolver {
     cp_data_structures: CPEngineDataStructures,
     clausal_propagator: ClausalPropagator,
     learned_clause_manager: LearnedClauseManager,
+    learned_clause_minimiser: LearnedClauseMinimiser,
     restart_strategy: GlucoseRestartStrategy,
     cp_propagators: Vec<Box<dyn ConstraintProgrammingPropagator>>,
     sat_cp_mediator: SATCPMediator,
@@ -51,6 +52,8 @@ pub struct SatisfactionSolverOptions {
     pub restart_num_assigned_window: u64,
     pub restart_geometric_coef: Option<f64>,
 
+    pub learning_clause_minimisation: bool,
+
     /// Certificate output file or None if certificate output is disabled.
     pub certificate_file: Option<File>,
 }
@@ -67,6 +70,7 @@ impl ConstraintSatisfactionSolver {
             cp_data_structures: CPEngineDataStructures::default(),
             clausal_propagator: ClausalPropagator::default(),
             learned_clause_manager: LearnedClauseManager::new(sat_options),
+            learned_clause_minimiser: LearnedClauseMinimiser::default(),
             restart_strategy: GlucoseRestartStrategy::new(&solver_options),
             cp_propagators: vec![],
             sat_cp_mediator: SATCPMediator::default(),
@@ -382,14 +386,17 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict(&mut self) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
+        //compute the learned clause
         self.compute_1uip(); //the result is stored in self.analysis_result
 
+        //now process the learned clause, i.e., add it to the clause database
         if let Err(write_error) = self.write_to_certificate() {
             warn!(
                 "Failed to update the certificate file, error message: {}",
                 write_error
             );
         }
+
         //unit clauses are treated in a special way: they are added as decision literals at decision level 0
         if self.analysis_result.learned_literals.len() == 1 {
             //important to notify about the conflict _before_ backtracking removes literals from the trail
@@ -936,15 +943,83 @@ impl ConstraintSatisfactionSolver {
             self.seen[literal.get_propositional_variable()] = false;
         }
 
-        //pumpkin_assert_advanced(analysis_result.CheckCorrectnessAfterConflictAnalysis(state_), "There is an issues with the derived learned clause after analysis!");
-        //if (internal_parameters_.use_clause_minimisation_) { learned_clause_minimiser_.RemoveImplicationGraphDominatedLiteralsBetter(analysis_result); }
-        //pumpkin_assert_advanced(analysis_result.CheckCorrectnessAfterConflictAnalysis(state_), "After minimisation the learned clause has an issue!");
+        if self.internal_parameters.learning_clause_minimisation {
+            pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
+
+            self.learned_clause_minimiser.remove_dominated_literals(
+                &mut self.analysis_result,
+                &self.clausal_propagator,
+                &mut self.sat_data_structures,
+                &self.cp_data_structures,
+                &mut self.sat_cp_mediator,
+                &mut self.cp_propagators,
+            );
+        }
 
         self.sat_cp_mediator
             .explanation_clause_manager
             .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
 
+        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
         //the return value is stored in the input 'analysis_result'
+    }
+
+    fn debug_check_conflict_analysis_result(&self) -> bool {
+        //debugging method: performs sanity checks on the learned clause
+
+        let assignments = &self.sat_data_structures.assignments_propositional;
+        let learned_lits = &self.analysis_result.learned_literals;
+
+        assert!(
+            self.analysis_result.backjump_level < self.get_decision_level(),
+            "Backjump level must be lower than the current level."
+        );
+
+        assert!(
+            learned_lits
+                .iter()
+                .all(|&literal| !assignments.is_literal_root_assignment(literal)),
+            "No root level literals may be present in a learned clause."
+        );
+
+        assert!(
+            self.get_decision_level()
+                == assignments
+                    .get_literal_assignment_level(self.analysis_result.learned_literals[0]),
+            "The asserting literal must be at the highest level."
+        );
+
+        assert!(
+            learned_lits[1..].iter().all(|&literal| {
+                assignments.get_literal_assignment_level(literal) != self.get_decision_level()
+            }),
+            "There may be only one literal at the highest decision level"
+        );
+
+        assert!(
+            learned_lits[1..]
+                .iter()
+                .all(|&literal| { assignments.is_literal_assigned_false(literal) }),
+            "All literals apart from the propagating literal are assigned false"
+        );
+
+        if learned_lits.len() >= 2 {
+            assert!(
+                self.analysis_result.backjump_level
+                    == assignments.get_literal_assignment_level(learned_lits[1]),
+                "Assertion level seems wrong."
+            );
+
+            let second_max_level = assignments.get_literal_assignment_level(learned_lits[1]);
+
+            assert!(
+                learned_lits[1..].iter().all(|&literal| {
+                    assignments.get_literal_assignment_level(literal) <= second_max_level
+                }),
+                "The literal at position 1 must be at the second highest level"
+            );
+        }
+        true
     }
 
     fn debug_conflict_analysis_check_next_literal(
@@ -1190,6 +1265,7 @@ impl Default for SatisfactionSolverOptions {
             restart_num_assigned_coef: 1.4,
             restart_num_assigned_window: 5000,
             restart_geometric_coef: None,
+            learning_clause_minimisation: true,
         }
     }
 }
