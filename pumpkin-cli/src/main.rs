@@ -53,7 +53,7 @@ struct Args {
 
     /// Decides the sequence based on which the restarts are performed.
     /// To be used in combination with "restarts-base-interval"
-    #[arg(long = "restart-sequence-generator", value_parser = sequence_generator_parser, default_value_t = SequenceGeneratorType::Constant.into())]
+    #[arg(long = "restart-sequence", value_parser = sequence_generator_parser, default_value_t = SequenceGeneratorType::Constant.into())]
     restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
 
     /// The base interval length is used as a multiplier to the restart sequence.
@@ -316,10 +316,6 @@ fn cnf_problem(
             Some(solution)
         }
         CSPSolverExecutionFlag::Infeasible => {
-            println!("s UNSATISFIABLE");
-            None
-        }
-        CSPSolverExecutionFlag::InfeasibleUnderAssumptions => {
             println!("s UNSATISFIABLE");
             None
         }

@@ -100,7 +100,11 @@ impl LinearSearch {
                     );
 
                     println!("o {}", best_objective_value);
-                    info!("Current objective is {} after {} seconds", best_objective_value, stopwatch.get_elapsed_time());
+                    info!(
+                        "Current objective is {} after {} seconds",
+                        best_objective_value,
+                        stopwatch.get_elapsed_time()
+                    );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return OptimisationResult::Optimal {
@@ -109,9 +113,11 @@ impl LinearSearch {
                     };
                 }
                 CSPSolverExecutionFlag::Timeout => {
-                    return OptimisationResult::Satisfiable { best_solution, objective_value: best_objective_value };
+                    return OptimisationResult::Satisfiable {
+                        best_solution,
+                        objective_value: best_objective_value,
+                    };
                 }
-                CSPSolverExecutionFlag::InfeasibleUnderAssumptions => panic!("Do not expect to be infeasible under assumption as a result of a linear search call.")               
             }
         }
     }

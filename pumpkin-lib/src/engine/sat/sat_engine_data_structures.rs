@@ -32,12 +32,21 @@ impl std::fmt::Display for LearnedClauseSortingStrategy {
 }
 
 impl SATEngineDataStructures {
+    pub fn are_all_assumptions_assigned(&self) -> bool {
+        self.assignments_propositional.get_decision_level() > self.assumptions.len() as u32
+    }
+
     fn peek_next_assumption_literal(&self) -> Option<Literal> {
-        assert!(
-            self.assumptions.is_empty(),
-            "Assumptions are not yet supported!"
-        );
-        None
+        if self.are_all_assumptions_assigned() {
+            None
+        } else {
+            //the convention is that at decision level i, the (i-1)th assumption is set
+            //  note that the decision level is increased before calling branching hence the minus one
+            Some(
+                self.assumptions
+                    [(self.assignments_propositional.get_decision_level() as usize) - 1],
+            )
+        }
     }
 
     pub fn get_next_branching_decision(&mut self) -> Option<BranchingDecision> {

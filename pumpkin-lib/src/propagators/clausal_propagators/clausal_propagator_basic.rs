@@ -321,12 +321,12 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         assignments: &AssignmentsPropositional,
         clause_allocator: &ClauseAllocator,
     ) -> bool {
-        //the code below does not do many check with regard to virtual binary clauses
-
         assert!(
             self.watch_lists.len() as u32 == 2 * assignments.num_propositional_variables(),
             "Watch list length is not as expected given the number of propositional variables."
         );
+
+        assert!(self.is_propagation_complete(assignments.trail.len()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
 
         //check that each clause that appears in the watch list appears exactly twice
         //  note that not every clause in the clause manager necessarily appears in the watch list

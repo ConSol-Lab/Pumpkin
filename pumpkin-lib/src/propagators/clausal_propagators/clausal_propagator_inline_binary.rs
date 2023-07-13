@@ -404,6 +404,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             "Watch list length is not as expected given the number of propositional variables."
         );
 
+        assert!(self.is_propagation_complete(assignments.trail.len()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
+
         //check that each clause that appears in the watch list appears exactly twice
         //  note that not every clause in the clause manager necessarily appears in the watch list
 

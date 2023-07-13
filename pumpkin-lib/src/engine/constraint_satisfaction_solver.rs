@@ -124,12 +124,61 @@ impl ConstraintSatisfactionSolver {
         self.solve_internal()
     }
 
-    pub fn extract_core(&mut self) -> Vec<Literal> {
-        pumpkin_assert_simple!(
-            self.state.is_infeasible_under_assumptions(),
-            "Cannot extract core unless the solver is in the infeasible under assumption state."
-        );
-        todo!();
+    //a clausal core is defined as an (implied) clause that contains only assumption literals
+    //  a core can be verified with reverse unit propagation (RUP)
+    //the function can fail if the assumptions were inconsistent, i.e., the assumptions contained x and !x
+    //  in that case one of the two inconsistent literals are returns as an error
+    //otherwise the function returns a clausal core
+    //  note that the returned clausal core may not necessarily be unique, nor the smallest
+    pub fn extract_clausal_core(&mut self) -> Result<Vec<Literal>, Literal> {
+        pumpkin_assert_simple!(self.debug_check_core_extraction());
+
+        if self.state.is_infeasible() {
+            return Ok(vec![]);
+        }
+
+        let violated_assumption = self.state.get_violated_assumption();
+
+        //we consider three cases:
+        //  1. The assumption is falsified at the root level
+        //  2. The assumption is inconsistent with other assumptions, e.g., x and !x given as assumptions
+        //  3. Standard case
+
+        //Case one: the assumption is falsified at the root level
+        if self
+            .sat_data_structures
+            .assignments_propositional
+            .is_literal_root_assignment(violated_assumption)
+        {
+            self.restore_state_at_root();
+            Ok(vec![violated_assumption])
+        }
+        //Case two: the assumption is inconsistent with other assumptions
+        //  i.e., the assumptions contain both literal 'x' and '~x'
+        //  not sure what would be the best output in this case, possibly a special flag?
+        //      for now we return the reason (x && ~x)
+        else if !self
+            .sat_data_structures
+            .assignments_propositional
+            .is_literal_propagated(violated_assumption)
+        {
+            self.restore_state_at_root();
+            Err(violated_assumption)
+        }
+        //Case three: the standard case, proceed with core extraction
+        //performs resolution on all implied assumptions until only decision assumptions are left
+        //  the violating assumption is used as the starting point
+        //  at this point, any reason clause encountered will contains only assumptions, but some assumptions might be implied
+        //  this corresponds to the all-decision CDCL learning scheme
+        else {
+            self.compute_all_decision_learning_helper(Some(!violated_assumption));
+            self.analysis_result
+                .learned_literals
+                .push(!violated_assumption);
+            pumpkin_assert_moderate!(self.debug_check_clausal_core());
+            self.restore_state_at_root();
+            Ok(self.analysis_result.learned_literals.clone())
+        }
     }
 
     pub fn solve(&mut self, time_limit_in_seconds: i64) -> CSPSolverExecutionFlag {
@@ -216,7 +265,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self) {
-        pumpkin_assert_simple!(self.state.has_solution() && self.get_decision_level() > 0);
+        pumpkin_assert_simple!(
+            self.state.has_solution() && self.get_decision_level() > 0
+                || self.state.is_infeasible_under_assumptions()
+        );
 
         self.backtrack(0);
         self.state.declare_ready();
@@ -226,6 +278,8 @@ impl ConstraintSatisfactionSolver {
 //methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
     fn initialise(&mut self, assumptions: &[Literal], time_limit_in_seconds: i64) {
+        pumpkin_assert_simple!(!self.state.is_infeasible_under_assumptions(), "Solver is not expected to be in the infeasible under assumptions state when initialising. Missed extracting the core?");
+
         let num_propositional_variables = self
             .sat_data_structures
             .assignments_propositional
@@ -292,7 +346,7 @@ impl ConstraintSatisfactionSolver {
                 BranchingDecision::Assumption { assumption_literal } => {
                     let success = self.enqueue_assumption_literal(assumption_literal);
                     if !success {
-                        return Err(CSPSolverExecutionFlag::InfeasibleUnderAssumptions);
+                        return Err(CSPSolverExecutionFlag::Infeasible);
                     }
                 }
                 BranchingDecision::StandardDecision { decision_literal } => {
@@ -387,9 +441,15 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_moderate!(self.state.conflicting());
 
         //compute the learned clause
-        self.compute_1uip(); //the result is stored in self.analysis_result
+        //  the result is stored in self.analysis_result
+        self.compute_1uip();
 
-        //now process the learned clause, i.e., add it to the clause database
+        self.process_learned_clause();
+
+        self.state.declare_solving();
+    }
+
+    fn process_learned_clause(&mut self) {
         if let Err(write_error) = self.write_to_certificate() {
             warn!(
                 "Failed to update the certificate file, error message: {}",
@@ -410,13 +470,6 @@ impl ConstraintSatisfactionSolver {
             self.backtrack(0);
 
             let unit_clause = self.analysis_result.learned_literals[0];
-
-            pumpkin_assert_simple!(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .is_literal_unassigned(unit_clause),
-                "Do not expect to learn a literal that is already set."
-            );
 
             self.sat_data_structures
                 .assignments_propositional
@@ -448,15 +501,19 @@ impl ConstraintSatisfactionSolver {
             self.restart_strategy
                 .notify_conflict(lbd, num_variables_assigned_before_conflict);
         }
-
-        self.state.declare_solving();
     }
 
-    //a restart differs from backtracking to level zero
-    //   in that a restart backtrack to decision level zero and then performs additional operations,
+    //a 'restart' differs from backtracking to level zero
+    //   in that a restart backtracks to decision level zero and then performs additional operations,
     //      e.g., clean up learned clauses, adjust restart frequency, etc.
     fn restart_during_search(&mut self) {
-        if self.get_decision_level() == 0 {
+        pumpkin_assert_simple!(
+            self.sat_data_structures.are_all_assumptions_assigned(),
+            "Sanity check: restarts should not trigger whilst assigning assumptions"
+        );
+
+        //no point backtracking past the assumption level
+        if self.get_decision_level() <= self.sat_data_structures.assumptions.len() as u32 {
             return;
         }
 
@@ -684,6 +741,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         literals: Vec<Literal>,
     ) -> Result<(), ConstraintOperationError> {
+        pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         pumpkin_assert_moderate!(self.is_propagation_complete());
 
         if self.state.is_infeasible() {
@@ -790,20 +848,8 @@ impl ConstraintSatisfactionSolver {
 //methods for conflict analysis
 impl ConstraintSatisfactionSolver {
     //computes the 1uip and stores it in 'analysis_result'
-    pub fn compute_1uip(&mut self) {
-        pumpkin_assert_simple!(
-            self.seen.len() as u32
-                == self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .num_propositional_variables()
-        );
-        pumpkin_assert_simple!(self.sat_cp_mediator.explanation_clause_manager.is_empty());
-        pumpkin_assert_simple!(!self
-            .sat_data_structures
-            .assignments_propositional
-            .is_at_the_root_level());
-        pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
+    fn compute_1uip(&mut self) {
+        pumpkin_assert_simple!(self.debug_conflict_analysis_proconditions());
 
         self.analysis_result.learned_literals.resize(
             1,
@@ -823,11 +869,11 @@ impl ConstraintSatisfactionSolver {
         let mut next_literal: Option<Literal> = None;
 
         loop {
-            pumpkin_assert_moderate!(self.debug_conflict_analysis_check_next_literal(
+            pumpkin_assert_moderate!(self.debug_1uip_conflict_analysis_check_next_literal(
                 next_literal,
                 &self.sat_data_structures
             ));
-            //note that the 'next_literal' is only None in the first iterator
+            //note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
                 self.sat_cp_mediator.get_propagation_clause_reference(
                     propagated_literal,
@@ -844,12 +890,6 @@ impl ConstraintSatisfactionSolver {
                     &mut self.cp_propagators,
                 )
             };
-
-            //todo
-            //for simplicity we bump every clause, even though it is not meaningful to bump virtual binary and explanation clauses
-            //in the future we could look into avoiding this
-            //  it somewhat depends on how we decide to handle explanation clauses in the future
-            //also we allocate new clauses for each explanation, this may change in the future
             self.learned_clause_manager
                 .update_clause_lbd_and_bump_activity(
                     clause_reference,
@@ -892,7 +932,7 @@ impl ConstraintSatisfactionSolver {
                     num_current_decision_level_literals_to_inspect +=
                         is_current_level_assignment as usize;
 
-                    //literals from previous decision levels are considered for the learnt clause
+                    //literals from previous decision levels are considered for the learned clause
                     if !is_current_level_assignment {
                         self.analysis_result.learned_literals.push(reason_literal);
                         //the highest decision level literal must be placed at index 1 to prepare the clause for propagation
@@ -964,6 +1004,174 @@ impl ConstraintSatisfactionSolver {
         //the return value is stored in the input 'analysis_result'
     }
 
+    //computes the learned clause containing only decision literals and stores it in 'analysis_result'
+    #[allow(dead_code)]
+    fn compute_all_decision_learning(&mut self) {
+        self.compute_all_decision_learning_helper(None);
+    }
+
+    //the helper is used to facilitate usage when extracting the clausal core
+    //  normal conflict analysis would use 'compute_all_decision_learning'
+    fn compute_all_decision_learning_helper(&mut self, mut next_literal: Option<Literal>) {
+        //the code is similar to 1uip learning with small differences to accomodate the all-decision learning scheme
+        pumpkin_assert_simple!(
+            next_literal.is_some() || self.debug_conflict_analysis_proconditions()
+        ); //when using this function when extracting the core, no conflict acutally takes place, but the preconditions expect a conflict clause, so we skip this check
+
+        self.analysis_result.learned_literals.clear();
+        self.analysis_result.backjump_level = 0;
+
+        let mut num_propagated_literals_left_to_inspect = 0;
+        let mut next_trail_index = self
+            .sat_data_structures
+            .assignments_propositional
+            .trail
+            .len()
+            - 1;
+
+        loop {
+            //note that the 'next_literal' is only None in the first iteration
+            let clause_reference = if let Some(propagated_literal) = next_literal {
+                self.sat_cp_mediator.get_propagation_clause_reference(
+                    propagated_literal,
+                    &self.clausal_propagator,
+                    &mut self.sat_data_structures,
+                    &self.cp_data_structures,
+                    &mut self.cp_propagators,
+                )
+            } else {
+                self.sat_cp_mediator.get_conflict_reason_clause_reference(
+                    self.state.get_conflict_info(),
+                    &mut self.sat_data_structures,
+                    &self.cp_data_structures,
+                    &mut self.cp_propagators,
+                )
+            };
+            self.learned_clause_manager
+                .update_clause_lbd_and_bump_activity(
+                    clause_reference,
+                    &self.sat_data_structures.assignments_propositional,
+                    &mut self.sat_data_structures.clause_allocator,
+                );
+
+            //process the reason literal
+            //	i.e., perform resolution and update other related internal data structures
+            let start_index = (next_literal.is_some()) as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
+            for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
+                .get_literal_slice()[start_index..]
+            {
+                //only consider non-root assignments that have not been considered before
+                let is_root_assignment = self
+                    .sat_data_structures
+                    .assignments_propositional
+                    .is_literal_root_assignment(reason_literal);
+                let seen = self.seen[reason_literal.get_propositional_variable()];
+
+                if !is_root_assignment && !seen {
+                    //mark the variable as seen so that we do not process it more than once
+                    self.seen[reason_literal.get_propositional_variable()] = true;
+
+                    self.sat_data_structures
+                        .propositional_variable_selector
+                        .bump_activity(reason_literal.get_propositional_variable());
+
+                    num_propagated_literals_left_to_inspect +=
+                        self.sat_data_structures
+                            .assignments_propositional
+                            .is_literal_propagated(reason_literal) as i32;
+
+                    //only decision literals are kept for the learned clause
+                    if self
+                        .sat_data_structures
+                        .assignments_propositional
+                        .is_literal_decision(reason_literal)
+                    {
+                        self.analysis_result.learned_literals.push(reason_literal);
+                    }
+                }
+            }
+
+            if num_propagated_literals_left_to_inspect == 0 {
+                break;
+            }
+
+            //after resolution took place, find the next literal on the trail that is relevant for this conflict
+            //only literals that have been seen so far are relevant
+            //  note that there may be many literals that are not relevant
+            while !self.seen[self.sat_data_structures.assignments_propositional.trail
+                [next_trail_index]
+                .get_propositional_variable()]
+                || self
+                    .sat_data_structures
+                    .assignments_propositional
+                    .is_literal_decision(
+                        self.sat_data_structures.assignments_propositional.trail[next_trail_index],
+                    )
+            {
+                next_trail_index -= 1;
+            }
+
+            //make appropriate adjustments to prepare for the next iteration
+            next_literal =
+                Some(self.sat_data_structures.assignments_propositional.trail[next_trail_index]);
+            self.seen[next_literal.unwrap().get_propositional_variable()] = false; //the same literal cannot be encountered more than once on the trail, so we can clear the flag here
+            next_trail_index -= 1;
+            num_propagated_literals_left_to_inspect -= 1;
+
+            pumpkin_assert_simple!(
+                self.sat_data_structures
+                    .assignments_propositional
+                    .is_literal_propagated(next_literal.unwrap()),
+                "Sanity check: the next literal on the trail select must be a propagated literal."
+            );
+        }
+
+        //clear the seen flags for literals in the learned clause
+        //  note that other flags have already been cleaned above in the previous loop
+        for literal in &self.analysis_result.learned_literals {
+            self.seen[literal.get_propositional_variable()] = false;
+        }
+
+        //set the literals in the learned clause in the expected order
+        //  the propagated literal at index 0
+        //  the second highest decision level literal at index 1
+
+        //the above could have been updated during the analysis
+        //  but instead we do it here using this helper function
+        let place_max_in_front = |lits: &mut [Literal]| {
+            let assignments = &self.sat_data_structures.assignments_propositional;
+            let mut max_index: usize = 0;
+            let mut max_level = assignments.get_literal_assignment_level(lits[max_index]);
+            for i in lits.iter().enumerate() {
+                let new_level = assignments.get_literal_assignment_level(*i.1);
+                if max_level < new_level {
+                    max_index = i.0;
+                    max_level = new_level;
+                }
+            }
+            lits.swap(0, max_index);
+        };
+
+        place_max_in_front(self.analysis_result.learned_literals.as_mut_slice());
+        if self.analysis_result.learned_literals.len() > 2 {
+            place_max_in_front(&mut self.analysis_result.learned_literals[1..]);
+        }
+
+        if self.analysis_result.learned_literals.len() > 1 {
+            self.analysis_result.backjump_level = self
+                .sat_data_structures
+                .assignments_propositional
+                .get_literal_assignment_level(self.analysis_result.learned_literals[1]);
+        }
+
+        self.sat_cp_mediator
+            .explanation_clause_manager
+            .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
+
+        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
+        //the return value is stored in the input 'analysis_result'
+    }
+
     fn debug_check_conflict_analysis_result(&self) -> bool {
         //debugging method: performs sanity checks on the learned clause
 
@@ -1022,7 +1230,7 @@ impl ConstraintSatisfactionSolver {
         true
     }
 
-    fn debug_conflict_analysis_check_next_literal(
+    fn debug_1uip_conflict_analysis_check_next_literal(
         &self,
         next_literal: Option<Literal>,
         sat_data_structures: &SATEngineDataStructures,
@@ -1071,6 +1279,68 @@ impl ConstraintSatisfactionSolver {
                     && is_assigned_at_current_decision_level
             }
         }
+    }
+
+    fn debug_check_core_extraction(&self) -> bool {
+        if self.state.is_infeasible() {
+            true
+        } else if self.state.is_infeasible_under_assumptions() {
+            pumpkin_assert_simple!(
+                self.sat_data_structures
+                    .assignments_propositional
+                    .is_literal_assigned_false(self.state.get_violated_assumption()),
+                "Violated assumption is expected to be assigned false."
+            );
+
+            pumpkin_assert_moderate!(self
+                .sat_data_structures
+                .assumptions
+                .contains(&self.state.get_violated_assumption()));
+            true
+        } else {
+            panic!("Cannot extract core unless the solver is either infeasible or infeasible under assumptions.");
+        }
+    }
+
+    fn debug_conflict_analysis_proconditions(&mut self) -> bool {
+        pumpkin_assert_simple!(self.state.conflicting());
+
+        pumpkin_assert_simple!(
+            self.seen.len() as u32
+                == self
+                    .sat_data_structures
+                    .assignments_propositional
+                    .num_propositional_variables()
+        );
+        pumpkin_assert_simple!(self.sat_cp_mediator.explanation_clause_manager.is_empty());
+        pumpkin_assert_simple!(!self
+            .sat_data_structures
+            .assignments_propositional
+            .is_at_the_root_level());
+        pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
+
+        true
+    }
+
+    fn debug_check_clausal_core(&self) -> bool {
+        pumpkin_assert_moderate!(
+            self.analysis_result
+                .learned_literals
+                .iter()
+                .all(|core_literal| self.sat_data_structures.assumptions.contains(core_literal)),
+            "Each core literal must be part of the assumptions."
+        );
+        pumpkin_assert_moderate!(
+            self.analysis_result
+                .learned_literals
+                .iter()
+                .all(|core_literal| self
+                    .sat_data_structures
+                    .assignments_propositional
+                    .is_literal_decision(*core_literal)),
+            "Each core literal must be a decision."
+        );
+        true
     }
 }
 
@@ -1142,20 +1412,6 @@ impl CSPSolverState {
         //self.is_clausal_conflict() || self.is_cp_conflict()
     }
 
-    /*pub fn is_clausal_conflict(&self) -> bool {
-        matches!(
-            self.internal_state,
-            CSPSolverStateInternal::ConflictClausal { conflict_clause: _ }
-        )
-    }
-
-    pub fn is_cp_conflict(&self) -> bool {
-        matches!(
-            self.internal_state,
-            CSPSolverStateInternal::ConflictCP { conflict_reason: _ }
-        )
-    }*/
-
     pub fn is_infeasible(&self) -> bool {
         matches!(self.internal_state, CSPSolverStateInternal::Infeasible)
     }
@@ -1188,22 +1444,6 @@ impl CSPSolverState {
         }
     }
 
-    /*pub fn get_conflict_clause(&self) -> ConflictInfo {
-        if let CSPSolverStateInternal::ConflictClausal { conflict_clause } = self.internal_state {
-            conflict_clause
-        } else {
-            panic!("Cannot extract conflict clause if solver is not in a clausal conflict.");
-        }
-    }*/
-
-    /*pub fn get_conflict_reason_cp(&self) -> &PropositionalConjunction {
-        if let CSPSolverStateInternal::ConflictCP { conflict_reason } = &self.internal_state {
-            conflict_reason
-        } else {
-            panic!("Cannot extract conflict reason of a cp propagator if solver is not in a cp conflict.");
-        }
-    }*/
-
     pub fn timeout(&self) -> bool {
         matches!(self.internal_state, CSPSolverStateInternal::Timeout)
     }
@@ -1216,7 +1456,9 @@ impl CSPSolverState {
     }
 
     fn declare_ready(&mut self) {
-        pumpkin_assert_simple!(self.has_solution() && !self.is_infeasible());
+        pumpkin_assert_simple!(
+            self.has_solution() && !self.is_infeasible() || self.is_infeasible_under_assumptions()
+        );
         self.internal_state = CSPSolverStateInternal::Ready;
     }
 
@@ -1276,5 +1518,198 @@ impl Default for ConstraintSatisfactionSolver {
             SatOptions::default(),
             SatisfactionSolverOptions::default(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::basic_types::{CSPSolverExecutionFlag, Literal};
+
+    use super::ConstraintSatisfactionSolver;
+
+    fn is_same_core(core1: &Vec<Literal>, core2: &Vec<Literal>) -> bool {
+        core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
+    }
+
+    fn is_result_the_same(
+        res1: &Result<Vec<Literal>, Literal>,
+        res2: &Result<Vec<Literal>, Literal>,
+    ) -> bool {
+        //if the two results disagree on the outcome, can already return false
+        if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
+            println!("diff");
+            println!("{:?}", res1.clone().unwrap());
+            return false;
+        }
+        //if both results are errors, check if the two errors are the same
+        else if res1.is_err() {
+            println!("err");
+            res1.clone().unwrap_err().get_propositional_variable()
+                == res2.clone().unwrap_err().get_propositional_variable()
+        }
+        //otherwise the two results are both ok
+        else {
+            println!("ok");
+            is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
+        }
+    }
+
+    fn run_test(
+        mut solver: ConstraintSatisfactionSolver,
+        assumptions: Vec<Literal>,
+        expected_flag: CSPSolverExecutionFlag,
+        expected_result: Result<Vec<Literal>, Literal>,
+        time_limit_in_seconds: i64,
+    ) {
+        let flag = solver.solve_under_assumptions(&assumptions, time_limit_in_seconds);
+
+        assert!(flag == expected_flag, "The flags do not match.");
+
+        if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
+            assert!(
+                is_result_the_same(&solver.extract_clausal_core(), &expected_result),
+                "The result is not the same"
+            );
+        }
+    }
+
+    fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
+
+        let _ = solver.add_permanent_clause(vec![lit1, lit2]);
+        let _ = solver.add_permanent_clause(vec![lit1, !lit2]);
+        let _ = solver.add_permanent_clause(vec![!lit1, lit2]);
+        (solver, vec![lit1, lit2])
+    }
+
+    #[test]
+    fn simple_core_extraction_1_1() {
+        let (solver, lits) = create_instance1();
+        run_test(
+            solver,
+            vec![!lits[0], !lits[1]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![!lits[0]]),
+            1,
+        )
+    }
+
+    #[test]
+    fn simple_core_extraction_1_2() {
+        let (solver, lits) = create_instance1();
+        run_test(
+            solver,
+            vec![!lits[1], !lits[0]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![!lits[1]]),
+            1,
+        );
+    }
+
+    #[test]
+    fn simple_core_extraction_1_infeasible() {
+        let (mut solver, lits) = create_instance1();
+        let _ = solver.add_permanent_clause(vec![!lits[0], !lits[1]]);
+        run_test(
+            solver,
+            vec![!lits[1], !lits[0]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![]),
+            1,
+        );
+    }
+
+    #[test]
+    fn simple_core_extraction_1_core_before_inconsistency() {
+        let (solver, lits) = create_instance1();
+        run_test(
+            solver,
+            vec![!lits[1], lits[1]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![!lits[1]]), //the core gets computed before inconsistency is detected
+            1,
+        );
+    }
+
+    fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
+
+        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
+        let _ = solver.add_permanent_clause(vec![lit1, !lit2, lit3]);
+        (solver, vec![lit1, lit2, lit3])
+    }
+
+    #[test]
+    fn simple_core_extraction_2_1() {
+        let (solver, lits) = create_instance2();
+        run_test(
+            solver,
+            vec![!lits[0], lits[1], !lits[2]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![lits[0], !lits[1], lits[2]]),
+            1,
+        );
+    }
+
+    #[test]
+    fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
+        let (solver, lits) = create_instance2();
+        run_test(
+            solver,
+            vec![!lits[0], lits[1], !lits[2], lits[0]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![lits[0], !lits[1], lits[2]]), //could return inconsistent assumptions, however inconsistency will not be detected given the order of the assumptions
+            1,
+        );
+    }
+
+    #[test]
+    fn simple_core_extraction_2_inconsistent_long_assumptions() {
+        let (solver, lits) = create_instance2();
+        run_test(
+            solver,
+            vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
+            CSPSolverExecutionFlag::Infeasible,
+            Err(lits[0]),
+            1,
+        );
+    }
+
+    fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
+        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
+        (solver, vec![lit1, lit2, lit3])
+    }
+
+    #[test]
+    fn simple_core_extraction_3_1() {
+        let (solver, lits) = create_instance3();
+        run_test(
+            solver,
+            vec![!lits[0], !lits[1], !lits[2]],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![lits[0], lits[1], lits[2]]),
+            1,
+        );
+    }
+
+    #[test]
+    fn simple_core_extraction_3_2() {
+        let (solver, lits) = create_instance3();
+        run_test(
+            solver,
+            vec![!lits[0], !lits[1]],
+            CSPSolverExecutionFlag::Feasible,
+            Ok(vec![]), //will be ignored in the test
+            1,
+        );
     }
 }

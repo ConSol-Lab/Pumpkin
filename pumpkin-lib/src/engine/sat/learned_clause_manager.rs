@@ -219,7 +219,7 @@ impl LearnedClauseManager {
         clause_allocator: &mut ClauseAllocator,
     ) {
         if clause_allocator.get_clause(clause_reference).is_learned()
-            && clause_allocator.get_clause(clause_reference).lbd() > 2
+            && clause_allocator.get_clause(clause_reference).lbd() > self.parameters.lbd_threshold
         {
             self.bump_clause_activity(clause_reference, clause_allocator);
             self.update_lbd(clause_reference, assignments, clause_allocator);

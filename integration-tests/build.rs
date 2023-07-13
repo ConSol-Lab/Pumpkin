@@ -44,7 +44,12 @@ fn compile_c_binary<Source: AsRef<Path>>(
     }
 }
 
-fn add_output_file<P: AsRef<Path>>(cmd: &mut Command, is_msvc: bool, output_dir: P, output_stem: &str) {
+fn add_output_file<P: AsRef<Path>>(
+    cmd: &mut Command,
+    is_msvc: bool,
+    output_dir: P,
+    output_stem: &str,
+) {
     let output_dir = output_dir.as_ref();
     if is_msvc {
         let exe_name = format!("{output_stem}.exe");
