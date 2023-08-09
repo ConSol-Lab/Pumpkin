@@ -1,0 +1,35 @@
+image: rust
+
+definitions:
+  caches:
+    cargo: /usr/local/cargo
+    rust-target: $BITBUCKET_CLONE_DIR/target
+
+pipelines:
+  branches:
+    master:
+      - step: 
+          caches:
+            - cargo
+            - rust-target
+
+          script:
+            - echo "Build project"                    ; cargo build --release
+            - echo "Format source code"               ; cargo fmt --check
+            - echo "Run Clippy"                       ; cargo clippy
+            - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
+            - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
+
+  pull-requests:
+    '**':
+      - step: 
+          caches:
+            - cargo
+            - rust-target
+
+          script:
+            - echo "Build project"                    ; cargo build --release
+            - echo "Format source code"               ; cargo fmt --check
+            - echo "Run Clippy"                       ; cargo clippy
+            - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
+            - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
