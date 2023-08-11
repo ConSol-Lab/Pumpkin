@@ -248,6 +248,10 @@ fn wcnf_problem(
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
 
+    let num_problem_variables = csp_solver
+        .get_propositional_assignments()
+        .num_propositional_variables() as usize;
+
     let mut solver = OptimisationSolver::new(
         csp_solver,
         objective_function,
@@ -260,7 +264,10 @@ fn wcnf_problem(
             objective_value,
         } => {
             println!("s OPTIMAL");
-            println!("v {}", stringify_solution(&solution));
+            println!(
+                "v {}",
+                stringify_solution(&solution, num_problem_variables, false)
+            );
             Some((solution, objective_value))
         }
         OptimisationResult::Satisfiable {
@@ -268,7 +275,10 @@ fn wcnf_problem(
             objective_value,
         } => {
             println!("s SATISFIABLE");
-            println!("v {}", stringify_solution(&best_solution));
+            println!(
+                "v {}",
+                stringify_solution(&best_solution, num_problem_variables, false)
+            );
             Some((best_solution, objective_value))
         }
         OptimisationResult::Infeasible => {
@@ -311,7 +321,10 @@ fn cnf_problem(
             );
 
             println!("s SATISFIABLE");
-            println!("v {}", stringify_solution(&solution));
+            println!(
+                "v {}",
+                stringify_solution(&solution, solution.num_propositional_variables(), true)
+            );
 
             Some(solution)
         }
@@ -340,8 +353,12 @@ fn time_limit_in_secs(time_limit: Option<Duration>) -> i64 {
         .unwrap_or(i64::MAX)
 }
 
-fn stringify_solution(solution: &Solution) -> String {
-    (1..solution.num_propositional_variables())
+fn stringify_solution(
+    solution: &Solution,
+    num_variables: usize,
+    terminate_with_zero: bool,
+) -> String {
+    (1..num_variables)
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
             if solution[var] {
@@ -350,7 +367,11 @@ fn stringify_solution(solution: &Solution) -> String {
                 format!("-{} ", var.index())
             }
         })
-        .chain(std::iter::once("0".to_string()))
+        .chain(if terminate_with_zero {
+            std::iter::once("0".to_string())
+        } else {
+            std::iter::once("".to_string())
+        })
         .collect::<String>()
 }
 
