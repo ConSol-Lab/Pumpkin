@@ -1,0 +1,29 @@
+c Standarized MaxSat Instance
+c{
+c "sha1sum": "715131b909f8c9f190705fbf541bd0b7e2e95126",
+c "nvars": 4,
+c "ncls": 8,
+c "nhards": 4,
+c "nhard_len_stats":
+c    { "min": 3, "max": 3, "ave": 3.00,
+c      "stddev": 0.00 },
+c "nsofts": 4,
+c "nsoft_len_stats":
+c    { "min": 1, "max": 1, "ave": 1.00,
+c      "stddev": 0.00 },
+c "nsoft_wts": 1,
+c "soft_wt_stats":
+c    { "min": 1, "max": 1, "ave": 1.00,
+c      "stddev": 0.00 }
+c}
+c------------------------------------------------------------
+c SUBTRACT 0 
+p wcnf 4 8 5
+1 -1 0
+1 -2 0
+1 -3 0
+1 -4 0
+5 1 2 3 0
+5 1 3 4 0
+5 1 2 4 0
+5 2 3 4 0

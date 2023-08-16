@@ -1,0 +1,4 @@
+# Ignore test artefacts
+*.proof
+*.err
+*.log

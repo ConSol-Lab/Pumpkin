@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path, process::Command};
+use std::{error::Error, ffi::OsStr, path::Path, process::Command};
 
 fn main() {
     if let Err(e) = run() {
@@ -7,24 +7,31 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    compile_c_binary("src/drat-trim.c", "drat-trim")?;
-    compile_c_binary("src/precochk.c", "precochk")?;
+    compile_c_binary(&["src/drat-trim.c"], "drat-trim")?;
+    compile_c_binary(&["src/precochk.c"], "precochk")?;
+    compile_c_binary(&["src/maxsat-checker.cc", "src/Wcnf.cc"], "maxsat-checker")?;
 
-    println!("cargo:rerun-if-changed=src/drat-trim.c");
-    println!("cargo:rerun-if-changed=src/precochk.c");
-    println!("cargo:rerun-if-changed=src/io-polyfill.h");
-    println!("cargo:rerun-if-changed=src/wintime.h");
+    println!("cargo:rerun-if-changed=src/*.c");
+    println!("cargo:rerun-if-changed=src/*.h");
+    println!("cargo:rerun-if-changed=src/*.cc");
     println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
 }
 
 fn compile_c_binary<Source: AsRef<Path>>(
-    source: Source,
+    sources: &[Source],
     output_stem: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut build = cc::Build::new();
     build.opt_level(2);
+
+    if sources
+        .iter()
+        .any(|source| source.as_ref().extension() == Some(OsStr::new("cc")))
+    {
+        build.cpp(true);
+    }
 
     let compiler = build.try_get_compiler()?;
     let mut cmd = compiler.to_command();
@@ -33,7 +40,10 @@ fn compile_c_binary<Source: AsRef<Path>>(
     let output_dir = Path::new(&out_dir);
 
     add_output_file(&mut cmd, compiler.is_like_msvc(), output_dir, output_stem);
-    cmd.arg(source.as_ref());
+
+    for source in sources {
+        cmd.arg(source.as_ref());
+    }
 
     let status_code = cmd.status()?;
 
@@ -53,13 +63,14 @@ fn add_output_file<P: AsRef<Path>>(
     let output_dir = output_dir.as_ref();
     if is_msvc {
         let exe_name = format!("{output_stem}.exe");
-        let obj_name = format!("{output_stem}.obj");
 
         // The path to the object file.
-        cmd.arg(format!("/Fo:{}/{obj_name}", output_dir.to_string_lossy()));
+        cmd.arg(format!("/Fo:{}/", output_dir.to_string_lossy()));
 
         // The path to the executable.
         cmd.arg(format!("/Fe:{}/{exe_name}", output_dir.to_string_lossy()));
+
+        cmd.arg("/std:c++17");
     } else {
         let output_file = output_dir.join(output_stem);
         cmd.arg("-o").arg(output_file);

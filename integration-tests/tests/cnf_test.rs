@@ -1,11 +1,6 @@
-use std::{
-    fs::File,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::Duration,
-};
+use std::process::{Command, Stdio};
 
-use wait_timeout::ChildExt;
+use integration_tests::{ensure_release_binary_built, get_executable, run_solver, verify_proof};
 
 macro_rules! test_cnf_instance {
     ($name:ident) => {
@@ -112,17 +107,11 @@ fn run_cnf_test(instance_name: &str) {
         env!("CARGO_MANIFEST_DIR")
     );
 
-    let Files {
-        proof_file,
-        log_file,
-        err_file,
-    } = run_solver(&instance_path);
-
-    dbg!(&precochk);
+    let files = run_solver(&instance_path);
 
     let solution_check = Command::new(precochk)
         .arg(&instance_path)
-        .arg(&log_file)
+        .arg(&files.log_file)
         .stdout(Stdio::null())
         .stdin(Stdio::null())
         .stderr(Stdio::null())
@@ -133,11 +122,7 @@ fn run_cnf_test(instance_name: &str) {
 
     match solution_check {
         // The formula is satisfiable and the solution is correct.
-        0 => {
-            std::fs::remove_file(log_file).unwrap();
-            std::fs::remove_file(proof_file).unwrap();
-            std::fs::remove_file(err_file).unwrap();
-        }
+        0 => files.cleanup().unwrap(),
 
         // An error occurred while running the solution checker.
         1 => panic!("precochk errored"),
@@ -146,94 +131,8 @@ fn run_cnf_test(instance_name: &str) {
         2 => panic!("not all clauses are satisfied"),
 
         // The formula is unsatisfiable, so we verify the proof.
-        20 => verify_proof(instance_path, proof_file),
+        20 => verify_proof(instance_path, files).unwrap(),
 
         code => todo!("unhandled code: {code}"),
-    }
-}
-
-struct Files {
-    proof_file: PathBuf,
-    log_file: PathBuf,
-    err_file: PathBuf,
-}
-
-fn verify_proof(instance_path: String, proof_file: PathBuf) {
-    let drat_trim = get_executable(format!("{}/drat-trim", env!("OUT_DIR")));
-
-    let status = Command::new(drat_trim)
-        .stdout(Stdio::null())
-        .arg(instance_path)
-        .arg(proof_file)
-        .status()
-        .expect("Failed to run drat-trim");
-
-    assert!(status.success(), "drat-trim reported an error");
-}
-
-fn run_solver(instance_path: impl AsRef<Path>) -> Files {
-    const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-
-    let instance_path = instance_path.as_ref();
-
-    let solver = get_executable(format!(
-        "{}/../target/release/pumpkin-cli",
-        env!("CARGO_MANIFEST_DIR")
-    ));
-
-    let log_file_path = instance_path.with_extension("log");
-    let err_file_path = instance_path.with_extension("err");
-    let proof_file_path = instance_path.with_extension("proof");
-
-    let mut child = Command::new(solver)
-        .arg("--certificate-path")
-        .arg(&proof_file_path)
-        .arg(instance_path)
-        .stdout(
-            File::create(&log_file_path).expect("Failed to create log file for {instance_name}."),
-        )
-        .stderr(
-            File::create(&err_file_path).expect("Failed to create error file for {instance_name}."),
-        )
-        .stdin(Stdio::null())
-        .spawn()
-        .expect("Failed to run solver.");
-
-    match child.wait_timeout(TEST_TIMEOUT) {
-        Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
-        Ok(Some(status)) if status.success() => {}
-        Ok(Some(_)) => panic!("error solving instance"),
-        Err(e) => panic!("error starting solver: {e}"),
-    }
-
-    Files {
-        log_file: log_file_path,
-        proof_file: proof_file_path,
-        err_file: err_file_path,
-    }
-}
-
-fn ensure_release_binary_built() {
-    let working_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../pumpkin-cli");
-
-    let compile_status = Command::new("cargo")
-        .arg("build")
-        .arg("--release")
-        .arg("-q")
-        .current_dir(working_dir)
-        .stdout(Stdio::null())
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect("Failed to execute command to compile solver.");
-
-    assert!(compile_status.success(), "Failed to compile solver.");
-}
-
-fn get_executable(path: impl AsRef<Path>) -> PathBuf {
-    if cfg!(windows) {
-        path.as_ref().with_extension("exe")
-    } else {
-        path.as_ref().to_path_buf()
     }
 }

@@ -3,7 +3,7 @@ name = "integration-tests"
 version = "0.1.0"
 edition = "2021"
 
-[dev-dependencies]
+[dependencies]
 wait-timeout = "0.2.0"
 
 [build-dependencies]
