@@ -2,7 +2,7 @@ use log::{debug, warn};
 use std::iter::once;
 
 use crate::{
-    basic_types::{Predicate, PropagationStatusCP, PropositionalConjunction},
+    basic_types::{Predicate, PropositionalConjunction},
     engine::cp::DomainManager,
     propagators::{
         clausal_propagators::ClausalPropagatorInterface, ConstraintProgrammingPropagator,
@@ -46,9 +46,7 @@ impl DebugHelper {
                 DomainManager::new(propagator.0 as u32, &mut assignments_integer_clone);
             let propagation_status_cp = propagator.1.debug_propagate_from_scratch(&mut domains);
 
-            if let PropagationStatusCP::ConflictDetected { ref failure_reason } =
-                propagation_status_cp
-            {
+            if let Err(ref failure_reason) = propagation_status_cp {
                 warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.1.name(), propagator.0, failure_reason);
                 panic!();
             }
@@ -128,7 +126,7 @@ impl DebugHelper {
                     propagator.debug_propagate_from_scratch(&mut domains);
 
                 assert!(
-                    debug_propagation_status_cp.no_conflict(),
+                    debug_propagation_status_cp.is_ok(),
                     "{}",
                     format!("Debug propagation detected a conflict when consider a reason for propagation by the propagator '{}' with id '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
 
@@ -168,7 +166,7 @@ impl DebugHelper {
                     propagator.debug_propagate_from_scratch(&mut domains);
 
                 assert!(
-                    debug_propagation_status_cp.conflict_detected(),
+                    debug_propagation_status_cp.is_err(),
                     "{}",
                     format!("Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\nPropagator: '{}'\nPropagator id: '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate)
                 );
@@ -202,7 +200,7 @@ impl DebugHelper {
             let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut domains);
 
-            assert!(debug_propagation_status_cp.conflict_detected(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
+            assert!(debug_propagation_status_cp.is_err(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
         } else {
             //if even adding the predicates failed, the method adding the predicates would have printed debug info already
             //  so we just need to add more information to indicate where the failure happened
@@ -241,7 +239,7 @@ impl DebugHelper {
                     let debug_propagation_status_cp =
                         propagator.debug_propagate_from_scratch(&mut domains);
 
-                    if debug_propagation_status_cp.no_conflict() {
+                    if debug_propagation_status_cp.is_ok() {
                         found_nonconflicting_state_at_root = true;
                         break;
                     }

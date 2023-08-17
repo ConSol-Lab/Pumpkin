@@ -8,7 +8,7 @@ use super::{
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
     BranchingDecision, CSPSolverExecutionFlag, ConflictInfo, ConstraintOperationError, DomainId,
-    Literal, PropagationStatusCP, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
+    Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
 };
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::{DebugHelper, DomainManager};
@@ -648,7 +648,7 @@ impl ConstraintSatisfactionSolver {
 
             match propagation_status_cp {
                 //if there was a conflict, then stop any further propagation and proceed to conflict analysis
-                PropagationStatusCP::ConflictDetected { failure_reason } => {
+                Err(failure_reason) => {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.cp_data_structures.assignments_integer,
                         &failure_reason,
@@ -658,7 +658,8 @@ impl ConstraintSatisfactionSolver {
 
                     return PropagationStatusOneStepCP::ConflictDetected { failure_reason };
                 }
-                PropagationStatusCP::NoConflictDetected => {
+
+                Ok(()) => {
                     //if at least one integer domain change was made, stop further propagation
                     //  the point is to go to the clausal propagator before continuing with other propagators
                     let num_propagations_done = self
@@ -725,10 +726,7 @@ impl ConstraintSatisfactionSolver {
             .watch_list_cp
             .add_watches_for_propagator(new_propagator.as_ref(), new_propagator_id);
 
-        if new_propagator
-            .initialise_at_root(&mut domains)
-            .conflict_detected()
-        {
+        if new_propagator.initialise_at_root(&mut domains).is_err() {
             false
         } else {
             self.propagate_enqueued();

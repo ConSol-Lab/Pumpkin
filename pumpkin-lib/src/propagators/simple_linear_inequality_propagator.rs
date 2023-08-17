@@ -102,9 +102,7 @@ impl<Var: IntVar> ConstraintProgrammingPropagator for SimpleLinearInequalityProp
 
         //in case the slack is negative, the constraint cannot be satisfied
         if slack < 0 {
-            return PropagationStatusCP::ConflictDetected {
-                failure_reason: self.create_naive_reason(None, domains),
-            };
+            return Err(self.create_naive_reason(None, domains));
         }
 
         //otherwise, the constraint may be satisfied
@@ -138,7 +136,7 @@ impl<Var: IntVar> ConstraintProgrammingPropagator for SimpleLinearInequalityProp
                 }
             }
         }
-        PropagationStatusCP::NoConflictDetected
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(&self, domains: &mut DomainManager) -> PropagationStatusCP {
@@ -146,9 +144,7 @@ impl<Var: IntVar> ConstraintProgrammingPropagator for SimpleLinearInequalityProp
 
         //in case the slack is negative, the constraint cannot be satisfied
         if slack < 0 {
-            return PropagationStatusCP::ConflictDetected {
-                failure_reason: self.create_naive_reason(None, domains),
-            };
+            return Err(self.create_naive_reason(None, domains));
         }
 
         //otherwise, the constraint may be satisfied
@@ -177,7 +173,7 @@ impl<Var: IntVar> ConstraintProgrammingPropagator for SimpleLinearInequalityProp
             }
         }
 
-        PropagationStatusCP::NoConflictDetected
+        Ok(())
     }
 
     fn synchronise(&mut self, _domains: &DomainManager) {}

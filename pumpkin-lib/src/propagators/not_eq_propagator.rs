@@ -18,8 +18,10 @@ impl<VX, VY> NotEq<VX, VY> {
 
 impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEq<VX, VY> {
     fn propagate(&mut self, domains: &mut DomainManager) -> PropagationStatusCP {
-        propagate_one_direction(&self.x, &self.y, domains)
-            .and_then(|| propagate_one_direction(&self.y, &self.x, domains))
+        propagate_one_direction(&self.x, &self.y, domains)?;
+        propagate_one_direction(&self.y, &self.x, domains)?;
+
+        Ok(())
     }
 
     fn synchronise(&mut self, _: &DomainManager) {}
@@ -56,7 +58,7 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
     domains: &mut DomainManager,
 ) -> PropagationStatusCP {
     if x.lower_bound(domains) != x.upper_bound(domains) {
-        return PropagationStatusCP::NoConflictDetected;
+        return Ok(());
     }
 
     let value = x.lower_bound(domains);
@@ -64,13 +66,12 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
         let x_predicate = x.equality_predicate(value);
         let y_predicate = y.disequality_predicate(value);
 
-        return PropagationStatusCP::ConflictDetected {
-            failure_reason: vec![x_predicate, y_predicate].into(),
-        };
+        return Err(vec![x_predicate, y_predicate].into());
     }
 
     y.remove(domains, value);
-    PropagationStatusCP::NoConflictDetected
+
+    Ok(())
 }
 
 #[cfg(test)]

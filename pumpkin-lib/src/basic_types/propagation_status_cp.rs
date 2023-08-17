@@ -1,26 +1,6 @@
 use super::PropositionalConjunction;
 
-pub enum PropagationStatusCP {
-    ConflictDetected {
-        failure_reason: PropositionalConjunction,
-    },
-    NoConflictDetected,
-}
-
-impl PropagationStatusCP {
-    pub fn no_conflict(&self) -> bool {
-        matches!(*self, PropagationStatusCP::NoConflictDetected)
-    }
-
-    pub fn conflict_detected(&self) -> bool {
-        !self.no_conflict()
-    }
-
-    pub fn and_then<F: FnOnce() -> PropagationStatusCP>(self, next: F) -> PropagationStatusCP {
-        if self.no_conflict() {
-            next()
-        } else {
-            self
-        }
-    }
-}
+/// The result of invoking a constraint programming propagator. The propagation can either succeed
+/// or identify a conflict. The necessary conditions for the conflict must be captured in the error
+/// variant, i.e. a propositional conjunction.
+pub type PropagationStatusCP = Result<(), PropositionalConjunction>;
