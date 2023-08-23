@@ -7,9 +7,8 @@ use crate::{
     engine::{
         clause_allocators::{ClauseAllocatorInterface, ClauseInterface},
         constraint_satisfaction_solver::{ClausalPropagator, ConflictAnalysisResult},
-        sat_cp_mediator, CPEngineDataStructures,
+        sat_cp_mediator, CPEngineDataStructures, ConstraintProgrammingPropagator,
     },
-    propagators::ConstraintProgrammingPropagator,
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
@@ -38,7 +37,7 @@ impl LearnedClauseMinimiser {
         analysis_result: &mut ConflictAnalysisResult,
         clausal_propagator: &ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
-        cp_data_structures: &CPEngineDataStructures,
+        cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) {
@@ -99,7 +98,7 @@ impl LearnedClauseMinimiser {
         input_literal: Literal,
         clausal_propagator: &ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
-        cp_data_structures: &CPEngineDataStructures,
+        cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) {

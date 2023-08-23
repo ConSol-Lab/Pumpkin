@@ -1,9 +1,9 @@
-use crate::{
-    basic_types::{DomainId, Predicate},
-    propagators::ConstraintProgrammingPropagator,
-};
+use crate::basic_types::{DomainId, Predicate};
 
-use super::{AssignmentsInteger, DomainOperationOutcome, PropagatorQueue, WatchListCP};
+use super::{
+    AssignmentsInteger, ConstraintProgrammingPropagator, DomainOperationOutcome, PropagatorQueue,
+    PropagatorVarId, WatchListCP,
+};
 
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
@@ -35,13 +35,13 @@ impl CPEngineDataStructures {
         &mut self,
         integer_variable: DomainId,
         new_lower_bound: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         let outcome = self.assignments_integer.tighten_lower_bound_no_notify(
             integer_variable,
             new_lower_bound,
-            propagator_id,
+            propagator_reason,
         );
 
         match outcome {
@@ -62,13 +62,13 @@ impl CPEngineDataStructures {
         &mut self,
         integer_variable: DomainId,
         new_upper_bound: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         let outcome = self.assignments_integer.tighten_upper_bound_no_notify(
             integer_variable,
             new_upper_bound,
-            propagator_id,
+            propagator_reason,
         );
 
         match outcome {
@@ -89,7 +89,7 @@ impl CPEngineDataStructures {
         &mut self,
         integer_variable: DomainId,
         assigned_value: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         let old_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
@@ -98,7 +98,7 @@ impl CPEngineDataStructures {
         let outcome = self.assignments_integer.make_assignment_no_notify(
             integer_variable,
             assigned_value,
-            propagator_id,
+            propagator_reason,
         );
 
         let new_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
@@ -123,6 +123,12 @@ impl CPEngineDataStructures {
                             &mut self.propagator_queue,
                         );
                 }
+
+                self.watch_list_cp.notify_assign_subscribed_propagators(
+                    integer_variable,
+                    cp_propagators,
+                    &mut self.propagator_queue,
+                );
                 DomainOperationOutcome::Success
             }
             DomainOperationOutcome::Failure => DomainOperationOutcome::Failure,
@@ -133,7 +139,7 @@ impl CPEngineDataStructures {
         &mut self,
         integer_variable: DomainId,
         removed_value_from_domain: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         let old_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
@@ -142,7 +148,7 @@ impl CPEngineDataStructures {
         let outcome = self.assignments_integer.remove_value_from_domain_no_notify(
             integer_variable,
             removed_value_from_domain,
-            propagator_id,
+            propagator_reason,
         );
 
         let new_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
@@ -189,7 +195,7 @@ impl CPEngineDataStructures {
     pub fn apply_predicate(
         &mut self,
         predicate: &Predicate,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         if self.does_predicate_hold(predicate) {
@@ -203,7 +209,7 @@ impl CPEngineDataStructures {
             } => self.tighten_lower_bound(
                 integer_variable,
                 lower_bound,
-                propagator_id,
+                propagator_reason,
                 cp_propagators,
             ),
             Predicate::UpperBound {
@@ -212,7 +218,7 @@ impl CPEngineDataStructures {
             } => self.tighten_upper_bound(
                 integer_variable,
                 upper_bound,
-                propagator_id,
+                propagator_reason,
                 cp_propagators,
             ),
             Predicate::NotEqual {
@@ -221,7 +227,7 @@ impl CPEngineDataStructures {
             } => self.remove_value_from_domain(
                 integer_variable,
                 not_equal_constant,
-                propagator_id,
+                propagator_reason,
                 cp_propagators,
             ),
             Predicate::Equal {
@@ -230,7 +236,7 @@ impl CPEngineDataStructures {
             } => self.make_assignment(
                 integer_variable,
                 equality_constant,
-                propagator_id,
+                propagator_reason,
                 cp_propagators,
             ),
         }

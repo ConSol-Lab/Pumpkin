@@ -2,11 +2,11 @@
 //! information unaltered, or apply transformations which can be performed without the need of
 //! constraints.
 
-use crate::engine::{DomainEvent, DomainManager, DomainOperationOutcome, Watchers};
+use crate::engine::{Change, Delta, DomainEvent, DomainManager, DomainOperationOutcome, Watchers};
 
-use super::{DomainId, Predicate};
+use super::{DomainId, Predicate, PredicateConstructor};
 
-pub trait IntVar: Clone {
+pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     /// Get the lower bound of the variable.
     fn lower_bound(&self, domains: &DomainManager) -> i32;
 
@@ -25,20 +25,11 @@ pub trait IntVar: Clone {
     /// Tighten the upper bound of the domain of this variable.
     fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome;
 
-    /// Create a predicate where the variable equals the value.
-    fn equality_predicate(&self, value: i32) -> Predicate;
-
-    /// Create a predicate where the variable does not equal the value.
-    fn disequality_predicate(&self, value: i32) -> Predicate;
-
-    /// Create a predicate where the variable lower bound is the value.
-    fn lower_bound_predicate(&self, value: i32) -> Predicate;
-
-    /// Create a predicate where the variable upper bound is the value.
-    fn upper_bound_predicate(&self, value: i32) -> Predicate;
-
     /// Register a watch for this variable on the given domain event.
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent);
+
+    /// Decode a delta into the change it represents for this variable.
+    fn unpack(&self, delta: Delta) -> Change;
 
     /// Get a variable which domain is scaled compared to the domain of self.
     ///
@@ -87,36 +78,12 @@ impl IntVar for DomainId {
         domains.tighten_upper_bound(*self, value)
     }
 
-    fn equality_predicate(&self, value: i32) -> Predicate {
-        Predicate::Equal {
-            integer_variable: *self,
-            equality_constant: value,
-        }
-    }
-
-    fn disequality_predicate(&self, value: i32) -> Predicate {
-        Predicate::NotEqual {
-            integer_variable: *self,
-            not_equal_constant: value,
-        }
-    }
-
-    fn lower_bound_predicate(&self, value: i32) -> Predicate {
-        Predicate::LowerBound {
-            integer_variable: *self,
-            lower_bound: value,
-        }
-    }
-
-    fn upper_bound_predicate(&self, value: i32) -> Predicate {
-        Predicate::UpperBound {
-            integer_variable: *self,
-            upper_bound: value,
-        }
-    }
-
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
         watchers.watch(*self, event);
+    }
+
+    fn unpack(&self, delta: Delta) -> Change {
+        delta.unwrap_change()
     }
 }
 
@@ -138,6 +105,10 @@ impl<View> AffineView<View> {
             None
         }
     }
+
+    fn map(&self, value: i32) -> i32 {
+        self.scale * value + self.offset
+    }
 }
 
 impl<View> IntVar for AffineView<View>
@@ -145,11 +116,11 @@ where
     View: IntVar,
 {
     fn lower_bound(&self, domains: &DomainManager) -> i32 {
-        self.scale * self.inner.lower_bound(domains) + self.offset
+        self.map(self.inner.lower_bound(domains))
     }
 
     fn upper_bound(&self, domains: &DomainManager) -> i32 {
-        self.scale * self.inner.upper_bound(domains) + self.offset
+        self.map(self.inner.upper_bound(domains))
     }
 
     fn contains(&self, domains: &DomainManager, value: i32) -> bool {
@@ -176,22 +147,6 @@ where
             .unwrap_or(DomainOperationOutcome::Failure)
     }
 
-    fn equality_predicate(&self, _value: i32) -> Predicate {
-        todo!("how to deal with the case where self.invert() returns None")
-    }
-
-    fn disequality_predicate(&self, _value: i32) -> Predicate {
-        todo!("how to deal with the case where self.invert() returns None")
-    }
-
-    fn lower_bound_predicate(&self, _value: i32) -> Predicate {
-        todo!("how to deal with the case where self.invert() returns None")
-    }
-
-    fn upper_bound_predicate(&self, _value: i32) -> Predicate {
-        todo!("how to deal with the case where self.invert() returns None")
-    }
-
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
         if self.scale.is_negative() {
             match event {
@@ -202,5 +157,33 @@ where
         } else {
             self.inner.watch(watchers, event);
         }
+    }
+
+    fn unpack(&self, delta: Delta) -> Change {
+        match self.inner.unpack(delta) {
+            Change::Removal(value) => Change::Removal(self.map(value)),
+            Change::LowerBound(_) => todo!(),
+            Change::UpperBound(_) => todo!(),
+        }
+    }
+}
+
+impl<Var: PredicateConstructor> PredicateConstructor for AffineView<Var> {
+    type Value = Var::Value;
+
+    fn lower_bound_predicate(&self, _bound: Self::Value) -> Predicate {
+        todo!("Handle case where invert() returns None.")
+    }
+
+    fn upper_bound_predicate(&self, _bound: Self::Value) -> Predicate {
+        todo!("Handle case where invert() returns None.")
+    }
+
+    fn equality_predicate(&self, _bound: Self::Value) -> Predicate {
+        todo!("Handle case where invert() returns None.")
+    }
+
+    fn disequality_predicate(&self, _bound: Self::Value) -> Predicate {
+        todo!("Handle case where invert() returns None.")
     }
 }

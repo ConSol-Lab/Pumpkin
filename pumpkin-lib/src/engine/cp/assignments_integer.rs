@@ -3,6 +3,8 @@ use crate::{
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
+use super::{PropagatorId, PropagatorVarId};
+
 #[derive(Clone)]
 pub struct AssignmentsInteger {
     state: AssignmentsIntegerInternalState,
@@ -46,8 +48,8 @@ impl AssignmentsInteger {
         self.trail.len()
     }
 
-    pub fn get_predicate_on_trail(&self, index: usize) -> Predicate {
-        self.trail[index].predicate
+    pub fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
+        self.trail[index]
     }
 
     pub fn get_last_entry_on_trail(&self) -> ConstraintProgrammingTrailEntry {
@@ -83,8 +85,10 @@ impl AssignmentsInteger {
     }
 
     //todo explain that it can return None
-    pub fn get_propagator_id_on_trail(&self, index_on_trail: usize) -> Option<u32> {
-        self.trail[index_on_trail].propagator_id
+    pub fn get_propagator_id_on_trail(&self, index_on_trail: usize) -> Option<PropagatorId> {
+        self.trail[index_on_trail]
+            .propagator_reason
+            .map(|entry| entry.propagator)
     }
 }
 
@@ -179,7 +183,7 @@ impl AssignmentsInteger {
         &mut self,
         integer_variable: DomainId,
         new_lower_bound: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         pumpkin_assert_simple!(
             self.state.is_ok(),
@@ -204,7 +208,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_id,
+            propagator_reason,
         });
 
         self.domains[integer_variable].lower_bound = new_lower_bound;
@@ -215,7 +219,7 @@ impl AssignmentsInteger {
         &mut self,
         integer_variable: DomainId,
         new_upper_bound: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         pumpkin_assert_simple!(
             self.state.is_ok(),
@@ -240,7 +244,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_id,
+            propagator_reason,
         });
 
         self.domains[integer_variable].upper_bound = new_upper_bound;
@@ -251,7 +255,7 @@ impl AssignmentsInteger {
         &mut self,
         integer_variable: DomainId,
         assigned_value: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         pumpkin_assert_simple!(
             self.state.is_ok(),
@@ -268,12 +272,12 @@ impl AssignmentsInteger {
 
         //only tighten the lower bound if needed
         if self.get_lower_bound(integer_variable) < assigned_value {
-            self.tighten_lower_bound_no_notify(integer_variable, assigned_value, propagator_id);
+            self.tighten_lower_bound_no_notify(integer_variable, assigned_value, propagator_reason);
         }
 
         //only tighten the uper bound if needed
         if self.get_upper_bound(integer_variable) > assigned_value {
-            self.tighten_upper_bound_no_notify(integer_variable, assigned_value, propagator_id);
+            self.tighten_upper_bound_no_notify(integer_variable, assigned_value, propagator_reason);
         }
         DomainOperationOutcome::Success
     }
@@ -282,7 +286,7 @@ impl AssignmentsInteger {
         &mut self,
         integer_variable: DomainId,
         removed_value_from_domain: i32,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         let predicate = Predicate::NotEqual {
             integer_variable,
@@ -301,7 +305,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_id,
+            propagator_reason,
         });
 
         let domain = &mut self.domains[integer_variable];
@@ -338,7 +342,7 @@ impl AssignmentsInteger {
     pub fn apply_predicate_no_notify(
         &mut self,
         predicate: &Predicate,
-        propagator_id: Option<u32>,
+        propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         pumpkin_assert_simple!(
             self.state.is_ok(),
@@ -353,23 +357,31 @@ impl AssignmentsInteger {
             Predicate::LowerBound {
                 integer_variable,
                 lower_bound,
-            } => self.tighten_lower_bound_no_notify(integer_variable, lower_bound, propagator_id),
+            } => {
+                self.tighten_lower_bound_no_notify(integer_variable, lower_bound, propagator_reason)
+            }
             Predicate::UpperBound {
                 integer_variable,
                 upper_bound,
-            } => self.tighten_upper_bound_no_notify(integer_variable, upper_bound, propagator_id),
+            } => {
+                self.tighten_upper_bound_no_notify(integer_variable, upper_bound, propagator_reason)
+            }
             Predicate::NotEqual {
                 integer_variable,
                 not_equal_constant,
             } => self.remove_value_from_domain_no_notify(
                 integer_variable,
                 not_equal_constant,
-                propagator_id,
+                propagator_reason,
             ),
             Predicate::Equal {
                 integer_variable,
                 equality_constant,
-            } => self.make_assignment_no_notify(integer_variable, equality_constant, propagator_id),
+            } => self.make_assignment_no_notify(
+                integer_variable,
+                equality_constant,
+                propagator_reason,
+            ),
         }
     }
 
@@ -457,7 +469,7 @@ pub struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
     pub old_lower_bound: i32, //explicitly store the bound before the predicate was applied so that it is easier later on to update the bounds when backtracking
     pub old_upper_bound: i32,
-    pub propagator_id: Option<u32>, //stores the id of the propagator that made the assignment, only makes sense if a propagation took place, e.g., does _not_ make sense in the case of a decision or if the update was due to synchronisation from the propositional trail
+    pub propagator_reason: Option<PropagatorVarId>, //stores the id of the propagator that made the assignment, only makes sense if a propagation took place, e.g., does _not_ make sense in the case of a decision or if the update was due to synchronisation from the propositional trail
 }
 
 #[derive(Clone)]

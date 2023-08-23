@@ -2,7 +2,8 @@ use super::clause_allocators::ClauseAllocatorBasic;
 use super::cp::CPEngineDataStructures;
 use super::sat::SATEngineDataStructures;
 use super::{
-    AssignmentsInteger, AssignmentsPropositional, GlucoseRestartStrategy, LearnedClauseManager,
+    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
+    ConstraintProgrammingPropagator, GlucoseRestartStrategy, LearnedClauseManager,
     LearnedClauseMinimiser, SATCPMediator, SatOptions,
 };
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
@@ -11,9 +12,8 @@ use crate::basic_types::{
     Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
 };
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::{DebugHelper, DomainManager};
+use crate::engine::{DebugHelper, PropagationContext, PropagatorConstructorContext, PropagatorId};
 use crate::propagators::clausal_propagators::{ClausalPropagatorBasic, ClausalPropagatorInterface};
-use crate::propagators::ConstraintProgrammingPropagator;
 use crate::{
     pumpkin_assert_advanced, pumpkin_assert_extreme, pumpkin_assert_moderate, pumpkin_assert_simple,
 };
@@ -544,11 +544,12 @@ impl ConstraintSatisfactionSolver {
         //      allow incremental synchronisation
         //      only call the subset of propagators that were notified since last backtrack
         for propagator_id in 0..self.cp_propagators.len() {
-            let domains = DomainManager::new(
-                propagator_id as u32,
+            let context = PropagationContext::new(
                 &mut self.cp_data_structures.assignments_integer,
+                PropagatorId(propagator_id as u32),
             );
-            self.cp_propagators[propagator_id].synchronise(&domains);
+
+            self.cp_propagators[propagator_id].synchronise(&context);
         }
     }
 
@@ -638,13 +639,13 @@ impl ConstraintSatisfactionSolver {
                 .assignments_integer
                 .num_trail_entries();
             let propagator_id = self.cp_data_structures.propagator_queue.pop();
-            let propagator = &mut self.cp_propagators[propagator_id as usize];
-            let mut domains = DomainManager::new(
-                propagator_id,
+            let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+            let mut context = PropagationContext::new(
                 &mut self.cp_data_structures.assignments_integer,
+                propagator_id,
             );
 
-            let propagation_status_cp = propagator.propagate(&mut domains);
+            let propagation_status_cp = propagator.propagate(&mut context);
 
             match propagation_status_cp {
                 //if there was a conflict, then stop any further propagation and proceed to conflict analysis
@@ -683,15 +684,15 @@ impl ConstraintSatisfactionSolver {
                         let propagations = self
                             .cp_data_structures
                             .assignments_integer
-                            .get_last_predicates_on_trail(num_propagations_done);
+                            .get_last_entries_on_trail(num_propagations_done);
                         self.cp_data_structures
                             .assignments_integer
                             .undo_trail(num_propagations_done);
 
-                        for predicate in propagations {
+                        for entry in propagations {
                             self.cp_data_structures.apply_predicate(
-                                &predicate,
-                                Some(propagator_id),
+                                &entry.predicate,
+                                entry.propagator_reason,
                                 &mut self.cp_propagators,
                             );
                         }
@@ -707,26 +708,29 @@ impl ConstraintSatisfactionSolver {
 
 //methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
-    pub fn add_propagator(
-        &mut self,
-        propagator_to_add: Box<dyn ConstraintProgrammingPropagator>,
-    ) -> bool {
-        pumpkin_assert_simple!(propagator_to_add.priority() <= 3, "The propagator priority exceeds 3. Currently we only support values up to 3, but this can easily be changed if there is a good reason.");
-
-        let new_propagator_id = self.cp_propagators.len() as u32;
-        self.cp_propagators.push(propagator_to_add);
-
-        let new_propagator = &mut self.cp_propagators[new_propagator_id as usize];
-        let mut domains = DomainManager::new(
+    pub fn add_propagator<Constructor>(&mut self, args: Constructor::Args) -> bool
+    where
+        Constructor: CPPropagatorConstructor,
+    {
+        let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
+        let constructor_context = PropagatorConstructorContext::new(
+            &mut self.cp_data_structures.watch_list_cp,
             new_propagator_id,
-            &mut self.cp_data_structures.assignments_integer,
         );
 
-        self.cp_data_structures
-            .watch_list_cp
-            .add_watches_for_propagator(new_propagator.as_ref(), new_propagator_id);
+        let propagator_to_add = Constructor::create(args, constructor_context);
 
-        if new_propagator.initialise_at_root(&mut domains).is_err() {
+        pumpkin_assert_simple!(propagator_to_add.priority() <= 3, "The propagator priority exceeds 3. Currently we only support values up to 3, but this can easily be changed if there is a good reason.");
+
+        self.cp_propagators.push(propagator_to_add);
+
+        let new_propagator = &mut self.cp_propagators[new_propagator_id];
+        let mut context = PropagationContext::new(
+            &mut self.cp_data_structures.assignments_integer,
+            new_propagator_id,
+        );
+
+        if new_propagator.initialise_at_root(&mut context).is_err() {
             false
         } else {
             self.propagate_enqueued();
@@ -877,7 +881,7 @@ impl ConstraintSatisfactionSolver {
                     propagated_literal,
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
-                    &self.cp_data_structures,
+                    &mut self.cp_data_structures,
                     &mut self.cp_propagators,
                 )
             } else {
@@ -988,7 +992,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.analysis_result,
                 &self.clausal_propagator,
                 &mut self.sat_data_structures,
-                &self.cp_data_structures,
+                &mut self.cp_data_structures,
                 &mut self.sat_cp_mediator,
                 &mut self.cp_propagators,
             );
@@ -1034,7 +1038,7 @@ impl ConstraintSatisfactionSolver {
                     propagated_literal,
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
-                    &self.cp_data_structures,
+                    &mut self.cp_data_structures,
                     &mut self.cp_propagators,
                 )
             } else {

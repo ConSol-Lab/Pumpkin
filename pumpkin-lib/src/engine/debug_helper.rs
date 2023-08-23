@@ -3,17 +3,15 @@ use std::iter::once;
 
 use crate::{
     basic_types::{Predicate, PropositionalConjunction},
-    engine::cp::DomainManager,
-    propagators::{
-        clausal_propagators::ClausalPropagatorInterface, ConstraintProgrammingPropagator,
-    },
+    engine::PropagationContext,
+    propagators::clausal_propagators::ClausalPropagatorInterface,
     pumpkin_assert_eq_simple, pumpkin_assert_simple,
 };
 
 use super::{
     constraint_satisfaction_solver::ClausalPropagator,
     cp::{AssignmentsInteger, DomainOperationOutcome},
-    SATEngineDataStructures,
+    ConstraintProgrammingPropagator, PropagatorId, SATEngineDataStructures,
 };
 
 pub struct DebugHelper {}
@@ -38,16 +36,18 @@ impl DebugHelper {
         //          instead such behaviour may be detected when debug-checking the reason for propagation
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
-        for propagator in propagators_cp.iter().enumerate() {
+        for (propagator_id, propagator) in propagators_cp.iter().enumerate() {
             let num_entries_on_trail_before_propagation =
                 assignments_integer_clone.num_trail_entries();
 
-            let mut domains =
-                DomainManager::new(propagator.0 as u32, &mut assignments_integer_clone);
-            let propagation_status_cp = propagator.1.debug_propagate_from_scratch(&mut domains);
+            let mut context = PropagationContext::new(
+                &mut assignments_integer_clone,
+                PropagatorId(propagator_id as u32),
+            );
+            let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.1.name(), propagator.0, failure_reason);
+                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.name(), propagator_id, failure_reason);
                 panic!();
             }
 
@@ -55,7 +55,7 @@ impl DebugHelper {
                 - num_entries_on_trail_before_propagation;
             pumpkin_assert_eq_simple!(num_missed_propagations, 0,
                 "Propagator '{}' with id '{}' propagated {} predicates after calling debug_propagate_from_scratch, meaning it missed propagations in its regular 'propagate' method. 
-                    Aborting!", propagator.1.name(), propagator.0, num_missed_propagations);
+                    Aborting!", propagator.name(), propagator_id, num_missed_propagations);
         }
         //then check the clausal propagator
         pumpkin_assert_simple!(clausal_propagator.debug_check_state(
@@ -69,7 +69,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: u32,
+        propagator_id: PropagatorId,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             assignments_integer,
@@ -121,9 +121,12 @@ impl DebugHelper {
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
+                let mut context = PropagationContext::new(
+                    &mut assignments_integer_clone,
+                    PropagatorId(propagator_id),
+                );
                 let debug_propagation_status_cp =
-                    propagator.debug_propagate_from_scratch(&mut domains);
+                    propagator.debug_propagate_from_scratch(&mut context);
 
                 assert!(
                     debug_propagation_status_cp.is_ok(),
@@ -161,9 +164,12 @@ impl DebugHelper {
 
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
+                let mut context = PropagationContext::new(
+                    &mut assignments_integer_clone,
+                    PropagatorId(propagator_id),
+                );
                 let debug_propagation_status_cp =
-                    propagator.debug_propagate_from_scratch(&mut domains);
+                    propagator.debug_propagate_from_scratch(&mut context);
 
                 assert!(
                     debug_propagation_status_cp.is_err(),
@@ -183,7 +189,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: u32,
+        propagator_id: PropagatorId,
     ) {
         let mut assignments_integer_clone =
             DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
@@ -197,8 +203,9 @@ impl DebugHelper {
 
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
-            let mut domains = DomainManager::new(propagator_id, &mut assignments_integer_clone);
-            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut domains);
+            let mut context =
+                PropagationContext::new(&mut assignments_integer_clone, propagator_id);
+            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
             assert!(debug_propagation_status_cp.is_err(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
         } else {
@@ -212,7 +219,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn ConstraintProgrammingPropagator,
-        propagator_id: u32,
+        propagator_id: PropagatorId,
     ) {
         //let the failure be: (p1 && p2 && p3) -> failure
         //  then (!p1 || !p2 || !p3) should not lead to immediate failure
@@ -234,10 +241,10 @@ impl DebugHelper {
 
             match outcome {
                 DomainOperationOutcome::Success => {
-                    let mut domains =
-                        DomainManager::new(propagator_id, &mut assignments_integer_clone);
+                    let mut context =
+                        PropagationContext::new(&mut assignments_integer_clone, propagator_id);
                     let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(&mut domains);
+                        propagator.debug_propagate_from_scratch(&mut context);
 
                     if debug_propagation_status_cp.is_ok() {
                         found_nonconflicting_state_at_root = true;

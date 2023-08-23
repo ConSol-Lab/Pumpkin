@@ -160,3 +160,149 @@ impl std::fmt::Display for Predicate {
         }
     }
 }
+
+impl std::fmt::Debug for Predicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+pub trait PredicateConstructor {
+    type Value;
+
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate;
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate;
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate;
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate;
+}
+
+impl PredicateConstructor for DomainId {
+    type Value = i32;
+
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::LowerBound {
+            integer_variable: *self,
+            lower_bound: bound,
+        }
+    }
+
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::UpperBound {
+            integer_variable: *self,
+            upper_bound: bound,
+        }
+    }
+
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::Equal {
+            integer_variable: *self,
+            equality_constant: bound,
+        }
+    }
+
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::NotEqual {
+            integer_variable: *self,
+            not_equal_constant: bound,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! predicate {
+    ($($var:ident).+ >= $bound:expr) => {{
+        use $crate::basic_types::PredicateConstructor;
+        $($var).+.lower_bound_predicate($bound)
+    }};
+    ($($var:ident).+ <= $bound:expr) => {{
+        use $crate::basic_types::PredicateConstructor;
+        $($var).+.upper_bound_predicate($bound)
+    }};
+    ($($var:ident).+ == $value:expr) => {{
+        use $crate::basic_types::PredicateConstructor;
+        $($var).+.equality_predicate($value)
+    }};
+    ($($var:ident).+ != $value:expr) => {{
+        use $crate::basic_types::PredicateConstructor;
+        $($var).+.disequality_predicate($value)
+    }};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn macro_local_identifiers_are_matched() {
+        let x = DomainId { id: 0 };
+
+        assert_eq!(
+            Predicate::LowerBound {
+                integer_variable: x,
+                lower_bound: 2,
+            },
+            predicate![x >= 2]
+        );
+        assert_eq!(
+            Predicate::UpperBound {
+                integer_variable: x,
+                upper_bound: 3,
+            },
+            predicate![x <= 3]
+        );
+        assert_eq!(
+            Predicate::Equal {
+                integer_variable: x,
+                equality_constant: 5
+            },
+            predicate![x == 5]
+        );
+        assert_eq!(
+            Predicate::NotEqual {
+                integer_variable: x,
+                not_equal_constant: 5,
+            },
+            predicate![x != 5]
+        );
+    }
+
+    #[test]
+    fn macro_nested_identifiers_are_matched() {
+        struct Wrapper {
+            x: DomainId,
+        }
+
+        let wrapper = Wrapper {
+            x: DomainId { id: 0 },
+        };
+
+        assert_eq!(
+            Predicate::LowerBound {
+                integer_variable: wrapper.x,
+                lower_bound: 2,
+            },
+            predicate![wrapper.x >= 2]
+        );
+        assert_eq!(
+            Predicate::UpperBound {
+                integer_variable: wrapper.x,
+                upper_bound: 3,
+            },
+            predicate![wrapper.x <= 3]
+        );
+        assert_eq!(
+            Predicate::Equal {
+                integer_variable: wrapper.x,
+                equality_constant: 5
+            },
+            predicate![wrapper.x == 5]
+        );
+        assert_eq!(
+            Predicate::NotEqual {
+                integer_variable: wrapper.x,
+                not_equal_constant: 5,
+            },
+            predicate![wrapper.x != 5]
+        );
+    }
+}

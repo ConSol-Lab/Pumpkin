@@ -37,7 +37,7 @@ pub use integer_variable::DomainId;
 pub use integer_variable::IntegerVariableGeneratorIterator;
 pub use key_value_heap::KeyValueHeap;
 pub use literal::Literal;
-pub use predicate::Predicate;
+pub use predicate::{Predicate, PredicateConstructor};
 pub use propagation_status_cp::PropagationStatusCP;
 pub use propagation_status_cp_one_step::PropagationStatusOneStepCP;
 pub use propositional_conjunction::PropositionalConjunction;

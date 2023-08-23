@@ -3,19 +3,19 @@ use crate::basic_types::{
     PropositionalVariable,
 };
 
-use crate::engine::DebugHelper;
+use crate::engine::{DebugHelper, Delta, PropagationContext, PropagatorId};
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
-use crate::propagators::ConstraintProgrammingPropagator;
 use crate::{pumpkin_assert_advanced, pumpkin_assert_moderate, pumpkin_assert_simple};
 
 use super::constraint_satisfaction_solver::ClausalPropagator;
 use super::{
-    AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures, ExplanationClauseManager,
+    AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
+    ConstraintProgrammingPropagator, ExplanationClauseManager, PropagatorVarId,
     SATEngineDataStructures,
 };
 
 pub struct SATCPMediator {
-    synchronised_literal_to_predicate: Vec<Predicate>, //todo explain
+    synchronised_literal_to_predicate: Vec<(Predicate, Option<PropagatorVarId>)>, //todo explain
     mapping_integer_variable_to_equality_literals: Vec<Vec<Literal>>,
     mapping_integer_variable_to_lower_bound_literals: Vec<Vec<Literal>>,
     mapping_literal_to_predicates: Vec<Vec<Predicate>>,
@@ -55,7 +55,7 @@ impl SATCPMediator {
         //      since the clausal propagator will propagate other literals to ensure that the meaning of the literal is respected
         //          e.g., placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1] to true
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
-            let predicate = assignments_integer.get_predicate_on_trail(cp_trail_pos);
+            let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
             let propagator_id = assignments_integer
                 .get_propagator_id_on_trail(cp_trail_pos)
@@ -63,13 +63,14 @@ impl SATCPMediator {
                     "None is not expected for the propagator identifier here, strange, must abort.",
                 );
 
-            let literal = self.get_predicate_literal(predicate);
+            let literal = self.get_predicate_literal(entry.predicate);
 
             let constraint_reference =
-                ConstraintReference::create_propagator_reference(propagator_id);
+                ConstraintReference::create_propagator_reference(propagator_id.0);
 
             assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
-            self.synchronised_literal_to_predicate[literal] = predicate;
+            self.synchronised_literal_to_predicate[literal] =
+                (entry.predicate, entry.propagator_reason);
         }
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
     }
@@ -179,9 +180,9 @@ impl SATCPMediator {
         self.mapping_literal_to_predicates.push(vec![]);
 
         self.synchronised_literal_to_predicate
-            .push(Predicate::get_dummy_predicate());
+            .push((Predicate::get_dummy_predicate(), None));
         self.synchronised_literal_to_predicate
-            .push(Predicate::get_dummy_predicate());
+            .push((Predicate::get_dummy_predicate(), None));
 
         PropositionalVariable::new(new_variable_index)
     }
@@ -492,7 +493,7 @@ impl SATCPMediator {
         propagated_literal: Literal,
         clausal_propagator: &ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
-        cp_data_structures: &CPEngineDataStructures,
+        cp_data_structures: &mut CPEngineDataStructures,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         pumpkin_assert_moderate!(
@@ -524,13 +525,22 @@ impl SATCPMediator {
         }
         //Case 2: the literal was placed on the propositional trail while synchronising the CP trail with the propositional trail
         else {
-            let predicate = self.synchronised_literal_to_predicate[propagated_literal];
+            let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
             let propagator_id = constraint_reference.get_propagator_id();
+
+            let context = PropagationContext::new(
+                &mut cp_data_structures.assignments_integer,
+                PropagatorId(propagator_id),
+            );
+
+            let delta =
+                Delta::from_predicate(synchonised_entry.1.unwrap().variable, synchonised_entry.0);
+
             let propagator = &mut cp_propagators[propagator_id as usize];
-            let reason = propagator.get_reason_for_propagation(predicate);
+            let reason = propagator.get_reason_for_propagation(&context, delta);
 
             pumpkin_assert_advanced!(DebugHelper::debug_propagator_reason(
-                predicate,
+                synchonised_entry.0,
                 &reason,
                 &cp_data_structures.assignments_integer,
                 propagator.as_ref(),

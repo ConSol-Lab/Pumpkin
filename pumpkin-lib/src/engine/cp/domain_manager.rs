@@ -1,20 +1,20 @@
 use crate::basic_types::{DomainId, Predicate};
 
-use super::{assignments_integer::DomainOperationOutcome, AssignmentsInteger};
+use super::{assignments_integer::DomainOperationOutcome, AssignmentsInteger, PropagatorVarId};
 
 //todo explain, this is a wrapper struct
 pub struct DomainManager<'a> {
-    propagator_id: Option<u32>,
+    propagator_reason: Option<PropagatorVarId>,
     assignments_integer: &'a mut AssignmentsInteger,
 }
 
 impl DomainManager<'_> {
     pub fn new(
-        propagator_id: u32,
+        propagator_var: PropagatorVarId,
         assignments_integer: &'_ mut AssignmentsInteger,
     ) -> DomainManager {
         DomainManager {
-            propagator_id: Some(propagator_id),
+            propagator_reason: Some(propagator_var),
             assignments_integer,
         }
     }
@@ -89,7 +89,7 @@ impl DomainManager<'_> {
         self.assignments_integer.tighten_lower_bound_no_notify(
             integer_variable,
             new_lower_bound,
-            self.propagator_id,
+            self.propagator_reason,
         )
     }
 
@@ -101,7 +101,7 @@ impl DomainManager<'_> {
         self.assignments_integer.tighten_upper_bound_no_notify(
             integer_variable,
             new_upper_bound,
-            self.propagator_id,
+            self.propagator_reason,
         )
     }
 
@@ -113,7 +113,7 @@ impl DomainManager<'_> {
         self.assignments_integer.make_assignment_no_notify(
             integer_variable,
             assigned_value,
-            self.propagator_id,
+            self.propagator_reason,
         )
     }
 
@@ -125,7 +125,7 @@ impl DomainManager<'_> {
         self.assignments_integer.remove_value_from_domain_no_notify(
             integer_variable,
             removed_value_from_domain,
-            self.propagator_id,
+            self.propagator_reason,
         )
     }
 }

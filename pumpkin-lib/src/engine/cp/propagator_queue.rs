@@ -5,9 +5,11 @@ use std::collections::VecDeque;
 
 use crate::pumpkin_assert_moderate;
 
+use super::PropagatorId;
+
 pub struct PropagatorQueue {
-    queues: Vec<VecDeque<u32>>,
-    present_propagators: HashSet<u32>,
+    queues: Vec<VecDeque<PropagatorId>>,
+    present_propagators: HashSet<PropagatorId>,
     present_priorities: BinaryHeap<Reverse<u32>>,
 }
 
@@ -24,7 +26,7 @@ impl PropagatorQueue {
         self.present_propagators.is_empty()
     }
 
-    pub fn enqueue_propagator(&mut self, propagator_id: u32, priority: u32) {
+    pub fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 
         if !self.is_propagator_enqueued(propagator_id) {
@@ -36,7 +38,7 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn pop(&mut self) -> u32 {
+    pub fn pop(&mut self) -> PropagatorId {
         pumpkin_assert_moderate!(!self.is_empty());
 
         let top_priority = self.present_priorities.peek().unwrap().0 as usize;
@@ -63,7 +65,7 @@ impl PropagatorQueue {
         self.present_priorities.clear();
     }
 
-    fn is_propagator_enqueued(&self, propagator_id: u32) -> bool {
+    fn is_propagator_enqueued(&self, propagator_id: PropagatorId) -> bool {
         self.present_propagators.contains(&propagator_id)
     }
 }
