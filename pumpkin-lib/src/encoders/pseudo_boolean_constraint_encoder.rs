@@ -63,13 +63,17 @@ impl std::fmt::Display for PseudoBooleanEncoding {
 
 /// main struct through which encoders are to be used
 pub struct PseudoBooleanConstraintEncoder {
-    original_weighted_literals: Vec<WeightedLiteral>,
-    original_constant_term: u64,
-    encoder: Option<Box<dyn PseudoBooleanConstraintEncoderInterface>>,
-    has_initial_encoding: bool,
+    state: State,
     constant_term: u64,
     k_previous: u64,
     encoding_algorithm: PseudoBooleanEncoding,
+}
+
+enum State {
+    New(Vec<WeightedLiteral>),
+    Encoded(Box<dyn PseudoBooleanConstraintEncoderInterface>),
+    Preprocessed(Vec<WeightedLiteral>),
+    TriviallySatisfied,
 }
 
 impl PseudoBooleanConstraintEncoder {
@@ -83,10 +87,7 @@ impl PseudoBooleanConstraintEncoder {
         );
 
         Self {
-            original_weighted_literals: weighted_literals,
-            original_constant_term: 0,
-            encoder: None,
-            has_initial_encoding: false,
+            state: State::New(weighted_literals),
             constant_term: 0,
             k_previous: 0,
             encoding_algorithm,
@@ -126,7 +127,6 @@ impl PseudoBooleanConstraintEncoder {
             encoding_algorithm,
         );
         encoder.constant_term = function.get_constant_term();
-        encoder.original_constant_term = encoder.constant_term;
         encoder
     }
 
@@ -142,60 +142,84 @@ impl PseudoBooleanConstraintEncoder {
             "Can only add encodings at the root level."
         );
 
-        //if the encoding has already been encoded, then we strenthen the constraint incrementally
-        if self.has_initial_encoding {
-            pumpkin_assert_simple!(self.are_strenthening_conditions_met(k));
+        match self.state {
+            State::New(ref mut weighted_literals) => {
+                let literals = std::mem::take(weighted_literals);
+                self.create_encoding(literals, k, csp_solver)?
+            }
+            State::Encoded(ref mut encoder) => {
+                pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
 
-            self.encoder
-                .as_mut()
-                .unwrap()
-                .strengthen_at_most_k(k - self.constant_term, csp_solver)
-        } else {
-            let time_start = Instant::now();
+                pumpkin_assert_simple!(
+                    k > self.constant_term,
+                    "The k is below the trivial lower bound, probably an error?"
+                );
 
-            let preprocessed_weighted_literals = self.initialise_and_preprocess(k, csp_solver)?;
-
-            if !preprocessed_weighted_literals.is_empty() {
-                self.encoder = Some(Self::create_encoder(
-                    preprocessed_weighted_literals,
-                    k,
-                    csp_solver,
-                    self.encoding_algorithm,
-                )?);
+                encoder.strengthen_at_most_k(k - self.constant_term, csp_solver)?;
             }
 
-            debug!(
-                "Initial encoding took {} seconds.",
-                time_start.elapsed().as_secs()
-            );
+            State::Preprocessed(ref mut literals) => {
+                let sum_weight = literals.iter().map(|term| term.weight).sum::<u64>();
+                let literals = std::mem::take(literals);
 
-            Ok(())
+                if sum_weight > k - self.constant_term {
+                    self.state = State::Encoded(Self::create_encoder(
+                        literals,
+                        k,
+                        csp_solver,
+                        self.encoding_algorithm,
+                    )?);
+                }
+            }
+
+            State::TriviallySatisfied => {}
         }
+
+        Ok(())
     }
 
-    fn are_strenthening_conditions_met(&self, k: u64) -> bool {
-        if self.k_previous <= k {
-            debug!("The strenthened k value for the right hand side is not smaller than the previous k.");
-            return false;
+    fn create_encoding(
+        &mut self,
+        weighted_literals: Vec<WeightedLiteral>,
+        initial_k: u64,
+        csp_solver: &mut ConstraintSatisfactionSolver,
+    ) -> Result<(), EncodingError> {
+        let time_start = Instant::now();
+
+        let preprocessed_weighted_literals =
+            self.initialise_and_preprocess(weighted_literals, initial_k, csp_solver)?;
+
+        let sum_weight = preprocessed_weighted_literals
+            .iter()
+            .map(|term| term.weight)
+            .sum::<u64>();
+
+        if preprocessed_weighted_literals.is_empty() {
+            self.state = State::TriviallySatisfied;
+        } else if sum_weight < initial_k - self.constant_term {
+            self.state = State::Preprocessed(preprocessed_weighted_literals);
+        } else {
+            self.state = State::Encoded(Self::create_encoder(
+                preprocessed_weighted_literals,
+                initial_k,
+                csp_solver,
+                self.encoding_algorithm,
+            )?);
         }
 
-        if k < self.constant_term {
-            debug!("The k is below the trivial lower bound, probably an error?");
-            return false;
-        }
+        debug!(
+            "Initial encoding took {} seconds.",
+            time_start.elapsed().as_secs()
+        );
 
-        if self.encoder.is_none() {
-            debug!("Strenthening to be applied but no encoding?");
-            return false;
-        }
-
-        true
+        Ok(())
     }
 
     /// Initialises internal data structures
     /// Returns the preprocessed weighted literals    
     fn initialise_and_preprocess(
         &mut self,
+        weighted_literals: Vec<WeightedLiteral>,
         k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> Result<Vec<WeightedLiteral>, EncodingError> {
@@ -216,48 +240,48 @@ impl PseudoBooleanConstraintEncoder {
         //the preprocessing could be implemented more efficiency but probably is not the bottleneck
 
         self.k_previous = k;
-        self.has_initial_encoding = true;
 
-        //  compute the left hand side value caused by literals assigned to true at the root level
-        //      note: during initialisation, the self.constant_term may be set to greater than zero so we need to add to it
-        self.constant_term += self
-            .original_weighted_literals
-            .iter()
-            .filter_map(|p| {
-                if csp_solver
-                    .get_propositional_assignments()
-                    .is_literal_assigned_true(p.literal)
+        // Propagate literals x_i with too large coefficients
+        //   i.e., w_i > k -> ~x_i
+        // The propagation is done until a fixed point
+        //  since propagating a literal x_i with a large coefficient
+        //  may lead to the propagation of other literals
+
+        // During this propagation, the constant term may exceed the bound,
+        //  at which point the constraint is trivially unsatisfiable.
+
+        let mut has_assigned = true;
+
+        while has_assigned {
+            has_assigned = false;
+
+            for term in &weighted_literals {
+                if term.weight > k - self.constant_term
+                    && csp_solver
+                        .get_propositional_assignments()
+                        .is_literal_unassigned(term.literal)
                 {
-                    Some(p.weight)
-                } else {
-                    None
-                }
-            })
-            .sum::<u64>();
+                    has_assigned = true;
 
-        //can terminate if the left-hand side already exceeds k
-        if self.constant_term > k {
-            return Err(EncodingError::TriviallyUnsatisfiable);
-        }
-
-        //propagate literals with too large coefficients
-        //  i.e., w_i > k -> ~x_i
-        for term in &self.original_weighted_literals {
-            if term.weight > k - self.constant_term
-                && csp_solver
+                    let result = csp_solver.add_unit_clause(!term.literal);
+                    if result.is_err() {
+                        return Err(EncodingError::RootPropagationConflict);
+                    }
+                } else if csp_solver
                     .get_propositional_assignments()
-                    .is_literal_unassigned(term.literal)
-            {
-                //should handle by changing 'add_unit_clause' to return a result
-                if csp_solver.add_unit_clause(!term.literal).is_err() {
-                    return Err(EncodingError::RootPropagationConflict);
+                    .is_literal_assigned_true(term.literal)
+                {
+                    self.constant_term += term.weight;
                 }
+            }
+
+            if self.constant_term > k {
+                return Err(EncodingError::TriviallyUnsatisfiable);
             }
         }
 
         //collect terms that are not assigned at the root level
-        let unassigned_weighted_literals: Vec<WeightedLiteral> = self
-            .original_weighted_literals
+        let unassigned_weighted_literals: Vec<WeightedLiteral> = weighted_literals
             .iter()
             .filter(|term| {
                 csp_solver
@@ -267,15 +291,6 @@ impl PseudoBooleanConstraintEncoder {
             .copied()
             .collect();
 
-        if unassigned_weighted_literals
-            .iter()
-            .map(|term| term.weight)
-            .sum::<u64>()
-            <= k - self.constant_term
-        {
-            //trivially satisfied, so return the empty vector of literals
-            return Ok(vec![]);
-        }
         Ok(unassigned_weighted_literals)
     }
 

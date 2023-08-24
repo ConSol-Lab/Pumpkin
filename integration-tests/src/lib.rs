@@ -3,17 +3,19 @@
 use std::{
     fs::File,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
     time::Duration,
 };
 
 use wait_timeout::ChildExt;
 
 pub struct Files {
+    pub instance_file: PathBuf,
     pub proof_file: PathBuf,
     pub log_file: PathBuf,
     pub err_file: PathBuf,
 }
+
 impl Files {
     pub fn cleanup(self) -> std::io::Result<()> {
         std::fs::remove_file(self.log_file)?;
@@ -60,6 +62,7 @@ pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
     }
 
     Files {
+        instance_file: instance_path.to_path_buf(),
         log_file: log_file_path,
         proof_file: proof_file_path,
         err_file: err_file_path,
@@ -91,17 +94,71 @@ pub fn get_executable(path: impl AsRef<Path>) -> PathBuf {
     }
 }
 
-pub fn verify_proof(instance_path: String, files: Files) -> std::io::Result<()> {
+pub enum CheckerOutput {
+    Panic,
+    Acceptable,
+}
+
+pub trait Checker {
+    fn executable_name() -> &'static str;
+
+    fn prepare_command(cmd: &mut Command, files: &Files);
+
+    fn parse_checker_output(output: &Output) -> CheckerOutput;
+
+    fn after_checking_action(files: Files, _output: &Output) {
+        files.cleanup().unwrap()
+    }
+}
+
+pub fn run_solution_checker<Check: Checker>(files: Files) {
+    let checker_exe = get_executable(format!("{}/{}", env!("OUT_DIR"), Check::executable_name()));
+
+    let mut command = Command::new(checker_exe);
+    command.stdout(Stdio::piped());
+    command.stdin(Stdio::null());
+    command.stderr(Stdio::piped());
+
+    Check::prepare_command(&mut command, &files);
+
+    let output = command.output().unwrap_or_else(|_| {
+        panic!(
+            "Failed to run solution checker: {}",
+            Check::executable_name()
+        )
+    });
+
+    match Check::parse_checker_output(&output) {
+        CheckerOutput::Panic => {
+            println!("{}", std::str::from_utf8(&output.stdout).unwrap());
+
+            panic!(
+                "Failed to verify solution file. Checker exited with code {}",
+                output.status
+            );
+        }
+        CheckerOutput::Acceptable => Check::after_checking_action(files, &output),
+    }
+}
+
+pub fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()> {
+    if checker_output.status.code().unwrap() == 0 {
+        return Ok(());
+    }
+
     let drat_trim = get_executable(format!("{}/drat-trim", env!("OUT_DIR")));
 
-    let status = Command::new(drat_trim)
-        .stdout(Stdio::null())
-        .arg(instance_path)
+    let output = Command::new(drat_trim)
+        .stdout(Stdio::piped())
+        .arg(&files.instance_file)
         .arg(&files.proof_file)
-        .status()
+        .output()
         .expect("Failed to run drat-trim");
 
-    assert!(status.success(), "drat-trim reported an error");
+    if !output.status.success() {
+        println!("{}", std::str::from_utf8(&output.stdout).unwrap());
+        panic!("drat-trim reported an error");
+    }
 
     files.cleanup()
 }

@@ -1,6 +1,8 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, Output};
 
-use integration_tests::{ensure_release_binary_built, get_executable, run_solver};
+use integration_tests::{
+    ensure_release_binary_built, run_solution_checker, run_solver, Checker, CheckerOutput, Files,
+};
 
 macro_rules! test_wcnf_instance {
     ($name:ident) => {
@@ -21,36 +23,35 @@ test_wcnf_instance!(normalized_g9x3);
 test_wcnf_instance!(normalized_g9x9);
 test_wcnf_instance!(ram_k3_n9);
 
+struct MaxSATChecker;
+
+impl Checker for MaxSATChecker {
+    fn executable_name() -> &'static str {
+        "maxsat-checker"
+    }
+
+    fn prepare_command(cmd: &mut Command, files: &Files) {
+        cmd.arg(&files.instance_file);
+        cmd.arg(&files.log_file);
+    }
+
+    fn parse_checker_output(output: &Output) -> CheckerOutput {
+        if output.status.success() {
+            CheckerOutput::Acceptable
+        } else {
+            CheckerOutput::Panic
+        }
+    }
+}
+
 fn run_wcnf_test(instance_name: &str) {
     ensure_release_binary_built();
-
-    let checker = get_executable(format!("{}/maxsat-checker", env!("OUT_DIR")));
 
     let instance_path = format!(
         "{}/tests/wcnf/{instance_name}.wcnf",
         env!("CARGO_MANIFEST_DIR")
     );
+    let files = run_solver(instance_path);
 
-    let files = run_solver(&instance_path);
-
-    let solution_check = Command::new(checker)
-        .arg(&instance_path)
-        .arg(&files.log_file)
-        .stdout(Stdio::null())
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect("Failed to run maxsat-checker")
-        .code()
-        .expect("maxsat-checker exited by signal");
-
-    match solution_check {
-        // The formula is satisfiable and the solution is correct.
-        0 => files.cleanup().unwrap(),
-
-        // An error occurred running the solution checker.
-        1 => panic!("Failed to verify solution file."),
-
-        code => todo!("unhandled code: {code}"),
-    }
+    run_solution_checker::<MaxSATChecker>(files);
 }

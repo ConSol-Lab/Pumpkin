@@ -118,10 +118,16 @@ pub fn parse_cnf<Sink: DimacsSink>(
     }
 }
 
+pub struct WcnfInstance<Formula> {
+    pub formula: Formula,
+    pub last_instance_variable: usize,
+    pub objective: Function,
+}
+
 pub fn parse_wcnf<Sink: DimacsSink>(
     source: impl Read,
     sink_constructor_args: Sink::ConstructorArgs,
-) -> Result<(Sink::Formula, Function), DimacsParseError> {
+) -> Result<WcnfInstance<Sink::Formula>, DimacsParseError> {
     let mut objective_function = Function::default();
     let mut reader = BufReader::new(source);
     let mut parser =
@@ -148,7 +154,18 @@ pub fn parse_wcnf<Sink: DimacsSink>(
             let data = reader.fill_buf()?;
 
             if data.is_empty() {
-                return Ok((parser.complete()?, objective_function));
+                let last_instance_variable = parser
+                    .header
+                    .as_ref()
+                    .ok_or(DimacsParseError::MissingHeader)?
+                    .num_variables;
+                let formula = parser.complete()?;
+
+                return Ok(WcnfInstance {
+                    formula,
+                    last_instance_variable,
+                    objective: objective_function,
+                });
             }
 
             parser.parse_chunk(data)?;
@@ -707,7 +724,9 @@ mod tests {
     }
 
     fn parse_wcnf_source(source: &str) -> (Vec<Vec<i32>>, Function) {
-        parse_wcnf::<Vec<Vec<i32>>>(source.as_bytes(), ()).expect("valid dimacs")
+        parse_wcnf::<Vec<Vec<i32>>>(source.as_bytes(), ())
+            .map(|instance| (instance.formula, instance.objective))
+            .expect("valid dimacs")
     }
 
     impl DimacsSink for Vec<Vec<i32>> {

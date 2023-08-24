@@ -4,7 +4,7 @@ mod result;
 
 use clap::Parser;
 use log::{error, info, warn, LevelFilter};
-use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink};
+use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink, WcnfInstance};
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::optimisation::{LinearSearch, OptimisationResult, OptimisationSolver};
@@ -243,14 +243,14 @@ fn wcnf_problem(
     verify: bool,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
-    let (csp_solver, objective_function) = parse_wcnf::<SolverDimacsSink>(
+    let WcnfInstance {
+        formula: csp_solver,
+        objective: objective_function,
+        last_instance_variable,
+    } = parse_wcnf::<SolverDimacsSink>(
         instance_file,
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
-
-    let num_problem_variables = csp_solver
-        .get_propositional_assignments()
-        .num_propositional_variables() as usize;
 
     let mut solver = OptimisationSolver::new(
         csp_solver,
@@ -266,7 +266,7 @@ fn wcnf_problem(
             println!("s OPTIMAL");
             println!(
                 "v {}",
-                stringify_solution(&solution, num_problem_variables, false)
+                stringify_solution(&solution, last_instance_variable + 1, false)
             );
             Some((solution, objective_value))
         }
@@ -277,7 +277,7 @@ fn wcnf_problem(
             println!("s SATISFIABLE");
             println!(
                 "v {}",
-                stringify_solution(&best_solution, num_problem_variables, false)
+                stringify_solution(&best_solution, last_instance_variable + 1, false)
             );
             Some((best_solution, objective_value))
         }

@@ -1,6 +1,9 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, Output};
 
-use integration_tests::{ensure_release_binary_built, get_executable, run_solver, verify_proof};
+use integration_tests::{
+    ensure_release_binary_built, run_solution_checker, run_solver, verify_proof, Checker,
+    CheckerOutput, Files,
+};
 
 macro_rules! test_cnf_instance {
     ($name:ident) => {
@@ -97,42 +100,41 @@ test_cnf_instance!(unit5);
 test_cnf_instance!(unit6);
 test_cnf_instance!(unit7);
 
+struct CnfChecker;
+
+impl Checker for CnfChecker {
+    fn executable_name() -> &'static str {
+        "precochk"
+    }
+
+    fn prepare_command(cmd: &mut Command, files: &Files) {
+        cmd.arg(&files.instance_file);
+        cmd.arg(&files.log_file);
+    }
+
+    fn parse_checker_output(output: &Output) -> CheckerOutput {
+        let code = output.status.code().unwrap_or(1);
+
+        if code == 0 || code == 20 {
+            CheckerOutput::Acceptable
+        } else {
+            CheckerOutput::Panic
+        }
+    }
+
+    fn after_checking_action(files: Files, output: &Output) {
+        verify_proof(files, output).unwrap()
+    }
+}
+
 fn run_cnf_test(instance_name: &str) {
     ensure_release_binary_built();
-
-    let precochk = get_executable(format!("{}/precochk", env!("OUT_DIR")));
 
     let instance_path = format!(
         "{}/tests/cnf/{instance_name}.cnf",
         env!("CARGO_MANIFEST_DIR")
     );
+    let files = run_solver(instance_path);
 
-    let files = run_solver(&instance_path);
-
-    let solution_check = Command::new(precochk)
-        .arg(&instance_path)
-        .arg(&files.log_file)
-        .stdout(Stdio::null())
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect("Failed to run precochk")
-        .code()
-        .expect("precochk exited by signal");
-
-    match solution_check {
-        // The formula is satisfiable and the solution is correct.
-        0 => files.cleanup().unwrap(),
-
-        // An error occurred while running the solution checker.
-        1 => panic!("precochk errored"),
-
-        // The reported solution does not satisfy all clauses in the instance.
-        2 => panic!("not all clauses are satisfied"),
-
-        // The formula is unsatisfiable, so we verify the proof.
-        20 => verify_proof(instance_path, files).unwrap(),
-
-        code => todo!("unhandled code: {code}"),
-    }
+    run_solution_checker::<CnfChecker>(files);
 }
