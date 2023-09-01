@@ -1,6 +1,7 @@
 mod assignments_integer;
 mod cp_engine_data_structures;
 mod domain_manager;
+mod event_sink;
 mod propagation;
 mod propagator_queue;
 pub mod test_helper;

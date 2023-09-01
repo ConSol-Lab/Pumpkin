@@ -2,7 +2,10 @@
 //! information unaltered, or apply transformations which can be performed without the need of
 //! constraints.
 
-use crate::engine::{Change, Delta, DomainEvent, DomainManager, DomainOperationOutcome, Watchers};
+use crate::engine::{
+    Delta, DomainChange, DomainEvent, DomainManager, DomainOperationOutcome, OpaqueDomainEvent,
+    Watchers,
+};
 
 use super::{DomainId, Predicate, PredicateConstructor};
 
@@ -29,7 +32,10 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent);
 
     /// Decode a delta into the change it represents for this variable.
-    fn unpack(&self, delta: Delta) -> Change;
+    fn unpack_delta(&self, delta: Delta) -> DomainChange;
+
+    /// Decode a domain event for this variable.
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
 
     /// Get a variable which domain is scaled compared to the domain of self.
     ///
@@ -82,8 +88,12 @@ impl IntVar for DomainId {
         watchers.watch(*self, event);
     }
 
-    fn unpack(&self, delta: Delta) -> Change {
+    fn unpack_delta(&self, delta: Delta) -> DomainChange {
         delta.unwrap_change()
+    }
+
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
+        event.unwrap()
     }
 }
 
@@ -159,11 +169,23 @@ where
         }
     }
 
-    fn unpack(&self, delta: Delta) -> Change {
-        match self.inner.unpack(delta) {
-            Change::Removal(value) => Change::Removal(self.map(value)),
-            Change::LowerBound(_) => todo!(),
-            Change::UpperBound(_) => todo!(),
+    fn unpack_delta(&self, delta: Delta) -> DomainChange {
+        match self.inner.unpack_delta(delta) {
+            DomainChange::Removal(value) => DomainChange::Removal(self.map(value)),
+            DomainChange::LowerBound(_) => todo!(),
+            DomainChange::UpperBound(_) => todo!(),
+        }
+    }
+
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
+        if self.scale.is_negative() {
+            match self.inner.unpack_event(event) {
+                DomainEvent::LowerBound => DomainEvent::UpperBound,
+                DomainEvent::UpperBound => DomainEvent::LowerBound,
+                event => event,
+            }
+        } else {
+            self.inner.unpack_event(event)
         }
     }
 }

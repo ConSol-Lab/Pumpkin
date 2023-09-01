@@ -3,27 +3,17 @@ use crate::{
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
-use super::{PropagatorId, PropagatorVarId};
+use super::{event_sink::EventSink, DomainEvent, PropagatorId, PropagatorVarId};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AssignmentsInteger {
     state: AssignmentsIntegerInternalState,
     current_decision_level: u32,
     trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail
     trail: Vec<ConstraintProgrammingTrailEntry>,
     domains: Vec<IntegerDomainExplicit>, //[integer_variable.id][j] indicates if value j is in the domain of the integer variable
-}
 
-impl Default for AssignmentsInteger {
-    fn default() -> Self {
-        AssignmentsInteger {
-            state: AssignmentsIntegerInternalState::Ok,
-            current_decision_level: 0,
-            trail: vec![],
-            trail_delimiter: Vec::new(),
-            domains: vec![],
-        }
-    }
+    events: EventSink,
 }
 
 impl AssignmentsInteger {
@@ -79,6 +69,8 @@ impl AssignmentsInteger {
         self.domains
             .push(IntegerDomainExplicit::new(lower_bound, upper_bound));
 
+        self.events.grow();
+
         DomainId {
             id: self.num_integer_variables() - 1,
         }
@@ -89,6 +81,10 @@ impl AssignmentsInteger {
         self.trail[index_on_trail]
             .propagator_reason
             .map(|entry| entry.propagator)
+    }
+
+    pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
+        self.events.drain()
     }
 }
 
@@ -179,7 +175,7 @@ impl AssignmentsInteger {
 
 //methods to change the domains
 impl AssignmentsInteger {
-    pub fn tighten_lower_bound_no_notify(
+    pub fn tighten_lower_bound(
         &mut self,
         integer_variable: DomainId,
         new_lower_bound: i32,
@@ -212,10 +208,21 @@ impl AssignmentsInteger {
         });
 
         self.domains[integer_variable].lower_bound = new_lower_bound;
+
+        if old_lower_bound < new_lower_bound {
+            self.events
+                .event_occurred(DomainEvent::LowerBound, integer_variable);
+        }
+
+        if self.is_integer_variable_assigned(integer_variable) {
+            self.events
+                .event_occurred(DomainEvent::Assign, integer_variable);
+        }
+
         DomainOperationOutcome::Success
     }
 
-    pub fn tighten_upper_bound_no_notify(
+    pub fn tighten_upper_bound(
         &mut self,
         integer_variable: DomainId,
         new_upper_bound: i32,
@@ -248,10 +255,21 @@ impl AssignmentsInteger {
         });
 
         self.domains[integer_variable].upper_bound = new_upper_bound;
+
+        if old_upper_bound > new_upper_bound {
+            self.events
+                .event_occurred(DomainEvent::UpperBound, integer_variable);
+        }
+
+        if self.is_integer_variable_assigned(integer_variable) {
+            self.events
+                .event_occurred(DomainEvent::Assign, integer_variable);
+        }
+
         DomainOperationOutcome::Success
     }
 
-    pub fn make_assignment_no_notify(
+    pub fn make_assignment(
         &mut self,
         integer_variable: DomainId,
         assigned_value: i32,
@@ -272,17 +290,18 @@ impl AssignmentsInteger {
 
         //only tighten the lower bound if needed
         if self.get_lower_bound(integer_variable) < assigned_value {
-            self.tighten_lower_bound_no_notify(integer_variable, assigned_value, propagator_reason);
+            self.tighten_lower_bound(integer_variable, assigned_value, propagator_reason);
         }
 
         //only tighten the uper bound if needed
         if self.get_upper_bound(integer_variable) > assigned_value {
-            self.tighten_upper_bound_no_notify(integer_variable, assigned_value, propagator_reason);
+            self.tighten_upper_bound(integer_variable, assigned_value, propagator_reason);
         }
+
         DomainOperationOutcome::Success
     }
 
-    pub fn remove_value_from_domain_no_notify(
+    pub fn remove_value_from_domain(
         &mut self,
         integer_variable: DomainId,
         removed_value_from_domain: i32,
@@ -321,6 +340,9 @@ impl AssignmentsInteger {
 
                 pumpkin_assert_moderate!(domain.debug_bounds_check());
             }
+
+            self.events
+                .event_occurred(DomainEvent::LowerBound, integer_variable);
         }
         //adjust the upper bound
         if old_upper_bound == removed_value_from_domain {
@@ -331,7 +353,14 @@ impl AssignmentsInteger {
 
                 pumpkin_assert_moderate!(domain.debug_bounds_check());
             }
+
+            self.events
+                .event_occurred(DomainEvent::UpperBound, integer_variable);
         }
+
+        self.events
+            .event_occurred(DomainEvent::Any, integer_variable);
+
         DomainOperationOutcome::Success
     }
 
@@ -339,7 +368,7 @@ impl AssignmentsInteger {
     //  in case the predicate is already true, no changes happen
     //  however in case the predicate would lead to inconsistent domains, e.g., decreasing the upper bound past the lower bound
     //      pumpkin asserts will make the program crash
-    pub fn apply_predicate_no_notify(
+    pub fn apply_predicate(
         &mut self,
         predicate: &Predicate,
         propagator_reason: Option<PropagatorVarId>,
@@ -357,19 +386,15 @@ impl AssignmentsInteger {
             Predicate::LowerBound {
                 integer_variable,
                 lower_bound,
-            } => {
-                self.tighten_lower_bound_no_notify(integer_variable, lower_bound, propagator_reason)
-            }
+            } => self.tighten_lower_bound(integer_variable, lower_bound, propagator_reason),
             Predicate::UpperBound {
                 integer_variable,
                 upper_bound,
-            } => {
-                self.tighten_upper_bound_no_notify(integer_variable, upper_bound, propagator_reason)
-            }
+            } => self.tighten_upper_bound(integer_variable, upper_bound, propagator_reason),
             Predicate::NotEqual {
                 integer_variable,
                 not_equal_constant,
-            } => self.remove_value_from_domain_no_notify(
+            } => self.remove_value_from_domain(
                 integer_variable,
                 not_equal_constant,
                 propagator_reason,
@@ -377,11 +402,7 @@ impl AssignmentsInteger {
             Predicate::Equal {
                 integer_variable,
                 equality_constant,
-            } => self.make_assignment_no_notify(
-                integer_variable,
-                equality_constant,
-                propagator_reason,
-            ),
+            } => self.make_assignment(integer_variable, equality_constant, propagator_reason),
         }
     }
 
@@ -514,8 +535,9 @@ impl IntegerDomainExplicit {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 enum AssignmentsIntegerInternalState {
+    #[default]
     Ok,
     Conflict,
 }
@@ -530,7 +552,138 @@ impl AssignmentsIntegerInternalState {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum DomainOperationOutcome {
     Success,
     Failure,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lower_bound_change_lower_bound_event() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.tighten_lower_bound(d1, 2, None);
+
+        let events = assignment.drain_domain_events().collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound, DomainEvent::Any]);
+    }
+
+    #[test]
+    fn upper_bound_change_triggers_upper_bound_event() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.tighten_upper_bound(d1, 2, None);
+
+        let events = assignment.drain_domain_events().collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound, DomainEvent::Any]);
+    }
+
+    #[test]
+    fn bounds_change_can_also_trigger_assign_event() {
+        let mut assignment = AssignmentsInteger::default();
+
+        let d1 = assignment.grow(1, 5);
+        let d2 = assignment.grow(1, 5);
+
+        assignment.tighten_lower_bound(d1, 5, None);
+        assignment.tighten_upper_bound(d2, 1, None);
+
+        let events = assignment.drain_domain_events().collect::<Vec<_>>();
+        assert_eq!(events.len(), 6);
+
+        assert_contains_events(
+            &events,
+            d1,
+            [
+                DomainEvent::LowerBound,
+                DomainEvent::Any,
+                DomainEvent::Assign,
+            ],
+        );
+        assert_contains_events(
+            &events,
+            d2,
+            [
+                DomainEvent::UpperBound,
+                DomainEvent::Any,
+                DomainEvent::Assign,
+            ],
+        );
+    }
+
+    #[test]
+    fn making_assignment_triggers_appropriate_events() {
+        let mut assignment = AssignmentsInteger::default();
+
+        let d1 = assignment.grow(1, 5);
+        let d2 = assignment.grow(1, 5);
+        let d3 = assignment.grow(1, 5);
+
+        assignment.make_assignment(d1, 1, None);
+        assignment.make_assignment(d2, 5, None);
+        assignment.make_assignment(d3, 3, None);
+
+        let events = assignment.drain_domain_events().collect::<Vec<_>>();
+        assert_eq!(events.len(), 10);
+
+        assert_contains_events(
+            &events,
+            d1,
+            [
+                DomainEvent::Assign,
+                DomainEvent::UpperBound,
+                DomainEvent::Any,
+            ],
+        );
+        assert_contains_events(
+            &events,
+            d2,
+            [
+                DomainEvent::Assign,
+                DomainEvent::LowerBound,
+                DomainEvent::Any,
+            ],
+        );
+        assert_contains_events(
+            &events,
+            d3,
+            [
+                DomainEvent::Assign,
+                DomainEvent::LowerBound,
+                DomainEvent::UpperBound,
+                DomainEvent::Any,
+            ],
+        );
+    }
+
+    #[test]
+    fn removal_triggers_any_event() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.remove_value_from_domain(d1, 2, None);
+
+        let events = assignment.drain_domain_events().collect::<Vec<_>>();
+        assert_eq!(events.len(), 1);
+        assert!(events.contains(&(DomainEvent::Any, d1)));
+    }
+
+    fn assert_contains_events(
+        slice: &[(DomainEvent, DomainId)],
+        domain: DomainId,
+        required_events: impl AsRef<[DomainEvent]>,
+    ) {
+        for event in required_events.as_ref() {
+            assert!(slice.contains(&(*event, domain)));
+        }
+    }
 }

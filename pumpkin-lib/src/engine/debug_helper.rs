@@ -236,8 +236,7 @@ impl DebugHelper {
                 DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
 
             let negated_predicate = !*predicate;
-            let outcome =
-                assignments_integer_clone.apply_predicate_no_notify(&negated_predicate, None);
+            let outcome = assignments_integer_clone.apply_predicate(&negated_predicate, None);
 
             match outcome {
                 DomainOperationOutcome::Success => {
@@ -284,7 +283,7 @@ impl DebugHelper {
         predicates: &[Predicate],
     ) -> bool {
         for predicate in predicates {
-            let outcome = assignments_integer.apply_predicate_no_notify(predicate, None);
+            let outcome = assignments_integer.apply_predicate(predicate, None);
             match outcome {
                 DomainOperationOutcome::Success => {
                     //do nothing, everything is okay

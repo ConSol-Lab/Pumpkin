@@ -1,7 +1,4 @@
-use std::{
-    cell::RefCell,
-    ops::{Index, IndexMut},
-};
+use std::ops::{Index, IndexMut};
 
 use crate::basic_types::{
     variables::IntVar, Predicate, PredicateConstructor, PropagationStatusCP,
@@ -63,8 +60,8 @@ pub struct PropagatorVariable<Var> {
 }
 
 impl<Var: IntVar> PropagatorVariable<Var> {
-    pub fn unpack(&self, delta: Delta) -> Change {
-        self.inner.unpack(delta)
+    pub fn unpack(&self, delta: Delta) -> DomainChange {
+        self.inner.unpack_delta(delta)
     }
 }
 
@@ -98,7 +95,7 @@ pub struct PropagatorVarId {
 /// A delta is a propagated change to a variable. A propagator can be asked to explain why it
 /// applied this particular change to the variable. It is a predicate that is projected onto the
 /// local id of a propagator.
-pub struct Delta(LocalId, Change);
+pub struct Delta(LocalId, DomainChange);
 
 impl Delta {
     pub(crate) fn from_predicate(local_id: LocalId, predicate: Predicate) -> Delta {
@@ -107,12 +104,12 @@ impl Delta {
             Predicate::UpperBound { .. } => todo!(),
             Predicate::NotEqual {
                 not_equal_constant, ..
-            } => Delta(local_id, Change::Removal(not_equal_constant)),
+            } => Delta(local_id, DomainChange::Removal(not_equal_constant)),
             Predicate::Equal { .. } => todo!(),
         }
     }
 
-    pub(crate) fn unwrap_change(self) -> Change {
+    pub(crate) fn unwrap_change(self) -> DomainChange {
         self.1
     }
 
@@ -124,26 +121,39 @@ impl Delta {
 
 /// A change is a modification of a particular variable, independant of any variable. In effect, a
 /// predicate is a DomainId + Change.
-pub enum Change {
+pub enum DomainChange {
     Removal(i32),
     LowerBound(i32),
     UpperBound(i32),
 }
 
-pub struct PropagationContext<'assignment> {
-    assignment: RefCell<&'assignment mut AssignmentsInteger>,
-    propagator_id: PropagatorId,
+/// A wrapper for a domain event, which forces the propagator implementation to map the event
+/// through the variable view.
+pub struct OpaqueDomainEvent(DomainEvent);
+
+impl From<DomainEvent> for OpaqueDomainEvent {
+    fn from(event: DomainEvent) -> Self {
+        OpaqueDomainEvent(event)
+    }
+}
+
+impl OpaqueDomainEvent {
+    pub(crate) fn unwrap(self) -> DomainEvent {
+        self.0
+    }
+}
+
+pub struct PropagationContext<'a> {
+    domain_manager: DomainManager<'a>,
 }
 
 impl PropagationContext<'_> {
     pub(crate) fn new(
-        assignment: &'_ mut AssignmentsInteger,
+        assignment: &mut AssignmentsInteger,
         propagator_id: PropagatorId,
     ) -> PropagationContext<'_> {
-        PropagationContext {
-            assignment: RefCell::new(assignment),
-            propagator_id,
-        }
+        let domain_manager = DomainManager::new(propagator_id, assignment);
+        PropagationContext { domain_manager }
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -152,39 +162,15 @@ impl PropagationContext<'_> {
     }
 
     pub fn lower_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        let mut assignment = self.assignment.borrow_mut();
-        let domain_manager = DomainManager::new(
-            PropagatorVarId {
-                propagator: self.propagator_id,
-                variable: var.local_id,
-            },
-            &mut assignment,
-        );
-        var.inner.lower_bound(&domain_manager)
+        var.inner.lower_bound(&self.domain_manager)
     }
 
     pub fn upper_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        let mut assignment = self.assignment.borrow_mut();
-        let domain_manager = DomainManager::new(
-            PropagatorVarId {
-                propagator: self.propagator_id,
-                variable: var.local_id,
-            },
-            &mut assignment,
-        );
-        var.inner.upper_bound(&domain_manager)
+        var.inner.upper_bound(&self.domain_manager)
     }
 
     pub fn contains<Var: IntVar>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
-        let mut assignment = self.assignment.borrow_mut();
-        let domain_manager = DomainManager::new(
-            PropagatorVarId {
-                propagator: self.propagator_id,
-                variable: var.local_id,
-            },
-            &mut assignment,
-        );
-        var.inner.contains(&domain_manager, value)
+        var.inner.contains(&self.domain_manager, value)
     }
 
     pub fn remove<Var: IntVar>(
@@ -192,15 +178,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         value: i32,
     ) -> DomainOperationOutcome {
-        let mut assignment = self.assignment.borrow_mut();
-        let mut domain_manager = DomainManager::new(
-            PropagatorVarId {
-                propagator: self.propagator_id,
-                variable: var.local_id,
-            },
-            &mut assignment,
-        );
-        var.inner.remove(&mut domain_manager, value)
+        self.domain_manager.set_local_id(var.local_id);
+        var.inner.remove(&mut self.domain_manager, value)
     }
 }
 
@@ -254,6 +233,15 @@ impl PropagatorConstructorContext<'_> {
     }
 }
 
+/// Indicator of what to do when a propagator is notified.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EnqueueDecision {
+    /// The propagator should be enqueued.
+    Enqueue,
+    /// THe propagator should not be enqueued.
+    Skip,
+}
+
 pub trait ConstraintProgrammingPropagator {
     //Propagate method that will be called during search
     //	extends the current partial assignments with inferred domain changes
@@ -261,6 +249,24 @@ pub trait ConstraintProgrammingPropagator {
     //      otherwise returns the reason for failure in PropagationStatusCP::ConflictDetected { failure_reason }
     //      note that the failure (explanation) is given as a conjunction of predicates that lead to the failure
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP;
+
+    /// Called when an event happens to one of the variables the propagator is subscribed to. It
+    /// indicates whether the provided event should cause the propagator to be enqueued.
+    ///
+    /// This can be used to incrementally maintain datastructures or perform propagations, and
+    /// should only be used for computationally cheap logic. Expensive computation should be
+    /// performed in the [`ConstraintProgrammingPropagator::propagate()`] method.
+    ///
+    /// By default the propagator is always enqueued for every event. Not all propagators will
+    /// benefit from implementing this, so it is not required to do so.
+    fn notify(
+        &mut self,
+        _context: &mut PropagationContext,
+        _local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        EnqueueDecision::Enqueue
+    }
 
     //Called each time the solver backtracks
     //  the propagator can then update its internal data structures given the new variable domains
@@ -306,7 +312,7 @@ mod tests {
     use super::*;
 
     impl Delta {
-        pub fn new(local_id: LocalId, change: Change) -> Delta {
+        pub fn new(local_id: LocalId, change: DomainChange) -> Delta {
             Delta(local_id, change)
         }
     }

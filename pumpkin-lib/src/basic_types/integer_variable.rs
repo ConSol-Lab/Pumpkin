@@ -3,6 +3,12 @@ pub struct DomainId {
     pub id: u32,
 }
 
+impl DomainId {
+    pub fn new(id: u32) -> Self {
+        DomainId { id }
+    }
+}
+
 impl<T> std::ops::Index<DomainId> for Vec<T> {
     type Output = T;
     fn index(&self, index_variable: DomainId) -> &T {

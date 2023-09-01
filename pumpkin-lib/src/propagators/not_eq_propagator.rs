@@ -2,7 +2,7 @@ use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     conjunction,
     engine::{
-        CPPropagatorConstructor, Change, ConstraintProgrammingPropagator, Delta, DomainEvent,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
         LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
 };
@@ -51,14 +51,14 @@ impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEq<VX, VY> {
     ) -> PropositionalConjunction {
         match delta.affected_local_id() {
             ID_X => {
-                if let Change::Removal(value) = self.x.unpack(delta) {
+                if let DomainChange::Removal(value) = self.x.unpack(delta) {
                     conjunction!([self.y == value])
                 } else {
                     unreachable!("Only a singular value can be removed by this propagator.");
                 }
             }
             ID_Y => {
-                if let Change::Removal(value) = self.y.unpack(delta) {
+                if let DomainChange::Removal(value) = self.y.unpack(delta) {
                     conjunction!([self.x == value])
                 } else {
                     unreachable!("Only a singular value can be removed by this propagator.");
@@ -122,7 +122,7 @@ mod tests {
 
         assert!(!solver.contains(x, 4));
 
-        let reason = solver.get_reason(&mut propagator, Delta::new(ID_X, Change::Removal(4)));
+        let reason = solver.get_reason(&mut propagator, Delta::new(ID_X, DomainChange::Removal(4)));
         assert_eq!(conjunction!([y == 4]), reason);
     }
 
@@ -137,7 +137,7 @@ mod tests {
 
         assert!(!solver.contains(y, 4));
 
-        let reason = solver.get_reason(&mut propagator, Delta::new(ID_Y, Change::Removal(4)));
+        let reason = solver.get_reason(&mut propagator, Delta::new(ID_Y, DomainChange::Removal(4)));
         assert_eq!(conjunction!([x == 4]), reason);
     }
 }

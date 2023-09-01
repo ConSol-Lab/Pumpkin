@@ -105,20 +105,21 @@ impl SATCPMediator {
 
         for sat_trail_pos in self.sat_trail_synced_position..assignments_propositional.trail.len() {
             let literal = assignments_propositional.trail[sat_trail_pos];
-            self.synchronise_literal(literal, cp_data_structures, cp_propagators);
+            self.synchronise_literal(literal, cp_data_structures);
         }
         self.sat_trail_synced_position = assignments_propositional.trail.len();
         //the newly added entries to the trail do not need to be synchronise with the propositional trail
         //  this is because the integer trail was already synchronise when this method was called
         //  and the newly added entries are already present on the propositional trail
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
+
+        cp_data_structures.process_domain_events(cp_propagators);
     }
 
     fn synchronise_literal(
         &mut self,
         literal: Literal,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) {
         //recall that a literal may be linked to multiple predicates
         //  e.g., this may happen when in preprocessing two literals are detected to be equal
@@ -126,7 +127,7 @@ impl SATCPMediator {
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.mapping_literal_to_predicates[literal].len() {
             let predicate = self.mapping_literal_to_predicates[literal][j];
-            cp_data_structures.apply_predicate(&predicate, None, cp_propagators);
+            cp_data_structures.apply_predicate(&predicate, None);
         }
     }
 

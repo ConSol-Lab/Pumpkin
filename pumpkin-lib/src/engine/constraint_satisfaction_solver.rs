@@ -634,10 +634,6 @@ impl ConstraintSatisfactionSolver {
 
     fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
         while !self.cp_data_structures.propagator_queue.is_empty() {
-            let num_predicates_on_trail_before = self
-                .cp_data_structures
-                .assignments_integer
-                .num_trail_entries();
             let propagator_id = self.cp_data_structures.propagator_queue.pop();
             let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
             let mut context = PropagationContext::new(
@@ -661,42 +657,11 @@ impl ConstraintSatisfactionSolver {
                 }
 
                 Ok(()) => {
-                    //if at least one integer domain change was made, stop further propagation
-                    //  the point is to go to the clausal propagator before continuing with other propagators
-                    let num_propagations_done = self
+                    let propagation_happened = self
                         .cp_data_structures
-                        .assignments_integer
-                        .num_trail_entries()
-                        - num_predicates_on_trail_before;
+                        .process_domain_events(&mut self.cp_propagators);
 
-                    if num_propagations_done > 0 {
-                        //notify other propagators
-                        //  note that during propagators, predicates are placed on the assignment_integer trail
-                        //      but no notifying is done for propagators
-                        //  this is because the propagator does not have all the info on which propagators to notify when propagating
-                        //here we do the notification by removing the predicates from the trail, and apply them in the same order
-                        //  but this time notify all propagators of the relevant changes
-                        //  note that even the propagator that did the changes needs to be notified
-                        //  since propagators are not required to propagate until a fixed point in one step
-
-                        //the current solution of copying from the trail, popping, and reapplying is not ideal
-                        //  todo think about better ways
-                        let propagations = self
-                            .cp_data_structures
-                            .assignments_integer
-                            .get_last_entries_on_trail(num_propagations_done);
-                        self.cp_data_structures
-                            .assignments_integer
-                            .undo_trail(num_propagations_done);
-
-                        for entry in propagations {
-                            self.cp_data_structures.apply_predicate(
-                                &entry.predicate,
-                                entry.propagator_reason,
-                                &mut self.cp_propagators,
-                            );
-                        }
-
+                    if propagation_happened {
                         return PropagationStatusOneStepCP::PropagationHappened;
                     }
                 }

@@ -1,14 +1,16 @@
 use crate::basic_types::{DomainId, Predicate};
 
 use super::{
-    AssignmentsInteger, ConstraintProgrammingPropagator, DomainOperationOutcome, PropagatorQueue,
-    PropagatorVarId, WatchListCP,
+    AssignmentsInteger, ConstraintProgrammingPropagator, DomainEvent, DomainOperationOutcome,
+    EnqueueDecision, PropagationContext, PropagatorQueue, PropagatorVarId, WatchListCP,
 };
 
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
     pub watch_list_cp: WatchListCP,
     pub propagator_queue: PropagatorQueue,
+
+    event_drain: Vec<(DomainEvent, DomainId)>,
 }
 
 impl Default for CPEngineDataStructures {
@@ -17,6 +19,7 @@ impl Default for CPEngineDataStructures {
             assignments_integer: AssignmentsInteger::default(),
             watch_list_cp: WatchListCP::default(),
             propagator_queue: PropagatorQueue::new(5),
+            event_drain: vec![],
         }
     }
 }
@@ -31,161 +34,38 @@ impl CPEngineDataStructures {
 //methods for motifying the domains of variables
 //  note that modifying the domain will inform propagators about the changes through the notify functions
 impl CPEngineDataStructures {
-    pub fn tighten_lower_bound(
+    /// Process the stored domain events. If no events were present, this returns false. Otherwise,
+    /// true is returned.
+    pub fn process_domain_events(
         &mut self,
-        integer_variable: DomainId,
-        new_lower_bound: i32,
-        propagator_reason: Option<PropagatorVarId>,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
-    ) -> DomainOperationOutcome {
-        let outcome = self.assignments_integer.tighten_lower_bound_no_notify(
-            integer_variable,
-            new_lower_bound,
-            propagator_reason,
-        );
+    ) -> bool {
+        self.event_drain
+            .extend(self.assignments_integer.drain_domain_events());
 
-        match outcome {
-            DomainOperationOutcome::Success => {
-                self.watch_list_cp
-                    .notify_lower_bound_subscribed_propagators(
-                        integer_variable,
-                        cp_propagators,
-                        &mut self.propagator_queue,
-                    );
-                DomainOperationOutcome::Success
-            }
-            DomainOperationOutcome::Failure => DomainOperationOutcome::Failure,
+        if self.event_drain.is_empty() {
+            return false;
         }
-    }
 
-    pub fn tighten_upper_bound(
-        &mut self,
-        integer_variable: DomainId,
-        new_upper_bound: i32,
-        propagator_reason: Option<PropagatorVarId>,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
-    ) -> DomainOperationOutcome {
-        let outcome = self.assignments_integer.tighten_upper_bound_no_notify(
-            integer_variable,
-            new_upper_bound,
-            propagator_reason,
-        );
-
-        match outcome {
-            DomainOperationOutcome::Success => {
-                self.watch_list_cp
-                    .notify_upper_bound_subscribed_propagators(
-                        integer_variable,
-                        cp_propagators,
-                        &mut self.propagator_queue,
-                    );
-                DomainOperationOutcome::Success
-            }
-            DomainOperationOutcome::Failure => DomainOperationOutcome::Failure,
-        }
-    }
-
-    pub fn make_assignment(
-        &mut self,
-        integer_variable: DomainId,
-        assigned_value: i32,
-        propagator_reason: Option<PropagatorVarId>,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
-    ) -> DomainOperationOutcome {
-        let old_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
-        let old_upper_bound = self.assignments_integer.get_upper_bound(integer_variable);
-
-        let outcome = self.assignments_integer.make_assignment_no_notify(
-            integer_variable,
-            assigned_value,
-            propagator_reason,
-        );
-
-        let new_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
-        let new_upper_bound = self.assignments_integer.get_upper_bound(integer_variable);
-
-        match outcome {
-            DomainOperationOutcome::Success => {
-                if old_lower_bound < new_lower_bound {
-                    self.watch_list_cp
-                        .notify_lower_bound_subscribed_propagators(
-                            integer_variable,
-                            cp_propagators,
-                            &mut self.propagator_queue,
-                        );
-                }
-
-                if old_upper_bound > new_upper_bound {
-                    self.watch_list_cp
-                        .notify_upper_bound_subscribed_propagators(
-                            integer_variable,
-                            cp_propagators,
-                            &mut self.propagator_queue,
-                        );
-                }
-
-                self.watch_list_cp.notify_assign_subscribed_propagators(
-                    integer_variable,
-                    cp_propagators,
-                    &mut self.propagator_queue,
+        for (event, domain) in self.event_drain.drain(..) {
+            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
+                let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
+                let mut context = PropagationContext::new(
+                    &mut self.assignments_integer,
+                    propagator_var.propagator,
                 );
-                DomainOperationOutcome::Success
+
+                let enqueue_decision =
+                    propagator.notify(&mut context, propagator_var.variable, event.into());
+
+                if enqueue_decision == EnqueueDecision::Enqueue {
+                    self.propagator_queue
+                        .enqueue_propagator(propagator_var.propagator, propagator.priority());
+                }
             }
-            DomainOperationOutcome::Failure => DomainOperationOutcome::Failure,
         }
-    }
 
-    pub fn remove_value_from_domain(
-        &mut self,
-        integer_variable: DomainId,
-        removed_value_from_domain: i32,
-        propagator_reason: Option<PropagatorVarId>,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
-    ) -> DomainOperationOutcome {
-        let old_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
-        let old_upper_bound = self.assignments_integer.get_upper_bound(integer_variable);
-
-        let outcome = self.assignments_integer.remove_value_from_domain_no_notify(
-            integer_variable,
-            removed_value_from_domain,
-            propagator_reason,
-        );
-
-        let new_lower_bound = self.assignments_integer.get_lower_bound(integer_variable);
-        let new_upper_bound = self.assignments_integer.get_upper_bound(integer_variable);
-
-        match outcome {
-            DomainOperationOutcome::Success => {
-                //...if the inequality operation was a lower bound change
-                if old_lower_bound < new_lower_bound {
-                    self.watch_list_cp
-                        .notify_lower_bound_subscribed_propagators(
-                            integer_variable,
-                            cp_propagators,
-                            &mut self.propagator_queue,
-                        );
-                }
-                //...if the inequality operation was an upper bound change
-                else if old_upper_bound > new_upper_bound {
-                    self.watch_list_cp
-                        .notify_upper_bound_subscribed_propagators(
-                            integer_variable,
-                            cp_propagators,
-                            &mut self.propagator_queue,
-                        );
-                }
-                //...otherwise the operation created a hole in the domain
-                else {
-                    self.watch_list_cp.notify_hole_subscribed_propagators(
-                        integer_variable,
-                        cp_propagators,
-                        &mut self.propagator_queue,
-                    );
-                }
-                DomainOperationOutcome::Success
-            }
-            DomainOperationOutcome::Failure => DomainOperationOutcome::Failure,
-        }
+        true
     }
 
     //changes the domains according to the predicate
@@ -196,7 +76,6 @@ impl CPEngineDataStructures {
         &mut self,
         predicate: &Predicate,
         propagator_reason: Option<PropagatorVarId>,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> DomainOperationOutcome {
         if self.does_predicate_hold(predicate) {
             return DomainOperationOutcome::Success;
@@ -206,38 +85,34 @@ impl CPEngineDataStructures {
             Predicate::LowerBound {
                 integer_variable,
                 lower_bound,
-            } => self.tighten_lower_bound(
+            } => self.assignments_integer.tighten_lower_bound(
                 integer_variable,
                 lower_bound,
                 propagator_reason,
-                cp_propagators,
             ),
             Predicate::UpperBound {
                 integer_variable,
                 upper_bound,
-            } => self.tighten_upper_bound(
+            } => self.assignments_integer.tighten_upper_bound(
                 integer_variable,
                 upper_bound,
                 propagator_reason,
-                cp_propagators,
             ),
             Predicate::NotEqual {
                 integer_variable,
                 not_equal_constant,
-            } => self.remove_value_from_domain(
+            } => self.assignments_integer.remove_value_from_domain(
                 integer_variable,
                 not_equal_constant,
                 propagator_reason,
-                cp_propagators,
             ),
             Predicate::Equal {
                 integer_variable,
                 equality_constant,
-            } => self.make_assignment(
+            } => self.assignments_integer.make_assignment(
                 integer_variable,
                 equality_constant,
                 propagator_reason,
-                cp_propagators,
             ),
         }
     }
