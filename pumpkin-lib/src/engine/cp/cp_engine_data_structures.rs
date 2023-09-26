@@ -83,34 +83,34 @@ impl CPEngineDataStructures {
 
         match *predicate {
             Predicate::LowerBound {
-                integer_variable,
+                domain_id,
                 lower_bound,
             } => self.assignments_integer.tighten_lower_bound(
-                integer_variable,
+                domain_id,
                 lower_bound,
                 propagator_reason,
             ),
             Predicate::UpperBound {
-                integer_variable,
+                domain_id,
                 upper_bound,
             } => self.assignments_integer.tighten_upper_bound(
-                integer_variable,
+                domain_id,
                 upper_bound,
                 propagator_reason,
             ),
             Predicate::NotEqual {
-                integer_variable,
+                domain_id,
                 not_equal_constant,
             } => self.assignments_integer.remove_value_from_domain(
-                integer_variable,
+                domain_id,
                 not_equal_constant,
                 propagator_reason,
             ),
             Predicate::Equal {
-                integer_variable,
+                domain_id,
                 equality_constant,
             } => self.assignments_integer.make_assignment(
-                integer_variable,
+                domain_id,
                 equality_constant,
                 propagator_reason,
             ),

@@ -96,8 +96,8 @@ impl DebugHelper {
     ) -> bool {
         if reason
             .iter()
-            .map(|p| p.get_integer_variable())
-            .any(|integer_variable| integer_variable == propagated_predicate.get_integer_variable())
+            .map(|p| p.get_domain())
+            .any(|domain| domain == propagated_predicate.get_domain())
         {
             panic!("{}", format!("The reason for propagation should not contain the integer variable that was propagated.
             Propagator: {},    

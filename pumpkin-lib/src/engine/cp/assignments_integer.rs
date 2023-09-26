@@ -11,7 +11,7 @@ pub struct AssignmentsInteger {
     current_decision_level: u32,
     trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail
     trail: Vec<ConstraintProgrammingTrailEntry>,
-    domains: Vec<IntegerDomainExplicit>, //[integer_variable.id][j] indicates if value j is in the domain of the integer variable
+    domains: Vec<IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
 
     events: EventSink,
 }
@@ -26,12 +26,12 @@ impl AssignmentsInteger {
         self.current_decision_level
     }
 
-    pub fn num_integer_variables(&self) -> u32 {
+    pub fn num_domains(&self) -> u32 {
         self.domains.len() as u32
     }
 
-    pub fn get_integer_variables_variables(&self) -> IntegerVariableGeneratorIterator {
-        IntegerVariableGeneratorIterator::new(0, self.num_integer_variables())
+    pub fn get_domains(&self) -> IntegerVariableGeneratorIterator {
+        IntegerVariableGeneratorIterator::new(0, self.num_domains())
     }
 
     pub fn num_trail_entries(&self) -> usize {
@@ -64,7 +64,7 @@ impl AssignmentsInteger {
 
     //registers the domain of a new integer variable
     //note that this is an internal method that does _not_ allocate additional information necessary for the solver apart from the domain
-    //when creating a new integer variable, use create_new_integer_variable in the ConstraintSatisfactionSolver
+    //when creating a new integer variable, use create_new_domain_id in the ConstraintSatisfactionSolver
     pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         self.domains
             .push(IntegerDomainExplicit::new(lower_bound, upper_bound));
@@ -72,7 +72,7 @@ impl AssignmentsInteger {
         self.events.grow();
 
         DomainId {
-            id: self.num_integer_variables() - 1,
+            id: self.num_domains() - 1,
         }
     }
 
@@ -90,86 +90,81 @@ impl AssignmentsInteger {
 
 //methods for getting info about the domains
 impl AssignmentsInteger {
-    pub fn get_lower_bound(&self, integer_variable: DomainId) -> i32 {
-        self.domains[integer_variable].lower_bound
+    pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id].lower_bound
     }
 
-    pub fn get_upper_bound(&self, integer_variable: DomainId) -> i32 {
-        self.domains[integer_variable].upper_bound
+    pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id].upper_bound
     }
 
-    pub fn get_assigned_value(&self, integer_variable: DomainId) -> i32 {
-        pumpkin_assert_simple!(self.is_integer_variable_assigned(integer_variable));
-        self.domains[integer_variable].lower_bound
+    pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
+        pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
+        self.domains[domain_id].lower_bound
     }
 
-    pub fn get_lower_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
+    pub fn get_lower_bound_predicate(&self, domain_id: DomainId) -> Predicate {
         Predicate::LowerBound {
-            integer_variable,
-            lower_bound: self.get_lower_bound(integer_variable),
+            domain_id,
+            lower_bound: self.get_lower_bound(domain_id),
         }
     }
 
-    pub fn get_upper_bound_predicate(&self, integer_variable: DomainId) -> Predicate {
-        let upper_bound = self.get_upper_bound(integer_variable);
+    pub fn get_upper_bound_predicate(&self, domain_id: DomainId) -> Predicate {
+        let upper_bound = self.get_upper_bound(domain_id);
         Predicate::UpperBound {
-            integer_variable,
+            domain_id,
             upper_bound,
         }
     }
 
     pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
-        integer_variables: I,
+        domain_ids: I,
     ) -> Vec<Predicate> {
-        integer_variables
+        domain_ids
             .map(|i| self.get_lower_bound_predicate(*i))
             .collect()
     }
 
     pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
-        integer_variables: I,
+        domain_ids: I,
     ) -> Vec<Predicate> {
-        integer_variables
+        domain_ids
             .map(|i| self.get_upper_bound_predicate(*i))
             .collect()
     }
 
     pub fn get_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
-        integer_variables: I,
+        domain_ids: I,
     ) -> Vec<Predicate> {
-        integer_variables
-            .flat_map(|integer_variable| {
+        domain_ids
+            .flat_map(|domain_id| {
                 [
-                    self.get_lower_bound_predicate(*integer_variable),
-                    self.get_upper_bound_predicate(*integer_variable),
+                    self.get_lower_bound_predicate(*domain_id),
+                    self.get_upper_bound_predicate(*domain_id),
                 ]
             })
             .collect()
     }
 
-    pub fn is_value_in_domain(&self, integer_variable: DomainId, value: i32) -> bool {
+    pub fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
         //recall that the data structure is lazy
         //  so we first need to check whether the value falls within the bounds,
         //  and only then check the is_value_in_domain vector
-        self.get_lower_bound(integer_variable) <= value
-            && value <= self.get_upper_bound(integer_variable)
-            && self.domains[integer_variable].is_value_in_domain[value as usize]
+        self.get_lower_bound(domain_id) <= value
+            && value <= self.get_upper_bound(domain_id)
+            && self.domains[domain_id].is_value_in_domain[value as usize]
     }
 
-    pub fn is_integer_variable_assigned(&self, integer_variable: DomainId) -> bool {
-        self.get_lower_bound(integer_variable) == self.get_upper_bound(integer_variable)
+    pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
+        self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
     }
 
-    pub fn is_integer_variable_assigned_to_value(
-        &self,
-        integer_variable: DomainId,
-        value: i32,
-    ) -> bool {
-        self.is_integer_variable_assigned(integer_variable)
-            && self.get_lower_bound(integer_variable) == value
+    pub fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
+        self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
     }
 }
 
@@ -177,7 +172,7 @@ impl AssignmentsInteger {
 impl AssignmentsInteger {
     pub fn tighten_lower_bound(
         &mut self,
-        integer_variable: DomainId,
+        domain_id: DomainId,
         new_lower_bound: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
@@ -185,20 +180,20 @@ impl AssignmentsInteger {
             self.state.is_ok(),
             "Cannot tighten lower bound if state is not ok."
         );
-        pumpkin_assert_moderate!(new_lower_bound > self.get_lower_bound(integer_variable));
+        pumpkin_assert_moderate!(new_lower_bound > self.get_lower_bound(domain_id));
 
         let predicate = Predicate::LowerBound {
-            integer_variable,
+            domain_id,
             lower_bound: new_lower_bound,
         };
 
-        if new_lower_bound > self.get_upper_bound(integer_variable) {
+        if new_lower_bound > self.get_upper_bound(domain_id) {
             self.state = AssignmentsIntegerInternalState::Conflict;
             return DomainOperationOutcome::Failure;
         }
 
-        let old_lower_bound = self.get_lower_bound(integer_variable);
-        let old_upper_bound = self.get_upper_bound(integer_variable);
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
 
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
@@ -207,16 +202,15 @@ impl AssignmentsInteger {
             propagator_reason,
         });
 
-        self.domains[integer_variable].lower_bound = new_lower_bound;
+        self.domains[domain_id].lower_bound = new_lower_bound;
 
         if old_lower_bound < new_lower_bound {
             self.events
-                .event_occurred(DomainEvent::LowerBound, integer_variable);
+                .event_occurred(DomainEvent::LowerBound, domain_id);
         }
 
-        if self.is_integer_variable_assigned(integer_variable) {
-            self.events
-                .event_occurred(DomainEvent::Assign, integer_variable);
+        if self.is_domain_assigned(domain_id) {
+            self.events.event_occurred(DomainEvent::Assign, domain_id);
         }
 
         DomainOperationOutcome::Success
@@ -224,7 +218,7 @@ impl AssignmentsInteger {
 
     pub fn tighten_upper_bound(
         &mut self,
-        integer_variable: DomainId,
+        domain_id: DomainId,
         new_upper_bound: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
@@ -232,20 +226,20 @@ impl AssignmentsInteger {
             self.state.is_ok(),
             "Cannot tighten upper if state is not ok."
         );
-        pumpkin_assert_moderate!(new_upper_bound < self.get_upper_bound(integer_variable));
+        pumpkin_assert_moderate!(new_upper_bound < self.get_upper_bound(domain_id));
 
         let predicate = Predicate::UpperBound {
-            integer_variable,
+            domain_id,
             upper_bound: new_upper_bound,
         };
 
-        if new_upper_bound < self.get_lower_bound(integer_variable) {
+        if new_upper_bound < self.get_lower_bound(domain_id) {
             self.state = AssignmentsIntegerInternalState::Conflict;
             return DomainOperationOutcome::Failure;
         }
 
-        let old_lower_bound = self.get_lower_bound(integer_variable);
-        let old_upper_bound = self.get_upper_bound(integer_variable);
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
 
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
@@ -254,16 +248,15 @@ impl AssignmentsInteger {
             propagator_reason,
         });
 
-        self.domains[integer_variable].upper_bound = new_upper_bound;
+        self.domains[domain_id].upper_bound = new_upper_bound;
 
         if old_upper_bound > new_upper_bound {
             self.events
-                .event_occurred(DomainEvent::UpperBound, integer_variable);
+                .event_occurred(DomainEvent::UpperBound, domain_id);
         }
 
-        if self.is_integer_variable_assigned(integer_variable) {
-            self.events
-                .event_occurred(DomainEvent::Assign, integer_variable);
+        if self.is_domain_assigned(domain_id) {
+            self.events.event_occurred(DomainEvent::Assign, domain_id);
         }
 
         DomainOperationOutcome::Success
@@ -271,7 +264,7 @@ impl AssignmentsInteger {
 
     pub fn make_assignment(
         &mut self,
-        integer_variable: DomainId,
+        domain_id: DomainId,
         assigned_value: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
@@ -279,23 +272,21 @@ impl AssignmentsInteger {
             self.state.is_ok(),
             "Cannot make assignment if state is not ok."
         );
-        pumpkin_assert_moderate!(
-            !self.is_integer_variable_assigned_to_value(integer_variable, assigned_value)
-        );
+        pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
 
-        if !self.is_value_in_domain(integer_variable, assigned_value) {
+        if !self.is_value_in_domain(domain_id, assigned_value) {
             self.state = AssignmentsIntegerInternalState::Conflict;
             return DomainOperationOutcome::Failure;
         }
 
         //only tighten the lower bound if needed
-        if self.get_lower_bound(integer_variable) < assigned_value {
-            self.tighten_lower_bound(integer_variable, assigned_value, propagator_reason);
+        if self.get_lower_bound(domain_id) < assigned_value {
+            self.tighten_lower_bound(domain_id, assigned_value, propagator_reason);
         }
 
         //only tighten the uper bound if needed
-        if self.get_upper_bound(integer_variable) > assigned_value {
-            self.tighten_upper_bound(integer_variable, assigned_value, propagator_reason);
+        if self.get_upper_bound(domain_id) > assigned_value {
+            self.tighten_upper_bound(domain_id, assigned_value, propagator_reason);
         }
 
         DomainOperationOutcome::Success
@@ -303,22 +294,22 @@ impl AssignmentsInteger {
 
     pub fn remove_value_from_domain(
         &mut self,
-        integer_variable: DomainId,
+        domain_id: DomainId,
         removed_value_from_domain: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> DomainOperationOutcome {
         let predicate = Predicate::NotEqual {
-            integer_variable,
+            domain_id,
             not_equal_constant: removed_value_from_domain,
         };
 
-        if !self.is_value_in_domain(integer_variable, removed_value_from_domain) {
+        if !self.is_value_in_domain(domain_id, removed_value_from_domain) {
             self.state = AssignmentsIntegerInternalState::Conflict;
             return DomainOperationOutcome::Failure;
         }
 
-        let old_lower_bound = self.get_lower_bound(integer_variable);
-        let old_upper_bound = self.get_upper_bound(integer_variable);
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
 
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
@@ -327,7 +318,7 @@ impl AssignmentsInteger {
             propagator_reason,
         });
 
-        let domain = &mut self.domains[integer_variable];
+        let domain = &mut self.domains[domain_id];
 
         domain.is_value_in_domain[removed_value_from_domain as usize] = false;
 
@@ -342,7 +333,7 @@ impl AssignmentsInteger {
             }
 
             self.events
-                .event_occurred(DomainEvent::LowerBound, integer_variable);
+                .event_occurred(DomainEvent::LowerBound, domain_id);
         }
         //adjust the upper bound
         if old_upper_bound == removed_value_from_domain {
@@ -355,11 +346,10 @@ impl AssignmentsInteger {
             }
 
             self.events
-                .event_occurred(DomainEvent::UpperBound, integer_variable);
+                .event_occurred(DomainEvent::UpperBound, domain_id);
         }
 
-        self.events
-            .event_occurred(DomainEvent::Any, integer_variable);
+        self.events.event_occurred(DomainEvent::Any, domain_id);
 
         DomainOperationOutcome::Success
     }
@@ -384,25 +374,21 @@ impl AssignmentsInteger {
 
         match *predicate {
             Predicate::LowerBound {
-                integer_variable,
+                domain_id,
                 lower_bound,
-            } => self.tighten_lower_bound(integer_variable, lower_bound, propagator_reason),
+            } => self.tighten_lower_bound(domain_id, lower_bound, propagator_reason),
             Predicate::UpperBound {
-                integer_variable,
+                domain_id,
                 upper_bound,
-            } => self.tighten_upper_bound(integer_variable, upper_bound, propagator_reason),
+            } => self.tighten_upper_bound(domain_id, upper_bound, propagator_reason),
             Predicate::NotEqual {
-                integer_variable,
+                domain_id,
                 not_equal_constant,
-            } => self.remove_value_from_domain(
-                integer_variable,
-                not_equal_constant,
-                propagator_reason,
-            ),
+            } => self.remove_value_from_domain(domain_id, not_equal_constant, propagator_reason),
             Predicate::Equal {
-                integer_variable,
+                domain_id,
                 equality_constant,
-            } => self.make_assignment(integer_variable, equality_constant, propagator_reason),
+            } => self.make_assignment(domain_id, equality_constant, propagator_reason),
         }
     }
 
@@ -414,21 +400,21 @@ impl AssignmentsInteger {
 
         match *predicate {
             Predicate::LowerBound {
-                integer_variable,
+                domain_id,
                 lower_bound,
-            } => self.get_lower_bound(integer_variable) >= lower_bound,
+            } => self.get_lower_bound(domain_id) >= lower_bound,
             Predicate::UpperBound {
-                integer_variable,
+                domain_id,
                 upper_bound,
-            } => self.get_upper_bound(integer_variable) <= upper_bound,
+            } => self.get_upper_bound(domain_id) <= upper_bound,
             Predicate::NotEqual {
-                integer_variable,
+                domain_id,
                 not_equal_constant,
-            } => !self.is_value_in_domain(integer_variable, not_equal_constant),
+            } => !self.is_value_in_domain(domain_id, not_equal_constant),
             Predicate::Equal {
-                integer_variable,
+                domain_id,
                 equality_constant,
-            } => self.is_integer_variable_assigned_to_value(integer_variable, equality_constant),
+            } => self.is_domain_assigned_to_value(domain_id, equality_constant),
         }
     }
 
@@ -442,21 +428,20 @@ impl AssignmentsInteger {
             );
 
             let popped_entry = self.trail.pop().unwrap();
-            let integer_variable = popped_entry.predicate.get_integer_variable();
+            let domain_id = popped_entry.predicate.get_domain();
 
             if let Predicate::NotEqual {
-                integer_variable: _,
+                domain_id: _,
                 not_equal_constant,
             } = popped_entry.predicate
             {
-                self.domains[integer_variable].is_value_in_domain[not_equal_constant as usize] =
-                    true;
+                self.domains[domain_id].is_value_in_domain[not_equal_constant as usize] = true;
             }
 
-            self.domains[integer_variable].lower_bound = popped_entry.old_lower_bound;
-            self.domains[integer_variable].upper_bound = popped_entry.old_upper_bound;
+            self.domains[domain_id].lower_bound = popped_entry.old_lower_bound;
+            self.domains[domain_id].upper_bound = popped_entry.old_upper_bound;
 
-            pumpkin_assert_moderate!(self.domains[integer_variable].debug_bounds_check());
+            pumpkin_assert_moderate!(self.domains[domain_id].debug_bounds_check());
         }
     }
 

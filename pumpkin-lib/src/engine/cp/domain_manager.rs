@@ -81,8 +81,7 @@ impl DomainManager<'_> {
     }
 
     pub fn is_domain_assigned(&self, domain: DomainId) -> bool {
-        self.assignments_integer
-            .is_integer_variable_assigned(domain)
+        self.assignments_integer.is_domain_assigned(domain)
     }
 }
 

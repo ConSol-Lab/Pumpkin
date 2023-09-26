@@ -4,7 +4,7 @@ use super::sat::SATEngineDataStructures;
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
     ConstraintProgrammingPropagator, GlucoseRestartStrategy, LearnedClauseManager,
-    LearnedClauseMinimiser, SATCPMediator, SatOptions,
+    LearnedClauseMinimiser, PropagationContext, SATCPMediator, SatOptions,
 };
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
@@ -12,7 +12,7 @@ use crate::basic_types::{
     Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
 };
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::{DebugHelper, PropagationContext, PropagatorConstructorContext, PropagatorId};
+use crate::engine::{DebugHelper, PropagatorConstructorContext, PropagatorId};
 use crate::propagators::clausal_propagators::{ClausalPropagatorBasic, ClausalPropagatorInterface};
 use crate::{
     pumpkin_assert_advanced, pumpkin_assert_extreme, pumpkin_assert_moderate, pumpkin_assert_simple,
@@ -205,7 +205,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
-        self.sat_cp_mediator.create_new_integer_variable(
+        self.sat_cp_mediator.create_new_domain(
             lower_bound,
             upper_bound,
             &mut self.clausal_propagator,
@@ -223,9 +223,9 @@ impl ConstraintSatisfactionSolver {
         &self.sat_data_structures.assignments_propositional
     }
 
-    pub fn get_lower_bound_literal(&self, integer_variable: DomainId, lower_bound: i32) -> Literal {
+    pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
         self.sat_cp_mediator
-            .get_lower_bound_literal(integer_variable, lower_bound)
+            .get_lower_bound_literal(domain, lower_bound)
     }
 
     pub fn get_integer_assignments(&self) -> &AssignmentsInteger {
@@ -633,7 +633,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
-        while !self.cp_data_structures.propagator_queue.is_empty() {
+        if !self.cp_data_structures.propagator_queue.is_empty() {
             let propagator_id = self.cp_data_structures.propagator_queue.pop();
             let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
             let mut context = PropagationContext::new(
@@ -644,7 +644,8 @@ impl ConstraintSatisfactionSolver {
             let propagation_status_cp = propagator.propagate(&mut context);
 
             match propagation_status_cp {
-                //if there was a conflict, then stop any further propagation and proceed to conflict analysis
+                // If there was a conflict, then stop any further propagation and proceed to
+                // conflict analysis.
                 Err(failure_reason) => {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.cp_data_structures.assignments_integer,
@@ -657,13 +658,10 @@ impl ConstraintSatisfactionSolver {
                 }
 
                 Ok(()) => {
-                    let propagation_happened = self
-                        .cp_data_structures
+                    self.cp_data_structures
                         .process_domain_events(&mut self.cp_propagators);
 
-                    if propagation_happened {
-                        return PropagationStatusOneStepCP::PropagationHappened;
-                    }
+                    return PropagationStatusOneStepCP::PropagationHappened;
                 }
             }
         }

@@ -16,8 +16,8 @@ use super::{
 
 pub struct SATCPMediator {
     synchronised_literal_to_predicate: Vec<(Predicate, Option<PropagatorVarId>)>, //todo explain
-    mapping_integer_variable_to_equality_literals: Vec<Vec<Literal>>,
-    mapping_integer_variable_to_lower_bound_literals: Vec<Vec<Literal>>,
+    mapping_domain_to_equality_literals: Vec<Vec<Literal>>,
+    mapping_domain_to_lower_bound_literals: Vec<Vec<Literal>>,
     mapping_literal_to_predicates: Vec<Vec<Predicate>>,
     cp_trail_synced_position: usize, // assignments_integer.trail[cp_trail_synced_position] is the next entry that needs to be synchronised with the propositional assignment trail
     sat_trail_synced_position: usize, // this is the sat equivalent of the above, i.e., assignments_propositional.trail[sat_trail_synced_position] is the next literal on the trail that needs to be synchronised with the integer trail
@@ -32,8 +32,8 @@ impl Default for SATCPMediator {
         SATCPMediator {
             synchronised_literal_to_predicate: vec![],
             mapping_literal_to_predicates: vec![], //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
-            mapping_integer_variable_to_equality_literals: vec![],
-            mapping_integer_variable_to_lower_bound_literals: vec![],
+            mapping_domain_to_equality_literals: vec![],
+            mapping_domain_to_lower_bound_literals: vec![],
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
             explanation_clause_manager: ExplanationClauseManager::default(),
@@ -93,12 +93,7 @@ impl SATCPMediator {
         //      and might be useful for a custom domain propagator
         //  this would also simplify the code below, no additional checks would be needed? Not sure.
 
-        if cp_data_structures
-            .assignments_integer
-            .num_integer_variables()
-            == 0
-            || cp_propagators.is_empty()
-        {
+        if cp_data_structures.assignments_integer.num_domains() == 0 || cp_propagators.is_empty() {
             self.sat_trail_synced_position = assignments_propositional.trail.len();
             return;
         }
@@ -188,7 +183,7 @@ impl SATCPMediator {
         PropositionalVariable::new(new_variable_index)
     }
 
-    pub fn create_new_integer_variable(
+    pub fn create_new_domain(
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
@@ -207,7 +202,7 @@ impl SATCPMediator {
         //	creating literals to capture predicates (domain operations)
         //	creating a mapping of predicates to their corresponding domain operations
 
-        let integer_variable = cp_data_structures
+        let domain_id = cp_data_structures
             .assignments_integer
             .grow(lower_bound, upper_bound);
 
@@ -228,7 +223,7 @@ impl SATCPMediator {
         //  create propositional literals for the remaining lower bound literals
         for i in (lower_bound + 1)..=upper_bound {
             let lower_bound_predicate = Predicate::LowerBound {
-                integer_variable,
+                domain_id,
                 lower_bound: i,
             };
 
@@ -275,14 +270,14 @@ impl SATCPMediator {
         self.add_predicate_information_to_propositional_variable(
             lower_bound_literals[(lower_bound + 1) as usize].get_propositional_variable(),
             Predicate::NotEqual {
-                integer_variable,
+                domain_id,
                 not_equal_constant: lower_bound,
             },
         );
 
         for i in (lower_bound + 1)..upper_bound {
             let equality_predicate = Predicate::Equal {
-                integer_variable,
+                domain_id,
                 equality_constant: i,
             };
 
@@ -302,7 +297,7 @@ impl SATCPMediator {
             self.add_predicate_information_to_propositional_variable(
                 lower_bound_literals[upper_bound as usize].get_propositional_variable(),
                 Predicate::Equal {
-                    integer_variable,
+                    domain_id,
                     equality_constant: upper_bound,
                 },
             );
@@ -335,13 +330,13 @@ impl SATCPMediator {
             );
         }
 
-        self.mapping_integer_variable_to_lower_bound_literals
+        self.mapping_domain_to_lower_bound_literals
             .push(lower_bound_literals);
 
-        self.mapping_integer_variable_to_equality_literals
+        self.mapping_domain_to_equality_literals
             .push(equality_literals);
 
-        integer_variable
+        domain_id
     }
 
     pub fn add_predicate_information_to_propositional_variable(
@@ -392,65 +387,52 @@ impl SATCPMediator {
 
 //methods for getting simple information on the interface of SAT and CP
 impl SATCPMediator {
-    pub fn get_lower_bound_literal(&self, integer_variable: DomainId, lower_bound: i32) -> Literal {
-        if lower_bound as usize
-            >= self.mapping_integer_variable_to_lower_bound_literals[integer_variable].len()
-        {
+    pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
+        if lower_bound as usize >= self.mapping_domain_to_lower_bound_literals[domain].len() {
             self.false_literal
         } else if lower_bound.is_negative() {
             self.true_literal
         } else {
-            self.mapping_integer_variable_to_lower_bound_literals[integer_variable]
-                [lower_bound as usize]
+            self.mapping_domain_to_lower_bound_literals[domain][lower_bound as usize]
         }
     }
 
-    pub fn get_upper_bound_literal(&self, integer_variable: DomainId, upper_bound: i32) -> Literal {
-        !self.get_lower_bound_literal(integer_variable, upper_bound + 1)
+    pub fn get_upper_bound_literal(&self, domain: DomainId, upper_bound: i32) -> Literal {
+        !self.get_lower_bound_literal(domain, upper_bound + 1)
     }
 
-    pub fn get_equality_literal(
-        &self,
-        integer_variable: DomainId,
-        equality_constant: i32,
-    ) -> Literal {
-        if equality_constant as usize
-            >= self.mapping_integer_variable_to_equality_literals[integer_variable].len()
+    pub fn get_equality_literal(&self, domain: DomainId, equality_constant: i32) -> Literal {
+        if equality_constant as usize >= self.mapping_domain_to_equality_literals[domain].len()
             || equality_constant.is_negative()
         {
             self.false_literal
         } else {
-            self.mapping_integer_variable_to_equality_literals[integer_variable]
-                [equality_constant as usize]
+            self.mapping_domain_to_equality_literals[domain][equality_constant as usize]
         }
     }
 
-    pub fn get_inequality_literal(
-        &self,
-        integer_variable: DomainId,
-        not_equal_constant: i32,
-    ) -> Literal {
-        !self.get_equality_literal(integer_variable, not_equal_constant)
+    pub fn get_inequality_literal(&self, domain: DomainId, not_equal_constant: i32) -> Literal {
+        !self.get_equality_literal(domain, not_equal_constant)
     }
 
     pub fn get_predicate_literal(&self, predicate: Predicate) -> Literal {
         match predicate {
             Predicate::LowerBound {
-                integer_variable,
+                domain_id,
                 lower_bound,
-            } => self.get_lower_bound_literal(integer_variable, lower_bound),
+            } => self.get_lower_bound_literal(domain_id, lower_bound),
             Predicate::UpperBound {
-                integer_variable,
+                domain_id,
                 upper_bound,
-            } => self.get_upper_bound_literal(integer_variable, upper_bound),
+            } => self.get_upper_bound_literal(domain_id, upper_bound),
             Predicate::NotEqual {
-                integer_variable,
+                domain_id,
                 not_equal_constant,
-            } => self.get_inequality_literal(integer_variable, not_equal_constant),
+            } => self.get_inequality_literal(domain_id, not_equal_constant),
             Predicate::Equal {
-                integer_variable,
+                domain_id,
                 equality_constant,
-            } => self.get_equality_literal(integer_variable, equality_constant),
+            } => self.get_equality_literal(domain_id, equality_constant),
         }
     }
 
@@ -566,22 +548,16 @@ impl SATCPMediator {
 
     fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
         pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables() as usize
-                == self.mapping_integer_variable_to_lower_bound_literals.len()
+            cp_data_structures.assignments_integer.num_domains() as usize
+                == self.mapping_domain_to_lower_bound_literals.len()
         );
         pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables() as usize
-                == self.mapping_integer_variable_to_equality_literals.len()
+            cp_data_structures.assignments_integer.num_domains() as usize
+                == self.mapping_domain_to_equality_literals.len()
         );
         pumpkin_assert_simple!(
-            cp_data_structures
-                .assignments_integer
-                .num_integer_variables()
-                == cp_data_structures.watch_list_cp.num_integer_variables()
+            cp_data_structures.assignments_integer.num_domains()
+                == cp_data_structures.watch_list_cp.num_domains()
         );
         true
     }

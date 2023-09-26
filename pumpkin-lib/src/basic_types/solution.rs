@@ -18,7 +18,7 @@ impl Solution {
         let mut truth_values =
             vec![true; assignments_propositional.num_propositional_variables() as usize];
 
-        let mut integer_values = vec![0; assignments_integer.num_integer_variables() as usize];
+        let mut integer_values = vec![0; assignments_integer.num_domains() as usize];
 
         Solution::update_propositional_values(&mut truth_values, assignments_propositional);
 
@@ -34,7 +34,7 @@ impl Solution {
         self.truth_values.len()
     }
 
-    pub fn num_integer_variables(&self) -> usize {
+    pub fn num_domains(&self) -> usize {
         self.integer_values.len()
     }
 
@@ -49,7 +49,7 @@ impl Solution {
         );
 
         pumpkin_assert_moderate!(
-            self.integer_values.len() <= assignments_integer.num_integer_variables() as usize
+            self.integer_values.len() <= assignments_integer.num_domains() as usize
         );
 
         //it could be that more variables have been added to the problem since last this time struct has seen a solution
@@ -64,9 +64,9 @@ impl Solution {
             );
         }
 
-        if self.integer_values.len() < assignments_integer.num_integer_variables() as usize {
+        if self.integer_values.len() < assignments_integer.num_domains() as usize {
             self.integer_values
-                .resize(assignments_integer.num_integer_variables() as usize, 0);
+                .resize(assignments_integer.num_domains() as usize, 0);
         }
 
         Solution::update_propositional_values(&mut self.truth_values, assignments_propositional);
@@ -96,21 +96,20 @@ impl Solution {
     }
 
     fn update_integer_values(integer_values: &mut [i32], assignments_integer: &AssignmentsInteger) {
-        for integer_variable in assignments_integer.get_integer_variables_variables() {
+        for domain in assignments_integer.get_domains() {
             pumpkin_assert_simple!(
-                assignments_integer.is_integer_variable_assigned(integer_variable),
+                assignments_integer.is_domain_assigned(domain),
                 "The solution struct expects that all integer variables are assigned."
             );
-            integer_values[integer_variable.id as usize] =
-                assignments_integer.get_assigned_value(integer_variable);
+            integer_values[domain.id as usize] = assignments_integer.get_assigned_value(domain);
         }
     }
 }
 
 impl std::ops::Index<DomainId> for Solution {
     type Output = i32;
-    fn index(&self, integer_variable: DomainId) -> &i32 {
-        &self.integer_values[integer_variable]
+    fn index(&self, domain: DomainId) -> &i32 {
+        &self.integer_values[domain]
     }
 }
 

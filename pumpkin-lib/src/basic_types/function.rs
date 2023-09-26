@@ -43,8 +43,8 @@ impl Function {
         }
     }
 
-    pub fn add_weighted_integer(&mut self, integer_variable: DomainId, weight: u64) {
-        *self.weighted_integers.entry(integer_variable).or_insert(0) += weight;
+    pub fn add_weighted_integer(&mut self, domain_id: DomainId, weight: u64) {
+        *self.weighted_integers.entry(domain_id).or_insert(0) += weight;
     }
 
     pub fn add_constant_term(&mut self, value: u64) {
@@ -79,9 +79,9 @@ impl Function {
         }
         //add the contribution of the integer part
         for term in self.get_weighted_integers() {
-            let integer_variable = *term.0;
+            let domain_id = *term.0;
             let weight = *term.1;
-            value += weight * solution[integer_variable] as u64;
+            value += weight * solution[domain_id] as u64;
         }
         value
     }
@@ -101,12 +101,10 @@ impl Function {
         }
         //add the contribution of the integer part
         for term in self.get_weighted_integers() {
-            let integer_variable = *term.0;
+            let domain_id = *term.0;
             let weight = *term.1;
-            pumpkin_assert_moderate!(
-                assignments_integer.is_integer_variable_assigned(integer_variable)
-            );
-            value += weight * assignments_integer.get_assigned_value(integer_variable) as u64;
+            pumpkin_assert_moderate!(assignments_integer.is_domain_assigned(domain_id));
+            value += weight * assignments_integer.get_assigned_value(domain_id) as u64;
         }
         value
     }
@@ -124,20 +122,20 @@ impl Function {
             .collect();
 
         for term in self.get_weighted_integers() {
-            let integer_variable = *term.0;
+            let domain_id = *term.0;
             let weight = *term.1;
 
             let lower_bound = csp_solver
                 .get_integer_assignments()
-                .get_lower_bound(integer_variable);
+                .get_lower_bound(domain_id);
             let upper_bound = csp_solver
                 .get_integer_assignments()
-                .get_upper_bound(integer_variable);
+                .get_upper_bound(domain_id);
 
             //note that we only needs lower bound literals starting from lower_bound+1
             //  the literals before those contribute to the objective function but not in a way that can be changed
             for i in (lower_bound + 1)..upper_bound {
-                let literal = csp_solver.get_lower_bound_literal(integer_variable, i);
+                let literal = csp_solver.get_lower_bound_literal(domain_id, i);
                 weighted_literals.push(WeightedLiteral { literal, weight });
             }
         }
@@ -154,6 +152,6 @@ impl Function {
 
 #[derive(Clone)]
 pub struct WeightedInteger {
-    pub integer_variable: DomainId,
+    pub domain_id: DomainId,
     pub weight: u64,
 }

@@ -31,7 +31,7 @@ impl WatchListCP {
         self.watchers.push(WatcherCP::default());
     }
 
-    pub fn num_integer_variables(&self) -> u32 {
+    pub fn num_domains(&self) -> u32 {
         self.watchers.len() as u32
     }
 
