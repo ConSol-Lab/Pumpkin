@@ -49,6 +49,14 @@ impl TestSolver {
         self.assignment.is_value_in_domain(var, value)
     }
 
+    pub fn lower_bound(&self, var: DomainId) -> i32 {
+        self.assignment.get_lower_bound(var)
+    }
+
+    pub fn upper_bound(&self, var: DomainId) -> i32 {
+        self.assignment.get_upper_bound(var)
+    }
+
     pub fn propagate(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
         let mut context = PropagationContext::new(&mut self.assignment, propagator.id);
         propagator.propagator.propagate(&mut context)

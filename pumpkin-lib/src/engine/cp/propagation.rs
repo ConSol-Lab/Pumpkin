@@ -16,6 +16,10 @@ impl LocalId {
     pub const fn from(value: u32) -> Self {
         LocalId(value)
     }
+
+    pub fn unpack(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for LocalId {
@@ -184,6 +188,24 @@ impl PropagationContext<'_> {
     ) -> Result<(), EmptyDomain> {
         self.domain_manager.set_local_id(var.local_id);
         var.inner.remove(&mut self.domain_manager, value)
+    }
+
+    pub fn set_upper_bound<Var: IntVar>(
+        &mut self,
+        var: &PropagatorVariable<Var>,
+        bound: i32,
+    ) -> Result<(), EmptyDomain> {
+        self.domain_manager.set_local_id(var.local_id);
+        var.inner.set_upper_bound(&mut self.domain_manager, bound)
+    }
+
+    pub fn set_lower_bound<Var: IntVar>(
+        &mut self,
+        var: &PropagatorVariable<Var>,
+        bound: i32,
+    ) -> Result<(), EmptyDomain> {
+        self.domain_manager.set_local_id(var.local_id);
+        var.inner.set_lower_bound(&mut self.domain_manager, bound)
     }
 }
 
