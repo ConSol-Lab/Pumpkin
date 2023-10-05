@@ -72,4 +72,11 @@ impl TestSolver {
             .propagator
             .get_reason_for_propagation(&context, delta)
     }
+
+    pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {
+        let actual_lb = self.lower_bound(var);
+        let actual_ub = self.upper_bound(var);
+
+        assert_eq!((lb, ub), (actual_lb, actual_ub), "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]");
+    }
 }
