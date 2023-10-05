@@ -264,6 +264,7 @@ name = "pumpkin-lib"
 version = "0.1.0"
 dependencies = [
  "bitfield",
+ "env_logger",
  "log",
  "thiserror",
 ]

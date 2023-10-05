@@ -1,15 +1,11 @@
-//! A model for the BIBD problem. See the following:
-//! http://mathworld.wolfram.com/BlockDesign.html
-//! http://www.dcs.st-and.ac.uk/~ianm/CSPLib/prob/prob028/spec.html
-//!
 //! The BIBD(v, b, r, k, l) problem is the following:
 //! Find a binary matrix of `v` rows and `b` columns, such that each row sums to `r`, each column
 //! sums to `k`, and the dot product between any pair of distinct rows is `l`.
 
 use pumpkin_lib::{
-    basic_types::DomainId,
+    basic_types::{variables::IntVar, CSPSolverExecutionFlag},
     engine::ConstraintSatisfactionSolver,
-    propagators::{IntTimes, IntTimesArgs},
+    propagators::{IntTimes, IntTimesArgs, LinearLeq, LinearLeqArgs},
 };
 
 struct BIBD {
@@ -43,9 +39,18 @@ impl BIBD {
 }
 
 fn main() {
-    let Some(bibd) = BIBD::from_args() else {
-        eprintln!("Usage: {} <v> <b> <r> <k> <l>", std::env::args().nth(0).unwrap());
-        return;
+    env_logger::init();
+
+    // let Some(bibd) = BIBD::from_args() else {
+    //     eprintln!("Usage: {} <v> <b> <r> <k> <l>", std::env::args().nth(0).unwrap());
+    //     return;
+    // };
+    let bibd = BIBD {
+        v: 5,
+        b: 4,
+        r: 2,
+        k: 2,
+        l: 2,
     };
 
     let mut solver = ConstraintSatisfactionSolver::default();
@@ -59,7 +64,7 @@ fn main() {
 
     let pairwise_product = (0..bibd.v)
         .map(|_| {
-            (0..bibd.b)
+            (0..bibd.v)
                 .map(|_| {
                     (0..bibd.b)
                         .map(|_| solver.create_new_integer_variable(0, 1))
@@ -70,11 +75,11 @@ fn main() {
         .collect::<Vec<_>>();
 
     for row in matrix.iter() {
-        linear_eq(&mut solver, row, bibd.r);
+        linear_eq(&mut solver, row, bibd.r as i32);
     }
 
     for row in transpose(&matrix) {
-        linear_eq(&mut solver, &row, bibd.k);
+        linear_eq(&mut solver, &row, bibd.k as i32);
     }
 
     for r1 in 0..bibd.v as usize {
@@ -86,9 +91,50 @@ fn main() {
                     c: pairwise_product[r1][r2][col],
                 });
             }
-            // int_linear(m[i][j], IRT_EQ, l);
+            linear_leq(&mut solver, &pairwise_product[r1][r2], bibd.l as i32);
         }
     }
+
+    match solver.solve(i64::MAX) {
+        CSPSolverExecutionFlag::Feasible => {
+            let row_separator = format!("{}+", "+---".repeat(bibd.b as usize));
+
+            for row in matrix.iter() {
+                let line = row
+                    .iter()
+                    .map(|var| {
+                        if solver
+                            .get_integer_assignments()
+                            .get_assigned_value(var.clone())
+                            == 1
+                        {
+                            "| * ".to_string()
+                        } else {
+                            "|   ".to_string()
+                        }
+                    })
+                    .collect::<String>();
+
+                println!("{row_separator}\n{line}|");
+            }
+
+            println!("{row_separator}");
+        }
+
+        CSPSolverExecutionFlag::Infeasible => println!("UNSATISFIABLE"),
+        CSPSolverExecutionFlag::Timeout => println!("UNKNOWN"),
+    }
+}
+
+fn linear_leq<Var: IntVar + 'static>(
+    solver: &mut ConstraintSatisfactionSolver,
+    vars: &[Var],
+    c: i32,
+) {
+    solver.add_propagator::<LinearLeq<_>>(LinearLeqArgs {
+        x: vars.iter().cloned().collect(),
+        c,
+    });
 }
 
 fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {
@@ -104,6 +150,13 @@ fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {
         .collect()
 }
 
-fn linear_eq(_solver: &mut ConstraintSatisfactionSolver, _row: &[DomainId], _rhs: u32) {
-    todo!()
+fn linear_eq<Var: IntVar + 'static>(
+    solver: &mut ConstraintSatisfactionSolver,
+    row: &[Var],
+    rhs: i32,
+) {
+    linear_leq(solver, row, rhs);
+
+    let negated = row.iter().map(|var| var.scaled(-1)).collect::<Vec<_>>();
+    linear_leq(solver, &negated, -rhs);
 }
