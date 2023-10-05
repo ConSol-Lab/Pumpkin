@@ -125,11 +125,19 @@ where
     View: IntVar,
 {
     fn lower_bound(&self, domains: &DomainManager) -> i32 {
-        self.map(self.inner.lower_bound(domains))
+        if self.scale < 0 {
+            self.map(self.inner.upper_bound(domains))
+        } else {
+            self.map(self.inner.lower_bound(domains))
+        }
     }
 
     fn upper_bound(&self, domains: &DomainManager) -> i32 {
-        self.map(self.inner.upper_bound(domains))
+        if self.scale < 0 {
+            self.map(self.inner.lower_bound(domains))
+        } else {
+            self.map(self.inner.upper_bound(domains))
+        }
     }
 
     fn contains(&self, domains: &DomainManager, value: i32) -> bool {
@@ -139,21 +147,35 @@ where
     }
 
     fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        self.invert(value)
-            .ok_or(EmptyDomain)
-            .and_then(|v| self.inner.remove(domains, v))
+        if let Some(v) = self.invert(value) {
+            self.inner.remove(domains, v)
+        } else {
+            Ok(())
+        }
     }
 
     fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        self.invert(value)
-            .ok_or(EmptyDomain)
-            .and_then(|v| self.inner.set_lower_bound(domains, v))
+        let inverted = self
+            .invert(value)
+            .expect("handle case where the unscaled value is not integer");
+
+        if self.scale >= 0 {
+            self.inner.set_lower_bound(domains, inverted)
+        } else {
+            self.inner.set_upper_bound(domains, inverted)
+        }
     }
 
     fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        self.invert(value)
-            .ok_or(EmptyDomain)
-            .and_then(|v| self.inner.set_upper_bound(domains, v))
+        let inverted = self
+            .invert(value)
+            .expect("handle case where the unscaled value is not integer");
+
+        if self.scale >= 0 {
+            self.inner.set_upper_bound(domains, inverted)
+        } else {
+            self.inner.set_lower_bound(domains, inverted)
+        }
     }
 
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
@@ -171,8 +193,20 @@ where
     fn unpack_delta(&self, delta: Delta) -> DomainChange {
         match self.inner.unpack_delta(delta) {
             DomainChange::Removal(value) => DomainChange::Removal(self.map(value)),
-            DomainChange::LowerBound(_) => todo!(),
-            DomainChange::UpperBound(_) => todo!(),
+            DomainChange::LowerBound(lower_bound) => {
+                if self.scale >= 0 {
+                    DomainChange::LowerBound(self.map(lower_bound))
+                } else {
+                    DomainChange::UpperBound(self.map(lower_bound))
+                }
+            }
+            DomainChange::UpperBound(upper_bound) => {
+                if self.scale >= 0 {
+                    DomainChange::UpperBound(self.map(upper_bound))
+                } else {
+                    DomainChange::LowerBound(self.map(upper_bound))
+                }
+            }
         }
     }
 
