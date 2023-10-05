@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
-    conjunction,
+    basic_types::{variables::IntVar, Predicate, PropagationStatusCP, PropositionalConjunction},
     engine::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
         LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
+    predicate,
 };
 
 /// A bounds-consistent propagator for maintaining the constraint `a * b = c`. The propagator
@@ -14,7 +16,7 @@ pub struct IntTimes<VA, VB, VC> {
     b: PropagatorVariable<VB>,
     c: PropagatorVariable<VC>,
 
-    propagations: [Vec<[i32; 2]>; 3],
+    propagations: [HashMap<DomainChange, [Predicate; 2]>; 3],
 }
 
 pub struct IntTimesArgs<VA, VB, VC> {
@@ -56,7 +58,80 @@ where
     VC: IntVar,
 {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        self.debug_propagate_from_scratch(context)
+        let a_min = context.lower_bound(&self.a);
+        let a_max = context.upper_bound(&self.a);
+        let b_min = context.lower_bound(&self.b);
+        let b_max = context.upper_bound(&self.b);
+        let c_min = context.lower_bound(&self.c);
+        let c_max = context.upper_bound(&self.c);
+
+        // TODO: Remove these assertions? Or do we handle these cases with views to simplify this
+        // implementation.
+        assert!(
+            a_min >= 0,
+            "The IntTimes propagator assumes a to be non-negative."
+        );
+        assert!(
+            b_min >= 0,
+            "The IntTimes propagator assumes b to be non-negative."
+        );
+
+        context.set_upper_bound(&self.c, a_max * b_max)?;
+        context.set_lower_bound(&self.c, a_min * b_min)?;
+
+        // a >= ceil(c.min / b.max)
+        if b_max >= 1 {
+            let bound = (c_min + b_max - 1) / b_max;
+            if context.lower_bound(&self.a) < bound {
+                context.set_lower_bound(&self.a, bound)?;
+
+                self.propagations[0].insert(
+                    DomainChange::LowerBound(bound),
+                    [predicate![self.c >= c_min], predicate![self.b <= b_max]],
+                );
+            }
+        }
+
+        // a <= floor(c.max / b.min)
+        if b_min >= 1 {
+            let bound = c_max / b_min;
+            if context.upper_bound(&self.a) > bound {
+                context.set_upper_bound(&self.a, bound)?;
+
+                self.propagations[0].insert(
+                    DomainChange::UpperBound(bound),
+                    [predicate![self.c <= c_max], predicate![self.b >= b_min]],
+                );
+            }
+        }
+
+        // b >= ceil(c.min / a.max)
+        if a_max >= 1 {
+            let bound = (c_min + a_max - 1) / a_max;
+
+            if context.lower_bound(&self.b) < bound {
+                context.set_lower_bound(&self.b, bound)?;
+                self.propagations[1].insert(
+                    DomainChange::LowerBound(bound),
+                    [predicate![self.c >= c_min], predicate![self.a <= a_max]],
+                );
+            }
+        }
+
+        // b <= floor(c.max / a.min)
+        if a_min >= 1 {
+            let bound = c_max / a_min;
+            if context.upper_bound(&self.b) > bound {
+                context.set_upper_bound(&self.b, bound)?;
+
+                self.propagations[1].insert(
+                    DomainChange::UpperBound(bound),
+                    [predicate![self.c <= c_max], predicate![self.a >= a_min]],
+                );
+            }
+        }
+
+        Ok(())
     }
 
     fn synchronise(&mut self, _context: &PropagationContext) {}
@@ -66,58 +141,22 @@ where
         _context: &PropagationContext,
         delta: Delta,
     ) -> PropositionalConjunction {
-        use DomainChange::*;
-
-        match delta.affected_local_id() {
-            ID_A => match self.a.unpack(delta) {
-                LowerBound(val) => {
-                    let [b_max, c_min] = self.propagations[ID_A.unpack() as usize][val as usize];
-                    conjunction!([self.b <= b_max] & [self.c >= c_min])
-                }
-
-                UpperBound(val) => {
-                    let [b_min, c_max] = self.propagations[ID_A.unpack() as usize][val as usize];
-                    conjunction!([self.b >= b_min] & [self.c <= c_max])
-                }
-
-                Removal(_) => unreachable!(),
-            },
-            ID_B => match self.b.unpack(delta) {
-                LowerBound(val) => {
-                    let [a_max, c_min] = self.propagations[ID_B.unpack() as usize][val as usize];
-                    conjunction!([self.a <= a_max] & [self.c >= c_min])
-                }
-
-                UpperBound(val) => {
-                    let [a_min, c_max] = self.propagations[ID_B.unpack() as usize][val as usize];
-                    conjunction!([self.a >= a_min] & [self.c <= c_max])
-                }
-
-                Removal(_) => unreachable!(),
-            },
-            ID_C => match self.c.unpack(delta) {
-                LowerBound(val) => {
-                    let [a_min, b_min] = self.propagations[ID_C.unpack() as usize][val as usize];
-                    conjunction!([self.a >= a_min] & [self.b >= b_min])
-                }
-
-                UpperBound(val) => {
-                    let [a_max, b_max] = self.propagations[ID_C.unpack() as usize][val as usize];
-                    conjunction!([self.a <= a_max] & [self.b <= b_max])
-                }
-
-                Removal(_) => unreachable!(),
-            },
+        let reason = match delta.affected_local_id() {
+            ID_A => self.propagations[0][&self.a.unpack(delta)],
+            ID_B => self.propagations[1][&self.b.unpack(delta)],
+            ID_C => self.propagations[2][&self.c.unpack(delta)],
             _ => unreachable!(),
-        }
+        };
+
+        PropositionalConjunction::from(reason.to_vec())
     }
 
     fn priority(&self) -> u32 {
-        todo!()
+        0
     }
 
     fn name(&self) -> &str {
-        todo!()
+        "IntTimes"
     }
 
     fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
