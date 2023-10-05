@@ -1,6 +1,6 @@
 use crate::engine::EmptyDomain;
 
-use super::PropositionalConjunction;
+use super::{Predicate, PropositionalConjunction};
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
@@ -22,5 +22,14 @@ impl From<EmptyDomain> for Inconsistency {
 impl From<PropositionalConjunction> for Inconsistency {
     fn from(value: PropositionalConjunction) -> Self {
         Inconsistency::Other(value)
+    }
+}
+
+impl<Slice> From<Slice> for Inconsistency
+where
+    Slice: AsRef<[Predicate]>,
+{
+    fn from(value: Slice) -> Self {
+        Inconsistency::Other(value.as_ref().to_vec().into())
     }
 }
