@@ -22,11 +22,14 @@ pub struct LinearLeqArgs<Var> {
     pub c: i32,
 }
 
+static mut LINEAR_COUNT: usize = 0;
+
 /// Propagator for the constraint `\sum x_i <= c`.
 pub struct LinearLeq<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
     propagations: Box<[HashMap<i32, PropositionalConjunction>]>,
+    id: usize,
 }
 
 impl<Var> CPPropagatorConstructor for LinearLeq<Var>
@@ -46,7 +49,7 @@ where
             .map(|(i, x_i)| {
                 context.register(
                     x_i.clone(),
-                    DomainEvent::UpperBound,
+                    DomainEvent::LowerBound,
                     LocalId::from(i as u32),
                 )
             })
@@ -54,10 +57,15 @@ where
 
         let propagations = (0..x.len()).map(|_| HashMap::new()).collect();
 
+        unsafe {
+            LINEAR_COUNT += 1;
+        }
+
         Box::new(LinearLeq {
             x,
             c: args.c,
             propagations,
+            id: unsafe { LINEAR_COUNT },
         })
     }
 }
@@ -87,8 +95,6 @@ where
             let bound = self.c - (lb_lhs - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
-                context.set_upper_bound(x_i, bound)?;
-
                 let reason = self
                     .x
                     .iter()
@@ -103,6 +109,7 @@ where
                     .collect::<Vec<_>>();
 
                 self.propagations[i].insert(bound, reason.into());
+                context.set_upper_bound(x_i, bound)?;
             }
         }
 
