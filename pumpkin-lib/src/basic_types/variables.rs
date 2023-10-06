@@ -225,7 +225,21 @@ where
 
 impl<Var: std::fmt::Debug> std::fmt::Debug for AffineView<Var> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} * {:?} + {}", self.scale, self.inner, self.offset)
+        if self.scale == -1 {
+            write!(f, "-")?;
+        } else if self.scale != 1 {
+            write!(f, "{} * ", self.scale)?;
+        }
+
+        write!(f, "({:?})", self.inner)?;
+
+        if self.offset < 0 {
+            write!(f, " - {}", -self.offset)?;
+        } else if self.offset > 0 {
+            write!(f, " + {}", self.offset)?;
+        }
+
+        Ok(())
     }
 }
 
