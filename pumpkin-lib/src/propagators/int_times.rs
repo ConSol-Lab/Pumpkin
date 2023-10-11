@@ -79,7 +79,7 @@ where
         let new_max_c = a_max * b_max;
         let new_min_c = a_min * b_min;
 
-        if context.upper_bound(&self.c) >= new_max_c {
+        if context.upper_bound(&self.c) > new_max_c {
             self.propagations[2].insert(
                 DomainChange::UpperBound(new_max_c),
                 [predicate![self.a <= a_max], predicate![self.b <= b_max]],
@@ -87,7 +87,7 @@ where
             context.set_upper_bound(&self.c, new_max_c)?;
         }
 
-        if context.lower_bound(&self.c) <= new_min_c {
+        if context.lower_bound(&self.c) < new_min_c {
             self.propagations[2].insert(
                 DomainChange::LowerBound(new_min_c),
                 [predicate![self.a >= a_min], predicate![self.b >= b_min]],
@@ -218,7 +218,7 @@ where
 
         // b <= floor(c.max / a.min)
         if a_min >= 1 {
-            context.set_upper_bound(&self.a, c_max / a_min)?;
+            context.set_upper_bound(&self.b, c_max / a_min)?;
         }
 
         Ok(())
