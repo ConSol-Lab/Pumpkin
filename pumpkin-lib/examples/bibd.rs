@@ -1,6 +1,6 @@
-//! The BIBD(v, b, r, k, l) problem is the following:
-//! Find a binary matrix of `v` rows and `b` columns, such that each row sums to `r`, each column
-//! sums to `k`, and the dot product between any pair of distinct rows is `l`.
+//! See:
+//! - https://en.wikipedia.org/wiki/Block_design#Pairwise_balanced_uniform_designs_(2-designs_or_BIBDs)
+//! - https://mathworld.wolfram.com/BlockDesign.html
 
 use pumpkin_lib::{
     basic_types::{variables::IntVar, CSPSolverExecutionFlag},
@@ -24,34 +24,33 @@ impl BIBD {
             .collect::<Result<Vec<u32>, _>>()
             .ok()?;
 
-        if args.len() != 5 {
+        if args.len() != 3 {
             return None;
         }
 
-        Some(Self {
-            v: args[0],
-            b: args[1],
-            r: args[2],
-            k: args[3],
-            l: args[4],
-        })
+        let v = args[0];
+        let k = args[1];
+        let l = args[2];
+
+        let r = l * (v - 1) / (k - 1);
+        let b = v * r / k;
+
+        Some(Self { v, b, r, k, l })
     }
 }
 
 fn main() {
     env_logger::init();
 
-    // let Some(bibd) = BIBD::from_args() else {
-    //     eprintln!("Usage: {} <v> <b> <r> <k> <l>", std::env::args().nth(0).unwrap());
-    //     return;
-    // };
-    let bibd = BIBD {
-        v: 5,
-        b: 4,
-        r: 2,
-        k: 2,
-        l: 2,
+    let Some(bibd) = BIBD::from_args() else {
+        eprintln!("Usage: {} <v> <k> <l>", std::env::args().nth(0).unwrap());
+        return;
     };
+
+    println!(
+        "bibd: (v = {}, b = {}, r = {}, k = {}, l = {}",
+        bibd.v, bibd.b, bibd.r, bibd.k, bibd.l
+    );
 
     let mut solver = ConstraintSatisfactionSolver::default();
     let matrix = (0..bibd.v)
