@@ -127,7 +127,10 @@ where
         let change = self.x[i as usize].unpack(delta);
 
         if let DomainChange::UpperBound(value) = change {
-            std::mem::take(self.propagations[i as usize].get_mut(&value).unwrap())
+            self.propagations[i as usize]
+                .get_mut(&value)
+                .unwrap()
+                .clone()
         } else {
             unreachable!()
         }
