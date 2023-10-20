@@ -2,6 +2,8 @@
 //! information unaltered, or apply transformations which can be performed without the need of
 //! constraints.
 
+use std::cmp::Ordering;
+
 use crate::engine::{
     Delta, DomainChange, DomainEvent, DomainManager, EmptyDomain, OpaqueDomainEvent, Watchers,
 };
@@ -233,10 +235,10 @@ impl<Var: std::fmt::Debug> std::fmt::Debug for AffineView<Var> {
 
         write!(f, "({:?})", self.inner)?;
 
-        if self.offset < 0 {
-            write!(f, " - {}", -self.offset)?;
-        } else if self.offset > 0 {
-            write!(f, " + {}", self.offset)?;
+        match self.offset.cmp(&0) {
+            Ordering::Less => write!(f, " - {}", -self.offset)?,
+            Ordering::Equal => {}
+            Ordering::Greater => write!(f, " + {}", self.offset)?,
         }
 
         Ok(())

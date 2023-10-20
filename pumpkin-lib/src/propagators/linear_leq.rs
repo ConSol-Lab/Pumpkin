@@ -41,7 +41,7 @@ where
     ) -> Box<dyn ConstraintProgrammingPropagator> {
         let x: Box<[_]> = args
             .x
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, x_i)| {
                 context.register(
