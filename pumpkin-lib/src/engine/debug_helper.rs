@@ -9,8 +9,7 @@ use crate::{
 };
 
 use super::{
-    constraint_satisfaction_solver::ClausalPropagator,
-    cp::{AssignmentsInteger, DomainOperationOutcome},
+    constraint_satisfaction_solver::ClausalPropagator, cp::AssignmentsInteger,
     ConstraintProgrammingPropagator, PropagatorId, SATEngineDataStructures,
 };
 
@@ -47,7 +46,7 @@ impl DebugHelper {
             let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {}", propagator.name(), propagator_id, failure_reason);
+                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {:?}", propagator.name(), propagator_id, failure_reason);
                 panic!();
             }
 
@@ -238,20 +237,15 @@ impl DebugHelper {
             let negated_predicate = !*predicate;
             let outcome = assignments_integer_clone.apply_predicate(&negated_predicate, None);
 
-            match outcome {
-                DomainOperationOutcome::Success => {
-                    let mut context =
-                        PropagationContext::new(&mut assignments_integer_clone, propagator_id);
-                    let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(&mut context);
+            if outcome.is_ok() {
+                let mut context =
+                    PropagationContext::new(&mut assignments_integer_clone, propagator_id);
+                let debug_propagation_status_cp =
+                    propagator.debug_propagate_from_scratch(&mut context);
 
-                    if debug_propagation_status_cp.is_ok() {
-                        found_nonconflicting_state_at_root = true;
-                        break;
-                    }
-                }
-                DomainOperationOutcome::Failure => {
-                    //do nothing
+                if debug_propagation_status_cp.is_ok() {
+                    found_nonconflicting_state_at_root = true;
+                    break;
                 }
             }
         }
@@ -285,10 +279,10 @@ impl DebugHelper {
         for predicate in predicates {
             let outcome = assignments_integer.apply_predicate(predicate, None);
             match outcome {
-                DomainOperationOutcome::Success => {
+                Ok(()) => {
                     //do nothing, everything is okay
                 }
-                DomainOperationOutcome::Failure => {
+                Err(_) => {
                     //trivial failure, this is unexpected
                     //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
                     debug!(

@@ -3,7 +3,7 @@
 
 use bitfield::{Bit, BitMut, BitRange};
 
-use crate::pumpkin_assert_moderate;
+use crate::{engine::PropagatorId, pumpkin_assert_moderate};
 
 use super::ClauseReference;
 
@@ -42,7 +42,9 @@ impl ConstraintReference {
         ConstraintReference { code: clause_id }
     }
 
-    pub fn create_propagator_reference(propagator_id: u32) -> ConstraintReference {
+    pub fn create_propagator_reference(propagator_id: PropagatorId) -> ConstraintReference {
+        let propagator_id = propagator_id.0;
+
         pumpkin_assert_moderate!(ConstraintReference::are_two_most_significant_bits_zero(
             propagator_id
         ));
@@ -74,16 +76,23 @@ impl ConstraintReference {
         <u32 as BitRange<u32>>::bit_range(&self.code, 31, 30) == 1
     }
 
-    pub fn get_propagator_id(&self) -> u32 {
+    pub fn get_propagator_id(&self) -> PropagatorId {
         pumpkin_assert_moderate!(self.is_propagator());
         let mut id = self.code;
         id.set_bit(30, false); //clear the 30th bit, the 31st bit is assumed to already be cleared
-        id
+        PropagatorId(id)
     }
 
     //for internal purposes, not to be called usually
     pub fn get_code(&self) -> u32 {
         self.code
+    }
+
+    /// Get the underlying clause reference. If this is not a clause reference, but a propagator,
+    /// this method will panic.
+    pub fn as_clause_reference(self) -> ClauseReference {
+        pumpkin_assert_moderate!(self.is_clause());
+        ClauseReference::create_allocated_clause_reference(self.code)
     }
 }
 
@@ -107,7 +116,10 @@ impl From<ClauseReference> for ConstraintReference {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::{ClauseReference, Literal};
+    use crate::{
+        basic_types::{ClauseReference, Literal},
+        engine::PropagatorId,
+    };
 
     use super::ConstraintReference;
 
@@ -133,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_propagator_conversion() {
-        let propagator_id: u32 = 10;
+        let propagator_id = PropagatorId(10);
         let constraint_reference = ConstraintReference::create_propagator_reference(propagator_id);
         assert!(!constraint_reference.is_clause());
         assert!(constraint_reference.is_propagator());

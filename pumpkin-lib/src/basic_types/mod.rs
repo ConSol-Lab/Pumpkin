@@ -38,7 +38,7 @@ pub use instance::Instance;
 pub use key_value_heap::KeyValueHeap;
 pub use literal::Literal;
 pub use predicate::{Predicate, PredicateConstructor};
-pub use propagation_status_cp::PropagationStatusCP;
+pub use propagation_status_cp::{Inconsistency, PropagationStatusCP};
 pub use propagation_status_cp_one_step::PropagationStatusOneStepCP;
 pub use propositional_conjunction::PropositionalConjunction;
 pub use propositional_variable::PropositionalVariable;

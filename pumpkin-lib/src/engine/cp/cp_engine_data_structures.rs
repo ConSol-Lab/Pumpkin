@@ -1,8 +1,8 @@
 use crate::basic_types::{DomainId, Predicate};
 
 use super::{
-    AssignmentsInteger, ConstraintProgrammingPropagator, DomainEvent, DomainOperationOutcome,
-    EnqueueDecision, PropagationContext, PropagatorQueue, PropagatorVarId, WatchListCP,
+    AssignmentsInteger, ConstraintProgrammingPropagator, DomainEvent, EmptyDomain, EnqueueDecision,
+    PropagationContext, PropagatorQueue, PropagatorVarId, WatchListCP,
 };
 
 pub struct CPEngineDataStructures {
@@ -76,9 +76,9 @@ impl CPEngineDataStructures {
         &mut self,
         predicate: &Predicate,
         propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         if self.does_predicate_hold(predicate) {
-            return DomainOperationOutcome::Success;
+            return Ok(());
         }
 
         match *predicate {

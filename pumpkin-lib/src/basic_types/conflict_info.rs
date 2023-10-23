@@ -1,4 +1,4 @@
-use super::{ClauseReference, Literal, PropositionalConjunction};
+use super::{ConstraintReference, Literal, PropositionalConjunction};
 
 pub enum ConflictInfo {
     //virtual binary clauses do not have a constraint reference
@@ -7,8 +7,9 @@ pub enum ConflictInfo {
         lit1: Literal,
         lit2: Literal,
     },
-    StandardClause {
-        clause_reference: ClauseReference,
+    Propagation {
+        reference: ConstraintReference,
+        literal: Literal,
     },
     Explanation {
         propositional_conjunction: PropositionalConjunction,

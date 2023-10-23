@@ -3,14 +3,14 @@ use crate::basic_types::{
     PropositionalVariable,
 };
 
-use crate::engine::{DebugHelper, Delta, PropagationContext, PropagatorId};
+use crate::engine::{Delta, PropagationContext, PropagatorId};
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
-use crate::{pumpkin_assert_advanced, pumpkin_assert_moderate, pumpkin_assert_simple};
+use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
 use super::constraint_satisfaction_solver::ClausalPropagator;
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
-    ConstraintProgrammingPropagator, ExplanationClauseManager, PropagatorVarId,
+    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager, PropagatorVarId,
     SATEngineDataStructures,
 };
 
@@ -49,7 +49,7 @@ impl SATCPMediator {
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
-    ) {
+    ) -> Option<ConflictInfo> {
         //for each entry on the integer trail, we now add the equivalent propositional representation on the propositional trail
         //  note that only one literal per predicate will be stored
         //      since the clausal propagator will propagate other literals to ensure that the meaning of the literal is respected
@@ -66,13 +66,21 @@ impl SATCPMediator {
             let literal = self.get_predicate_literal(entry.predicate);
 
             let constraint_reference =
-                ConstraintReference::create_propagator_reference(propagator_id.0);
+                ConstraintReference::create_propagator_reference(propagator_id);
 
-            assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
+            let conflict_info =
+                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
+
             self.synchronised_literal_to_predicate[literal] =
                 (entry.predicate, entry.propagator_reason);
+
+            if conflict_info.is_some() {
+                self.cp_trail_synced_position = cp_trail_pos + 1;
+                return conflict_info;
+            }
         }
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
+        None
     }
 
     pub fn synchronise_integer_trail_based_on_propositional_trail(
@@ -80,7 +88,7 @@ impl SATCPMediator {
         assignments_propositional: &AssignmentsPropositional,
         cp_data_structures: &mut CPEngineDataStructures,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
-    ) {
+    ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(
             self.cp_trail_synced_position == cp_data_structures.assignments_integer.num_trail_entries(),
             "We can only sychronise the propositional trail if the integer trail is already sychronised."
@@ -95,12 +103,12 @@ impl SATCPMediator {
 
         if cp_data_structures.assignments_integer.num_domains() == 0 || cp_propagators.is_empty() {
             self.sat_trail_synced_position = assignments_propositional.trail.len();
-            return;
+            return Ok(());
         }
 
         for sat_trail_pos in self.sat_trail_synced_position..assignments_propositional.trail.len() {
             let literal = assignments_propositional.trail[sat_trail_pos];
-            self.synchronise_literal(literal, cp_data_structures);
+            self.synchronise_literal(literal, cp_data_structures)?;
         }
         self.sat_trail_synced_position = assignments_propositional.trail.len();
         //the newly added entries to the trail do not need to be synchronise with the propositional trail
@@ -109,21 +117,25 @@ impl SATCPMediator {
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
 
         cp_data_structures.process_domain_events(cp_propagators);
+
+        Ok(())
     }
 
     fn synchronise_literal(
         &mut self,
         literal: Literal,
         cp_data_structures: &mut CPEngineDataStructures,
-    ) {
+    ) -> Result<(), EmptyDomain> {
         //recall that a literal may be linked to multiple predicates
         //  e.g., this may happen when in preprocessing two literals are detected to be equal
         //  so now we loop for each predicate and make necessary updates
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.mapping_literal_to_predicates[literal].len() {
             let predicate = self.mapping_literal_to_predicates[literal][j];
-            cp_data_structures.apply_predicate(&predicate, None);
+            cp_data_structures.apply_predicate(&predicate, None)?;
         }
+
+        Ok(())
     }
 
     pub fn synchronise(
@@ -334,7 +346,16 @@ impl SATCPMediator {
             .push(lower_bound_literals);
 
         self.mapping_domain_to_equality_literals
-            .push(equality_literals);
+            .push(equality_literals.clone());
+
+        // Add clause to select at least one equality.
+        clausal_propagator
+            .add_permanent_clause(
+                equality_literals,
+                &mut sat_data_structures.assignments_propositional,
+                &mut sat_data_structures.clause_allocator,
+            )
+            .expect("at least one equality must hold");
 
         domain_id
     }
@@ -440,8 +461,8 @@ impl SATCPMediator {
         &mut self,
         conflict_info: &ConflictInfo,
         sat_data_structures: &mut SATEngineDataStructures,
-        _cp_data_structures: &CPEngineDataStructures,
-        _cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        cp_data_structures: &mut CPEngineDataStructures,
+        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         match conflict_info {
             ConflictInfo::VirtualBinaryClause { lit1, lit2 } => self
@@ -450,7 +471,19 @@ impl SATCPMediator {
                     vec![*lit1, *lit2],
                     &mut sat_data_structures.clause_allocator,
                 ),
-            ConflictInfo::StandardClause { clause_reference } => *clause_reference,
+            ConflictInfo::Propagation { literal, reference } => {
+                if reference.is_clause() {
+                    reference.as_clause_reference()
+                } else {
+                    self.create_clause_from_propagation_reason(
+                        *literal,
+                        reference.get_propagator_id(),
+                        cp_data_structures,
+                        cp_propagators,
+                        sat_data_structures,
+                    )
+                }
+            }
             ConflictInfo::Explanation {
                 propositional_conjunction,
             } => {
@@ -508,42 +541,55 @@ impl SATCPMediator {
         }
         //Case 2: the literal was placed on the propositional trail while synchronising the CP trail with the propositional trail
         else {
-            let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
-            let propagator_id = constraint_reference.get_propagator_id();
-
-            let context = PropagationContext::new(
-                &mut cp_data_structures.assignments_integer,
-                PropagatorId(propagator_id),
-            );
-
-            let delta =
-                Delta::from_predicate(synchonised_entry.1.unwrap().variable, synchonised_entry.0);
-
-            let propagator = &mut cp_propagators[propagator_id as usize];
-            let reason = propagator.get_reason_for_propagation(&context, delta);
-
-            pumpkin_assert_advanced!(DebugHelper::debug_propagator_reason(
-                synchonised_entry.0,
-                &reason,
-                &cp_data_structures.assignments_integer,
-                propagator.as_ref(),
-                propagator_id
-            ));
-
-            //create the explanation clause
-            //  allocate a fresh vector each time might be a performance bottleneck
-            //  todo better ways
-            //important to keep propagated literal at the zero-th position
-            let explanation_literals = std::iter::once(propagated_literal)
-                .chain(reason.iter().map(|&p| !self.get_predicate_literal(p)))
-                .collect();
-
-            self.explanation_clause_manager
-                .add_explanation_clause_unchecked(
-                    explanation_literals,
-                    &mut sat_data_structures.clause_allocator,
-                )
+            self.create_clause_from_propagation_reason(
+                propagated_literal,
+                constraint_reference.get_propagator_id(),
+                cp_data_structures,
+                cp_propagators,
+                sat_data_structures,
+            )
         }
+    }
+
+    fn create_clause_from_propagation_reason(
+        &mut self,
+        propagated_literal: Literal,
+        propagator_id: PropagatorId,
+        cp_data_structures: &mut CPEngineDataStructures,
+        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        sat_data_structures: &mut SATEngineDataStructures,
+    ) -> ClauseReference {
+        let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
+        let delta =
+            Delta::from_predicate(synchonised_entry.1.unwrap().variable, synchonised_entry.0);
+
+        let context =
+            PropagationContext::new(&mut cp_data_structures.assignments_integer, propagator_id);
+
+        let propagator = &mut cp_propagators[propagator_id.0 as usize];
+        let reason = propagator.get_reason_for_propagation(&context, delta);
+
+        // pumpkin_assert_advanced!(DebugHelper::debug_propagator_reason(
+        //     synchonised_entry.0,
+        //     &reason,
+        //     &cp_data_structures.assignments_integer,
+        //     propagator.as_ref(),
+        //     propagator_id.0
+        // ));
+
+        //create the explanation clause
+        //  allocate a fresh vector each time might be a performance bottleneck
+        //  todo better ways
+        //important to keep propagated literal at the zero-th position
+        let explanation_literals = std::iter::once(propagated_literal)
+            .chain(reason.iter().map(|&p| !self.get_predicate_literal(p)))
+            .collect();
+
+        self.explanation_clause_manager
+            .add_explanation_clause_unchecked(
+                explanation_literals,
+                &mut sat_data_structures.clause_allocator,
+            )
     }
 
     fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {

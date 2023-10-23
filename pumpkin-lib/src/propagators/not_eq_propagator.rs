@@ -13,14 +13,16 @@ pub struct NotEq<VX, VY> {
 }
 
 pub struct NotEqArgs<VX, VY> {
-    x: VX,
-    y: VY,
+    pub x: VX,
+    pub y: VY,
 }
 
 const ID_X: LocalId = LocalId::from(0);
 const ID_Y: LocalId = LocalId::from(1);
 
-impl<VX: IntVar + 'static, VY: IntVar + 'static> CPPropagatorConstructor for NotEq<VX, VY> {
+impl<VX: IntVar + std::fmt::Debug + 'static, VY: IntVar + std::fmt::Debug + 'static>
+    CPPropagatorConstructor for NotEq<VX, VY>
+{
     type Args = NotEqArgs<VX, VY>;
 
     fn create(
@@ -34,7 +36,9 @@ impl<VX: IntVar + 'static, VY: IntVar + 'static> CPPropagatorConstructor for Not
     }
 }
 
-impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEq<VX, VY> {
+impl<VX: IntVar + std::fmt::Debug, VY: IntVar + std::fmt::Debug> ConstraintProgrammingPropagator
+    for NotEq<VX, VY>
+{
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         propagate_one_direction(&self.x, &self.y, context)?;
         propagate_one_direction(&self.y, &self.x, context)?;
@@ -82,13 +86,16 @@ impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEq<VX, VY> {
 
     fn debug_propagate_from_scratch(
         &self,
-        _context: &mut PropagationContext,
+        context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        todo!()
+        propagate_one_direction(&self.x, &self.y, context)?;
+        propagate_one_direction(&self.y, &self.x, context)?;
+
+        Ok(())
     }
 }
 
-fn propagate_one_direction<VX: IntVar, VY: IntVar>(
+fn propagate_one_direction<VX: IntVar, VY: IntVar + std::fmt::Debug>(
     x: &PropagatorVariable<VX>,
     y: &PropagatorVariable<VY>,
     context: &mut PropagationContext,
@@ -99,7 +106,7 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
 
     let value = context.lower_bound(x);
     if context.contains(y, value) {
-        context.remove(y, value);
+        context.remove(y, value)?;
     }
 
     Ok(())

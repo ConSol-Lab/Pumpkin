@@ -28,6 +28,12 @@ impl std::fmt::Display for DomainId {
     }
 }
 
+impl std::fmt::Debug for DomainId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "x{}", self.id)
+    }
+}
+
 pub struct IntegerVariableGeneratorIterator {
     current_index: u32,
     end_index: u32,

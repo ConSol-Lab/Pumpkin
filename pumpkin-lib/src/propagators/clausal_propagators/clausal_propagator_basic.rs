@@ -256,12 +256,9 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                 //	watched_clause[0] is assigned false -> conflict
 
                 //can propagate?
-                if assignments.is_literal_unassigned(watched_clause[0]) {
-                    assignments.enqueue_propagated_literal(
-                        watched_clause[0],
-                        watched_clause_reference.into(),
-                    );
-                } else {
+                let conflict_info = assignments
+                    .enqueue_propagated_literal(watched_clause[0], watched_clause_reference.into());
+                if let Some(conflict_info) = conflict_info {
                     //conflict detected, stop any further propagation and report the conflict
                     //  pumpkin_assert_advanced(state_.assignments_.IsAssignedFalse(watched_clause[0]), "Sanity check.");
                     //readd the remaining watchers to the watch list
@@ -272,9 +269,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                         end_index += 1;
                     }
                     self.watch_lists[!true_literal].truncate(end_index);
-                    return Err(ConflictInfo::StandardClause {
-                        clause_reference: watched_clause_reference,
-                    });
+                    return Err(conflict_info);
                 }
             }
             self.watch_lists[!true_literal].truncate(end_index);

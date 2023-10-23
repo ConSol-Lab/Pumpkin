@@ -3,8 +3,7 @@
 //! constraints.
 
 use crate::engine::{
-    Delta, DomainChange, DomainEvent, DomainManager, DomainOperationOutcome, OpaqueDomainEvent,
-    Watchers,
+    Delta, DomainChange, DomainEvent, DomainManager, EmptyDomain, OpaqueDomainEvent, Watchers,
 };
 
 use super::{DomainId, Predicate, PredicateConstructor};
@@ -20,13 +19,13 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     fn contains(&self, domains: &DomainManager, value: i32) -> bool;
 
     /// Remove a value from the domain of this variable.
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome;
+    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
 
     /// Tighten the lower bound of the domain of this variable.
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome;
+    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
 
     /// Tighten the upper bound of the domain of this variable.
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome;
+    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain event.
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent);
@@ -72,15 +71,15 @@ impl IntVar for DomainId {
         domains.is_value_in_domain(*self, value)
     }
 
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         domains.remove_value_from_domain(*self, value)
     }
 
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         domains.tighten_lower_bound(*self, value)
     }
 
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         domains.tighten_upper_bound(*self, value)
     }
 
@@ -139,22 +138,22 @@ where
             .unwrap_or(false)
     }
 
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         self.invert(value)
-            .map(|v| self.inner.remove(domains, v))
-            .unwrap_or(DomainOperationOutcome::Failure)
+            .ok_or(EmptyDomain)
+            .and_then(|v| self.inner.remove(domains, v))
     }
 
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         self.invert(value)
-            .map(|v| self.inner.set_lower_bound(domains, v))
-            .unwrap_or(DomainOperationOutcome::Failure)
+            .ok_or(EmptyDomain)
+            .and_then(|v| self.inner.set_lower_bound(domains, v))
     }
 
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> DomainOperationOutcome {
+    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
         self.invert(value)
-            .map(|v| self.inner.set_upper_bound(domains, v))
-            .unwrap_or(DomainOperationOutcome::Failure)
+            .ok_or(EmptyDomain)
+            .and_then(|v| self.inner.set_upper_bound(domains, v))
     }
 
     fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
@@ -190,22 +189,50 @@ where
     }
 }
 
-impl<Var: PredicateConstructor> PredicateConstructor for AffineView<Var> {
+impl<Var: std::fmt::Debug> std::fmt::Debug for AffineView<Var> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} * {:?} + {}", self.scale, self.inner, self.offset)
+    }
+}
+
+impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView<Var> {
     type Value = Var::Value;
 
-    fn lower_bound_predicate(&self, _bound: Self::Value) -> Predicate {
-        todo!("Handle case where invert() returns None.")
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        let inverted_bound = self
+            .invert(bound)
+            .expect("Handle case where invert() returns None.");
+
+        if self.scale < 0 {
+            self.inner.upper_bound_predicate(inverted_bound)
+        } else {
+            self.inner.lower_bound_predicate(inverted_bound)
+        }
     }
 
-    fn upper_bound_predicate(&self, _bound: Self::Value) -> Predicate {
-        todo!("Handle case where invert() returns None.")
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        let inverted_bound = self
+            .invert(bound)
+            .expect("Handle case where invert() returns None.");
+
+        if self.scale < 0 {
+            self.inner.lower_bound_predicate(inverted_bound)
+        } else {
+            self.inner.upper_bound_predicate(inverted_bound)
+        }
     }
 
-    fn equality_predicate(&self, _bound: Self::Value) -> Predicate {
-        todo!("Handle case where invert() returns None.")
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        let inverted_bound = self
+            .invert(bound)
+            .expect("Handle case where invert() returns None.");
+        self.inner.equality_predicate(inverted_bound)
     }
 
-    fn disequality_predicate(&self, _bound: Self::Value) -> Predicate {
-        todo!("Handle case where invert() returns None.")
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        let inverted_bound = self
+            .invert(bound)
+            .expect("Handle case where invert() returns None.");
+        self.inner.disequality_predicate(inverted_bound)
     }
 }

@@ -1,9 +1,6 @@
 use crate::basic_types::{DomainId, Predicate};
 
-use super::{
-    assignments_integer::DomainOperationOutcome, AssignmentsInteger, LocalId, PropagatorId,
-    PropagatorVarId,
-};
+use super::{AssignmentsInteger, EmptyDomain, LocalId, PropagatorId, PropagatorVarId};
 
 /// The domain manager is passed to the variables to allow them to access their domains inside
 /// propagators.
@@ -91,7 +88,7 @@ impl DomainManager<'_> {
         &mut self,
         domain: DomainId,
         new_lower_bound: i32,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         let reason = Some(self.propagator_var_id());
 
         self.assignments_integer
@@ -102,7 +99,7 @@ impl DomainManager<'_> {
         &mut self,
         domain: DomainId,
         new_upper_bound: i32,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         let reason = Some(self.propagator_var_id());
 
         self.assignments_integer
@@ -113,7 +110,7 @@ impl DomainManager<'_> {
         &mut self,
         domain: DomainId,
         assigned_value: i32,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         let reason = Some(self.propagator_var_id());
 
         self.assignments_integer
@@ -124,7 +121,7 @@ impl DomainManager<'_> {
         &mut self,
         domain: DomainId,
         removed_value_from_domain: i32,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         let reason = Some(self.propagator_var_id());
 
         self.assignments_integer

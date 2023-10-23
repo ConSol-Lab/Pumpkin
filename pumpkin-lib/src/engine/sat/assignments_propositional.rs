@@ -1,5 +1,6 @@
 use crate::basic_types::{
-    ConstraintReference, Literal, PropositionalVariable, PropositionalVariableGeneratorIterator,
+    ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
+    PropositionalVariableGeneratorIterator,
 };
 use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
@@ -185,8 +186,13 @@ impl AssignmentsPropositional {
         &mut self,
         true_literal: Literal,
         constraint_reference: ConstraintReference,
-    ) {
-        pumpkin_assert_simple!(self.is_literal_unassigned(true_literal));
+    ) -> Option<ConflictInfo> {
+        if self.is_literal_assigned_false(true_literal) {
+            return Some(ConflictInfo::Propagation {
+                literal: true_literal,
+                reference: constraint_reference,
+            });
+        }
 
         self.assignment_info[true_literal.get_propositional_variable()] =
             PropositionalAssignmentInfo::Assigned {
@@ -196,6 +202,8 @@ impl AssignmentsPropositional {
             };
 
         self.trail.push(true_literal);
+
+        None
     }
 
     pub fn undo_assignment(&mut self, variable: PropositionalVariable) {
@@ -217,11 +225,10 @@ impl AssignmentsPropositional {
         &mut self,
         propagated_literal: Literal,
         constraint_reference: ConstraintReference,
-    ) {
-        pumpkin_assert_simple!(!self.is_literal_assigned(propagated_literal));
+    ) -> Option<ConflictInfo> {
         pumpkin_assert_simple!(!constraint_reference.is_null());
 
-        self.make_assignment(propagated_literal, constraint_reference);
+        self.make_assignment(propagated_literal, constraint_reference)
     }
 
     pub fn synchronise(&mut self, new_decision_level: u32) {

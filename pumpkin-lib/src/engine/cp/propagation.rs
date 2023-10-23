@@ -5,9 +5,7 @@ use crate::basic_types::{
     PropositionalConjunction,
 };
 
-use super::{
-    AssignmentsInteger, DomainEvent, DomainManager, DomainOperationOutcome, WatchListCP, Watchers,
-};
+use super::{AssignmentsInteger, DomainEvent, DomainManager, EmptyDomain, WatchListCP, Watchers};
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
@@ -57,6 +55,12 @@ impl<T> IndexMut<PropagatorId> for Vec<T> {
 pub struct PropagatorVariable<Var> {
     inner: Var,
     local_id: LocalId,
+}
+
+impl<Var: std::fmt::Debug> std::fmt::Debug for PropagatorVariable<Var> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "var({}, {:?})", self.local_id, self.inner)
+    }
 }
 
 impl<Var: IntVar> PropagatorVariable<Var> {
@@ -177,7 +181,7 @@ impl PropagationContext<'_> {
         &mut self,
         var: &PropagatorVariable<Var>,
         value: i32,
-    ) -> DomainOperationOutcome {
+    ) -> Result<(), EmptyDomain> {
         self.domain_manager.set_local_id(var.local_id);
         var.inner.remove(&mut self.domain_manager, value)
     }

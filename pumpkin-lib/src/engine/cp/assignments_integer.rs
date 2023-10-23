@@ -7,7 +7,6 @@ use super::{event_sink::EventSink, DomainEvent, PropagatorId, PropagatorVarId};
 
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {
-    state: AssignmentsIntegerInternalState,
     current_decision_level: u32,
     trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail
     trail: Vec<ConstraintProgrammingTrailEntry>,
@@ -15,6 +14,9 @@ pub struct AssignmentsInteger {
 
     events: EventSink,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct EmptyDomain;
 
 impl AssignmentsInteger {
     pub fn increase_decision_level(&mut self) {
@@ -66,14 +68,16 @@ impl AssignmentsInteger {
     //note that this is an internal method that does _not_ allocate additional information necessary for the solver apart from the domain
     //when creating a new integer variable, use create_new_domain_id in the ConstraintSatisfactionSolver
     pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+        let id = DomainId {
+            id: self.num_domains(),
+        };
+
         self.domains
-            .push(IntegerDomainExplicit::new(lower_bound, upper_bound));
+            .push(IntegerDomainExplicit::new(lower_bound, upper_bound, id));
 
         self.events.grow();
 
-        DomainId {
-            id: self.num_domains() - 1,
-        }
+        id
     }
 
     //todo explain that it can return None
@@ -151,12 +155,8 @@ impl AssignmentsInteger {
     }
 
     pub fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
-        //recall that the data structure is lazy
-        //  so we first need to check whether the value falls within the bounds,
-        //  and only then check the is_value_in_domain vector
-        self.get_lower_bound(domain_id) <= value
-            && value <= self.get_upper_bound(domain_id)
-            && self.domains[domain_id].is_value_in_domain[value as usize]
+        let domain = &self.domains[domain_id];
+        domain.contains(value)
     }
 
     pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
@@ -175,138 +175,13 @@ impl AssignmentsInteger {
         domain_id: DomainId,
         new_lower_bound: i32,
         propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
-        pumpkin_assert_simple!(
-            self.state.is_ok(),
-            "Cannot tighten lower bound if state is not ok."
-        );
+    ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(new_lower_bound > self.get_lower_bound(domain_id));
 
         let predicate = Predicate::LowerBound {
             domain_id,
             lower_bound: new_lower_bound,
         };
-
-        if new_lower_bound > self.get_upper_bound(domain_id) {
-            self.state = AssignmentsIntegerInternalState::Conflict;
-            return DomainOperationOutcome::Failure;
-        }
-
-        let old_lower_bound = self.get_lower_bound(domain_id);
-        let old_upper_bound = self.get_upper_bound(domain_id);
-
-        self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate,
-            old_lower_bound,
-            old_upper_bound,
-            propagator_reason,
-        });
-
-        self.domains[domain_id].lower_bound = new_lower_bound;
-
-        if old_lower_bound < new_lower_bound {
-            self.events
-                .event_occurred(DomainEvent::LowerBound, domain_id);
-        }
-
-        if self.is_domain_assigned(domain_id) {
-            self.events.event_occurred(DomainEvent::Assign, domain_id);
-        }
-
-        DomainOperationOutcome::Success
-    }
-
-    pub fn tighten_upper_bound(
-        &mut self,
-        domain_id: DomainId,
-        new_upper_bound: i32,
-        propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
-        pumpkin_assert_simple!(
-            self.state.is_ok(),
-            "Cannot tighten upper if state is not ok."
-        );
-        pumpkin_assert_moderate!(new_upper_bound < self.get_upper_bound(domain_id));
-
-        let predicate = Predicate::UpperBound {
-            domain_id,
-            upper_bound: new_upper_bound,
-        };
-
-        if new_upper_bound < self.get_lower_bound(domain_id) {
-            self.state = AssignmentsIntegerInternalState::Conflict;
-            return DomainOperationOutcome::Failure;
-        }
-
-        let old_lower_bound = self.get_lower_bound(domain_id);
-        let old_upper_bound = self.get_upper_bound(domain_id);
-
-        self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate,
-            old_lower_bound,
-            old_upper_bound,
-            propagator_reason,
-        });
-
-        self.domains[domain_id].upper_bound = new_upper_bound;
-
-        if old_upper_bound > new_upper_bound {
-            self.events
-                .event_occurred(DomainEvent::UpperBound, domain_id);
-        }
-
-        if self.is_domain_assigned(domain_id) {
-            self.events.event_occurred(DomainEvent::Assign, domain_id);
-        }
-
-        DomainOperationOutcome::Success
-    }
-
-    pub fn make_assignment(
-        &mut self,
-        domain_id: DomainId,
-        assigned_value: i32,
-        propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
-        pumpkin_assert_simple!(
-            self.state.is_ok(),
-            "Cannot make assignment if state is not ok."
-        );
-        pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
-
-        if !self.is_value_in_domain(domain_id, assigned_value) {
-            self.state = AssignmentsIntegerInternalState::Conflict;
-            return DomainOperationOutcome::Failure;
-        }
-
-        //only tighten the lower bound if needed
-        if self.get_lower_bound(domain_id) < assigned_value {
-            self.tighten_lower_bound(domain_id, assigned_value, propagator_reason);
-        }
-
-        //only tighten the uper bound if needed
-        if self.get_upper_bound(domain_id) > assigned_value {
-            self.tighten_upper_bound(domain_id, assigned_value, propagator_reason);
-        }
-
-        DomainOperationOutcome::Success
-    }
-
-    pub fn remove_value_from_domain(
-        &mut self,
-        domain_id: DomainId,
-        removed_value_from_domain: i32,
-        propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
-        let predicate = Predicate::NotEqual {
-            domain_id,
-            not_equal_constant: removed_value_from_domain,
-        };
-
-        if !self.is_value_in_domain(domain_id, removed_value_from_domain) {
-            self.state = AssignmentsIntegerInternalState::Conflict;
-            return DomainOperationOutcome::Failure;
-        }
 
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
@@ -319,39 +194,86 @@ impl AssignmentsInteger {
         });
 
         let domain = &mut self.domains[domain_id];
+        domain.set_lower_bound(new_lower_bound, &mut self.events);
 
-        domain.is_value_in_domain[removed_value_from_domain as usize] = false;
+        domain.verify_consistency()
+    }
 
-        //adjust the lower bound
-        if old_lower_bound == removed_value_from_domain {
-            //set the lower bound to the next value
-            //  note that the lower bound might increase by more than one, if the values greater than 'not_equal_constant' are also not in the domain
-            while domain.is_value_in_domain[domain.lower_bound as usize] {
-                domain.lower_bound += 1;
+    pub fn tighten_upper_bound(
+        &mut self,
+        domain_id: DomainId,
+        new_upper_bound: i32,
+        propagator_reason: Option<PropagatorVarId>,
+    ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_moderate!(new_upper_bound < self.get_upper_bound(domain_id));
 
-                pumpkin_assert_moderate!(domain.debug_bounds_check());
-            }
+        let predicate = Predicate::UpperBound {
+            domain_id,
+            upper_bound: new_upper_bound,
+        };
 
-            self.events
-                .event_occurred(DomainEvent::LowerBound, domain_id);
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
+
+        self.trail.push(ConstraintProgrammingTrailEntry {
+            predicate,
+            old_lower_bound,
+            old_upper_bound,
+            propagator_reason,
+        });
+
+        let domain = &mut self.domains[domain_id];
+        domain.set_upper_bound(new_upper_bound, &mut self.events);
+
+        domain.verify_consistency()
+    }
+
+    pub fn make_assignment(
+        &mut self,
+        domain_id: DomainId,
+        assigned_value: i32,
+        propagator_reason: Option<PropagatorVarId>,
+    ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
+
+        //only tighten the lower bound if needed
+        if self.get_lower_bound(domain_id) < assigned_value {
+            self.tighten_lower_bound(domain_id, assigned_value, propagator_reason)?;
         }
-        //adjust the upper bound
-        if old_upper_bound == removed_value_from_domain {
-            //set the upper bound to the next value
-            //  note that the upper bound might increase by more than one, if the values lower than 'not_equal_constant' are also not in the domain
-            while domain.is_value_in_domain[domain.upper_bound as usize] {
-                domain.upper_bound -= 1;
 
-                pumpkin_assert_moderate!(domain.debug_bounds_check());
-            }
-
-            self.events
-                .event_occurred(DomainEvent::UpperBound, domain_id);
+        //only tighten the uper bound if needed
+        if self.get_upper_bound(domain_id) > assigned_value {
+            self.tighten_upper_bound(domain_id, assigned_value, propagator_reason)?;
         }
 
-        self.events.event_occurred(DomainEvent::Any, domain_id);
+        self.domains[domain_id].verify_consistency()
+    }
 
-        DomainOperationOutcome::Success
+    pub fn remove_value_from_domain(
+        &mut self,
+        domain_id: DomainId,
+        removed_value_from_domain: i32,
+        propagator_reason: Option<PropagatorVarId>,
+    ) -> Result<(), EmptyDomain> {
+        let predicate = Predicate::NotEqual {
+            domain_id,
+            not_equal_constant: removed_value_from_domain,
+        };
+
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
+
+        self.trail.push(ConstraintProgrammingTrailEntry {
+            predicate,
+            old_lower_bound,
+            old_upper_bound,
+            propagator_reason,
+        });
+
+        let domain = &mut self.domains[domain_id];
+        domain.remove_value(removed_value_from_domain, &mut self.events);
+
+        domain.verify_consistency()
     }
 
     //changes the domains according to the predicate
@@ -362,14 +284,9 @@ impl AssignmentsInteger {
         &mut self,
         predicate: &Predicate,
         propagator_reason: Option<PropagatorVarId>,
-    ) -> DomainOperationOutcome {
-        pumpkin_assert_simple!(
-            self.state.is_ok(),
-            "Cannot apply predicate after getting into a bad state."
-        );
-
+    ) -> Result<(), EmptyDomain> {
         if self.does_predicate_hold(predicate) {
-            return DomainOperationOutcome::Success;
+            return Ok(());
         }
 
         match *predicate {
@@ -393,11 +310,6 @@ impl AssignmentsInteger {
     }
 
     pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {
-        pumpkin_assert_simple!(
-            self.state.is_ok(),
-            "Cannot evaluate predicate after getting into a bad state."
-        );
-
         match *predicate {
             Predicate::LowerBound {
                 domain_id,
@@ -454,19 +366,6 @@ impl AssignmentsInteger {
         self.undo_trail(num_trail_entries_to_remove);
         self.current_decision_level = new_decision_level;
         self.trail_delimiter.truncate(new_decision_level as usize);
-
-        if self.is_conflict() {
-            self.restore_state_to_ok();
-        }
-    }
-
-    pub fn is_conflict(&self) -> bool {
-        self.state.is_conflict()
-    }
-
-    pub fn restore_state_to_ok(&mut self) {
-        pumpkin_assert_simple!(self.is_conflict());
-        self.state = AssignmentsIntegerInternalState::Ok;
     }
 }
 
@@ -478,69 +377,141 @@ pub struct ConstraintProgrammingTrailEntry {
     pub propagator_reason: Option<PropagatorVarId>, //stores the id of the propagator that made the assignment, only makes sense if a propagation took place, e.g., does _not_ make sense in the case of a decision or if the update was due to synchronisation from the propositional trail
 }
 
+/// This is the CP representation of a domain. It stores the individual values that are in the
+/// domain, alongside the current bounds. To support negative values, and to prevent allocating
+/// more memory than the size of the domain, an offset is determined which is used to index into
+/// the slice that keeps track of whether an individual value is in the domain.
+///
+/// When the domain is in an empty state, `lower_bound > upper_bound` and the state of the
+/// `is_value_in_domain` field is undefined.
 #[derive(Clone)]
 struct IntegerDomainExplicit {
-    lower_bound: i32, //note that even though we only support nonnegative domains, i32 are used over u32 for simplicity
+    id: DomainId,
+
+    lower_bound: i32,
     upper_bound: i32,
-    is_value_in_domain: Vec<bool>,
+
+    offset: i32,
+
+    is_value_in_domain: Box<[bool]>,
 }
 
 impl IntegerDomainExplicit {
-    pub fn new(lower_bound: i32, upper_bound: i32) -> IntegerDomainExplicit {
-        pumpkin_assert_simple!(
-            !lower_bound.is_negative() && !upper_bound.is_negative(),
-            "Currently we only support nonnegative domains."
-        );
-        pumpkin_assert_simple!(
-            upper_bound.is_positive(),
-            "In principle we could allocate integers with upper bound zero,
-            but for now we consider this an error."
-        );
+    pub fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
+        pumpkin_assert_simple!(lower_bound <= upper_bound, "Cannot create an empty domain.");
 
-        let mut is_value_in_domain = vec![true; (upper_bound + 1) as usize];
+        let size = upper_bound - lower_bound + 1;
+        let is_value_in_domain = vec![true; size as usize];
 
-        //values outside of the domain need to be marked as false
-        for value in is_value_in_domain.iter_mut().take(lower_bound as usize) {
-            *value = false;
-        }
+        let offset = -lower_bound;
 
         IntegerDomainExplicit {
+            id,
             lower_bound,
             upper_bound,
-            is_value_in_domain,
+            offset,
+            is_value_in_domain: is_value_in_domain.into(),
         }
+    }
+
+    fn contains(&self, value: i32) -> bool {
+        let idx = self.get_index(value);
+
+        self.lower_bound <= value && value <= self.upper_bound && self.is_value_in_domain[idx]
+    }
+
+    fn remove_value(&mut self, value: i32, events: &mut EventSink) {
+        if value < self.lower_bound || value > self.upper_bound {
+            return;
+        }
+
+        let idx = self.get_index(value);
+
+        if self.is_value_in_domain[idx] {
+            events.event_occurred(DomainEvent::Any, self.id);
+        }
+
+        self.is_value_in_domain[idx] = false;
+
+        self.update_lower_bound(events);
+        self.update_upper_bound(events);
+
+        if self.lower_bound == self.upper_bound {
+            events.event_occurred(DomainEvent::Assign, self.id);
+        }
+    }
+
+    fn set_upper_bound(&mut self, value: i32, events: &mut EventSink) {
+        if value >= self.upper_bound {
+            return;
+        }
+
+        events.event_occurred(DomainEvent::UpperBound, self.id);
+
+        self.upper_bound = value;
+        self.update_upper_bound(events);
+
+        if self.lower_bound == self.upper_bound {
+            events.event_occurred(DomainEvent::Assign, self.id);
+        }
+    }
+
+    fn set_lower_bound(&mut self, value: i32, events: &mut EventSink) {
+        if value <= self.lower_bound {
+            return;
+        }
+
+        events.event_occurred(DomainEvent::LowerBound, self.id);
+
+        self.lower_bound = value;
+        self.update_lower_bound(events);
+
+        if self.lower_bound == self.upper_bound {
+            events.event_occurred(DomainEvent::Assign, self.id);
+        }
+    }
+
+    fn update_lower_bound(&mut self, events: &mut EventSink) {
+        while self.get_index(self.lower_bound) < self.is_value_in_domain.len()
+            && !self.is_value_in_domain[self.get_index(self.lower_bound)]
+        {
+            events.event_occurred(DomainEvent::LowerBound, self.id);
+            self.lower_bound += 1;
+        }
+    }
+
+    fn update_upper_bound(&mut self, events: &mut EventSink) {
+        while self.upper_bound + self.offset >= 0
+            && !self.is_value_in_domain[self.get_index(self.upper_bound)]
+        {
+            events.event_occurred(DomainEvent::UpperBound, self.id);
+            self.upper_bound -= 1;
+        }
+    }
+
+    fn get_index(&self, value: i32) -> usize {
+        (value + self.offset) as usize
     }
 
     fn debug_bounds_check(&self) -> bool {
-        self.lower_bound <= self.upper_bound
-            && (self.lower_bound as usize) < self.is_value_in_domain.len()
+        // If the domain is empty, the lower bound will be greater than the upper bound.
+        if self.lower_bound > self.upper_bound {
+            true
+        } else {
+            (self.lower_bound as usize) < self.is_value_in_domain.len()
             && (self.upper_bound as usize) < self.is_value_in_domain.len()
             && self.is_value_in_domain[self.lower_bound as usize] //the lower and upper bound value should at least be in the is_value_in_domain
             && self.is_value_in_domain[self.upper_bound as usize]
-    }
-}
-
-#[derive(Clone, Default)]
-enum AssignmentsIntegerInternalState {
-    #[default]
-    Ok,
-    Conflict,
-}
-
-impl AssignmentsIntegerInternalState {
-    pub fn is_ok(&self) -> bool {
-        matches!(*self, AssignmentsIntegerInternalState::Ok)
+        }
     }
 
-    pub fn is_conflict(&self) -> bool {
-        matches!(*self, AssignmentsIntegerInternalState::Conflict)
+    fn verify_consistency(&self) -> Result<(), EmptyDomain> {
+        if self.lower_bound > self.upper_bound {
+            Err(EmptyDomain)
+        } else {
+            Ok(())
+        }
     }
-}
-
-#[derive(PartialEq, Eq)]
-pub enum DomainOperationOutcome {
-    Success,
-    Failure,
 }
 
 #[cfg(test)]
@@ -552,7 +523,9 @@ mod tests {
         let mut assignment = AssignmentsInteger::default();
         let d1 = assignment.grow(1, 5);
 
-        assignment.tighten_lower_bound(d1, 2, None);
+        assignment
+            .tighten_lower_bound(d1, 2, None)
+            .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 2);
@@ -565,7 +538,9 @@ mod tests {
         let mut assignment = AssignmentsInteger::default();
         let d1 = assignment.grow(1, 5);
 
-        assignment.tighten_upper_bound(d1, 2, None);
+        assignment
+            .tighten_upper_bound(d1, 2, None)
+            .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 2);
@@ -579,8 +554,12 @@ mod tests {
         let d1 = assignment.grow(1, 5);
         let d2 = assignment.grow(1, 5);
 
-        assignment.tighten_lower_bound(d1, 5, None);
-        assignment.tighten_upper_bound(d2, 1, None);
+        assignment
+            .tighten_lower_bound(d1, 5, None)
+            .expect("non-empty domain");
+        assignment
+            .tighten_upper_bound(d2, 1, None)
+            .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 6);
@@ -613,9 +592,15 @@ mod tests {
         let d2 = assignment.grow(1, 5);
         let d3 = assignment.grow(1, 5);
 
-        assignment.make_assignment(d1, 1, None);
-        assignment.make_assignment(d2, 5, None);
-        assignment.make_assignment(d3, 3, None);
+        assignment
+            .make_assignment(d1, 1, None)
+            .expect("non-empty domain");
+        assignment
+            .make_assignment(d2, 5, None)
+            .expect("non-empty domain");
+        assignment
+            .make_assignment(d3, 3, None)
+            .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 10);
@@ -655,11 +640,83 @@ mod tests {
         let mut assignment = AssignmentsInteger::default();
         let d1 = assignment.grow(1, 5);
 
-        assignment.remove_value_from_domain(d1, 2, None);
+        assignment
+            .remove_value_from_domain(d1, 2, None)
+            .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
         assert!(events.contains(&(DomainEvent::Any, d1)));
+    }
+
+    #[test]
+    fn values_can_be_removed_from_domains() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(2, &mut events);
+
+        assert!(!domain.contains(2));
+    }
+
+    #[test]
+    fn removing_the_lower_bound_updates_that_lower_bound() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(2, &mut events);
+        domain.remove_value(1, &mut events);
+
+        assert_eq!(3, domain.lower_bound);
+    }
+
+    #[test]
+    fn removing_the_upper_bound_updates_the_upper_bound() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(4, &mut events);
+        domain.remove_value(5, &mut events);
+
+        assert_eq!(3, domain.upper_bound);
+    }
+
+    #[test]
+    fn an_empty_domain_accepts_removal_operations() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(4, &mut events);
+        domain.remove_value(1, &mut events);
+        domain.remove_value(1, &mut events);
+    }
+
+    #[test]
+    fn setting_lower_bound_rounds_up_to_nearest_value_in_domain() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(2, &mut events);
+        domain.set_lower_bound(2, &mut events);
+
+        assert_eq!(3, domain.lower_bound);
+    }
+
+    #[test]
+    fn setting_upper_bound_rounds_down_to_nearest_value_in_domain() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        domain.remove_value(4, &mut events);
+        domain.set_upper_bound(4, &mut events);
+
+        assert_eq!(3, domain.upper_bound);
     }
 
     fn assert_contains_events(

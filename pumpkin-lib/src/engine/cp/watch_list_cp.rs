@@ -1,4 +1,4 @@
-use crate::{basic_types::DomainId, pumpkin_assert_moderate};
+use crate::basic_types::DomainId;
 
 use super::PropagatorVarId;
 
@@ -69,14 +69,9 @@ impl<'a> Watchers<'a> {
             DomainEvent::Assign => &mut watcher.assign_watchers,
         };
 
-        pumpkin_assert_moderate!(
-            event_watcher.contains(&self.propagator_var),
-            "Duplicate registration for event {:?} on propagator variable {:?}.",
-            event,
-            self.propagator_var,
-        );
-
-        event_watcher.push(self.propagator_var);
+        if !event_watcher.contains(&self.propagator_var) {
+            event_watcher.push(self.propagator_var);
+        }
     }
 }
 

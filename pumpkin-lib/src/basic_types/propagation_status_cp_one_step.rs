@@ -2,7 +2,7 @@ use super::PropositionalConjunction;
 
 pub enum PropagationStatusOneStepCP {
     ConflictDetected {
-        failure_reason: PropositionalConjunction,
+        propositional_conjunction: PropositionalConjunction,
     },
     PropagationHappened,
     FixedPoint,
@@ -10,9 +10,10 @@ pub enum PropagationStatusOneStepCP {
 
 impl PropagationStatusOneStepCP {
     pub fn no_conflict(&self) -> bool {
-        !matches!(
+        matches!(
             *self,
-            PropagationStatusOneStepCP::ConflictDetected { failure_reason: _ }
+            PropagationStatusOneStepCP::PropagationHappened
+                | PropagationStatusOneStepCP::FixedPoint
         )
     }
 

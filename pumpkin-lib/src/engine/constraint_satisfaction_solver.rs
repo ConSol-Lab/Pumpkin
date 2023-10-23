@@ -9,7 +9,7 @@ use super::{
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
     BranchingDecision, CSPSolverExecutionFlag, ConflictInfo, ConstraintOperationError, DomainId,
-    Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
+    Inconsistency, Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
 };
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::{DebugHelper, PropagatorConstructorContext, PropagatorId};
@@ -560,11 +560,18 @@ impl ConstraintSatisfactionSolver {
             .num_assigned_propositional_variables();
 
         loop {
-            self.sat_cp_mediator
+            let conflict_info = self
+                .sat_cp_mediator
                 .synchronise_propositional_trail_based_on_integer_trail(
                     &mut self.sat_data_structures.assignments_propositional,
                     &self.cp_data_structures.assignments_integer,
                 );
+
+            if let Some(conflict_info) = conflict_info {
+                // The previous propagation triggered an empty domain.
+                self.state.declare_conflict(conflict_info);
+                break;
+            }
 
             let clausal_propagation_status = self.clausal_propagator.propagate(
                 &mut self.sat_data_structures.assignments_propositional,
@@ -581,7 +588,8 @@ impl ConstraintSatisfactionSolver {
                     &self.sat_data_structures.assignments_propositional,
                     &mut self.cp_data_structures,
                     &mut self.cp_propagators,
-                );
+                )
+                .expect("should not be an error");
 
             //propagate boolean propagators - todo add these special-case propagators
 
@@ -589,16 +597,19 @@ impl ConstraintSatisfactionSolver {
             let propagation_status_one_step_cp = self.propagate_cp_one_step();
 
             match propagation_status_one_step_cp {
-                PropagationStatusOneStepCP::ConflictDetected { failure_reason } => {
+                PropagationStatusOneStepCP::ConflictDetected {
+                    propositional_conjunction,
+                } => {
                     self.sat_cp_mediator
                         .synchronise_propositional_trail_based_on_integer_trail(
                             &mut self.sat_data_structures.assignments_propositional,
                             &self.cp_data_structures.assignments_integer,
                         );
+
                     self.state.declare_conflict(ConflictInfo::Explanation {
-                        propositional_conjunction: failure_reason,
+                        propositional_conjunction,
                     });
-                    //self.state.declare_cp_conflict(conflict_reason);
+
                     break;
                 }
                 PropagationStatusOneStepCP::PropagationHappened => {
@@ -644,17 +655,23 @@ impl ConstraintSatisfactionSolver {
             let propagation_status_cp = propagator.propagate(&mut context);
 
             match propagation_status_cp {
-                // If there was a conflict, then stop any further propagation and proceed to
-                // conflict analysis.
-                Err(failure_reason) => {
+                // An empty domain conflict will be caught by the clausal propagator.
+                Err(Inconsistency::EmptyDomain) => {
+                    return PropagationStatusOneStepCP::PropagationHappened;
+                }
+
+                // A propagator-specific reason for the current conflict.
+                Err(Inconsistency::Other(propositional_conjunction)) => {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                         &self.cp_data_structures.assignments_integer,
-                        &failure_reason,
+                        &propositional_conjunction,
                         propagator.as_ref(),
                         propagator_id,
                     ));
 
-                    return PropagationStatusOneStepCP::ConflictDetected { failure_reason };
+                    return PropagationStatusOneStepCP::ConflictDetected {
+                        propositional_conjunction,
+                    };
                 }
 
                 Ok(()) => {
@@ -851,7 +868,7 @@ impl ConstraintSatisfactionSolver {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
-                    &self.cp_data_structures,
+                    &mut self.cp_data_structures,
                     &mut self.cp_propagators,
                 )
             };
@@ -1008,7 +1025,7 @@ impl ConstraintSatisfactionSolver {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
-                    &self.cp_data_structures,
+                    &mut self.cp_data_structures,
                     &mut self.cp_propagators,
                 )
             };
@@ -1504,7 +1521,7 @@ mod tests {
         if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
             println!("diff");
             println!("{:?}", res1.clone().unwrap());
-            return false;
+            false
         }
         //if both results are errors, check if the two errors are the same
         else if res1.is_err() {
