@@ -1,20 +1,12 @@
-// During development of the explanation system we allow unused code, and hide the warnings to not
-// flood the compiler output.
-#![allow(unused_imports, dead_code)]
-
 use std::collections::HashMap;
 
 use crate::{
-    basic_types::{
-        variables::IntVar, DomainId, Predicate, PropagationStatusCP, PropositionalConjunction,
-    },
-    conjunction,
+    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
-        DomainManager, LocalId, PropagationContext, PropagatorConstructorContext,
-        PropagatorVariable, Watchers,
+        LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
-    predicate, pumpkin_assert_simple,
+    predicate,
 };
 
 pub struct LinearLeqArgs<Var> {
@@ -108,7 +100,11 @@ where
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: &PropagationContext) {}
+    fn synchronise(&mut self, context: &PropagationContext) {
+        for (i, x_i) in self.x.iter().enumerate() {
+            self.propagations[i].retain(|bound, _reason| *bound >= context.upper_bound(x_i))
+        }
+    }
 
     fn get_reason_for_propagation(
         &mut self,
@@ -116,16 +112,14 @@ where
         delta: Delta,
     ) -> PropositionalConjunction {
         let i = delta.affected_local_id().unpack();
-        let change = self.x[i as usize].unpack(delta);
+        let DomainChange::UpperBound(bound) = self.x[i as usize].unpack(delta) else {
+            unreachable!();
+        };
 
-        if let DomainChange::UpperBound(value) = change {
-            self.propagations[i as usize]
-                .get_mut(&value)
-                .unwrap()
-                .clone()
-        } else {
-            unreachable!()
-        }
+        self.propagations[i as usize]
+            .get_mut(&bound)
+            .unwrap()
+            .clone()
     }
 
     fn priority(&self) -> u32 {
@@ -174,7 +168,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::test_helper::TestSolver;
+    use crate::{conjunction, engine::test_helper::TestSolver};
 
     use super::*;
 
