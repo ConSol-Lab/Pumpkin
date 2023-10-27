@@ -107,6 +107,8 @@ impl<View> AffineView<View> {
         }
     }
 
+    /// Apply the inverse transformation of this view on a value, to go from the value in the domain
+    /// of `self` to a value in the domain of `self.inner`.
     fn invert(&self, value: i32) -> Option<i32> {
         let inverted_translation = value - self.offset;
 
