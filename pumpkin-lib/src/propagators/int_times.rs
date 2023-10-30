@@ -230,7 +230,7 @@ where
 
         // a >= ceil(c.min / b.max)
         if b_max >= 1 {
-            context.set_lower_bound(&self.a, (c_min + b_max - 1) / b_max)?;
+            context.set_lower_bound(&self.a, div_ceil_pos(c_min, b_max))?;
         }
 
         // a <= floor(c.max / b.min)
@@ -240,7 +240,7 @@ where
 
         // b >= ceil(c.min / a.max)
         if a_max >= 1 {
-            context.set_lower_bound(&self.b, (c_min + a_max - 1) / a_max)?;
+            context.set_lower_bound(&self.b, div_ceil_pos(c_min, a_max))?;
         }
 
         // b <= floor(c.max / a.min)
@@ -250,6 +250,13 @@ where
 
         Ok(())
     }
+}
+
+/// Compute `ceil(numerator / denominator)`.
+///
+/// Assumes `numerator, denominator > 0`.
+fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
+    (numerator + denominator - 1) / denominator
 }
 
 #[cfg(test)]
