@@ -65,7 +65,7 @@ where
             .map(|var| context.lower_bound(var))
             .sum::<i32>();
 
-        if self.c - lb_lhs < 0 {
+        if self.c < lb_lhs {
             let reason = self
                 .x
                 .iter()
