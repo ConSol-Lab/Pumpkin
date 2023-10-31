@@ -64,93 +64,15 @@ where
     VC: IntVar,
 {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        let a_min = context.lower_bound(&self.a);
-        let a_max = context.upper_bound(&self.a);
-        let b_min = context.lower_bound(&self.b);
-        let b_max = context.upper_bound(&self.b);
-        let c_min = context.lower_bound(&self.c);
-        let c_max = context.upper_bound(&self.c);
-
-        // TODO: Remove these assertions? Or do we handle these cases with views to simplify this
-        // implementation.
-        assert!(
-            a_min >= 0,
-            "The IntTimes propagator assumes a to be non-negative."
-        );
-        assert!(
-            b_min >= 0,
-            "The IntTimes propagator assumes b to be non-negative."
-        );
-
-        let new_max_c = a_max * b_max;
-        let new_min_c = a_min * b_min;
-
-        if context.upper_bound(&self.c) > new_max_c {
-            self.propagations_c.insert(
-                DomainChange::UpperBound(new_max_c),
-                [predicate![self.a <= a_max], predicate![self.b <= b_max]],
-            );
-            context.set_upper_bound(&self.c, new_max_c)?;
-        }
-
-        if context.lower_bound(&self.c) < new_min_c {
-            self.propagations_c.insert(
-                DomainChange::LowerBound(new_min_c),
-                [predicate![self.a >= a_min], predicate![self.b >= b_min]],
-            );
-            context.set_lower_bound(&self.c, new_min_c)?;
-        }
-
-        // a >= ceil(c.min / b.max)
-        if b_max >= 1 {
-            let bound = (c_min + b_max - 1) / b_max;
-            if context.lower_bound(&self.a) < bound {
-                self.propagations_a.insert(
-                    DomainChange::LowerBound(bound),
-                    [predicate![self.c >= c_min], predicate![self.b <= b_max]],
-                );
-                context.set_lower_bound(&self.a, bound)?;
-            }
-        }
-
-        // a <= floor(c.max / b.min)
-        if b_min >= 1 {
-            let bound = c_max / b_min;
-            if context.upper_bound(&self.a) > bound {
-                self.propagations_a.insert(
-                    DomainChange::UpperBound(bound),
-                    [predicate![self.c <= c_max], predicate![self.b >= b_min]],
-                );
-                context.set_upper_bound(&self.a, bound)?;
-            }
-        }
-
-        // b >= ceil(c.min / a.max)
-        if a_max >= 1 {
-            let bound = (c_min + a_max - 1) / a_max;
-
-            if context.lower_bound(&self.b) < bound {
-                self.propagations_b.insert(
-                    DomainChange::LowerBound(bound),
-                    [predicate![self.c >= c_min], predicate![self.a <= a_max]],
-                );
-                context.set_lower_bound(&self.b, bound)?;
-            }
-        }
-
-        // b <= floor(c.max / a.min)
-        if a_min >= 1 {
-            let bound = c_max / a_min;
-            if context.upper_bound(&self.b) > bound {
-                self.propagations_b.insert(
-                    DomainChange::UpperBound(bound),
-                    [predicate![self.c <= c_max], predicate![self.a >= a_min]],
-                );
-                context.set_upper_bound(&self.b, bound)?;
-            }
-        }
-
-        Ok(())
+        perform_propagation(
+            context,
+            &self.a,
+            &self.b,
+            &self.c,
+            &mut self.propagations_a,
+            &mut self.propagations_b,
+            &mut self.propagations_c,
+        )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -207,54 +129,123 @@ where
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        let a_min = context.lower_bound(&self.a);
-        let a_max = context.upper_bound(&self.a);
-        let b_min = context.lower_bound(&self.b);
-        let b_max = context.upper_bound(&self.b);
-        let c_min = context.lower_bound(&self.c);
-        let c_max = context.upper_bound(&self.c);
+        let mut propagations_a = HashMap::new();
+        let mut propagations_b = HashMap::new();
+        let mut propagations_c = HashMap::new();
 
-        // TODO: Remove these assertions? Or do we handle these cases with views to simplify this
-        // implementation.
-        assert!(
-            a_min >= 0,
-            "The IntTimes propagator assumes a to be non-negative."
-        );
-        assert!(
-            b_min >= 0,
-            "The IntTimes propagator assumes b to be non-negative."
-        );
-
-        context.set_upper_bound(&self.c, a_max * b_max)?;
-        context.set_lower_bound(&self.c, a_min * b_min)?;
-
-        // a >= ceil(c.min / b.max)
-        if b_max >= 1 {
-            context.set_lower_bound(&self.a, div_ceil_pos(c_min, b_max))?;
-        }
-
-        // a <= floor(c.max / b.min)
-        if b_min >= 1 {
-            context.set_upper_bound(&self.a, c_max / b_min)?;
-        }
-
-        // b >= ceil(c.min / a.max)
-        if a_max >= 1 {
-            context.set_lower_bound(&self.b, div_ceil_pos(c_min, a_max))?;
-        }
-
-        // b <= floor(c.max / a.min)
-        if a_min >= 1 {
-            context.set_upper_bound(&self.b, c_max / a_min)?;
-        }
-
-        Ok(())
+        perform_propagation(
+            context,
+            &self.a,
+            &self.b,
+            &self.c,
+            &mut propagations_a,
+            &mut propagations_b,
+            &mut propagations_c,
+        )
     }
+}
+
+fn perform_propagation<VA: IntVar, VB: IntVar, VC: IntVar>(
+    context: &mut PropagationContext,
+    a: &PropagatorVariable<VA>,
+    b: &PropagatorVariable<VB>,
+    c: &PropagatorVariable<VC>,
+    propagations_a: &mut HashMap<DomainChange, [Predicate; 2]>,
+    propagations_b: &mut HashMap<DomainChange, [Predicate; 2]>,
+    propagations_c: &mut HashMap<DomainChange, [Predicate; 2]>,
+) -> PropagationStatusCP {
+    let a_min = context.lower_bound(a);
+    let a_max = context.upper_bound(a);
+    let b_min = context.lower_bound(b);
+    let b_max = context.upper_bound(b);
+    let c_min = context.lower_bound(c);
+    let c_max = context.upper_bound(c);
+
+    // TODO: Remove these assertions? Or do we handle these cases with views to simplify this
+    // implementation.
+    assert!(
+        a_min >= 0,
+        "The IntTimes propagator assumes a to be non-negative."
+    );
+    assert!(
+        b_min >= 0,
+        "The IntTimes propagator assumes b to be non-negative."
+    );
+
+    let new_max_c = a_max * b_max;
+    let new_min_c = a_min * b_min;
+
+    if context.upper_bound(c) > new_max_c {
+        propagations_c.insert(
+            DomainChange::UpperBound(new_max_c),
+            [predicate![a <= a_max], predicate![b <= b_max]],
+        );
+        context.set_upper_bound(c, new_max_c)?;
+    }
+
+    if context.lower_bound(c) < new_min_c {
+        propagations_c.insert(
+            DomainChange::LowerBound(new_min_c),
+            [predicate![a >= a_min], predicate![b >= b_min]],
+        );
+        context.set_lower_bound(c, new_min_c)?;
+    }
+
+    // a >= ceil(c.min / b.max)
+    if b_max >= 1 {
+        let bound = div_ceil_pos(c_min, b_max);
+        if context.lower_bound(a) < bound {
+            propagations_a.insert(
+                DomainChange::LowerBound(bound),
+                [predicate![c >= c_min], predicate![b <= b_max]],
+            );
+            context.set_lower_bound(a, bound)?;
+        }
+    }
+
+    // a <= floor(c.max / b.min)
+    if b_min >= 1 {
+        let bound = c_max / b_min;
+        if context.upper_bound(a) > bound {
+            propagations_a.insert(
+                DomainChange::UpperBound(bound),
+                [predicate![c <= c_max], predicate![b >= b_min]],
+            );
+            context.set_upper_bound(a, bound)?;
+        }
+    }
+
+    // b >= ceil(c.min / a.max)
+    if a_max >= 1 {
+        let bound = div_ceil_pos(c_min, a_max);
+
+        if context.lower_bound(b) < bound {
+            propagations_b.insert(
+                DomainChange::LowerBound(bound),
+                [predicate![c >= c_min], predicate![a <= a_max]],
+            );
+            context.set_lower_bound(b, bound)?;
+        }
+    }
+
+    // b <= floor(c.max / a.min)
+    if a_min >= 1 {
+        let bound = c_max / a_min;
+        if context.upper_bound(b) > bound {
+            propagations_b.insert(
+                DomainChange::UpperBound(bound),
+                [predicate![c <= c_max], predicate![a >= a_min]],
+            );
+            context.set_upper_bound(b, bound)?;
+        }
+    }
+    Ok(())
 }
 
 /// Compute `ceil(numerator / denominator)`.
 ///
 /// Assumes `numerator, denominator > 0`.
+#[inline]
 fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
     (numerator + denominator - 1) / denominator
 }
