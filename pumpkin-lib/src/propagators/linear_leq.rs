@@ -59,45 +59,7 @@ where
     Var: IntVar,
 {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        let lb_lhs = self
-            .x
-            .iter()
-            .map(|var| context.lower_bound(var))
-            .sum::<i32>();
-
-        if self.c < lb_lhs {
-            let reason = self
-                .x
-                .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .collect::<Vec<_>>();
-
-            return Err(reason.into());
-        }
-
-        for (i, x_i) in self.x.iter().enumerate() {
-            let bound = self.c - (lb_lhs - context.lower_bound(x_i));
-
-            if context.upper_bound(x_i) > bound {
-                let reason = self
-                    .x
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(j, x_j)| {
-                        if j != i {
-                            Some(predicate![x_j >= context.lower_bound(x_j)])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                self.propagations[i].insert(bound, reason.into());
-                context.set_upper_bound(x_i, bound)?;
-            }
-        }
-
-        Ok(())
+        perform_propagation(context, &self.x, self.c, &mut self.propagations)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -138,32 +100,50 @@ where
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        let lb_lhs = self
-            .x
-            .iter()
-            .map(|var| context.lower_bound(var))
-            .sum::<i32>();
+        let mut propagation_store = vec![HashMap::new(); self.x.len()];
+        perform_propagation(context, &self.x, self.c, &mut propagation_store)
+    }
+}
 
-        if self.c - lb_lhs < 0 {
-            let reason = self
-                .x
+fn perform_propagation<Var: IntVar>(
+    context: &mut PropagationContext<'_>,
+    x: &[PropagatorVariable<Var>],
+    c: i32,
+    propagation_store: &mut [HashMap<i32, PropositionalConjunction>],
+) -> PropagationStatusCP {
+    let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
+
+    if c < lb_lhs {
+        let reason = x
+            .iter()
+            .map(|var| predicate![var >= context.lower_bound(var)])
+            .collect::<Vec<_>>();
+
+        return Err(reason.into());
+    }
+
+    for (i, x_i) in x.iter().enumerate() {
+        let bound = c - (lb_lhs - context.lower_bound(x_i));
+
+        if context.upper_bound(x_i) > bound {
+            let reason = x
                 .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
+                .enumerate()
+                .filter_map(|(j, x_j)| {
+                    if j != i {
+                        Some(predicate![x_j >= context.lower_bound(x_j)])
+                    } else {
+                        None
+                    }
+                })
                 .collect::<Vec<_>>();
 
-            return Err(reason.into());
+            propagation_store[i].insert(bound, reason.into());
+            context.set_upper_bound(x_i, bound)?;
         }
-
-        for x_i in self.x.iter() {
-            let bound = self.c - (lb_lhs - context.lower_bound(x_i));
-
-            if context.upper_bound(x_i) > bound {
-                context.set_upper_bound(x_i, bound)?;
-            }
-        }
-
-        Ok(())
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
