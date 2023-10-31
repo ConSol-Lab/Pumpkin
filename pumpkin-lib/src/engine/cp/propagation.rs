@@ -16,6 +16,10 @@ impl LocalId {
     pub const fn from(value: u32) -> Self {
         LocalId(value)
     }
+
+    pub fn unpack(self) -> u32 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for LocalId {
@@ -103,14 +107,16 @@ pub struct Delta(LocalId, DomainChange);
 
 impl Delta {
     pub(crate) fn from_predicate(local_id: LocalId, predicate: Predicate) -> Delta {
-        match predicate {
-            Predicate::LowerBound { .. } => todo!(),
-            Predicate::UpperBound { .. } => todo!(),
+        let change = match predicate {
+            Predicate::LowerBound { lower_bound, .. } => DomainChange::LowerBound(lower_bound),
+            Predicate::UpperBound { upper_bound, .. } => DomainChange::UpperBound(upper_bound),
             Predicate::NotEqual {
                 not_equal_constant, ..
-            } => Delta(local_id, DomainChange::Removal(not_equal_constant)),
+            } => DomainChange::Removal(not_equal_constant),
             Predicate::Equal { .. } => todo!(),
-        }
+        };
+
+        Delta(local_id, change)
     }
 
     pub(crate) fn unwrap_change(self) -> DomainChange {
@@ -125,6 +131,7 @@ impl Delta {
 
 /// A change is a modification of a particular variable, independant of any variable. In effect, a
 /// predicate is a DomainId + Change.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DomainChange {
     Removal(i32),
     LowerBound(i32),
@@ -184,6 +191,24 @@ impl PropagationContext<'_> {
     ) -> Result<(), EmptyDomain> {
         self.domain_manager.set_local_id(var.local_id);
         var.inner.remove(&mut self.domain_manager, value)
+    }
+
+    pub fn set_upper_bound<Var: IntVar>(
+        &mut self,
+        var: &PropagatorVariable<Var>,
+        bound: i32,
+    ) -> Result<(), EmptyDomain> {
+        self.domain_manager.set_local_id(var.local_id);
+        var.inner.set_upper_bound(&mut self.domain_manager, bound)
+    }
+
+    pub fn set_lower_bound<Var: IntVar>(
+        &mut self,
+        var: &PropagatorVariable<Var>,
+        bound: i32,
+    ) -> Result<(), EmptyDomain> {
+        self.domain_manager.set_local_id(var.local_id);
+        var.inner.set_lower_bound(&mut self.domain_manager, bound)
     }
 }
 

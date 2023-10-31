@@ -8,3 +8,6 @@ edition = "2021"
 thiserror = "1.0.39"
 log = "0.4.17"
 bitfield = "0.14.0"
+
+[dev-dependencies]
+env_logger = "0.10.0"

@@ -5,7 +5,7 @@ use crate::{
     basic_types::{Predicate, PropositionalConjunction},
     engine::PropagationContext,
     propagators::clausal_propagators::ClausalPropagatorInterface,
-    pumpkin_assert_eq_simple, pumpkin_assert_simple,
+    pumpkin_assert_simple,
 };
 
 use super::{
@@ -52,9 +52,24 @@ impl DebugHelper {
 
             let num_missed_propagations = assignments_integer_clone.num_trail_entries()
                 - num_entries_on_trail_before_propagation;
-            pumpkin_assert_eq_simple!(num_missed_propagations, 0,
-                "Propagator '{}' with id '{}' propagated {} predicates after calling debug_propagate_from_scratch, meaning it missed propagations in its regular 'propagate' method. 
-                    Aborting!", propagator.name(), propagator_id, num_missed_propagations);
+
+            if num_missed_propagations > 0 {
+                eprintln!(
+                    "Propagator '{}' with id '{}' missed predicates:",
+                    propagator.name(),
+                    propagator_id
+                );
+
+                for idx in num_entries_on_trail_before_propagation
+                    ..assignments_integer_clone.num_trail_entries()
+                {
+                    let trail_entry = assignments_integer_clone.get_trail_entry(idx);
+                    let pred = trail_entry.predicate;
+                    eprintln!("  - {pred:?}");
+                }
+
+                panic!("missed propagations");
+            }
         }
         //then check the clausal propagator
         pumpkin_assert_simple!(clausal_propagator.debug_check_state(

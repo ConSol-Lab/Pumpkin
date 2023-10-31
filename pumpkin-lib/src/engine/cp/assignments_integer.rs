@@ -176,7 +176,9 @@ impl AssignmentsInteger {
         new_lower_bound: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> Result<(), EmptyDomain> {
-        pumpkin_assert_moderate!(new_lower_bound > self.get_lower_bound(domain_id));
+        if new_lower_bound <= self.get_lower_bound(domain_id) {
+            return self.domains[domain_id].verify_consistency();
+        }
 
         let predicate = Predicate::LowerBound {
             domain_id,
@@ -205,7 +207,9 @@ impl AssignmentsInteger {
         new_upper_bound: i32,
         propagator_reason: Option<PropagatorVarId>,
     ) -> Result<(), EmptyDomain> {
-        pumpkin_assert_moderate!(new_upper_bound < self.get_upper_bound(domain_id));
+        if new_upper_bound >= self.get_upper_bound(domain_id) {
+            return self.domains[domain_id].verify_consistency();
+        }
 
         let predicate = Predicate::UpperBound {
             domain_id,
