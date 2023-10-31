@@ -70,7 +70,7 @@ fn main() {
     };
 
     println!(
-        "bibd: (v = {}, b = {}, r = {}, k = {}, l = {}",
+        "bibd: (v = {}, b = {}, r = {}, k = {}, l = {})",
         bibd.rows, bibd.columns, bibd.row_sum, bibd.column_sum, bibd.max_dot_product
     );
 
