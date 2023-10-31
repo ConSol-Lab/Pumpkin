@@ -1,4 +1,5 @@
 use crate::basic_types::DomainId;
+use enumset::EnumSetType;
 
 use super::PropagatorVarId;
 
@@ -12,17 +13,12 @@ pub struct Watchers<'a> {
     watch_list: &'a mut WatchListCP,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
+#[derive(Debug, EnumSetType)]
 pub enum DomainEvent {
-    Assign = 1,
-    Any = 2,
-    LowerBound = 4,
-    UpperBound = 8,
-}
-
-impl DomainEvent {
-    pub const MAX: u8 = DomainEvent::UpperBound as u8;
+    Assign,
+    Any,
+    LowerBound,
+    UpperBound,
 }
 
 //public functions

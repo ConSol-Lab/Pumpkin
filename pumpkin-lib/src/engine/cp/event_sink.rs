@@ -1,4 +1,5 @@
 use crate::basic_types::DomainId;
+use enumset::EnumSet;
 
 use super::DomainEvent;
 
@@ -11,66 +12,36 @@ use super::DomainEvent;
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone)]
 pub struct EventSink {
-    events: Vec<u8>,
+    present: Vec<EnumSet<DomainEvent>>,
+    events: Vec<(DomainEvent, DomainId)>,
 }
 
 impl EventSink {
     pub fn grow(&mut self) {
-        self.events.push(0);
+        self.present.push(EnumSet::new());
     }
 
     pub fn event_occurred(&mut self, event: DomainEvent, domain: DomainId) {
-        let elem = &mut self.events[domain];
+        let elem = &mut self.present[domain];
 
-        *elem = (*elem | event as u8) | DomainEvent::Any as u8;
+        if elem.contains(event) {
+            // The event was already triggered.
+            return;
+        }
+
+        if event != DomainEvent::Any && elem.is_empty() {
+            // Ensure the any event always is triggered when a modification happens.
+            self.events.push((DomainEvent::Any, domain));
+        }
+
+        elem.insert_all(event | DomainEvent::Any);
+        self.events.push((event, domain));
     }
 
     pub fn drain(&mut self) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
-        EventSinkIter {
-            events: &mut self.events,
-            domain_idx: 0,
-            event_idx: 0,
-        }
-    }
-}
-
-pub struct EventSinkIter<'a> {
-    events: &'a mut Vec<u8>,
-    domain_idx: u32,
-    event_idx: u32,
-}
-
-impl<'a> Iterator for EventSinkIter<'a> {
-    type Item = (DomainEvent, DomainId);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.domain_idx < self.events.len() as u32 {
-            let domain = DomainId {
-                id: self.domain_idx,
-            };
-
-            let elem = self.events[domain];
-            let mut event_bit = 1u8 << self.event_idx;
-
-            while (elem & event_bit) != event_bit && event_bit <= DomainEvent::MAX {
-                self.event_idx += 1;
-                event_bit <<= 1;
-            }
-
-            if event_bit <= DomainEvent::MAX {
-                // Safety: Event bit cannot be larger than DomainEvent::MAX.
-                let event: DomainEvent = unsafe { std::mem::transmute(event_bit) };
-                self.event_idx += 1;
-
-                return Some((event, domain));
-            }
-
-            self.events[domain] = 0;
-            self.domain_idx += 1;
-            self.event_idx = 0;
-        }
-
-        None
+        self.events.drain(..).inspect(|&(event, domain)| {
+            self.present[domain].remove(event);
+        })
     }
 }
 
@@ -84,6 +55,18 @@ mod tests {
 
         let events = sink.drain().collect::<Vec<_>>();
         assert!(events.is_empty());
+    }
+
+    #[test]
+    fn an_any_event_is_pushed_once() {
+        let mut sink = EventSink::default();
+        sink.grow();
+
+        sink.event_occurred(DomainEvent::Any, DomainId::new(0));
+
+        let events = sink.drain().collect::<Vec<_>>();
+        assert_eq!(events.len(), 1);
+        assert!(events.contains(&(DomainEvent::Any, DomainId::new(0))));
     }
 
     #[test]
