@@ -27,6 +27,14 @@ impl From<Vec<Predicate>> for PropositionalConjunction {
     }
 }
 
+impl From<Predicate> for PropositionalConjunction {
+    fn from(predicate: Predicate) -> Self {
+        PropositionalConjunction {
+            predicates_in_conjunction: Vec::from([predicate]),
+        }
+    }
+}
+
 impl std::fmt::Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.predicates_in_conjunction.is_empty() {

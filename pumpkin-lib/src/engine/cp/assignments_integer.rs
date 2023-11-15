@@ -1,6 +1,6 @@
 use crate::{
     basic_types::{DomainId, IntegerVariableGeneratorIterator, Predicate},
-    pumpkin_assert_moderate, pumpkin_assert_simple,
+    predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
 use super::{event_sink::EventSink, DomainEvent, PropagatorId, PropagatorVarId};
@@ -120,6 +120,26 @@ impl AssignmentsInteger {
             domain_id,
             upper_bound,
         }
+    }
+
+    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
+        let mut predicates = Vec::new();
+        let domain = &self.domains[domain_id];
+        // if fixed, this is just one predicate
+        if domain.lower_bound == domain.upper_bound {
+            predicates.push(predicate![domain_id == domain.lower_bound]);
+            return predicates;
+        }
+        // if not fixed, start with the bounds...
+        predicates.push(predicate![domain_id >= domain.lower_bound]);
+        predicates.push(predicate![domain_id <= domain.upper_bound]);
+        // then the holes...
+        for i in (domain.lower_bound + 1)..domain.upper_bound {
+            if !domain.is_value_in_domain[domain.get_index(i)] {
+                predicates.push(predicate![domain_id != i]);
+            }
+        }
+        predicates
     }
 
     pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(

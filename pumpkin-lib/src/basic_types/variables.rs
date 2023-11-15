@@ -20,6 +20,10 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     /// Determine whether the value is in the domain of this variable.
     fn contains(&self, domains: &DomainManager, value: i32) -> bool;
 
+    /// Get a predicate description (bounds + holes) of the domain of this variable.
+    /// N.B. can be very expensive with large domains, and very large with holey domains
+    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate>;
+
     /// Remove a value from the domain of this variable.
     fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
 
@@ -71,6 +75,10 @@ impl IntVar for DomainId {
 
     fn contains(&self, domains: &DomainManager, value: i32) -> bool {
         domains.is_value_in_domain(*self, value)
+    }
+
+    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate> {
+        domains.get_domain_description(*self)
     }
 
     fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
@@ -148,6 +156,19 @@ where
         self.invert(value)
             .map(|v| self.inner.contains(domains, v))
             .unwrap_or(false)
+    }
+
+    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate> {
+        let mut result = self.inner.describe_domain(domains);
+        if self.scale < 0 {
+            result.iter_mut().for_each(|p| {
+                p.map(|v| self.map(v));
+                p.flip_bound()
+            })
+        } else {
+            result.iter_mut().for_each(|p| p.map(|v| self.map(v)))
+        }
+        result
     }
 
     fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {

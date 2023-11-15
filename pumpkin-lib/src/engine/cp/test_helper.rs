@@ -1,6 +1,7 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use crate::basic_types::{DomainId, PropagationStatusCP, PropositionalConjunction};
+use crate::engine::EmptyDomain;
 
 use super::{
     propagation::{
@@ -55,6 +56,10 @@ impl TestSolver {
 
     pub fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignment.get_upper_bound(var)
+    }
+
+    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
+        self.assignment.remove_value_from_domain(var, value, None)
     }
 
     pub fn propagate(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {

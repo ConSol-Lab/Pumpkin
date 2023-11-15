@@ -184,6 +184,10 @@ impl PropagationContext<'_> {
         var.inner.contains(&self.domain_manager, value)
     }
 
+    pub fn describe_domain<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> Vec<Predicate> {
+        var.inner.describe_domain(&self.domain_manager)
+    }
+
     pub fn remove<Var: IntVar>(
         &mut self,
         var: &PropagatorVariable<Var>,

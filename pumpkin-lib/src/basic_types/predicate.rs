@@ -93,6 +93,43 @@ impl Predicate {
         }
     }
 
+    pub fn map(&mut self, mut f: impl FnMut(i32) -> i32) {
+        match self {
+            Predicate::LowerBound { lower_bound, .. } => *lower_bound = f(*lower_bound),
+            Predicate::UpperBound { upper_bound, .. } => *upper_bound = f(*upper_bound),
+            Predicate::NotEqual {
+                not_equal_constant, ..
+            } => *not_equal_constant = f(*not_equal_constant),
+            Predicate::Equal {
+                equality_constant, ..
+            } => *equality_constant = f(*equality_constant),
+        }
+    }
+
+    pub fn flip_bound(&mut self) {
+        match *self {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => {
+                *self = Predicate::UpperBound {
+                    domain_id,
+                    upper_bound: lower_bound,
+                }
+            }
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => {
+                *self = Predicate::LowerBound {
+                    domain_id,
+                    lower_bound: upper_bound,
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn get_dummy_predicate() -> Predicate {
         let domain_id = DomainId { id: u32::MAX };
         Predicate::Equal {
@@ -210,21 +247,21 @@ impl PredicateConstructor for DomainId {
 
 #[macro_export]
 macro_rules! predicate {
-    ($($var:ident).+ >= $bound:expr) => {{
+    ($($var:ident).+$([$index:expr])? >= $bound:expr) => {{
         use $crate::basic_types::PredicateConstructor;
-        $($var).+.lower_bound_predicate($bound)
+        $($var).+$([$index])?.lower_bound_predicate($bound)
     }};
-    ($($var:ident).+ <= $bound:expr) => {{
+    ($($var:ident).+$([$index:expr])? <= $bound:expr) => {{
         use $crate::basic_types::PredicateConstructor;
-        $($var).+.upper_bound_predicate($bound)
+        $($var).+$([$index])?.upper_bound_predicate($bound)
     }};
-    ($($var:ident).+ == $value:expr) => {{
+    ($($var:ident).+$([$index:expr])? == $value:expr) => {{
         use $crate::basic_types::PredicateConstructor;
-        $($var).+.equality_predicate($value)
+        $($var).+$([$index])?.equality_predicate($value)
     }};
-    ($($var:ident).+ != $value:expr) => {{
+    ($($var:ident).+$([$index:expr])? != $value:expr) => {{
         use $crate::basic_types::PredicateConstructor;
-        $($var).+.disequality_predicate($value)
+        $($var).+$([$index])?.disequality_predicate($value)
     }};
 }
 
@@ -303,6 +340,40 @@ mod tests {
                 not_equal_constant: 5,
             },
             predicate![wrapper.x != 5]
+        );
+    }
+
+    #[test]
+    fn macro_index_expressions_are_matched() {
+        let wrapper = [DomainId { id: 0 }];
+
+        assert_eq!(
+            Predicate::LowerBound {
+                domain_id: wrapper[0],
+                lower_bound: 2,
+            },
+            predicate![wrapper[0] >= 2]
+        );
+        assert_eq!(
+            Predicate::UpperBound {
+                domain_id: wrapper[0],
+                upper_bound: 3,
+            },
+            predicate![wrapper[0] <= 3]
+        );
+        assert_eq!(
+            Predicate::Equal {
+                domain_id: wrapper[0],
+                equality_constant: 5
+            },
+            predicate![wrapper[0] == 5]
+        );
+        assert_eq!(
+            Predicate::NotEqual {
+                domain_id: wrapper[0],
+                not_equal_constant: 5,
+            },
+            predicate![wrapper[0] != 5]
         );
     }
 }

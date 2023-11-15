@@ -52,6 +52,10 @@ impl DomainManager<'_> {
         self.assignments_integer.get_upper_bound_predicate(domain)
     }
 
+    pub fn get_domain_description(&self, domain: DomainId) -> Vec<Predicate> {
+        self.assignments_integer.get_domain_description(domain)
+    }
+
     pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
         &self,
         domains: I,
