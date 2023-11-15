@@ -84,6 +84,12 @@ impl LearnedClauseMinimiser {
                 }
             }
         }
+        if analysis_result.learned_literals.len() > 1 {
+            analysis_result.backjump_level = sat_data_structures
+                .assignments_propositional
+                .get_literal_assignment_level(analysis_result.learned_literals[1]);
+        }
+
         analysis_result.learned_literals.truncate(end_position);
 
         self.clean_up();
