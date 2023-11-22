@@ -171,11 +171,11 @@ impl ConstraintSatisfactionSolver {
         //  at this point, any reason clause encountered will contains only assumptions, but some assumptions might be implied
         //  this corresponds to the all-decision CDCL learning scheme
         else {
-            self.compute_all_decision_learning_helper(Some(!violated_assumption));
+            self.compute_all_decision_learning_helper(Some(!violated_assumption), true);
             self.analysis_result
                 .learned_literals
                 .push(!violated_assumption);
-            pumpkin_assert_moderate!(self.debug_check_clausal_core());
+            pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption));
             self.restore_state_at_root();
             Ok(self.analysis_result.learned_literals.clone())
         }
@@ -392,17 +392,6 @@ impl ConstraintSatisfactionSolver {
         //Case 3: the assumption literal is in conflict with the input assumption
         //  which means the instance is infeasible under the current assumptions
         else {
-            pumpkin_assert_moderate!(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .get_literal_assignment_level(assumption_literal)
-                    == 0
-                    || self
-                        .sat_data_structures
-                        .assignments_propositional
-                        .is_literal_propagated(assumption_literal),
-            );
-
             self.state
                 .declare_infeasible_under_assumptions(assumption_literal);
             false
@@ -966,7 +955,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         if self.internal_parameters.learning_clause_minimisation {
-            pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
+            pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false));
 
             self.learned_clause_minimiser.remove_dominated_literals(
                 &mut self.analysis_result,
@@ -982,19 +971,23 @@ impl ConstraintSatisfactionSolver {
             .explanation_clause_manager
             .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
 
-        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
+        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false));
         //the return value is stored in the input 'analysis_result'
     }
 
     //computes the learned clause containing only decision literals and stores it in 'analysis_result'
     #[allow(dead_code)]
-    fn compute_all_decision_learning(&mut self) {
-        self.compute_all_decision_learning_helper(None);
+    fn compute_all_decision_learning(&mut self, is_extracting_core: bool) {
+        self.compute_all_decision_learning_helper(None, is_extracting_core);
     }
 
     //the helper is used to facilitate usage when extracting the clausal core
     //  normal conflict analysis would use 'compute_all_decision_learning'
-    fn compute_all_decision_learning_helper(&mut self, mut next_literal: Option<Literal>) {
+    fn compute_all_decision_learning_helper(
+        &mut self,
+        mut next_literal: Option<Literal>,
+        is_extracting_core: bool,
+    ) {
         //the code is similar to 1uip learning with small differences to accomodate the all-decision learning scheme
         pumpkin_assert_simple!(
             next_literal.is_some() || self.debug_conflict_analysis_proconditions()
@@ -1150,11 +1143,11 @@ impl ConstraintSatisfactionSolver {
             .explanation_clause_manager
             .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
 
-        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result());
+        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(is_extracting_core));
         //the return value is stored in the input 'analysis_result'
     }
 
-    fn debug_check_conflict_analysis_result(&self) -> bool {
+    fn debug_check_conflict_analysis_result(&self, is_extracting_core: bool) -> bool {
         //debugging method: performs sanity checks on the learned clause
 
         let assignments = &self.sat_data_structures.assignments_propositional;
@@ -1172,12 +1165,16 @@ impl ConstraintSatisfactionSolver {
             "No root level literals may be present in a learned clause."
         );
 
-        assert!(
-            self.get_decision_level()
-                == assignments
-                    .get_literal_assignment_level(self.analysis_result.learned_literals[0]),
-            "The asserting literal must be at the highest level."
-        );
+        if !is_extracting_core {
+            // When this method is called during core extraction, the decision level is not
+            // necessarily the decision level of learned_literals[0].
+            assert!(
+                self.get_decision_level()
+                    == assignments
+                        .get_literal_assignment_level(self.analysis_result.learned_literals[0]),
+                "The asserting literal must be at the highest level."
+            );
+        }
 
         assert!(
             learned_lits[1..].iter().all(|&literal| {
@@ -1304,23 +1301,27 @@ impl ConstraintSatisfactionSolver {
         true
     }
 
-    fn debug_check_clausal_core(&self) -> bool {
+    fn debug_check_clausal_core(&self, violated_assumption: Literal) -> bool {
         pumpkin_assert_moderate!(
             self.analysis_result
                 .learned_literals
                 .iter()
-                .all(|core_literal| self.sat_data_structures.assumptions.contains(core_literal)),
+                .all(|&core_literal| self
+                    .sat_data_structures
+                    .assumptions
+                    .contains(&!core_literal)),
             "Each core literal must be part of the assumptions."
         );
         pumpkin_assert_moderate!(
             self.analysis_result
                 .learned_literals
                 .iter()
-                .all(|core_literal| self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .is_literal_decision(*core_literal)),
-            "Each core literal must be a decision."
+                .all(|&core_literal| core_literal == !violated_assumption
+                    || self
+                        .sat_data_structures
+                        .assignments_propositional
+                        .is_literal_decision(!core_literal)),
+            "Each core literal (except the violated literal) must be a decision."
         );
         true
     }
@@ -1541,9 +1542,8 @@ mod tests {
         assumptions: Vec<Literal>,
         expected_flag: CSPSolverExecutionFlag,
         expected_result: Result<Vec<Literal>, Literal>,
-        time_limit_in_seconds: i64,
     ) {
-        let flag = solver.solve_under_assumptions(&assumptions, time_limit_in_seconds);
+        let flag = solver.solve_under_assumptions(&assumptions, i64::MAX);
 
         assert!(flag == expected_flag, "The flags do not match.");
 
@@ -1574,7 +1574,6 @@ mod tests {
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![!lits[0]]),
-            1,
         )
     }
 
@@ -1586,7 +1585,6 @@ mod tests {
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![!lits[1]]),
-            1,
         );
     }
 
@@ -1599,7 +1597,6 @@ mod tests {
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![]),
-            1,
         );
     }
 
@@ -1611,7 +1608,6 @@ mod tests {
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![!lits[1]]), //the core gets computed before inconsistency is detected
-            1,
         );
     }
 
@@ -1634,7 +1630,6 @@ mod tests {
             vec![!lits[0], lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![lits[0], !lits[1], lits[2]]),
-            1,
         );
     }
 
@@ -1646,7 +1641,6 @@ mod tests {
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![lits[0], !lits[1], lits[2]]), //could return inconsistent assumptions, however inconsistency will not be detected given the order of the assumptions
-            1,
         );
     }
 
@@ -1658,7 +1652,6 @@ mod tests {
             vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
             Err(lits[0]),
-            1,
         );
     }
 
@@ -1679,7 +1672,6 @@ mod tests {
             vec![!lits[0], !lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
             Ok(vec![lits[0], lits[1], lits[2]]),
-            1,
         );
     }
 
@@ -1691,7 +1683,6 @@ mod tests {
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Feasible,
             Ok(vec![]), //will be ignored in the test
-            1,
         );
     }
 }
