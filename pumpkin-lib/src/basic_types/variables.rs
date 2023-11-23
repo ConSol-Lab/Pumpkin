@@ -11,6 +11,8 @@ use crate::engine::{
 use super::{DomainId, Predicate, PredicateConstructor};
 
 pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
+    type AffineView: IntVar;
+
     /// Get the lower bound of the variable.
     fn lower_bound(&self, domains: &DomainManager) -> i32;
 
@@ -46,25 +48,23 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     ///
     /// The scaled domain will have holes in it. E.g. if we have `dom(x) = {1, 2}`, then
     /// `dom(x.scaled(2)) = {2, 4}` and *not* `dom(x.scaled(2)) = {1, 2, 3, 4}`.
-    fn scaled(&self, scale: i32) -> AffineView<Self> {
-        AffineView::new(self.clone(), scale, 0)
-    }
+    fn scaled(&self, scale: i32) -> Self::AffineView;
 
     /// Get a variable which domain has a constant offset to the domain of self.
-    fn offset(&self, offset: i32) -> AffineView<Self> {
-        AffineView::new(self.clone(), 1, offset)
-    }
+    fn offset(&self, offset: i32) -> Self::AffineView;
 }
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the domain of `x`.
 #[derive(Clone)]
-pub struct AffineView<View> {
-    inner: View,
+pub struct AffineView<Inner> {
+    inner: Inner,
     scale: i32,
     offset: i32,
 }
 
 impl IntVar for DomainId {
+    type AffineView = AffineView<Self>;
+
     fn lower_bound(&self, domains: &DomainManager) -> i32 {
         domains.get_lower_bound(*self)
     }
@@ -104,10 +104,24 @@ impl IntVar for DomainId {
     fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
         event.unwrap()
     }
+
+    fn scaled(&self, scale: i32) -> Self::AffineView {
+        AffineView::new(*self, scale, 0)
+    }
+
+    fn offset(&self, offset: i32) -> Self::AffineView {
+        AffineView::new(*self, 1, offset)
+    }
 }
 
-impl<View> AffineView<View> {
-    pub fn new(inner: View, scale: i32, offset: i32) -> Self {
+impl From<DomainId> for AffineView<DomainId> {
+    fn from(value: DomainId) -> Self {
+        AffineView::new(value, 1, 0)
+    }
+}
+
+impl<Inner> AffineView<Inner> {
+    pub fn new(inner: Inner, scale: i32, offset: i32) -> Self {
         AffineView {
             inner,
             scale,
@@ -136,6 +150,8 @@ impl<View> IntVar for AffineView<View>
 where
     View: IntVar,
 {
+    type AffineView = Self;
+
     fn lower_bound(&self, domains: &DomainManager) -> i32 {
         if self.scale < 0 {
             self.map(self.inner.upper_bound(domains))
@@ -246,6 +262,19 @@ where
             self.inner.unpack_event(event)
         }
     }
+
+    fn scaled(&self, scale: i32) -> Self::AffineView {
+        let mut result = self.clone();
+        result.scale *= scale;
+        result.offset *= scale;
+        result
+    }
+
+    fn offset(&self, offset: i32) -> Self::AffineView {
+        let mut result = self.clone();
+        result.offset += offset;
+        result
+    }
 }
 
 impl<Var: std::fmt::Debug> std::fmt::Debug for AffineView<Var> {
@@ -307,5 +336,30 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
             .invert(bound)
             .expect("Handle case where invert() returns None.");
         self.inner.disequality_predicate(inverted_bound)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scaling_an_affine_view() {
+        let view = AffineView::new(DomainId::new(0), 3, 4);
+        assert_eq!(3, view.scale);
+        assert_eq!(4, view.offset);
+        let scaled_view = view.scaled(6);
+        assert_eq!(18, scaled_view.scale);
+        assert_eq!(24, scaled_view.offset);
+    }
+
+    #[test]
+    fn offsetting_an_affine_view() {
+        let view = AffineView::new(DomainId::new(0), 3, 4);
+        assert_eq!(3, view.scale);
+        assert_eq!(4, view.offset);
+        let scaled_view = view.offset(6);
+        assert_eq!(3, scaled_view.scale);
+        assert_eq!(10, scaled_view.offset);
     }
 }
