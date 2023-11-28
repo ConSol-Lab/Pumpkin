@@ -170,19 +170,23 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         &self,
         context: &mut PropagationContext,
         change_and_explanation_bound: DomainChange,
-        (var, value): (&PropagatorVariable<Var>, i32),
-        tasks: &[Task<Var>],
-        profile_tasks: &[usize],
+        propagating_variable: &PropagatorVariable<Var>,
+        propagation_value: i32,
+        profile_tasks: &[Task<Var>],
     ) -> Result<PropositionalConjunction, PropositionalConjunction> {
         let explanation = Util::create_naïve_explanation(
             change_and_explanation_bound,
-            var,
+            propagating_variable,
             context,
-            profile_tasks.iter().map(|index| &tasks[*index]),
+            profile_tasks.iter(),
         );
         let result = match change_and_explanation_bound {
-            DomainChange::LowerBound(_) => context.set_lower_bound(var, value),
-            DomainChange::UpperBound(_) => context.set_upper_bound(var, value),
+            DomainChange::LowerBound(_) => {
+                context.set_lower_bound(propagating_variable, propagation_value)
+            }
+            DomainChange::UpperBound(_) => {
+                context.set_upper_bound(propagating_variable, propagation_value)
+            }
             _ => unreachable!(),
         };
         match result {

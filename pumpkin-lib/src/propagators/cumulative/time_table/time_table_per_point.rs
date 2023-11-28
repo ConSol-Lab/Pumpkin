@@ -5,7 +5,7 @@ use crate::{
         variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
         PropositionalConjunction,
     },
-    engine::{DomainChange, EnqueueDecision, PropagationContext, PropagatorVariable},
+    engine::{DomainChange, EnqueueDecision, PropagationContext},
     propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
 };
 
@@ -96,22 +96,6 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
             }
         }
         Ok(profile)
-    }
-
-    fn store_explanation(
-        &mut self,
-        var: &PropagatorVariable<Var>,
-        value: i32,
-        explanation: PropositionalConjunction,
-        lower_bound: bool,
-    ) {
-        if lower_bound {
-            self.reasons_for_propagation_lower_bound[var.get_local_id().get_value()]
-                .insert(value, explanation);
-        } else {
-            self.reasons_for_propagation_upper_bound[var.get_local_id().get_value()]
-                .insert(value, explanation);
-        }
     }
 }
 
@@ -295,9 +279,12 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                             .propagate_and_explain(
                                 context,
                                 DomainChange::LowerBound(context.lower_bound(s)),
-                                (s, *end + 1),
-                                tasks_arg,
-                                profile_tasks,
+                                s,
+                                *end + 1,
+                                &profile_tasks
+                                    .iter()
+                                    .map(|current| tasks_arg[*current].clone())
+                                    .collect::<Vec<_>>(),
                             )
                             .is_err()
                     {
@@ -309,9 +296,12 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                             .propagate_and_explain(
                                 context,
                                 DomainChange::UpperBound(context.upper_bound(s)),
-                                (s, *start - p),
-                                tasks_arg,
-                                profile_tasks,
+                                s,
+                                *start - p,
+                                &profile_tasks
+                                    .iter()
+                                    .map(|current| tasks_arg[*current].clone())
+                                    .collect::<Vec<_>>(),
                             )
                             .is_err()
                     {
