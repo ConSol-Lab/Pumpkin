@@ -13,6 +13,10 @@ use super::{AssignmentsInteger, DomainEvent, DomainManager, EmptyDomain, WatchLi
 pub struct LocalId(u32);
 
 impl LocalId {
+    pub fn get_value(&self) -> usize {
+        self.0 as usize
+    }
+
     pub const fn from(value: u32) -> Self {
         LocalId(value)
     }
@@ -56,6 +60,7 @@ impl<T> IndexMut<PropagatorId> for Vec<T> {
 /// A propagator variable is a handle to a variable for a propagator. It keeps track of the
 /// [`LocalId`] when modifying the domain. To obtain a propagator variable, the
 /// [`PropagatorConstructorContext::register()`] method should be used.
+#[derive(Clone)]
 pub struct PropagatorVariable<Var> {
     inner: Var,
     local_id: LocalId,
@@ -70,6 +75,10 @@ impl<Var: std::fmt::Debug> std::fmt::Debug for PropagatorVariable<Var> {
 impl<Var: IntVar> PropagatorVariable<Var> {
     pub fn unpack(&self, delta: Delta) -> DomainChange {
         self.inner.unpack_delta(delta)
+    }
+
+    pub fn get_local_id(&self) -> LocalId {
+        return self.local_id;
     }
 }
 

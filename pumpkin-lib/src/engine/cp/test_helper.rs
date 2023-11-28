@@ -3,6 +3,7 @@
 use crate::basic_types::{DomainId, PropagationStatusCP, PropositionalConjunction};
 use crate::engine::EmptyDomain;
 
+use super::{EnqueueDecision, LocalId};
 use super::{
     propagation::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, PropagationContext,
@@ -31,6 +32,11 @@ impl TestSolver {
         self.assignment.grow(lb, ub)
     }
 
+    pub fn initialise_at_root(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
+        let mut context = PropagationContext::new(&mut self.assignment, propagator.id);
+        propagator.propagator.initialise_at_root(&mut context)
+    }
+
     pub fn new_propagator<Constructor: CPPropagatorConstructor>(
         &mut self,
         args: Constructor::Args,
@@ -52,6 +58,22 @@ impl TestSolver {
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {
         self.assignment.get_lower_bound(var)
+    }
+
+    pub fn increase_lower_bound(
+        &mut self,
+        propagator: &mut TestPropagator,
+        id: i32,
+        var: DomainId,
+        value: i32,
+    ) -> EnqueueDecision {
+        let _ = self.assignment.tighten_lower_bound(var, value, None);
+        let mut context = PropagationContext::new(&mut self.assignment, propagator.id);
+        propagator.propagator.notify(
+            &mut context,
+            LocalId::from(id as u32),
+            crate::engine::OpaqueDomainEvent::from(crate::engine::DomainEvent::LowerBound),
+        )
     }
 
     pub fn upper_bound(&self, var: DomainId) -> i32 {
