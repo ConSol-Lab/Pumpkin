@@ -12,7 +12,7 @@ use crate::{
 use super::{ResourceProfile, TimeTablePropagator};
 
 ///Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
-/// * `time_able` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+/// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
 /// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
 /// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
 pub struct TimeTablePerPoint {
