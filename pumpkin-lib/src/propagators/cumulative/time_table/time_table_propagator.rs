@@ -356,7 +356,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
                                 return CumulativePropagationResult::new(
                                     Err(Inconsistency::EmptyDomain),
-                                    explanations,
+                                    Some(explanations),
                                 );
                             }
                         }
@@ -396,7 +396,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
                                 return CumulativePropagationResult::new(
                                     Err(Inconsistency::EmptyDomain),
-                                    explanations,
+                                    Some(explanations),
                                 );
                             }
                         }
@@ -404,7 +404,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 }
             }
         }
-        CumulativePropagationResult::new(Ok(()), explanations)
+        CumulativePropagationResult::new(Ok(()), Some(explanations))
     }
 
     /// Propagates from scratch (i.e. it recalculates all data structures)
@@ -434,7 +434,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
                 CumulativePropagationResult::new(
                     self.create_error_clause(context, tasks, &conflict_profile),
-                    Vec::new(),
+                    None,
                 )
             }
         }

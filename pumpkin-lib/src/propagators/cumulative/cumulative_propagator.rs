@@ -14,7 +14,6 @@ use std::hash::Hash;
 
 use super::{CumulativePropagationResult, IncrementalPropagator, TimeTablePerPoint};
 
-//---------------General Datastructures---------------
 #[derive(Clone, Copy, Debug, PartialEq)]
 ///Determines whether the propagator is incremental or not
 pub enum Incrementality {
@@ -132,7 +131,7 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
             horizon,
             incrementality,
             _propagation_method: propagation_method,
-            bounds: Vec::new(),
+            bounds: Vec::with_capacity(tasks.len()),
             updated: Vec::new(),
             propagator: match propagation_method {
                 PropagationMethod::TimeTablePerPoint => {
@@ -220,9 +219,12 @@ impl<Var: IntVar + 'static> Cumulative<Var> {
             )
         };
         //We go over all of the explanations and store them
-        for explanation in explanations {
-            self.propagator.store_explanation(explanation)
+        if let Some(explanations) = explanations {
+            for explanation in explanations {
+                self.propagator.store_explanation(explanation)
+            }
         }
+
         self.updated.clear(); //All of the updates (should) have been processed so we can clear the structure
         status
     }
@@ -367,7 +369,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for Cumulative<Var> 
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        let mut new_bounds = Vec::new();
+        let mut new_bounds = Vec::with_capacity(self.tasks.len());
         for task in self.tasks.iter() {
             new_bounds.push((
                 context.lower_bound(&task.start_variable),

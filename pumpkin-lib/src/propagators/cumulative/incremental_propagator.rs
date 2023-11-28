@@ -34,16 +34,16 @@ impl Explanation {
 
 ///Stores the result of a propagation iteration by the cumulative propagators
 /// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
-/// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before
+/// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before. These explanations could be [None] if a structural inconsistency is found
 pub struct CumulativePropagationResult {
     pub status: PropagationStatusCP,
-    pub explanations: Vec<Explanation>,
+    pub explanations: Option<Vec<Explanation>>,
 }
 
 impl CumulativePropagationResult {
     pub fn new(
         status: PropagationStatusCP,
-        explanations: Vec<Explanation>,
+        explanations: Option<Vec<Explanation>>,
     ) -> CumulativePropagationResult {
         CumulativePropagationResult {
             status,

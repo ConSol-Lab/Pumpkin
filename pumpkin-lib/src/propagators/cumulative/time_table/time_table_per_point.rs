@@ -23,10 +23,8 @@ pub struct TimeTablePerPoint {
 
 impl TimeTablePerPoint {
     pub fn new<Var: IntVar + 'static>(num_tasks: usize) -> TimeTablePerPoint {
-        let mut reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> = Vec::new();
-        for _ in 0..num_tasks {
-            reasons_for_propagation.push(HashMap::new());
-        }
+        let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
+            vec![HashMap::new(); num_tasks];
         TimeTablePerPoint {
             time_table: BTreeMap::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
