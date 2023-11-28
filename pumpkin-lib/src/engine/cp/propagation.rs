@@ -78,7 +78,7 @@ impl<Var: IntVar> PropagatorVariable<Var> {
     }
 
     pub fn get_local_id(&self) -> LocalId {
-        return self.local_id;
+        self.local_id
     }
 }
 

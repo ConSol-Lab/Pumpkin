@@ -6,7 +6,7 @@ use crate::{
         PropositionalConjunction,
     },
     engine::{DomainChange, EnqueueDecision, PropagationContext, PropagatorVariable},
-    propagators::{IncrementalPropagator, Task, Updated},
+    propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
 };
 
 use super::{ResourceProfile, TimeTablePropagator};
@@ -14,7 +14,6 @@ use super::{ResourceProfile, TimeTablePropagator};
 //-------------TIME TABLE PER POINT-------------
 pub struct TimeTablePerPoint {
     time_table: BTreeMap<u32, ResourceProfile>, //structure for holding time-tables
-    temporary_time_table: Vec<ResourceProfile>, //TODO: there has to be a better way
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>, // for each variable, eagerly maps the bound change to an explanation
     reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>, // for each variable, eagerly maps the bound change to an explanation
 }
@@ -27,7 +26,6 @@ impl TimeTablePerPoint {
         }
         TimeTablePerPoint {
             time_table: BTreeMap::new(),
-            temporary_time_table: Vec::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
             reasons_for_propagation_upper_bound: reasons_for_propagation,
         }
@@ -35,14 +33,27 @@ impl TimeTablePerPoint {
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
-    fn create_time_table(
+    fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
         tasks: &[Task<Var>],
         capacity: i32,
         reversed: bool,
-    ) -> (bool, Vec<usize>) {
+    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>> {
+        let result = self.create_time_table(context, tasks, capacity, reversed)?;
+        self.time_table = result;
+        Ok(self.time_table.clone())
+    }
+
+    fn create_time_table(
+        &self,
+        context: &PropagationContext,
+        tasks: &[Task<Var>],
+        capacity: i32,
+        reversed: bool,
+    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>> {
         let mut profile: BTreeMap<u32, ResourceProfile> = BTreeMap::new();
+        //First we go over all tasks and determine their mandatory parts
         for Task {
             start_variable: s,
             processing_time: p,
@@ -67,7 +78,9 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
             }
 
             if upper_bound < lower_bound + p {
+                //There is a mandatory part
                 for i in upper_bound..(lower_bound + p) {
+                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
                     let current_profile: &mut ResourceProfile = profile
                         .entry(i as u32)
                         .or_insert(ResourceProfile::default(i));
@@ -75,14 +88,13 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
                     current_profile.profile_tasks.push(id.get_value());
 
                     if current_profile.height > capacity {
-                        return (true, current_profile.profile_tasks.clone());
+                        //The addition of the current task to the resource profile has caused an overflow
+                        return Err(current_profile.profile_tasks.clone());
                     }
                 }
             }
         }
-        self.temporary_time_table = profile.values().cloned().collect();
-        self.time_table = profile;
-        (false, Vec::new())
+        Ok(profile)
     }
 
     fn store_explanation(
@@ -100,10 +112,6 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
                 .insert(value, explanation);
         }
     }
-
-    fn get_time_table(&self) -> &Vec<ResourceProfile> {
-        &self.temporary_time_table
-    }
 }
 
 impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
@@ -114,10 +122,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         _tasks: &[Task<Var>],
         _bounds: &mut Vec<(i32, i32)>,
         _capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    ) {
+    ) -> CumulativePropagationResult {
         todo!()
     }
 
@@ -210,29 +215,33 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                     continue;
                 } else if self.var_has_overlap_with_interval(context, *p, s, *start, *end) {
                     //check whether an overflow occurs + whether we can update the lower-bound
-                    if (start - p) < context.lower_bound(s) && *end + 1 > context.lower_bound(s) {
-                        let (conflict_found, _explanation) = self.propagate_and_explain(
-                            context,
-                            DomainChange::LowerBound(context.lower_bound(s)),
-                            (s, *end + 1),
-                            tasks_arg,
-                            profile_tasks,
-                        );
-                        if conflict_found {
-                            return Err(Inconsistency::EmptyDomain);
-                        }
+                    if (start - p) < context.lower_bound(s)
+                        && *end + 1 > context.lower_bound(s)
+                        && self
+                            .propagate_and_explain(
+                                context,
+                                DomainChange::LowerBound(context.lower_bound(s)),
+                                (s, *end + 1),
+                                tasks_arg,
+                                profile_tasks,
+                            )
+                            .is_err()
+                    {
+                        return Err(Inconsistency::EmptyDomain);
                     }
-                    if end > &context.upper_bound(s) && *start - p < context.upper_bound(s) {
-                        let (conflict_found, _explanation) = self.propagate_and_explain(
-                            context,
-                            DomainChange::UpperBound(context.upper_bound(s)),
-                            (s, *start - p),
-                            tasks_arg,
-                            profile_tasks,
-                        );
-                        if conflict_found {
-                            return Err(Inconsistency::EmptyDomain);
-                        }
+                    if end > &context.upper_bound(s)
+                        && *start - p < context.upper_bound(s)
+                        && self
+                            .propagate_and_explain(
+                                context,
+                                DomainChange::UpperBound(context.upper_bound(s)),
+                                (s, *start - p),
+                                tasks_arg,
+                                profile_tasks,
+                            )
+                            .is_err()
+                    {
+                        return Err(Inconsistency::EmptyDomain);
                     }
                 }
             }
@@ -247,10 +256,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         bounds: &mut Vec<(i32, i32)>,
         horizon: i32,
         capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    ) {
+    ) -> CumulativePropagationResult {
         TimeTablePropagator::propagate_from_scratch(self, context, tasks, bounds, horizon, capacity)
     }
 
@@ -266,17 +272,21 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
 
     fn store_explanation(
         &mut self,
-        var: &PropagatorVariable<Var>,
-        value: i32,
-        explanation: PropositionalConjunction,
-        lower_bound: bool,
+        Explanation {
+            change,
+            index,
+            explanation,
+        }: Explanation,
     ) {
-        if lower_bound {
-            self.reasons_for_propagation_lower_bound[var.get_local_id().get_value()]
-                .insert(value, explanation);
-        } else {
-            self.reasons_for_propagation_upper_bound[var.get_local_id().get_value()]
-                .insert(value, explanation);
+        //Note that we assume that the index is the same as the local id of the task
+        match change {
+            DomainChange::LowerBound(value) => {
+                self.reasons_for_propagation_lower_bound[index].insert(value, explanation);
+            }
+            DomainChange::UpperBound(value) => {
+                self.reasons_for_propagation_upper_bound[index].insert(value, explanation);
+            }
+            _ => unreachable!(),
         }
     }
 

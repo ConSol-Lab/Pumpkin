@@ -12,18 +12,18 @@ use crate::{
 
 use std::hash::Hash;
 
-use super::{IncrementalPropagator, TimeTablePerPoint};
+use super::{CumulativePropagationResult, IncrementalPropagator, TimeTablePerPoint};
 
 //---------------General Datastructures---------------
 #[derive(Clone, Copy, Debug, PartialEq)]
+///Determines whether the propagator is incremental or not
 pub enum Incrementality {
-    //Determines whether the propagator is incremental or not
     REGULAR = 1,
     INCREMENTAL = 2,
 }
 #[derive(Clone, Debug, Copy)]
+///Determines what method is used for propagation
 pub enum PropagationMethod {
-    //Determines what method is used for propagation
     TimeTablePerPoint = 1,
 }
 
@@ -36,8 +36,12 @@ impl std::fmt::Display for PropagationMethod {
 }
 
 #[derive(Clone, Debug)]
+///Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
+/// * `start_variable` - The [PropagatorVariable] representing the start time of a task
+/// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
+/// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
+/// * `id` - The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
 pub struct Task<Var> {
-    //For now, only the start times are assumed to be variable
     pub start_variable: PropagatorVariable<Var>, //start_time
     pub processing_time: i32,                    //processing_time (duration)
     pub resource_usage: i32,                     //resource usage
@@ -59,41 +63,58 @@ impl<Var: IntVar + 'static> PartialEq for Task<Var> {
 impl<Var: IntVar + 'static> Eq for Task<Var> {}
 
 #[derive(Clone, Debug)]
+///The task which is passed as argument
+/// * `start_variable` - The [IntVar] representing the start time of a task
+/// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
+/// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
 pub struct ArgTask<Var> {
-    //The task which is passed as argument
-    pub start_time: Var,      //start_time
-    pub processing_time: i32, //processing_time (duration)
-    pub resource_usage: i32,  //resource usage
+    pub start_time: Var,
+    pub processing_time: i32,
+    pub resource_usage: i32,
 }
 #[derive(Clone)]
+///The arguments which are required to create the constraint/propagators
+/// * `tasks` - A box containing all of the ArgTasks
+/// * `capacity` - The capacity of the resource
+/// * `horizon` - The horizon of the resource (i.e. the largest possible makespan)
+/// * `incrementality` - What form of incrementality is used (either [Incrementality::INCREMENTAL] or [Incrementality::REGULAR])
+/// * `propagation_method` - The used propagation method (for example, [PropagationMethod::TimeTablePerPoint])
 pub struct CumulativeArgs<Var> {
-    //The arguments which are required to create the constraint/propagators
-    pub tasks: Box<[ArgTask<Var>]>, //A box containing all of the ArgTasks
-    pub capacity: i32,              //The capacity of the resource
-    pub horizon: i32, //The horizon of the resource (i.e. the largest possible makespan)
-    pub incrementality: Incrementality, //What form of incrementality is used
-    pub propagation_method: PropagationMethod, //The used propagation method
+    pub tasks: Box<[ArgTask<Var>]>,
+    pub capacity: i32,
+    pub horizon: i32,
+    pub incrementality: Incrementality,
+    pub propagation_method: PropagationMethod,
 }
 
 #[derive(Debug, Copy, Clone)]
+/// Stores the information of an updated task
 pub struct Updated {
-    // Used for notifying the propagator when a task has been updated
     pub task_id: usize,
     pub old_lower_bound: i32,
     pub old_upper_bound: i32,
     pub new_lower_bound: i32,
     pub new_upper_bound: i32,
 }
+
+///Holds the data for the cumulative constraint; this constraint models that for each time-point in the horizon, the resource consumption for that time-point is not exceeded
+/// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]
+/// * `capacity` - The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
+/// * `horizon` - The horizon of the resource (i.e. the largest possible makespan)
+/// * `incrementality` - What form of incrementality is used (either [Incrementality::INCREMENTAL] or [Incrementality::REGULAR])
+/// * `propagation_method` - The used propagation method (for example, [PropagationMethod::TimeTablePerPoint])
+/// * `bounds` - The current known bounds of the different tasks; stored as (lower_bound, upper_bound)
+/// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
+/// * `propagator` - Holds the actual propagator which is responsible for the propagation, this allows the overarching propagator to not be required to have unnecessary data structures
 pub struct Cumulative<Var> {
-    //Holds the data of the propagator
-    tasks: Vec<Task<Var>>,                           //The Set of Tasks
-    capacity: i32,                                   //The capacity of the resource
-    horizon: i32, //The horizon of the resource (i.e. the largest possible makespan)
-    incrementality: Incrementality, //What form of incrementality is used
-    _propagation_method: PropagationMethod, //The used propagation method
-    bounds: Vec<(i32, i32)>, //The current known bounds
-    updated: Vec<Updated>, //The variables which have been updated since the last round of propagation, this structure is updated by the propagator
-    propagator: Box<dyn IncrementalPropagator<Var>>, //Holds the actual propagator which is responsible for the propagation, this allows the overarching propagator to not be required to have unnecessary data structures
+    tasks: Vec<Task<Var>>,
+    capacity: i32,
+    horizon: i32,
+    incrementality: Incrementality,
+    _propagation_method: PropagationMethod,
+    bounds: Vec<(i32, i32)>,
+    updated: Vec<Updated>,
+    propagator: Box<dyn IncrementalPropagator<Var>>,
 }
 //------------------------------
 
@@ -109,7 +130,7 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
             tasks: tasks.clone(),
             capacity,
             horizon,
-            incrementality: incrementality.clone(),
+            incrementality,
             _propagation_method: propagation_method,
             bounds: Vec::new(),
             updated: Vec::new(),
@@ -176,7 +197,10 @@ impl<Var: IntVar + 'static> Cumulative<Var> {
         context: &mut PropagationContext,
         incrementality: Incrementality,
     ) -> PropagationStatusCP {
-        let (status, explanations) = if let Incrementality::INCREMENTAL = incrementality {
+        let CumulativePropagationResult {
+            status,
+            explanations,
+        } = if let Incrementality::INCREMENTAL = incrementality {
             //Propagate incrementally, this requires the propagator to implement the propagate_incrementally
             self.propagator.propagate_incrementally(
                 context,
@@ -196,13 +220,8 @@ impl<Var: IntVar + 'static> Cumulative<Var> {
             )
         };
         //We go over all of the explanations and store them
-        for (lower_bound, task_id, value, explanation) in explanations {
-            self.propagator.store_explanation(
-                &self.tasks[task_id].start_variable,
-                value,
-                explanation,
-                lower_bound,
-            )
+        for explanation in explanations {
+            self.propagator.store_explanation(explanation)
         }
         self.updated.clear(); //All of the updates (should) have been processed so we can clear the structure
         status

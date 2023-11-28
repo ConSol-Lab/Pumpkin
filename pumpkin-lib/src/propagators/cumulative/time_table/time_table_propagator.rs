@@ -1,6 +1,6 @@
 use std::{
     cmp::{max, min},
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
 };
 
 use crate::{
@@ -9,7 +9,8 @@ use crate::{
         PropositionalConjunction,
     },
     engine::{DomainChange, EnqueueDecision, PropagationContext, PropagatorVariable},
-    propagators::{IncrementalPropagator, Task, Updated},
+    propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
+    pumpkin_assert_simple,
 };
 
 #[derive(Clone)]
@@ -107,15 +108,24 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         EnqueueDecision::Enqueue
     }
 
-    /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
-    /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
-    fn create_time_table(
+    ///See method [create_time_table][TimeTablePropagator::create_time_table], creates and assigns the time-table
+    fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
         tasks: &[Task<Var>],
         capacity: i32,
         reversed: bool,
-    ) -> (bool, Vec<usize>);
+    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
+
+    /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
+    /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+    fn create_time_table(
+        &self,
+        context: &PropagationContext,
+        tasks: &[Task<Var>],
+        capacity: i32,
+        reversed: bool,
+    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
     fn reset_structures(
@@ -125,11 +135,12 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         _horizon: i32,
         capacity: i32,
     ) {
-        self.create_time_table(context, tasks, capacity, false);
+        let result = self.create_time_table_and_assign(context, tasks, capacity, false);
+        pumpkin_assert_simple!(
+            result.is_ok(),
+            "Found error while backtracking, this should not be possible"
+        );
     }
-
-    /// Returns the current time-table
-    fn get_time_table(&self) -> &Vec<ResourceProfile>;
 
     /// Eagerly store the reason for a propagation of a value in the appropriate datastructure
     fn store_explanation(
@@ -250,18 +261,16 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
 
     /// Checks whether a propagation should occur based on the current state of the time-table
     /// * `to_check` - The profiles which should be checked
-    fn check_for_updates(
+    fn check_for_updates<'a>(
         &self,
         context: &mut PropagationContext,
-        to_check: &[ResourceProfile],
+        to_check: impl Iterator<Item = &'a ResourceProfile>,
         tasks: &[Task<Var>],
         bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    ) {
-        let mut explanations: Vec<(bool, usize, i32, PropositionalConjunction)> = Vec::new();
+    ) -> CumulativePropagationResult {
+        let to_check = to_check.cloned().collect::<Vec<_>>();
+        let mut explanations: Vec<Explanation> = Vec::new();
         //We go over all profiles
         for (
             index,
@@ -306,12 +315,12 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             .find_maximum_bound_and_profiles(
                                 true,
                                 index,
-                                to_check,
+                                &to_check,
                                 task,
                                 capacity,
                                 (tasks, bounds),
                             );
-                        let (conflict_found, explanation) = self.propagate_and_explain(
+                        match self.propagate_and_explain(
                             context,
                             DomainChange::LowerBound(min(
                                 context.lower_bound(s),
@@ -320,12 +329,26 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             (s, lower_bound),
                             tasks,
                             &new_profile_tasks,
-                        );
-                        explanations.push((true, id.get_value(), lower_bound, explanation));
-
-                        if conflict_found {
-                            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-                            return (Err(Inconsistency::EmptyDomain), explanations);
+                        ) {
+                            Ok(explanation) => {
+                                explanations.push(Explanation::new(
+                                    DomainChange::LowerBound(lower_bound),
+                                    id.get_value(),
+                                    explanation,
+                                ));
+                            }
+                            Err(explanation) => {
+                                explanations.push(Explanation::new(
+                                    DomainChange::LowerBound(lower_bound),
+                                    id.get_value(),
+                                    explanation,
+                                ));
+                                //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
+                                return CumulativePropagationResult::new(
+                                    Err(Inconsistency::EmptyDomain),
+                                    explanations,
+                                );
+                            }
                         }
                     }
                     if end > &context.upper_bound(s) && *start - p < context.upper_bound(s) {
@@ -335,28 +358,43 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             .find_maximum_bound_and_profiles(
                                 false,
                                 index,
-                                to_check,
+                                &to_check,
                                 task,
                                 capacity,
                                 (tasks, bounds),
                             );
-                        let (conflict_found, explanation) = self.propagate_and_explain(
+                        match self.propagate_and_explain(
                             context,
                             DomainChange::UpperBound(max(context.upper_bound(s), *end)),
                             (s, upper_bound),
                             tasks,
                             &new_profile_tasks,
-                        );
-                        explanations.push((false, id.get_value(), upper_bound, explanation));
-                        if conflict_found {
-                            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-                            return (Err(Inconsistency::EmptyDomain), explanations);
+                        ) {
+                            Ok(explanation) => {
+                                explanations.push(Explanation::new(
+                                    DomainChange::UpperBound(upper_bound),
+                                    id.get_value(),
+                                    explanation,
+                                ));
+                            }
+                            Err(explanation) => {
+                                explanations.push(Explanation::new(
+                                    DomainChange::UpperBound(upper_bound),
+                                    id.get_value(),
+                                    explanation,
+                                ));
+                                //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
+                                return CumulativePropagationResult::new(
+                                    Err(Inconsistency::EmptyDomain),
+                                    explanations,
+                                );
+                            }
                         }
                     }
                 }
             }
         }
-        (Ok(()), explanations)
+        CumulativePropagationResult::new(Ok(()), explanations)
     }
 
     /// Propagates from scratch (i.e. it recalculates all data structures)
@@ -367,10 +405,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         bounds: &mut Vec<(i32, i32)>,
         _horizon: i32,
         capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    ) {
+    ) -> CumulativePropagationResult {
         //Clear the current known bounds and recalculate them from the current bounds
         bounds.clear();
         for task in tasks.iter() {
@@ -379,19 +414,19 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 context.upper_bound(&task.start_variable),
             ))
         }
-        {
-            //Create the time-table
-            let (unsat, conflict_profile) = self.create_time_table(context, tasks, capacity, false);
-            if unsat {
+
+        match self.create_time_table_and_assign(context, tasks, capacity, false) {
+            Ok(time_table) => {
+                //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
+                self.check_for_updates(context, time_table.values(), tasks, bounds, capacity)
+            }
+            Err(conflict_profile) => {
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
-                return (
+                CumulativePropagationResult::new(
                     self.create_error_clause(context, tasks, &conflict_profile),
                     Vec::new(),
-                );
+                )
             }
         }
-        let time_table = self.get_time_table();
-        //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-        self.check_for_updates(context, time_table, tasks, bounds, capacity)
     }
 }

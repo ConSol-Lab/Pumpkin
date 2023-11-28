@@ -3,7 +3,6 @@
 use crate::basic_types::{DomainId, PropagationStatusCP, PropositionalConjunction};
 use crate::engine::EmptyDomain;
 
-use super::{EnqueueDecision, LocalId};
 use super::{
     propagation::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, PropagationContext,
@@ -11,6 +10,7 @@ use super::{
     },
     AssignmentsInteger, WatchListCP,
 };
+use super::{EnqueueDecision, LocalId};
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default)]

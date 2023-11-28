@@ -3,18 +3,53 @@ use crate::{
         variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
         PropositionalConjunction,
     },
-    engine::{
-        DomainChange, EmptyDomain, EnqueueDecision, PropagationContext, PropagatorVariable,
-    },
+    engine::{DomainChange, EmptyDomain, EnqueueDecision, PropagationContext, PropagatorVariable},
 };
 
 use super::{Task, Updated, Util};
 
-pub struct PropagationEvent<Var: IntVar + 'static> {
-    pub lower_bound: bool,
-    pub propagating_task: Task<Var>,
-    pub update_value: i32,
-    pub profile_tasks: Vec<Task<Var>>,
+///Stores the explanations
+/// * `change` - The domain change related to the event; contains the type of domain change and the value
+/// * `index` - The index of the updated task (this is equal to its local id)
+/// * `explanation` - The actual explanation consisting of a PropositionalConjunction
+pub struct Explanation {
+    pub change: DomainChange,
+    pub index: usize,
+    pub explanation: PropositionalConjunction,
+}
+
+impl Explanation {
+    pub fn new(
+        change: DomainChange,
+        index: usize,
+        explanation: PropositionalConjunction,
+    ) -> Explanation {
+        Explanation {
+            change,
+            index,
+            explanation,
+        }
+    }
+}
+
+///Stores the result of a propagation iteration by the cumulative propagators
+/// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
+/// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before
+pub struct CumulativePropagationResult {
+    pub status: PropagationStatusCP,
+    pub explanations: Vec<Explanation>,
+}
+
+impl CumulativePropagationResult {
+    pub fn new(
+        status: PropagationStatusCP,
+        explanations: Vec<Explanation>,
+    ) -> CumulativePropagationResult {
+        CumulativePropagationResult {
+            status,
+            explanations,
+        }
+    }
 }
 
 pub trait IncrementalPropagator<Var: IntVar + 'static> {
@@ -38,10 +73,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         tasks: &[Task<Var>],
         bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    );
+    ) -> CumulativePropagationResult;
 
     /// Propagates from scratch (i.e. it recalculates all data structures)
     fn propagate_from_scratch(
@@ -51,10 +83,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         bounds: &mut Vec<(i32, i32)>,
         horizon: i32,
         capacity: i32,
-    ) -> (
-        PropagationStatusCP,
-        Vec<(bool, usize, i32, PropositionalConjunction)>,
-    );
+    ) -> CumulativePropagationResult;
 
     /// Checks whether the propagator should propagate based on the changes in task
     fn should_propagate(
@@ -120,13 +149,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     }
 
     /// Eagerly store the reason for a propagation of a value in the appropriate datastructure
-    fn store_explanation(
-        &mut self,
-        var: &PropagatorVariable<Var>,
-        value: i32,
-        explanation: PropositionalConjunction,
-        lower_bound: bool,
-    );
+    fn store_explanation(&mut self, explanation: Explanation);
 
     /// Propagate the variable to the provided value
     fn propagate_without_explanation(
@@ -150,7 +173,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         (var, value): (&PropagatorVariable<Var>, i32),
         tasks: &[Task<Var>],
         profile_tasks: &[usize],
-    ) -> (bool, PropositionalConjunction) {
+    ) -> Result<PropositionalConjunction, PropositionalConjunction> {
         let explanation = Util::create_naïve_explanation(
             change_and_explanation_bound,
             var,
@@ -163,8 +186,8 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
             _ => unreachable!(),
         };
         match result {
-            Result::Err(_x) => (true, explanation),
-            Result::Ok(_x) => (false, explanation),
+            Result::Err(_) => Err(explanation),
+            Result::Ok(_) => Ok(explanation),
         }
     }
 
