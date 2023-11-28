@@ -14,18 +14,27 @@ use crate::{
 };
 
 #[derive(Clone)]
+///Structure used for storing events for calculating the time-table (e.g. in [TimeTablePerPoint][TimeTablePerPoint::time_table]) by keeping track of when a mandatory part has started or ended
+/// * `time_stamp` - The time-stamp of the event
+/// * `change_resource_usage` - Change in the resource usage at the given time-point; a positive value indicates the start of a mandatory part and a negative value indicates the end of a mandatory part
+/// * `task_id` - The id of the task responsible for the event
 pub struct Event {
-    pub time_stamp: i32, //time-stamp of event
-    pub delta_c: i32, //change in resource usage at this time-point (positive if start of mandatory part, negative otherwise)
-    pub task_id: usize, //id of the task responsible for the event
+    pub time_stamp: i32,
+    pub change_resource_usage: i32,
+    pub task_id: usize,
 }
 
 #[derive(Clone, Debug)]
+///Structures used for storing the data related to resource profiles; a [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
+/// * `start` - The start time of the [ResourceProfile] (inclusive)
+/// * `end` - The end time of the [ResourceProfile] (inclusive)
+/// * `profile_tasks` - The IDs of the tasks which are part of the profile
+/// * `height` - The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
 pub struct ResourceProfile {
-    pub start: i32,                //start time of profile (inclusive)
-    pub end: i32,                  //end time of profile (inclusive), end >= start
-    pub profile_tasks: Vec<usize>, //the ids of the tasks in this profile
-    pub height: i32,               //height of the profile
+    pub start: i32,
+    pub end: i32,
+    pub profile_tasks: Vec<usize>,
+    pub height: i32,
 }
 
 impl ResourceProfile {
@@ -39,6 +48,7 @@ impl ResourceProfile {
     }
 }
 
+///A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var> {
     /// Static method for creating an error clause similar to [create_error_clause][IncrementalPropagator::create_error_clause] consisting of the bounds of the provided arguments
     /// * `conflict_tasks` - A list of indices into the `tasks` parameter which constitute the tasks which have caused the conflict
@@ -108,7 +118,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         EnqueueDecision::Enqueue
     }
 
-    ///See method [create_time_table][TimeTablePropagator::create_time_table], creates and assigns the time-table
+    ///See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,

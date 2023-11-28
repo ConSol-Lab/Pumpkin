@@ -11,11 +11,14 @@ use crate::{
 
 use super::{ResourceProfile, TimeTablePropagator};
 
-//-------------TIME TABLE PER POINT-------------
+///Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
+/// * `time_able` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+/// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
+/// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
 pub struct TimeTablePerPoint {
-    time_table: BTreeMap<u32, ResourceProfile>, //structure for holding time-tables
-    reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>, // for each variable, eagerly maps the bound change to an explanation
-    reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>, // for each variable, eagerly maps the bound change to an explanation
+    time_table: BTreeMap<u32, ResourceProfile>,
+    reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
+    reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
 }
 
 impl TimeTablePerPoint {
@@ -124,6 +127,79 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         _capacity: i32,
     ) -> CumulativePropagationResult {
         todo!()
+    }
+
+    fn propagate_from_scratch(
+        &mut self,
+        context: &mut PropagationContext,
+        tasks: &[Task<Var>],
+        bounds: &mut Vec<(i32, i32)>,
+        horizon: i32,
+        capacity: i32,
+    ) -> CumulativePropagationResult {
+        TimeTablePropagator::propagate_from_scratch(self, context, tasks, bounds, horizon, capacity)
+    }
+
+    fn reset_structures(
+        &mut self,
+        context: &PropagationContext,
+        tasks: &[Task<Var>],
+        horizon: i32,
+        capacity: i32,
+    ) {
+        TimeTablePropagator::reset_structures(self, context, tasks, horizon, capacity);
+    }
+
+    fn store_explanation(
+        &mut self,
+        Explanation {
+            change,
+            index,
+            explanation,
+        }: Explanation,
+    ) {
+        //Note that we assume that the index is the same as the local id of the task
+        match change {
+            DomainChange::LowerBound(value) => {
+                self.reasons_for_propagation_lower_bound[index].insert(value, explanation);
+            }
+            DomainChange::UpperBound(value) => {
+                self.reasons_for_propagation_upper_bound[index].insert(value, explanation);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_reason(
+        &self,
+        affected_tasks: &Task<Var>,
+        change: DomainChange,
+    ) -> PropositionalConjunction {
+        match change {
+            DomainChange::LowerBound(value) => self.reasons_for_propagation_lower_bound
+                [affected_tasks.id.get_value()]
+            .get(&value)
+            .unwrap()
+            .clone(),
+            DomainChange::UpperBound(value) => self.reasons_for_propagation_upper_bound
+                [affected_tasks.id.get_value()]
+            .get(&value)
+            .unwrap()
+            .clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn should_propagate(
+        &mut self,
+        context: &PropagationContext,
+        _tasks: &[Task<Var>],
+        task: &Task<Var>,
+        bounds: &[(i32, i32)],
+        _capacity: i32,
+        updated: &mut Vec<Updated>,
+    ) -> EnqueueDecision {
+        TimeTablePropagator::should_propagate(self, task, context, bounds, updated)
     }
 
     fn debug_propagate_from_scratch(
@@ -247,79 +323,6 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
             }
         }
         Ok(())
-    }
-
-    fn propagate_from_scratch(
-        &mut self,
-        context: &mut PropagationContext,
-        tasks: &[Task<Var>],
-        bounds: &mut Vec<(i32, i32)>,
-        horizon: i32,
-        capacity: i32,
-    ) -> CumulativePropagationResult {
-        TimeTablePropagator::propagate_from_scratch(self, context, tasks, bounds, horizon, capacity)
-    }
-
-    fn reset_structures(
-        &mut self,
-        context: &PropagationContext,
-        tasks: &[Task<Var>],
-        horizon: i32,
-        capacity: i32,
-    ) {
-        TimeTablePropagator::reset_structures(self, context, tasks, horizon, capacity);
-    }
-
-    fn store_explanation(
-        &mut self,
-        Explanation {
-            change,
-            index,
-            explanation,
-        }: Explanation,
-    ) {
-        //Note that we assume that the index is the same as the local id of the task
-        match change {
-            DomainChange::LowerBound(value) => {
-                self.reasons_for_propagation_lower_bound[index].insert(value, explanation);
-            }
-            DomainChange::UpperBound(value) => {
-                self.reasons_for_propagation_upper_bound[index].insert(value, explanation);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn get_reason(
-        &self,
-        affected_tasks: &Task<Var>,
-        change: DomainChange,
-    ) -> PropositionalConjunction {
-        match change {
-            DomainChange::LowerBound(value) => self.reasons_for_propagation_lower_bound
-                [affected_tasks.id.get_value()]
-            .get(&value)
-            .unwrap()
-            .clone(),
-            DomainChange::UpperBound(value) => self.reasons_for_propagation_upper_bound
-                [affected_tasks.id.get_value()]
-            .get(&value)
-            .unwrap()
-            .clone(),
-            _ => unreachable!(),
-        }
-    }
-
-    fn should_propagate(
-        &mut self,
-        context: &PropagationContext,
-        _tasks: &[Task<Var>],
-        task: &Task<Var>,
-        bounds: &[(i32, i32)],
-        _capacity: i32,
-        updated: &mut Vec<Updated>,
-    ) -> EnqueueDecision {
-        TimeTablePropagator::should_propagate(self, task, context, bounds, updated)
     }
 }
 
