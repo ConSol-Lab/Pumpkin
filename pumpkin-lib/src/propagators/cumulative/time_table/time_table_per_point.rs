@@ -581,12 +581,23 @@ mod tests {
         let result = solver.initialise_at_root(&mut propagator);
 
         assert_eq!(solver.lower_bound(s2), 1);
-        //The propagator can only lower the upper-bound if there is a mandatory part which overlaps with'
-        //its latest starting time, if we do not propagate until fixpoint then it is unsure whether the upper-bound has been propagated to its lowest values
-        assert!(solver.upper_bound(s2) <= 4);
+        assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
         assert!(result.is_ok());
+
+        let reason = solver.get_reason(
+            &mut propagator,
+            Delta::new(LocalId::from(1), DomainChange::UpperBound(3)),
+        );
+        assert_eq!(
+            PropositionalConjunction::from(vec![
+                s2.upper_bound_predicate(9),
+                s1.lower_bound_predicate(6),
+                s1.upper_bound_predicate(6),
+            ]),
+            reason
+        );
     }
 
     #[test]
@@ -782,9 +793,66 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(1),
+                s2.lower_bound_predicate(0), //Note that this is a more general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
                 s1.lower_bound_predicate(1),
                 s1.upper_bound_predicate(1),
+            ]),
+            reason
+        );
+    }
+
+    #[test]
+    fn propagator_propagates_generic_bounds() {
+        let mut solver = TestSolver::default();
+        let s1 = solver.new_variable(3, 3);
+        let s2 = solver.new_variable(5, 5);
+        let s3 = solver.new_variable(1, 15);
+
+        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
+            tasks: [
+                ArgTask {
+                    start_time: s1,
+                    processing_time: 2,
+                    resource_usage: 1,
+                },
+                ArgTask {
+                    start_time: s2,
+                    processing_time: 2,
+                    resource_usage: 1,
+                },
+                ArgTask {
+                    start_time: s3,
+                    processing_time: 4,
+                    resource_usage: 1,
+                },
+            ]
+            .into_iter()
+            .collect(),
+            capacity: 1,
+            horizon: 20,
+            incrementality: Incrementality::REGULAR,
+            propagation_method: PropagationMethod::TimeTablePerPoint,
+        });
+        let result = solver.initialise_at_root(&mut propagator);
+        assert_eq!(solver.lower_bound(s3), 7);
+        assert_eq!(solver.upper_bound(s3), 15);
+        assert_eq!(solver.lower_bound(s2), 5);
+        assert_eq!(solver.upper_bound(s2), 5);
+        assert_eq!(solver.lower_bound(s1), 3);
+        assert_eq!(solver.upper_bound(s1), 3);
+        assert!(result.is_ok());
+
+        let reason = solver.get_reason(
+            &mut propagator,
+            Delta::new(LocalId::from(2), DomainChange::LowerBound(7)),
+        );
+        assert_eq!(
+            PropositionalConjunction::from(vec![
+                s2.upper_bound_predicate(5),
+                s2.lower_bound_predicate(5),
+                s1.lower_bound_predicate(3),
+                s1.upper_bound_predicate(3),
+                s3.lower_bound_predicate(0), //Note that s3 would have been able to propagate this bound even if it started at time 0
             ]),
             reason
         );

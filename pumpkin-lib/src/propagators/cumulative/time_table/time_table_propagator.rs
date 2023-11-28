@@ -1,13 +1,10 @@
 use std::{
-    cmp::{max, min},
+    cmp::max,
     collections::{BTreeMap, HashSet},
 };
 
 use crate::{
-    basic_types::{
-        variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
-        PropositionalConjunction,
-    },
+    basic_types::{variables::IntVar, Inconsistency, PropositionalConjunction},
     engine::{DomainChange, EnqueueDecision, PropagationContext, PropagatorVariable},
     propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
     pumpkin_assert_simple,
@@ -50,30 +47,6 @@ impl ResourceProfile {
 
 ///A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var> {
-    /// Static method for creating an error clause similar to [create_error_clause][IncrementalPropagator::create_error_clause] consisting of the bounds of the provided arguments
-    /// * `conflict_tasks` - A list of indices into the `tasks` parameter which constitute the tasks which have caused the conflict
-    fn create_error_clause(
-        context: &PropagationContext,
-        tasks: &[Task<Var>],
-        conflict_tasks: &Vec<usize>,
-    ) -> PropagationStatusCP {
-        let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
-        for task_id in conflict_tasks.iter() {
-            let Task {
-                start_variable: s,
-                processing_time: _,
-                resource_usage: _,
-                id: _,
-            } = &tasks[*task_id];
-            error_clause.push(s.upper_bound_predicate(context.upper_bound(s)));
-            error_clause.push(s.lower_bound_predicate(context.lower_bound(s)));
-        }
-
-        Err(Inconsistency::from(PropositionalConjunction::from(
-            error_clause,
-        )))
-    }
-
     /// Determines whether the propagator should be enqueued for propagation
     /// * `task` - The task which has been updated
     /// * `bounds` - The bounds before the current update took place - this does not need to be updated in this function as it will be updated in [notify][CumulativePropagator::notify]
@@ -148,7 +121,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         let result = self.create_time_table_and_assign(context, tasks, capacity, false);
         pumpkin_assert_simple!(
             result.is_ok(),
-            "Found error while backtracking, this should not be possible"
+            "Found error while backtracking, this indicates that a conflict was not reported by the current propagator"
         );
     }
 
@@ -163,17 +136,28 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
 
     /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
     /// * `lower_bound` - Whether the propagation is on the lower-bound or the upper-bound
-    /// * `profiles` - The [ResourceProfile]s with together with their indices in the time-table
-    fn find_maximum_bound_and_profiles(
+    /// * `profiles` - The [ResourceProfile]s in the time-table
+    fn find_maximum_bound_and_profiles<'a>(
         &self,
         lower_bound: bool,
-        propagating_index: usize,
-        profiles: &[ResourceProfile],
+        (num_profiles, propagating_index): (usize, usize),
+        mut profiles: impl Iterator<Item = &'a ResourceProfile> + DoubleEndedIterator,
         propagating_task: &Task<Var>,
         capacity: i32,
         (tasks, bounds): (&[Task<Var>], &[(i32, i32)]),
     ) -> (i32, Vec<usize>) {
-        let mut current_profile = &profiles[propagating_index]; //The profile which caused the original propagation
+        let mut current_profile = if lower_bound {
+            profiles
+                .nth(propagating_index)
+                .expect("Propagating profile did not exist within the provided iterator")
+        } else {
+            //We need to find the current profile and then proceed in reverse order
+            //If we have the list [0, 1, 2, 3, 4, 5, 6] with propagating_index = 4 then we need to skip 2 profiles to get to the current one
+            //This is equal to skipping num_profiles - propagating_index - 1 (in the example 7 - 4 - 1 = 2)
+            profiles
+                .nth_back(num_profiles - propagating_index - 1)
+                .expect("Propagating profile did not exist within the provided iterator")
+        }; //The profile which caused the original propagation
         let mut new_profile_tasks = HashSet::new(); //The profile tasks responsible for the maximum calculated bound update
         new_profile_tasks.extend(current_profile.profile_tasks.clone());
         let mut bound = if lower_bound {
@@ -183,36 +167,34 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         };
         if lower_bound {
             //If the propagating_index is the last profile then no further propagations are able to take place based on the current one
-            if propagating_index < profiles.len() - 1 {
-                for next_profile in profiles.iter().skip(propagating_index + 1) {
-                    //Go through all profiles starting from the propagating one
-                    //Find all profiles after the current one which would propagate for the current task based on that profiles[propagating_index] propagated
-                    //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
-                    if next_profile.height + propagating_task.resource_usage > capacity
-                        && !self.has_mandatory_part_in_interval(
-                            propagating_task.id.get_value(),
-                            next_profile.start,
-                            next_profile.end,
-                            tasks,
-                            bounds,
-                        ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
-                        && (next_profile.start - current_profile.end + 1) < propagating_task.processing_time
-                    //The updated task necessarily overlaps with the next profile
-                    {
-                        bound = next_profile.end + 1;
-                        new_profile_tasks.extend(next_profile.profile_tasks.clone());
-                        current_profile = next_profile;
-                    } else if (current_profile.start - next_profile.end + 1)
-                        >= propagating_task.processing_time
-                    {
-                        //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
-                        break;
-                    }
+            for next_profile in profiles {
+                //Go through all profiles starting from the propagating one
+                //Find all profiles after the current one which would propagate for the current task based on that profiles[propagating_index] propagated
+                //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
+                if next_profile.height + propagating_task.resource_usage > capacity
+                    && !self.has_mandatory_part_in_interval(
+                        propagating_task.id.get_value(),
+                        next_profile.start,
+                        next_profile.end,
+                        tasks,
+                        bounds,
+                    ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
+                    && (next_profile.start - current_profile.end + 1) < propagating_task.processing_time
+                //The updated task necessarily overlaps with the next profile
+                {
+                    bound = next_profile.end + 1;
+                    new_profile_tasks.extend(next_profile.profile_tasks.clone());
+                    current_profile = next_profile;
+                } else if (current_profile.start - next_profile.end + 1)
+                    >= propagating_task.processing_time
+                {
+                    //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
+                    break;
                 }
             }
         } else if propagating_index > 0 {
             //An upper-bound update and we check whether the propagating profile is not the first profile
-            for next_profile in profiles.iter().take(propagating_index).rev() {
+            for next_profile in profiles.rev() {
                 //Find all profiles before the current one which would propagate for the current task based on that profiles[propagating_index] propagated
                 //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
                 if next_profile.height + propagating_task.resource_usage > capacity
@@ -274,12 +256,12 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn check_for_updates<'a>(
         &self,
         context: &mut PropagationContext,
-        to_check: impl Iterator<Item = &'a ResourceProfile>,
+        to_check: impl Iterator<Item = &'a ResourceProfile> + Clone + DoubleEndedIterator,
+        to_check_len: usize,
         tasks: &[Task<Var>],
         bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
     ) -> CumulativePropagationResult {
-        let to_check = to_check.cloned().collect::<Vec<_>>();
         let mut explanations: Vec<Explanation> = Vec::new();
         //We go over all profiles
         for (
@@ -290,7 +272,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 profile_tasks: _,
                 height,
             },
-        ) in to_check.iter().enumerate()
+        ) in to_check.clone().enumerate()
         {
             //Then we go over all the different tasks
             for task in tasks.iter() {
@@ -324,18 +306,15 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                         let (lower_bound, new_profile_tasks) = self
                             .find_maximum_bound_and_profiles(
                                 true,
-                                index,
-                                &to_check,
+                                (to_check_len, index),
+                                to_check.clone(),
                                 task,
                                 capacity,
                                 (tasks, bounds),
                             );
                         match self.propagate_and_explain(
                             context,
-                            DomainChange::LowerBound(min(
-                                context.lower_bound(s),
-                                lower_bound - p + 1,
-                            )), //Use the minimum bound which would have propagated the profile at index
+                            DomainChange::LowerBound(max(0, start - p + 1)), //Use the minimum bound which would have propagated the profile at index
                             (s, lower_bound),
                             tasks,
                             &new_profile_tasks,
@@ -367,8 +346,8 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                         let (upper_bound, new_profile_tasks) = self
                             .find_maximum_bound_and_profiles(
                                 false,
-                                index,
-                                &to_check,
+                                (to_check_len, index),
+                                to_check.clone(),
                                 task,
                                 capacity,
                                 (tasks, bounds),
@@ -428,7 +407,14 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         match self.create_time_table_and_assign(context, tasks, capacity, false) {
             Ok(time_table) => {
                 //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-                self.check_for_updates(context, time_table.values(), tasks, bounds, capacity)
+                self.check_for_updates(
+                    context,
+                    time_table.values(),
+                    time_table.len(),
+                    tasks,
+                    bounds,
+                    capacity,
+                )
             }
             Err(conflict_profile) => {
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
