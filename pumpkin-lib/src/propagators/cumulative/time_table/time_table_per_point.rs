@@ -102,7 +102,6 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         _context: &mut PropagationContext,
         _updated: &mut Vec<Updated>,
         _tasks: &[Rc<Task<Var>>],
-        _bounds: &mut Vec<(i32, i32)>,
         _capacity: i32,
     ) -> CumulativePropagationResult {
         todo!()
@@ -112,11 +111,10 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         &mut self,
         context: &mut PropagationContext,
         tasks: &[Rc<Task<Var>>],
-        bounds: &mut Vec<(i32, i32)>,
         horizon: i32,
         capacity: i32,
     ) -> CumulativePropagationResult {
-        TimeTablePropagator::propagate_from_scratch(self, context, tasks, bounds, horizon, capacity)
+        TimeTablePropagator::propagate_from_scratch(self, context, tasks, horizon, capacity)
     }
 
     fn reset_structures(
@@ -186,7 +184,6 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         horizon: i32,
         capacity: i32,
         tasks_arg: &[Rc<Task<Var>>],
-        bounds: &[(i32, i32)],
     ) -> PropagationStatusCP {
         let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
@@ -247,7 +244,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                 if height + task.resource_usage <= capacity {
                     // The tasks are sorted by capacity, if this task doesn't overload then none will
                     break;
-                } else if self.has_mandatory_part_in_interval(task, *start, *end, bounds) {
+                } else if self.has_mandatory_part_in_interval(context, task, *start, *end) {
                     continue;
                 } else if self.var_has_overlap_with_interval(context, task, *start, *end) {
                     //check whether an overflow occurs + whether we can update the lower-bound

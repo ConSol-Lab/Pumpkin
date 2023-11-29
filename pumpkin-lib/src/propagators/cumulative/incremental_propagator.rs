@@ -73,7 +73,6 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         context: &mut PropagationContext,
         updated: &mut Vec<Updated>,
         tasks: &[Rc<Task<Var>>],
-        bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
     ) -> CumulativePropagationResult;
 
@@ -82,7 +81,6 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         &mut self,
         context: &mut PropagationContext,
         tasks: &[Rc<Task<Var>>],
-        bounds: &mut Vec<(i32, i32)>,
         horizon: i32,
         capacity: i32,
     ) -> CumulativePropagationResult;
@@ -202,6 +200,5 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         horizon: i32,
         capacity: i32,
         tasks_arg: &[Rc<Task<Var>>],
-        bounds: &[(i32, i32)],
     ) -> PropagationStatusCP;
 }

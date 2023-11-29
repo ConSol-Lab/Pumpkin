@@ -210,7 +210,6 @@ impl<Var: IntVar + 'static> Cumulative<Var> {
                 context,
                 &mut self.updated,
                 &self.tasks,
-                &mut self.bounds,
                 self.capacity,
             )
         } else {
@@ -218,7 +217,6 @@ impl<Var: IntVar + 'static> Cumulative<Var> {
             self.propagator.propagate_from_scratch(
                 context,
                 &self.tasks,
-                &mut self.bounds,
                 self.horizon,
                 self.capacity,
             )
@@ -320,9 +318,11 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for Cumulative<Var> 
                 ))
             }
         }
-        //Reset the structures on the propagator itself
-        self.propagator
-            .reset_structures(context, &self.tasks, self.capacity);
+        if self.incrementality == Incrementality::INCREMENTAL {
+            //Reset the structures on the propagator itself; generally this only occurs when the propagator is incremental since structures are recalculated from scratch otherwise
+            self.propagator
+                .reset_structures(context, &self.tasks, self.capacity);
+        }
     }
 
     fn get_reason_for_propagation(
@@ -374,19 +374,11 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for Cumulative<Var> 
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        let mut new_bounds = Vec::with_capacity(self.tasks.len());
-        for task in self.tasks.iter() {
-            new_bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ));
-        }
         self.propagator.debug_propagate_from_scratch(
             context,
             self.horizon,
             self.capacity,
             &self.tasks,
-            &new_bounds,
         )
     }
 }
