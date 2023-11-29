@@ -12,20 +12,20 @@ use crate::{
     propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
 };
 
-use super::{ResourceProfile, TimeTablePropagator};
+use super::{ResourceProfile, TimeTableCreationResult, TimeTablePropagator};
 
 ///Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 /// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
 /// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
 /// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
-pub struct TimeTablePerPoint {
-    time_table: BTreeMap<u32, ResourceProfile>,
+pub struct TimeTablePerPoint<Var> {
+    time_table: BTreeMap<u32, ResourceProfile<Var>>,
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
     reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
 }
 
-impl TimeTablePerPoint {
-    pub fn new<Var: IntVar + 'static>(num_tasks: usize) -> TimeTablePerPoint {
+impl<Var: IntVar + 'static> TimeTablePerPoint<Var> {
+    pub fn new(num_tasks: usize) -> TimeTablePerPoint<Var> {
         let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
             vec![HashMap::new(); num_tasks];
         TimeTablePerPoint {
@@ -36,14 +36,14 @@ impl TimeTablePerPoint {
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
+impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> {
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
-    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>> {
+    ) -> TimeTableCreationResult<Var> {
         let result = self.create_time_table(context, tasks, capacity, reversed)?;
         self.time_table = result;
         Ok(self.time_table.clone())
@@ -55,8 +55,8 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
-    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>> {
-        let mut profile: BTreeMap<u32, ResourceProfile> = BTreeMap::new();
+    ) -> TimeTableCreationResult<Var> {
+        let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts
         for task in tasks.iter() {
             let mut upper_bound = context.upper_bound(&task.start_variable);
@@ -79,11 +79,11 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
                 //There is a mandatory part
                 for i in upper_bound..(lower_bound + task.processing_time) {
                     //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
-                    let current_profile: &mut ResourceProfile = profile
+                    let current_profile: &mut ResourceProfile<Var> = profile
                         .entry(i as u32)
                         .or_insert(ResourceProfile::default(i));
                     current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(task.id.get_value());
+                    current_profile.profile_tasks.push(Rc::clone(task));
 
                     if current_profile.height > capacity {
                         //The addition of the current task to the resource profile has caused an overflow
@@ -96,7 +96,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint {
     }
 }
 
-impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
+impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var> {
     fn propagate_incrementally(
         &mut self,
         _context: &mut PropagationContext,
@@ -123,10 +123,9 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         &mut self,
         context: &PropagationContext,
         tasks: &[Rc<Task<Var>>],
-        horizon: i32,
         capacity: i32,
     ) {
-        TimeTablePropagator::reset_structures(self, context, tasks, horizon, capacity);
+        TimeTablePropagator::reset_structures(self, context, tasks, capacity);
     }
 
     fn store_explanation(
@@ -189,7 +188,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         tasks_arg: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> PropagationStatusCP {
-        let mut profile: Vec<ResourceProfile> = Vec::with_capacity(horizon as usize);
+        let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
             profile.push(ResourceProfile {
                 start: i,
@@ -207,7 +206,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
             if upper_bound < lower_bound + task.processing_time {
                 for i in upper_bound..(lower_bound + task.processing_time) {
                     profile[i as usize].height += task.resource_usage;
-                    profile[i as usize].profile_tasks.push(task.id.get_value());
+                    profile[i as usize].profile_tasks.push(Rc::clone(task));
 
                     if profile[i as usize].height > capacity {
                         conflict = true;
@@ -220,10 +219,15 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
         {
             if conflict {
                 let mut error_clause = Vec::with_capacity(conflict_profile.len() * 2);
-                for task_id in conflict_profile.iter() {
-                    let s = &tasks_arg[*task_id].start_variable;
-                    error_clause.push(s.upper_bound_predicate(context.upper_bound(s)));
-                    error_clause.push(s.lower_bound_predicate(context.lower_bound(s)));
+                for task in conflict_profile.iter() {
+                    error_clause.push(
+                        task.start_variable
+                            .upper_bound_predicate(context.upper_bound(&task.start_variable)),
+                    );
+                    error_clause.push(
+                        task.start_variable
+                            .lower_bound_predicate(context.lower_bound(&task.start_variable)),
+                    );
                 }
                 return Err(Inconsistency::from(PropositionalConjunction::from(
                     error_clause,
@@ -243,21 +247,9 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                 if height + task.resource_usage <= capacity {
                     // The tasks are sorted by capacity, if this task doesn't overload then none will
                     break;
-                } else if self.has_mandatory_part_in_interval(
-                    task.id.get_value(),
-                    *start,
-                    *end,
-                    tasks_arg,
-                    bounds,
-                ) {
+                } else if self.has_mandatory_part_in_interval(task, *start, *end, bounds) {
                     continue;
-                } else if self.var_has_overlap_with_interval(
-                    context,
-                    task.processing_time,
-                    &task.start_variable,
-                    *start,
-                    *end,
-                ) {
+                } else if self.var_has_overlap_with_interval(context, task, *start, *end) {
                     //check whether an overflow occurs + whether we can update the lower-bound
                     if (start - task.processing_time) < context.lower_bound(&task.start_variable)
                         && *end + 1 > context.lower_bound(&task.start_variable)
@@ -267,10 +259,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                                 DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
                                 &task.start_variable,
                                 *end + 1,
-                                &profile_tasks
-                                    .iter()
-                                    .map(|current| Rc::clone(&tasks_arg[*current]))
-                                    .collect::<Vec<_>>(),
+                                profile_tasks,
                             )
                             .is_err()
                     {
@@ -284,10 +273,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint {
                                 DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
                                 &task.start_variable,
                                 *start - task.processing_time,
-                                &profile_tasks
-                                    .iter()
-                                    .map(|current| tasks_arg[*current].clone())
-                                    .collect::<Vec<_>>(),
+                                profile_tasks,
                             )
                             .is_err()
                     {

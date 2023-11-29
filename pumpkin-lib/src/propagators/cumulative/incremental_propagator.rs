@@ -122,7 +122,6 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         &mut self,
         context: &PropagationContext,
         tasks: &[Rc<Task<Var>>],
-        horizon: i32,
         capacity: i32,
     );
 
@@ -130,14 +129,18 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn create_error_clause(
         &self,
         context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        conflict_tasks: &Vec<usize>,
+        conflict_tasks: &Vec<Rc<Task<Var>>>,
     ) -> PropagationStatusCP {
         let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
-        for task_id in conflict_tasks.iter() {
-            let task = &tasks[*task_id];
-            error_clause.push(task.start_variable.upper_bound_predicate(context.upper_bound(&task.start_variable)));
-            error_clause.push(task.start_variable.lower_bound_predicate(context.lower_bound(&task.start_variable)));
+        for task in conflict_tasks.iter() {
+            error_clause.push(
+                task.start_variable
+                    .upper_bound_predicate(context.upper_bound(&task.start_variable)),
+            );
+            error_clause.push(
+                task.start_variable
+                    .lower_bound_predicate(context.lower_bound(&task.start_variable)),
+            );
         }
 
         Err(Inconsistency::from(PropositionalConjunction::from(

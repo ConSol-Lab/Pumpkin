@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
-    engine::{DomainChange, EnqueueDecision, PropagationContext, PropagatorVariable},
+    engine::{DomainChange, EnqueueDecision, PropagationContext},
     propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
     pumpkin_assert_simple,
 };
@@ -28,15 +28,15 @@ pub struct Event {
 /// * `end` - The end time of the [ResourceProfile] (inclusive)
 /// * `profile_tasks` - The IDs of the tasks which are part of the profile
 /// * `height` - The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
-pub struct ResourceProfile {
+pub struct ResourceProfile<Var> {
     pub start: i32,
     pub end: i32,
-    pub profile_tasks: Vec<usize>,
+    pub profile_tasks: Vec<Rc<Task<Var>>>,
     pub height: i32,
 }
 
-impl ResourceProfile {
-    pub fn default(time: i32) -> ResourceProfile {
+impl<Var: IntVar + 'static> ResourceProfile<Var> {
+    pub fn default(time: i32) -> ResourceProfile<Var> {
         ResourceProfile {
             start: time,
             end: time,
@@ -45,6 +45,9 @@ impl ResourceProfile {
         }
     }
 }
+
+pub type TimeTableCreationResult<Var> =
+    Result<BTreeMap<u32, ResourceProfile<Var>>, Vec<Rc<Task<Var>>>>;
 
 ///A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var> {
@@ -100,7 +103,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
-    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
+    ) -> TimeTableCreationResult<Var>;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
@@ -110,14 +113,13 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
-    ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
+    ) -> TimeTableCreationResult<Var>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
     fn reset_structures(
         &mut self,
         context: &PropagationContext,
         tasks: &[Rc<Task<Var>>],
-        _horizon: i32,
         capacity: i32,
     ) {
         let result = self.create_time_table_and_assign(context, tasks, capacity, false);
@@ -130,23 +132,16 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn find_maximum_bound_and_profiles_lower_bound<'a>(
         &self,
         propagating_index: usize,
-        mut profiles: impl Iterator<Item = &'a ResourceProfile> + DoubleEndedIterator,
-        propagating_task: &Task<Var>,
+        mut profiles: impl Iterator<Item = &'a ResourceProfile<Var>> + DoubleEndedIterator,
+        propagating_task: &Rc<Task<Var>>,
         capacity: i32,
-        tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> (i32, Vec<Rc<Task<Var>>>) {
         let mut current_profile = profiles
             .nth(propagating_index)
             .expect("Propagating profile did not exist within the provided iterator");
-        let mut new_profile_tasks = HashSet::new();
-        new_profile_tasks.extend(
-            current_profile
-                .profile_tasks
-                .clone()
-                .iter()
-                .map(|current| Rc::clone(&tasks[*current])),
-        );
+        let mut new_profile_tasks: HashSet<&Rc<Task<Var>>> = HashSet::new();
+        new_profile_tasks.extend(current_profile.profile_tasks.iter());
         let mut bound = current_profile.end + 1; //We are updating the lower-bound so the original update will place the lower-bound after the end of the propagating profile
                                                  //If the propagating_index is the last profile then no further propagations are able to take place based on the current one
         for next_profile in profiles {
@@ -155,22 +150,16 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
             //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
             if next_profile.height + propagating_task.resource_usage > capacity
                 && !self.has_mandatory_part_in_interval(
-                    propagating_task.id.get_value(),
+                    propagating_task,
                     next_profile.start,
                     next_profile.end,
-                    tasks,
                     bounds,
                 ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
                 && (next_profile.start - current_profile.end + 1) < propagating_task.processing_time
             //The updated task necessarily overlaps with the next profile
             {
                 bound = next_profile.end + 1;
-                new_profile_tasks.extend(
-                    next_profile
-                        .profile_tasks
-                        .iter()
-                        .map(|current| tasks[*current].clone()),
-                );
+                new_profile_tasks.extend(next_profile.profile_tasks.iter());
                 current_profile = next_profile;
             } else if (current_profile.start - next_profile.end + 1)
                 >= propagating_task.processing_time
@@ -179,7 +168,13 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 break;
             }
         }
-        (bound, new_profile_tasks.into_iter().collect::<Vec<_>>())
+        (
+            bound,
+            new_profile_tasks
+                .into_iter()
+                .map(Rc::clone)
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
@@ -189,10 +184,9 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         &self,
         num_profiles: usize,
         propagating_index: usize,
-        mut profiles: impl Iterator<Item = &'a ResourceProfile> + DoubleEndedIterator,
-        propagating_task: &Task<Var>,
+        mut profiles: impl Iterator<Item = &'a ResourceProfile<Var>> + DoubleEndedIterator,
+        propagating_task: &Rc<Task<Var>>,
         capacity: i32,
-        tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> (i32, Vec<Rc<Task<Var>>>) {
         //We need to find the current profile and then proceed in reverse order
@@ -203,13 +197,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
             .expect("Propagating profile did not exist within the provided iterator");
 
         let mut new_profile_tasks = HashSet::new();
-        new_profile_tasks.extend(
-            current_profile
-                .profile_tasks
-                .clone()
-                .iter()
-                .map(|current| Rc::clone(&tasks[*current])),
-        );
+        new_profile_tasks.extend(current_profile.profile_tasks.iter());
         let mut bound = current_profile.start - propagating_task.processing_time; //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile;
         if propagating_index > 0 {
             //An upper-bound update and we check whether the propagating profile is not the first profile
@@ -218,22 +206,16 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
                 if next_profile.height + propagating_task.resource_usage > capacity
                     && !self.has_mandatory_part_in_interval(
-                        propagating_task.id.get_value(),
+                        propagating_task,
                         next_profile.start,
                         next_profile.end,
-                        tasks,
                         bounds,
                     ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
                     && (current_profile.start - next_profile.end + 1) < propagating_task.processing_time
                 //The updated task necessarily overlaps with the previous profile after the update
                 {
                     bound = next_profile.start - propagating_task.processing_time;
-                    new_profile_tasks.extend(
-                        next_profile
-                            .profile_tasks
-                            .iter()
-                            .map(|current| tasks[*current].clone()),
-                    );
+                    new_profile_tasks.extend(next_profile.profile_tasks.iter());
                     current_profile = next_profile;
                 } else if (current_profile.start - next_profile.end + 1)
                     >= propagating_task.processing_time
@@ -243,19 +225,23 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 }
             }
         }
-        (bound, new_profile_tasks.into_iter().collect::<Vec<_>>())
+        (
+            bound,
+            new_profile_tasks
+                .into_iter()
+                .map(Rc::clone)
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the interval [start, end]
     fn has_mandatory_part_in_interval(
         &self,
-        id: usize,
+        task: &Rc<Task<Var>>,
         start: i32,
         end: i32,
-        tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> bool {
-        let task: &Task<Var> = &tasks[id];
         let (lower_bound, upper_bound) = bounds[task.id.get_value()];
         (upper_bound < (lower_bound + task.processing_time)) //There exists a mandatory part
                 && (upper_bound <= end) //The start of the mandatory part is before the end of the interval
@@ -266,12 +252,14 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn var_has_overlap_with_interval(
         &self,
         context: &mut PropagationContext,
-        p: i32,
-        var: &PropagatorVariable<Var>,
+        task: &Rc<Task<Var>>,
         start: i32,
         end: i32,
     ) -> bool {
-        let (lower_bound, upper_bound) = (context.lower_bound(var), context.upper_bound(var) + p); //The release time of the task and the deadline
+        let (lower_bound, upper_bound) = (
+            context.lower_bound(&task.start_variable),
+            context.upper_bound(&task.start_variable) + task.processing_time,
+        ); //The release time of the task and the deadline
         (start <= upper_bound) && (lower_bound <= end) //Check whether there is any overlap between the two intervals (i.e. there exists a C such that start <= C <= end /\ lower_bound <= C <= upper_bound)
     }
 
@@ -280,7 +268,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn check_for_updates<'a>(
         &self,
         context: &mut PropagationContext,
-        to_check: impl Iterator<Item = &'a ResourceProfile> + Clone + DoubleEndedIterator,
+        to_check: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
         to_check_len: usize,
         tasks: &[Rc<Task<Var>>],
         bounds: &mut Vec<(i32, i32)>,
@@ -307,22 +295,10 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 if height + task.resource_usage <= capacity {
                     // The tasks are sorted by capacity, if this task doesn't overload then none will
                     break;
-                } else if self.has_mandatory_part_in_interval(
-                    task.id.get_value(),
-                    *start,
-                    *end,
-                    tasks,
-                    bounds,
-                ) {
+                } else if self.has_mandatory_part_in_interval(task, *start, *end, bounds) {
                     // The current task is part of the current profile, which means that it can't be propagated by it
                     continue;
-                } else if self.var_has_overlap_with_interval(
-                    context,
-                    task.processing_time,
-                    &task.start_variable,
-                    *start,
-                    *end,
-                ) {
+                } else if self.var_has_overlap_with_interval(context, task, *start, *end) {
                     //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
                     if (start - task.processing_time) < context.lower_bound(&task.start_variable)
                         && *end >= context.lower_bound(&task.start_variable)
@@ -335,7 +311,6 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 to_check.clone(),
                                 task,
                                 capacity,
-                                tasks,
                                 bounds,
                             );
                         match self.propagate_and_explain(
@@ -378,7 +353,6 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 to_check.clone(),
                                 task,
                                 capacity,
-                                tasks,
                                 bounds,
                             );
                         match self.propagate_and_explain(
@@ -451,7 +425,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
             Err(conflict_profile) => {
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
                 CumulativePropagationResult::new(
-                    self.create_error_clause(context, tasks, &conflict_profile),
+                    self.create_error_clause(context, &conflict_profile),
                     None,
                 )
             }

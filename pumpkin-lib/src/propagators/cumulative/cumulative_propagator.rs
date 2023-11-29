@@ -140,7 +140,7 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
             updated: Vec::new(),
             propagator: match propagation_method {
                 PropagationMethod::TimeTablePerPoint => {
-                    Box::new(TimeTablePerPoint::new::<Var>(tasks.len()))
+                    Box::new(TimeTablePerPoint::new(tasks.len()))
                 }
             },
         }
@@ -322,7 +322,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for Cumulative<Var> 
         }
         //Reset the structures on the propagator itself
         self.propagator
-            .reset_structures(context, &self.tasks, self.horizon, self.capacity);
+            .reset_structures(context, &self.tasks, self.capacity);
     }
 
     fn get_reason_for_propagation(
