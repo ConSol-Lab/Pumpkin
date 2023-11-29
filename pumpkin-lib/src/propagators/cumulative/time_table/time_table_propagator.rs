@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     collections::{BTreeMap, HashSet},
+    rc::Rc,
 };
 
 use crate::{
@@ -96,7 +97,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
     ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
@@ -106,7 +107,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn create_time_table(
         &self,
         context: &PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         capacity: i32,
         reversed: bool,
     ) -> Result<BTreeMap<u32, ResourceProfile>, Vec<usize>>;
@@ -115,7 +116,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn reset_structures(
         &mut self,
         context: &PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         _horizon: i32,
         capacity: i32,
     ) {
@@ -126,76 +127,91 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         );
     }
 
-    /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
-    /// * `lower_bound` - Whether the propagation is on the lower-bound or the upper-bound
-    /// * `profiles` - The [ResourceProfile]s in the time-table
-    fn find_maximum_bound_and_profiles<'a>(
+    fn find_maximum_bound_and_profiles_lower_bound<'a>(
         &self,
-        lower_bound: bool,
-        (num_profiles, propagating_index): (usize, usize),
+        propagating_index: usize,
         mut profiles: impl Iterator<Item = &'a ResourceProfile> + DoubleEndedIterator,
         propagating_task: &Task<Var>,
         capacity: i32,
-        (tasks, bounds): (&[Task<Var>], &[(i32, i32)]),
-    ) -> (i32, Vec<Task<Var>>) {
-        let mut current_profile = if lower_bound {
-            profiles
-                .nth(propagating_index)
-                .expect("Propagating profile did not exist within the provided iterator")
-        } else {
-            //We need to find the current profile and then proceed in reverse order
-            //If we have the list [0, 1, 2, 3, 4, 5, 6] with propagating_index = 4 then we need to find the 2nd profile from the back
-            //This is equal to taking the (num_profiles - propagating_index - 1)th profile (in the example the 7 - 4 - 1 = 2nd profile)
-            profiles
-                .nth_back(num_profiles - propagating_index - 1)
-                .expect("Propagating profile did not exist within the provided iterator")
-        }; //The profile which caused the original propagation
+        tasks: &[Rc<Task<Var>>],
+        bounds: &[(i32, i32)],
+    ) -> (i32, Vec<Rc<Task<Var>>>) {
+        let mut current_profile = profiles
+            .nth(propagating_index)
+            .expect("Propagating profile did not exist within the provided iterator");
         let mut new_profile_tasks = HashSet::new();
         new_profile_tasks.extend(
             current_profile
                 .profile_tasks
                 .clone()
                 .iter()
-                .map(|current| tasks[*current].clone()),
+                .map(|current| Rc::clone(&tasks[*current])),
         );
-        let mut bound = if lower_bound {
-            current_profile.end + 1 //We are updating the lower-bound so the original update will place the lower-bound after the end of the propagating profile
-        } else {
-            current_profile.start - propagating_task.processing_time //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile
-        };
-        if lower_bound {
-            //If the propagating_index is the last profile then no further propagations are able to take place based on the current one
-            for next_profile in profiles {
-                //Go through all profiles starting from the propagating one
-                //Find all profiles after the current one which would propagate for the current task based on that profiles[propagating_index] propagated
-                //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
-                if next_profile.height + propagating_task.resource_usage > capacity
-                    && !self.has_mandatory_part_in_interval(
-                        propagating_task.id.get_value(),
-                        next_profile.start,
-                        next_profile.end,
-                        tasks,
-                        bounds,
-                    ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
-                    && (next_profile.start - current_profile.end + 1) < propagating_task.processing_time
-                //The updated task necessarily overlaps with the next profile
-                {
-                    bound = next_profile.end + 1;
-                    new_profile_tasks.extend(
-                        next_profile
-                            .profile_tasks
-                            .iter()
-                            .map(|current| tasks[*current].clone()),
-                    );
-                    current_profile = next_profile;
-                } else if (current_profile.start - next_profile.end + 1)
-                    >= propagating_task.processing_time
-                {
-                    //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
-                    break;
-                }
+        let mut bound = current_profile.end + 1; //We are updating the lower-bound so the original update will place the lower-bound after the end of the propagating profile
+                                                 //If the propagating_index is the last profile then no further propagations are able to take place based on the current one
+        for next_profile in profiles {
+            //Go through all profiles starting from the propagating one
+            //Find all profiles after the current one which would propagate for the current task based on that profiles[propagating_index] propagated
+            //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
+            if next_profile.height + propagating_task.resource_usage > capacity
+                && !self.has_mandatory_part_in_interval(
+                    propagating_task.id.get_value(),
+                    next_profile.start,
+                    next_profile.end,
+                    tasks,
+                    bounds,
+                ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
+                && (next_profile.start - current_profile.end + 1) < propagating_task.processing_time
+            //The updated task necessarily overlaps with the next profile
+            {
+                bound = next_profile.end + 1;
+                new_profile_tasks.extend(
+                    next_profile
+                        .profile_tasks
+                        .iter()
+                        .map(|current| tasks[*current].clone()),
+                );
+                current_profile = next_profile;
+            } else if (current_profile.start - next_profile.end + 1)
+                >= propagating_task.processing_time
+            {
+                //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
+                break;
             }
-        } else if propagating_index > 0 {
+        }
+        (bound, new_profile_tasks.into_iter().collect::<Vec<_>>())
+    }
+
+    /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
+    /// * `lower_bound` - Whether the propagation is on the lower-bound or the upper-bound
+    /// * `profiles` - The [ResourceProfile]s in the time-table
+    fn find_maximum_bound_and_profiles_upper_bound<'a>(
+        &self,
+        num_profiles: usize,
+        propagating_index: usize,
+        mut profiles: impl Iterator<Item = &'a ResourceProfile> + DoubleEndedIterator,
+        propagating_task: &Task<Var>,
+        capacity: i32,
+        tasks: &[Rc<Task<Var>>],
+        bounds: &[(i32, i32)],
+    ) -> (i32, Vec<Rc<Task<Var>>>) {
+        //We need to find the current profile and then proceed in reverse order
+        //If we have the list [0, 1, 2, 3, 4, 5, 6] with propagating_index = 4 then we need to find the 2nd profile from the back
+        //This is equal to taking the (num_profiles - propagating_index - 1)th profile (in the example the 7 - 4 - 1 = 2nd profile)
+        let mut current_profile = profiles
+            .nth_back(num_profiles - propagating_index - 1)
+            .expect("Propagating profile did not exist within the provided iterator");
+
+        let mut new_profile_tasks = HashSet::new();
+        new_profile_tasks.extend(
+            current_profile
+                .profile_tasks
+                .clone()
+                .iter()
+                .map(|current| Rc::clone(&tasks[*current])),
+        );
+        let mut bound = current_profile.start - propagating_task.processing_time; //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile;
+        if propagating_index > 0 {
             //An upper-bound update and we check whether the propagating profile is not the first profile
             for next_profile in profiles.rev() {
                 //Find all profiles before the current one which would propagate for the current task based on that profiles[propagating_index] propagated
@@ -236,7 +252,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         id: usize,
         start: i32,
         end: i32,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> bool {
         let task: &Task<Var> = &tasks[id];
@@ -266,7 +282,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         context: &mut PropagationContext,
         to_check: impl Iterator<Item = &'a ResourceProfile> + Clone + DoubleEndedIterator,
         to_check_len: usize,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
     ) -> CumulativePropagationResult {
@@ -288,17 +304,11 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                     //If the variable is already fixed then we do not need to check for any updated
                     continue;
                 }
-                let Task {
-                    start_variable: s,
-                    processing_time: p,
-                    resource_usage: c,
-                    id,
-                } = &task;
-                if height + c <= capacity {
+                if height + task.resource_usage <= capacity {
                     // The tasks are sorted by capacity, if this task doesn't overload then none will
                     break;
                 } else if self.has_mandatory_part_in_interval(
-                    id.get_value(),
+                    task.id.get_value(),
                     *start,
                     *end,
                     tasks,
@@ -306,38 +316,46 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                 ) {
                     // The current task is part of the current profile, which means that it can't be propagated by it
                     continue;
-                } else if self.var_has_overlap_with_interval(context, *p, s, *start, *end) {
+                } else if self.var_has_overlap_with_interval(
+                    context,
+                    task.processing_time,
+                    &task.start_variable,
+                    *start,
+                    *end,
+                ) {
                     //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
-                    if (start - p) < context.lower_bound(s) && *end >= context.lower_bound(s) {
+                    if (start - task.processing_time) < context.lower_bound(&task.start_variable)
+                        && *end >= context.lower_bound(&task.start_variable)
+                    {
                         //The current task necessarily overlap with the current ResourceProfile (i.e. lb(s) + p >= start /\ lb(s) <= end)
                         //Based on this propagation, find the profile which now propagates to the highest lower bound for this task
                         let (lower_bound, new_profile_tasks) = self
-                            .find_maximum_bound_and_profiles(
-                                true,
-                                (to_check_len, index),
+                            .find_maximum_bound_and_profiles_lower_bound(
+                                index,
                                 to_check.clone(),
                                 task,
                                 capacity,
-                                (tasks, bounds),
+                                tasks,
+                                bounds,
                             );
                         match self.propagate_and_explain(
                             context,
-                            DomainChange::LowerBound(max(0, start - p + 1)), //Use the minimum bound which would have propagated the profile at index
-                            s,
+                            DomainChange::LowerBound(max(0, start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
+                            &task.start_variable,
                             lower_bound,
                             &new_profile_tasks,
                         ) {
                             Ok(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::LowerBound(lower_bound),
-                                    id.get_value(),
+                                    task.id.get_value(),
                                     explanation,
                                 ));
                             }
                             Err(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::LowerBound(lower_bound),
-                                    id.get_value(),
+                                    task.id.get_value(),
                                     explanation,
                                 ));
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
@@ -348,36 +366,42 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             }
                         }
                     }
-                    if end > &context.upper_bound(s) && *start - p < context.upper_bound(s) {
+                    if end > &context.upper_bound(&task.start_variable)
+                        && *start - task.processing_time < context.upper_bound(&task.start_variable)
+                    {
                         //The current task has overlap with the current resource profile (i.e. end > ub(s) /\ start - p < ub(s)); this means that if the task starts at its latest starting time it would overlap with this ResourceProfile
                         //Based on this propagation, find the profile which now propagates to the lowest upper bound for this task
                         let (upper_bound, new_profile_tasks) = self
-                            .find_maximum_bound_and_profiles(
-                                false,
-                                (to_check_len, index),
+                            .find_maximum_bound_and_profiles_upper_bound(
+                                to_check_len,
+                                index,
                                 to_check.clone(),
                                 task,
                                 capacity,
-                                (tasks, bounds),
+                                tasks,
+                                bounds,
                             );
                         match self.propagate_and_explain(
                             context,
-                            DomainChange::UpperBound(max(context.upper_bound(s), *end)),
-                            s,
+                            DomainChange::UpperBound(max(
+                                context.upper_bound(&task.start_variable),
+                                *end,
+                            )),
+                            &task.start_variable,
                             upper_bound,
                             &new_profile_tasks,
                         ) {
                             Ok(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::UpperBound(upper_bound),
-                                    id.get_value(),
+                                    task.id.get_value(),
                                     explanation,
                                 ));
                             }
                             Err(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::UpperBound(upper_bound),
-                                    id.get_value(),
+                                    task.id.get_value(),
                                     explanation,
                                 ));
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
@@ -398,7 +422,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn propagate_from_scratch(
         &mut self,
         context: &mut PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         bounds: &mut Vec<(i32, i32)>,
         _horizon: i32,
         capacity: i32,

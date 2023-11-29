@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     basic_types::{
         variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
@@ -70,7 +72,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         &mut self,
         context: &mut PropagationContext,
         updated: &mut Vec<Updated>,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         bounds: &mut Vec<(i32, i32)>,
         capacity: i32,
     ) -> CumulativePropagationResult;
@@ -79,7 +81,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn propagate_from_scratch(
         &mut self,
         context: &mut PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         bounds: &mut Vec<(i32, i32)>,
         horizon: i32,
         capacity: i32,
@@ -89,7 +91,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn should_propagate(
         &mut self,
         context: &PropagationContext,
-        _tasks: &[Task<Var>],
+        _tasks: &[Rc<Task<Var>>],
         task: &Task<Var>,
         bounds: &[(i32, i32)],
         _capacity: i32,
@@ -119,7 +121,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn reset_structures(
         &mut self,
         context: &PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         horizon: i32,
         capacity: i32,
     );
@@ -128,19 +130,14 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn create_error_clause(
         &self,
         context: &PropagationContext,
-        tasks: &[Task<Var>],
+        tasks: &[Rc<Task<Var>>],
         conflict_tasks: &Vec<usize>,
     ) -> PropagationStatusCP {
         let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
         for task_id in conflict_tasks.iter() {
-            let Task {
-                start_variable: s,
-                processing_time: _,
-                resource_usage: _,
-                id: _,
-            } = &tasks[*task_id];
-            error_clause.push(s.upper_bound_predicate(context.upper_bound(s)));
-            error_clause.push(s.lower_bound_predicate(context.lower_bound(s)));
+            let task = &tasks[*task_id];
+            error_clause.push(task.start_variable.upper_bound_predicate(context.upper_bound(&task.start_variable)));
+            error_clause.push(task.start_variable.lower_bound_predicate(context.lower_bound(&task.start_variable)));
         }
 
         Err(Inconsistency::from(PropositionalConjunction::from(
@@ -172,7 +169,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         change_and_explanation_bound: DomainChange,
         propagating_variable: &PropagatorVariable<Var>,
         propagation_value: i32,
-        profile_tasks: &[Task<Var>],
+        profile_tasks: &[Rc<Task<Var>>],
     ) -> Result<PropositionalConjunction, PropositionalConjunction> {
         let explanation = Util::create_naïve_explanation(
             change_and_explanation_bound,
@@ -201,7 +198,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         context: &mut PropagationContext,
         horizon: i32,
         capacity: i32,
-        tasks_arg: &[Task<Var>],
+        tasks_arg: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> PropagationStatusCP;
 }

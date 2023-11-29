@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     basic_types::{variables::IntVar, Predicate, PredicateConstructor, PropositionalConjunction},
     engine::{DomainChange, PropagationContext, PropagatorVariable},
@@ -14,7 +16,7 @@ impl Util {
         change_and_explanation_bound: DomainChange,
         var: &PropagatorVariable<Var>,
         context: &PropagationContext,
-        profile_tasks: impl Iterator<Item = &'a Task<Var>>,
+        profile_tasks: impl Iterator<Item = &'a Rc<Task<Var>>>,
     ) -> PropositionalConjunction {
         let mut explanation: Vec<Predicate> = Vec::new();
 

@@ -10,7 +10,7 @@ use crate::{
     pumpkin_assert_eq_simple, pumpkin_assert_extreme,
 };
 
-use std::hash::Hash;
+use std::{hash::Hash, rc::Rc};
 
 use super::{CumulativePropagationResult, IncrementalPropagator, TimeTablePerPoint};
 
@@ -97,7 +97,7 @@ pub struct Updated {
 }
 
 ///Holds the data for the cumulative constraint; this constraint models that for each time-point in the horizon, the resource consumption for that time-point is not exceeded
-/// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]
+/// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]; this is stored as a Box of Rc's to accomodate the sharing of the tasks
 /// * `capacity` - The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
 /// * `horizon` - The horizon of the resource (i.e. the largest possible makespan)
 /// * `incrementality` - What form of incrementality is used (either [Incrementality::INCREMENTAL] or [Incrementality::REGULAR])
@@ -106,7 +106,7 @@ pub struct Updated {
 /// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
 /// * `propagator` - Holds the actual propagator which is responsible for the propagation, this allows the overarching propagator to not be required to have unnecessary data structures
 pub struct Cumulative<Var> {
-    tasks: Vec<Task<Var>>,
+    tasks: Box<[Rc<Task<Var>>]>,
     capacity: i32,
     horizon: i32,
     incrementality: Incrementality,
@@ -126,7 +126,12 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
         propagation_method: PropagationMethod,
     ) -> Cumulative<Var> {
         Cumulative {
-            tasks: tasks.clone(),
+            tasks: tasks
+                .clone()
+                .into_iter()
+                .map(Rc::new)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             capacity,
             horizon,
             incrementality,
