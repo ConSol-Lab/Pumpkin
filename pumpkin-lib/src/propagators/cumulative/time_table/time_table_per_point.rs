@@ -103,7 +103,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         _updated: &mut Vec<Updated>,
         _tasks: &[Rc<Task<Var>>],
         _capacity: i32,
-    ) -> CumulativePropagationResult {
+    ) -> CumulativePropagationResult<Var> {
         todo!()
     }
 
@@ -113,7 +113,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         tasks: &[Rc<Task<Var>>],
         horizon: i32,
         capacity: i32,
-    ) -> CumulativePropagationResult {
+    ) -> CumulativePropagationResult<Var> {
         TimeTablePropagator::propagate_from_scratch(self, context, tasks, horizon, capacity)
     }
 
@@ -130,17 +130,17 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         &mut self,
         Explanation {
             change,
-            index,
+            task,
             explanation,
-        }: Explanation,
+        }: Explanation<Var>,
     ) {
         //Note that we assume that the index is the same as the local id of the task
         match change {
             DomainChange::LowerBound(value) => {
-                self.reasons_for_propagation_lower_bound[index].insert(value, explanation);
+                self.reasons_for_propagation_lower_bound[task.id.get_value()].insert(value, explanation);
             }
             DomainChange::UpperBound(value) => {
-                self.reasons_for_propagation_upper_bound[index].insert(value, explanation);
+                self.reasons_for_propagation_upper_bound[task.id.get_value()].insert(value, explanation);
             }
             _ => unreachable!(),
         }

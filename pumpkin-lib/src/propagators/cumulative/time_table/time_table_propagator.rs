@@ -270,8 +270,8 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         to_check_len: usize,
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
-    ) -> CumulativePropagationResult {
-        let mut explanations: Vec<Explanation> = Vec::new();
+    ) -> CumulativePropagationResult<Var> {
+        let mut explanations: Vec<Explanation<Var>> = Vec::new();
         //We go over all profiles
         for (
             index,
@@ -320,14 +320,14 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             Ok(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::LowerBound(lower_bound),
-                                    task.id.get_value(),
+                                    Rc::clone(task),
                                     explanation,
                                 ));
                             }
                             Err(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::LowerBound(lower_bound),
-                                    task.id.get_value(),
+                                    Rc::clone(task),
                                     explanation,
                                 ));
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
@@ -365,14 +365,14 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                             Ok(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::UpperBound(upper_bound),
-                                    task.id.get_value(),
+                                    Rc::clone(task),
                                     explanation,
                                 ));
                             }
                             Err(explanation) => {
                                 explanations.push(Explanation::new(
                                     DomainChange::UpperBound(upper_bound),
-                                    task.id.get_value(),
+                                    Rc::clone(task),
                                     explanation,
                                 ));
                                 //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
@@ -396,7 +396,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         tasks: &[Rc<Task<Var>>],
         _horizon: i32,
         capacity: i32,
-    ) -> CumulativePropagationResult {
+    ) -> CumulativePropagationResult<Var> {
         match self.create_time_table_and_assign(context, tasks, capacity, false) {
             Ok(time_table) => {
                 //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)

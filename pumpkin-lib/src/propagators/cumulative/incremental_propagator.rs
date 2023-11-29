@@ -14,21 +14,21 @@ use super::{Task, Updated, Util};
 /// * `change` - The domain change related to the event; contains the type of domain change and the value
 /// * `index` - The index of the updated task (this is equal to its local id)
 /// * `explanation` - The actual explanation consisting of a PropositionalConjunction
-pub struct Explanation {
+pub struct Explanation<Var> {
     pub change: DomainChange,
-    pub index: usize,
+    pub task: Rc<Task<Var>>,
     pub explanation: PropositionalConjunction,
 }
 
-impl Explanation {
+impl<Var: IntVar + 'static> Explanation<Var> {
     pub fn new(
         change: DomainChange,
-        index: usize,
+        task: Rc<Task<Var>>,
         explanation: PropositionalConjunction,
-    ) -> Explanation {
+    ) -> Explanation<Var> {
         Explanation {
             change,
-            index,
+            task,
             explanation,
         }
     }
@@ -37,16 +37,16 @@ impl Explanation {
 ///Stores the result of a propagation iteration by the cumulative propagators
 /// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
 /// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before. These explanations could be [None] if a structural inconsistency is found
-pub struct CumulativePropagationResult {
+pub struct CumulativePropagationResult<Var> {
     pub status: PropagationStatusCP,
-    pub explanations: Option<Vec<Explanation>>,
+    pub explanations: Option<Vec<Explanation<Var>>>,
 }
 
-impl CumulativePropagationResult {
+impl<Var: IntVar + 'static> CumulativePropagationResult<Var> {
     pub fn new(
         status: PropagationStatusCP,
-        explanations: Option<Vec<Explanation>>,
-    ) -> CumulativePropagationResult {
+        explanations: Option<Vec<Explanation<Var>>>,
+    ) -> CumulativePropagationResult<Var> {
         CumulativePropagationResult {
             status,
             explanations,
@@ -74,7 +74,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         updated: &mut Vec<Updated>,
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
-    ) -> CumulativePropagationResult;
+    ) -> CumulativePropagationResult<Var>;
 
     /// Propagates from scratch (i.e. it recalculates all data structures)
     fn propagate_from_scratch(
@@ -83,7 +83,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         tasks: &[Rc<Task<Var>>],
         horizon: i32,
         capacity: i32,
-    ) -> CumulativePropagationResult;
+    ) -> CumulativePropagationResult<Var>;
 
     /// Checks whether the propagator should propagate based on the changes in task
     fn should_propagate(
@@ -147,7 +147,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     }
 
     /// Eagerly store the reason for a propagation of a value in the appropriate datastructure
-    fn store_explanation(&mut self, explanation: Explanation);
+    fn store_explanation(&mut self, explanation: Explanation<Var>);
 
     /// Propagate the variable to the provided value
     fn propagate_without_explanation(
