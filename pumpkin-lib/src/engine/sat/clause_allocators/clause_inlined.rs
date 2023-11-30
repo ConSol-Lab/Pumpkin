@@ -164,7 +164,7 @@ impl ClauseInlined {
         is_learned: bool,
     ) -> &mut ClauseInlined {
         unsafe {
-            let mut clause = loc.cast::<ClauseInlined>();
+            let clause = loc.cast::<ClauseInlined>();
             (*clause).update_lbd(literals.len() as u32);
             (*clause).clear_flags();
             if is_learned {
@@ -246,7 +246,7 @@ mod tests {
         assert!(clause[0] == Literal::u32_to_literal(0));
         assert!(clause[1] == Literal::u32_to_literal(0));
 
-        let new_lit_code = 100 as u32;
+        let new_lit_code = 100;
         let new_lit = Literal::u32_to_literal(new_lit_code);
         clause[0] = new_lit;
 
