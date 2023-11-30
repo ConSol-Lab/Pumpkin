@@ -11,16 +11,6 @@ use crate::{
     pumpkin_assert_simple,
 };
 
-///Structure used for storing events for calculating the time-table (e.g. in [TimeTablePerPoint][TimeTablePerPoint::time_table]) by keeping track of when a mandatory part has started or ended
-/// * `time_stamp` - The time-stamp of the event
-/// * `change_resource_usage` - Change in the resource usage at the given time-point; a positive value indicates the start of a mandatory part and a negative value indicates the end of a mandatory part
-/// * `task_id` - The id of the task responsible for the event
-pub struct Event {
-    pub time_stamp: i32,
-    pub change_resource_usage: i32,
-    pub task_id: usize,
-}
-
 #[derive(Clone, Debug)]
 ///Structures used for storing the data related to resource profiles; a [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
 /// * `start` - The start time of the [ResourceProfile] (inclusive)
