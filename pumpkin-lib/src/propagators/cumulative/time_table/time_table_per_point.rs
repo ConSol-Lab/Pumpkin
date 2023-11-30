@@ -100,7 +100,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
     fn propagate_incrementally(
         &mut self,
         _context: &mut PropagationContext,
-        _updated: &mut Vec<Updated>,
+        _updated: &mut Vec<Updated<Var>>,
         _tasks: &[Rc<Task<Var>>],
         _capacity: i32,
     ) -> CumulativePropagationResult<Var> {
@@ -150,17 +150,17 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
 
     fn get_reason(
         &self,
-        affected_tasks: &Task<Var>,
+        affected_task: &Rc<Task<Var>>,
         change: DomainChange,
     ) -> PropositionalConjunction {
         match change {
             DomainChange::LowerBound(value) => self.reasons_for_propagation_lower_bound
-                [affected_tasks.id.get_value()]
+                [affected_task.id.get_value()]
             .get(&value)
             .unwrap()
             .clone(),
             DomainChange::UpperBound(value) => self.reasons_for_propagation_upper_bound
-                [affected_tasks.id.get_value()]
+                [affected_task.id.get_value()]
             .get(&value)
             .unwrap()
             .clone(),
@@ -172,12 +172,12 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         &mut self,
         context: &PropagationContext,
         _tasks: &[Rc<Task<Var>>],
-        task: &Task<Var>,
+        updated_task: &Rc<Task<Var>>,
         bounds: &[(i32, i32)],
         _capacity: i32,
-        updated: &mut Vec<Updated>,
+        updated: &mut Vec<Updated<Var>>,
     ) -> EnqueueDecision {
-        TimeTablePropagator::should_propagate(self, task, context, bounds, updated)
+        TimeTablePropagator::should_propagate(self, updated_task, context, bounds, updated)
     }
 
     fn debug_propagate_from_scratch(
@@ -256,7 +256,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                             .propagate_and_explain(
                                 context,
                                 DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
-                                &task.start_variable,
+                                task,
                                 *end + 1,
                                 profile_tasks,
                             )
@@ -270,7 +270,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                             .propagate_and_explain(
                                 context,
                                 DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
-                                &task.start_variable,
+                                task,
                                 *start - task.processing_time,
                                 profile_tasks,
                             )

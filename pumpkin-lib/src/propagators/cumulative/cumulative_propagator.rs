@@ -86,10 +86,10 @@ pub struct CumulativeArgs<Var> {
     pub propagation_method: PropagationMethod,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 /// Stores the information of an updated task
-pub struct Updated {
-    pub task_id: usize,
+pub struct Updated<Var> {
+    pub task: Rc<Task<Var>>,
     pub old_lower_bound: i32,
     pub old_upper_bound: i32,
     pub new_lower_bound: i32,
@@ -112,7 +112,7 @@ pub struct Cumulative<Var> {
     incrementality: Incrementality,
     _propagation_method: PropagationMethod,
     bounds: Vec<(i32, i32)>,
-    updated: Vec<Updated>,
+    updated: Vec<Updated<Var>>,
     propagator: Box<dyn IncrementalPropagator<Var>>,
 }
 //------------------------------

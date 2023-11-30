@@ -5,7 +5,7 @@ use crate::{
         variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
         PropositionalConjunction,
     },
-    engine::{DomainChange, EmptyDomain, EnqueueDecision, PropagationContext, PropagatorVariable},
+    engine::{DomainChange, EnqueueDecision, PropagationContext},
 };
 
 use super::{Task, Updated, Util};
@@ -63,7 +63,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     /// Returns the reason for why the affected task had the provided change
     fn get_reason(
         &self,
-        affected_task: &Task<Var>,
+        affected_task: &Rc<Task<Var>>,
         change: DomainChange,
     ) -> PropositionalConjunction;
 
@@ -71,7 +71,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn propagate_incrementally(
         &mut self,
         context: &mut PropagationContext,
-        updated: &mut Vec<Updated>,
+        updated: &mut Vec<Updated<Var>>,
         tasks: &[Rc<Task<Var>>],
         capacity: i32,
     ) -> CumulativePropagationResult<Var>;
@@ -90,22 +90,22 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         &mut self,
         context: &PropagationContext,
         _tasks: &[Rc<Task<Var>>],
-        task: &Task<Var>,
+        updated_task: &Rc<Task<Var>>,
         bounds: &[(i32, i32)],
         _capacity: i32,
-        updated: &mut Vec<Updated>,
+        updated: &mut Vec<Updated<Var>>,
     ) -> EnqueueDecision {
         //Checks whether there is a change in the bounds
-        let (lower_bound, upper_bound) = bounds[task.id.get_value()];
-        if lower_bound < context.lower_bound(&task.start_variable)
-            || upper_bound > context.upper_bound(&task.start_variable)
+        let (lower_bound, upper_bound) = bounds[updated_task.id.get_value()];
+        if lower_bound < context.lower_bound(&updated_task.start_variable)
+            || upper_bound > context.upper_bound(&updated_task.start_variable)
         {
             updated.push(Updated {
-                task_id: task.id.get_value(),
+                task: Rc::clone(updated_task),
                 old_lower_bound: lower_bound,
                 old_upper_bound: upper_bound,
-                new_lower_bound: context.lower_bound(&task.start_variable),
-                new_upper_bound: context.upper_bound(&task.start_variable),
+                new_lower_bound: context.lower_bound(&updated_task.start_variable),
+                new_upper_bound: context.upper_bound(&updated_task.start_variable),
             })
         }
         if !updated.is_empty() {
@@ -127,7 +127,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     fn create_error_clause(
         &self,
         context: &PropagationContext,
-        conflict_tasks: &Vec<Rc<Task<Var>>>,
+        conflict_tasks: &[Rc<Task<Var>>],
     ) -> PropagationStatusCP {
         let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
         for task in conflict_tasks.iter() {
@@ -149,41 +149,27 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
     /// Eagerly store the reason for a propagation of a value in the appropriate datastructure
     fn store_explanation(&mut self, explanation: Explanation<Var>);
 
-    /// Propagate the variable to the provided value
-    fn propagate_without_explanation(
-        &self,
-        context: &mut PropagationContext,
-        lower_bound: bool,
-        (var, value): (&PropagatorVariable<Var>, i32),
-    ) -> Result<(), EmptyDomain> {
-        if lower_bound {
-            context.set_lower_bound(var, value)
-        } else {
-            context.set_upper_bound(var, value)
-        }
-    }
-
     /// Propagate the variable to the provided value and eagerly calculate the explanation given the tasks which were responsible for the propagation
     fn propagate_and_explain(
         &self,
         context: &mut PropagationContext,
         change_and_explanation_bound: DomainChange,
-        propagating_variable: &PropagatorVariable<Var>,
+        propagating_task: &Rc<Task<Var>>,
         propagation_value: i32,
         profile_tasks: &[Rc<Task<Var>>],
     ) -> Result<PropositionalConjunction, PropositionalConjunction> {
         let explanation = Util::create_naïve_explanation(
             change_and_explanation_bound,
-            propagating_variable,
+            propagating_task,
             context,
             profile_tasks.iter(),
         );
         let result = match change_and_explanation_bound {
             DomainChange::LowerBound(_) => {
-                context.set_lower_bound(propagating_variable, propagation_value)
+                context.set_lower_bound(&propagating_task.start_variable, propagation_value)
             }
             DomainChange::UpperBound(_) => {
-                context.set_upper_bound(propagating_variable, propagation_value)
+                context.set_upper_bound(&propagating_task.start_variable, propagation_value)
             }
             _ => unreachable!(),
         };

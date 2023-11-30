@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     basic_types::{variables::IntVar, Predicate, PredicateConstructor, PropositionalConjunction},
-    engine::{DomainChange, PropagationContext, PropagatorVariable},
+    engine::{DomainChange, PropagationContext},
 };
 
 use super::Task;
@@ -14,7 +14,7 @@ impl Util {
     /// * `change_and_explanation_bound` - The change (i.e. lower-bound or upper-bound change) and the explanation bound which should be used (Note that the explanation bound could be different from the actual propagation)
     pub fn create_naïve_explanation<'a, Var: IntVar + 'static>(
         change_and_explanation_bound: DomainChange,
-        var: &PropagatorVariable<Var>,
+        task: &Rc<Task<Var>>,
         context: &PropagationContext,
         profile_tasks: impl Iterator<Item = &'a Rc<Task<Var>>>,
     ) -> PropositionalConjunction {
@@ -23,10 +23,10 @@ impl Util {
         //First we include the lower- or upper-bound of the task
         match change_and_explanation_bound {
             DomainChange::LowerBound(explanation_bound) => {
-                explanation.push(var.lower_bound_predicate(explanation_bound));
+                explanation.push(task.start_variable.lower_bound_predicate(explanation_bound));
             }
             DomainChange::UpperBound(explanation_bound) => {
-                explanation.push(var.upper_bound_predicate(explanation_bound))
+                explanation.push(task.start_variable.upper_bound_predicate(explanation_bound))
             }
             _ => unreachable!(),
         }

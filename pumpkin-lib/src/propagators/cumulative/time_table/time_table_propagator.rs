@@ -56,14 +56,14 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     /// * `updated` - A vector of [Updated] objects which represent the updated tasks since the last iteration of propagations
     fn should_propagate(
         &self,
-        task: &Task<Var>,
+        updated_task: &Rc<Task<Var>>,
         context: &PropagationContext,
         bounds: &[(i32, i32)],
-        updated: &mut Vec<Updated>,
+        updated: &mut Vec<Updated<Var>>,
     ) -> EnqueueDecision {
-        let (old_lower_bound, old_upper_bound) = bounds[task.id.get_value()];
-        if context.lower_bound(&task.start_variable) <= old_lower_bound
-            && context.upper_bound(&task.start_variable) >= old_upper_bound
+        let (old_lower_bound, old_upper_bound) = bounds[updated_task.id.get_value()];
+        if context.lower_bound(&updated_task.start_variable) <= old_lower_bound
+            && context.upper_bound(&updated_task.start_variable) >= old_upper_bound
         {
             //No update to the bounds of the variables has taken place, enqueue if the list of updated is not empty, skip otherwise
             return if !updated.is_empty() {
@@ -73,20 +73,20 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
             };
         }
 
-        if context.upper_bound(&task.start_variable)
-            < context.lower_bound(&task.start_variable) + task.processing_time
+        if context.upper_bound(&updated_task.start_variable)
+            < context.lower_bound(&updated_task.start_variable) + updated_task.processing_time
         //If this is the case then a mandatory part exists for the updated task
         {
-            if context.lower_bound(&task.start_variable) > old_lower_bound
-                || context.upper_bound(&task.start_variable) < old_upper_bound
+            if context.lower_bound(&updated_task.start_variable) > old_lower_bound
+                || context.upper_bound(&updated_task.start_variable) < old_upper_bound
             //Check whether there has either been an update to the lower-bound or the upper-bound (or both)
             {
                 updated.push(Updated {
-                    task_id: task.id.get_value(),
+                    task: Rc::clone(updated_task),
                     old_lower_bound,
                     old_upper_bound,
-                    new_lower_bound: context.lower_bound(&task.start_variable),
-                    new_upper_bound: context.upper_bound(&task.start_variable),
+                    new_lower_bound: context.lower_bound(&updated_task.start_variable),
+                    new_upper_bound: context.upper_bound(&updated_task.start_variable),
                 });
             }
             //There is a new mandatory part, Enqueue
@@ -128,6 +128,9 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         );
     }
 
+    /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
+    /// This method assumes that the lower-bound has been propagated due to `profiles.nth(propagating_index)`
+    /// * `profiles` - The [ResourceProfile]s in the time-table
     fn find_maximum_bound_and_profiles_lower_bound<'a>(
         &self,
         context: &PropagationContext,
@@ -176,7 +179,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     }
 
     /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
-    /// * `lower_bound` - Whether the propagation is on the lower-bound or the upper-bound
+    /// This method assumes that the upper-bound has been propagated due to `profiles.nth(propagating_index)`
     /// * `profiles` - The [ResourceProfile]s in the time-table
     fn find_maximum_bound_and_profiles_upper_bound<'a>(
         &self,
@@ -313,7 +316,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                         match self.propagate_and_explain(
                             context,
                             DomainChange::LowerBound(max(0, start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
-                            &task.start_variable,
+                            task,
                             lower_bound,
                             &new_profile_tasks,
                         ) {
@@ -358,7 +361,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 context.upper_bound(&task.start_variable),
                                 *end,
                             )),
-                            &task.start_variable,
+                            task,
                             upper_bound,
                             &new_profile_tasks,
                         ) {
