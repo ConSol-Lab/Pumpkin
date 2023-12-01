@@ -7,7 +7,9 @@ use std::{
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
     engine::{DomainChange, EnqueueDecision, PropagationContext},
-    propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
+    propagators::{
+        CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated, Util,
+    },
     pumpkin_assert_simple,
 };
 
@@ -303,7 +305,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 task,
                                 capacity,
                             );
-                        match self.propagate_and_explain(
+                        match Util::propagate_and_explain(
                             context,
                             DomainChange::LowerBound(max(0, start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
                             task,
@@ -345,7 +347,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 task,
                                 capacity,
                             );
-                        match self.propagate_and_explain(
+                        match Util::propagate_and_explain(
                             context,
                             DomainChange::UpperBound(max(
                                 context.upper_bound(&task.start_variable),
@@ -404,7 +406,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
             Err(conflict_profile) => {
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
                 CumulativePropagationResult::new(
-                    self.create_error_clause(context, &conflict_profile),
+                    Util::create_error_clause(context, &conflict_profile),
                     None,
                 )
             }

@@ -1,14 +1,11 @@
 use std::rc::Rc;
 
 use crate::{
-    basic_types::{
-        variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
-        PropositionalConjunction,
-    },
+    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{DomainChange, EnqueueDecision, PropagationContext},
 };
 
-use super::{Task, Updated, Util};
+use super::{Task, Updated};
 
 ///Stores the explanations
 /// * `change` - The domain change related to the event; contains the type of domain change and the value
@@ -54,6 +51,7 @@ impl<Var: IntVar + 'static> CumulativePropagationResult<Var> {
     }
 }
 
+///The interface/trait which specifies the required behaviour of an incremental propagator
 pub trait IncrementalPropagator<Var: IntVar + 'static> {
     ///Initialises the propagator constructs which could not be initialised with the ConstructorContext
     fn initialise(&mut self, _context: &PropagationContext, _capacity: i32) -> PropagationStatusCP {
@@ -109,7 +107,7 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
             })
         }
         if !updated.is_empty() {
-            crate::engine::EnqueueDecision::Enqueue
+            EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
         }
@@ -123,61 +121,8 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         capacity: i32,
     );
 
-    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
-    fn create_error_clause(
-        &self,
-        context: &PropagationContext,
-        conflict_tasks: &[Rc<Task<Var>>],
-    ) -> PropagationStatusCP {
-        let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
-        for task in conflict_tasks.iter() {
-            error_clause.push(
-                task.start_variable
-                    .upper_bound_predicate(context.upper_bound(&task.start_variable)),
-            );
-            error_clause.push(
-                task.start_variable
-                    .lower_bound_predicate(context.lower_bound(&task.start_variable)),
-            );
-        }
-
-        Err(Inconsistency::from(PropositionalConjunction::from(
-            error_clause,
-        )))
-    }
-
     /// Eagerly store the reason for a propagation of a value in the appropriate datastructure
     fn store_explanation(&mut self, explanation: Explanation<Var>);
-
-    /// Propagate the variable to the provided value and eagerly calculate the explanation given the tasks which were responsible for the propagation
-    fn propagate_and_explain(
-        &self,
-        context: &mut PropagationContext,
-        change_and_explanation_bound: DomainChange,
-        propagating_task: &Rc<Task<Var>>,
-        propagation_value: i32,
-        profile_tasks: &[Rc<Task<Var>>],
-    ) -> Result<PropositionalConjunction, PropositionalConjunction> {
-        let explanation = Util::create_naïve_explanation(
-            change_and_explanation_bound,
-            propagating_task,
-            context,
-            profile_tasks.iter(),
-        );
-        let result = match change_and_explanation_bound {
-            DomainChange::LowerBound(_) => {
-                context.set_lower_bound(&propagating_task.start_variable, propagation_value)
-            }
-            DomainChange::UpperBound(_) => {
-                context.set_upper_bound(&propagating_task.start_variable, propagation_value)
-            }
-            _ => unreachable!(),
-        };
-        match result {
-            Result::Err(_) => Err(explanation),
-            Result::Ok(_) => Ok(explanation),
-        }
-    }
 
     /// Propagate from scratch (i.e. recalculate all data structures)
     fn debug_propagate_from_scratch(

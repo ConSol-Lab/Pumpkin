@@ -1,8 +1,12 @@
 use std::rc::Rc;
 
 use crate::{
-    basic_types::{variables::IntVar, Predicate, PredicateConstructor, PropositionalConjunction},
+    basic_types::{
+        variables::IntVar, Inconsistency, Predicate, PredicateConstructor, PropagationStatusCP,
+        PropositionalConjunction,
+    },
     engine::{DomainChange, PropagationContext},
+    pumpkin_assert_simple,
 };
 
 use super::Task;
@@ -43,5 +47,60 @@ impl Util {
             );
         }
         PropositionalConjunction::from(explanation)
+    }
+
+    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
+    pub fn create_error_clause<Var: IntVar + 'static>(
+        context: &PropagationContext,
+        conflict_tasks: &[Rc<Task<Var>>],
+    ) -> PropagationStatusCP {
+        let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
+        for task in conflict_tasks.iter() {
+            error_clause.push(
+                task.start_variable
+                    .upper_bound_predicate(context.upper_bound(&task.start_variable)),
+            );
+            error_clause.push(
+                task.start_variable
+                    .lower_bound_predicate(context.lower_bound(&task.start_variable)),
+            );
+        }
+
+        Err(Inconsistency::from(PropositionalConjunction::from(
+            error_clause,
+        )))
+    }
+
+    /// Propagates the start variable of `propagating_task` to the provided `propagation_value` and eagerly calculates the explanation given the `profile_tasks` which were responsible for the propagation
+    pub fn propagate_and_explain<Var: IntVar + 'static>(
+        context: &mut PropagationContext,
+        change_and_explanation_bound: DomainChange,
+        propagating_task: &Rc<Task<Var>>,
+        propagation_value: i32,
+        profile_tasks: &[Rc<Task<Var>>],
+    ) -> Result<PropositionalConjunction, PropositionalConjunction> {
+        pumpkin_assert_simple!(
+            !profile_tasks.is_empty(),
+            "A propagation has to have occurred due to another task"
+        );
+        let explanation = Util::create_naïve_explanation(
+            change_and_explanation_bound,
+            propagating_task,
+            context,
+            profile_tasks.iter(),
+        );
+        let result = match change_and_explanation_bound {
+            DomainChange::LowerBound(_) => {
+                context.set_lower_bound(&propagating_task.start_variable, propagation_value)
+            }
+            DomainChange::UpperBound(_) => {
+                context.set_upper_bound(&propagating_task.start_variable, propagation_value)
+            }
+            _ => unreachable!(),
+        };
+        match result {
+            Result::Err(_) => Err(explanation),
+            Result::Ok(_) => Ok(explanation),
+        }
     }
 }

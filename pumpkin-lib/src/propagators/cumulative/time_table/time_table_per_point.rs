@@ -5,11 +5,12 @@ use std::{
 
 use crate::{
     basic_types::{
-        variables::IntVar, Inconsistency, PredicateConstructor, PropagationStatusCP,
-        PropositionalConjunction,
+        variables::IntVar, Inconsistency, PropagationStatusCP, PropositionalConjunction,
     },
     engine::{DomainChange, EnqueueDecision, PropagationContext},
-    propagators::{CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated},
+    propagators::{
+        CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated, Util,
+    },
 };
 
 use super::{ResourceProfile, TimeTableCreationResult, TimeTablePropagator};
@@ -187,6 +188,8 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         capacity: i32,
         tasks_arg: &[Rc<Task<Var>>],
     ) -> PropagationStatusCP {
+        //This method is similar to that of `create_time_table` but somewhat simpler
+        //We first create a time-table per point in the horizon
         let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
             profile.push(ResourceProfile {
@@ -196,43 +199,28 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                 height: 0,
             });
         }
-        let mut conflict = false;
-        let mut conflict_profile = Vec::new();
         for task in tasks_arg.iter() {
             let upper_bound = context.upper_bound(&task.start_variable);
             let lower_bound = context.lower_bound(&task.start_variable);
 
             if upper_bound < lower_bound + task.processing_time {
+                //For each task, we check whether there now exists a mandatory part
+                //If this is the case then we add the task we are currently processing (i.e. `task`) to the created or existing profile
                 for i in upper_bound..(lower_bound + task.processing_time) {
                     profile[i as usize].height += task.resource_usage;
                     profile[i as usize].profile_tasks.push(Rc::clone(task));
 
                     if profile[i as usize].height > capacity {
-                        conflict = true;
-                        conflict_profile = profile[i as usize].profile_tasks.clone();
-                        break;
+                        //The profile which we have just added to has overflown the resource capacity
+                        return Util::create_error_clause(
+                            context,
+                            &profile[i as usize].profile_tasks,
+                        );
                     }
                 }
             }
         }
-        {
-            if conflict {
-                let mut error_clause = Vec::with_capacity(conflict_profile.len() * 2);
-                for task in conflict_profile.iter() {
-                    error_clause.push(
-                        task.start_variable
-                            .upper_bound_predicate(context.upper_bound(&task.start_variable)),
-                    );
-                    error_clause.push(
-                        task.start_variable
-                            .lower_bound_predicate(context.lower_bound(&task.start_variable)),
-                    );
-                }
-                return Err(Inconsistency::from(PropositionalConjunction::from(
-                    error_clause,
-                )));
-            }
-        }
+        //Now we need to propagate the tasks appropriately, first we go over all profiles
         for ResourceProfile {
             start,
             end,
@@ -240,42 +228,41 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
             height,
         } in profile.iter()
         {
-            //go over every profile
+            //Then we go over all tasks
             for task in tasks_arg.iter() {
-                // go over every task
                 if height + task.resource_usage <= capacity {
-                    // The tasks are sorted by capacity, if this task doesn't overload then none will
+                    //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
                     break;
                 } else if self.has_mandatory_part_in_interval(context, task, *start, *end) {
+                    //The task has a mandatory part here already, it cannot be propagated due the current profile
                     continue;
                 } else if self.var_has_overlap_with_interval(context, task, *start, *end) {
-                    //check whether an overflow occurs + whether we can update the lower-bound
                     if (start - task.processing_time) < context.lower_bound(&task.start_variable)
                         && *end + 1 > context.lower_bound(&task.start_variable)
-                        && self
-                            .propagate_and_explain(
-                                context,
-                                DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
-                                task,
-                                *end + 1,
-                                profile_tasks,
-                            )
-                            .is_err()
+                        && Util::propagate_and_explain(
+                            context,
+                            DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
+                            task,
+                            *end + 1,
+                            profile_tasks,
+                        )
+                        .is_err()
                     {
+                        //We do not need to store explanations so we simply check whether the propagation of the lower bound resulted in an error
                         return Err(Inconsistency::EmptyDomain);
                     }
                     if end > &context.upper_bound(&task.start_variable)
                         && *start - task.processing_time < context.upper_bound(&task.start_variable)
-                        && self
-                            .propagate_and_explain(
-                                context,
-                                DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
-                                task,
-                                *start - task.processing_time,
-                                profile_tasks,
-                            )
-                            .is_err()
+                        && Util::propagate_and_explain(
+                            context,
+                            DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
+                            task,
+                            *start - task.processing_time,
+                            profile_tasks,
+                        )
+                        .is_err()
                     {
+                        //We do not need to store explanations so we simply check whether the propagation of the upper bound resulted in an error
                         return Err(Inconsistency::EmptyDomain);
                     }
                 }
