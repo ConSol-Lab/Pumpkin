@@ -73,7 +73,7 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
 }
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the domain of `x`.
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
     inner: Inner,
     scale: i32,

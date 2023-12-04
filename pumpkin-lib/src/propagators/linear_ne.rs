@@ -160,10 +160,12 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(1, 5);
 
-        let mut propagator = solver.new_propagator::<LinearNe<_>>(LinearNeArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-        });
+        let mut propagator = solver
+            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
+            .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
@@ -178,12 +180,12 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(2, 2);
 
-        let mut propagator = solver.new_propagator::<LinearNe<_>>(LinearNeArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-        });
-
-        let err = solver.propagate(&mut propagator).expect_err("empty domain");
+        let err = solver
+            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
+            .expect_err("empty domain");
 
         assert_eq!(Inconsistency::Other(conjunction!([x == 2] & [y == 2])), err);
     }
@@ -194,10 +196,12 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(1, 5);
 
-        let mut propagator = solver.new_propagator::<LinearNe<_>>(LinearNeArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-        });
+        let mut propagator = solver
+            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
+            .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
@@ -215,10 +219,12 @@ mod tests {
         let x = solver.new_variable(0, 3);
         let y = solver.new_variable(0, 3);
 
-        let mut propagator = solver.new_propagator::<LinearNe<_>>(LinearNeArgs {
-            terms: [x.scaled(1), y.scaled(-1)].into(),
-            rhs: 0,
-        });
+        let mut propagator = solver
+            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+                terms: [x.scaled(1), y.scaled(-1)].into(),
+                rhs: 0,
+            })
+            .expect("non-empty domain");
 
         solver.remove(x, 0).expect("non-empty domain");
         solver.remove(x, 2).expect("non-empty domain");

@@ -159,10 +159,12 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver.new_propagator::<LinearLeq<_>>(LinearLeqArgs {
-            x: [x, y].into(),
-            c: 7,
-        });
+        let mut propagator = solver
+            .new_propagator::<LinearLeq<_>>(LinearLeqArgs {
+                x: [x, y].into(),
+                c: 7,
+            })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
@@ -176,10 +178,12 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver.new_propagator::<LinearLeq<_>>(LinearLeqArgs {
-            x: [x, y].into(),
-            c: 7,
-        });
+        let mut propagator = solver
+            .new_propagator::<LinearLeq<_>>(LinearLeqArgs {
+                x: [x, y].into(),
+                c: 7,
+            })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 

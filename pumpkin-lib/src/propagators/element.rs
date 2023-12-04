@@ -336,8 +336,9 @@ mod tests {
         let rhs = solver.new_variable(2, 8);
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -360,8 +361,9 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -398,8 +400,9 @@ mod tests {
 
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 

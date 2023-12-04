@@ -57,6 +57,7 @@ impl<T> IndexMut<PropagatorId> for Vec<T> {
 /// A propagator variable is a handle to a variable for a propagator. It keeps track of the
 /// [`LocalId`] when modifying the domain. To obtain a propagator variable, the
 /// [`PropagatorConstructorContext::register()`] method should be used.
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
     inner: Var,
     local_id: LocalId,
@@ -137,6 +138,17 @@ pub enum DomainChange {
     Removal(i32),
     LowerBound(i32),
     UpperBound(i32),
+}
+
+/// TODO: Does this make sense in all cases?
+impl From<DomainChange> for DomainEvent {
+    fn from(value: DomainChange) -> Self {
+        match value {
+            DomainChange::Removal(_) => DomainEvent::Any,
+            DomainChange::LowerBound(_) => DomainEvent::LowerBound,
+            DomainChange::UpperBound(_) => DomainEvent::UpperBound,
+        }
+    }
 }
 
 /// A wrapper for a domain event, which forces the propagator implementation to map the event

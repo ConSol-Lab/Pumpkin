@@ -1,14 +1,13 @@
+#![cfg(test)]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
-use crate::basic_types::{DomainId, PropagationStatusCP, PropositionalConjunction};
-
-use super::{
-    propagation::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, PropagationContext,
-        PropagatorConstructorContext, PropagatorId,
-    },
-    AssignmentsInteger, EmptyDomain, WatchListCP,
+use crate::basic_types::{DomainId, Inconsistency, PropagationStatusCP, PropositionalConjunction};
+use crate::engine::{
+    AssignmentsInteger, CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta,
+    DomainChange, DomainEvent, EmptyDomain, EnqueueDecision, LocalId, OpaqueDomainEvent,
+    PropagationContext, PropagatorConstructorContext, PropagatorId, WatchListCP,
 };
+use std::fmt::{Debug, Formatter};
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default)]
@@ -24,6 +23,17 @@ pub struct TestPropagator {
     id: PropagatorId,
 }
 
+impl Debug for TestPropagator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TestPropagator for {} (id: {})",
+            self.propagator.name(),
+            self.id
+        )
+    }
+}
+
 impl TestSolver {
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.watch_list.grow();
@@ -33,7 +43,7 @@ impl TestSolver {
     pub fn new_propagator<Constructor: CPPropagatorConstructor>(
         &mut self,
         args: Constructor::Args,
-    ) -> TestPropagator {
+    ) -> Result<TestPropagator, Inconsistency> {
         let id = PropagatorId(self.next_id);
         self.next_id += 1;
 
@@ -42,7 +52,19 @@ impl TestSolver {
             PropagatorConstructorContext::new(&mut self.watch_list, id),
         );
 
-        TestPropagator { propagator, id }
+        let mut propagator1 = TestPropagator { propagator, id };
+        self.initialise_at_root(&mut propagator1)?;
+
+        Ok(propagator1)
+    }
+
+    pub fn initialise_at_root(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
+        propagator
+            .propagator
+            .initialise_at_root(&mut PropagationContext::new(
+                &mut self.assignment,
+                propagator.id,
+            ))
     }
 
     pub fn contains(&self, var: DomainId, value: i32) -> bool {
@@ -57,6 +79,14 @@ impl TestSolver {
         self.assignment.get_upper_bound(var)
     }
 
+    pub fn set_upper_bound(&mut self, var: DomainId, ub: i32) -> Result<(), EmptyDomain> {
+        self.assignment.tighten_upper_bound(var, ub, None)
+    }
+
+    pub fn set_lower_bound(&mut self, var: DomainId, ub: i32) -> Result<(), EmptyDomain> {
+        self.assignment.tighten_lower_bound(var, ub, None)
+    }
+
     pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
         self.assignment.remove_value_from_domain(var, value, None)
     }
@@ -64,6 +94,52 @@ impl TestSolver {
     pub fn propagate(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
         let mut context = PropagationContext::new(&mut self.assignment, propagator.id);
         propagator.propagator.propagate(&mut context)
+    }
+
+    pub fn notify(
+        &mut self,
+        propagator: &mut TestPropagator,
+        event: OpaqueDomainEvent,
+        local_id: LocalId,
+    ) -> EnqueueDecision {
+        propagator.propagator.notify(
+            &mut PropagationContext::new(&mut self.assignment, propagator.id),
+            local_id,
+            event,
+        )
+    }
+
+    pub fn get_affected_locals(
+        &self,
+        propagator: &TestPropagator,
+        domain_id: DomainId,
+        event: DomainEvent,
+    ) -> impl Iterator<Item = LocalId> + '_ {
+        let id = propagator.id;
+        self.watch_list
+            .get_affected_propagators(event, domain_id)
+            .iter()
+            .filter_map(move |pvi| {
+                if pvi.propagator == id {
+                    Some(pvi.variable)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn notify_changed(
+        &mut self,
+        propagator: &mut TestPropagator,
+        domain_id: DomainId,
+        event: DomainEvent,
+    ) {
+        for local_id in self
+            .get_affected_locals(propagator, domain_id, event)
+            .collect::<Vec<_>>()
+        {
+            self.notify(propagator, event.into(), local_id);
+        }
     }
 
     pub fn get_reason(
@@ -75,6 +151,20 @@ impl TestSolver {
         propagator
             .propagator
             .get_reason_for_propagation(&context, delta)
+    }
+
+    pub fn to_deltas(
+        &self,
+        propagator: &TestPropagator,
+        var: DomainId,
+        change: DomainChange,
+    ) -> Vec<Delta> {
+        self.watch_list
+            .get_affected_propagators(change.into(), var)
+            .iter()
+            .filter(|pv| pv.propagator == propagator.id)
+            .map(|pv| Delta::new(pv.variable, change))
+            .collect()
     }
 
     pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {

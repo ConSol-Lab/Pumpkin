@@ -7,7 +7,7 @@ use super::{Predicate, PropositionalConjunction};
 /// variant, i.e. a propositional conjunction.
 pub type PropagationStatusCP = Result<(), Inconsistency>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Inconsistency {
     EmptyDomain,
     Other(PropositionalConjunction),

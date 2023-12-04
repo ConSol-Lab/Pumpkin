@@ -125,7 +125,9 @@ mod tests {
         let x = solver.new_variable(1, 10);
         let y = solver.new_variable(4, 4);
 
-        let mut propagator = solver.new_propagator::<NotEq<_, _>>(NotEqArgs { x, y });
+        let mut propagator = solver
+            .new_propagator::<NotEq<_, _>>(NotEqArgs { x, y })
+            .expect("no empty domains");
         solver.propagate(&mut propagator).expect("no inconsistency");
 
         assert!(!solver.contains(x, 4));
@@ -140,7 +142,9 @@ mod tests {
         let y = solver.new_variable(1, 10);
         let x = solver.new_variable(4, 4);
 
-        let mut propagator = solver.new_propagator::<NotEq<_, _>>(NotEqArgs { x, y });
+        let mut propagator = solver
+            .new_propagator::<NotEq<_, _>>(NotEqArgs { x, y })
+            .expect("no empty domains");
         solver.propagate(&mut propagator).expect("no inconsistency");
 
         assert!(!solver.contains(y, 4));

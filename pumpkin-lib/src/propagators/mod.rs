@@ -1,4 +1,5 @@
 pub mod clausal_propagators;
+mod diff_logic;
 mod element;
 mod int_times;
 mod linear_leq;

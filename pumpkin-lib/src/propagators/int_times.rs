@@ -264,7 +264,9 @@ mod tests {
         let b = solver.new_variable(0, 4);
         let c = solver.new_variable(-10, 20);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -295,7 +297,9 @@ mod tests {
         let b = solver.new_variable(0, 12);
         let c = solver.new_variable(2, 12);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -326,7 +330,9 @@ mod tests {
         let b = solver.new_variable(3, 6);
         let c = solver.new_variable(2, 12);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -334,7 +340,7 @@ mod tests {
         assert_eq!(4, solver.upper_bound(a));
         assert_eq!(3, solver.lower_bound(b));
         assert_eq!(6, solver.upper_bound(b));
-        assert_eq!(2, solver.lower_bound(c));
+        assert_eq!(3, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
         let reason_lb = solver.get_reason(
