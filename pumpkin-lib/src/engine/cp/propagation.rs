@@ -5,7 +5,7 @@ use crate::basic_types::{
     PropositionalConjunction,
 };
 
-use super::{AssignmentsInteger, DomainEvent, DomainManager, EmptyDomain, WatchListCP, Watchers};
+use super::{AssignmentsInteger, DomainEvent, EmptyDomain, WatchListCP, Watchers};
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
@@ -155,7 +155,8 @@ impl OpaqueDomainEvent {
 }
 
 pub struct PropagationContext<'a> {
-    domain_manager: DomainManager<'a>,
+    propagator_id: PropagatorId,
+    assignment: &'a mut AssignmentsInteger,
 }
 
 impl PropagationContext<'_> {
@@ -163,8 +164,18 @@ impl PropagationContext<'_> {
         assignment: &mut AssignmentsInteger,
         propagator_id: PropagatorId,
     ) -> PropagationContext<'_> {
-        let domain_manager = DomainManager::new(propagator_id, assignment);
-        PropagationContext { domain_manager }
+        PropagationContext {
+            propagator_id,
+            assignment,
+        }
+    }
+
+    #[inline]
+    fn propagator_var_id<Var>(&self, var: &PropagatorVariable<Var>) -> PropagatorVarId {
+        PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: var.local_id,
+        }
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -173,19 +184,19 @@ impl PropagationContext<'_> {
     }
 
     pub fn lower_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.lower_bound(&self.domain_manager)
+        var.inner.lower_bound(self.assignment)
     }
 
     pub fn upper_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.upper_bound(&self.domain_manager)
+        var.inner.upper_bound(self.assignment)
     }
 
     pub fn contains<Var: IntVar>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
-        var.inner.contains(&self.domain_manager, value)
+        var.inner.contains(self.assignment, value)
     }
 
     pub fn describe_domain<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> Vec<Predicate> {
-        var.inner.describe_domain(&self.domain_manager)
+        var.inner.describe_domain(self.assignment)
     }
 
     pub fn remove<Var: IntVar>(
@@ -193,8 +204,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         value: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.remove(&mut self.domain_manager, value)
+        let reason = self.propagator_var_id(var);
+        var.inner.remove(self.assignment, value, reason)
     }
 
     pub fn set_upper_bound<Var: IntVar>(
@@ -202,8 +213,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         bound: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.set_upper_bound(&mut self.domain_manager, bound)
+        let reason = self.propagator_var_id(var);
+        var.inner.set_upper_bound(self.assignment, bound, reason)
     }
 
     pub fn set_lower_bound<Var: IntVar>(
@@ -211,8 +222,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         bound: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.set_lower_bound(&mut self.domain_manager, bound)
+        let reason = self.propagator_var_id(var);
+        var.inner.set_lower_bound(self.assignment, bound, reason)
     }
 }
 
