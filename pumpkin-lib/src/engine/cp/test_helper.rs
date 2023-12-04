@@ -1,14 +1,13 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use crate::basic_types::{DomainId, PropagationStatusCP, PropositionalConjunction};
-use crate::engine::EmptyDomain;
 
 use super::{
     propagation::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, PropagationContext,
         PropagatorConstructorContext, PropagatorId,
     },
-    AssignmentsInteger, WatchListCP,
+    AssignmentsInteger, EmptyDomain, WatchListCP,
 };
 
 /// A container for CP variables, which can be used to test propagators.

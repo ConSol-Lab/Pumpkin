@@ -1,4 +1,5 @@
 mod checker;
+mod flatzinc;
 mod parsers;
 mod result;
 
@@ -156,7 +157,7 @@ fn main() {
     match run() {
         Ok(()) => {}
         Err(e) => {
-            error!("Execution failed, error: {}", e);
+            error!("Execution failed, error: {:#?}", e);
             std::process::exit(1);
         }
     }
@@ -172,7 +173,10 @@ fn run() -> PumpkinResult<()> {
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
         Some("wcnf") => FileFormat::WcnfDimacsPLine,
-        _ => return Err(PumpkinError::InvalidInstanceFile),
+        Some("fzn") => FileFormat::FlatZinc,
+        _ => {
+            return Err(PumpkinError::invalid_instance(args.instance_path.display()));
+        }
     };
 
     let sat_options = SatOptions {
@@ -211,7 +215,7 @@ fn run() -> PumpkinResult<()> {
     let instance_path = args
         .instance_path
         .to_str()
-        .ok_or(PumpkinError::InvalidInstanceFile)?;
+        .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
     let verify_outcome = args.verify_solution;
 
     match file_format {
@@ -221,7 +225,7 @@ fn run() -> PumpkinResult<()> {
             time_limit,
             instance_path,
             verify_outcome,
-        ),
+        )?,
         FileFormat::WcnfDimacsPLine => wcnf_problem(
             sat_options,
             solver_options,
@@ -229,9 +233,15 @@ fn run() -> PumpkinResult<()> {
             instance_path,
             args.upper_bound_encoding.inner,
             verify_outcome,
-        ),
+        )?,
         FileFormat::MaxSAT2022 => todo!(),
+        FileFormat::FlatZinc => flatzinc::solve(
+            ConstraintSatisfactionSolver::new(sat_options, solver_options),
+            instance_path,
+        )?,
     }
+
+    Ok(())
 }
 
 fn wcnf_problem(

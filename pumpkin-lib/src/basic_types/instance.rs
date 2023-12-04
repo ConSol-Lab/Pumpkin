@@ -52,6 +52,7 @@ impl Instance {
             FileFormat::CnfDimacsPLine => self.read_cnf_p_line(file_location),
             FileFormat::WcnfDimacsPLine => self.read_wcnf_p_line(file_location),
             FileFormat::MaxSAT2022 => todo!(),
+            FileFormat::FlatZinc => todo!(),
         }
     }
 

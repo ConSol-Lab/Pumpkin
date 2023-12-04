@@ -3,4 +3,5 @@ pub enum FileFormat {
     CnfDimacsPLine,
     WcnfDimacsPLine,
     MaxSAT2022,
+    FlatZinc,
 }
