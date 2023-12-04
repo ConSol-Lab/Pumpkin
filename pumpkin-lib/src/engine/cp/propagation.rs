@@ -75,10 +75,6 @@ impl<Var: IntVar> PropagatorVariable<Var> {
     pub fn unpack(&self, delta: Delta) -> DomainChange {
         self.inner.unpack_delta(delta)
     }
-
-    pub fn get_local_id(&self) -> LocalId {
-        self.local_id
-    }
 }
 
 impl<Var: PredicateConstructor> PredicateConstructor for PropagatorVariable<Var> {
