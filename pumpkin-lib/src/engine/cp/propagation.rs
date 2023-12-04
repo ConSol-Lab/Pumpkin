@@ -60,7 +60,6 @@ impl<T> IndexMut<PropagatorId> for Vec<T> {
 /// A propagator variable is a handle to a variable for a propagator. It keeps track of the
 /// [`LocalId`] when modifying the domain. To obtain a propagator variable, the
 /// [`PropagatorConstructorContext::register()`] method should be used.
-#[derive(Clone)]
 pub struct PropagatorVariable<Var> {
     inner: Var,
     local_id: LocalId,

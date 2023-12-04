@@ -34,7 +34,7 @@ impl std::fmt::Display for PropagationMethod {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 ///Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
 /// * `start_variable` - The [PropagatorVariable] representing the start time of a task
 /// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
@@ -119,15 +119,15 @@ pub struct Cumulative<Var> {
 
 impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
     fn new(
-        tasks: &Vec<Task<Var>>,
+        tasks: Vec<Task<Var>>,
         capacity: i32,
         horizon: i32,
         incrementality: Incrementality,
         propagation_method: PropagationMethod,
     ) -> Cumulative<Var> {
+        let num_tasks = tasks.len();
         Cumulative {
             tasks: tasks
-                .clone()
                 .into_iter()
                 .map(Rc::new)
                 .collect::<Vec<_>>()
@@ -136,12 +136,10 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
             horizon,
             incrementality,
             _propagation_method: propagation_method,
-            bounds: Vec::with_capacity(tasks.len()),
+            bounds: Vec::with_capacity(num_tasks),
             updated: Vec::new(),
             propagator: match propagation_method {
-                PropagationMethod::TimeTablePerPoint => {
-                    Box::new(TimeTablePerPoint::new(tasks.len()))
-                }
+                PropagationMethod::TimeTablePerPoint => Box::new(TimeTablePerPoint::new(num_tasks)),
             },
         }
     }
@@ -185,7 +183,7 @@ where
             })
             .collect::<Vec<Task<Var>>>();
         Box::new(Cumulative::new(
-            &tasks,
+            tasks,
             args.capacity,
             args.horizon,
             args.incrementality,
