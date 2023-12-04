@@ -144,7 +144,7 @@ pub enum DomainChange {
 impl From<DomainChange> for DomainEvent {
     fn from(value: DomainChange) -> Self {
         match value {
-            DomainChange::Removal(_) => DomainEvent::Any,
+            DomainChange::Removal(_) => DomainEvent::Removal,
             DomainChange::LowerBound(_) => DomainEvent::LowerBound,
             DomainChange::UpperBound(_) => DomainEvent::UpperBound,
         }
