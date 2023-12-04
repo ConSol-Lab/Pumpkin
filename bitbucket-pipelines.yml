@@ -17,6 +17,7 @@ pipelines:
             - echo "Build project"                    ; cargo build --release
             - echo "Format source code"               ; ./scripts/fmt.sh
             - echo "Run Clippy"                       ; ./scripts/clippy.sh
+            - echo "Run cargo-deny"                   ; ./scripts/deny.sh
             - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
             - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
 
@@ -31,5 +32,6 @@ pipelines:
             - echo "Build project"                    ; cargo build --release
             - echo "Format source code"               ; ./scripts/fmt.sh
             - echo "Run Clippy"                       ; ./scripts/clippy.sh
+            - echo "Run cargo-deny"                   ; ./scripts/deny.sh
             - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
             - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
