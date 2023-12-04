@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::{PropagationStatusCP, PropositionalConjunction};
 use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
+    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvents,
     LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
 };
 use crate::{conjunction, predicate};
@@ -70,15 +70,15 @@ impl<VX: IntVar + 'static, VI: IntVar + 'static, VE: IntVar + 'static> CPPropaga
             .map(|(i, x_i)| {
                 context.register(
                     x_i.clone(),
-                    DomainEvent::Any,
+                    DomainEvents::ANY,
                     LocalId::from(i as u32 + ID_X_OFFSET),
                 )
             })
             .collect();
         Box::new(Element {
             array,
-            index: context.register(args.index, DomainEvent::Any, ID_INDEX),
-            rhs: context.register(args.rhs, DomainEvent::Any, ID_RHS),
+            index: context.register(args.index, DomainEvents::ANY, ID_INDEX),
+            rhs: context.register(args.rhs, DomainEvents::ANY, ID_RHS),
             propagations_index: HashMap::new(),
             propagations_rhs: HashMap::new(),
         })

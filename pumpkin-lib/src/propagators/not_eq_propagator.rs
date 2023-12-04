@@ -1,9 +1,10 @@
+use crate::engine::DomainEvents;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     conjunction,
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
-        LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
+        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
 };
 
@@ -30,8 +31,8 @@ impl<VX: IntVar + std::fmt::Debug + 'static, VY: IntVar + std::fmt::Debug + 'sta
         mut context: PropagatorConstructorContext<'_>,
     ) -> Box<dyn ConstraintProgrammingPropagator> {
         Box::new(NotEq {
-            x: context.register(args.x, DomainEvent::Assign, ID_X),
-            y: context.register(args.y, DomainEvent::Assign, ID_Y),
+            x: context.register(args.x, DomainEvents::ASSIGN, ID_X),
+            y: context.register(args.y, DomainEvents::ASSIGN, ID_Y),
         })
     }
 }

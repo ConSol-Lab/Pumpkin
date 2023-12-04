@@ -445,7 +445,7 @@ impl IntegerDomainExplicit {
         let idx = self.get_index(value);
 
         if self.is_value_in_domain[idx] {
-            events.event_occurred(DomainEvent::Any, self.id);
+            events.event_occurred(DomainEvent::Removal, self.id);
         }
 
         self.is_value_in_domain[idx] = false;
@@ -564,9 +564,9 @@ mod tests {
             .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [DomainEvent::LowerBound, DomainEvent::Any]);
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
     }
 
     #[test]
@@ -579,8 +579,8 @@ mod tests {
             .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
-        assert_eq!(events.len(), 2);
-        assert_contains_events(&events, d1, [DomainEvent::UpperBound, DomainEvent::Any]);
+        assert_eq!(events.len(), 1);
+        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
     }
 
     #[test]
@@ -598,26 +598,10 @@ mod tests {
             .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
-        assert_eq!(events.len(), 6);
+        assert_eq!(events.len(), 4);
 
-        assert_contains_events(
-            &events,
-            d1,
-            [
-                DomainEvent::LowerBound,
-                DomainEvent::Any,
-                DomainEvent::Assign,
-            ],
-        );
-        assert_contains_events(
-            &events,
-            d2,
-            [
-                DomainEvent::UpperBound,
-                DomainEvent::Any,
-                DomainEvent::Assign,
-            ],
-        );
+        assert_contains_events(&events, d1, [DomainEvent::LowerBound, DomainEvent::Assign]);
+        assert_contains_events(&events, d2, [DomainEvent::UpperBound, DomainEvent::Assign]);
     }
 
     #[test]
@@ -639,26 +623,10 @@ mod tests {
             .expect("non-empty domain");
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
-        assert_eq!(events.len(), 10);
+        assert_eq!(events.len(), 7);
 
-        assert_contains_events(
-            &events,
-            d1,
-            [
-                DomainEvent::Assign,
-                DomainEvent::UpperBound,
-                DomainEvent::Any,
-            ],
-        );
-        assert_contains_events(
-            &events,
-            d2,
-            [
-                DomainEvent::Assign,
-                DomainEvent::LowerBound,
-                DomainEvent::Any,
-            ],
-        );
+        assert_contains_events(&events, d1, [DomainEvent::Assign, DomainEvent::UpperBound]);
+        assert_contains_events(&events, d2, [DomainEvent::Assign, DomainEvent::LowerBound]);
         assert_contains_events(
             &events,
             d3,
@@ -666,13 +634,12 @@ mod tests {
                 DomainEvent::Assign,
                 DomainEvent::LowerBound,
                 DomainEvent::UpperBound,
-                DomainEvent::Any,
             ],
         );
     }
 
     #[test]
-    fn removal_triggers_any_event() {
+    fn removal_triggers_removal_event() {
         let mut assignment = AssignmentsInteger::default();
         let d1 = assignment.grow(1, 5);
 
@@ -682,7 +649,7 @@ mod tests {
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
-        assert!(events.contains(&(DomainEvent::Any, d1)));
+        assert!(events.contains(&(DomainEvent::Removal, d1)));
     }
 
     #[test]

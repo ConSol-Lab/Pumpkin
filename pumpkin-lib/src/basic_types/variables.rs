@@ -4,6 +4,8 @@
 
 use std::cmp::Ordering;
 
+use enumset::EnumSet;
+
 use crate::engine::{
     AssignmentsInteger, Delta, DomainChange, DomainEvent, EmptyDomain, OpaqueDomainEvent,
     PropagatorVarId, Watchers,
@@ -51,8 +53,8 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
         reason: PropagatorVarId,
     ) -> Result<(), EmptyDomain>;
 
-    /// Register a watch for this variable on the given domain event.
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent);
+    /// Register a watch for this variable on the given domain events.
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 
     /// Decode a delta into the change it represents for this variable.
     fn unpack_delta(&self, delta: Delta) -> DomainChange;
@@ -124,8 +126,8 @@ impl IntVar for DomainId {
         assignment.tighten_upper_bound(*self, value, Some(reason))
     }
 
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
-        watchers.watch(*self, event);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        watchers.watch_all(*self, events);
     }
 
     fn unpack_delta(&self, delta: Delta) -> DomainChange {
@@ -265,16 +267,13 @@ where
         }
     }
 
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
-        if self.scale.is_negative() {
-            match event {
-                DomainEvent::LowerBound => self.inner.watch(watchers, DomainEvent::UpperBound),
-                DomainEvent::UpperBound => self.inner.watch(watchers, DomainEvent::LowerBound),
-                event => self.inner.watch(watchers, event),
-            }
-        } else {
-            self.inner.watch(watchers, event);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
+        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
+        let intersection = events.intersection(bound);
+        if intersection.len() == 1 && self.scale.is_negative() {
+            events = events.symmetrical_difference(bound);
         }
+        self.inner.watch_all(watchers, events);
     }
 
     fn unpack_delta(&self, delta: Delta) -> DomainChange {

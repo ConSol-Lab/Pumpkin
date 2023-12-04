@@ -1,8 +1,9 @@
+use crate::engine::DomainEvents;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
-        LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
+        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
     predicate,
 };
@@ -36,7 +37,7 @@ where
             .iter()
             .enumerate()
             .map(|(i, x_i)| {
-                context.register(x_i.clone(), DomainEvent::Assign, LocalId::from(i as u32))
+                context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32))
             })
             .collect();
 

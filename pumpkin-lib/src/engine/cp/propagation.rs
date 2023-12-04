@@ -1,3 +1,4 @@
+use enumset::{enum_set, EnumSet};
 use std::ops::{Index, IndexMut};
 
 use crate::basic_types::{
@@ -259,7 +260,7 @@ impl PropagatorConstructorContext<'_> {
     pub fn register<Var: IntVar>(
         &mut self,
         var: Var,
-        event: DomainEvent,
+        domain_events: DomainEvents,
         local_id: LocalId,
     ) -> PropagatorVariable<Var> {
         let propagator_var = PropagatorVarId {
@@ -268,13 +269,47 @@ impl PropagatorConstructorContext<'_> {
         };
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
-        var.watch(&mut watchers, event);
+        var.watch_all(&mut watchers, domain_events.events);
 
         PropagatorVariable {
             inner: var,
             local_id,
         }
     }
+}
+
+impl DomainEvents {
+    /// DomainEvents with both lower and upper bound tightening (but not other value removal).
+    pub const BOUNDS: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::LowerBound | DomainEvent::UpperBound),
+    };
+    // this is all options right now, but won't be once we add variables of other types
+    /// DomainEvents with lower and upper bound tightening, assigning to a single value, and
+    ///  single value removal.
+    pub const ANY: DomainEvents = DomainEvents {
+        events: enum_set!(
+            DomainEvent::Assign
+                | DomainEvent::LowerBound
+                | DomainEvent::UpperBound
+                | DomainEvent::Removal
+        ),
+    };
+    /// DomainEvents with only lower bound tightening.
+    pub const LOWER_BOUND: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::LowerBound),
+    };
+    /// DomainEvents with only upper bound tightening.
+    pub const UPPER_BOUND: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::UpperBound),
+    };
+    /// DomainEvents with only assigning to a single value.
+    pub const ASSIGN: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::Assign),
+    };
+}
+
+pub struct DomainEvents {
+    events: EnumSet<DomainEvent>,
 }
 
 /// Indicator of what to do when a propagator is notified.

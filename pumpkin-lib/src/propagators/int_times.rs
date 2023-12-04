@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use log::warn;
 
+use crate::engine::DomainEvents;
 use crate::{
     basic_types::{variables::IntVar, Predicate, PropagationStatusCP, PropositionalConjunction},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
-        LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
+        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
     predicate,
 };
@@ -46,9 +47,9 @@ where
         mut context: PropagatorConstructorContext<'_>,
     ) -> Box<dyn ConstraintProgrammingPropagator> {
         Box::new(IntTimes {
-            a: context.register(args.a, DomainEvent::Any, ID_A),
-            b: context.register(args.b, DomainEvent::Any, ID_B),
-            c: context.register(args.c, DomainEvent::Any, ID_C),
+            a: context.register(args.a, DomainEvents::ANY, ID_A),
+            b: context.register(args.b, DomainEvents::ANY, ID_B),
+            c: context.register(args.c, DomainEvents::ANY, ID_C),
 
             propagations_a: Default::default(),
             propagations_b: Default::default(),
