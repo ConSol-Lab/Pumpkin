@@ -41,10 +41,10 @@ impl std::fmt::Display for PropagationMethod {
 /// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
 /// * `id` - The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
 pub struct Task<Var> {
-    pub start_variable: PropagatorVariable<Var>, //start_time
-    pub processing_time: i32,                    //processing_time (duration)
-    pub resource_usage: i32,                     //resource usage
-    pub id: LocalId,                             //localID of task
+    pub start_variable: PropagatorVariable<Var>,
+    pub processing_time: i32,
+    pub resource_usage: i32,
+    pub id: LocalId,
 }
 
 impl<Var: IntVar + 'static> Hash for Task<Var> {
@@ -115,7 +115,6 @@ pub struct Cumulative<Var> {
     updated: Vec<Updated<Var>>,
     propagator: Box<dyn IncrementalPropagator<Var>>,
 }
-//------------------------------
 
 impl<Var: IntVar + 'static + std::fmt::Debug> Cumulative<Var> {
     fn new(
