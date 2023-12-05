@@ -4,7 +4,7 @@ use std::hash::Hash;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::{Predicate, PropagationStatusCP, PropositionalConjunction};
 use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
+    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvents,
     EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext, PropagatorConstructorContext,
     PropagatorVariable,
 };
@@ -73,12 +73,12 @@ where
                     (
                         context.register(
                             x_i.clone().scaled(1), // scale by 1 to make it an AffineView
-                            DomainEvent::UpperBound,
+                            DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32),
                         ),
                         context.register(
                             x_i.clone().scaled(-1),
-                            DomainEvent::UpperBound,
+                            DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 1),
                         ),
                     )
@@ -90,12 +90,12 @@ where
                     (
                         context.register(
                             x_j.clone().scaled(1),
-                            DomainEvent::UpperBound,
+                            DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 2),
                         ),
                         context.register(
                             x_j.clone().scaled(-1),
-                            DomainEvent::UpperBound,
+                            DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 3),
                         ),
                     )
