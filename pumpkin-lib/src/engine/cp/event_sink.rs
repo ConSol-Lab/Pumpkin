@@ -29,12 +29,7 @@ impl EventSink {
             return;
         }
 
-        if event != DomainEvent::Any && elem.is_empty() {
-            // Ensure the any event always is triggered when a modification happens.
-            self.events.push((DomainEvent::Any, domain));
-        }
-
-        elem.insert_all(event | DomainEvent::Any);
+        elem.insert(event);
         self.events.push((event, domain));
     }
 
@@ -58,18 +53,6 @@ mod tests {
     }
 
     #[test]
-    fn an_any_event_is_pushed_once() {
-        let mut sink = EventSink::default();
-        sink.grow();
-
-        sink.event_occurred(DomainEvent::Any, DomainId::new(0));
-
-        let events = sink.drain().collect::<Vec<_>>();
-        assert_eq!(events.len(), 1);
-        assert!(events.contains(&(DomainEvent::Any, DomainId::new(0))));
-    }
-
-    #[test]
     fn a_captured_event_is_observed_in_the_drain() {
         let mut sink = EventSink::default();
         sink.grow();
@@ -80,11 +63,9 @@ mod tests {
 
         let events = sink.drain().collect::<Vec<_>>();
 
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 2);
         assert!(events.contains(&(DomainEvent::LowerBound, DomainId::new(0))));
-        assert!(events.contains(&(DomainEvent::Any, DomainId::new(0))));
         assert!(events.contains(&(DomainEvent::UpperBound, DomainId::new(1))));
-        assert!(events.contains(&(DomainEvent::Any, DomainId::new(1))));
     }
 
     #[test]
@@ -112,6 +93,6 @@ mod tests {
 
         let events = sink.drain().collect::<Vec<_>>();
 
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 1);
     }
 }

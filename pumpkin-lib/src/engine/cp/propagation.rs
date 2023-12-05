@@ -1,3 +1,4 @@
+use enumset::{enum_set, EnumSet};
 use std::ops::{Index, IndexMut};
 
 use crate::basic_types::{
@@ -5,7 +6,7 @@ use crate::basic_types::{
     PropositionalConjunction,
 };
 
-use super::{AssignmentsInteger, DomainEvent, DomainManager, EmptyDomain, WatchListCP, Watchers};
+use super::{AssignmentsInteger, DomainEvent, EmptyDomain, WatchListCP, Watchers};
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
@@ -60,6 +61,7 @@ impl<T> IndexMut<PropagatorId> for Vec<T> {
 /// A propagator variable is a handle to a variable for a propagator. It keeps track of the
 /// [`LocalId`] when modifying the domain. To obtain a propagator variable, the
 /// [`PropagatorConstructorContext::register()`] method should be used.
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
     inner: Var,
     local_id: LocalId,
@@ -142,6 +144,17 @@ pub enum DomainChange {
     UpperBound(i32),
 }
 
+/// TODO: Does this make sense in all cases?
+impl From<DomainChange> for DomainEvent {
+    fn from(value: DomainChange) -> Self {
+        match value {
+            DomainChange::Removal(_) => DomainEvent::Removal,
+            DomainChange::LowerBound(_) => DomainEvent::LowerBound,
+            DomainChange::UpperBound(_) => DomainEvent::UpperBound,
+        }
+    }
+}
+
 /// A wrapper for a domain event, which forces the propagator implementation to map the event
 /// through the variable view.
 pub struct OpaqueDomainEvent(DomainEvent);
@@ -159,7 +172,8 @@ impl OpaqueDomainEvent {
 }
 
 pub struct PropagationContext<'a> {
-    domain_manager: DomainManager<'a>,
+    propagator_id: PropagatorId,
+    assignment: &'a mut AssignmentsInteger,
 }
 
 impl PropagationContext<'_> {
@@ -167,8 +181,18 @@ impl PropagationContext<'_> {
         assignment: &mut AssignmentsInteger,
         propagator_id: PropagatorId,
     ) -> PropagationContext<'_> {
-        let domain_manager = DomainManager::new(propagator_id, assignment);
-        PropagationContext { domain_manager }
+        PropagationContext {
+            propagator_id,
+            assignment,
+        }
+    }
+
+    #[inline]
+    fn propagator_var_id<Var>(&self, var: &PropagatorVariable<Var>) -> PropagatorVarId {
+        PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: var.local_id,
+        }
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -177,19 +201,19 @@ impl PropagationContext<'_> {
     }
 
     pub fn lower_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.lower_bound(&self.domain_manager)
+        var.inner.lower_bound(self.assignment)
     }
 
     pub fn upper_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.upper_bound(&self.domain_manager)
+        var.inner.upper_bound(self.assignment)
     }
 
     pub fn contains<Var: IntVar>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
-        var.inner.contains(&self.domain_manager, value)
+        var.inner.contains(self.assignment, value)
     }
 
     pub fn describe_domain<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> Vec<Predicate> {
-        var.inner.describe_domain(&self.domain_manager)
+        var.inner.describe_domain(self.assignment)
     }
 
     pub fn remove<Var: IntVar>(
@@ -197,8 +221,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         value: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.remove(&mut self.domain_manager, value)
+        let reason = self.propagator_var_id(var);
+        var.inner.remove(self.assignment, value, reason)
     }
 
     pub fn set_upper_bound<Var: IntVar>(
@@ -206,8 +230,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         bound: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.set_upper_bound(&mut self.domain_manager, bound)
+        let reason = self.propagator_var_id(var);
+        var.inner.set_upper_bound(self.assignment, bound, reason)
     }
 
     pub fn set_lower_bound<Var: IntVar>(
@@ -215,8 +239,8 @@ impl PropagationContext<'_> {
         var: &PropagatorVariable<Var>,
         bound: i32,
     ) -> Result<(), EmptyDomain> {
-        self.domain_manager.set_local_id(var.local_id);
-        var.inner.set_lower_bound(&mut self.domain_manager, bound)
+        let reason = self.propagator_var_id(var);
+        var.inner.set_lower_bound(self.assignment, bound, reason)
     }
 }
 
@@ -252,7 +276,7 @@ impl PropagatorConstructorContext<'_> {
     pub fn register<Var: IntVar>(
         &mut self,
         var: Var,
-        event: DomainEvent,
+        domain_events: DomainEvents,
         local_id: LocalId,
     ) -> PropagatorVariable<Var> {
         let propagator_var = PropagatorVarId {
@@ -261,13 +285,47 @@ impl PropagatorConstructorContext<'_> {
         };
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
-        var.watch(&mut watchers, event);
+        var.watch_all(&mut watchers, domain_events.events);
 
         PropagatorVariable {
             inner: var,
             local_id,
         }
     }
+}
+
+impl DomainEvents {
+    /// DomainEvents with both lower and upper bound tightening (but not other value removal).
+    pub const BOUNDS: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::LowerBound | DomainEvent::UpperBound),
+    };
+    // this is all options right now, but won't be once we add variables of other types
+    /// DomainEvents with lower and upper bound tightening, assigning to a single value, and
+    ///  single value removal.
+    pub const ANY: DomainEvents = DomainEvents {
+        events: enum_set!(
+            DomainEvent::Assign
+                | DomainEvent::LowerBound
+                | DomainEvent::UpperBound
+                | DomainEvent::Removal
+        ),
+    };
+    /// DomainEvents with only lower bound tightening.
+    pub const LOWER_BOUND: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::LowerBound),
+    };
+    /// DomainEvents with only upper bound tightening.
+    pub const UPPER_BOUND: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::UpperBound),
+    };
+    /// DomainEvents with only assigning to a single value.
+    pub const ASSIGN: DomainEvents = DomainEvents {
+        events: enum_set!(DomainEvent::Assign),
+    };
+}
+
+pub struct DomainEvents {
+    events: EnumSet<DomainEvent>,
 }
 
 /// Indicator of what to do when a propagator is notified.

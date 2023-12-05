@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use log::warn;
 
+use crate::engine::DomainEvents;
 use crate::{
     basic_types::{variables::IntVar, Predicate, PropagationStatusCP, PropositionalConjunction},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
-        LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
+        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
     },
     predicate,
 };
@@ -46,9 +47,9 @@ where
         mut context: PropagatorConstructorContext<'_>,
     ) -> Box<dyn ConstraintProgrammingPropagator> {
         Box::new(IntTimes {
-            a: context.register(args.a, DomainEvent::Any, ID_A),
-            b: context.register(args.b, DomainEvent::Any, ID_B),
-            c: context.register(args.c, DomainEvent::Any, ID_C),
+            a: context.register(args.a, DomainEvents::ANY, ID_A),
+            b: context.register(args.b, DomainEvents::ANY, ID_B),
+            c: context.register(args.c, DomainEvents::ANY, ID_C),
 
             propagations_a: Default::default(),
             propagations_b: Default::default(),
@@ -263,7 +264,9 @@ mod tests {
         let b = solver.new_variable(0, 4);
         let c = solver.new_variable(-10, 20);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -294,7 +297,9 @@ mod tests {
         let b = solver.new_variable(0, 12);
         let c = solver.new_variable(2, 12);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -325,7 +330,9 @@ mod tests {
         let b = solver.new_variable(3, 6);
         let c = solver.new_variable(2, 12);
 
-        let mut propagator = solver.new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c });
+        let mut propagator = solver
+            .new_propagator::<IntTimes<_, _, _>>(IntTimesArgs { a, b, c })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -333,7 +340,7 @@ mod tests {
         assert_eq!(4, solver.upper_bound(a));
         assert_eq!(3, solver.lower_bound(b));
         assert_eq!(6, solver.upper_bound(b));
-        assert_eq!(2, solver.lower_bound(c));
+        assert_eq!(3, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
         let reason_lb = solver.get_reason(

@@ -1,0 +1,8 @@
+{
+    "name": "Pumpkin",
+    "id": "nl.tudelft.algorithmics.pumpkin",
+    "version": "0.1",
+    "executable": "../../target/release/pumpkin-cli",
+
+    "tags": ["cp", "lcg", "int"]
+}

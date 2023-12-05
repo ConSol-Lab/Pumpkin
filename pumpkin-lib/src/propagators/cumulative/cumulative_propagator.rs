@@ -3,9 +3,8 @@ use crate::{
         variables::IntVar, Inconsistency, PropagationStatusCP, PropositionalConjunction,
     },
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainEvent,
-        EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext,
-        PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext,
+        PropagatorConstructorContext, PropagatorVariable, DomainEvents,
     },
     pumpkin_assert_eq_simple, pumpkin_assert_extreme,
 };
@@ -167,7 +166,7 @@ where
                     let return_value = Some(Task {
                         start_variable: context.register(
                             x.start_time.clone(),
-                            DomainEvent::Any,
+                            DomainEvents::BOUNDS,
                             LocalId::from(id),
                         ), //Subscribe to all domain events concerning the current variable
                         processing_time: x.processing_time,

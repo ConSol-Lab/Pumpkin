@@ -1,6 +1,8 @@
+use std::fmt::Display;
+
 use thiserror::Error;
 
-use crate::parsers::dimacs::DimacsParseError;
+use crate::{flatzinc::FlatZincError, parsers::dimacs::DimacsParseError};
 
 pub type PumpkinResult<T> = Result<T, PumpkinError>;
 
@@ -15,10 +17,18 @@ pub enum PumpkinError {
     IOError(#[from] std::io::Error),
     #[error("Failed to read file {1}, more details: {0}")]
     FileReadingError(std::io::Error, String),
-    #[error("The supplied path is not supported.")]
-    InvalidInstanceFile,
+    #[error("The file {0} is not supported.")]
+    InvalidInstanceFile(String),
     #[error("No file location given")]
     MissingFileError,
     #[error("The dimacs file was invalid")]
     InvalidDimacs(#[from] DimacsParseError),
+    #[error("Failed to run flatzinc model")]
+    FlatZinc(#[from] FlatZincError),
+}
+
+impl PumpkinError {
+    pub fn invalid_instance(path: impl Display) -> Self {
+        Self::InvalidInstanceFile(format!("{}", path))
+    }
 }

@@ -1,6 +1,6 @@
 use super::Predicate;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
     predicates_in_conjunction: Vec<Predicate>,
 }

@@ -4,8 +4,11 @@
 
 use std::cmp::Ordering;
 
+use enumset::EnumSet;
+
 use crate::engine::{
-    Delta, DomainChange, DomainEvent, DomainManager, EmptyDomain, OpaqueDomainEvent, Watchers,
+    AssignmentsInteger, Delta, DomainChange, DomainEvent, EmptyDomain, OpaqueDomainEvent,
+    PropagatorVarId, Watchers,
 };
 
 use super::{DomainId, Predicate, PredicateConstructor};
@@ -14,29 +17,44 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     type AffineView: IntVar;
 
     /// Get the lower bound of the variable.
-    fn lower_bound(&self, domains: &DomainManager) -> i32;
+    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32;
 
     /// Get the upper bound of the variable.
-    fn upper_bound(&self, domains: &DomainManager) -> i32;
+    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32;
 
     /// Determine whether the value is in the domain of this variable.
-    fn contains(&self, domains: &DomainManager, value: i32) -> bool;
+    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool;
 
     /// Get a predicate description (bounds + holes) of the domain of this variable.
     /// N.B. can be very expensive with large domains, and very large with holey domains
-    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate>;
+    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate>;
 
     /// Remove a value from the domain of this variable.
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
+    fn remove(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain>;
 
     /// Tighten the lower bound of the domain of this variable.
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
+    fn set_lower_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain>;
 
     /// Tighten the upper bound of the domain of this variable.
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain>;
+    fn set_upper_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain>;
 
-    /// Register a watch for this variable on the given domain event.
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent);
+    /// Register a watch for this variable on the given domain events.
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
 
     /// Decode a delta into the change it represents for this variable.
     fn unpack_delta(&self, delta: Delta) -> DomainChange;
@@ -55,7 +73,7 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
 }
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the domain of `x`.
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
     inner: Inner,
     scale: i32,
@@ -65,36 +83,51 @@ pub struct AffineView<Inner> {
 impl IntVar for DomainId {
     type AffineView = AffineView<Self>;
 
-    fn lower_bound(&self, domains: &DomainManager) -> i32 {
-        domains.get_lower_bound(*self)
+    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+        assignment.get_lower_bound(*self)
     }
 
-    fn upper_bound(&self, domains: &DomainManager) -> i32 {
-        domains.get_upper_bound(*self)
+    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+        assignment.get_upper_bound(*self)
     }
 
-    fn contains(&self, domains: &DomainManager, value: i32) -> bool {
-        domains.is_value_in_domain(*self, value)
+    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
+        assignment.is_value_in_domain(*self, value)
     }
 
-    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate> {
-        domains.get_domain_description(*self)
+    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
+        assignment.get_domain_description(*self)
     }
 
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        domains.remove_value_from_domain(*self, value)
+    fn remove(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
+        assignment.remove_value_from_domain(*self, value, Some(reason))
     }
 
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        domains.tighten_lower_bound(*self, value)
+    fn set_lower_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
+        assignment.tighten_lower_bound(*self, value, Some(reason))
     }
 
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
-        domains.tighten_upper_bound(*self, value)
+    fn set_upper_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
+        assignment.tighten_upper_bound(*self, value, Some(reason))
     }
 
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
-        watchers.watch(*self, event);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+        watchers.watch_all(*self, events);
     }
 
     fn unpack_delta(&self, delta: Delta) -> DomainChange {
@@ -152,30 +185,30 @@ where
 {
     type AffineView = Self;
 
-    fn lower_bound(&self, domains: &DomainManager) -> i32 {
+    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
         if self.scale < 0 {
-            self.map(self.inner.upper_bound(domains))
+            self.map(self.inner.upper_bound(assignment))
         } else {
-            self.map(self.inner.lower_bound(domains))
+            self.map(self.inner.lower_bound(assignment))
         }
     }
 
-    fn upper_bound(&self, domains: &DomainManager) -> i32 {
+    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
         if self.scale < 0 {
-            self.map(self.inner.lower_bound(domains))
+            self.map(self.inner.lower_bound(assignment))
         } else {
-            self.map(self.inner.upper_bound(domains))
+            self.map(self.inner.upper_bound(assignment))
         }
     }
 
-    fn contains(&self, domains: &DomainManager, value: i32) -> bool {
+    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
         self.invert(value)
-            .map(|v| self.inner.contains(domains, v))
+            .map(|v| self.inner.contains(assignment, v))
             .unwrap_or(false)
     }
 
-    fn describe_domain(&self, domains: &DomainManager) -> Vec<Predicate> {
-        let mut result = self.inner.describe_domain(domains);
+    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
+        let mut result = self.inner.describe_domain(assignment);
         if self.scale < 0 {
             result.iter_mut().for_each(|p| {
                 p.map(|v| self.map(v));
@@ -187,48 +220,60 @@ where
         result
     }
 
-    fn remove(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
+    fn remove(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
         if let Some(v) = self.invert(value) {
-            self.inner.remove(domains, v)
+            self.inner.remove(assignment, v, reason)
         } else {
             Ok(())
         }
     }
 
-    fn set_lower_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
+    fn set_lower_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
         let inverted = self
             .invert(value)
             .expect("handle case where the unscaled value is not integer");
 
         if self.scale >= 0 {
-            self.inner.set_lower_bound(domains, inverted)
+            self.inner.set_lower_bound(assignment, inverted, reason)
         } else {
-            self.inner.set_upper_bound(domains, inverted)
+            self.inner.set_upper_bound(assignment, inverted, reason)
         }
     }
 
-    fn set_upper_bound(&self, domains: &mut DomainManager, value: i32) -> Result<(), EmptyDomain> {
+    fn set_upper_bound(
+        &self,
+        assignment: &mut AssignmentsInteger,
+        value: i32,
+        reason: PropagatorVarId,
+    ) -> Result<(), EmptyDomain> {
         let inverted = self
             .invert(value)
             .expect("handle case where the unscaled value is not integer");
 
         if self.scale >= 0 {
-            self.inner.set_upper_bound(domains, inverted)
+            self.inner.set_upper_bound(assignment, inverted, reason)
         } else {
-            self.inner.set_lower_bound(domains, inverted)
+            self.inner.set_lower_bound(assignment, inverted, reason)
         }
     }
 
-    fn watch(&self, watchers: &mut Watchers<'_>, event: DomainEvent) {
-        if self.scale.is_negative() {
-            match event {
-                DomainEvent::LowerBound => self.inner.watch(watchers, DomainEvent::UpperBound),
-                DomainEvent::UpperBound => self.inner.watch(watchers, DomainEvent::LowerBound),
-                event => self.inner.watch(watchers, event),
-            }
-        } else {
-            self.inner.watch(watchers, event);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
+        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
+        let intersection = events.intersection(bound);
+        if intersection.len() == 1 && self.scale.is_negative() {
+            events = events.symmetrical_difference(bound);
         }
+        self.inner.watch_all(watchers, events);
     }
 
     fn unpack_delta(&self, delta: Delta) -> DomainChange {

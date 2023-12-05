@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::{PropagationStatusCP, PropositionalConjunction};
 use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvent,
+    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvents,
     LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
 };
 use crate::{conjunction, predicate};
@@ -70,15 +70,15 @@ impl<VX: IntVar + 'static, VI: IntVar + 'static, VE: IntVar + 'static> CPPropaga
             .map(|(i, x_i)| {
                 context.register(
                     x_i.clone(),
-                    DomainEvent::Any,
+                    DomainEvents::ANY,
                     LocalId::from(i as u32 + ID_X_OFFSET),
                 )
             })
             .collect();
         Box::new(Element {
             array,
-            index: context.register(args.index, DomainEvent::Any, ID_INDEX),
-            rhs: context.register(args.rhs, DomainEvent::Any, ID_RHS),
+            index: context.register(args.index, DomainEvents::ANY, ID_INDEX),
+            rhs: context.register(args.rhs, DomainEvents::ANY, ID_RHS),
             propagations_index: HashMap::new(),
             propagations_rhs: HashMap::new(),
         })
@@ -336,8 +336,9 @@ mod tests {
         let rhs = solver.new_variable(2, 8);
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -360,8 +361,9 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
@@ -398,8 +400,9 @@ mod tests {
 
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator =
-            solver.new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs });
+        let mut propagator = solver
+            .new_propagator::<Element<_, _, _>>(ElementArgs { array, index, rhs })
+            .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
