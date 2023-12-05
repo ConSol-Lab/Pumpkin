@@ -53,34 +53,18 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         bounds: &[(i32, i32)],
         updated: &mut Vec<Updated<Var>>,
     ) -> EnqueueDecision {
-        let (old_lower_bound, old_upper_bound) = bounds[updated_task.id.get_value()];
-        if context.lower_bound(&updated_task.start_variable) <= old_lower_bound
-            && context.upper_bound(&updated_task.start_variable) >= old_upper_bound
-        {
-            //No update to the bounds of the variables has taken place, enqueue if the list of updated is not empty, skip otherwise
-            return if !updated.is_empty() {
-                EnqueueDecision::Enqueue
-            } else {
-                EnqueueDecision::Skip
-            };
-        }
-
+        //Check whether a mandatory part exists for the updated task
         if context.upper_bound(&updated_task.start_variable)
             < context.lower_bound(&updated_task.start_variable) + updated_task.processing_time
-        //If this is the case then a mandatory part exists for the updated task
         {
-            if context.lower_bound(&updated_task.start_variable) > old_lower_bound
-                || context.upper_bound(&updated_task.start_variable) < old_upper_bound
-            //Check whether there has either been an update to the lower-bound or the upper-bound (or both)
-            {
-                updated.push(Updated {
-                    task: Rc::clone(updated_task),
-                    old_lower_bound,
-                    old_upper_bound,
-                    new_lower_bound: context.lower_bound(&updated_task.start_variable),
-                    new_upper_bound: context.upper_bound(&updated_task.start_variable),
-                });
-            }
+            let (prev_lower_bound, prev_upper_bound) = bounds[updated_task.id.get_value()];
+            updated.push(Updated {
+                task: Rc::clone(updated_task),
+                old_lower_bound: prev_lower_bound,
+                old_upper_bound: prev_upper_bound,
+                new_lower_bound: context.lower_bound(&updated_task.start_variable),
+                new_upper_bound: context.upper_bound(&updated_task.start_variable),
+            });
             //There is a new mandatory part, Enqueue
             return EnqueueDecision::Enqueue;
         }

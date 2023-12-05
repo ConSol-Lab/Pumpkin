@@ -83,7 +83,9 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         capacity: i32,
     ) -> CumulativePropagationResult<Var>;
 
-    /// Checks whether the propagator should propagate based on the changes in task
+    /// Checks whether the propagator should propagate based on the changes in task, the default implementation adds the updated task and enqueues the propagator
+    ///
+    /// This method should likely be overriden by the propagator
     fn should_propagate(
         &mut self,
         context: &PropagationContext,
@@ -94,23 +96,15 @@ pub trait IncrementalPropagator<Var: IntVar + 'static> {
         updated: &mut Vec<Updated<Var>>,
     ) -> EnqueueDecision {
         //Checks whether there is a change in the bounds
-        let (lower_bound, upper_bound) = bounds[updated_task.id.get_value()];
-        if lower_bound < context.lower_bound(&updated_task.start_variable)
-            || upper_bound > context.upper_bound(&updated_task.start_variable)
-        {
-            updated.push(Updated {
-                task: Rc::clone(updated_task),
-                old_lower_bound: lower_bound,
-                old_upper_bound: upper_bound,
-                new_lower_bound: context.lower_bound(&updated_task.start_variable),
-                new_upper_bound: context.upper_bound(&updated_task.start_variable),
-            })
-        }
-        if !updated.is_empty() {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
+        let (prev_lower_bound, prev_upper_bound) = bounds[updated_task.id.get_value()];
+        updated.push(Updated {
+            task: Rc::clone(updated_task),
+            old_lower_bound: prev_lower_bound,
+            old_upper_bound: prev_upper_bound,
+            new_lower_bound: context.lower_bound(&updated_task.start_variable),
+            new_upper_bound: context.upper_bound(&updated_task.start_variable),
+        });
+        EnqueueDecision::Enqueue
     }
 
     /// Resets the data structures after backtracking/backjumping

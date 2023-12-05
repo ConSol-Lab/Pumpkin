@@ -286,32 +286,32 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 4,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 3,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
+        solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -320,7 +320,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
+        let result = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
             tasks: [
                 ArgTask {
                     start_time: s1,
@@ -340,7 +340,6 @@ mod tests {
             incrementality: Incrementality::REGULAR,
             propagation_method: PropagationMethod::TimeTablePerPoint,
         });
-        let result = solver.initialise_at_root(&mut propagator);
         assert!(match result {
             Err(inconsistency) => {
                 match inconsistency {
@@ -369,32 +368,32 @@ mod tests {
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(0, 6);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 4,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 3,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
+        solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
         assert_eq!(solver.upper_bound(s2), 6);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -407,49 +406,49 @@ mod tests {
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: a,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: b,
-                    processing_time: 6,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: c,
-                    processing_time: 2,
-                    resource_usage: 4,
-                },
-                ArgTask {
-                    start_time: d,
-                    processing_time: 2,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: e,
-                    processing_time: 5,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: f,
-                    processing_time: 6,
-                    resource_usage: 2,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 5,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
+        solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 5,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 5,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -458,39 +457,39 @@ mod tests {
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 3,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let mut result = solver.initialise_at_root(&mut propagator);
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
         assert_eq!(solver.upper_bound(s2), 10);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        assert!(result.is_ok());
         let notification_status = solver.increase_lower_bound(&mut propagator, 0, s1, 5);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
 
-        result = solver.propagate(&mut propagator);
+        let result = solver.propagate(&mut propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 7);
         assert_eq!(solver.upper_bound(s2), 10);
@@ -504,35 +503,32 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 4,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 3,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
-        assert!(result.is_ok());
-        let result = solver.initialise_at_root(&mut propagator);
-
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
-        assert!(result.is_ok());
 
         let reason = solver.get_reason(
             &mut propagator,
@@ -558,47 +554,48 @@ mod tests {
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: a,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: b,
-                    processing_time: 6,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: c,
-                    processing_time: 2,
-                    resource_usage: 4,
-                },
-                ArgTask {
-                    start_time: d,
-                    processing_time: 2,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: e,
-                    processing_time: 4,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: f,
-                    processing_time: 6,
-                    resource_usage: 2,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 5,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let mut result = solver.initialise_at_root(&mut propagator);
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 5,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
         assert_eq!(solver.lower_bound(b), 2);
@@ -611,14 +608,13 @@ mod tests {
         assert_eq!(solver.upper_bound(e), 4);
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
-        assert!(result.is_ok());
 
         let notification_status = solver.increase_lower_bound(&mut propagator, 3, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        result = solver.propagate(&mut propagator);
+        let result = solver.propagate(&mut propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -634,52 +630,53 @@ mod tests {
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: a,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: b1,
-                    processing_time: 2,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: b2,
-                    processing_time: 3,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: c,
-                    processing_time: 2,
-                    resource_usage: 4,
-                },
-                ArgTask {
-                    start_time: d,
-                    processing_time: 2,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: e,
-                    processing_time: 4,
-                    resource_usage: 2,
-                },
-                ArgTask {
-                    start_time: f,
-                    processing_time: 6,
-                    resource_usage: 2,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 5,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let mut result = solver.initialise_at_root(&mut propagator);
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: a,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: b1,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: b2,
+                        processing_time: 3,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: c,
+                        processing_time: 2,
+                        resource_usage: 4,
+                    },
+                    ArgTask {
+                        start_time: d,
+                        processing_time: 2,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: e,
+                        processing_time: 4,
+                        resource_usage: 2,
+                    },
+                    ArgTask {
+                        start_time: f,
+                        processing_time: 6,
+                        resource_usage: 2,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 5,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
         assert_eq!(solver.lower_bound(c), 8);
@@ -690,14 +687,13 @@ mod tests {
         assert_eq!(solver.upper_bound(e), 4);
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
-        assert!(result.is_ok());
 
         let notification_status = solver.increase_lower_bound(&mut propagator, 4, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        result = solver.propagate(&mut propagator);
+        let result = solver.propagate(&mut propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -708,32 +704,32 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 4,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 3,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
-        assert!(result.is_ok());
 
         let reason = solver.get_reason(
             &mut propagator,
@@ -756,39 +752,39 @@ mod tests {
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
 
-        let mut propagator = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
-            tasks: [
-                ArgTask {
-                    start_time: s1,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s2,
-                    processing_time: 2,
-                    resource_usage: 1,
-                },
-                ArgTask {
-                    start_time: s3,
-                    processing_time: 4,
-                    resource_usage: 1,
-                },
-            ]
-            .into_iter()
-            .collect(),
-            capacity: 1,
-            horizon: 20,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
-        });
-        let result = solver.initialise_at_root(&mut propagator);
+        let mut propagator = solver
+            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+                tasks: [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 2,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s3,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                capacity: 1,
+                horizon: 20,
+                incrementality: Incrementality::REGULAR,
+                propagation_method: PropagationMethod::TimeTablePerPoint,
+            })
+            .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
         assert_eq!(solver.upper_bound(s3), 15);
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 5);
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
-        assert!(result.is_ok());
 
         let reason = solver.get_reason(
             &mut propagator,

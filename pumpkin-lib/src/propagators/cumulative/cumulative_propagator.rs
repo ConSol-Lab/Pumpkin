@@ -3,10 +3,11 @@ use crate::{
         variables::IntVar, Inconsistency, PropagationStatusCP, PropositionalConjunction,
     },
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext,
-        PropagatorConstructorContext, PropagatorVariable, DomainEvents,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainEvents,
+        EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext,
+        PropagatorConstructorContext, PropagatorVariable,
     },
-    pumpkin_assert_eq_simple, pumpkin_assert_extreme,
+    pumpkin_assert_eq_simple, pumpkin_assert_extreme, pumpkin_assert_moderate,
 };
 
 use std::{hash::Hash, rc::Rc};
@@ -276,26 +277,23 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for Cumulative<Var> 
                 let task = &self.tasks[local_id.get_value()];
                 pumpkin_assert_eq_simple!(local_id.get_value(), task.id.get_value(), "The propagator works under the assumption that the `local_id` is the index into `self.tasks`");
                 let (lower_bound, upper_bound) = self.bounds[task.id.get_value()];
-                if context.lower_bound(&task.start_variable) > lower_bound
-                    || context.upper_bound(&task.start_variable) < upper_bound
-                {
-                    //Lets the propagator decide whether it should propagate, this allows some optimizations based on, for example, mandatory parts
-                    let decision = self.propagator.should_propagate(
-                        context,
-                        &self.tasks,
-                        task,
-                        &self.bounds,
-                        self.capacity,
-                        &mut self.updated,
-                    );
-                    //Set the known bounds to the current values of the context
-                    let (lower_bound, upper_bound) =
-                        self.bounds.get_mut(task.id.get_value()).unwrap();
-                    *lower_bound = context.lower_bound(&task.start_variable);
-                    *upper_bound = context.upper_bound(&task.start_variable);
-                    return decision;
-                }
-                EnqueueDecision::Enqueue
+                pumpkin_assert_moderate!(context.lower_bound(&task.start_variable) > lower_bound || context.upper_bound(&task.start_variable) < upper_bound, "Registered for bounds event but notify happened and no update to the bounds was present");
+
+                //Lets the propagator decide whether it should propagate, this allows some optimizations based on, for example, mandatory parts
+                let decision = self.propagator.should_propagate(
+                    context,
+                    &self.tasks,
+                    task,
+                    &self.bounds,
+                    self.capacity,
+                    &mut self.updated,
+                );
+
+                //Set the known bounds to the current values of the context
+                let (lower_bound, upper_bound) = self.bounds.get_mut(task.id.get_value()).unwrap();
+                *lower_bound = context.lower_bound(&task.start_variable);
+                *upper_bound = context.upper_bound(&task.start_variable);
+                decision
             }
             Incrementality::REGULAR => EnqueueDecision::Enqueue,
         }
