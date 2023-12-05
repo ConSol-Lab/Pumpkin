@@ -192,6 +192,10 @@ impl AssignmentsPropositional {
                 literal: true_literal,
                 reference: constraint_reference,
             });
+        } else if self.is_literal_assigned_true(true_literal) {
+            // This can happen if a CP propagation triggers this, when the corresponding literal
+            // was already assigned.
+            return None;
         }
 
         self.assignment_info[true_literal.get_propositional_variable()] =
@@ -259,4 +263,51 @@ enum PropositionalAssignmentInfo {
         constraint_reference: ConstraintReference,
     },
     Unassigned,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        basic_types::{ConstraintReference, Literal, PropositionalVariable},
+        engine::{sat::assignments_propositional::PropositionalAssignmentInfo, PropagatorId},
+    };
+
+    use super::AssignmentsPropositional;
+
+    #[test]
+    pub fn already_assigned_literal_does_not_override_assignment_info() {
+        let mut assignments_propositional = AssignmentsPropositional::default();
+        let literal = Literal::new(
+            PropositionalVariable::new(assignments_propositional.num_propositional_variables()),
+            true,
+        );
+        assignments_propositional.grow();
+
+        let result = assignments_propositional.make_assignment(
+            literal,
+            ConstraintReference::create_propagator_reference(PropagatorId(0)),
+        );
+        assert!(result.is_none());
+        assert_eq!(assignments_propositional.trail.len(), 1);
+        //Re-assigning a literal which is already true does not result in the info being overwritten
+        let result_reassignment = assignments_propositional.make_assignment(
+            literal,
+            ConstraintReference::create_propagator_reference(PropagatorId(1)),
+        );
+        assert!(result_reassignment.is_none());
+        //Nor does it result in anything being added to the trail
+        assert_eq!(assignments_propositional.trail.len(), 1);
+        assert!({
+            if let PropositionalAssignmentInfo::Assigned {
+                truth_value: _,
+                decision_level: _,
+                constraint_reference,
+            } = assignments_propositional.assignment_info[literal.get_propositional_variable()]
+            {
+                constraint_reference.get_propagator_id() == PropagatorId(0)
+            } else {
+                false
+            }
+        })
+    }
 }

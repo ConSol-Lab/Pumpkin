@@ -7,7 +7,7 @@ use crate::engine::{Delta, PropagationContext, PropagatorId};
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
 use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
-use super::constraint_satisfaction_solver::ClausalPropagator;
+use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
     ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager, PropagatorVarId,
@@ -49,6 +49,8 @@ impl SATCPMediator {
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
+        clausal_propagator: &mut ClausalPropagator,
+        clause_allocator: &mut ClauseAllocator,
     ) -> Option<ConflictInfo> {
         //for each entry on the integer trail, we now add the equivalent propositional representation on the propositional trail
         //  note that only one literal per predicate will be stored
@@ -63,7 +65,7 @@ impl SATCPMediator {
                     "None is not expected for the propagator identifier here, strange, must abort.",
                 );
 
-            let literal = self.get_predicate_literal(entry.predicate);
+            let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
             let constraint_reference =
                 ConstraintReference::create_propagator_reference(propagator_id);
@@ -77,6 +79,15 @@ impl SATCPMediator {
             if conflict_info.is_some() {
                 self.cp_trail_synced_position = cp_trail_pos + 1;
                 return conflict_info;
+            }
+
+            //It could occur that one of these propagations caused a conflict in which case the SAT-view and the CP-view are unsynchronised
+            //We need to ensure that the views are synchronised up to the CP trail entry which caused the conflict
+            if let Err(e) =
+                clausal_propagator.propagate(assignments_propositional, clause_allocator)
+            {
+                self.cp_trail_synced_position = cp_trail_pos + 1;
+                return Some(e);
             }
         }
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
@@ -408,8 +419,17 @@ impl SATCPMediator {
 
 //methods for getting simple information on the interface of SAT and CP
 impl SATCPMediator {
-    pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
-        if lower_bound as usize >= self.mapping_domain_to_lower_bound_literals[domain].len() {
+    pub fn get_lower_bound_literal(
+        &self,
+        domain: DomainId,
+        lower_bound: i32,
+        assignments_integer: &AssignmentsInteger,
+    ) -> Literal {
+        if lower_bound < assignments_integer.get_initial_lower_bound(domain) {
+            //The lower bound is lower than the initial bound, this will always hold
+            self.true_literal
+        } else if lower_bound as usize >= self.mapping_domain_to_lower_bound_literals[domain].len()
+        {
             self.false_literal
         } else if lower_bound.is_negative() {
             self.true_literal
@@ -418,8 +438,17 @@ impl SATCPMediator {
         }
     }
 
-    pub fn get_upper_bound_literal(&self, domain: DomainId, upper_bound: i32) -> Literal {
-        !self.get_lower_bound_literal(domain, upper_bound + 1)
+    pub fn get_upper_bound_literal(
+        &self,
+        domain: DomainId,
+        upper_bound: i32,
+        assignments_integer: &AssignmentsInteger,
+    ) -> Literal {
+        if upper_bound < assignments_integer.get_initial_lower_bound(domain) {
+            //The upper bound can never be lower than the initial lower bound, return false
+            return self.false_literal;
+        }
+        !self.get_lower_bound_literal(domain, upper_bound + 1, assignments_integer)
     }
 
     pub fn get_equality_literal(&self, domain: DomainId, equality_constant: i32) -> Literal {
@@ -436,16 +465,20 @@ impl SATCPMediator {
         !self.get_equality_literal(domain, not_equal_constant)
     }
 
-    pub fn get_predicate_literal(&self, predicate: Predicate) -> Literal {
+    pub fn get_predicate_literal(
+        &self,
+        predicate: Predicate,
+        assignments_integer: &AssignmentsInteger,
+    ) -> Literal {
         match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => self.get_lower_bound_literal(domain_id, lower_bound),
+            } => self.get_lower_bound_literal(domain_id, lower_bound, assignments_integer),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => self.get_upper_bound_literal(domain_id, upper_bound),
+            } => self.get_upper_bound_literal(domain_id, upper_bound, assignments_integer),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
@@ -492,7 +525,9 @@ impl SATCPMediator {
                 //  todo better ways
                 let explanation_literals = propositional_conjunction
                     .iter()
-                    .map(|&p| !self.get_predicate_literal(p))
+                    .map(|&p| {
+                        !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
+                    })
                     .collect();
 
                 self.explanation_clause_manager
@@ -581,9 +616,12 @@ impl SATCPMediator {
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
         //important to keep propagated literal at the zero-th position
-        let explanation_literals = std::iter::once(propagated_literal)
-            .chain(reason.iter().map(|&p| !self.get_predicate_literal(p)))
-            .collect();
+        let explanation_literals =
+            std::iter::once(propagated_literal)
+                .chain(reason.iter().map(|&p| {
+                    !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
+                }))
+                .collect();
 
         self.explanation_clause_manager
             .add_explanation_clause_unchecked(
@@ -606,5 +644,142 @@ impl SATCPMediator {
                 == cp_data_structures.watch_list_cp.num_domains()
         );
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{basic_types::PredicateConstructor, engine::LocalId};
+
+    use super::*;
+
+    #[test]
+    fn negative_upper_bound() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+        let domain_id = mediator.create_new_domain(
+            0,
+            10,
+            &mut ClausalPropagator::default(),
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+        let result = mediator.get_upper_bound_literal(
+            domain_id,
+            -2,
+            &cp_data_structures.assignments_integer,
+        );
+        assert_eq!(
+            result,
+            sat_data_structures.assignments_propositional.false_literal
+        );
+    }
+
+    #[test]
+    fn negative_lower_bound() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+        let domain_id = mediator.create_new_domain(
+            0,
+            10,
+            &mut ClausalPropagator::default(),
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+        let result = mediator.get_lower_bound_literal(
+            domain_id,
+            -2,
+            &cp_data_structures.assignments_integer,
+        );
+        assert_eq!(
+            result,
+            sat_data_structures.assignments_propositional.true_literal
+        );
+    }
+
+    #[test]
+    fn clausal_propagation_is_synced_until_right_before_conflict() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+        let mut clausal_propagator = ClausalPropagator::default();
+
+        let domain_id = mediator.create_new_domain(
+            0,
+            10,
+            &mut clausal_propagator,
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+
+        let result = cp_data_structures.assignments_integer.tighten_lower_bound(
+            domain_id,
+            2,
+            Some(PropagatorVarId {
+                propagator: PropagatorId(0),
+                variable: LocalId::from(0),
+            }),
+        );
+        assert!(result.is_ok());
+        assert_eq!(
+            cp_data_structures
+                .assignments_integer
+                .get_lower_bound(domain_id),
+            2
+        );
+
+        let result = cp_data_structures.assignments_integer.tighten_lower_bound(
+            domain_id,
+            8,
+            Some(PropagatorVarId {
+                propagator: PropagatorId(0),
+                variable: LocalId::from(0),
+            }),
+        );
+        assert!(result.is_ok());
+        assert_eq!(
+            cp_data_structures
+                .assignments_integer
+                .get_lower_bound(domain_id),
+            8
+        );
+
+        let result = cp_data_structures.assignments_integer.tighten_lower_bound(
+            domain_id,
+            12,
+            Some(PropagatorVarId {
+                propagator: PropagatorId(0),
+                variable: LocalId::from(0),
+            }),
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            cp_data_structures
+                .assignments_integer
+                .get_lower_bound(domain_id),
+            12
+        );
+
+        mediator.synchronise_propositional_trail_based_on_integer_trail(
+            &mut sat_data_structures.assignments_propositional,
+            &mut cp_data_structures.assignments_integer,
+            &mut clausal_propagator,
+            &mut sat_data_structures.clause_allocator,
+        );
+
+        for lower_bound in 0..=8 {
+            let literal = mediator.get_predicate_literal(
+                domain_id.lower_bound_predicate(lower_bound),
+                &cp_data_structures.assignments_integer,
+            );
+            assert!(
+                sat_data_structures
+                    .assignments_propositional
+                    .is_literal_assigned_true(literal),
+                "Literal for lower-bound {lower_bound} is not assigned"
+            );
+        }
     }
 }

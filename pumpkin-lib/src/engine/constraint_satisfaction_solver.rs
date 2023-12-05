@@ -224,8 +224,11 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
-        self.sat_cp_mediator
-            .get_lower_bound_literal(domain, lower_bound)
+        self.sat_cp_mediator.get_lower_bound_literal(
+            domain,
+            lower_bound,
+            &self.cp_data_structures.assignments_integer,
+        )
     }
 
     pub fn get_integer_assignments(&self) -> &AssignmentsInteger {
@@ -554,6 +557,8 @@ impl ConstraintSatisfactionSolver {
                 .synchronise_propositional_trail_based_on_integer_trail(
                     &mut self.sat_data_structures.assignments_propositional,
                     &self.cp_data_structures.assignments_integer,
+                    &mut self.clausal_propagator,
+                    &mut self.sat_data_structures.clause_allocator,
                 );
 
             if let Some(conflict_info) = conflict_info {
@@ -593,6 +598,8 @@ impl ConstraintSatisfactionSolver {
                         .synchronise_propositional_trail_based_on_integer_trail(
                             &mut self.sat_data_structures.assignments_propositional,
                             &self.cp_data_structures.assignments_integer,
+                            &mut self.clausal_propagator,
+                            &mut self.sat_data_structures.clause_allocator,
                         );
 
                     self.state.declare_conflict(ConflictInfo::Explanation {
