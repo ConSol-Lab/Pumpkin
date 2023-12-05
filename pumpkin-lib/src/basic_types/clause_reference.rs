@@ -106,6 +106,6 @@ mod tests {
         m.set_bit(1, true);
         m.set_bit(2, true);
         m.set_bit(3, true);
-        assert!(<u32 as BitRange<u32>>::bit_range(&m, 2, 0) == 7 as u32);
+        assert!(<u32 as BitRange<u32>>::bit_range(&m, 2, 0) == 7);
     }
 }
