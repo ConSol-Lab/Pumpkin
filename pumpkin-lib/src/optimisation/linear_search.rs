@@ -5,7 +5,8 @@ use crate::{
 };
 use log::info;
 
-use super::{ConstraintSatisfactionSolver, OptimisationResult};
+use super::OptimisationResult;
+use crate::engine::ConstraintSatisfactionSolver;
 
 pub struct LinearSearch {
     upper_bound_encoding: PseudoBooleanEncoding,
@@ -53,7 +54,7 @@ impl LinearSearch {
         );
 
         loop {
-            if best_objective_value == objective_function.get_constant_term() {
+            if best_objective_value == upper_bound_encoder.get_constant_term() {
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value,

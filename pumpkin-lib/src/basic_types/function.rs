@@ -127,14 +127,14 @@ impl Function {
 
             let lower_bound = csp_solver
                 .get_integer_assignments()
-                .get_lower_bound(domain_id);
+                .get_initial_lower_bound(domain_id);
             let upper_bound = csp_solver
                 .get_integer_assignments()
                 .get_upper_bound(domain_id);
 
             //note that we only needs lower bound literals starting from lower_bound+1
             //  the literals before those contribute to the objective function but not in a way that can be changed
-            for i in (lower_bound + 1)..upper_bound {
+            for i in (lower_bound + 1)..=upper_bound {
                 let literal = csp_solver.get_lower_bound_literal(domain_id, i);
                 weighted_literals.push(WeightedLiteral { literal, weight });
             }
