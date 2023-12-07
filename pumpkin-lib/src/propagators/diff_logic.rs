@@ -164,7 +164,7 @@ where
 {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         for &y_start in &self.updated {
-            propagate_shared(
+            propagate_shared::<false, V>(
                 &self.elementary_constraints,
                 context,
                 &self.local_id_to_var(y_start).clone(),
@@ -213,8 +213,7 @@ where
 
     fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
-            cycle_check(&self.elementary_constraints, y_start, &mut self.worklist)?;
-            propagate_shared(
+            propagate_shared::<true, V>(
                 &self.elementary_constraints,
                 context,
                 y_start,
@@ -230,7 +229,7 @@ where
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
-            propagate_shared(
+            propagate_shared::<false, V>(
                 &self.elementary_constraints,
                 context,
                 y_start,
@@ -242,39 +241,8 @@ where
     }
 }
 
-/// Find negative cycles in the graph of elementary constraints: this will always give an empty
-///  domain
 #[allow(clippy::type_complexity)]
-fn cycle_check<V>(
-    elementary_constraints: &HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
-    y_start: &PropagatorVariable<V>,
-    worklist: &mut VecDeque<PropagatorVariable<V>>,
-) -> PropagationStatusCP
-where
-    V: IntVar + Hash + Eq,
-{
-    worklist.push_front(y_start.clone());
-    while let Some(y1) = worklist.pop_front() {
-        let y1_y2_edges = elementary_constraints
-            .get(&y1)
-            .map(|s| s.iter())
-            .unwrap_or([].iter());
-        for (delta, y2) in y1_y2_edges {
-            if *delta < 0 {
-                if y2 == y_start {
-                    // return Inconsistency::Other without a reason, since this check happens only
-                    //  at the root.
-                    return Err([].into());
-                }
-                worklist.push_back(y2.clone());
-            }
-        }
-    }
-    Ok(())
-}
-
-#[allow(clippy::type_complexity)]
-fn propagate_shared<V>(
+fn propagate_shared<const CYCLE_CHECK: bool, V>(
     elementary_constraints: &HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
     context: &mut PropagationContext,
     y_start: &PropagatorVariable<V>,
@@ -285,6 +253,7 @@ where
     V: IntVar + Hash + Eq,
 {
     worklist.push_front(y_start.clone());
+    let mut cycle_reason = Vec::new();
     while let Some(y1) = worklist.pop_front() {
         let y1_y2_edges = elementary_constraints
             .get(&y1)
@@ -295,6 +264,14 @@ where
             let y2_ub_max = y1_ub + delta;
             if y2_ub_max < context.upper_bound(y2) {
                 let reason = predicate![y1 <= y1_ub];
+                if CYCLE_CHECK {
+                    cycle_reason.push(reason);
+                    if y2 == y_start {
+                        // return Inconsistency::Other without a reason, since this check happens only
+                        //  at the root.
+                        return Err(cycle_reason.into());
+                    }
+                }
                 reasons.insert((y2.clone(), y2_ub_max), reason);
                 context.set_upper_bound(y2, y2_ub_max)?;
                 worklist.push_back(y2.clone());
@@ -418,6 +395,18 @@ mod tests {
             .expect_err("cycle detected");
 
         // inconsistency found as soon as first propagation is done
-        assert_eq!(Inconsistency::Other(vec![].into()), inconsistency);
+        assert!(matches!(inconsistency, Inconsistency::Other(_)));
+
+        let Inconsistency::Other(cycle) = inconsistency else {
+            unreachable!()
+        };
+        assert!(
+            cycle.eq(&conjunction!([x_0 >= -10] & [x_1 >= -9]))
+                || cycle.eq(&conjunction!([x_0 >= -9] & [x_1 >= -10]))
+                || cycle.eq(&conjunction!([x_0 <= 9] & [x_1 <= 10]))
+                || cycle.eq(&conjunction!([x_0 <= 10] & [x_1 <= 9])),
+            "Cycle is not based on first propagation of either upper or lower bounds, but instead has: {}",
+            cycle,
+        );
     }
 }

@@ -102,6 +102,14 @@ impl AssignmentsInteger {
         self.domains[domain_id].upper_bound
     }
 
+    pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id].initial_lower_bound
+    }
+
+    pub fn get_initial_upper_bound(&self, domain_id: DomainId) -> i32 {
+        self.domains[domain_id].initial_upper_bound
+    }
+
     pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
         self.domains[domain_id].lower_bound
@@ -407,6 +415,8 @@ struct IntegerDomainExplicit {
 
     lower_bound: i32,
     upper_bound: i32,
+    initial_lower_bound: i32,
+    initial_upper_bound: i32,
 
     offset: i32,
 
@@ -426,6 +436,8 @@ impl IntegerDomainExplicit {
             id,
             lower_bound,
             upper_bound,
+            initial_lower_bound: lower_bound,
+            initial_upper_bound: upper_bound,
             offset,
             is_value_in_domain: is_value_in_domain.into(),
         }
