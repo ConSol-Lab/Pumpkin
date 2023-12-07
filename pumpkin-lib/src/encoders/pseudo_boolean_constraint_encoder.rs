@@ -130,6 +130,10 @@ impl PseudoBooleanConstraintEncoder {
         encoder
     }
 
+    pub fn get_constant_term(&self) -> u64 {
+        self.constant_term
+    }
+
     pub fn constrain_at_most_k(
         &mut self,
         k: u64,
@@ -151,8 +155,8 @@ impl PseudoBooleanConstraintEncoder {
                 pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
 
                 pumpkin_assert_simple!(
-                    k > self.constant_term,
-                    "The k is below the trivial lower bound, probably an error?"
+                    k >= self.constant_term,
+                    "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
                 );
 
                 encoder.strengthen_at_most_k(k - self.constant_term, csp_solver)?;
@@ -195,13 +199,18 @@ impl PseudoBooleanConstraintEncoder {
             .sum::<u64>();
 
         if preprocessed_weighted_literals.is_empty() {
+            //All literals are assigned at the root level, it is thus trivially satisfied
             self.state = State::TriviallySatisfied;
-        } else if sum_weight < initial_k - self.constant_term {
+        } else if sum_weight <= initial_k - self.constant_term {
+            //The sum of the weights of the literals assigned at the root level is lower than the initial_k - constant_term
+            //This means that this constraint is currently satisfied (but might be strengthened in the future)
             self.state = State::Preprocessed(preprocessed_weighted_literals);
         } else {
+            //We need to constrain the preprocessed literals further to ensure that it encodes the initial value
+            //We know that `constant_term` is already assigned, we thus need to constraint the remaining variables to `initial_k - constant_term`
             self.state = State::Encoded(Self::create_encoder(
                 preprocessed_weighted_literals,
-                initial_k,
+                initial_k - self.constant_term,
                 csp_solver,
                 self.encoding_algorithm,
             )?);

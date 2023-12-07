@@ -764,7 +764,7 @@ mod tests {
 
         mediator.synchronise_propositional_trail_based_on_integer_trail(
             &mut sat_data_structures.assignments_propositional,
-            &mut cp_data_structures.assignments_integer,
+            &cp_data_structures.assignments_integer,
             &mut clausal_propagator,
             &mut sat_data_structures.clause_allocator,
         );
