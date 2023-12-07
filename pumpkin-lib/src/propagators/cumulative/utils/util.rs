@@ -107,6 +107,9 @@ impl Util {
         }
     }
 
+    /// Based on the [ArgTask]s which are passed, it creates [Task]s which have been registered for bound events
+    ///
+    /// This method ensures that the tasks are ordered in non-decreasing order by resource usage and that tasks with a resource usage of zero are removed
     pub fn create_tasks<Var: IntVar + 'static>(
         arg_tasks: &[ArgTask<Var>],
         mut context: PropagatorConstructorContext<'_>,
@@ -141,6 +144,7 @@ impl Util {
         tasks
     }
 
+    /// This task stores the propagations in the correct structure based on whether the explanation concerns a lower-bound update or an upper-bound update
     pub fn store_explanations<Var: IntVar + 'static>(
         explanations: Option<Vec<Explanation<Var>>>,
         reasons_for_propagation_lower_bound: &mut [HashMap<i32, PropositionalConjunction>],
@@ -169,6 +173,7 @@ impl Util {
         }
     }
 
+    /// Returns the reason for a propagation based on the provided [Delta] and the structures in which the reasons are stored
     pub fn get_reason_for_propagation<Var: IntVar + 'static>(
         delta: Delta,
         reasons_for_propagation_lower_bound: &[HashMap<i32, PropositionalConjunction>],
@@ -191,13 +196,13 @@ impl Util {
         }
     }
 
+    /// Initialises the bounds at the root
     pub fn initialise_at_root<Var: IntVar + 'static>(
         update_bounds: bool,
         params: &mut CumulativeParameters<Var>,
         context: &PropagationContext,
     ) {
         if update_bounds {
-            //If the propagation method is incremental then reset the bounds
             params.bounds.clear();
             for task in params.tasks.iter() {
                 params.bounds.push((

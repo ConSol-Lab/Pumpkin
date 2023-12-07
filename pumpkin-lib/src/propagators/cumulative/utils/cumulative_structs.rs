@@ -6,15 +6,15 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 #[derive(Debug)]
-///Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
-/// * `start_variable` - The [PropagatorVariable] representing the start time of a task
-/// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
-/// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
-/// * `id` - The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
+/// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
 pub struct Task<Var> {
+    /// * `start_variable` - The [PropagatorVariable] representing the start time of a task
     pub start_variable: PropagatorVariable<Var>,
+    /// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
     pub processing_time: i32,
+    /// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
+    /// * `id` - The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
     pub id: LocalId,
 }
 
@@ -33,24 +33,21 @@ impl<Var: IntVar + 'static> PartialEq for Task<Var> {
 impl<Var: IntVar + 'static> Eq for Task<Var> {}
 
 #[derive(Clone, Debug)]
-///The task which is passed as argument
-/// * `start_variable` - The [IntVar] representing the start time of a task
-/// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
-/// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
+/// The task which is passed as argument
 pub struct ArgTask<Var> {
+    /// * `start_variable` - The [IntVar] representing the start time of a task
     pub start_time: Var,
+    /// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
     pub processing_time: i32,
+    /// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
 }
 #[derive(Clone)]
-///The arguments which are required to create the constraint/propagators
-/// * `tasks` - A box containing all of the ArgTasks
-/// * `capacity` - The capacity of the resource
-/// * `horizon` - The horizon of the resource (i.e. the largest possible makespan)
-/// * `incrementality` - What form of incrementality is used (either [Incrementality::INCREMENTAL] or [Incrementality::REGULAR])
-/// * `propagation_method` - The used propagation method (for example, [PropagationMethod::TimeTablePerPoint])
+/// The arguments which are required to create the constraint/propagators
 pub struct CumulativeArgs<Var> {
+    /// * `tasks` - A box containing all of the ArgTasks
     pub tasks: Box<[ArgTask<Var>]>,
+    /// * `capacity` - The capacity of the resource
     pub capacity: i32,
 }
 
@@ -64,19 +61,15 @@ pub struct Updated<Var> {
     pub new_upper_bound: i32,
 }
 
-///Holds the data for the cumulative constraint; this constraint models that for each time-point in the horizon, the resource consumption for that time-point is not exceeded
-/// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]; this is stored as a Box of Rc's to accomodate the sharing of the tasks
-/// * `capacity` - The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
-/// * `horizon` - The horizon of the resource (i.e. the largest possible makespan)
-/// * `incrementality` - What form of incrementality is used (either [Incrementality::INCREMENTAL] or [Incrementality::REGULAR])
-/// * `propagation_method` - The used propagation method (for example, [PropagationMethod::TimeTablePerPoint])
-/// * `bounds` - The current known bounds of the different tasks; stored as (lower_bound, upper_bound)
-/// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
-/// * `propagator` - Holds the actual propagator which is responsible for the propagation, this allows the overarching propagator to not be required to have unnecessary data structures
+/// Holds the data for the cumulative constraint; this constraint models that for each time-point in the horizon, the resource consumption for that time-point is not exceeded
 pub struct CumulativeParameters<Var> {
+    /// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]; this is stored as a Box of Rc's to accomodate the sharing of the tasks
     pub tasks: Box<[Rc<Task<Var>>]>,
+    /// * `capacity` - The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
     pub capacity: i32,
+    /// * `bounds` - The current known bounds of the different tasks; stored as (lower_bound, upper_bound)
     pub bounds: Vec<(i32, i32)>,
+    /// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
     pub updated: Vec<Updated<Var>>,
 }
 
@@ -95,13 +88,13 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
     }
 }
 
-///Stores the explanations
-/// * `change` - The domain change related to the event; contains the type of domain change and the value
-/// * `index` - The index of the updated task (this is equal to its local id)
-/// * `explanation` - The actual explanation consisting of a PropositionalConjunction
+/// Stores the explanations
 pub struct Explanation<Var> {
+    /// * `change` - The domain change related to the event; contains the type of domain change and the value
     pub change: DomainChange,
+    /// * `task` - The updated task
     pub task: Rc<Task<Var>>,
+    /// * `explanation` - The actual explanation consisting of a PropositionalConjunction
     pub explanation: PropositionalConjunction,
 }
 
@@ -119,11 +112,11 @@ impl<Var: IntVar + 'static> Explanation<Var> {
     }
 }
 
-///Stores the result of a propagation iteration by the cumulative propagators
-/// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
-/// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before. These explanations could be [None] if a structural inconsistency is found
+/// Stores the result of a propagation iteration by the cumulative propagators
 pub struct CumulativePropagationResult<Var> {
+    /// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
     pub status: PropagationStatusCP,
+    /// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before. These explanations could be [None] if a structural inconsistency is found
     pub explanations: Option<Vec<Explanation<Var>>>,
 }
 

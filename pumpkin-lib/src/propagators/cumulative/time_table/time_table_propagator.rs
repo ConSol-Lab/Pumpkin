@@ -14,15 +14,15 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-///Structures used for storing the data related to resource profiles; a [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
-/// * `start` - The start time of the [ResourceProfile] (inclusive)
-/// * `end` - The end time of the [ResourceProfile] (inclusive)
-/// * `profile_tasks` - The IDs of the tasks which are part of the profile
-/// * `height` - The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
+/// Structures used for storing the data related to resource profiles; a [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
 pub struct ResourceProfile<Var> {
+    /// * `start` - The start time of the [ResourceProfile] (inclusive)
     pub start: i32,
+    /// * `end` - The end time of the [ResourceProfile] (inclusive)
     pub end: i32,
+    /// * `profile_tasks` - The IDs of the tasks which are part of the profile
     pub profile_tasks: Vec<Rc<Task<Var>>>,
+    /// * `height` - The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
     pub height: i32,
 }
 
@@ -40,7 +40,7 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
 pub type TimeTableCreationResult<Var> =
     Result<BTreeMap<u32, ResourceProfile<Var>>, Vec<Rc<Task<Var>>>>;
 
-///A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
+/// A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static> {
     /// Determines whether the propagator should be enqueued for propagation
     /// * `task` - The task which has been updated
@@ -71,7 +71,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
         EnqueueDecision::Enqueue
     }
 
-    ///See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table
+    /// See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,

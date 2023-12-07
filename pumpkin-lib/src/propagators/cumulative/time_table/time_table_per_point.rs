@@ -16,7 +16,7 @@ use crate::{
 
 use super::{ResourceProfile, TimeTableCreationResult, TimeTablePropagator};
 
-///Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
+/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPoint<Var> {
     /// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
     time_table: BTreeMap<u32, ResourceProfile<Var>>,
