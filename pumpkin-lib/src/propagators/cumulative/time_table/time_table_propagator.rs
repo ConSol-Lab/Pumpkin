@@ -1,8 +1,4 @@
-use std::{
-    cmp::max,
-    collections::HashSet,
-    rc::Rc,
-};
+use std::{cmp::max, collections::HashSet, rc::Rc};
 
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
@@ -39,13 +35,16 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
 
 /// A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static> {
+    ///Type of the generic iterator for iterating over the time-table without assuming the type of [TimeTableType][TimeTablePropagator::TimeTableType]
     type TimeTableIterator<'b>: Iterator<Item = &'b ResourceProfile<Var>>
         + Clone
         + DoubleEndedIterator
     where
         Self: 'b;
+    ///Type of the time-table which is returned when performing [TimeTablePropagator::create_time_table]
     type TimeTableType;
 
+    ///Returns a [TimeTableIterator][TimeTablePropagator::TimeTableIterator] and the number of profiles contained in the iterator
     fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize);
 
     /// Determines whether the propagator should be enqueued for propagation
@@ -77,7 +76,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
         EnqueueDecision::Enqueue
     }
 
-    /// See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table
+    /// See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table, optionally returning the profile responsible for the conflict (if such a conflict occurred)
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
@@ -85,6 +84,8 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+    ///
+    /// The result of this method is either the time-table of type [TimeTableType][TimeTablePropagator::TimeTableType] or the tasks responsible for the conflict
     fn create_time_table(
         &self,
         context: &PropagationContext,
