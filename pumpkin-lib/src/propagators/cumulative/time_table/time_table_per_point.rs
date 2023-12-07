@@ -7,189 +7,124 @@ use crate::{
     basic_types::{
         variables::IntVar, Inconsistency, PropagationStatusCP, PropositionalConjunction,
     },
-    engine::{DomainChange, EnqueueDecision, PropagationContext},
-    propagators::{
-        CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated, Util,
+    engine::{
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange,
+        EnqueueDecision, PropagationContext, PropagatorConstructorContext,
     },
+    propagators::{CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Util},
 };
 
 use super::{ResourceProfile, TimeTableCreationResult, TimeTablePropagator};
 
 ///Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
-/// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
-/// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
-/// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
 pub struct TimeTablePerPoint<Var> {
+    /// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
     time_table: BTreeMap<u32, ResourceProfile<Var>>,
+    /// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
+    /// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
     reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
+    /// * `cumulative_params` - Stores the input parameters to the cumulative constraint
+    cumulative_params: CumulativeParameters<Var>,
+}
+
+impl<Var> CPPropagatorConstructor for TimeTablePerPoint<Var>
+where
+    Var: IntVar + 'static + std::fmt::Debug,
+{
+    type Args = CumulativeArgs<Var>;
+
+    fn create(
+        args: Self::Args,
+        context: PropagatorConstructorContext<'_>,
+    ) -> Box<dyn ConstraintProgrammingPropagator> {
+        Box::new(TimeTablePerPoint::new(
+            Util::create_tasks(&args.tasks, context),
+            args.capacity,
+        ))
+    }
 }
 
 impl<Var: IntVar + 'static> TimeTablePerPoint<Var> {
-    pub fn new(num_tasks: usize) -> TimeTablePerPoint<Var> {
+    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> TimeTablePerPoint<Var> {
         let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); num_tasks];
+            vec![HashMap::new(); tasks.len()];
         TimeTablePerPoint {
             time_table: BTreeMap::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
             reasons_for_propagation_upper_bound: reasons_for_propagation,
+            cumulative_params: CumulativeParameters::create(tasks, capacity),
         }
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> {
-    fn create_time_table_and_assign(
+impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoint<Var> {
+    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+        let CumulativePropagationResult {
+            status,
+            explanations,
+        } = TimeTablePropagator::propagate_from_scratch(self, context);
+
+        Util::store_explanations(
+            explanations,
+            &mut self.reasons_for_propagation_lower_bound,
+            &mut self.reasons_for_propagation_upper_bound,
+        );
+        status
+    }
+
+    fn synchronise(&mut self, context: &PropagationContext) {
+        TimeTablePropagator::reset_structures(self, context);
+    }
+
+    fn get_reason_for_propagation(
         &mut self,
-        context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-        reversed: bool,
-    ) -> TimeTableCreationResult<Var> {
-        let result = self.create_time_table(context, tasks, capacity, reversed)?;
-        self.time_table = result;
-        Ok(self.time_table.clone())
+        _context: &PropagationContext,
+        delta: Delta,
+    ) -> PropositionalConjunction {
+        Util::get_reason_for_propagation(
+            delta,
+            &self.reasons_for_propagation_lower_bound,
+            &self.reasons_for_propagation_upper_bound,
+            &self.cumulative_params.tasks,
+        )
     }
 
-    fn create_time_table(
-        &self,
-        context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-        reversed: bool,
-    ) -> TimeTableCreationResult<Var> {
-        let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
-        //First we go over all tasks and determine their mandatory parts
-        for task in tasks.iter() {
-            let mut upper_bound = context.upper_bound(&task.start_variable);
-            let mut lower_bound = context.lower_bound(&task.start_variable);
-            if reversed {
-                //This is to take into account scaled views, this is necessary for the following reason:
-                //Let's say we have the following two tasks:
-                // x: start time in [4, 7] with a processing time of 5 -> mandatory part [7, 9)
-                // y: start time in [3, 3] with a processing time of 2 -> mandatory part [3, 5)
-                // Which leads to no overlap
-                //If we then take the scaled view we get mandatory parts from [-4, -2) and [-3, -1) which means that there is suddenly an overlap
-                //So we need to take into account when variables have negative bounds!
-                std::mem::swap(&mut upper_bound, &mut lower_bound);
-                upper_bound = upper_bound.abs();
-                lower_bound = lower_bound.abs();
-                assert!(lower_bound <= upper_bound);
-            }
-
-            if upper_bound < lower_bound + task.processing_time {
-                //There is a mandatory part
-                for i in upper_bound..(lower_bound + task.processing_time) {
-                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
-                    let current_profile: &mut ResourceProfile<Var> = profile
-                        .entry(i as u32)
-                        .or_insert(ResourceProfile::default(i));
-                    current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(Rc::clone(task));
-
-                    if current_profile.height > capacity {
-                        //The addition of the current task to the resource profile has caused an overflow
-                        return Err(current_profile.profile_tasks.clone());
-                    }
-                }
-            }
-        }
-        Ok(profile)
-    }
-}
-
-impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var> {
-    fn propagate_incrementally(
+    fn notify(
         &mut self,
         _context: &mut PropagationContext,
-        _updated: &mut Vec<Updated<Var>>,
-        _tasks: &[Rc<Task<Var>>],
-        _capacity: i32,
-    ) -> CumulativePropagationResult<Var> {
-        todo!()
-    }
-
-    fn propagate_from_scratch(
-        &mut self,
-        context: &mut PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        horizon: i32,
-        capacity: i32,
-    ) -> CumulativePropagationResult<Var> {
-        TimeTablePropagator::propagate_from_scratch(self, context, tasks, horizon, capacity)
-    }
-
-    fn reset_structures(
-        &mut self,
-        context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-    ) {
-        TimeTablePropagator::reset_structures(self, context, tasks, capacity);
-    }
-
-    fn store_explanation(
-        &mut self,
-        Explanation {
-            change,
-            task,
-            explanation,
-        }: Explanation<Var>,
-    ) {
-        //Note that we assume that the index is the same as the local id of the task
-        match change {
-            DomainChange::LowerBound(value) => {
-                self.reasons_for_propagation_lower_bound[task.id.get_value()]
-                    .insert(value, explanation);
-            }
-            DomainChange::UpperBound(value) => {
-                self.reasons_for_propagation_upper_bound[task.id.get_value()]
-                    .insert(value, explanation);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn get_reason(
-        &self,
-        affected_task: &Rc<Task<Var>>,
-        change: DomainChange,
-    ) -> PropositionalConjunction {
-        match change {
-            DomainChange::LowerBound(value) => self.reasons_for_propagation_lower_bound
-                [affected_task.id.get_value()]
-            .get(&value)
-            .unwrap()
-            .clone(),
-            DomainChange::UpperBound(value) => self.reasons_for_propagation_upper_bound
-                [affected_task.id.get_value()]
-            .get(&value)
-            .unwrap()
-            .clone(),
-            _ => unreachable!(),
-        }
-    }
-
-    fn should_propagate(
-        &mut self,
-        context: &PropagationContext,
-        _tasks: &[Rc<Task<Var>>],
-        updated_task: &Rc<Task<Var>>,
-        bounds: &[(i32, i32)],
-        _capacity: i32,
-        updated: &mut Vec<Updated<Var>>,
+        _local_id: crate::engine::LocalId,
+        _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        TimeTablePropagator::should_propagate(self, updated_task, context, bounds, updated)
+        //Propagator from scratch, always enqueue
+        EnqueueDecision::Enqueue
+    }
+
+    fn priority(&self) -> u32 {
+        3
+    }
+
+    fn name(&self) -> &str {
+        "CumulativeTimeTablePerPoint"
+    }
+
+    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+        Util::initialise_at_root(false, &mut self.cumulative_params, context);
+        self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContext,
-        horizon: i32,
-        capacity: i32,
-        tasks_arg: &[Rc<Task<Var>>],
     ) -> PropagationStatusCP {
         //This method is similar to that of `create_time_table` but somewhat simpler
         //We first create a time-table per point in the horizon
+        let horizon = self
+            .cumulative_params
+            .tasks
+            .iter()
+            .map(|current| current.processing_time)
+            .sum::<i32>();
         let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
             profile.push(ResourceProfile {
@@ -199,7 +134,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                 height: 0,
             });
         }
-        for task in tasks_arg.iter() {
+        for task in self.cumulative_params.tasks.iter() {
             let upper_bound = context.upper_bound(&task.start_variable);
             let lower_bound = context.lower_bound(&task.start_variable);
 
@@ -210,7 +145,7 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
                     profile[i as usize].height += task.resource_usage;
                     profile[i as usize].profile_tasks.push(Rc::clone(task));
 
-                    if profile[i as usize].height > capacity {
+                    if profile[i as usize].height > self.cumulative_params.capacity {
                         //The profile which we have just added to has overflown the resource capacity
                         return Util::create_error_clause(
                             context,
@@ -229,8 +164,8 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
         } in profile.iter()
         {
             //Then we go over all tasks
-            for task in tasks_arg.iter() {
-                if height + task.resource_usage <= capacity {
+            for task in self.cumulative_params.tasks.iter() {
+                if height + task.resource_usage <= self.cumulative_params.capacity {
                     //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
                     break;
                 } else if self.has_mandatory_part_in_interval(context, task, *start, *end) {
@@ -272,12 +207,54 @@ impl<Var: IntVar + 'static> IncrementalPropagator<Var> for TimeTablePerPoint<Var
     }
 }
 
+impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> {
+    fn create_time_table_and_assign(
+        &mut self,
+        context: &PropagationContext,
+    ) -> TimeTableCreationResult<Var> {
+        let result = self.create_time_table(context)?;
+        self.time_table = result;
+        Ok(self.time_table.clone())
+    }
+
+    fn create_time_table(&self, context: &PropagationContext) -> TimeTableCreationResult<Var> {
+        let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
+        //First we go over all tasks and determine their mandatory parts
+        for task in self.cumulative_params.tasks.iter() {
+            let upper_bound = context.upper_bound(&task.start_variable);
+            let lower_bound = context.lower_bound(&task.start_variable);
+
+            if upper_bound < lower_bound + task.processing_time {
+                //There is a mandatory part
+                for i in upper_bound..(lower_bound + task.processing_time) {
+                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
+                    let current_profile: &mut ResourceProfile<Var> = profile
+                        .entry(i as u32)
+                        .or_insert(ResourceProfile::default(i));
+                    current_profile.height += task.resource_usage;
+                    current_profile.profile_tasks.push(Rc::clone(task));
+
+                    if current_profile.height > self.cumulative_params.capacity {
+                        //The addition of the current task to the resource profile has caused an overflow
+                        return Err(current_profile.profile_tasks.clone());
+                    }
+                }
+            }
+        }
+        Ok(profile)
+    }
+
+    fn get_parameters(&self) -> &CumulativeParameters<Var> {
+        &self.cumulative_params
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         basic_types::{Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction},
         engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
-        propagators::{ArgTask, Cumulative, CumulativeArgs, Incrementality, PropagationMethod},
+        propagators::{ArgTask, CumulativeArgs, TimeTablePerPoint},
     };
 
     #[test]
@@ -287,7 +264,7 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -303,9 +280,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -320,7 +294,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator::<Cumulative<_>>(CumulativeArgs {
+        let result = solver.new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
             tasks: [
                 ArgTask {
                     start_time: s1,
@@ -336,9 +310,6 @@ mod tests {
             .into_iter()
             .collect(),
             capacity: 1,
-            horizon: 10,
-            incrementality: Incrementality::REGULAR,
-            propagation_method: PropagationMethod::TimeTablePerPoint,
         });
         assert!(match result {
             Err(inconsistency) => {
@@ -369,7 +340,7 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -385,9 +356,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -407,7 +375,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: a,
@@ -443,9 +411,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 5,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -458,7 +423,7 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -474,9 +439,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -504,7 +466,7 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -520,9 +482,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -555,7 +514,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: a,
@@ -591,9 +550,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 5,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -631,7 +587,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: a,
@@ -672,9 +628,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 5,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -705,7 +658,7 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -721,9 +674,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -753,7 +703,7 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let mut propagator = solver
-            .new_propagator::<Cumulative<_>>(CumulativeArgs {
+            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
                 tasks: [
                     ArgTask {
                         start_time: s1,
@@ -774,9 +724,6 @@ mod tests {
                 .into_iter()
                 .collect(),
                 capacity: 1,
-                horizon: 20,
-                incrementality: Incrementality::REGULAR,
-                propagation_method: PropagationMethod::TimeTablePerPoint,
             })
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);

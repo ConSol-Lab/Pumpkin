@@ -8,7 +8,7 @@ use crate::{
     basic_types::{variables::IntVar, Inconsistency},
     engine::{DomainChange, EnqueueDecision, PropagationContext},
     propagators::{
-        CumulativePropagationResult, Explanation, IncrementalPropagator, Task, Updated, Util,
+        CumulativeParameters, CumulativePropagationResult, Explanation, Task, Updated, Util,
     },
     pumpkin_assert_simple,
 };
@@ -41,7 +41,7 @@ pub type TimeTableCreationResult<Var> =
     Result<BTreeMap<u32, ResourceProfile<Var>>, Vec<Rc<Task<Var>>>>;
 
 ///A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
-pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var> {
+pub trait TimeTablePropagator<Var: IntVar + 'static> {
     /// Determines whether the propagator should be enqueued for propagation
     /// * `task` - The task which has been updated
     /// * `bounds` - The bounds before the current update took place - this does not need to be updated in this function as it will be updated in [notify][CumulativePropagator::notify]
@@ -75,29 +75,15 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-        reversed: bool,
     ) -> TimeTableCreationResult<Var>;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
-    fn create_time_table(
-        &self,
-        context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-        reversed: bool,
-    ) -> TimeTableCreationResult<Var>;
+    fn create_time_table(&self, context: &PropagationContext) -> TimeTableCreationResult<Var>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
-    fn reset_structures(
-        &mut self,
-        context: &PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
-    ) {
-        let result = self.create_time_table_and_assign(context, tasks, capacity, false);
+    fn reset_structures(&mut self, context: &PropagationContext) {
+        let result = self.create_time_table_and_assign(context);
         pumpkin_assert_simple!(
             result.is_ok(),
             "Found error while backtracking, this indicates that a conflict was not reported by the current propagator"
@@ -247,9 +233,8 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         context: &mut PropagationContext,
         to_check: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
         to_check_len: usize,
-        tasks: &[Rc<Task<Var>>],
-        capacity: i32,
     ) -> CumulativePropagationResult<Var> {
+        let params = self.get_parameters();
         let mut explanations: Vec<Explanation<Var>> = Vec::new();
         //We go over all profiles
         for (
@@ -263,12 +248,12 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         ) in to_check.clone().enumerate()
         {
             //Then we go over all the different tasks
-            for task in tasks.iter() {
+            for task in params.tasks.iter() {
                 if context.is_fixed(&task.start_variable) {
                     //If the variable is already fixed then we do not need to check for any updated
                     continue;
                 }
-                if height + task.resource_usage <= capacity {
+                if height + task.resource_usage <= params.capacity {
                     // The tasks are sorted by capacity, if this task doesn't overload then none will
                     break;
                 } else if self.has_mandatory_part_in_interval(context, task, *start, *end) {
@@ -287,7 +272,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 index,
                                 to_check.clone(),
                                 task,
-                                capacity,
+                                params.capacity,
                             );
                         match Util::propagate_and_explain(
                             context,
@@ -329,7 +314,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
                                 index,
                                 to_check.clone(),
                                 task,
-                                capacity,
+                                params.capacity,
                             );
                         match Util::propagate_and_explain(
                             context,
@@ -368,24 +353,17 @@ pub trait TimeTablePropagator<Var: IntVar + 'static>: IncrementalPropagator<Var>
         CumulativePropagationResult::new(Ok(()), Some(explanations))
     }
 
+    fn get_parameters(&self) -> &CumulativeParameters<Var>;
+
     /// Propagates from scratch (i.e. it recalculates all data structures)
     fn propagate_from_scratch(
         &mut self,
         context: &mut PropagationContext,
-        tasks: &[Rc<Task<Var>>],
-        _horizon: i32,
-        capacity: i32,
     ) -> CumulativePropagationResult<Var> {
-        match self.create_time_table_and_assign(context, tasks, capacity, false) {
+        match self.create_time_table_and_assign(context) {
             Ok(time_table) => {
                 //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-                self.check_for_updates(
-                    context,
-                    time_table.values(),
-                    time_table.len(),
-                    tasks,
-                    capacity,
-                )
+                self.check_for_updates(context, time_table.values(), time_table.len())
             }
             Err(conflict_profile) => {
                 //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
