@@ -11,6 +11,8 @@
   * the linear_ne constraint
   * the 'satisfy' goal
 * Started supporting solution logging according to the FlatZinc specification
+* Added cumulative propagator(s)
+  * Added propagator utilising time-table reasoning per time point
 
 ## Bugfixes
 
