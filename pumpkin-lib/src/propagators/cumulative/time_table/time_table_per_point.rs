@@ -14,7 +14,7 @@ use crate::{
     propagators::{CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Util},
 };
 
-use super::{ResourceProfile, TimeTableCreationResult, TimeTablePropagator};
+use super::{ResourceProfile, TimeTablePropagator};
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPoint<Var> {
@@ -208,16 +208,27 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> {
+    type TimeTableIterator<'b> = std::collections::btree_map::Values<'b, u32, ResourceProfile<Var>>;
+
+    type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
+
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
-    ) -> TimeTableCreationResult<Var> {
-        let result = self.create_time_table(context)?;
-        self.time_table = result;
-        Ok(self.time_table.clone())
+    ) -> Option<Vec<Rc<Task<Var>>>> {
+        match self.create_time_table(context) {
+            Ok(result) => {
+                self.time_table = result;
+                None
+            }
+            Err(explanation) => Some(explanation),
+        }
     }
 
-    fn create_time_table(&self, context: &PropagationContext) -> TimeTableCreationResult<Var> {
+    fn create_time_table(
+        &self,
+        context: &PropagationContext,
+    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
         let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts
         for task in self.cumulative_params.tasks.iter() {
@@ -246,6 +257,10 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
 
     fn get_parameters(&self) -> &CumulativeParameters<Var> {
         &self.cumulative_params
+    }
+
+    fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize) {
+        (self.time_table.values(), self.time_table.len())
     }
 }
 

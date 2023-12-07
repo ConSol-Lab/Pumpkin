@@ -1,6 +1,6 @@
 use std::{
     cmp::max,
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     rc::Rc,
 };
 
@@ -37,11 +37,17 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
     }
 }
 
-pub type TimeTableCreationResult<Var> =
-    Result<BTreeMap<u32, ResourceProfile<Var>>, Vec<Rc<Task<Var>>>>;
-
 /// A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static> {
+    type TimeTableIterator<'b>: Iterator<Item = &'b ResourceProfile<Var>>
+        + Clone
+        + DoubleEndedIterator
+    where
+        Self: 'b;
+    type TimeTableType;
+
+    fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize);
+
     /// Determines whether the propagator should be enqueued for propagation
     /// * `task` - The task which has been updated
     /// * `bounds` - The bounds before the current update took place - this does not need to be updated in this function as it will be updated in [notify][CumulativePropagator::notify]
@@ -75,17 +81,20 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
-    ) -> TimeTableCreationResult<Var>;
+    ) -> Option<Vec<Rc<Task<Var>>>>;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
-    fn create_time_table(&self, context: &PropagationContext) -> TimeTableCreationResult<Var>;
+    fn create_time_table(
+        &self,
+        context: &PropagationContext,
+    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
     fn reset_structures(&mut self, context: &PropagationContext) {
         let result = self.create_time_table_and_assign(context);
         pumpkin_assert_simple!(
-            result.is_ok(),
+            result.is_none(),
             "Found error while backtracking, this indicates that a conflict was not reported by the current propagator"
         );
     }
@@ -360,18 +369,16 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
         &mut self,
         context: &mut PropagationContext,
     ) -> CumulativePropagationResult<Var> {
-        match self.create_time_table_and_assign(context) {
-            Ok(time_table) => {
-                //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-                self.check_for_updates(context, time_table.values(), time_table.len())
-            }
-            Err(conflict_profile) => {
-                //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
-                CumulativePropagationResult::new(
-                    Util::create_error_clause(context, &conflict_profile),
-                    None,
-                )
-            }
+        if let Some(conflict_profile) = self.create_time_table_and_assign(context) {
+            //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
+            CumulativePropagationResult::new(
+                Util::create_error_clause(context, &conflict_profile),
+                None,
+            )
+        } else {
+            //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
+            let (time_table, time_table_len) = self.get_time_table_and_length();
+            self.check_for_updates(context, time_table, time_table_len)
         }
     }
 }
