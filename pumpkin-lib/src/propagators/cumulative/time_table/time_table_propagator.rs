@@ -1,4 +1,4 @@
-use std::{cmp::max, collections::HashSet, rc::Rc};
+use std::{cmp::max, collections::HashSet, ops::Range, rc::Rc};
 
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
@@ -85,7 +85,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
         } else {
             //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
             let (time_table, time_table_len) = self.get_time_table_and_length();
-            check_for_updates(context, time_table, time_table_len, self.get_parameters())
+            check_for_updates_time_table(context, time_table, time_table_len, self.get_parameters())
         }
     }
 }
@@ -222,7 +222,7 @@ pub fn var_has_overlap_with_interval<Var: IntVar + 'static>(
 
 /// Checks whether a propagation should occur based on the current state of the time-table
 /// * `to_check` - The profiles which should be checked
-fn check_for_updates<'a, Var: IntVar + 'static>(
+pub fn check_for_updates_time_table<'a, Var: IntVar + 'static>(
     context: &mut PropagationContext,
     to_check: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
     to_check_len: usize,
@@ -344,4 +344,29 @@ fn check_for_updates<'a, Var: IntVar + 'static>(
         }
     }
     CumulativePropagationResult::new(Ok(()), Some(explanations))
+}
+
+/// When a task is updated (i.e. its release time increased or its deadline decreased), this function determines at which times mandatory parts are added
+pub fn generate_update_range<Var: IntVar + 'static>(
+    task: &Task<Var>,
+    prev_lower_bound: i32,
+    prev_upper_bound: i32,
+    new_lower_bound: i32,
+    new_upper_bound: i32,
+) -> (Range<i32>, Range<i32>) {
+    //Assumption: the notify method checks whether there is a mandatory part with the new lower- and upper-bounds
+    //If both the upper and the lower bound have been updated then the update-range of the lower-bound (upper-bound) should be separate from the update-range of the upper-bound (lower-bound)
+    if prev_upper_bound < prev_lower_bound + task.processing_time {
+        //mandatory part existed previously
+        (
+            new_upper_bound..prev_upper_bound,
+            prev_lower_bound + task.processing_time..new_lower_bound + task.processing_time,
+        )
+    } else {
+        //fully new mandatory part inserted
+        (
+            new_upper_bound..new_lower_bound + task.processing_time,
+            0..0,
+        )
+    }
 }

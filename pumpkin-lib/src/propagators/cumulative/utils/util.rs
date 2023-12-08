@@ -9,10 +9,10 @@ use crate::{
         Delta, DomainChange, DomainEvents, LocalId, PropagationContext,
         PropagatorConstructorContext,
     },
-    pumpkin_assert_simple,
+    pumpkin_assert_extreme, pumpkin_assert_simple,
 };
 
-use super::{ArgTask, CumulativeParameters, Explanation, Task};
+use super::{ArgTask, CumulativeParameters, Explanation, Task, Updated};
 
 pub struct Util {}
 
@@ -213,5 +213,58 @@ impl Util {
         }
 
         params.updated.clear();
+    }
+
+    pub fn check_bounds_equal_at_propagation<Var: IntVar + 'static>(
+        context: &PropagationContext,
+        tasks: &[Rc<Task<Var>>],
+        bounds: &[(i32, i32)],
+    ) {
+        pumpkin_assert_extreme!(
+            tasks.iter().all(|current| bounds[current.id.get_value()]
+                == (
+                    context.lower_bound(&current.start_variable),
+                    context.upper_bound(&current.start_variable)
+                )),
+            "{:?}",
+            tasks
+                .iter()
+                .map(|current| format!(
+                    "{:?} - {:?}",
+                    bounds[current.id.get_value()],
+                    (
+                        context.lower_bound(&current.start_variable),
+                        context.upper_bound(&current.start_variable)
+                    )
+                ))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    pub fn update_bounds_task<Var: IntVar + 'static>(
+        context: &PropagationContext,
+        bounds: &mut [(i32, i32)],
+        task: &Rc<Task<Var>>,
+    ) {
+        bounds[task.id.get_value()] = (
+            context.lower_bound(&task.start_variable),
+            context.upper_bound(&task.start_variable),
+        );
+    }
+
+    pub fn reset_bounds_clear_updated<Var: IntVar + 'static>(
+        context: &PropagationContext,
+        updated: &mut Vec<Updated<Var>>,
+        bounds: &mut Vec<(i32, i32)>,
+        tasks: &[Rc<Task<Var>>],
+    ) {
+        updated.clear();
+        bounds.clear();
+        for task in tasks.iter() {
+            bounds.push((
+                context.lower_bound(&task.start_variable),
+                context.upper_bound(&task.start_variable),
+            ))
+        }
     }
 }
