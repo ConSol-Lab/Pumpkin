@@ -3,7 +3,7 @@ use crate::{
     predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
-use super::{event_sink::EventSink, DomainEvent, PropagatorId, PropagatorVarId};
+use super::{event_sink::EventSink, IntDomainEvent, PropagatorId, PropagatorVarId};
 
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {
@@ -87,7 +87,7 @@ impl AssignmentsInteger {
             .map(|entry| entry.propagator)
     }
 
-    pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
+    pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain()
     }
 }
@@ -457,7 +457,7 @@ impl IntegerDomainExplicit {
         let idx = self.get_index(value);
 
         if self.is_value_in_domain[idx] {
-            events.event_occurred(DomainEvent::Removal, self.id);
+            events.event_occurred(IntDomainEvent::Removal, self.id);
         }
 
         self.is_value_in_domain[idx] = false;
@@ -466,7 +466,7 @@ impl IntegerDomainExplicit {
         self.update_upper_bound(events);
 
         if self.lower_bound == self.upper_bound {
-            events.event_occurred(DomainEvent::Assign, self.id);
+            events.event_occurred(IntDomainEvent::Assign, self.id);
         }
     }
 
@@ -475,13 +475,13 @@ impl IntegerDomainExplicit {
             return;
         }
 
-        events.event_occurred(DomainEvent::UpperBound, self.id);
+        events.event_occurred(IntDomainEvent::UpperBound, self.id);
 
         self.upper_bound = value;
         self.update_upper_bound(events);
 
         if self.lower_bound == self.upper_bound {
-            events.event_occurred(DomainEvent::Assign, self.id);
+            events.event_occurred(IntDomainEvent::Assign, self.id);
         }
     }
 
@@ -490,13 +490,13 @@ impl IntegerDomainExplicit {
             return;
         }
 
-        events.event_occurred(DomainEvent::LowerBound, self.id);
+        events.event_occurred(IntDomainEvent::LowerBound, self.id);
 
         self.lower_bound = value;
         self.update_lower_bound(events);
 
         if self.lower_bound == self.upper_bound {
-            events.event_occurred(DomainEvent::Assign, self.id);
+            events.event_occurred(IntDomainEvent::Assign, self.id);
         }
     }
 
@@ -504,7 +504,7 @@ impl IntegerDomainExplicit {
         while self.get_index(self.lower_bound) < self.is_value_in_domain.len()
             && !self.is_value_in_domain[self.get_index(self.lower_bound)]
         {
-            events.event_occurred(DomainEvent::LowerBound, self.id);
+            events.event_occurred(IntDomainEvent::LowerBound, self.id);
             self.lower_bound += 1;
         }
     }
@@ -513,7 +513,7 @@ impl IntegerDomainExplicit {
         while self.upper_bound + self.offset >= 0
             && !self.is_value_in_domain[self.get_index(self.upper_bound)]
         {
-            events.event_occurred(DomainEvent::UpperBound, self.id);
+            events.event_occurred(IntDomainEvent::UpperBound, self.id);
             self.upper_bound -= 1;
         }
     }
@@ -578,7 +578,7 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [DomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
     }
 
     #[test]
@@ -592,7 +592,7 @@ mod tests {
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
-        assert_contains_events(&events, d1, [DomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
     }
 
     #[test]
@@ -612,8 +612,16 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 4);
 
-        assert_contains_events(&events, d1, [DomainEvent::LowerBound, DomainEvent::Assign]);
-        assert_contains_events(&events, d2, [DomainEvent::UpperBound, DomainEvent::Assign]);
+        assert_contains_events(
+            &events,
+            d1,
+            [IntDomainEvent::LowerBound, IntDomainEvent::Assign],
+        );
+        assert_contains_events(
+            &events,
+            d2,
+            [IntDomainEvent::UpperBound, IntDomainEvent::Assign],
+        );
     }
 
     #[test]
@@ -637,15 +645,23 @@ mod tests {
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 7);
 
-        assert_contains_events(&events, d1, [DomainEvent::Assign, DomainEvent::UpperBound]);
-        assert_contains_events(&events, d2, [DomainEvent::Assign, DomainEvent::LowerBound]);
+        assert_contains_events(
+            &events,
+            d1,
+            [IntDomainEvent::Assign, IntDomainEvent::UpperBound],
+        );
+        assert_contains_events(
+            &events,
+            d2,
+            [IntDomainEvent::Assign, IntDomainEvent::LowerBound],
+        );
         assert_contains_events(
             &events,
             d3,
             [
-                DomainEvent::Assign,
-                DomainEvent::LowerBound,
-                DomainEvent::UpperBound,
+                IntDomainEvent::Assign,
+                IntDomainEvent::LowerBound,
+                IntDomainEvent::UpperBound,
             ],
         );
     }
@@ -661,7 +677,7 @@ mod tests {
 
         let events = assignment.drain_domain_events().collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
-        assert!(events.contains(&(DomainEvent::Removal, d1)));
+        assert!(events.contains(&(IntDomainEvent::Removal, d1)));
     }
 
     #[test]
@@ -751,9 +767,9 @@ mod tests {
     }
 
     fn assert_contains_events(
-        slice: &[(DomainEvent, DomainId)],
+        slice: &[(IntDomainEvent, DomainId)],
         domain: DomainId,
-        required_events: impl AsRef<[DomainEvent]>,
+        required_events: impl AsRef<[IntDomainEvent]>,
     ) {
         for event in required_events.as_ref() {
             assert!(slice.contains(&(*event, domain)));

@@ -1,9 +1,7 @@
-use super::PropositionalConjunction;
+use super::ConflictInfo;
 
 pub enum PropagationStatusOneStepCP {
-    ConflictDetected {
-        propositional_conjunction: PropositionalConjunction,
-    },
+    ConflictDetected { conflict_info: ConflictInfo },
     PropagationHappened,
     FixedPoint,
 }

@@ -70,15 +70,15 @@ impl<VX: IntVar + 'static, VI: IntVar + 'static, VE: IntVar + 'static> CPPropaga
             .map(|(i, x_i)| {
                 context.register(
                     x_i.clone(),
-                    DomainEvents::ANY,
+                    DomainEvents::ANY_INT,
                     LocalId::from(i as u32 + ID_X_OFFSET),
                 )
             })
             .collect();
         Box::new(Element {
             array,
-            index: context.register(args.index, DomainEvents::ANY, ID_INDEX),
-            rhs: context.register(args.rhs, DomainEvents::ANY, ID_RHS),
+            index: context.register(args.index, DomainEvents::ANY_INT, ID_INDEX),
+            rhs: context.register(args.rhs, DomainEvents::ANY_INT, ID_RHS),
             propagations_index: HashMap::new(),
             propagations_rhs: HashMap::new(),
         })
@@ -246,6 +246,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator for Ele
                 let i = i as i32;
                 conjunction![[self.index == i] & [self.rhs >= v]]
             }
+            (_, _) => unreachable!(),
         }
     }
 

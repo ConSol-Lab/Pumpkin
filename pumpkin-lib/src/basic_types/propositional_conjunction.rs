@@ -1,13 +1,18 @@
-use super::Predicate;
+use super::{Literal, Predicate};
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
     predicates_in_conjunction: Vec<Predicate>,
+    literals_in_conjunction: Vec<Literal>,
 }
 
 impl PropositionalConjunction {
     pub fn and(&mut self, predicate: Predicate) {
         self.predicates_in_conjunction.push(predicate);
+    }
+
+    pub fn and_literal(&mut self, literal: Literal) {
+        self.literals_in_conjunction.push(literal);
     }
 
     pub fn num_predicates(&self) -> u32 {
@@ -17,12 +22,17 @@ impl PropositionalConjunction {
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
         self.predicates_in_conjunction.iter()
     }
+
+    pub fn iter_literals(&self) -> std::slice::Iter<'_, Literal> {
+        self.literals_in_conjunction.iter()
+    }
 }
 
 impl From<Vec<Predicate>> for PropositionalConjunction {
     fn from(predicates_in_conjunction: Vec<Predicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
+            literals_in_conjunction: Vec::new(),
         }
     }
 }
@@ -31,13 +41,14 @@ impl From<Predicate> for PropositionalConjunction {
     fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: Vec::from([predicate]),
+            literals_in_conjunction: Vec::new(),
         }
     }
 }
 
 impl std::fmt::Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.predicates_in_conjunction.is_empty() {
+        if self.predicates_in_conjunction.is_empty() && self.literals_in_conjunction.is_empty() {
             write!(f, "{{empty}}")
         } else {
             write!(
@@ -46,6 +57,7 @@ impl std::fmt::Display for PropositionalConjunction {
                 self.predicates_in_conjunction
                     .iter()
                     .map(|p| p.to_string())
+                    .chain(self.literals_in_conjunction.iter().map(|x| x.to_string()))
                     .collect::<Vec<String>>()
                     .join("; ")
             )
@@ -61,13 +73,19 @@ impl std::fmt::Debug for PropositionalConjunction {
 
 impl PartialEq for PropositionalConjunction {
     fn eq(&self, other: &Self) -> bool {
-        if self.predicates_in_conjunction.len() != other.predicates_in_conjunction.len() {
+        if self.predicates_in_conjunction.len() != other.predicates_in_conjunction.len()
+            || self.literals_in_conjunction.len() != other.literals_in_conjunction.len()
+        {
             return false;
         }
 
         self.predicates_in_conjunction
             .iter()
             .all(|predicate| other.predicates_in_conjunction.contains(predicate))
+            && self
+                .literals_in_conjunction
+                .iter()
+                .all(|literal| other.literals_in_conjunction.contains(literal))
     }
 }
 
@@ -123,6 +141,7 @@ mod tests {
         let y = DomainId { id: 1 };
         let conjunction = PropositionalConjunction {
             predicates_in_conjunction: vec![predicate![x >= 5], predicate![y == 1]],
+            literals_in_conjunction: Vec::new(),
         };
         assert_eq!(conjunction!([x >= 5] & [y == 1]), conjunction);
     }
@@ -138,6 +157,7 @@ mod tests {
 
         let conjunction = PropositionalConjunction {
             predicates_in_conjunction: vec![predicate![w.x == 1]],
+            literals_in_conjunction: Vec::new(),
         };
 
         assert_eq!(conjunction!([w.x == 1]), conjunction);

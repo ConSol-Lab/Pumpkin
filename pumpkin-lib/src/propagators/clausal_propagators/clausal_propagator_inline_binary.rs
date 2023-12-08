@@ -125,6 +125,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             assignments.enqueue_propagated_literal(
                 asserting_literal,
                 ClauseReference::create_virtual_binary_clause_reference(second_literal).into(),
+                None,
             );
             None
         }
@@ -133,7 +134,11 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             let clause_reference = self
                 .add_clause_unchecked(literals, true, clause_allocator)
                 .expect("Add clause failed for some reason");
-            assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+            assignments.enqueue_propagated_literal(
+                asserting_literal,
+                clause_reference.into(),
+                None,
+            );
             Some(clause_reference)
         }
     }
@@ -241,6 +246,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
                         assignments.enqueue_propagated_literal(
                             cached_literal,
                             watched_clause_reference.into(),
+                            None,
                         );
                         //keep the watcher
                         self.watch_lists[!true_literal][end_index] =
@@ -332,8 +338,11 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
                 //	watched_clause[0] is assigned false -> conflict
 
                 //can propagate?
-                let conflict_info = assignments
-                    .enqueue_propagated_literal(watched_clause[0], watched_clause_reference.into());
+                let conflict_info = assignments.enqueue_propagated_literal(
+                    watched_clause[0],
+                    watched_clause_reference.into(),
+                    None,
+                );
                 if let Some(conflict_info) = conflict_info {
                     //conflict detected, stop any further propagation and report the conflict
                     //  pumpkin_assert_advanced(state_.assignments_.IsAssignedFalse(watched_clause[0]), "Sanity check.");

@@ -1,19 +1,27 @@
 #![cfg(test)]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
-use crate::basic_types::{DomainId, Inconsistency, PropagationStatusCP, PropositionalConjunction};
+use crate::basic_types::{
+    DomainId, Inconsistency, Literal, PropagationStatusCP, PropositionalConjunction,
+    PropositionalVariable,
+};
 use crate::engine::{
-    AssignmentsInteger, CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta,
-    DomainChange, DomainEvent, EmptyDomain, EnqueueDecision, LocalId, OpaqueDomainEvent,
-    PropagationContext, PropagatorConstructorContext, PropagatorId, WatchListCP,
+    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
+    ConstraintProgrammingPropagator, Delta, DomainChange, EmptyDomain, EnqueueDecision,
+    IntDomainEvent, LocalId, OpaqueDomainEvent, PropagationContext, PropagatorConstructorContext,
+    PropagatorId, WatchListCP,
 };
 use std::fmt::{Debug, Formatter};
+
+use super::WatchListPropositional;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default)]
 pub struct TestSolver {
     assignment: AssignmentsInteger,
+    assignment_propositional: AssignmentsPropositional,
     watch_list: WatchListCP,
+    watch_list_propositional: WatchListPropositional,
     next_id: u32,
 }
 
@@ -40,6 +48,14 @@ impl TestSolver {
         self.assignment.grow(lb, ub)
     }
 
+    pub fn new_literal(&mut self) -> Literal {
+        let new_variable_index = self.assignment_propositional.num_propositional_variables();
+        self.watch_list_propositional.grow();
+        self.assignment_propositional.grow();
+
+        Literal::new(PropositionalVariable::new(new_variable_index), true)
+    }
+
     pub fn new_propagator<Constructor: CPPropagatorConstructor>(
         &mut self,
         args: Constructor::Args,
@@ -49,7 +65,11 @@ impl TestSolver {
 
         let propagator = Constructor::create(
             args,
-            PropagatorConstructorContext::new(&mut self.watch_list, id),
+            PropagatorConstructorContext::new(
+                &mut self.watch_list,
+                &mut self.watch_list_propositional,
+                id,
+            ),
         );
 
         let mut propagator1 = TestPropagator { propagator, id };
@@ -63,6 +83,7 @@ impl TestSolver {
             .propagator
             .initialise_at_root(&mut PropagationContext::new(
                 &mut self.assignment,
+                &mut self.assignment_propositional,
                 propagator.id,
             ))
     }
@@ -75,16 +96,29 @@ impl TestSolver {
         self.assignment.get_lower_bound(var)
     }
 
+    pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+        self.assignment.tighten_lower_bound(var, bound, None)
+    }
+
+    pub fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+        self.assignment.tighten_upper_bound(var, bound, None)
+    }
+
+    pub fn set_literal(&mut self, var: Literal, val: bool) {
+        self.assignment_propositional
+            .enqueue_decision_literal(if val { var } else { !var });
+    }
+
+    pub fn is_literal_true(&mut self, var: Literal) -> bool {
+        self.assignment_propositional.is_literal_assigned_true(var)
+    }
+
+    pub fn is_literal_false(&mut self, var: Literal) -> bool {
+        self.assignment_propositional.is_literal_assigned_false(var)
+    }
+
     pub fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignment.get_upper_bound(var)
-    }
-
-    pub fn set_upper_bound(&mut self, var: DomainId, ub: i32) -> Result<(), EmptyDomain> {
-        self.assignment.tighten_upper_bound(var, ub, None)
-    }
-
-    pub fn set_lower_bound(&mut self, var: DomainId, ub: i32) -> Result<(), EmptyDomain> {
-        self.assignment.tighten_lower_bound(var, ub, None)
     }
 
     pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
@@ -92,7 +126,11 @@ impl TestSolver {
     }
 
     pub fn propagate(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
-        let mut context = PropagationContext::new(&mut self.assignment, propagator.id);
+        let mut context = PropagationContext::new(
+            &mut self.assignment,
+            &mut self.assignment_propositional,
+            propagator.id,
+        );
         propagator.propagator.propagate(&mut context)
     }
 
@@ -103,7 +141,11 @@ impl TestSolver {
         local_id: LocalId,
     ) -> EnqueueDecision {
         propagator.propagator.notify(
-            &mut PropagationContext::new(&mut self.assignment, propagator.id),
+            &mut PropagationContext::new(
+                &mut self.assignment,
+                &mut self.assignment_propositional,
+                propagator.id,
+            ),
             local_id,
             event,
         )
@@ -113,7 +155,7 @@ impl TestSolver {
         &self,
         propagator: &TestPropagator,
         domain_id: DomainId,
-        event: DomainEvent,
+        event: IntDomainEvent,
     ) -> impl Iterator<Item = LocalId> + '_ {
         let id = propagator.id;
         self.watch_list
@@ -132,7 +174,7 @@ impl TestSolver {
         &mut self,
         propagator: &mut TestPropagator,
         domain_id: DomainId,
-        event: DomainEvent,
+        event: IntDomainEvent,
     ) {
         for local_id in self
             .get_affected_locals(propagator, domain_id, event)
@@ -147,7 +189,11 @@ impl TestSolver {
         propagator: &mut TestPropagator,
         delta: Delta,
     ) -> PropositionalConjunction {
-        let context = PropagationContext::new(&mut self.assignment, propagator.id);
+        let context = PropagationContext::new(
+            &mut self.assignment,
+            &mut self.assignment_propositional,
+            propagator.id,
+        );
         propagator
             .propagator
             .get_reason_for_propagation(&context, delta)
