@@ -273,7 +273,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
 #[cfg(test)]
 mod tests {
     use crate::{
-        basic_types::{Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction},
+        basic_types::{Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction, ConflictInfo},
         engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
         propagators::{ArgTask, CumulativeArgs, TimeTablePerPoint},
     };
@@ -335,8 +335,7 @@ mod tests {
         assert!(match result {
             Err(inconsistency) => {
                 match inconsistency {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Other(x) => {
+                    Inconsistency::Other(ConflictInfo::Explanation(x)) => {
                         let expected = [
                             s1.upper_bound_predicate(1),
                             s1.lower_bound_predicate(1),
@@ -348,6 +347,7 @@ mod tests {
                             .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
                             && x.iter().all(|y| expected.contains(y))
                     }
+                    _ => false
                 }
             }
             _ => false,

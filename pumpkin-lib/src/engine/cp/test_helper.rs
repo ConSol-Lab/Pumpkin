@@ -112,7 +112,13 @@ impl TestSolver {
         propagator.propagator.notify(
             &mut context,
             LocalId::from(id as u32),
-            crate::engine::OpaqueDomainEvent::from(DomainEvents::LOWER_BOUND),
+            crate::engine::OpaqueDomainEvent::from(
+                DomainEvents::LOWER_BOUND
+                    .get_int_events()
+                    .iter()
+                    .next()
+                    .unwrap(),
+            ),
         )
     }
 
