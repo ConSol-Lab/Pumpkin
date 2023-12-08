@@ -20,16 +20,16 @@ use super::{
 pub struct LocalId(u32);
 
 impl LocalId {
-    pub fn get_value(&self) -> usize {
-        self.0 as usize
-    }
-
     pub const fn from(value: u32) -> Self {
         LocalId(value)
     }
 
-    pub fn unpack(self) -> u32 {
-        self.0
+    pub fn unpack<T: TryFrom<u32>>(self) -> T
+    where
+        <T as TryFrom<u32>>::Error: std::fmt::Debug,
+    {
+        T::try_from(self.0)
+            .expect("Could not convert between given type and expected type of `local_id`")
     }
 }
 

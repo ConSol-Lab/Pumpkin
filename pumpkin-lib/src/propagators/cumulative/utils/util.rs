@@ -160,11 +160,11 @@ impl Util {
                 //Note that we assume that the index is the same as the local id of the task
                 match change {
                     DomainChange::LowerBound(value) => {
-                        reasons_for_propagation_lower_bound[task.id.get_value()]
+                        reasons_for_propagation_lower_bound[task.id.unpack::<usize>()]
                             .insert(value, explanation);
                     }
                     DomainChange::UpperBound(value) => {
-                        reasons_for_propagation_upper_bound[task.id.get_value()]
+                        reasons_for_propagation_upper_bound[task.id.unpack::<usize>()]
                             .insert(value, explanation);
                     }
                     _ => unreachable!(),
@@ -180,15 +180,15 @@ impl Util {
         reasons_for_propagation_upper_bound: &[HashMap<i32, PropositionalConjunction>],
         tasks: &[Rc<Task<Var>>],
     ) -> PropositionalConjunction {
-        let affected_task = &tasks[delta.affected_local_id().get_value()];
+        let affected_task = &tasks[delta.affected_local_id().unpack::<usize>()];
         match affected_task.start_variable.unpack(delta) {
             DomainChange::LowerBound(value) => reasons_for_propagation_lower_bound
-                [affected_task.id.get_value()]
+                [affected_task.id.unpack::<usize>()]
             .get(&value)
             .unwrap()
             .clone(),
             DomainChange::UpperBound(value) => reasons_for_propagation_upper_bound
-                [affected_task.id.get_value()]
+                [affected_task.id.unpack::<usize>()]
             .get(&value)
             .unwrap()
             .clone(),

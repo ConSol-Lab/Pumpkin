@@ -26,7 +26,7 @@ impl<Var: IntVar + 'static> Hash for Task<Var> {
 
 impl<Var: IntVar + 'static> PartialEq for Task<Var> {
     fn eq(&self, other: &Self) -> bool {
-        self.id.get_value() == other.id.get_value()
+        self.id.unpack::<usize>() == other.id.unpack()
     }
 }
 
