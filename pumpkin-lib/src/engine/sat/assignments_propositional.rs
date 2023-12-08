@@ -1,9 +1,13 @@
+use std::cmp::min;
+
 use crate::basic_types::{
     ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
     PropositionalVariableGeneratorIterator,
 };
+use crate::engine::LocalId;
 use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
+#[derive(Clone)]
 pub struct AssignmentsPropositional {
     assignment_info: Vec<PropositionalAssignmentInfo>,
     current_decision_level: u32,
@@ -11,6 +15,7 @@ pub struct AssignmentsPropositional {
     pub trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail. Note that the current decision level does not have an entry in the trail delimiter!
     pub true_literal: Literal,
     pub false_literal: Literal,
+    pub processed_index: usize,
 }
 
 impl Default for AssignmentsPropositional {
@@ -23,6 +28,7 @@ impl Default for AssignmentsPropositional {
             trail_delimiter: vec![],
             true_literal: dummy_literal,
             false_literal: dummy_literal,
+            processed_index: 0,
         }
     }
 }
@@ -54,6 +60,7 @@ impl AssignmentsPropositional {
     pub fn pop_trail(&mut self) -> Literal {
         let last_literal = self.trail.pop().expect("Cannot pop empty trail?");
         self.undo_assignment(last_literal.get_propositional_variable());
+        self.processed_index = min(self.processed_index, self.trail.len());
         last_literal
     }
 
@@ -63,6 +70,7 @@ impl AssignmentsPropositional {
                 truth_value,
                 decision_level: _,
                 constraint_reference: _,
+                local_id: _,
             } => truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
         }
@@ -74,8 +82,21 @@ impl AssignmentsPropositional {
                 truth_value,
                 decision_level: _,
                 constraint_reference: _,
+                local_id: _,
             } => !truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
+        }
+    }
+
+    pub fn get_local_id_of_literal(&self, literal: Literal) -> Option<LocalId> {
+        match self.assignment_info[literal.get_propositional_variable()] {
+            PropositionalAssignmentInfo::Assigned {
+                truth_value: _,
+                decision_level: _,
+                constraint_reference: _,
+                local_id,
+            } => local_id,
+            PropositionalAssignmentInfo::Unassigned => None,
         }
     }
 
@@ -122,6 +143,7 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
+                local_id: _,
             } => constraint_reference.is_null(),
         }
     }
@@ -137,6 +159,7 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
+                local_id: _,
             } => !constraint_reference.is_null(),
         }
     }
@@ -154,6 +177,7 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level,
                 constraint_reference: _,
+                local_id: _,
             } => decision_level,
         }
     }
@@ -174,6 +198,7 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
+                local_id: _,
             } => constraint_reference,
         }
     }
@@ -186,6 +211,7 @@ impl AssignmentsPropositional {
         &mut self,
         true_literal: Literal,
         constraint_reference: ConstraintReference,
+        local_id: Option<LocalId>,
     ) -> Option<ConflictInfo> {
         if self.is_literal_assigned_false(true_literal) {
             return Some(ConflictInfo::Propagation {
@@ -203,6 +229,7 @@ impl AssignmentsPropositional {
                 truth_value: true_literal.is_positive(),
                 decision_level: self.get_decision_level(),
                 constraint_reference,
+                local_id,
             };
 
         self.trail.push(true_literal);
@@ -222,6 +249,7 @@ impl AssignmentsPropositional {
         self.make_assignment(
             decision_literal,
             ConstraintReference::create_null_reference(),
+            None,
         );
     }
 
@@ -229,10 +257,10 @@ impl AssignmentsPropositional {
         &mut self,
         propagated_literal: Literal,
         constraint_reference: ConstraintReference,
+        local_id: Option<LocalId>,
     ) -> Option<ConflictInfo> {
         pumpkin_assert_simple!(!constraint_reference.is_null());
-
-        self.make_assignment(propagated_literal, constraint_reference)
+        self.make_assignment(propagated_literal, constraint_reference, local_id)
     }
 
     pub fn synchronise(&mut self, new_decision_level: u32) {
@@ -244,6 +272,7 @@ impl AssignmentsPropositional {
 
         self.current_decision_level = new_decision_level;
         self.trail_delimiter.truncate(new_decision_level as usize);
+        self.processed_index = self.trail_delimiter.len();
     }
 
     pub fn is_at_the_root_level(&self) -> bool {
@@ -255,12 +284,23 @@ impl AssignmentsPropositional {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,
         decision_level: u32,
+
+        // TODO: There is a dependency between these two fields that we ideally
+        // want to encode at a type level. A `constraint_reference` points
+        // to a propagator if and only if `local_id` is `Some(_)`.
+        //
+        // Since a reference to a propagator will in most cases be accompanied
+        // by a local id, it would make sense to encode the local id within the
+        // reference. However, that impacts the layout of the type possibly
+        // hurting cache performance. This is pure speculation, and should be
+        // verified with benchmarks.
         constraint_reference: ConstraintReference,
+        local_id: Option<LocalId>,
     },
     Unassigned,
 }
@@ -286,6 +326,7 @@ mod tests {
         let result = assignments_propositional.make_assignment(
             literal,
             ConstraintReference::create_propagator_reference(PropagatorId(0)),
+            None,
         );
         assert!(result.is_none());
         assert_eq!(assignments_propositional.trail.len(), 1);
@@ -293,6 +334,7 @@ mod tests {
         let result_reassignment = assignments_propositional.make_assignment(
             literal,
             ConstraintReference::create_propagator_reference(PropagatorId(1)),
+            None,
         );
         assert!(result_reassignment.is_none());
         //Nor does it result in anything being added to the trail
@@ -302,6 +344,7 @@ mod tests {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
+                local_id: _,
             } = assignments_propositional.assignment_info[literal.get_propositional_variable()]
             {
                 constraint_reference.get_propagator_id() == PropagatorId(0)

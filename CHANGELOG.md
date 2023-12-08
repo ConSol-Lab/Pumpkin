@@ -11,6 +11,9 @@
   * the linear_ne constraint
   * the 'satisfy' goal
 * Started supporting solution logging according to the FlatZinc specification
+* Added support for propagating literals in CP propagators.
+* Implemented reified linear leq propagator.
+* Added disjunctive scheduling example through a difference logic model.
 * Added cumulative propagator(s)
   * Added propagator utilising time-table reasoning per time point
 

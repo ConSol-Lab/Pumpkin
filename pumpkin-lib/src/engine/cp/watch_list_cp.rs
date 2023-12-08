@@ -15,7 +15,7 @@ pub struct Watchers<'a> {
 
 /// A description of the kinds of events that can happen on a domain variable.
 #[derive(Debug, EnumSetType)]
-pub enum DomainEvent {
+pub enum IntDomainEvent {
     /// Event where an (integer) variable domain collapses to a single value.
     Assign,
     /// Event where an (integer) variable domain tightens the lower bound.
@@ -40,16 +40,16 @@ impl WatchListCP {
 
     pub fn get_affected_propagators(
         &self,
-        event: DomainEvent,
+        event: IntDomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {
         let watcher = &self.watchers[domain];
 
         match event {
-            DomainEvent::Assign => &watcher.assign_watchers,
-            DomainEvent::LowerBound => &watcher.lower_bound_watchers,
-            DomainEvent::UpperBound => &watcher.upper_bound_watchers,
-            DomainEvent::Removal => &watcher.removal_watchers,
+            IntDomainEvent::Assign => &watcher.assign_watchers,
+            IntDomainEvent::LowerBound => &watcher.lower_bound_watchers,
+            IntDomainEvent::UpperBound => &watcher.upper_bound_watchers,
+            IntDomainEvent::Removal => &watcher.removal_watchers,
         }
     }
 }
@@ -62,14 +62,14 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub fn watch(&mut self, domain: DomainId, event: DomainEvent) {
+    pub fn watch(&mut self, domain: DomainId, event: IntDomainEvent) {
         let watcher = &mut self.watch_list.watchers[domain];
 
         let event_watcher = match event {
-            DomainEvent::LowerBound => &mut watcher.lower_bound_watchers,
-            DomainEvent::UpperBound => &mut watcher.upper_bound_watchers,
-            DomainEvent::Assign => &mut watcher.assign_watchers,
-            DomainEvent::Removal => &mut watcher.removal_watchers,
+            IntDomainEvent::LowerBound => &mut watcher.lower_bound_watchers,
+            IntDomainEvent::UpperBound => &mut watcher.upper_bound_watchers,
+            IntDomainEvent::Assign => &mut watcher.assign_watchers,
+            IntDomainEvent::Removal => &mut watcher.removal_watchers,
         };
 
         if !event_watcher.contains(&self.propagator_var) {
@@ -77,15 +77,15 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub fn watch_all(&mut self, domain: DomainId, events: EnumSet<DomainEvent>) {
+    pub fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {
             let event_watcher = match event {
-                DomainEvent::LowerBound => &mut watcher.lower_bound_watchers,
-                DomainEvent::UpperBound => &mut watcher.upper_bound_watchers,
-                DomainEvent::Assign => &mut watcher.assign_watchers,
-                DomainEvent::Removal => &mut watcher.removal_watchers,
+                IntDomainEvent::LowerBound => &mut watcher.lower_bound_watchers,
+                IntDomainEvent::UpperBound => &mut watcher.upper_bound_watchers,
+                IntDomainEvent::Assign => &mut watcher.assign_watchers,
+                IntDomainEvent::Removal => &mut watcher.removal_watchers,
             };
 
             if !event_watcher.contains(&self.propagator_var) {

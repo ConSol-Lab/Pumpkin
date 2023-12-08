@@ -284,10 +284,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
+    use crate::basic_types::{ConflictInfo, Inconsistency};
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::DomainEvent::{LowerBound, UpperBound};
+    use crate::engine::IntDomainEvent::{LowerBound, UpperBound};
 
     #[test]
     fn initialisation_and_propagation() {
@@ -395,9 +395,12 @@ mod tests {
             .expect_err("cycle detected");
 
         // inconsistency found as soon as first propagation is done
-        assert!(matches!(inconsistency, Inconsistency::Other(_)));
+        assert!(matches!(
+            inconsistency,
+            Inconsistency::Other(ConflictInfo::Explanation(_))
+        ));
 
-        let Inconsistency::Other(cycle) = inconsistency else {
+        let Inconsistency::Other(ConflictInfo::Explanation(cycle)) = inconsistency else {
             unreachable!()
         };
         assert!(

@@ -187,7 +187,8 @@ mod tests {
             })
             .expect_err("empty domain");
 
-        assert_eq!(Inconsistency::Other(conjunction!([x == 2] & [y == 2])), err);
+        let expected: Inconsistency = conjunction!([x == 2] & [y == 2]).into();
+        assert_eq!(expected, err);
     }
 
     #[test]

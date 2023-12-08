@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use enumset::EnumSet;
 
 use crate::engine::{
-    AssignmentsInteger, Delta, DomainChange, DomainEvent, EmptyDomain, OpaqueDomainEvent,
+    AssignmentsInteger, Delta, DomainChange, EmptyDomain, IntDomainEvent, OpaqueDomainEvent,
     PropagatorVarId, Watchers,
 };
 
@@ -54,13 +54,13 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
 
     /// Decode a delta into the change it represents for this variable.
     fn unpack_delta(&self, delta: Delta) -> DomainChange;
 
     /// Decode a domain event for this variable.
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent;
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
 
     /// Get a variable which domain is scaled compared to the domain of self.
     ///
@@ -126,7 +126,7 @@ impl IntVar for DomainId {
         assignment.tighten_upper_bound(*self, value, Some(reason))
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<DomainEvent>) {
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
         watchers.watch_all(*self, events);
     }
 
@@ -134,7 +134,7 @@ impl IntVar for DomainId {
         delta.unwrap_change()
     }
 
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         event.unwrap()
     }
 
@@ -267,8 +267,8 @@ where
         }
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<DomainEvent>) {
-        let bound = DomainEvent::LowerBound | DomainEvent::UpperBound;
+    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<IntDomainEvent>) {
+        let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
             events = events.symmetrical_difference(bound);
@@ -293,14 +293,15 @@ where
                     DomainChange::LowerBound(self.map(upper_bound))
                 }
             }
+            _ => unreachable!(),
         }
     }
 
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> DomainEvent {
+    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         if self.scale.is_negative() {
             match self.inner.unpack_event(event) {
-                DomainEvent::LowerBound => DomainEvent::UpperBound,
-                DomainEvent::UpperBound => DomainEvent::LowerBound,
+                IntDomainEvent::LowerBound => IntDomainEvent::UpperBound,
+                IntDomainEvent::UpperBound => IntDomainEvent::LowerBound,
                 event => event,
             }
         } else {

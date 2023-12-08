@@ -158,10 +158,7 @@ fn linear_less_than_equal<Var: IntVar + 'static>(
     vars: &[Var],
     c: i32,
 ) {
-    solver.add_propagator::<LinearLeq<_>>(LinearLeqArgs {
-        x: vars.iter().cloned().collect(),
-        c,
-    });
+    solver.add_propagator::<LinearLeq<_>>(LinearLeqArgs::create(vars.iter().cloned().collect(), c));
 }
 
 fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {

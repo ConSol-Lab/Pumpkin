@@ -1,12 +1,18 @@
 use enumset::{enum_set, EnumSet};
 use std::ops::{Index, IndexMut};
 
-use crate::basic_types::{
-    variables::IntVar, Predicate, PredicateConstructor, PropagationStatusCP,
-    PropositionalConjunction,
+use crate::{
+    basic_types::{
+        variables::IntVar, ConstraintReference, Inconsistency, Literal, Predicate,
+        PredicateConstructor, PropagationStatusCP, PropositionalConjunction,
+    },
+    engine::AssignmentsPropositional,
 };
 
-use super::{AssignmentsInteger, DomainEvent, EmptyDomain, WatchListCP, Watchers};
+use super::{
+    AssignmentsInteger, BooleanDomainEvent, EmptyDomain, IntDomainEvent, WatchListCP,
+    WatchListPropositional, Watchers, WatchersPropositional,
+};
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
@@ -73,6 +79,18 @@ impl<Var: std::fmt::Debug> std::fmt::Debug for PropagatorVariable<Var> {
     }
 }
 
+impl PropagatorVariable<Literal> {
+    pub fn get_literal(&self) -> Literal {
+        self.inner
+    }
+}
+
+impl PropagatorVariable<Literal> {
+    pub fn unpack(&self, delta: Delta) -> DomainChange {
+        delta.unwrap_change()
+    }
+}
+
 impl<Var: IntVar> PropagatorVariable<Var> {
     pub fn unpack(&self, delta: Delta) -> DomainChange {
         self.inner.unpack_delta(delta)
@@ -125,6 +143,15 @@ impl Delta {
         Delta(local_id, change)
     }
 
+    pub(crate) fn from_literal(local_id: LocalId, value: bool) -> Delta {
+        let change = match value {
+            true => DomainChange::LiteralAssignedTrue,
+            false => DomainChange::LiteralAssignedFalse,
+        };
+
+        Delta(local_id, change)
+    }
+
     pub(crate) fn unwrap_change(self) -> DomainChange {
         self.1
     }
@@ -142,31 +169,34 @@ pub enum DomainChange {
     Removal(i32),
     LowerBound(i32),
     UpperBound(i32),
+    LiteralAssignedTrue,
+    LiteralAssignedFalse,
 }
 
 /// TODO: Does this make sense in all cases?
-impl From<DomainChange> for DomainEvent {
+impl From<DomainChange> for IntDomainEvent {
     fn from(value: DomainChange) -> Self {
         match value {
-            DomainChange::Removal(_) => DomainEvent::Removal,
-            DomainChange::LowerBound(_) => DomainEvent::LowerBound,
-            DomainChange::UpperBound(_) => DomainEvent::UpperBound,
+            DomainChange::Removal(_) => IntDomainEvent::Removal,
+            DomainChange::LowerBound(_) => IntDomainEvent::LowerBound,
+            DomainChange::UpperBound(_) => IntDomainEvent::UpperBound,
+            _ => unreachable!(),
         }
     }
 }
 
 /// A wrapper for a domain event, which forces the propagator implementation to map the event
 /// through the variable view.
-pub struct OpaqueDomainEvent(DomainEvent);
+pub struct OpaqueDomainEvent(IntDomainEvent);
 
-impl From<DomainEvent> for OpaqueDomainEvent {
-    fn from(event: DomainEvent) -> Self {
+impl From<IntDomainEvent> for OpaqueDomainEvent {
+    fn from(event: IntDomainEvent) -> Self {
         OpaqueDomainEvent(event)
     }
 }
 
 impl OpaqueDomainEvent {
-    pub(crate) fn unwrap(self) -> DomainEvent {
+    pub(crate) fn unwrap(self) -> IntDomainEvent {
         self.0
     }
 }
@@ -174,16 +204,19 @@ impl OpaqueDomainEvent {
 pub struct PropagationContext<'a> {
     propagator_id: PropagatorId,
     assignment: &'a mut AssignmentsInteger,
+    assignments_propositional: &'a mut AssignmentsPropositional,
 }
 
-impl PropagationContext<'_> {
+impl<'a> PropagationContext<'_> {
     pub(crate) fn new(
-        assignment: &mut AssignmentsInteger,
+        assignment: &'a mut AssignmentsInteger,
+        assignments_propositional: &'a mut AssignmentsPropositional,
         propagator_id: PropagatorId,
-    ) -> PropagationContext<'_> {
+    ) -> PropagationContext<'a> {
         PropagationContext {
             propagator_id,
             assignment,
+            assignments_propositional,
         }
     }
 
@@ -193,6 +226,21 @@ impl PropagationContext<'_> {
             propagator: self.propagator_id,
             variable: var.local_id,
         }
+    }
+
+    pub fn is_literal_fixed(&self, var: &PropagatorVariable<Literal>) -> bool {
+        self.assignments_propositional
+            .is_literal_assigned(var.inner)
+    }
+
+    pub fn is_literal_true(&self, var: &PropagatorVariable<Literal>) -> bool {
+        self.assignments_propositional
+            .is_literal_assigned_true(var.inner)
+    }
+
+    pub fn is_literal_false(&self, var: &PropagatorVariable<Literal>) -> bool {
+        self.assignments_propositional
+            .is_literal_assigned_false(var.inner)
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -242,6 +290,21 @@ impl PropagationContext<'_> {
         let reason = self.propagator_var_id(var);
         var.inner.set_lower_bound(self.assignment, bound, reason)
     }
+
+    pub fn assign_literal(
+        &mut self,
+        var: &PropagatorVariable<Literal>,
+        bound: bool,
+    ) -> Result<(), Inconsistency> {
+        if let Some(conflict_info) = self.assignments_propositional.enqueue_propagated_literal(
+            if bound { var.inner } else { !var.inner },
+            ConstraintReference::create_propagator_reference(self.propagator_id),
+            Some(var.local_id),
+        ) {
+            return Err(Inconsistency::Other(conflict_info));
+        }
+        Ok(())
+    }
 }
 
 /// A CP propagator constructor takes an argument struct and constructs an implementation of
@@ -259,16 +322,19 @@ pub trait CPPropagatorConstructor {
 
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
+    watch_list_propositional: &'a mut WatchListPropositional,
     propagator_id: PropagatorId,
 }
 
 impl PropagatorConstructorContext<'_> {
-    pub(crate) fn new(
-        watch_list: &'_ mut WatchListCP,
+    pub(crate) fn new<'a>(
+        watch_list: &'a mut WatchListCP,
+        watch_list_propositional: &'a mut WatchListPropositional,
         propagator_id: PropagatorId,
-    ) -> PropagatorConstructorContext<'_> {
+    ) -> PropagatorConstructorContext<'a> {
         PropagatorConstructorContext {
             watch_list,
+            watch_list_propositional,
             propagator_id,
         }
     }
@@ -285,7 +351,28 @@ impl PropagatorConstructorContext<'_> {
         };
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
-        var.watch_all(&mut watchers, domain_events.events);
+        var.watch_all(&mut watchers, domain_events.get_int_events());
+
+        PropagatorVariable {
+            inner: var,
+            local_id,
+        }
+    }
+
+    pub fn register_literal(
+        &mut self,
+        var: Literal,
+        domain_events: DomainEvents,
+        local_id: LocalId,
+    ) -> PropagatorVariable<Literal> {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        let mut watchers =
+            WatchersPropositional::new(propagator_var, self.watch_list_propositional);
+        watchers.watch_all(var, domain_events.get_bool_events());
 
         PropagatorVariable {
             inner: var,
@@ -295,37 +382,71 @@ impl PropagatorConstructorContext<'_> {
 }
 
 impl DomainEvents {
+    ///DomainEvents for assigning true to literal
+    pub const ASSIGNED_TRUE: DomainEvents =
+        DomainEvents::create_with_bool_events(enum_set!(BooleanDomainEvent::AssignedTrue));
+    ///DomainEvents for assigning false to literal
+    pub const ASSIGNED_FALSE: DomainEvents =
+        DomainEvents::create_with_bool_events(enum_set!(BooleanDomainEvent::AssignedFalse));
+    ///DomainEvents for assigning true and false to literal
+    pub const ANY_BOOL: DomainEvents = DomainEvents::create_with_bool_events(enum_set!(
+        BooleanDomainEvent::AssignedTrue | BooleanDomainEvent::AssignedFalse
+    ));
     /// DomainEvents with both lower and upper bound tightening (but not other value removal).
-    pub const BOUNDS: DomainEvents = DomainEvents {
-        events: enum_set!(DomainEvent::LowerBound | DomainEvent::UpperBound),
-    };
+    pub const BOUNDS: DomainEvents = DomainEvents::create_with_int_events(enum_set!(
+        IntDomainEvent::LowerBound | IntDomainEvent::UpperBound
+    ));
     // this is all options right now, but won't be once we add variables of other types
     /// DomainEvents with lower and upper bound tightening, assigning to a single value, and
     ///  single value removal.
-    pub const ANY: DomainEvents = DomainEvents {
-        events: enum_set!(
-            DomainEvent::Assign
-                | DomainEvent::LowerBound
-                | DomainEvent::UpperBound
-                | DomainEvent::Removal
-        ),
-    };
+    pub const ANY_INT: DomainEvents = DomainEvents::create_with_int_events(enum_set!(
+        IntDomainEvent::Assign
+            | IntDomainEvent::LowerBound
+            | IntDomainEvent::UpperBound
+            | IntDomainEvent::Removal
+    ));
     /// DomainEvents with only lower bound tightening.
-    pub const LOWER_BOUND: DomainEvents = DomainEvents {
-        events: enum_set!(DomainEvent::LowerBound),
-    };
+    pub const LOWER_BOUND: DomainEvents =
+        DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::LowerBound));
     /// DomainEvents with only upper bound tightening.
-    pub const UPPER_BOUND: DomainEvents = DomainEvents {
-        events: enum_set!(DomainEvent::UpperBound),
-    };
+    pub const UPPER_BOUND: DomainEvents =
+        DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::UpperBound));
     /// DomainEvents with only assigning to a single value.
-    pub const ASSIGN: DomainEvents = DomainEvents {
-        events: enum_set!(DomainEvent::Assign),
-    };
+    pub const ASSIGN: DomainEvents =
+        DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::Assign));
 }
 
 pub struct DomainEvents {
-    events: EnumSet<DomainEvent>,
+    int_events: Option<EnumSet<IntDomainEvent>>,
+    boolean_events: Option<EnumSet<BooleanDomainEvent>>,
+}
+
+impl DomainEvents {
+    pub const fn create_with_int_events(int_events: EnumSet<IntDomainEvent>) -> DomainEvents {
+        DomainEvents {
+            int_events: Some(int_events),
+            boolean_events: None,
+        }
+    }
+
+    pub const fn create_with_bool_events(
+        boolean_events: EnumSet<BooleanDomainEvent>,
+    ) -> DomainEvents {
+        DomainEvents {
+            int_events: None,
+            boolean_events: Some(boolean_events),
+        }
+    }
+
+    pub fn get_int_events(&self) -> EnumSet<IntDomainEvent> {
+        self.int_events
+            .expect("Tried to retrieve int_events when it was not initialized")
+    }
+
+    pub fn get_bool_events(&self) -> EnumSet<BooleanDomainEvent> {
+        self.boolean_events
+            .expect("Tried to retrieve boolean_events when it was not initialized")
+    }
 }
 
 /// Indicator of what to do when a propagator is notified.
@@ -359,6 +480,16 @@ pub trait ConstraintProgrammingPropagator {
         _context: &mut PropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        EnqueueDecision::Enqueue
+    }
+
+    ///Notifies the propagator when the domain of a literal has changed (i.e. it is assigned)
+    fn notify_literal(
+        &mut self,
+        _context: &mut PropagationContext,
+        _local_id: LocalId,
+        _event: BooleanDomainEvent,
     ) -> EnqueueDecision {
         EnqueueDecision::Enqueue
     }

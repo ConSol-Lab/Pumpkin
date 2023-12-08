@@ -1,6 +1,6 @@
 use crate::engine::EmptyDomain;
 
-use super::{Predicate, PropositionalConjunction};
+use super::{ConflictInfo, Predicate, PropositionalConjunction};
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
 /// or identify a conflict. The necessary conditions for the conflict must be captured in the error
@@ -10,7 +10,7 @@ pub type PropagationStatusCP = Result<(), Inconsistency>;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Inconsistency {
     EmptyDomain,
-    Other(PropositionalConjunction),
+    Other(ConflictInfo),
 }
 
 impl From<EmptyDomain> for Inconsistency {
@@ -21,7 +21,7 @@ impl From<EmptyDomain> for Inconsistency {
 
 impl From<PropositionalConjunction> for Inconsistency {
     fn from(value: PropositionalConjunction) -> Self {
-        Inconsistency::Other(value)
+        Inconsistency::Other(ConflictInfo::Explanation(value))
     }
 }
 
@@ -30,6 +30,7 @@ where
     Slice: AsRef<[Predicate]>,
 {
     fn from(value: Slice) -> Self {
-        Inconsistency::Other(value.as_ref().to_vec().into())
+        let conjunction: PropositionalConjunction = value.as_ref().to_vec().into();
+        conjunction.into()
     }
 }

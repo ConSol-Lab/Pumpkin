@@ -1,16 +1,21 @@
-use crate::basic_types::{DomainId, Predicate};
+use crate::{
+    basic_types::{DomainId, Predicate},
+    engine::AssignmentsPropositional,
+};
 
 use super::{
-    AssignmentsInteger, ConstraintProgrammingPropagator, DomainEvent, EmptyDomain, EnqueueDecision,
-    PropagationContext, PropagatorQueue, PropagatorVarId, WatchListCP,
+    AssignmentsInteger, BooleanDomainEvent, ConstraintProgrammingPropagator, EmptyDomain,
+    EnqueueDecision, IntDomainEvent, PropagationContext, PropagatorQueue, PropagatorVarId,
+    WatchListCP, WatchListPropositional,
 };
 
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
     pub watch_list_cp: WatchListCP,
+    pub watch_list_propositional: WatchListPropositional,
     pub propagator_queue: PropagatorQueue,
 
-    event_drain: Vec<(DomainEvent, DomainId)>,
+    event_drain: Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl Default for CPEngineDataStructures {
@@ -18,6 +23,7 @@ impl Default for CPEngineDataStructures {
         CPEngineDataStructures {
             assignments_integer: AssignmentsInteger::default(),
             watch_list_cp: WatchListCP::default(),
+            watch_list_propositional: WatchListPropositional::default(),
             propagator_queue: PropagatorQueue::new(5),
             event_drain: vec![],
         }
@@ -39,11 +45,14 @@ impl CPEngineDataStructures {
     pub fn process_domain_events(
         &mut self,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        assignments_propositional: &mut AssignmentsPropositional,
     ) -> bool {
         self.event_drain
             .extend(self.assignments_integer.drain_domain_events());
 
-        if self.event_drain.is_empty() {
+        if self.event_drain.is_empty()
+            && assignments_propositional.processed_index == assignments_propositional.trail.len()
+        {
             return false;
         }
 
@@ -52,6 +61,7 @@ impl CPEngineDataStructures {
                 let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
                 let mut context = PropagationContext::new(
                     &mut self.assignments_integer,
+                    assignments_propositional,
                     propagator_var.propagator,
                 );
 
@@ -64,6 +74,34 @@ impl CPEngineDataStructures {
                 }
             }
         }
+
+        for literal in assignments_propositional.trail[assignments_propositional.processed_index..]
+            .to_vec()
+            .iter()
+        {
+            for (event, affected_literal) in BooleanDomainEvent::get_iterator(*literal) {
+                for propagator_var in self
+                    .watch_list_propositional
+                    .get_affected_propagators(event, affected_literal)
+                {
+                    let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
+                    let mut context = PropagationContext::new(
+                        &mut self.assignments_integer,
+                        assignments_propositional,
+                        propagator_var.propagator,
+                    );
+
+                    let enqueue_decision =
+                        propagator.notify_literal(&mut context, propagator_var.variable, event);
+
+                    if enqueue_decision == EnqueueDecision::Enqueue {
+                        self.propagator_queue
+                            .enqueue_propagator(propagator_var.propagator, propagator.priority());
+                    }
+                }
+            }
+        }
+        assignments_propositional.processed_index = assignments_propositional.trail.len();
 
         true
     }

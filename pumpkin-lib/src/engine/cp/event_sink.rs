@@ -1,7 +1,7 @@
 use crate::basic_types::DomainId;
 use enumset::EnumSet;
 
-use super::DomainEvent;
+use super::IntDomainEvent;
 
 /// While a propagator runs, the propagations it performs are captured as events in the event sink.
 /// When the propagator finishes, the event sink is drained to notify all the propagators that
@@ -12,8 +12,8 @@ use super::DomainEvent;
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone)]
 pub struct EventSink {
-    present: Vec<EnumSet<DomainEvent>>,
-    events: Vec<(DomainEvent, DomainId)>,
+    present: Vec<EnumSet<IntDomainEvent>>,
+    events: Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl EventSink {
@@ -21,7 +21,7 @@ impl EventSink {
         self.present.push(EnumSet::new());
     }
 
-    pub fn event_occurred(&mut self, event: DomainEvent, domain: DomainId) {
+    pub fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
         if elem.contains(event) {
@@ -33,7 +33,7 @@ impl EventSink {
         self.events.push((event, domain));
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = (DomainEvent, DomainId)> + '_ {
+    pub fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain(..).inspect(|&(event, domain)| {
             self.present[domain].remove(event);
         })
@@ -58,14 +58,14 @@ mod tests {
         sink.grow();
         sink.grow();
 
-        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(DomainEvent::UpperBound, DomainId::new(1));
+        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(IntDomainEvent::UpperBound, DomainId::new(1));
 
         let events = sink.drain().collect::<Vec<_>>();
 
         assert_eq!(events.len(), 2);
-        assert!(events.contains(&(DomainEvent::LowerBound, DomainId::new(0))));
-        assert!(events.contains(&(DomainEvent::UpperBound, DomainId::new(1))));
+        assert!(events.contains(&(IntDomainEvent::LowerBound, DomainId::new(0))));
+        assert!(events.contains(&(IntDomainEvent::UpperBound, DomainId::new(1))));
     }
 
     #[test]
@@ -74,8 +74,8 @@ mod tests {
         sink.grow();
         sink.grow();
 
-        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(DomainEvent::UpperBound, DomainId::new(1));
+        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(IntDomainEvent::UpperBound, DomainId::new(1));
 
         let _ = sink.drain().collect::<Vec<_>>();
 
@@ -88,8 +88,8 @@ mod tests {
         let mut sink = EventSink::default();
         sink.grow();
 
-        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
-        sink.event_occurred(DomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
+        sink.event_occurred(IntDomainEvent::LowerBound, DomainId::new(0));
 
         let events = sink.drain().collect::<Vec<_>>();
 
