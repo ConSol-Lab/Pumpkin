@@ -14,7 +14,10 @@ use crate::{
     propagators::{CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Util},
 };
 
-use super::{ResourceProfile, TimeTablePropagator, has_mandatory_part_in_interval, var_has_overlap_with_interval};
+use super::{
+    has_mandatory_part_in_interval, var_has_overlap_with_interval, ResourceProfile,
+    TimeTablePropagator,
+};
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPoint<Var> {
@@ -216,7 +219,10 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
         &mut self,
         context: &PropagationContext,
     ) -> Option<Vec<Rc<Task<Var>>>> {
-        match <TimeTablePerPoint<Var> as TimeTablePropagator<Var>>::create_time_table(context, self.get_parameters()) {
+        match <TimeTablePerPoint<Var> as TimeTablePropagator<Var>>::create_time_table(
+            context,
+            self.get_parameters(),
+        ) {
             Ok(result) => {
                 self.time_table = result;
                 None
@@ -227,7 +233,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
 
     fn create_time_table(
         context: &PropagationContext,
-        params: &CumulativeParameters<Var>
+        params: &CumulativeParameters<Var>,
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
         let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts

@@ -3,9 +3,7 @@ use std::{cmp::max, collections::HashSet, rc::Rc};
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
     engine::{DomainChange, PropagationContext},
-    propagators::{
-        CumulativeParameters, CumulativePropagationResult, Explanation, Task, Util,
-    },
+    propagators::{CumulativeParameters, CumulativePropagationResult, Explanation, Task, Util},
     pumpkin_assert_simple,
 };
 
