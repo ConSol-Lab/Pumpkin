@@ -230,118 +230,138 @@ fn check_for_updates<'a, Var: IntVar + 'static>(
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
     //We go over all profiles
-    for (
-        index,
-        ResourceProfile {
-            start,
-            end,
-            profile_tasks: _,
-            height,
-        },
-    ) in to_check.clone().enumerate()
-    {
+    for (index, profile) in to_check.clone().enumerate() {
         //Then we go over all the different tasks
         for task in params.tasks.iter() {
-            if context.is_fixed(&task.start_variable) {
-                //If the variable is already fixed then we do not need to check for any updated
-                continue;
-            }
-            if height + task.resource_usage <= params.capacity {
-                // The tasks are sorted by capacity, if this task doesn't overload then none will
-                break;
-            } else if has_mandatory_part_in_interval(context, task, *start, *end) {
-                // The current task is part of the current profile, which means that it can't be propagated by it
-                continue;
-            } else if var_has_overlap_with_interval(context, task, *start, *end) {
-                //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
-                if (start - task.processing_time) < context.lower_bound(&task.start_variable)
-                    && *end >= context.lower_bound(&task.start_variable)
-                {
-                    //The current task necessarily overlap with the current ResourceProfile (i.e. lb(s) + p >= start /\ lb(s) <= end)
-                    //Based on this propagation, find the profile which now propagates to the highest lower bound for this task
-                    let (lower_bound, new_profile_tasks) =
-                        find_maximum_bound_and_profiles_lower_bound(
-                            context,
-                            index,
-                            to_check.clone(),
-                            task,
-                            params.capacity,
-                        );
-                    match Util::propagate_and_explain(
-                        context,
-                        DomainChange::LowerBound(max(0, start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
-                        task,
-                        lower_bound,
-                        &new_profile_tasks,
-                    ) {
-                        Ok(explanation) => {
-                            explanations.push(Explanation::new(
-                                DomainChange::LowerBound(lower_bound),
-                                Rc::clone(task),
-                                explanation,
-                            ));
-                        }
-                        Err(explanation) => {
-                            explanations.push(Explanation::new(
-                                DomainChange::LowerBound(lower_bound),
-                                Rc::clone(task),
-                                explanation,
-                            ));
-                            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-                            return CumulativePropagationResult::new(
-                                Err(Inconsistency::EmptyDomain),
-                                Some(explanations),
-                            );
-                        }
+            match check_whether_task_can_be_updated_by_profile(
+                context,
+                task,
+                profile,
+                index,
+                params,
+                to_check.clone(),
+                to_check_len,
+                &mut explanations,
+            ) {
+                Ok(should_break) => {
+                    if should_break {
+                        break;
                     }
                 }
-                if end > &context.upper_bound(&task.start_variable)
-                    && *start - task.processing_time < context.upper_bound(&task.start_variable)
-                {
-                    //The current task has overlap with the current resource profile (i.e. end > ub(s) /\ start - p < ub(s)); this means that if the task starts at its latest starting time it would overlap with this ResourceProfile
-                    //Based on this propagation, find the profile which now propagates to the lowest upper bound for this task
-                    let (upper_bound, new_profile_tasks) =
-                        find_maximum_bound_and_profiles_upper_bound(
-                            context,
-                            to_check_len,
-                            index,
-                            to_check.clone(),
-                            task,
-                            params.capacity,
-                        );
-                    match Util::propagate_and_explain(
-                        context,
-                        DomainChange::UpperBound(max(
-                            context.upper_bound(&task.start_variable),
-                            *end,
-                        )),
-                        task,
-                        upper_bound,
-                        &new_profile_tasks,
-                    ) {
-                        Ok(explanation) => {
-                            explanations.push(Explanation::new(
-                                DomainChange::UpperBound(upper_bound),
-                                Rc::clone(task),
-                                explanation,
-                            ));
-                        }
-                        Err(explanation) => {
-                            explanations.push(Explanation::new(
-                                DomainChange::UpperBound(upper_bound),
-                                Rc::clone(task),
-                                explanation,
-                            ));
-                            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-                            return CumulativePropagationResult::new(
-                                Err(Inconsistency::EmptyDomain),
-                                Some(explanations),
-                            );
-                        }
-                    }
+                Err(_) => {
+                    return CumulativePropagationResult::new(
+                        Err(Inconsistency::EmptyDomain),
+                        Some(explanations),
+                    );
                 }
             }
         }
     }
     CumulativePropagationResult::new(Ok(()), Some(explanations))
+}
+
+fn check_whether_task_can_be_updated_by_profile<'a, Var: IntVar + 'static>(
+    context: &mut PropagationContext,
+    task: &Rc<Task<Var>>,
+    ResourceProfile {
+        start,
+        end,
+        profile_tasks: _,
+        height,
+    }: &ResourceProfile<Var>,
+    index: usize,
+    params: &CumulativeParameters<Var>,
+    to_check: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
+    to_check_len: usize,
+    explanations: &mut Vec<Explanation<Var>>,
+) -> Result<bool, ()> {
+    if context.is_fixed(&task.start_variable) {
+        //If the variable is already fixed then we do not need to check for any updated
+        return Ok(false);
+    }
+    if height + task.resource_usage <= params.capacity {
+        // The tasks are sorted by capacity, if this task doesn't overload then none will
+        return Ok(true);
+    } else if has_mandatory_part_in_interval(context, task, *start, *end) {
+        // The current task is part of the current profile, which means that it can't be propagated by it
+        return Ok(false);
+    } else if var_has_overlap_with_interval(context, task, *start, *end) {
+        //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
+        if (start - task.processing_time) < context.lower_bound(&task.start_variable)
+            && *end >= context.lower_bound(&task.start_variable)
+        {
+            //The current task necessarily overlap with the current ResourceProfile (i.e. lb(s) + p >= start /\ lb(s) <= end)
+            //Based on this propagation, find the profile which now propagates to the highest lower bound for this task
+            let (lower_bound, new_profile_tasks) = find_maximum_bound_and_profiles_lower_bound(
+                context,
+                index,
+                to_check.clone(),
+                task,
+                params.capacity,
+            );
+            match Util::propagate_and_explain(
+                context,
+                DomainChange::LowerBound(max(0, start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
+                task,
+                lower_bound,
+                &new_profile_tasks,
+            ) {
+                Ok(explanation) => {
+                    explanations.push(Explanation::new(
+                        DomainChange::LowerBound(lower_bound),
+                        Rc::clone(task),
+                        explanation,
+                    ));
+                }
+                Err(explanation) => {
+                    explanations.push(Explanation::new(
+                        DomainChange::LowerBound(lower_bound),
+                        Rc::clone(task),
+                        explanation,
+                    ));
+                    //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
+                    return Err(());
+                }
+            }
+        }
+        if end > &context.upper_bound(&task.start_variable)
+            && *start - task.processing_time < context.upper_bound(&task.start_variable)
+        {
+            //The current task has overlap with the current resource profile (i.e. end > ub(s) /\ start - p < ub(s)); this means that if the task starts at its latest starting time it would overlap with this ResourceProfile
+            //Based on this propagation, find the profile which now propagates to the lowest upper bound for this task
+            let (upper_bound, new_profile_tasks) = find_maximum_bound_and_profiles_upper_bound(
+                context,
+                to_check_len,
+                index,
+                to_check.clone(),
+                task,
+                params.capacity,
+            );
+            match Util::propagate_and_explain(
+                context,
+                DomainChange::UpperBound(max(context.upper_bound(&task.start_variable), *end)),
+                task,
+                upper_bound,
+                &new_profile_tasks,
+            ) {
+                Ok(explanation) => {
+                    explanations.push(Explanation::new(
+                        DomainChange::UpperBound(upper_bound),
+                        Rc::clone(task),
+                        explanation,
+                    ));
+                }
+                Err(explanation) => {
+                    explanations.push(Explanation::new(
+                        DomainChange::UpperBound(upper_bound),
+                        Rc::clone(task),
+                        explanation,
+                    ));
+                    //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
+                    return Err(());
+                }
+            }
+        }
+    }
+    Ok(false)
 }
