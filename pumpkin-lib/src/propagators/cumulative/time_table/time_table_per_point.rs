@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    has_mandatory_part_in_interval, var_has_overlap_with_interval, ResourceProfile,
-    TimeTablePropagator,
+    has_mandatory_part_in_interval, var_has_overlap_with_interval, IteratorWithLength,
+    ResourceProfile, TimeTablePropagator,
 };
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
@@ -265,8 +265,11 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
         &self.cumulative_params
     }
 
-    fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize) {
-        (self.time_table.values(), self.time_table.len())
+    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
+        IteratorWithLength {
+            iterator: self.time_table.values(),
+            length: self.time_table.len(),
+        }
     }
 }
 
