@@ -14,7 +14,7 @@ use crate::{
     propagators::{CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Util},
 };
 
-use super::{ResourceProfile, TimeTablePropagator};
+use super::{ResourceProfile, TimeTablePropagator, has_mandatory_part_in_interval, var_has_overlap_with_interval};
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPoint<Var> {
@@ -168,10 +168,10 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
                 if height + task.resource_usage <= self.cumulative_params.capacity {
                     //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
                     break;
-                } else if self.has_mandatory_part_in_interval(context, task, *start, *end) {
+                } else if has_mandatory_part_in_interval(context, task, *start, *end) {
                     //The task has a mandatory part here already, it cannot be propagated due the current profile
                     continue;
-                } else if self.var_has_overlap_with_interval(context, task, *start, *end) {
+                } else if var_has_overlap_with_interval(context, task, *start, *end) {
                     if (start - task.processing_time) < context.lower_bound(&task.start_variable)
                         && *end + 1 > context.lower_bound(&task.start_variable)
                         && Util::propagate_and_explain(
@@ -216,7 +216,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
         &mut self,
         context: &PropagationContext,
     ) -> Option<Vec<Rc<Task<Var>>>> {
-        match self.create_time_table(context) {
+        match <TimeTablePerPoint<Var> as TimeTablePropagator<Var>>::create_time_table(context, self.get_parameters()) {
             Ok(result) => {
                 self.time_table = result;
                 None
@@ -226,12 +226,12 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
     }
 
     fn create_time_table(
-        &self,
         context: &PropagationContext,
+        params: &CumulativeParameters<Var>
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
         let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts
-        for task in self.cumulative_params.tasks.iter() {
+        for task in params.tasks.iter() {
             let upper_bound = context.upper_bound(&task.start_variable);
             let lower_bound = context.lower_bound(&task.start_variable);
 
@@ -245,7 +245,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
                     current_profile.height += task.resource_usage;
                     current_profile.profile_tasks.push(Rc::clone(task));
 
-                    if current_profile.height > self.cumulative_params.capacity {
+                    if current_profile.height > params.capacity {
                         //The addition of the current task to the resource profile has caused an overflow
                         return Err(current_profile.profile_tasks.clone());
                     }
