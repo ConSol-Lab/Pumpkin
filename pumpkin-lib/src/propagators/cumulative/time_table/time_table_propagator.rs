@@ -229,30 +229,74 @@ fn check_for_updates<'a, Var: IntVar + 'static>(
     params: &CumulativeParameters<Var>,
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
-    //We go over all profiles
+    let mut unfixed_tasks = Vec::with_capacity(to_check_len); //Keep track of which task are unfixed
+                                                              //We go over all profiles
     for (index, profile) in to_check.clone().enumerate() {
         //Then we go over all the different tasks
-        for task in params.tasks.iter() {
-            match check_whether_task_can_be_updated_by_profile(
-                context,
-                task,
-                profile,
-                index,
-                params,
-                to_check.clone(),
-                to_check_len,
-                &mut explanations,
-            ) {
-                Ok(should_break) => {
-                    if should_break {
-                        break;
+        if index == 0 {
+            //We differentiate between the first time this loop is entered and the rest
+            //In the first iteration, we want to find all of the unfixed tasks to avoid iterating over them, these unfixed tasks are stored in `unfixed_tasks`
+            //We do it in this manner to prevent going over the iter an extra time when this method is invoked
+            for task in params.tasks.iter() {
+                if context.is_fixed(&task.start_variable) {
+                    //Task will not be updated by any of the profiles (because it is included in any profile with which it overlaps)
+                    continue;
+                } else {
+                    //The current task is not fixed yet, we thus add it to the list of unfixed tasks
+                    unfixed_tasks.push(Rc::clone(task));
+                }
+                match check_whether_task_can_be_updated_by_profile(
+                    context,
+                    task,
+                    profile,
+                    index,
+                    params,
+                    to_check.clone(),
+                    to_check_len,
+                    &mut explanations,
+                ) {
+                    Ok(should_break) => {
+                        if should_break {
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        return CumulativePropagationResult::new(
+                            Err(Inconsistency::EmptyDomain),
+                            Some(explanations),
+                        );
                     }
                 }
-                Err(_) => {
-                    return CumulativePropagationResult::new(
-                        Err(Inconsistency::EmptyDomain),
-                        Some(explanations),
-                    );
+            }
+        } else {
+            //We have collected all of the unfixed tasks, iterate as normal
+            //TODO: It could be that we have fixed more tasks due to propagation, potentially we could update `unfixed_tasks` but the memory overhead for this could be substantial but would need to profile
+            for task in params.tasks.iter() {
+                if context.is_fixed(&task.start_variable) {
+                    //Task will not be updated by any of the profiles (because it is included in any profile with which it overlaps)
+                    continue;
+                }
+                match check_whether_task_can_be_updated_by_profile(
+                    context,
+                    task,
+                    profile,
+                    index,
+                    params,
+                    to_check.clone(),
+                    to_check_len,
+                    &mut explanations,
+                ) {
+                    Ok(should_break) => {
+                        if should_break {
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        return CumulativePropagationResult::new(
+                            Err(Inconsistency::EmptyDomain),
+                            Some(explanations),
+                        );
+                    }
                 }
             }
         }
@@ -260,6 +304,11 @@ fn check_for_updates<'a, Var: IntVar + 'static>(
     CumulativePropagationResult::new(Ok(()), Some(explanations))
 }
 
+/// The method checks whether the current task can be propagated by the provided profile and performs the propagation
+///
+/// If no conflict has been found then it will return whether the current loop should be exited (in the case that height + p <= c since it will also not hold for subsequent tasks due to the sorting)
+///
+/// Note that this method can only find [Inconsistency::EmptyDomain] conflicts which means that we handle that error in the function which calls this one
 fn check_whether_task_can_be_updated_by_profile<'a, Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
@@ -275,10 +324,6 @@ fn check_whether_task_can_be_updated_by_profile<'a, Var: IntVar + 'static>(
     to_check_len: usize,
     explanations: &mut Vec<Explanation<Var>>,
 ) -> Result<bool, ()> {
-    if context.is_fixed(&task.start_variable) {
-        //If the variable is already fixed then we do not need to check for any updated
-        return Ok(false);
-    }
     if height + task.resource_usage <= params.capacity {
         // The tasks are sorted by capacity, if this task doesn't overload then none will
         return Ok(true);
