@@ -87,6 +87,7 @@ impl ConstraintSatisfactionSolver {
         let root_variable = csp_solver
             .sat_cp_mediator
             .create_new_propositional_variable(
+                &mut csp_solver.cp_data_structures.watch_list_propositional,
                 &mut csp_solver.clausal_propagator,
                 &mut csp_solver.sat_data_structures,
             );
@@ -199,6 +200,7 @@ impl ConstraintSatisfactionSolver {
 
     pub fn create_new_propositional_variable(&mut self) -> PropositionalVariable {
         self.sat_cp_mediator.create_new_propositional_variable(
+            &mut self.cp_data_structures.watch_list_propositional,
             &mut self.clausal_propagator,
             &mut self.sat_data_structures,
         )
@@ -538,6 +540,7 @@ impl ConstraintSatisfactionSolver {
         for propagator_id in 0..self.cp_propagators.len() {
             let context = PropagationContext::new(
                 &mut self.cp_data_structures.assignments_integer,
+                &mut self.sat_data_structures.assignments_propositional,
                 PropagatorId(propagator_id as u32),
             );
 
@@ -579,7 +582,7 @@ impl ConstraintSatisfactionSolver {
 
             self.sat_cp_mediator
                 .synchronise_integer_trail_based_on_propositional_trail(
-                    &self.sat_data_structures.assignments_propositional,
+                    &mut self.sat_data_structures.assignments_propositional,
                     &mut self.cp_data_structures,
                     &mut self.cp_propagators,
                 )
@@ -591,9 +594,15 @@ impl ConstraintSatisfactionSolver {
             let propagation_status_one_step_cp = self.propagate_cp_one_step();
 
             match propagation_status_one_step_cp {
-                PropagationStatusOneStepCP::ConflictDetected {
-                    propositional_conjunction,
-                } => {
+                PropagationStatusOneStepCP::PropagationHappened => {
+                    //do nothing, the result will be that the clausal propagator will go next
+                    //  recall that the idea is to always propagate simpler propagators before more complex ones
+                    //  after a cp propagation was done one step, it is time to go to the clausal propagator
+                }
+                PropagationStatusOneStepCP::FixedPoint => {
+                    break;
+                }
+                PropagationStatusOneStepCP::ConflictDetected { conflict_info } => {
                     self.sat_cp_mediator
                         .synchronise_propositional_trail_based_on_integer_trail(
                             &mut self.sat_data_structures.assignments_propositional,
@@ -601,19 +610,7 @@ impl ConstraintSatisfactionSolver {
                             &mut self.clausal_propagator,
                             &mut self.sat_data_structures.clause_allocator,
                         );
-
-                    self.state.declare_conflict(ConflictInfo::Explanation {
-                        propositional_conjunction,
-                    });
-
-                    break;
-                }
-                PropagationStatusOneStepCP::PropagationHappened => {
-                    //do nothing, the result will be that the clausal propagator will go next
-                    //  recall that the idea is to always propagate simpler propagators before more complex ones
-                    //  after a cp propagation was done one step, it is time to go to the clausal propagator
-                }
-                PropagationStatusOneStepCP::FixedPoint => {
+                    self.state.declare_conflict(conflict_info);
                     break;
                 }
             } //end match
@@ -645,6 +642,7 @@ impl ConstraintSatisfactionSolver {
             let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
             let mut context = PropagationContext::new(
                 &mut self.cp_data_structures.assignments_integer,
+                &mut self.sat_data_structures.assignments_propositional,
                 propagator_id,
             );
 
@@ -656,23 +654,27 @@ impl ConstraintSatisfactionSolver {
                     return PropagationStatusOneStepCP::PropagationHappened;
                 }
 
-                // A propagator-specific reason for the current conflict.
-                Err(Inconsistency::Other(propositional_conjunction)) => {
-                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                        &self.cp_data_structures.assignments_integer,
-                        &propositional_conjunction,
-                        propagator.as_ref(),
-                        propagator_id,
-                    ));
+                Err(Inconsistency::Other(conflict_info)) => {
+                    if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info
+                    {
+                        pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                            &self.cp_data_structures.assignments_integer,
+                            &self.sat_data_structures.assignments_propositional,
+                            &self.sat_cp_mediator,
+                            propositional_conjunction,
+                            propagator.as_ref(),
+                            propagator_id,
+                        ));
+                    }
 
-                    return PropagationStatusOneStepCP::ConflictDetected {
-                        propositional_conjunction,
-                    };
+                    return PropagationStatusOneStepCP::ConflictDetected { conflict_info };
                 }
 
                 Ok(()) => {
-                    self.cp_data_structures
-                        .process_domain_events(&mut self.cp_propagators);
+                    self.cp_data_structures.process_domain_events(
+                        &mut self.cp_propagators,
+                        &mut self.sat_data_structures.assignments_propositional,
+                    );
 
                     return PropagationStatusOneStepCP::PropagationHappened;
                 }
@@ -691,6 +693,7 @@ impl ConstraintSatisfactionSolver {
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
         let constructor_context = PropagatorConstructorContext::new(
             &mut self.cp_data_structures.watch_list_cp,
+            &mut self.cp_data_structures.watch_list_propositional,
             new_propagator_id,
         );
 
@@ -703,6 +706,7 @@ impl ConstraintSatisfactionSolver {
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
         let mut context = PropagationContext::new(
             &mut self.cp_data_structures.assignments_integer,
+            &mut self.sat_data_structures.assignments_propositional,
             new_propagator_id,
         );
 

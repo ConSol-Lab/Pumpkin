@@ -146,7 +146,7 @@ where
         // Note that the caching does not break the mapping of `LocalId`s to difference_vars.
         //  Whenever cached `PropagatorVariable`s were used in the tuple, their `LocalId`s simply
         //  map to an earlier offset in the `difference_vars` array.
-        let (div, rem) = (id.unpack() / 4, id.unpack() % 4);
+        let (div, rem) = (id.unpack::<u32>() / 4, id.unpack::<u32>() % 4);
         let diff_vars = &self.difference_vars[div as usize];
         match rem {
             0 => &diff_vars.0,
@@ -284,10 +284,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Inconsistency;
+    use crate::basic_types::{ConflictInfo, Inconsistency};
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::DomainEvent::{LowerBound, UpperBound};
+    use crate::engine::IntDomainEvent::{LowerBound, UpperBound};
 
     #[test]
     fn initialisation_and_propagation() {
@@ -395,9 +395,12 @@ mod tests {
             .expect_err("cycle detected");
 
         // inconsistency found as soon as first propagation is done
-        assert!(matches!(inconsistency, Inconsistency::Other(_)));
+        assert!(matches!(
+            inconsistency,
+            Inconsistency::Other(ConflictInfo::Explanation(_))
+        ));
 
-        let Inconsistency::Other(cycle) = inconsistency else {
+        let Inconsistency::Other(ConflictInfo::Explanation(cycle)) = inconsistency else {
             unreachable!()
         };
         assert!(

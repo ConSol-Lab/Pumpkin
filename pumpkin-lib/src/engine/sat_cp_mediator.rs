@@ -11,7 +11,7 @@ use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
     ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager, PropagatorVarId,
-    SATEngineDataStructures,
+    SATEngineDataStructures, WatchListPropositional,
 };
 
 pub struct SATCPMediator {
@@ -70,8 +70,11 @@ impl SATCPMediator {
             let constraint_reference =
                 ConstraintReference::create_propagator_reference(propagator_id);
 
-            let conflict_info =
-                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
+            let conflict_info = assignments_propositional.enqueue_propagated_literal(
+                literal,
+                constraint_reference,
+                None,
+            );
 
             self.synchronised_literal_to_predicate[literal] =
                 (entry.predicate, entry.propagator_reason);
@@ -96,7 +99,7 @@ impl SATCPMediator {
 
     pub fn synchronise_integer_trail_based_on_propositional_trail(
         &mut self,
-        assignments_propositional: &AssignmentsPropositional,
+        assignments_propositional: &mut AssignmentsPropositional,
         cp_data_structures: &mut CPEngineDataStructures,
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> Result<(), EmptyDomain> {
@@ -127,7 +130,7 @@ impl SATCPMediator {
         //  and the newly added entries are already present on the propositional trail
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
 
-        cp_data_structures.process_domain_events(cp_propagators);
+        cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
 
         Ok(())
     }
@@ -169,18 +172,23 @@ impl SATCPMediator {
 impl SATCPMediator {
     pub fn create_new_propositional_variable_with_predicate(
         &mut self,
+        watch_list_propositional: &mut WatchListPropositional,
         predicate: &Predicate,
         clausal_propagator: &mut ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
-        let variable =
-            self.create_new_propositional_variable(clausal_propagator, sat_data_structures);
+        let variable = self.create_new_propositional_variable(
+            watch_list_propositional,
+            clausal_propagator,
+            sat_data_structures,
+        );
         self.add_predicate_information_to_propositional_variable(variable, *predicate);
         variable
     }
 
     pub fn create_new_propositional_variable(
         &mut self,
+        watch_list_propositional: &mut WatchListPropositional,
         clausal_propagator: &mut ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
@@ -189,6 +197,8 @@ impl SATCPMediator {
             .num_propositional_variables();
 
         clausal_propagator.grow();
+
+        watch_list_propositional.grow();
 
         sat_data_structures.assignments_propositional.grow();
         sat_data_structures.propositional_variable_selector.grow();
@@ -251,6 +261,7 @@ impl SATCPMediator {
             };
 
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
+                &mut cp_data_structures.watch_list_propositional,
                 &lower_bound_predicate,
                 clausal_propagator,
                 sat_data_structures,
@@ -305,6 +316,7 @@ impl SATCPMediator {
             };
 
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
+                &mut cp_data_structures.watch_list_propositional,
                 &equality_predicate,
                 clausal_propagator,
                 sat_data_structures,
@@ -517,9 +529,7 @@ impl SATCPMediator {
                     )
                 }
             }
-            ConflictInfo::Explanation {
-                propositional_conjunction,
-            } => {
+            ConflictInfo::Explanation(propositional_conjunction) => {
                 //create the explanation clause
                 //  allocate a fresh vector each time might be a performance bottleneck
                 //  todo better ways
@@ -528,6 +538,7 @@ impl SATCPMediator {
                     .map(|&p| {
                         !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
                     })
+                    .chain(propositional_conjunction.iter_literals().map(|&l| !l))
                     .collect();
 
                 self.explanation_clause_manager
@@ -595,11 +606,26 @@ impl SATCPMediator {
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> ClauseReference {
         let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
-        let delta =
-            Delta::from_predicate(synchonised_entry.1.unwrap().variable, synchonised_entry.0);
+        let delta = {
+            match synchonised_entry.1 {
+                Some(id) => Delta::from_predicate(id.variable, synchonised_entry.0),
+                None => Delta::from_literal(
+                    sat_data_structures
+                        .assignments_propositional
+                        .get_local_id_of_literal(propagated_literal)
+                        .expect("Literal is not synchronised but it does also not have a local id"),
+                    sat_data_structures
+                        .assignments_propositional
+                        .is_literal_assigned_true(propagated_literal),
+                ),
+            }
+        };
 
-        let context =
-            PropagationContext::new(&mut cp_data_structures.assignments_integer, propagator_id);
+        let context = PropagationContext::new(
+            &mut cp_data_structures.assignments_integer,
+            &mut sat_data_structures.assignments_propositional,
+            propagator_id,
+        );
 
         let propagator = &mut cp_propagators[propagator_id.0 as usize];
         let reason = propagator.get_reason_for_propagation(&context, delta);
@@ -621,6 +647,7 @@ impl SATCPMediator {
                 .chain(reason.iter().map(|&p| {
                     !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
                 }))
+                .chain(reason.iter_literals().map(|&p| !p))
                 .collect();
 
         self.explanation_clause_manager

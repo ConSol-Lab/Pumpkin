@@ -160,11 +160,11 @@ impl Util {
                 //Note that we assume that the index is the same as the local id of the task
                 match change {
                     DomainChange::LowerBound(value) => {
-                        reasons_for_propagation_lower_bound[task.id.get_value()]
+                        reasons_for_propagation_lower_bound[task.id.unpack::<usize>()]
                             .insert(value, explanation);
                     }
                     DomainChange::UpperBound(value) => {
-                        reasons_for_propagation_upper_bound[task.id.get_value()]
+                        reasons_for_propagation_upper_bound[task.id.unpack::<usize>()]
                             .insert(value, explanation);
                     }
                     _ => unreachable!(),
@@ -180,15 +180,15 @@ impl Util {
         reasons_for_propagation_upper_bound: &[HashMap<i32, PropositionalConjunction>],
         tasks: &[Rc<Task<Var>>],
     ) -> PropositionalConjunction {
-        let affected_task = &tasks[delta.affected_local_id().get_value()];
+        let affected_task = &tasks[delta.affected_local_id().unpack::<usize>()];
         match affected_task.start_variable.unpack(delta) {
             DomainChange::LowerBound(value) => reasons_for_propagation_lower_bound
-                [affected_task.id.get_value()]
+                [affected_task.id.unpack::<usize>()]
             .get(&value)
             .unwrap()
             .clone(),
             DomainChange::UpperBound(value) => reasons_for_propagation_upper_bound
-                [affected_task.id.get_value()]
+                [affected_task.id.unpack::<usize>()]
             .get(&value)
             .unwrap()
             .clone(),
@@ -221,17 +221,19 @@ impl Util {
         bounds: &[(i32, i32)],
     ) {
         pumpkin_assert_extreme!(
-            tasks.iter().all(|current| bounds[current.id.get_value()]
-                == (
-                    context.lower_bound(&current.start_variable),
-                    context.upper_bound(&current.start_variable)
-                )),
+            tasks
+                .iter()
+                .all(|current| bounds[current.id.unpack::<usize>()]
+                    == (
+                        context.lower_bound(&current.start_variable),
+                        context.upper_bound(&current.start_variable)
+                    )),
             "{:?}",
             tasks
                 .iter()
                 .map(|current| format!(
                     "{:?} - {:?}",
-                    bounds[current.id.get_value()],
+                    bounds[current.id.unpack::<usize>()],
                     (
                         context.lower_bound(&current.start_variable),
                         context.upper_bound(&current.start_variable)
@@ -246,7 +248,7 @@ impl Util {
         bounds: &mut [(i32, i32)],
         task: &Rc<Task<Var>>,
     ) {
-        bounds[task.id.get_value()] = (
+        bounds[task.id.unpack::<usize>()] = (
             context.lower_bound(&task.start_variable),
             context.upper_bound(&task.start_variable),
         );

@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    has_mandatory_part_in_interval, var_has_overlap_with_interval, ResourceProfile,
-    TimeTablePropagator,
+    has_mandatory_part_in_interval, var_has_overlap_with_interval, IteratorWithLength,
+    ResourceProfile, TimeTablePropagator,
 };
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
@@ -274,15 +274,20 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
         &self.cumulative_params
     }
 
-    fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize) {
-        (self.time_table.values(), self.time_table.len())
+    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
+        IteratorWithLength {
+            iterator: self.time_table.values(),
+            length: self.time_table.len(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        basic_types::{Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction},
+        basic_types::{
+            ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
+        },
         engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
         propagators::{ArgTask, CumulativeArgs, TimeTablePerPoint},
     };
@@ -344,8 +349,7 @@ mod tests {
         assert!(match result {
             Err(inconsistency) => {
                 match inconsistency {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Other(x) => {
+                    Inconsistency::Other(ConflictInfo::Explanation(x)) => {
                         let expected = [
                             s1.upper_bound_predicate(1),
                             s1.lower_bound_predicate(1),
@@ -357,6 +361,7 @@ mod tests {
                             .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
                             && x.iter().all(|y| expected.contains(y))
                     }
+                    _ => false,
                 }
             }
             _ => false,

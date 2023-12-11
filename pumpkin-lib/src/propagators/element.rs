@@ -70,15 +70,15 @@ impl<VX: IntVar + 'static, VI: IntVar + 'static, VE: IntVar + 'static> CPPropaga
             .map(|(i, x_i)| {
                 context.register(
                     x_i.clone(),
-                    DomainEvents::ANY,
+                    DomainEvents::ANY_INT,
                     LocalId::from(i as u32 + ID_X_OFFSET),
                 )
             })
             .collect();
         Box::new(Element {
             array,
-            index: context.register(args.index, DomainEvents::ANY, ID_INDEX),
-            rhs: context.register(args.rhs, DomainEvents::ANY, ID_RHS),
+            index: context.register(args.index, DomainEvents::ANY_INT, ID_INDEX),
+            rhs: context.register(args.rhs, DomainEvents::ANY_INT, ID_RHS),
             propagations_index: HashMap::new(),
             propagations_rhs: HashMap::new(),
         })
@@ -92,7 +92,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> Element<VX, VI, VE> {
         let dc = match id {
             ID_INDEX => self.index.unpack(delta),
             ID_RHS => self.rhs.unpack(delta),
-            i => self.array[(i.unpack() - ID_X_OFFSET) as usize].unpack(delta),
+            i => self.array[(i.unpack::<u32>() - ID_X_OFFSET) as usize].unpack(delta),
         };
         (id, dc)
     }
@@ -223,7 +223,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator for Ele
                 conjunction![[self.index == i] & [x_i >= v]]
             }
             (id, DomainChange::Removal(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
+                let i = id.unpack::<u32>() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
@@ -231,7 +231,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator for Ele
                 conjunction![[self.index == i] & [self.rhs != v]]
             }
             (id, DomainChange::UpperBound(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
+                let i = id.unpack::<u32>() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
@@ -239,13 +239,14 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator for Ele
                 conjunction![[self.index == i] & [self.rhs <= v]]
             }
             (id, DomainChange::LowerBound(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
+                let i = id.unpack::<u32>() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
                 let i = i as i32;
                 conjunction![[self.index == i] & [self.rhs >= v]]
             }
+            (_, _) => unreachable!(),
         }
     }
 

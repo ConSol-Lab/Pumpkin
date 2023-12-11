@@ -3,6 +3,7 @@ use std::{
     rc::Rc,
 };
 
+use crate::propagators::check_for_updates;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
@@ -15,10 +16,8 @@ use crate::{
     pumpkin_assert_extreme,
 };
 
-use super::{
-    check_for_updates_time_table, generate_update_range, ResourceProfile, TimeTablePerPoint,
-    TimeTablePropagator,
-};
+use super::{generate_update_range, ResourceProfile, TimeTablePerPoint, TimeTablePropagator};
+use crate::propagators::IteratorWithLength;
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPointIncremental<Var> {
@@ -93,8 +92,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
                 //We first go over the lower update range and then we go over the lower update range
                 pumpkin_assert_extreme!(
                     !self.time_table.contains_key(&(t as u32))
-                    || !self.time_table.get(&(t as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.get_value() == task.id.get_value()),
-                    "Attempted to insert mandatory part where it already exists at time point {t} for task {} in time-table per time-point propagator", task.id.get_value());
+                    || !self.time_table.get(&(t as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack::<usize>() == task.id.unpack::<usize>()),
+                    "Attempted to insert mandatory part where it already exists at time point {t} for task {} in time-table per time-point propagator", task.id.unpack::<usize>());
 
                 //Add the updated profile to the ResourceProfile at time t
                 let current_profile: &mut ResourceProfile<Var> = self
@@ -115,10 +114,9 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         let CumulativePropagationResult {
             status,
             explanations,
-        } = check_for_updates_time_table(
+        } = check_for_updates(
             context,
-            self.time_table.values(),
-            self.time_table.len(),
+            self.get_time_table_and_length(),
             self.get_parameters(),
         );
 
@@ -159,15 +157,15 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        let task = &self.cumulative_params.tasks[local_id.get_value()];
+        let task = &self.cumulative_params.tasks[local_id.unpack::<usize>()];
         pumpkin_assert_extreme!(
             context.lower_bound(&task.start_variable)
-                > self.cumulative_params.bounds[task.id.get_value()].0
-                || self.cumulative_params.bounds[task.id.get_value()].1
+                > self.cumulative_params.bounds[task.id.unpack::<usize>()].0
+                || self.cumulative_params.bounds[task.id.unpack::<usize>()].1
                     >= context.upper_bound(&task.start_variable)
         );
-        let old_lower_bound = self.cumulative_params.bounds[task.id.get_value()].0;
-        let old_upper_bound = self.cumulative_params.bounds[task.id.get_value()].1;
+        let old_lower_bound = self.cumulative_params.bounds[task.id.unpack::<usize>()].0;
+        let old_upper_bound = self.cumulative_params.bounds[task.id.unpack::<usize>()].1;
         //We check whether a mandatory part was extended/introduced
         if context.upper_bound(&task.start_variable)
             < context.lower_bound(&task.start_variable) + task.processing_time
@@ -274,15 +272,20 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrem
         &self.cumulative_params
     }
 
-    fn get_time_table_and_length(&self) -> (Self::TimeTableIterator<'_>, usize) {
-        (self.time_table.values(), self.time_table.len())
+    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
+        IteratorWithLength {
+            iterator: self.time_table.values(),
+            length: self.time_table.len(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        basic_types::{Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction},
+        basic_types::{
+            ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
+        },
         engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
         propagators::{ArgTask, CumulativeArgs, TimeTablePerPointIncremental},
     };
@@ -344,8 +347,7 @@ mod tests {
         assert!(match result {
             Err(inconsistency) => {
                 match inconsistency {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Other(x) => {
+                    Inconsistency::Other(ConflictInfo::Explanation(x)) => {
                         let expected = [
                             s1.upper_bound_predicate(1),
                             s1.lower_bound_predicate(1),
@@ -357,6 +359,7 @@ mod tests {
                             .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
                             && x.iter().all(|y| expected.contains(y))
                     }
+                    _ => false,
                 }
             }
             _ => false,

@@ -7,7 +7,7 @@ use crate::{engine::PropagatorId, pumpkin_assert_moderate};
 
 use super::ClauseReference;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ConstraintReference {
     //the constraint reference may refer to a virtual binary clause, an allocated clause, or a propagator
     //  note that the user can only distinguish between a clause and a propagator (bu not whether a virtual or allocated clause)

@@ -47,9 +47,9 @@ where
         mut context: PropagatorConstructorContext<'_>,
     ) -> Box<dyn ConstraintProgrammingPropagator> {
         Box::new(IntTimes {
-            a: context.register(args.a, DomainEvents::ANY, ID_A),
-            b: context.register(args.b, DomainEvents::ANY, ID_B),
-            c: context.register(args.c, DomainEvents::ANY, ID_C),
+            a: context.register(args.a, DomainEvents::ANY_INT, ID_A),
+            b: context.register(args.b, DomainEvents::ANY_INT, ID_B),
+            c: context.register(args.c, DomainEvents::ANY_INT, ID_C),
 
             propagations_a: Default::default(),
             propagations_b: Default::default(),
@@ -86,6 +86,7 @@ where
                 DomainChange::Removal(value) => !context.contains(var, *value),
                 DomainChange::LowerBound(bound) => context.lower_bound(var) >= *bound,
                 DomainChange::UpperBound(bound) => context.upper_bound(var) <= *bound,
+                _ => unreachable!(),
             });
         }
 
