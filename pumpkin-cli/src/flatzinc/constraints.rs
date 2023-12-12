@@ -1,7 +1,5 @@
 use pumpkin_lib::{
-    basic_types::variables::IntVar,
-    engine::ConstraintSatisfactionSolver,
-    propagators::{LinearNe, LinearNeArgs},
+    basic_types::variables::IntVar, engine::ConstraintSatisfactionSolver, propagators::LinearNe,
 };
 
 pub fn int_lin_ne<Var: IntVar + std::fmt::Debug + 'static>(
@@ -9,5 +7,5 @@ pub fn int_lin_ne<Var: IntVar + std::fmt::Debug + 'static>(
     terms: Box<[Var]>,
     rhs: i32,
 ) {
-    solver.add_propagator::<LinearNe<_>>(LinearNeArgs { terms, rhs });
+    solver.add_propagator(LinearNe { terms, rhs });
 }

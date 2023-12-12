@@ -686,9 +686,10 @@ impl ConstraintSatisfactionSolver {
 
 //methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
-    pub fn add_propagator<Constructor>(&mut self, args: Constructor::Args) -> bool
+    pub fn add_propagator<Constructor>(&mut self, constructor: Constructor) -> bool
     where
         Constructor: CPPropagatorConstructor,
+        Constructor::Propagator: 'static,
     {
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
         let constructor_context = PropagatorConstructorContext::new(
@@ -697,7 +698,7 @@ impl ConstraintSatisfactionSolver {
             new_propagator_id,
         );
 
-        let propagator_to_add = Constructor::create(args, constructor_context);
+        let propagator_to_add = constructor.create_boxed(constructor_context);
 
         pumpkin_assert_simple!(propagator_to_add.priority() <= 3, "The propagator priority exceeds 3. Currently we only support values up to 3, but this can easily be changed if there is a good reason.");
 

@@ -18,12 +18,12 @@ type DiffLogicVariables<V> = (
 );
 
 /// Bounds consistent propagator for a set of constraints `x_i + \delta <= x_j`.
-pub struct DiffLogicArgs<V> {
+pub struct DiffLogic<V> {
     pub difference_constraints: Box<[(V, i32, V)]>,
 }
 
 #[derive(Default)]
-pub struct DiffLogic<V> {
+pub struct DiffLogicProp<V> {
     #[allow(clippy::type_complexity)]
     /// The elementary constraints of the form `(y_1 <= v) => (y_2 <= v + d)`.
     elementary_constraints: HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
@@ -44,12 +44,9 @@ where
     V: IntVar + Hash + Eq + 'static,
     <V as IntVar>::AffineView: Hash + Eq,
 {
-    type Args = DiffLogicArgs<V>;
+    type Propagator = DiffLogicProp<<V as IntVar>::AffineView>;
 
-    fn create(
-        args: Self::Args,
-        mut context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator> {
+    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
         //  x_i >= v -> x_j >= v + \delta
         //  x_j <= v -> x_i <= v - \delta
@@ -105,8 +102,8 @@ where
         };
 
         let mut elementary_constraints = HashMap::new();
-        let mut difference_vars = Vec::with_capacity(args.difference_constraints.len());
-        args.difference_constraints
+        let mut difference_vars = Vec::with_capacity(self.difference_constraints.len());
+        self.difference_constraints
             .iter()
             .enumerate()
             .for_each(|(i, (x_i, delta, x_j))| {
@@ -123,7 +120,7 @@ where
                     .push((delta, y_i_pos.clone()));
                 difference_vars.push((y_i_pos, y_i_neg, y_j_pos, y_j_neg));
             });
-        Box::new(DiffLogic {
+        DiffLogicProp {
             elementary_constraints: elementary_constraints
                 .into_iter()
                 .map(|(k, v)| (k, v.into_boxed_slice()))
@@ -132,11 +129,11 @@ where
             updated: Default::default(),
             reasons: Default::default(),
             worklist: Default::default(),
-        })
+        }
     }
 }
 
-impl<V> DiffLogic<V>
+impl<V> DiffLogicProp<V>
 where
     V: IntVar + Hash + Eq,
 {
@@ -158,7 +155,7 @@ where
     }
 }
 
-impl<V> ConstraintProgrammingPropagator for DiffLogic<V>
+impl<V> ConstraintProgrammingPropagator for DiffLogicProp<V>
 where
     V: IntVar + Hash + Eq,
 {
@@ -300,7 +297,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let mut propagator = solver
-            .new_propagator::<DiffLogic<_>>(DiffLogicArgs {
+            .new_propagator(DiffLogic {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -357,7 +354,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let mut propagator = solver
-            .new_propagator::<DiffLogic<_>>(DiffLogicArgs {
+            .new_propagator(DiffLogic {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -389,7 +386,7 @@ mod tests {
         // f2   x_1 + 1 <= x_0
 
         let inconsistency = solver
-            .new_propagator::<DiffLogic<_>>(DiffLogicArgs {
+            .new_propagator(DiffLogic {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 1, x_0)].into_boxed_slice(),
             })
             .expect_err("cycle detected");
