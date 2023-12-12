@@ -56,21 +56,22 @@ impl TestSolver {
         Literal::new(PropositionalVariable::new(new_variable_index), true)
     }
 
-    pub fn new_propagator<Constructor: CPPropagatorConstructor>(
+    pub fn new_propagator<Constructor>(
         &mut self,
-        args: Constructor::Args,
-    ) -> Result<TestPropagator, Inconsistency> {
+        constructor: Constructor,
+    ) -> Result<TestPropagator, Inconsistency>
+    where
+        Constructor: CPPropagatorConstructor,
+        Constructor::Propagator: 'static,
+    {
         let id = PropagatorId(self.next_id);
         self.next_id += 1;
 
-        let propagator = Constructor::create(
-            args,
-            PropagatorConstructorContext::new(
-                &mut self.watch_list,
-                &mut self.watch_list_propositional,
-                id,
-            ),
-        );
+        let propagator = constructor.create_boxed(PropagatorConstructorContext::new(
+            &mut self.watch_list,
+            &mut self.watch_list_propositional,
+            id,
+        ));
 
         let mut propagator1 = TestPropagator { propagator, id };
         self.initialise_at_root(&mut propagator1)?;
@@ -109,11 +110,11 @@ impl TestSolver {
             .enqueue_decision_literal(if val { var } else { !var });
     }
 
-    pub fn is_literal_true(&mut self, var: Literal) -> bool {
+    pub fn is_literal_true(&self, var: Literal) -> bool {
         self.assignment_propositional.is_literal_assigned_true(var)
     }
 
-    pub fn is_literal_false(&mut self, var: Literal) -> bool {
+    pub fn is_literal_false(&self, var: Literal) -> bool {
         self.assignment_propositional.is_literal_assigned_false(var)
     }
 

@@ -15,7 +15,7 @@
 use pumpkin_lib::{
     basic_types::{variables::IntVar, CSPSolverExecutionFlag},
     engine::ConstraintSatisfactionSolver,
-    propagators::{IntTimes, IntTimesArgs, LinearLeq, LinearLeqArgs},
+    propagators::{IntTimes, LinearLeq},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -112,7 +112,7 @@ fn main() {
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                solver.add_propagator::<IntTimes<_, _, _>>(IntTimesArgs {
+                solver.add_propagator(IntTimes {
                     a: matrix[r1][col],
                     b: matrix[r2][col],
                     c: pairwise_product[r1][r2][col],
@@ -158,7 +158,7 @@ fn linear_less_than_equal<Var: IntVar + 'static>(
     vars: &[Var],
     c: i32,
 ) {
-    solver.add_propagator::<LinearLeq<_>>(LinearLeqArgs::create(vars.iter().cloned().collect(), c));
+    solver.add_propagator(LinearLeq::new(vars.iter().cloned().collect(), c));
 }
 
 fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {

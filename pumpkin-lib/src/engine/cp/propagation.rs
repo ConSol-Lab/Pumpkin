@@ -303,17 +303,26 @@ impl<'a> PropagationContext<'_> {
     }
 }
 
-/// A CP propagator constructor takes an argument struct and constructs an implementation of
+/// A CP propagator constructor turns an argument struct into an implementation of
 /// [`ConstraintProgrammingPropagator`].
 pub trait CPPropagatorConstructor {
-    /// The arguments to the constructor.
-    type Args;
+    /// The propagator to construct.
+    type Propagator: ConstraintProgrammingPropagator;
 
     /// The constructor function.
-    fn create(
-        args: Self::Args,
+    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator;
+
+    /// A handy boxed constructor function.
+    fn create_boxed(
+        self,
         context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator>;
+    ) -> Box<dyn ConstraintProgrammingPropagator>
+    where
+        Self: Sized,
+        Self::Propagator: 'static,
+    {
+        Box::new(self.create(context))
+    }
 }
 
 pub struct PropagatorConstructorContext<'a> {
