@@ -107,13 +107,13 @@ impl Util {
         }
     }
 
-    /// Based on the [ArgTask]s which are passed, it creates [Task]s which have been registered for bound events
+    /// Based on the [ArgTask]s which are passed, it creates and returns [Task]s which have been registered for bound events and the horizon
     ///
     /// This method ensures that the tasks are ordered in non-decreasing order by resource usage and that tasks with a resource usage of zero are removed
     pub fn create_tasks<Var: IntVar + 'static>(
         arg_tasks: &[ArgTask<Var>],
         mut context: PropagatorConstructorContext<'_>,
-    ) -> Vec<Task<Var>> {
+    ) -> (Vec<Task<Var>>, i32) {
         //We order the tasks by non-decreasing (increasing in case of unique resource usage) resource usage, this allows certain optimizations
         let mut ordered_tasks = arg_tasks.to_vec();
         ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
@@ -141,7 +141,13 @@ impl Util {
                 }
             })
             .collect::<Vec<Task<Var>>>();
-        tasks
+        (
+            tasks,
+            ordered_tasks
+                .iter()
+                .map(|current| current.resource_usage)
+                .sum::<i32>(),
+        )
     }
 
     /// This task stores the propagations in the correct structure based on whether the explanation concerns a lower-bound update or an upper-bound update

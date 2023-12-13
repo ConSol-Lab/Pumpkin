@@ -38,20 +38,109 @@ where
     type Propagator = TimeTablePerPointProp<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        TimeTablePerPointProp::new(Util::create_tasks(&self.tasks, context), self.capacity)
+        let (tasks, horizon) = Util::create_tasks(&self.tasks, context);
+        TimeTablePerPointProp::new(CumulativeParameters::new(tasks, self.capacity, horizon))
     }
 }
 
 impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
-    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> TimeTablePerPointProp<Var> {
+    pub fn new(params: CumulativeParameters<Var>) -> TimeTablePerPointProp<Var> {
         let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); tasks.len()];
+            vec![HashMap::new(); params.tasks.len()];
         TimeTablePerPointProp {
             time_table: BTreeMap::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
             reasons_for_propagation_upper_bound: reasons_for_propagation,
-            cumulative_params: CumulativeParameters::new(tasks, capacity),
+            cumulative_params: params,
         }
+    }
+
+    pub fn debug_propagate_from_scratch_time_table_point(
+        context: &mut PropagationContext,
+        params: &CumulativeParameters<Var>,
+    ) -> PropagationStatusCP {
+        //This method is similar to that of `create_time_table` but somewhat simpler
+        //We first create a time-table per point in the horizon
+        let horizon = params.horizon;
+        let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
+        for i in 0..=horizon {
+            profile.push(ResourceProfile {
+                start: i,
+                end: i,
+                profile_tasks: Vec::new(),
+                height: 0,
+            });
+        }
+        for task in params.tasks.iter() {
+            let upper_bound = context.upper_bound(&task.start_variable);
+            let lower_bound = context.lower_bound(&task.start_variable);
+
+            if upper_bound < lower_bound + task.processing_time {
+                //For each task, we check whether there now exists a mandatory part
+                //If this is the case then we add the task we are currently processing (i.e. `task`) to the created or existing profile
+                for i in upper_bound..(lower_bound + task.processing_time) {
+                    profile[i as usize].height += task.resource_usage;
+                    profile[i as usize].profile_tasks.push(Rc::clone(task));
+
+                    if profile[i as usize].height > params.capacity {
+                        //The profile which we have just added to has overflown the resource capacity
+                        return Util::create_error_clause(
+                            context,
+                            &profile[i as usize].profile_tasks,
+                        );
+                    }
+                }
+            }
+        }
+        //Now we need to propagate the tasks appropriately, first we go over all profiles
+        for ResourceProfile {
+            start,
+            end,
+            profile_tasks,
+            height,
+        } in profile.iter()
+        {
+            //Then we go over all tasks
+            for task in params.tasks.iter() {
+                if height + task.resource_usage <= params.capacity {
+                    //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
+                    break;
+                } else if has_mandatory_part_in_interval(context, task, *start, *end) {
+                    //The task has a mandatory part here already, it cannot be propagated due the current profile
+                    continue;
+                } else if var_has_overlap_with_interval(context, task, *start, *end) {
+                    if (start - task.processing_time) < context.lower_bound(&task.start_variable)
+                        && *end + 1 > context.lower_bound(&task.start_variable)
+                        && Util::propagate_and_explain(
+                            context,
+                            DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
+                            task,
+                            *end + 1,
+                            profile_tasks,
+                        )
+                        .is_err()
+                    {
+                        //We do not need to store explanations so we simply check whether the propagation of the lower bound resulted in an error
+                        return Err(Inconsistency::EmptyDomain);
+                    }
+                    if end > &context.upper_bound(&task.start_variable)
+                        && *start - task.processing_time < context.upper_bound(&task.start_variable)
+                        && Util::propagate_and_explain(
+                            context,
+                            DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
+                            task,
+                            *start - task.processing_time,
+                            profile_tasks,
+                        )
+                        .is_err()
+                    {
+                        //We do not need to store explanations so we simply check whether the propagation of the upper bound resulted in an error
+                        return Err(Inconsistency::EmptyDomain);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -114,93 +203,10 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        //This method is similar to that of `create_time_table` but somewhat simpler
-        //We first create a time-table per point in the horizon
-        let horizon = self
-            .cumulative_params
-            .tasks
-            .iter()
-            .map(|current| current.processing_time)
-            .sum::<i32>();
-        let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
-        for i in 0..=horizon {
-            profile.push(ResourceProfile {
-                start: i,
-                end: i,
-                profile_tasks: Vec::new(),
-                height: 0,
-            });
-        }
-        for task in self.cumulative_params.tasks.iter() {
-            let upper_bound = context.upper_bound(&task.start_variable);
-            let lower_bound = context.lower_bound(&task.start_variable);
-
-            if upper_bound < lower_bound + task.processing_time {
-                //For each task, we check whether there now exists a mandatory part
-                //If this is the case then we add the task we are currently processing (i.e. `task`) to the created or existing profile
-                for i in upper_bound..(lower_bound + task.processing_time) {
-                    profile[i as usize].height += task.resource_usage;
-                    profile[i as usize].profile_tasks.push(Rc::clone(task));
-
-                    if profile[i as usize].height > self.cumulative_params.capacity {
-                        //The profile which we have just added to has overflown the resource capacity
-                        return Util::create_error_clause(
-                            context,
-                            &profile[i as usize].profile_tasks,
-                        );
-                    }
-                }
-            }
-        }
-        //Now we need to propagate the tasks appropriately, first we go over all profiles
-        for ResourceProfile {
-            start,
-            end,
-            profile_tasks,
-            height,
-        } in profile.iter()
-        {
-            //Then we go over all tasks
-            for task in self.cumulative_params.tasks.iter() {
-                if height + task.resource_usage <= self.cumulative_params.capacity {
-                    //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
-                    break;
-                } else if has_mandatory_part_in_interval(context, task, *start, *end) {
-                    //The task has a mandatory part here already, it cannot be propagated due the current profile
-                    continue;
-                } else if var_has_overlap_with_interval(context, task, *start, *end) {
-                    if (start - task.processing_time) < context.lower_bound(&task.start_variable)
-                        && *end + 1 > context.lower_bound(&task.start_variable)
-                        && Util::propagate_and_explain(
-                            context,
-                            DomainChange::LowerBound(context.lower_bound(&task.start_variable)),
-                            task,
-                            *end + 1,
-                            profile_tasks,
-                        )
-                        .is_err()
-                    {
-                        //We do not need to store explanations so we simply check whether the propagation of the lower bound resulted in an error
-                        return Err(Inconsistency::EmptyDomain);
-                    }
-                    if end > &context.upper_bound(&task.start_variable)
-                        && *start - task.processing_time < context.upper_bound(&task.start_variable)
-                        && Util::propagate_and_explain(
-                            context,
-                            DomainChange::UpperBound(context.upper_bound(&task.start_variable)),
-                            task,
-                            *start - task.processing_time,
-                            profile_tasks,
-                        )
-                        .is_err()
-                    {
-                        //We do not need to store explanations so we simply check whether the propagation of the upper bound resulted in an error
-                        return Err(Inconsistency::EmptyDomain);
-                    }
-                }
-            }
-        }
-        Ok(())
+        TimeTablePerPointProp::debug_propagate_from_scratch_time_table_point(
+            context,
+            self.get_parameters(),
+        )
     }
 }
 

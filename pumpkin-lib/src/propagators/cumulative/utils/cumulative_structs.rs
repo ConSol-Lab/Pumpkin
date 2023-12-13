@@ -87,10 +87,12 @@ pub struct CumulativeParameters<Var> {
     pub bounds: Vec<(i32, i32)>,
     /// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
     pub updated: Vec<Updated<Var>>,
+    /// * `horizon` - The largest possible makespan, in this case it is assumed to be the sum of all processing times
+    pub horizon: i32,
 }
 
 impl<Var: IntVar + 'static> CumulativeParameters<Var> {
-    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+    pub fn new(tasks: Vec<Task<Var>>, capacity: i32, horizon: i32) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -100,6 +102,7 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
+            horizon,
         }
     }
 }
