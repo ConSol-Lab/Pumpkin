@@ -5,7 +5,7 @@
 use pumpkin_lib::{
     basic_types::{variables::IntVar, Literal},
     engine::ConstraintSatisfactionSolver,
-    propagators::{LinearLeq, LinearLeqArgs},
+    propagators::LinearLeq,
 };
 
 fn main() {
@@ -109,7 +109,7 @@ fn linear_less_than_equal_reified<Var: IntVar + 'static>(
     c: i32,
     reif_literal: Literal,
 ) {
-    if solver.add_propagator::<LinearLeq<_>>(LinearLeqArgs::reified(vars.into(), c, reif_literal)) {
+    if solver.add_propagator(LinearLeq::reified(vars.into(), c, reif_literal)) {
         panic!("Adding propagator led to conflict");
     }
 }

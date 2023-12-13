@@ -10,19 +10,19 @@ use crate::{
     predicate,
 };
 
-pub struct LinearLeqArgs<Var> {
+pub struct LinearLeq<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
     pub reif: Option<Literal>,
 }
 
-impl<Var: IntVar + 'static> LinearLeqArgs<Var> {
-    pub fn create(x: Box<[Var]>, c: i32) -> LinearLeqArgs<Var> {
-        LinearLeqArgs { x, c, reif: None }
+impl<Var: IntVar + 'static> LinearLeq<Var> {
+    pub fn new(x: Box<[Var]>, c: i32) -> Self {
+        LinearLeq { x, c, reif: None }
     }
 
-    pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> LinearLeqArgs<Var> {
-        LinearLeqArgs {
+    pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
+        LinearLeq {
             x,
             c,
             reif: Some(reif),
@@ -30,14 +30,8 @@ impl<Var: IntVar + 'static> LinearLeqArgs<Var> {
     }
 }
 
-pub struct ReifiedLinearLeqArgs<Var> {
-    pub x: Box<[Var]>,
-    pub c: i32,
-    pub reif: Literal,
-}
-
 /// Propagator for the constraint `reif => \sum x_i <= c`.
-pub struct LinearLeq<Var> {
+pub struct LinearLeqProp<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
     propagations: Box<[HashMap<i32, PropositionalConjunction>]>,
@@ -46,16 +40,13 @@ pub struct LinearLeq<Var> {
 
 impl<Var> CPPropagatorConstructor for LinearLeq<Var>
 where
-    Var: IntVar + 'static,
+    Var: IntVar,
 {
-    type Args = LinearLeqArgs<Var>;
+    type Propagator = LinearLeqProp<Var>;
 
-    fn create(
-        args: Self::Args,
-        mut context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator> {
-        if let Some(literal) = args.reif {
-            let x: Box<[_]> = args
+    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+        if let Some(literal) = self.reif {
+            let x: Box<[_]> = self
                 .x
                 .iter()
                 .enumerate()
@@ -68,18 +59,18 @@ where
                 })
                 .collect();
             let propagations = (0..x.len() + 1).map(|_| HashMap::new()).collect();
-            Box::new(LinearLeq::<Var> {
+            LinearLeqProp::<Var> {
                 x,
-                c: args.c,
+                c: self.c,
                 propagations,
                 reif: Some(context.register_literal(
                     literal,
                     DomainEvents::ANY_BOOL,
-                    LocalId::from(args.x.len() as u32),
+                    LocalId::from(self.x.len() as u32),
                 )),
-            })
+            }
         } else {
-            let x: Box<[_]> = args
+            let x: Box<[_]> = self
                 .x
                 .iter()
                 .enumerate()
@@ -92,17 +83,17 @@ where
                 })
                 .collect();
             let propagations = (0..x.len()).map(|_| HashMap::new()).collect();
-            Box::new(LinearLeq::<Var> {
+            LinearLeqProp::<Var> {
                 x,
-                c: args.c,
+                c: self.c,
                 propagations,
                 reif: None,
-            })
+            }
         }
     }
 }
 
-impl<Var> ConstraintProgrammingPropagator for LinearLeq<Var>
+impl<Var> ConstraintProgrammingPropagator for LinearLeqProp<Var>
 where
     Var: IntVar,
 {
@@ -241,7 +232,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator::<LinearLeq<_>>(LinearLeqArgs::create([x, y].into(), 7))
+            .new_propagator(LinearLeq::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -257,7 +248,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator::<LinearLeq<_>>(LinearLeqArgs::create([x, y].into(), 7))
+            .new_propagator(LinearLeq::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -278,7 +269,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator::<LinearLeq<_>>(LinearLeqArgs::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLeq::reified([x, y].into(), 7, reif))
             .expect("No conflict");
 
         solver.set_literal(reif, false);
@@ -297,7 +288,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator::<LinearLeq<_>>(LinearLeqArgs::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLeq::reified([x, y].into(), 7, reif))
             .expect("No conflict");
 
         solver.set_literal(reif, true);
@@ -316,7 +307,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator::<LinearLeq<_>>(LinearLeqArgs::reified([x, y].into(), 1, reif))
+            .new_propagator(LinearLeq::reified([x, y].into(), 1, reif))
             .expect("No conflict");
 
         assert!(solver.is_literal_false(reif));

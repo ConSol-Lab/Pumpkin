@@ -1,7 +1,7 @@
 use pumpkin_lib::{
     basic_types::{variables::IntVar, CSPSolverExecutionFlag},
     engine::ConstraintSatisfactionSolver,
-    propagators::{NotEq, NotEqArgs},
+    propagators::NotEq,
 };
 
 fn main() {
@@ -79,12 +79,12 @@ fn all_different<Var: IntVar + std::fmt::Debug + 'static>(
 ) {
     for i in 0..variables.len() {
         for j in i + 1..variables.len() {
-            let not_eq = NotEqArgs {
+            let not_eq = NotEq {
                 x: variables[i].clone(),
                 y: variables[j].clone(),
             };
 
-            solver.add_propagator::<NotEq<_, _>>(not_eq);
+            solver.add_propagator(not_eq);
         }
     }
 }

@@ -219,7 +219,7 @@ pub fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
     );
     (upper_bound < (lower_bound + task.processing_time)) //There exists a mandatory part
                 && (upper_bound <= end) //The start of the mandatory part is before the end of the interval
-                && (start <= (lower_bound + task.processing_time)) //The start of the interval is before the end of the mandatory part
+                && (start < (lower_bound + task.processing_time)) //The start of the interval is before the end of the mandatory part
 }
 
 /// Checks whether the lower and upper bound of a variable overlap with the provided interval
@@ -233,7 +233,7 @@ pub fn var_has_overlap_with_interval<Var: IntVar + 'static>(
         context.lower_bound(&task.start_variable),
         context.upper_bound(&task.start_variable) + task.processing_time,
     ); //The release time of the task and the deadline
-    (start <= upper_bound) && (lower_bound <= end) //Check whether there is any overlap between the two intervals (i.e. there exists a C such that start <= C <= end /\ lower_bound <= C <= upper_bound)
+    (start < upper_bound) && (lower_bound <= end) //Check whether there is any overlap between the two intervals (i.e. there exists a C such that start <= C <= end /\ lower_bound <= C <= upper_bound)
 }
 
 /// Checks whether a propagation should occur based on the current state of the time-table

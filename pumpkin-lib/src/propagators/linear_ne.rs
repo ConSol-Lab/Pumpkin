@@ -8,7 +8,7 @@ use crate::{
     predicate,
 };
 
-pub struct LinearNeArgs<Var> {
+pub struct LinearNe<Var> {
     /// The terms which sum to the left-hand side.
     pub terms: Box<[Var]>,
     /// The right-hand side.
@@ -17,22 +17,19 @@ pub struct LinearNeArgs<Var> {
 
 /// Domain consistent propagator for the constraint `\sum x_i != rhs`, where `x_i` are integer variables
 /// and `rhs` is an integer constant.
-pub struct LinearNe<Var> {
+pub struct LinearNeProp<Var> {
     terms: Box<[PropagatorVariable<Var>]>,
     rhs: i32,
 }
 
 impl<Var> CPPropagatorConstructor for LinearNe<Var>
 where
-    Var: IntVar + std::fmt::Debug + 'static,
+    Var: IntVar,
 {
-    type Args = LinearNeArgs<Var>;
+    type Propagator = LinearNeProp<Var>;
 
-    fn create(
-        args: Self::Args,
-        mut context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator> {
-        let x: Box<[_]> = args
+    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+        let x: Box<[_]> = self
             .terms
             .iter()
             .enumerate()
@@ -41,14 +38,14 @@ where
             })
             .collect();
 
-        Box::new(LinearNe {
+        LinearNeProp {
             terms: x,
-            rhs: args.rhs,
-        })
+            rhs: self.rhs,
+        }
     }
 }
 
-impl<Var> ConstraintProgrammingPropagator for LinearNe<Var>
+impl<Var> ConstraintProgrammingPropagator for LinearNeProp<Var>
 where
     Var: IntVar,
 {
@@ -161,7 +158,7 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+            .new_propagator(LinearNe {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
             })
@@ -181,7 +178,7 @@ mod tests {
         let y = solver.new_variable(2, 2);
 
         let err = solver
-            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+            .new_propagator(LinearNe {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
             })
@@ -198,7 +195,7 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+            .new_propagator(LinearNe {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
             })
@@ -221,7 +218,7 @@ mod tests {
         let y = solver.new_variable(0, 3);
 
         let mut propagator = solver
-            .new_propagator::<LinearNe<_>>(LinearNeArgs {
+            .new_propagator(LinearNe {
                 terms: [x.scaled(1), y.scaled(-1)].into(),
                 rhs: 0,
             })

@@ -20,7 +20,7 @@ use super::{
 };
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
-pub struct TimeTablePerPoint<Var> {
+pub struct TimeTablePerPointProp<Var> {
     /// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
     time_table: BTreeMap<u32, ResourceProfile<Var>>,
     /// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
@@ -31,32 +31,27 @@ pub struct TimeTablePerPoint<Var> {
     cumulative_params: CumulativeParameters<Var>,
 }
 
-impl<Var> CPPropagatorConstructor for TimeTablePerPoint<Var>
+impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointProp<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
-    type Args = CumulativeArgs<Var>;
+    type Propagator = TimeTablePerPointProp<Var>;
 
-    fn create(
-        args: Self::Args,
-        context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator> {
-        Box::new(TimeTablePerPoint::new(
-            Util::create_tasks(&args.tasks, context),
-            args.capacity,
-        ))
+    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+        let (tasks, horizon) = Util::create_tasks(&self.tasks, context);
+        TimeTablePerPointProp::new(CumulativeParameters::new(tasks, self.capacity, horizon))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePerPoint<Var> {
-    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> TimeTablePerPoint<Var> {
+impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
+    pub fn new(params: CumulativeParameters<Var>) -> TimeTablePerPointProp<Var> {
         let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); tasks.len()];
-        TimeTablePerPoint {
+            vec![HashMap::new(); params.tasks.len()];
+        TimeTablePerPointProp {
             time_table: BTreeMap::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
             reasons_for_propagation_upper_bound: reasons_for_propagation,
-            cumulative_params: CumulativeParameters::create(tasks, capacity),
+            cumulative_params: params,
         }
     }
 
@@ -66,11 +61,7 @@ impl<Var: IntVar + 'static> TimeTablePerPoint<Var> {
     ) -> PropagationStatusCP {
         //This method is similar to that of `create_time_table` but somewhat simpler
         //We first create a time-table per point in the horizon
-        let horizon = params
-            .tasks
-            .iter()
-            .map(|current| current.processing_time)
-            .sum::<i32>();
+        let horizon = params.horizon;
         let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
             profile.push(ResourceProfile {
@@ -153,7 +144,7 @@ impl<Var: IntVar + 'static> TimeTablePerPoint<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoint<Var> {
+impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPointProp<Var> {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         let CumulativePropagationResult {
             status,
@@ -212,14 +203,14 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         &self,
         context: &mut PropagationContext,
     ) -> PropagationStatusCP {
-        TimeTablePerPoint::debug_propagate_from_scratch_time_table_point(
+        TimeTablePerPointProp::debug_propagate_from_scratch_time_table_point(
             context,
             self.get_parameters(),
         )
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> {
+impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<Var> {
     type TimeTableIterator<'b> = std::collections::btree_map::Values<'b, u32, ResourceProfile<Var>>;
 
     type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
@@ -228,7 +219,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPoint<Var> 
         &mut self,
         context: &PropagationContext,
     ) -> Option<Vec<Rc<Task<Var>>>> {
-        match <TimeTablePerPoint<Var> as TimeTablePropagator<Var>>::create_time_table(
+        match <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
             context,
             self.get_parameters(),
         ) {
@@ -289,7 +280,7 @@ mod tests {
             ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
         },
         engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
-        propagators::{ArgTask, CumulativeArgs, TimeTablePerPoint},
+        propagators::{ArgTask, TimeTablePerPoint},
     };
 
     #[test]
@@ -299,8 +290,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -314,8 +305,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
@@ -329,8 +320,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-            tasks: [
+        let result = solver.new_propagator(TimeTablePerPoint::new(
+            [
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -344,8 +335,8 @@ mod tests {
             ]
             .into_iter()
             .collect(),
-            capacity: 1,
-        });
+            1,
+        ));
         assert!(match result {
             Err(inconsistency) => {
                 match inconsistency {
@@ -375,8 +366,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -390,8 +381,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
         assert_eq!(solver.upper_bound(s2), 6);
@@ -410,8 +401,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -445,8 +436,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 5,
-            })
+                5,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -458,8 +449,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -473,8 +464,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
         assert_eq!(solver.upper_bound(s2), 10);
@@ -501,8 +492,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -516,8 +507,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
@@ -549,8 +540,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -584,8 +575,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 5,
-            })
+                5,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
@@ -622,8 +613,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -662,8 +653,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 5,
-            })
+                5,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
         assert_eq!(solver.upper_bound(a), 1);
@@ -693,8 +684,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -708,8 +699,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
         assert_eq!(solver.upper_bound(s2), 8);
@@ -738,8 +729,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let mut propagator = solver
-            .new_propagator::<TimeTablePerPoint<_>>(CumulativeArgs {
-                tasks: [
+            .new_propagator(TimeTablePerPoint::new(
+                [
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -758,8 +749,8 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                capacity: 1,
-            })
+                1,
+            ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
         assert_eq!(solver.upper_bound(s3), 15);

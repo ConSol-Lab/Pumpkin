@@ -1,9 +1,11 @@
+use crate::propagators::TimeTablePerPointIncrementalProp;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{DomainChange, LocalId, PropagatorVariable},
+    propagators::TimeTablePerPointProp,
 };
-use std::hash::Hash;
 use std::rc::Rc;
+use std::{hash::Hash, marker::PhantomData};
 
 #[derive(Debug)]
 /// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
@@ -44,12 +46,29 @@ pub struct ArgTask<Var> {
 }
 #[derive(Clone)]
 /// The arguments which are required to create the constraint/propagators
-pub struct CumulativeArgs<Var> {
+pub struct CumulativeArgs<Var, T> {
     /// * `tasks` - A box containing all of the ArgTasks
     pub tasks: Box<[ArgTask<Var>]>,
     /// * `capacity` - The capacity of the resource
     pub capacity: i32,
+    /// * `propagator_type` - We use [PhantomData] to differentiate between the different types of propagators, without this field we would need to create a new argument struct for each cumulative propagator
+    propagator_type: PhantomData<T>,
 }
+
+impl<Var, T> CumulativeArgs<Var, T> {
+    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
+        CumulativeArgs {
+            tasks,
+            capacity,
+            propagator_type: PhantomData,
+        }
+    }
+}
+
+/// An alias used for calling the [CumulativeArgs::new] method with the concrete propagator type of [TimeTablePerPointProp]; this is used to prevent creating a different `new` method for each type `T`
+pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointProp<Var>>;
+pub type TimeTablePerPointIncremental<Var> =
+    CumulativeArgs<Var, TimeTablePerPointIncrementalProp<Var>>;
 
 #[derive(Debug)]
 /// Stores the information of an updated task
@@ -71,10 +90,12 @@ pub struct CumulativeParameters<Var> {
     pub bounds: Vec<(i32, i32)>,
     /// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
     pub updated: Vec<Updated<Var>>,
+    /// * `horizon` - The largest possible makespan, in this case it is assumed to be the sum of all processing times
+    pub horizon: i32,
 }
 
 impl<Var: IntVar + 'static> CumulativeParameters<Var> {
-    pub fn create(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+    pub fn new(tasks: Vec<Task<Var>>, capacity: i32, horizon: i32) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -84,6 +105,7 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
+            horizon,
         }
     }
 }

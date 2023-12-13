@@ -8,12 +8,12 @@ use crate::{
     },
 };
 
-pub struct NotEq<VX, VY> {
+pub struct NotEqProp<VX, VY> {
     x: PropagatorVariable<VX>,
     y: PropagatorVariable<VY>,
 }
 
-pub struct NotEqArgs<VX, VY> {
+pub struct NotEq<VX, VY> {
     pub x: VX,
     pub y: VY,
 }
@@ -21,25 +21,18 @@ pub struct NotEqArgs<VX, VY> {
 const ID_X: LocalId = LocalId::from(0);
 const ID_Y: LocalId = LocalId::from(1);
 
-impl<VX: IntVar + std::fmt::Debug + 'static, VY: IntVar + std::fmt::Debug + 'static>
-    CPPropagatorConstructor for NotEq<VX, VY>
-{
-    type Args = NotEqArgs<VX, VY>;
+impl<VX: IntVar, VY: IntVar> CPPropagatorConstructor for NotEq<VX, VY> {
+    type Propagator = NotEqProp<VX, VY>;
 
-    fn create(
-        args: Self::Args,
-        mut context: PropagatorConstructorContext<'_>,
-    ) -> Box<dyn ConstraintProgrammingPropagator> {
-        Box::new(NotEq {
-            x: context.register(args.x, DomainEvents::ASSIGN, ID_X),
-            y: context.register(args.y, DomainEvents::ASSIGN, ID_Y),
-        })
+    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+        NotEqProp {
+            x: context.register(self.x, DomainEvents::ASSIGN, ID_X),
+            y: context.register(self.y, DomainEvents::ASSIGN, ID_Y),
+        }
     }
 }
 
-impl<VX: IntVar + std::fmt::Debug, VY: IntVar + std::fmt::Debug> ConstraintProgrammingPropagator
-    for NotEq<VX, VY>
-{
+impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEqProp<VX, VY> {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         propagate_one_direction(&self.x, &self.y, context)?;
         propagate_one_direction(&self.y, &self.x, context)?;
@@ -96,7 +89,7 @@ impl<VX: IntVar + std::fmt::Debug, VY: IntVar + std::fmt::Debug> ConstraintProgr
     }
 }
 
-fn propagate_one_direction<VX: IntVar, VY: IntVar + std::fmt::Debug>(
+fn propagate_one_direction<VX: IntVar, VY: IntVar>(
     x: &PropagatorVariable<VX>,
     y: &PropagatorVariable<VY>,
     context: &mut PropagationContext,
@@ -126,7 +119,7 @@ mod tests {
         let y = solver.new_variable(4, 4);
 
         let mut propagator = solver
-            .new_propagator::<NotEq<_, _>>(NotEqArgs { x, y })
+            .new_propagator(NotEq { x, y })
             .expect("no empty domains");
         solver.propagate(&mut propagator).expect("no inconsistency");
 
@@ -143,7 +136,7 @@ mod tests {
         let x = solver.new_variable(4, 4);
 
         let mut propagator = solver
-            .new_propagator::<NotEq<_, _>>(NotEqArgs { x, y })
+            .new_propagator(NotEq { x, y })
             .expect("no empty domains");
         solver.propagate(&mut propagator).expect("no inconsistency");
 
