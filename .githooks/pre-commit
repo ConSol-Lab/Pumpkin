@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -eux
+
+./scripts/fmt.sh
+./scripts/clippy.sh
