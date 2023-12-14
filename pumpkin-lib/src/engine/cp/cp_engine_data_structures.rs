@@ -1,7 +1,9 @@
 use crate::{
     basic_types::{DomainId, Predicate},
     engine::AssignmentsPropositional,
+    pumpkin_assert_simple,
 };
+use std::cmp::min;
 
 use super::{
     AssignmentsInteger, BooleanDomainEvent, ConstraintProgrammingPropagator, EmptyDomain,
@@ -15,6 +17,7 @@ pub struct CPEngineDataStructures {
     pub watch_list_propositional: WatchListPropositional,
     pub propagator_queue: PropagatorQueue,
 
+    propositional_trail_index: usize,
     event_drain: Vec<(IntDomainEvent, DomainId)>,
 }
 
@@ -25,13 +28,27 @@ impl Default for CPEngineDataStructures {
             watch_list_cp: WatchListCP::default(),
             watch_list_propositional: WatchListPropositional::default(),
             propagator_queue: PropagatorQueue::new(5),
+            propositional_trail_index: 0,
             event_drain: vec![],
         }
     }
 }
 
 impl CPEngineDataStructures {
-    pub fn backtrack(&mut self, backtrack_level: u32) {
+    pub fn backtrack(
+        &mut self,
+        backtrack_level: usize,
+        assignment_propositional: &AssignmentsPropositional,
+    ) {
+        pumpkin_assert_simple!(
+            assignment_propositional.get_decision_level()
+                < self.assignments_integer.get_decision_level(),
+            "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
+        );
+        self.propositional_trail_index = min(
+            self.propositional_trail_index,
+            assignment_propositional.num_trail_entries(),
+        );
         self.assignments_integer.synchronise(backtrack_level);
         self.propagator_queue.clear();
     }
@@ -51,7 +68,7 @@ impl CPEngineDataStructures {
             .extend(self.assignments_integer.drain_domain_events());
 
         if self.event_drain.is_empty()
-            && assignments_propositional.processed_index == assignments_propositional.trail.len()
+            && self.propositional_trail_index == assignments_propositional.num_trail_entries()
         {
             return false;
         }
@@ -75,11 +92,9 @@ impl CPEngineDataStructures {
             }
         }
 
-        for literal in assignments_propositional.trail[assignments_propositional.processed_index..]
-            .to_vec()
-            .iter()
-        {
-            for (event, affected_literal) in BooleanDomainEvent::get_iterator(*literal) {
+        for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
+            let literal = assignments_propositional.get_trail_entry(i);
+            for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
                 for propagator_var in self
                     .watch_list_propositional
                     .get_affected_propagators(event, affected_literal)
@@ -101,7 +116,7 @@ impl CPEngineDataStructures {
                 }
             }
         }
-        assignments_propositional.processed_index = assignments_propositional.trail.len();
+        self.propositional_trail_index = assignments_propositional.num_trail_entries();
 
         true
     }

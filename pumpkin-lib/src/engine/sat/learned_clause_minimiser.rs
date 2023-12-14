@@ -17,7 +17,7 @@ use super::{AssignmentsPropositional, SATEngineDataStructures};
 #[derive(Default)]
 pub struct LearnedClauseMinimiser {
     current_depth: usize,
-    allowed_decision_levels: HashSet<u32>, //could consider direct hashing here
+    allowed_decision_levels: HashSet<usize>, //could consider direct hashing here
     label_assignments: HashMap<Literal, Option<Label>>,
     num_minimisation_calls: usize,
     num_literals_removed_total: usize,
@@ -209,11 +209,11 @@ impl LearnedClauseMinimiser {
         self.current_depth -= 1;
     }
 
-    fn is_decision_level_allowed(&self, decision_level: u32) -> bool {
+    fn is_decision_level_allowed(&self, decision_level: usize) -> bool {
         self.allowed_decision_levels.contains(&decision_level)
     }
 
-    fn mark_decision_level_as_allowed(&mut self, decision_level: u32) {
+    fn mark_decision_level_as_allowed(&mut self, decision_level: usize) {
         self.allowed_decision_levels.insert(decision_level);
     }
 
