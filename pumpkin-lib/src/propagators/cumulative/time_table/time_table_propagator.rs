@@ -3,7 +3,9 @@ use std::{cmp::max, collections::HashSet, rc::Rc};
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
     engine::{DomainChange, PropagationContext},
-    propagators::{CumulativeParameters, CumulativePropagationResult, Explanation, Task, Util},
+    propagators::{
+        CumulativeParameters, CumulativePropagationResult, Explanation, SparseSet, Task, Util,
+    },
     pumpkin_assert_simple,
 };
 
@@ -248,72 +250,44 @@ fn check_for_updates<
     params: &CumulativeParameters<Var>,
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
-    let mut unfixed_tasks = Vec::with_capacity(iterator_with_length.length); //Keep track of which task are unfixed
-                                                                             //We go over all profiles
-    for (index, profile) in iterator_with_length.iterator.clone().enumerate() {
+    let mut tasks_to_consider = SparseSet::new(params.tasks.to_vec());
+    'profile_loop: for (index, profile) in iterator_with_length.iterator.clone().enumerate() {
         //Then we go over all the different tasks
-        if index == 0 {
-            //We differentiate between the first time this loop is entered and the rest
-            //In the first iteration, we want to find all of the unfixed tasks to avoid iterating over them, these unfixed tasks are stored in `unfixed_tasks`
-            //We do it in this manner to prevent going over the iter an extra time when this method is invoked
-            for task in params.tasks.iter() {
-                if context.is_fixed(&task.start_variable) {
-                    //Task will not be updated by any of the profiles (because it is included in any profile with which it overlaps)
-                    continue;
-                } else {
-                    //The current task is not fixed yet, we thus add it to the list of unfixed tasks
-                    unfixed_tasks.push(Rc::clone(task));
+        let mut task_index = 0;
+        while tasks_to_consider.has_next(task_index) {
+            let task = Rc::clone(tasks_to_consider.get(task_index));
+            if context.is_fixed(&task.start_variable)
+                || profile.start > context.upper_bound(&task.start_variable) + task.processing_time
+            {
+                //Task is fixed or the start of the current profile is necessarily after the latest completion time of the task under consideration
+                //The profiles are sorted by start time (and non-overlapping) so we can remove the task from consideration
+                tasks_to_consider.remove(&task);
+                if tasks_to_consider.is_empty() {
+                    //There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
                 }
-                match check_whether_task_can_be_updated_by_profile(
-                    context,
-                    task,
-                    profile,
-                    index,
-                    params,
-                    iterator_with_length.clone(),
-                    &mut explanations,
-                ) {
-                    Ok(should_break) => {
-                        if should_break {
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        return CumulativePropagationResult::new(
-                            Err(Inconsistency::EmptyDomain),
-                            Some(explanations),
-                        );
-                    }
-                }
+                continue;
             }
-        } else {
-            //We have collected all of the unfixed tasks, iterate as normal
-            //TODO: It could be that we have fixed more tasks due to propagation, potentially we could update `unfixed_tasks` but the memory overhead for this could be substantial but would need to profile
-            for task in params.tasks.iter() {
-                if context.is_fixed(&task.start_variable) {
-                    //Task will not be updated by any of the profiles (because it is included in any profile with which it overlaps)
-                    continue;
+            task_index += 1;
+            match check_whether_task_can_be_updated_by_profile(
+                context,
+                &task,
+                profile,
+                index,
+                params,
+                iterator_with_length.clone(),
+                &mut explanations,
+            ) {
+                Ok(should_break) => {
+                    if should_break {
+                        break;
+                    }
                 }
-                match check_whether_task_can_be_updated_by_profile(
-                    context,
-                    task,
-                    profile,
-                    index,
-                    params,
-                    iterator_with_length.clone(),
-                    &mut explanations,
-                ) {
-                    Ok(should_break) => {
-                        if should_break {
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        return CumulativePropagationResult::new(
-                            Err(Inconsistency::EmptyDomain),
-                            Some(explanations),
-                        );
-                    }
+                Err(_) => {
+                    return CumulativePropagationResult::new(
+                        Err(Inconsistency::EmptyDomain),
+                        Some(explanations),
+                    );
                 }
             }
         }
@@ -344,11 +318,10 @@ fn check_whether_task_can_be_updated_by_profile<
     iterator_with_length: IteratorWithLength<'a, Var, IteratorType>,
     explanations: &mut Vec<Explanation<Var>>,
 ) -> Result<bool, ()> {
-    if height + task.resource_usage <= params.capacity {
-        // The tasks are sorted by capacity, if this task doesn't overload then none will
-        return Ok(true);
-    } else if has_mandatory_part_in_interval(context, task, *start, *end) {
-        // The current task is part of the current profile, which means that it can't be propagated by it
+    if height + task.resource_usage <= params.capacity
+        || has_mandatory_part_in_interval(context, task, *start, *end)
+    {
+        //The task cannot be propagated due to its resource usage being too low or it is part of the interval which means that it cannot be updated at all
         return Ok(false);
     } else if var_has_overlap_with_interval(context, task, *start, *end) {
         //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
