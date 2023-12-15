@@ -257,7 +257,7 @@ impl LearnedClauseManager {
         );
         //the LBD is the number of literals at different decision levels
         //  this implementation should be improved
-        let mut codes: Vec<u32> = literals
+        let mut codes: Vec<usize> = literals
             .iter()
             .filter_map(|lit| {
                 let level = assignments.get_literal_assignment_level(*lit);
@@ -268,7 +268,7 @@ impl LearnedClauseManager {
                     None
                 }
             })
-            .collect::<Vec<u32>>();
+            .collect();
         codes.sort_unstable();
         codes.dedup();
         codes.len() as u32

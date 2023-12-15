@@ -458,7 +458,7 @@ impl ConstraintSatisfactionSolver {
                 1,
                 self.sat_data_structures
                     .assignments_propositional
-                    .num_assigned_propositional_variables(),
+                    .num_trail_entries(),
             );
 
             self.backtrack(0);
@@ -473,10 +473,10 @@ impl ConstraintSatisfactionSolver {
                 (self.analysis_result.learned_literals.len() == 1) as u64;
         } else {
             //important to get trail length before the backtrack
-            let num_variables_assigned_before_conflict = self
+            let num_variables_assigned_before_conflict = &self
                 .sat_data_structures
                 .assignments_propositional
-                .num_assigned_propositional_variables();
+                .num_trail_entries();
 
             self.backtrack(self.analysis_result.backjump_level);
 
@@ -493,7 +493,7 @@ impl ConstraintSatisfactionSolver {
             );
 
             self.restart_strategy
-                .notify_conflict(lbd, num_variables_assigned_before_conflict);
+                .notify_conflict(lbd, *num_variables_assigned_before_conflict);
         }
     }
 
@@ -507,7 +507,7 @@ impl ConstraintSatisfactionSolver {
         );
 
         //no point backtracking past the assumption level
-        if self.get_decision_level() <= self.sat_data_structures.assumptions.len() as u32 {
+        if self.get_decision_level() <= self.sat_data_structures.assumptions.len() {
             return;
         }
 
@@ -516,7 +516,7 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    fn backtrack(&mut self, backtrack_level: u32) {
+    fn backtrack(&mut self, backtrack_level: usize) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
         self.sat_data_structures.backtrack(backtrack_level);
@@ -524,10 +524,13 @@ impl ConstraintSatisfactionSolver {
         self.clausal_propagator.synchronise(
             self.sat_data_structures
                 .assignments_propositional
-                .num_assigned_propositional_variables() as usize,
+                .num_trail_entries(),
         );
 
-        self.cp_data_structures.backtrack(backtrack_level);
+        self.cp_data_structures.backtrack(
+            backtrack_level,
+            &self.sat_data_structures.assignments_propositional,
+        );
         //  note that sat_cp_mediator sync should be called after the sat/cp data structures backtrack
         self.sat_cp_mediator.synchronise(
             &self.sat_data_structures.assignments_propositional,
@@ -552,7 +555,7 @@ impl ConstraintSatisfactionSolver {
         let num_assigned_variables_old = self
             .sat_data_structures
             .assignments_propositional
-            .num_assigned_propositional_variables();
+            .num_trail_entries();
 
         loop {
             let conflict_info = self
@@ -618,11 +621,11 @@ impl ConstraintSatisfactionSolver {
 
         self.counters.num_conflicts += self.state.conflicting() as u64;
 
-        self.counters.num_propagations +=
-            self.sat_data_structures
-                .assignments_propositional
-                .num_assigned_propositional_variables() as u64
-                - num_assigned_variables_old as u64;
+        self.counters.num_propagations += self
+            .sat_data_structures
+            .assignments_propositional
+            .num_trail_entries() as u64
+            - num_assigned_variables_old as u64;
 
         //Only check fixed point propagation if there was no reported conflict.
         pumpkin_assert_extreme!(
@@ -807,12 +810,11 @@ impl ConstraintSatisfactionSolver {
         self.clausal_propagator.is_propagation_complete(
             self.sat_data_structures
                 .assignments_propositional
-                .trail
-                .len(),
+                .num_trail_entries(),
         ) && self.cp_data_structures.propagator_queue.is_empty()
     }
 
-    fn get_decision_level(&self) -> u32 {
+    fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
             self.sat_data_structures
                 .assignments_propositional
@@ -846,15 +848,14 @@ impl ConstraintSatisfactionSolver {
         let mut next_trail_index = self
             .sat_data_structures
             .assignments_propositional
-            .trail
-            .len()
+            .num_trail_entries()
             - 1;
         let mut next_literal: Option<Literal> = None;
 
         loop {
-            pumpkin_assert_moderate!(self.debug_1uip_conflict_analysis_check_next_literal(
+            pumpkin_assert_moderate!(Self::debug_1uip_conflict_analysis_check_next_literal(
                 next_literal,
-                &self.sat_data_structures
+                &self.sat_data_structures.assignments_propositional
             ));
             //note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
@@ -936,18 +937,23 @@ impl ConstraintSatisfactionSolver {
             //after resolution took place, find the next literal on the trail that is relevant for this conflict
             //only literals that have been seen so far are relevant
             //  note that there may be many literals that are not relevant
-            while !self.seen[self.sat_data_structures.assignments_propositional.trail
-                [next_trail_index]
+            while !self.seen[self
+                .sat_data_structures
+                .assignments_propositional
+                .get_trail_entry(next_trail_index)
                 .get_propositional_variable()]
             {
                 next_trail_index -= 1;
-                pumpkin_assert_advanced!(self.sat_data_structures.assignments_propositional.get_literal_assignment_level(self.sat_data_structures.assignments_propositional.trail[next_trail_index]) == self.sat_data_structures.assignments_propositional.get_decision_level(),
+                pumpkin_assert_advanced!(self.sat_data_structures.assignments_propositional.get_literal_assignment_level(self.sat_data_structures.assignments_propositional.get_trail_entry(next_trail_index)) == self.sat_data_structures.assignments_propositional.get_decision_level(),
                     "The current decision level trail has been overrun, mostly likely caused by an incorrectly implemented cp propagator?");
             }
 
             //make appropriate adjustments to prepare for the next iteration
-            next_literal =
-                Some(self.sat_data_structures.assignments_propositional.trail[next_trail_index]);
+            next_literal = Some(
+                self.sat_data_structures
+                    .assignments_propositional
+                    .get_trail_entry(next_trail_index),
+            );
             self.seen[next_literal.unwrap().get_propositional_variable()] = false; //the same literal cannot be encountered more than once on the trail, so we can clear the flag here
             num_current_decision_level_literals_to_inspect -= 1;
             next_trail_index -= 1;
@@ -1012,8 +1018,7 @@ impl ConstraintSatisfactionSolver {
         let mut next_trail_index = self
             .sat_data_structures
             .assignments_propositional
-            .trail
-            .len()
+            .num_trail_entries()
             - 1;
 
         loop {
@@ -1085,22 +1090,29 @@ impl ConstraintSatisfactionSolver {
             //after resolution took place, find the next literal on the trail that is relevant for this conflict
             //only literals that have been seen so far are relevant
             //  note that there may be many literals that are not relevant
-            while !self.seen[self.sat_data_structures.assignments_propositional.trail
-                [next_trail_index]
+            while !self.seen[self
+                .sat_data_structures
+                .assignments_propositional
+                .get_trail_entry(next_trail_index)
                 .get_propositional_variable()]
                 || self
                     .sat_data_structures
                     .assignments_propositional
                     .is_literal_decision(
-                        self.sat_data_structures.assignments_propositional.trail[next_trail_index],
+                        self.sat_data_structures
+                            .assignments_propositional
+                            .get_trail_entry(next_trail_index),
                     )
             {
                 next_trail_index -= 1;
             }
 
             //make appropriate adjustments to prepare for the next iteration
-            next_literal =
-                Some(self.sat_data_structures.assignments_propositional.trail[next_trail_index]);
+            next_literal = Some(
+                self.sat_data_structures
+                    .assignments_propositional
+                    .get_trail_entry(next_trail_index),
+            );
             self.seen[next_literal.unwrap().get_propositional_variable()] = false; //the same literal cannot be encountered more than once on the trail, so we can clear the flag here
             next_trail_index -= 1;
             num_propagated_literals_left_to_inspect -= 1;
@@ -1222,9 +1234,8 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn debug_1uip_conflict_analysis_check_next_literal(
-        &self,
         next_literal: Option<Literal>,
-        sat_data_structures: &SATEngineDataStructures,
+        assignments_propositional: &AssignmentsPropositional,
     ) -> bool {
         //in conflict analysis, literals are examined in reverse order on the trail
         //the examined literals are expected to be:
@@ -1237,34 +1248,20 @@ impl ConstraintSatisfactionSolver {
         match next_literal {
             None => true,
             Some(next_literal) => {
-                if sat_data_structures
-                    .assignments_propositional
-                    .is_literal_root_assignment(next_literal)
-                {
+                if assignments_propositional.is_literal_root_assignment(next_literal) {
                     return false;
                 }
 
-                let is_propagated = sat_data_structures
-                    .assignments_propositional
-                    .is_literal_propagated(next_literal);
+                let is_propagated = assignments_propositional.is_literal_propagated(next_literal);
 
-                let current_decision_level = sat_data_structures
-                    .assignments_propositional
-                    .get_decision_level() as usize;
-
-                let decision_level_start_index = sat_data_structures
-                    .assignments_propositional
-                    .trail_delimiter[current_decision_level - 1]
-                    as usize; //the literal is not a root assignment at this point so we can do -1
+                let current_decision_level = assignments_propositional.get_decision_level();
 
                 let is_decision_literal_of_current_level =
-                    sat_data_structures.assignments_propositional.trail[decision_level_start_index]
-                        == next_literal;
+                    assignments_propositional.is_literal_decision(next_literal);
 
-                let is_assigned_at_current_decision_level = sat_data_structures
-                    .assignments_propositional
+                let is_assigned_at_current_decision_level = assignments_propositional
                     .get_literal_assignment_level(next_literal)
-                    == current_decision_level as u32;
+                    == current_decision_level;
 
                 (is_propagated || is_decision_literal_of_current_level)
                     && is_assigned_at_current_decision_level
@@ -1360,7 +1357,7 @@ impl Counters {
 #[derive(Clone, Default)]
 pub struct ConflictAnalysisResult {
     pub learned_literals: Vec<Literal>,
-    pub backjump_level: u32,
+    pub backjump_level: usize,
 }
 
 #[derive(Default)]

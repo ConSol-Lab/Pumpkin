@@ -116,15 +116,17 @@ impl SATCPMediator {
         //  this would also simplify the code below, no additional checks would be needed? Not sure.
 
         if cp_data_structures.assignments_integer.num_domains() == 0 || cp_propagators.is_empty() {
-            self.sat_trail_synced_position = assignments_propositional.trail.len();
+            self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
             return Ok(());
         }
 
-        for sat_trail_pos in self.sat_trail_synced_position..assignments_propositional.trail.len() {
-            let literal = assignments_propositional.trail[sat_trail_pos];
+        for sat_trail_pos in
+            self.sat_trail_synced_position..assignments_propositional.num_trail_entries()
+        {
+            let literal = assignments_propositional.get_trail_entry(sat_trail_pos);
             self.synchronise_literal(literal, cp_data_structures)?;
         }
-        self.sat_trail_synced_position = assignments_propositional.trail.len();
+        self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
         //the newly added entries to the trail do not need to be synchronise with the propositional trail
         //  this is because the integer trail was already synchronise when this method was called
         //  and the newly added entries are already present on the propositional trail
@@ -158,13 +160,13 @@ impl SATCPMediator {
         assignments_integer: &AssignmentsInteger,
     ) {
         pumpkin_assert_simple!(
-            self.sat_trail_synced_position >= assignments_propositional.trail.len()
+            self.sat_trail_synced_position >= assignments_propositional.num_trail_entries()
         );
         pumpkin_assert_simple!(
             self.cp_trail_synced_position >= assignments_integer.num_trail_entries()
         );
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
-        self.sat_trail_synced_position = assignments_propositional.trail.len();
+        self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
     }
 }
 

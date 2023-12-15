@@ -16,6 +16,7 @@
 * Added disjunctive scheduling example through a difference logic model.
 * Added cumulative propagator(s)
   * Added propagator utilising time-table reasoning per time point
+* Refactored the CP and propositional trails, and extracted a trail abstraction.
 
 ## Bugfixes
 

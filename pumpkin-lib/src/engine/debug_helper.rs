@@ -42,7 +42,7 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation =
                 assignments_integer_clone.num_trail_entries();
             let num_entries_on_propositional_trail_before_propagation =
-                assignments_propostional_clone.num_assigned_propositional_variables();
+                assignments_propostional_clone.num_trail_entries();
 
             let mut context = PropagationContext::new(
                 &mut assignments_integer_clone,
@@ -60,7 +60,7 @@ impl DebugHelper {
                 - num_entries_on_trail_before_propagation;
 
             let num_missed_propositional_propagations = assignments_propostional_clone
-                .num_assigned_propositional_variables()
+                .num_trail_entries()
                 - num_entries_on_propositional_trail_before_propagation;
 
             if num_missed_propagations > 0 {
@@ -144,12 +144,9 @@ impl DebugHelper {
         //two checks are done
         //  Check #1. Does setting the predicates from the reason indeed lead to the propagation?
         {
-            let mut assignments_integer_clone =
-                DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
+            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
             let mut assignments_propositional_clone =
-                DebugHelper::debug_create_empty_assignment_propositional_clone(
-                    assignments_propositional,
-                );
+                assignments_propositional.debug_create_empty_clone();
 
             let reason_predicates: Vec<Predicate> = reason.iter().copied().collect();
             let adding_predicates_was_successful =
@@ -198,13 +195,10 @@ impl DebugHelper {
         //      this idea is by Graeme Gange in the context of debugging lazy explanations
         //          and is closely related to reverse unit propagation
         {
-            let mut assignments_integer_clone =
-                DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
+            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
 
             let mut assignments_propositional_clone =
-                DebugHelper::debug_create_empty_assignment_propositional_clone(
-                    assignments_propositional,
-                );
+                assignments_propositional.debug_create_empty_clone();
 
             let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
                 .chain(reason.iter().copied())
@@ -256,12 +250,9 @@ impl DebugHelper {
         propagator: &dyn ConstraintProgrammingPropagator,
         propagator_id: PropagatorId,
     ) {
-        let mut assignments_integer_clone =
-            DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
+        let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
         let mut assignments_propositional_clone =
-            DebugHelper::debug_create_empty_assignment_propositional_clone(
-                assignments_propositional,
-            );
+            assignments_propositional.debug_create_empty_clone();
 
         let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful =
@@ -312,12 +303,9 @@ impl DebugHelper {
         let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let mut found_nonconflicting_state_at_root = false;
         for predicate in &reason_predicates {
-            let mut assignments_integer_clone =
-                DebugHelper::debug_create_empty_assignment_integers_clone(assignments_integer);
+            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
             let mut assignments_propositional_clone =
-                DebugHelper::debug_create_empty_assignment_propositional_clone(
-                    assignments_propositional,
-                );
+                assignments_propositional.debug_create_empty_clone();
 
             let negated_predicate = !*predicate;
             let outcome = assignments_integer_clone.apply_predicate(&negated_predicate, None);
@@ -359,25 +347,6 @@ impl DebugHelper {
 
 //methods that serve as small utility functions
 impl DebugHelper {
-    fn debug_create_empty_assignment_integers_clone(
-        assignments_integer: &AssignmentsInteger,
-    ) -> AssignmentsInteger {
-        let mut assignments_integer_clone = assignments_integer.clone();
-        let num_trail_entries = assignments_integer_clone.num_trail_entries();
-        assignments_integer_clone.undo_trail(num_trail_entries);
-        assignments_integer_clone
-    }
-
-    fn debug_create_empty_assignment_propositional_clone(
-        assignments_propositional: &AssignmentsPropositional,
-    ) -> AssignmentsPropositional {
-        let mut assignments_propositional_clone = assignments_propositional.clone();
-        for literal in assignments_propositional_clone.trail.clone() {
-            assignments_propositional_clone.undo_assignment(literal.get_propositional_variable());
-        }
-        assignments_propositional_clone
-    }
-
     fn debug_add_predicates_to_assignment_integers(
         assignments_integer: &mut AssignmentsInteger,
         predicates: &[Predicate],

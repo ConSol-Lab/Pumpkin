@@ -1,8 +1,6 @@
-use std::cmp::min;
-
 use crate::basic_types::{
     ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
-    PropositionalVariableGeneratorIterator,
+    PropositionalVariableGeneratorIterator, Trail,
 };
 use crate::engine::LocalId;
 use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
@@ -10,37 +8,38 @@ use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 #[derive(Clone)]
 pub struct AssignmentsPropositional {
     assignment_info: Vec<PropositionalAssignmentInfo>,
-    current_decision_level: u32,
-    pub trail: Vec<Literal>,
-    pub trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail. Note that the current decision level does not have an entry in the trail delimiter!
+    trail: Trail<Literal>,
     pub true_literal: Literal,
     pub false_literal: Literal,
-    pub processed_index: usize,
 }
 
 impl Default for AssignmentsPropositional {
     fn default() -> Self {
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
         AssignmentsPropositional {
-            assignment_info: vec![],
-            current_decision_level: 0,
-            trail: vec![],
-            trail_delimiter: vec![],
+            assignment_info: Default::default(),
+            trail: Default::default(),
             true_literal: dummy_literal,
             false_literal: dummy_literal,
-            processed_index: 0,
         }
     }
 }
 
 impl AssignmentsPropositional {
     pub fn increase_decision_level(&mut self) {
-        self.current_decision_level += 1;
-        self.trail_delimiter.push(self.trail.len() as u32);
+        self.trail.increase_decision_level()
     }
 
-    pub fn get_decision_level(&self) -> u32 {
-        self.current_decision_level
+    pub fn get_decision_level(&self) -> usize {
+        self.trail.get_decision_level()
+    }
+
+    pub fn num_trail_entries(&self) -> usize {
+        self.trail.len()
+    }
+
+    pub fn get_trail_entry(&self, index: usize) -> Literal {
+        self.trail[index]
     }
 
     pub fn grow(&mut self) {
@@ -55,13 +54,6 @@ impl AssignmentsPropositional {
     pub fn get_propositional_variables(&self) -> PropositionalVariableGeneratorIterator {
         //we start from 1 to ignore the special variable with index zero, which is always assigned at the root to true
         PropositionalVariableGeneratorIterator::new(1, self.num_propositional_variables())
-    }
-
-    pub fn pop_trail(&mut self) -> Literal {
-        let last_literal = self.trail.pop().expect("Cannot pop empty trail?");
-        self.undo_assignment(last_literal.get_propositional_variable());
-        self.processed_index = min(self.processed_index, self.trail.len());
-        last_literal
     }
 
     pub fn is_variable_assigned_true(&self, variable: PropositionalVariable) -> bool {
@@ -168,7 +160,7 @@ impl AssignmentsPropositional {
         self.is_variable_propagated(literal.get_propositional_variable())
     }
 
-    pub fn get_variable_assignment_level(&self, variable: PropositionalVariable) -> u32 {
+    pub fn get_variable_assignment_level(&self, variable: PropositionalVariable) -> usize {
         match self.assignment_info[variable] {
             PropositionalAssignmentInfo::Unassigned => {
                 panic!("Unassigned variables do not have assignment levels");
@@ -182,7 +174,7 @@ impl AssignmentsPropositional {
         }
     }
 
-    pub fn get_literal_assignment_level(&self, literal: Literal) -> u32 {
+    pub fn get_literal_assignment_level(&self, literal: Literal) -> usize {
         self.get_variable_assignment_level(literal.get_propositional_variable())
     }
 
@@ -263,32 +255,34 @@ impl AssignmentsPropositional {
         self.make_assignment(propagated_literal, constraint_reference, local_id)
     }
 
-    pub fn synchronise(&mut self, new_decision_level: u32) {
-        pumpkin_assert_simple!(new_decision_level < self.current_decision_level);
-        pumpkin_assert_simple!(
-            self.trail.len() == (self.trail_delimiter[new_decision_level as usize] as usize),
-            "It is expected that the solver would pop the trail before calling this method."
-        );
+    /// This iterator returns the literals on the trail in _reverse_ order (LIFO)
+    pub fn synchronise(&mut self, new_decision_level: usize) -> impl Iterator<Item = Literal> + '_ {
+        self.trail.synchronise(new_decision_level).inspect(|entry| {
+            let variable = entry.get_propositional_variable();
 
-        self.current_decision_level = new_decision_level;
-        self.trail_delimiter.truncate(new_decision_level as usize);
-        self.processed_index = self.trail_delimiter.len();
+            self.assignment_info[variable] = PropositionalAssignmentInfo::Unassigned;
+        })
     }
 
     pub fn is_at_the_root_level(&self) -> bool {
-        self.current_decision_level == 0
+        self.get_decision_level() == 0
     }
 
-    pub fn num_assigned_propositional_variables(&self) -> u32 {
-        self.trail.len() as u32
+    pub fn debug_create_empty_clone(&self) -> Self {
+        AssignmentsPropositional {
+            assignment_info: vec![Default::default(); self.assignment_info.len()],
+            trail: Default::default(),
+            true_literal: self.true_literal,
+            false_literal: self.false_literal,
+        }
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Default)]
 enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,
-        decision_level: u32,
+        decision_level: usize,
 
         // TODO: There is a dependency between these two fields that we ideally
         // want to encode at a type level. A `constraint_reference` points
@@ -302,6 +296,7 @@ enum PropositionalAssignmentInfo {
         constraint_reference: ConstraintReference,
         local_id: Option<LocalId>,
     },
+    #[default]
     Unassigned,
 }
 

@@ -120,7 +120,7 @@ impl GlucoseRestartStrategy {
             > self.lbd_long_term_moving_average.value() * self.lbd_coef
     }
 
-    pub fn notify_conflict(&mut self, lbd: u32, num_literals_on_trail: u32) {
+    pub fn notify_conflict(&mut self, lbd: u32, num_literals_on_trail: usize) {
         //update moving averages
         self.num_assigned_variables_moving_average
             .add_term(num_literals_on_trail as u64);
