@@ -338,22 +338,17 @@ mod tests {
             1,
         ));
         assert!(match result {
-            Err(inconsistency) => {
-                match inconsistency {
-                    Inconsistency::Other(ConflictInfo::Explanation(x)) => {
-                        let expected = [
-                            s1.upper_bound_predicate(1),
-                            s1.lower_bound_predicate(1),
-                            s2.upper_bound_predicate(1),
-                            s2.lower_bound_predicate(1),
-                        ];
-                        expected
-                            .iter()
-                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                            && x.iter().all(|y| expected.contains(y))
-                    }
-                    _ => false,
-                }
+            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
+                let expected = [
+                    s1.upper_bound_predicate(1),
+                    s1.lower_bound_predicate(1),
+                    s2.upper_bound_predicate(1),
+                    s2.lower_bound_predicate(1),
+                ];
+                expected
+                    .iter()
+                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
+                    && x.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });
