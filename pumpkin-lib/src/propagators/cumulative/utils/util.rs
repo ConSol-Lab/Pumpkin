@@ -145,7 +145,7 @@ impl Util {
             tasks,
             ordered_tasks
                 .iter()
-                .map(|current| current.resource_usage)
+                .map(|current| current.processing_time)
                 .sum::<i32>(),
         )
     }
