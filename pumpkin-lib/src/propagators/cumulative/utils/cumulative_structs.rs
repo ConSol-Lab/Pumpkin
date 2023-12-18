@@ -6,8 +6,6 @@ use crate::{
 use std::rc::Rc;
 use std::{hash::Hash, marker::PhantomData};
 
-use super::GetIndex;
-
 #[derive(Debug)]
 /// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
 pub struct Task<Var> {
@@ -21,9 +19,9 @@ pub struct Task<Var> {
     pub id: LocalId,
 }
 
-impl<Var: IntVar + 'static> GetIndex for Rc<Task<Var>> {
-    fn get_index(&self) -> usize {
-        self.id.unpack()
+impl<Var: IntVar + 'static> Task<Var> {
+    pub fn get_id(task: &Rc<Task<Var>>) -> usize {
+        task.id.unpack()
     }
 }
 

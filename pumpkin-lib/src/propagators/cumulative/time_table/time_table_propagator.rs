@@ -285,7 +285,7 @@ fn check_for_updates<
     params: &CumulativeParameters<Var>,
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
-    let mut tasks_to_consider = SparseSet::new(params.tasks.to_vec());
+    let mut tasks_to_consider = SparseSet::new(params.tasks.to_vec(), Task::get_id);
     'profile_loop: for (index, profile) in iterator_with_length.iterator.clone().enumerate() {
         //Then we go over all the different tasks
         let mut task_index = 0;
