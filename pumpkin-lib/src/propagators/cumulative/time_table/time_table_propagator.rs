@@ -2,11 +2,12 @@ use std::{cmp::max, collections::HashSet, rc::Rc};
 
 use crate::{
     basic_types::{variables::IntVar, Inconsistency},
-    engine::{DomainChange, PropagationContext},
+    engine::{DomainChange, EnqueueDecision, PropagationContext},
     propagators::{
-        CumulativeParameters, CumulativePropagationResult, Explanation, SparseSet, Task, Util,
+        CumulativeParameters, CumulativePropagationResult, Explanation, SparseSet, Task, Updated,
+        Util,
     },
-    pumpkin_assert_simple,
+    pumpkin_assert_extreme, pumpkin_assert_simple,
 };
 
 #[derive(Clone, Debug)]
@@ -100,6 +101,40 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
             check_for_updates(context, iterator_with_length, self.get_parameters())
         }
     }
+}
+
+pub fn should_enqueue<Var: IntVar + 'static>(
+    params: &mut CumulativeParameters<Var>,
+    updated_task: Rc<Task<Var>>,
+    context: &PropagationContext,
+    empty_time_table: bool,
+) -> EnqueueDecision {
+    let task = &params.tasks[updated_task.id.unpack::<usize>()];
+    pumpkin_assert_extreme!(
+        context.lower_bound(&task.start_variable) > params.bounds[task.id.unpack::<usize>()].0
+            || params.bounds[task.id.unpack::<usize>()].1
+                >= context.upper_bound(&task.start_variable)
+    );
+    let old_lower_bound = params.bounds[task.id.unpack::<usize>()].0;
+    let old_upper_bound = params.bounds[task.id.unpack::<usize>()].1;
+    //We check whether a mandatory part was extended/introduced
+    if context.upper_bound(&task.start_variable)
+        < context.lower_bound(&task.start_variable) + task.processing_time
+    {
+        params.updated.push(Updated {
+            task: Rc::clone(task),
+            old_lower_bound,
+            old_upper_bound,
+            new_lower_bound: context.lower_bound(&task.start_variable),
+            new_upper_bound: context.upper_bound(&task.start_variable),
+        });
+    }
+    Util::update_bounds_task(context, &mut params.bounds, task);
+
+    // If the time-table is empty and we have not received any updates (e.g. no mandatory parts have been introduced since the last propagation)
+    // then we can determine that no propagation will take place
+    // It is not sufficient to check whether there have been no updates since it could be the case that a task which has been updated can now propagate due to an existing profile
+    (!empty_time_table || !params.updated.is_empty()).into()
 }
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
