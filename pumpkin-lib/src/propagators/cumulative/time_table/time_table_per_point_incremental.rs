@@ -17,7 +17,7 @@ use crate::{
     pumpkin_assert_extreme,
 };
 
-use super::{generate_update_range, ResourceProfile, TimeTablePropagator, should_enqueue};
+use super::{generate_update_range, should_enqueue, ResourceProfile, TimeTablePropagator};
 use crate::propagators::IteratorWithLength;
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
