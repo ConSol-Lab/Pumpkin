@@ -3,4 +3,4 @@
 set -eux
 
 rustup component add clippy
-cargo clippy --all-targets
+cargo clippy --all-targets -- -Dwarnings

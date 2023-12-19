@@ -33,7 +33,7 @@ impl std::fmt::Display for LearnedClauseSortingStrategy {
 
 impl SATEngineDataStructures {
     pub fn are_all_assumptions_assigned(&self) -> bool {
-        self.assignments_propositional.get_decision_level() > self.assumptions.len() as u32
+        self.assignments_propositional.get_decision_level() > self.assumptions.len()
     }
 
     fn peek_next_assumption_literal(&self) -> Option<Literal> {
@@ -42,10 +42,7 @@ impl SATEngineDataStructures {
         } else {
             //the convention is that at decision level i, the (i-1)th assumption is set
             //  note that the decision level is increased before calling branching hence the minus one
-            Some(
-                self.assumptions
-                    [(self.assignments_propositional.get_decision_level() as usize) - 1],
-            )
+            Some(self.assumptions[self.assignments_propositional.get_decision_level() - 1])
         }
     }
 
@@ -74,27 +71,22 @@ impl SATEngineDataStructures {
         }
     }
 
-    pub fn backtrack(&mut self, backtrack_level: u32) {
+    pub fn backtrack(&mut self, backtrack_level: usize) {
         pumpkin_assert_simple!(
             backtrack_level < self.assignments_propositional.get_decision_level()
         );
 
-        let num_assignments_for_removal = self.assignments_propositional.trail.len()
-            - self.assignments_propositional.trail_delimiter[backtrack_level as usize] as usize;
+        self.assignments_propositional
+            .synchronise(backtrack_level)
+            .for_each(|literal| {
+                self.propositional_variable_selector
+                    .restore(literal.get_propositional_variable());
 
-        for _i in 0..num_assignments_for_removal {
-            let last_literal = self.assignments_propositional.pop_trail();
-
-            self.propositional_variable_selector
-                .restore(last_literal.get_propositional_variable());
-
-            self.propositional_value_selector.update_if_not_frozen(
-                last_literal.get_propositional_variable(),
-                last_literal.is_positive(),
-            );
-        }
-
-        self.assignments_propositional.synchronise(backtrack_level);
+                self.propositional_value_selector.update_if_not_frozen(
+                    literal.get_propositional_variable(),
+                    literal.is_positive(),
+                );
+            });
     }
 
     //does simple preprocessing, modifying the input vector of literals

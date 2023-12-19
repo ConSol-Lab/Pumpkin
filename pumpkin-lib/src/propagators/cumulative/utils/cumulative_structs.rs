@@ -20,6 +20,12 @@ pub struct Task<Var> {
     pub id: LocalId,
 }
 
+impl<Var: IntVar + 'static> Task<Var> {
+    pub fn get_id(task: &Rc<Task<Var>>) -> usize {
+        task.id.unpack()
+    }
+}
+
 impl<Var: IntVar + 'static> Hash for Task<Var> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);

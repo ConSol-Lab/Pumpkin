@@ -21,8 +21,10 @@ pub mod sequence_generators;
 mod solution;
 mod solution_value_pair;
 mod stopwatch;
+mod trail;
 pub mod variables;
 mod weighted_literal;
+
 pub use branching_decision::BranchingDecision;
 pub use clause_reference::ClauseReference;
 pub use conflict_info::ConflictInfo;
@@ -46,4 +48,5 @@ pub use propositional_variable::PropositionalVariableGeneratorIterator;
 pub use solution::Solution;
 pub use solution_value_pair::SolutionValuePair;
 pub use stopwatch::Stopwatch;
+pub use trail::Trail;
 pub use weighted_literal::WeightedLiteral;

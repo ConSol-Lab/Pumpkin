@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    has_mandatory_part_in_interval, var_has_overlap_with_interval, IteratorWithLength,
-    ResourceProfile, TimeTablePropagator,
+    has_mandatory_part_in_interval, should_enqueue, var_has_overlap_with_interval,
+    IteratorWithLength, ResourceProfile, TimeTablePropagator,
 };
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
@@ -160,6 +160,12 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
+        Util::reset_bounds_clear_updated(
+            context,
+            &mut self.cumulative_params.updated,
+            &mut self.cumulative_params.bounds,
+            &self.cumulative_params.tasks,
+        );
         TimeTablePropagator::reset_structures(self, context);
     }
 
@@ -178,12 +184,17 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 
     fn notify(
         &mut self,
-        _context: &mut PropagationContext,
-        _local_id: crate::engine::LocalId,
+        context: &mut PropagationContext,
+        local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        //Propagator from scratch, always enqueue
-        EnqueueDecision::Enqueue
+        let updated_task = Rc::clone(&self.cumulative_params.tasks[local_id.unpack::<usize>()]);
+        should_enqueue(
+            &mut self.cumulative_params,
+            updated_task,
+            context,
+            self.time_table.is_empty(),
+        )
     }
 
     fn priority(&self) -> u32 {
@@ -195,7 +206,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     }
 
     fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        Util::initialise_at_root(false, &mut self.cumulative_params, context);
+        Util::initialise_at_root(true, &mut self.cumulative_params, context);
         self.propagate(context)
     }
 
@@ -338,22 +349,17 @@ mod tests {
             1,
         ));
         assert!(match result {
-            Err(inconsistency) => {
-                match inconsistency {
-                    Inconsistency::Other(ConflictInfo::Explanation(x)) => {
-                        let expected = [
-                            s1.upper_bound_predicate(1),
-                            s1.lower_bound_predicate(1),
-                            s2.upper_bound_predicate(1),
-                            s2.lower_bound_predicate(1),
-                        ];
-                        expected
-                            .iter()
-                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                            && x.iter().all(|y| expected.contains(y))
-                    }
-                    _ => false,
-                }
+            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
+                let expected = [
+                    s1.upper_bound_predicate(1),
+                    s1.lower_bound_predicate(1),
+                    s2.upper_bound_predicate(1),
+                    s2.lower_bound_predicate(1),
+                ];
+                expected
+                    .iter()
+                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
+                    && x.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });

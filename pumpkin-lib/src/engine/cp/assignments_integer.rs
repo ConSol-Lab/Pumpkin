@@ -1,3 +1,4 @@
+use crate::basic_types::Trail;
 use crate::{
     basic_types::{DomainId, IntegerVariableGeneratorIterator, Predicate},
     predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
@@ -7,9 +8,7 @@ use super::{event_sink::EventSink, IntDomainEvent, PropagatorId, PropagatorVarId
 
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {
-    current_decision_level: u32,
-    trail_delimiter: Vec<u32>, //[i] is the position where the i-th decision level ends (exclusive) on the trail
-    trail: Vec<ConstraintProgrammingTrailEntry>,
+    trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: Vec<IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
 
     events: EventSink,
@@ -20,12 +19,11 @@ pub struct EmptyDomain;
 
 impl AssignmentsInteger {
     pub fn increase_decision_level(&mut self) {
-        self.current_decision_level += 1;
-        self.trail_delimiter.push(self.trail.len() as u32);
+        self.trail.increase_decision_level()
     }
 
-    pub fn get_decision_level(&self) -> u32 {
-        self.current_decision_level
+    pub fn get_decision_level(&self) -> usize {
+        self.trail.get_decision_level()
     }
 
     pub fn num_domains(&self) -> u32 {
@@ -89,6 +87,18 @@ impl AssignmentsInteger {
 
     pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain()
+    }
+
+    pub fn debug_create_empty_clone(&self) -> Self {
+        let mut domains = self.domains.clone();
+        self.trail.iter().rev().for_each(|entry| {
+            let domain_id = entry.predicate.get_domain();
+            domains[domain_id].undo_trail_entry(entry);
+        });
+        AssignmentsInteger {
+            domains,
+            ..Default::default()
+        }
     }
 }
 
@@ -366,31 +376,15 @@ impl AssignmentsInteger {
         }
     }
 
-    pub fn undo_trail(&mut self, num_trail_entries_to_remove: usize) {
-        pumpkin_assert_simple!(num_trail_entries_to_remove <= self.trail.len());
-
-        for _i in 0..num_trail_entries_to_remove {
+    pub fn synchronise(&mut self, new_decision_level: usize) {
+        self.trail.synchronise(new_decision_level).for_each(|entry| {
             pumpkin_assert_moderate!(
-                !self.trail.last().unwrap().predicate.is_equality_predicate(),
+                !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
-
-            let popped_entry = self.trail.pop().unwrap();
-            let domain_id = popped_entry.predicate.get_domain();
-
-            self.domains[domain_id].undo_trail_entry(popped_entry);
-        }
-    }
-
-    pub fn synchronise(&mut self, new_decision_level: u32) {
-        pumpkin_assert_simple!(new_decision_level < self.current_decision_level);
-
-        let num_trail_entries_to_remove =
-            self.trail.len() - self.trail_delimiter[new_decision_level as usize] as usize;
-
-        self.undo_trail(num_trail_entries_to_remove);
-        self.current_decision_level = new_decision_level;
-        self.trail_delimiter.truncate(new_decision_level as usize);
+            let domain_id = entry.predicate.get_domain();
+            self.domains[domain_id].undo_trail_entry(&entry);
+        })
     }
 }
 
@@ -545,7 +539,7 @@ impl IntegerDomainExplicit {
         }
     }
 
-    fn undo_trail_entry(&mut self, entry: ConstraintProgrammingTrailEntry) {
+    fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
         if let Predicate::NotEqual {
             domain_id: _,
             not_equal_constant,

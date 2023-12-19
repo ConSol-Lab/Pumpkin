@@ -199,8 +199,9 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
         //  dividing this function into several smaller functions would normally make sense for readability
         //  however this is a performance hotspot, so it is hard to divide the code into smaller bits without degrading the performance
         //  so the decision was to not divide the function into smaller parts and simply have one long function
-        while self.next_position_on_trail_to_propagate < assignments.trail.len() {
-            let true_literal = assignments.trail[self.next_position_on_trail_to_propagate];
+        while self.next_position_on_trail_to_propagate < assignments.num_trail_entries() {
+            let true_literal =
+                assignments.get_trail_entry(self.next_position_on_trail_to_propagate);
             pumpkin_assert_simple!(assignments.is_literal_assigned_true(true_literal));
 
             //effectively remove all watches from this true_literal
@@ -408,7 +409,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             "Watch list length is not as expected given the number of propositional variables."
         );
 
-        assert!(self.is_propagation_complete(assignments.trail.len()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
+        assert!(self.is_propagation_complete(assignments.num_trail_entries()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
 
         //check that each clause that appears in the watch list appears exactly twice
         //  note that not every clause in the clause manager necessarily appears in the watch list

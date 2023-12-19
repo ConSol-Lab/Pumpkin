@@ -467,6 +467,16 @@ pub enum EnqueueDecision {
     Skip,
 }
 
+impl From<bool> for EnqueueDecision {
+    fn from(value: bool) -> Self {
+        if value {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
+        }
+    }
+}
+
 pub trait ConstraintProgrammingPropagator {
     //Propagate method that will be called during search
     //	extends the current partial assignments with inferred domain changes
