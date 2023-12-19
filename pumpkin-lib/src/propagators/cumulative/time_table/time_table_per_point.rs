@@ -166,7 +166,6 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
             &mut self.cumulative_params.bounds,
             &self.cumulative_params.tasks,
         );
-        TimeTablePropagator::reset_structures(self, context);
     }
 
     fn get_reason_for_propagation(
