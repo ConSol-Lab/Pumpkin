@@ -17,7 +17,7 @@ use crate::{
     pumpkin_assert_extreme,
 };
 
-use super::{generate_update_range, ResourceProfile, TimeTablePropagator};
+use super::{generate_update_range, ResourceProfile, TimeTablePropagator, should_enqueue};
 use crate::propagators::IteratorWithLength;
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
@@ -159,29 +159,13 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        let task = &self.cumulative_params.tasks[local_id.unpack::<usize>()];
-        pumpkin_assert_extreme!(
-            context.lower_bound(&task.start_variable)
-                > self.cumulative_params.bounds[task.id.unpack::<usize>()].0
-                || self.cumulative_params.bounds[task.id.unpack::<usize>()].1
-                    >= context.upper_bound(&task.start_variable)
-        );
-        let old_lower_bound = self.cumulative_params.bounds[task.id.unpack::<usize>()].0;
-        let old_upper_bound = self.cumulative_params.bounds[task.id.unpack::<usize>()].1;
-        //We check whether a mandatory part was extended/introduced
-        if context.upper_bound(&task.start_variable)
-            < context.lower_bound(&task.start_variable) + task.processing_time
-        {
-            self.cumulative_params.updated.push(Updated {
-                task: Rc::clone(task),
-                old_lower_bound,
-                old_upper_bound,
-                new_lower_bound: context.lower_bound(&task.start_variable),
-                new_upper_bound: context.upper_bound(&task.start_variable),
-            });
-        }
-        Util::update_bounds_task(context, &mut self.cumulative_params.bounds, task);
-        EnqueueDecision::Enqueue // TODO: for some reason skipping here and only returning when a new mandatory part is added will result in missed propagations
+        let updated_task = Rc::clone(&self.cumulative_params.tasks[local_id.unpack::<usize>()]);
+        should_enqueue(
+            &mut self.cumulative_params,
+            updated_task,
+            context,
+            self.time_table.is_empty(),
+        )
     }
 
     fn priority(&self) -> u32 {
