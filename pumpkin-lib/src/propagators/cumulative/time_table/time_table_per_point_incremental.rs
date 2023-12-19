@@ -4,7 +4,6 @@ use std::{
 };
 
 use crate::propagators::check_for_updates;
-use crate::propagators::TimeTablePerPointProp;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
@@ -16,6 +15,7 @@ use crate::{
     },
     pumpkin_assert_extreme,
 };
+use crate::{propagators::TimeTablePerPointProp, pumpkin_assert_advanced};
 
 use super::{generate_update_range, should_enqueue, ResourceProfile, TimeTablePropagator};
 use crate::propagators::IteratorWithLength;
@@ -65,10 +65,13 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
     for TimeTablePerPointIncrementalProp<Var>
 {
     fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        Util::check_bounds_equal_at_propagation(
-            context,
-            &self.cumulative_params.tasks,
-            &self.cumulative_params.bounds,
+        pumpkin_assert_advanced!(
+            Util::check_bounds_equal_at_propagation(
+                context,
+                &self.cumulative_params.tasks,
+                &self.cumulative_params.bounds,
+            ),
+            "Bound were not equal when propagating"
         );
         for Updated {
             task,

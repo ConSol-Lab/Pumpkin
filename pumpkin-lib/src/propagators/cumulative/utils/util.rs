@@ -9,7 +9,7 @@ use crate::{
         Delta, DomainChange, DomainEvents, LocalId, PropagationContext,
         PropagatorConstructorContext,
     },
-    pumpkin_assert_extreme, pumpkin_assert_simple,
+    pumpkin_assert_simple,
 };
 
 use super::{ArgTask, CumulativeParameters, Explanation, Task, Updated};
@@ -225,28 +225,14 @@ impl Util {
         context: &PropagationContext,
         tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
-    ) {
-        pumpkin_assert_extreme!(
-            tasks
-                .iter()
-                .all(|current| bounds[current.id.unpack::<usize>()]
-                    == (
-                        context.lower_bound(&current.start_variable),
-                        context.upper_bound(&current.start_variable)
-                    )),
-            "{:?}",
-            tasks
-                .iter()
-                .map(|current| format!(
-                    "{:?} - {:?}",
-                    bounds[current.id.unpack::<usize>()],
-                    (
-                        context.lower_bound(&current.start_variable),
-                        context.upper_bound(&current.start_variable)
-                    )
-                ))
-                .collect::<Vec<_>>()
-        );
+    ) -> bool {
+        tasks.iter().all(|current| {
+            bounds[current.id.unpack::<usize>()]
+                == (
+                    context.lower_bound(&current.start_variable),
+                    context.upper_bound(&current.start_variable),
+                )
+        })
     }
 
     pub fn update_bounds_task<Var: IntVar + 'static>(
