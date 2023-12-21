@@ -9,13 +9,13 @@ use std::{hash::Hash, marker::PhantomData};
 #[derive(Debug)]
 /// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
 pub struct Task<Var> {
-    /// * `start_variable` - The [PropagatorVariable] representing the start time of a task
+    /// The [PropagatorVariable] representing the start time of a task
     pub start_variable: PropagatorVariable<Var>,
-    /// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
+    /// The processing time of the `start_variable` (also referred to as duration of a task)
     pub processing_time: i32,
-    /// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
+    /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
-    /// * `id` - The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
+    /// The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
     pub id: LocalId,
 }
 
@@ -42,21 +42,22 @@ impl<Var: IntVar + 'static> Eq for Task<Var> {}
 #[derive(Clone, Debug)]
 /// The task which is passed as argument
 pub struct ArgTask<Var> {
-    /// * `start_variable` - The [IntVar] representing the start time of a task
+    /// The [IntVar] representing the start time of a task
     pub start_time: Var,
-    /// * `processing_time` - The processing time of the `start_variable` (also referred to as duration of a task)
+    /// The processing time of the `start_variable` (also referred to as duration of a task)
     pub processing_time: i32,
-    /// * `resource_usage` - How much of the resource the given task uses during its non-preemptive execution
+    /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
 }
 #[derive(Clone)]
 /// The arguments which are required to create the constraint/propagators
 pub struct CumulativeArgs<Var, T> {
-    /// * `tasks` - A box containing all of the ArgTasks
+    /// A box containing all of the ArgTasks
     pub tasks: Box<[ArgTask<Var>]>,
-    /// * `capacity` - The capacity of the resource
+    /// The capacity of the resource
     pub capacity: i32,
-    /// * `propagator_type` - We use [PhantomData] to differentiate between the different types of propagators, without this field we would need to create a new argument struct for each cumulative propagator
+    /// We use [PhantomData] to differentiate between the different types of propagators;
+    /// without this field we would need to create a new argument struct for each cumulative propagator
     propagator_type: PhantomData<T>,
 }
 
@@ -70,7 +71,8 @@ impl<Var, T> CumulativeArgs<Var, T> {
     }
 }
 
-/// An alias used for calling the [CumulativeArgs::new] method with the concrete propagator type of [TimeTablePerPointProp]; this is used to prevent creating a different `new` method for each type `T`
+/// An alias used for calling the [CumulativeArgs::new] method with the concrete propagator type of [TimeTablePerPointProp];
+/// this is used to prevent creating a different `new` method for each type `T`
 pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointProp<Var>>;
 
 #[derive(Debug)]

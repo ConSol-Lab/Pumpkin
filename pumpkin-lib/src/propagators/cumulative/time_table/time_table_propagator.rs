@@ -13,7 +13,7 @@ use crate::{
 #[derive(Clone, Debug)]
 /// Structures used for storing the data related to resource profiles;
 /// A [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
-pub struct ResourceProfile<Var> {
+pub(crate) struct ResourceProfile<Var> {
     /// The start time of the [ResourceProfile] (inclusive)
     pub start: i32,
     /// The end time of the [ResourceProfile] (inclusive)
@@ -36,7 +36,7 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
 }
 
 #[derive(Clone)]
-pub struct IteratorWithLength<
+pub(crate) struct IteratorWithLength<
     'a,
     Var: IntVar + 'static,
     IteratorType: Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
@@ -47,7 +47,7 @@ pub struct IteratorWithLength<
 
 /// A generic propagator which stores certain parts of the common behaviour for different time-table methods
 /// (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
-pub trait TimeTablePropagator<Var: IntVar + 'static> {
+pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     ///Type of the generic iterator for iterating over the time-table without assuming the type of [TimeTableType][TimeTablePropagator::TimeTableType]
     type TimeTableIterator<'b>: Iterator<Item = &'b ResourceProfile<Var>>
         + Clone
@@ -105,7 +105,8 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
     }
 }
 
-pub fn should_enqueue<Var: IntVar + 'static>(
+/// Determines whether a time-table propagator should enqueue and updates the appropriate structures for processing during propagation
+pub(crate) fn should_enqueue<Var: IntVar + 'static>(
     parameters: &mut CumulativeParameters<Var>,
     updated_task: Rc<Task<Var>>,
     context: &PropagationContext,
@@ -145,7 +146,6 @@ pub fn should_enqueue<Var: IntVar + 'static>(
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
 /// This method assumes that the lower-bound has been propagated due to `profiles.nth(propagating_index)`
-/// * `profiles` - The [ResourceProfile]s in the time-table
 fn find_maximum_bound_and_profiles_lower_bound<'a, Var: IntVar + 'static>(
     context: &PropagationContext,
     propagating_index: usize,
@@ -193,7 +193,6 @@ fn find_maximum_bound_and_profiles_lower_bound<'a, Var: IntVar + 'static>(
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
 /// This method assumes that the upper-bound has been propagated due to `profiles.nth(propagating_index)`
-/// * `profiles` - The [ResourceProfile]s in the time-table
 fn find_maximum_bound_and_profiles_upper_bound<
     'a,
     Var: IntVar + 'static,
@@ -251,7 +250,7 @@ fn find_maximum_bound_and_profiles_upper_bound<
 }
 
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the interval [start, end]
-pub fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
+pub(crate) fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
     context: &PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
@@ -267,7 +266,7 @@ pub fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
 }
 
 /// Checks whether the lower and upper bound of a variable overlap with the provided interval
-pub fn var_has_overlap_with_interval<Var: IntVar + 'static>(
+pub(crate) fn var_has_overlap_with_interval<Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
@@ -281,8 +280,10 @@ pub fn var_has_overlap_with_interval<Var: IntVar + 'static>(
     (start < upper_bound) && (lower_bound <= end)
 }
 
-/// Checks whether a propagation should occur based on the current state of the time-table
-/// * `to_check` - The profiles which should be checked
+/// Checks whether propagations should occur based on the current state of the time-table
+///
+/// It goes over all profiles and all tasks and determines which ones should be propagated;
+/// Note that this method is not idempotent
 fn check_for_updates<
     'a,
     Var: IntVar + 'static,

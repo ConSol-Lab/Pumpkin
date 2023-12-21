@@ -14,7 +14,7 @@ use crate::{
     propagators::{CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Util},
 };
 
-use super::{
+use super::time_table_propagator::{
     has_mandatory_part_in_interval, should_enqueue, var_has_overlap_with_interval,
     IteratorWithLength, ResourceProfile, TimeTablePropagator,
 };
@@ -59,7 +59,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
         }
     }
 
-    pub fn debug_propagate_from_scratch_time_table_point(
+    pub(crate) fn debug_propagate_from_scratch_time_table_point(
         context: &mut PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> PropagationStatusCP {

@@ -18,7 +18,10 @@ pub struct Util {}
 
 impl Util {
     /// Creates an explanation consisting of all bounds of the variables causing a propagation (See "Improving scheduling by Learning (Section 4.5) - Andreas Schutt")
-    /// * `change_and_explanation_bound` - The change (i.e. lower-bound or upper-bound change) and the explanation bound which should be used (Note that the explanation bound could be different from the actual propagation)
+    ///
+    /// `change_and_explanation_bound` stores the change (i.e. lower-bound or upper-bound change)
+    /// and the explanation bound which should be used
+    /// (Note that the explanation bound could be different from the actual propagation)
     pub fn create_naïve_explanation<'a, Var: IntVar + 'static>(
         change_and_explanation_bound: DomainChange,
         task: &Rc<Task<Var>>,
@@ -221,6 +224,7 @@ impl Util {
         params.updated.clear();
     }
 
+    /// Updates the bounds of the provided `task` to those stored in `context`
     pub fn update_bounds_task<Var: IntVar + 'static>(
         context: &PropagationContext,
         bounds: &mut [(i32, i32)],
@@ -232,6 +236,9 @@ impl Util {
         );
     }
 
+    /// Clears the provided `updated` and resets **all** bounds to those stored in `context`
+    ///
+    /// This method is predominantly used during bactracking/synchronisation
     pub fn reset_bounds_clear_updated<Var: IntVar + 'static>(
         context: &PropagationContext,
         updated: &mut Vec<Updated<Var>>,
