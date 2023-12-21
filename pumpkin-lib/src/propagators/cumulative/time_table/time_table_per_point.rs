@@ -19,16 +19,20 @@ use super::{
     IteratorWithLength, ResourceProfile, TimeTablePropagator,
 };
 
-/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
+/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint -
+/// This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPointProp<Var> {
-    /// * `time_table` - Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present | Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+    /// Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present |
+    /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
     time_table: BTreeMap<u32, ResourceProfile<Var>>,
-    /// * `reasons_for_propagation_lower_bound` - For each variable, eagerly maps the explanation of the lower-bound change
+    /// For each variable, eagerly maps the explanation of the lower-bound change;
+    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
-    /// * `reasons_for_propagation_upper_bound` - For each variable, eagerly maps the explanation of the upper-bound change
+    /// For each variable, eagerly maps the explanation of the upper-bound change
+    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i <= bound\]
     reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
-    /// * `cumulative_params` - Stores the input parameters to the cumulative constraint
-    cumulative_params: CumulativeParameters<Var>,
+    /// Stores the input parameters to the cumulative constraint
+    parameters: CumulativeParameters<Var>,
 }
 
 impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointProp<Var>>
@@ -44,24 +48,24 @@ where
 }
 
 impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
-    pub fn new(params: CumulativeParameters<Var>) -> TimeTablePerPointProp<Var> {
+    pub fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointProp<Var> {
         let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); params.tasks.len()];
+            vec![HashMap::new(); parameters.tasks.len()];
         TimeTablePerPointProp {
             time_table: BTreeMap::new(),
             reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
             reasons_for_propagation_upper_bound: reasons_for_propagation,
-            cumulative_params: params,
+            parameters,
         }
     }
 
     pub fn debug_propagate_from_scratch_time_table_point(
         context: &mut PropagationContext,
-        params: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var>,
     ) -> PropagationStatusCP {
         //This method is similar to that of `create_time_table` but somewhat simpler
         //We first create a time-table per point in the horizon
-        let horizon = params.horizon;
+        let horizon = parameters.horizon;
         let mut profile: Vec<ResourceProfile<Var>> = Vec::with_capacity(horizon as usize);
         for i in 0..=horizon {
             profile.push(ResourceProfile {
@@ -71,7 +75,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
                 height: 0,
             });
         }
-        for task in params.tasks.iter() {
+        for task in parameters.tasks.iter() {
             let upper_bound = context.upper_bound(&task.start_variable);
             let lower_bound = context.lower_bound(&task.start_variable);
 
@@ -82,7 +86,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
                     profile[i as usize].height += task.resource_usage;
                     profile[i as usize].profile_tasks.push(Rc::clone(task));
 
-                    if profile[i as usize].height > params.capacity {
+                    if profile[i as usize].height > parameters.capacity {
                         //The profile which we have just added to has overflown the resource capacity
                         return Util::create_error_clause(
                             context,
@@ -101,8 +105,8 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
         } in profile.iter()
         {
             //Then we go over all tasks
-            for task in params.tasks.iter() {
-                if height + task.resource_usage <= params.capacity {
+            for task in parameters.tasks.iter() {
+                if height + task.resource_usage <= parameters.capacity {
                     //The tasks are sorted in non-increasing order of resource usage, if this holds for a task then it will hold for all subsequent tasks
                     break;
                 } else if has_mandatory_part_in_interval(context, task, *start, *end) {
@@ -162,9 +166,9 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     fn synchronise(&mut self, context: &PropagationContext) {
         Util::reset_bounds_clear_updated(
             context,
-            &mut self.cumulative_params.updated,
-            &mut self.cumulative_params.bounds,
-            &self.cumulative_params.tasks,
+            &mut self.parameters.updated,
+            &mut self.parameters.bounds,
+            &self.parameters.tasks,
         );
     }
 
@@ -177,7 +181,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
             delta,
             &self.reasons_for_propagation_lower_bound,
             &self.reasons_for_propagation_upper_bound,
-            &self.cumulative_params.tasks,
+            &self.parameters.tasks,
         )
     }
 
@@ -187,9 +191,9 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        let updated_task = Rc::clone(&self.cumulative_params.tasks[local_id.unpack::<usize>()]);
+        let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         should_enqueue(
-            &mut self.cumulative_params,
+            &mut self.parameters,
             updated_task,
             context,
             self.time_table.is_empty(),
@@ -205,7 +209,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     }
 
     fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        Util::initialise_at_root(true, &mut self.cumulative_params, context);
+        Util::initialise_at_root(true, &mut self.parameters, context);
         self.propagate(context)
     }
 
@@ -243,11 +247,11 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
 
     fn create_time_table(
         context: &PropagationContext,
-        params: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var>,
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
         let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts
-        for task in params.tasks.iter() {
+        for task in parameters.tasks.iter() {
             let upper_bound = context.upper_bound(&task.start_variable);
             let lower_bound = context.lower_bound(&task.start_variable);
 
@@ -261,7 +265,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
                     current_profile.height += task.resource_usage;
                     current_profile.profile_tasks.push(Rc::clone(task));
 
-                    if current_profile.height > params.capacity {
+                    if current_profile.height > parameters.capacity {
                         //The addition of the current task to the resource profile has caused an overflow
                         return Err(current_profile.profile_tasks.clone());
                     }
@@ -272,7 +276,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
     }
 
     fn get_parameters(&self) -> &CumulativeParameters<Var> {
-        &self.cumulative_params
+        &self.parameters
     }
 
     fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
@@ -476,7 +480,7 @@ mod tests {
         assert_eq!(solver.upper_bound(s2), 10);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        let notification_status = solver.increase_lower_bound(&mut propagator, 0, s1, 5);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
@@ -596,7 +600,7 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound(&mut propagator, 3, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 3, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
@@ -672,7 +676,7 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound(&mut propagator, 4, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 4, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,

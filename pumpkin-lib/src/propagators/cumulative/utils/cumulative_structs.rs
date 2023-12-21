@@ -21,7 +21,7 @@ pub struct Task<Var> {
 
 impl<Var: IntVar + 'static> Task<Var> {
     pub fn get_id(task: &Rc<Task<Var>>) -> usize {
-        task.id.unpack()
+        task.id.unpack() as usize
     }
 }
 
@@ -33,7 +33,7 @@ impl<Var: IntVar + 'static> Hash for Task<Var> {
 
 impl<Var: IntVar + 'static> PartialEq for Task<Var> {
     fn eq(&self, other: &Self) -> bool {
-        self.id.unpack::<usize>() == other.id.unpack()
+        self.id.unpack() == other.id.unpack()
     }
 }
 
@@ -83,17 +83,21 @@ pub struct Updated<Var> {
     pub new_upper_bound: i32,
 }
 
-/// Holds the data for the cumulative constraint; this constraint models that for each time-point in the horizon, the resource consumption for that time-point is not exceeded
+/// Holds the data for the cumulative constraint;
+/// the tasks, the capacity, the known bounds, the values which have been updated since the previous proapgation and the horizon
 pub struct CumulativeParameters<Var> {
-    /// * `tasks` - The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec]; this is stored as a Box of Rc's to accomodate the sharing of the tasks
+    /// The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec];
+    /// this is stored as a Box of Rc's to accomodate the sharing of the tasks
     pub tasks: Box<[Rc<Task<Var>>]>,
-    /// * `capacity` - The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
+    /// The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
     pub capacity: i32,
-    /// * `bounds` - The current known bounds of the different tasks; stored as (lower_bound, upper_bound)
+    /// The current known bounds of the different tasks; stored as (lower bound, upper bound)
+    ///
+    /// [i] represents the currently known bounds of task i
     pub bounds: Vec<(i32, i32)>,
-    /// * `updated` - The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
+    /// The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
     pub updated: Vec<Updated<Var>>,
-    /// * `horizon` - The largest possible makespan, in this case it is assumed to be the sum of all processing times
+    /// The largest possible makespan, in this case it is assumed to be the sum of all processing times
     pub horizon: i32,
 }
 
@@ -115,11 +119,11 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
 
 /// Stores the explanations
 pub struct Explanation<Var> {
-    /// * `change` - The domain change related to the event; contains the type of domain change and the value
+    /// The domain change related to the event; contains the type of domain change and the value
     pub change: DomainChange,
-    /// * `task` - The updated task
+    /// The updated task
     pub task: Rc<Task<Var>>,
-    /// * `explanation` - The actual explanation consisting of a PropositionalConjunction
+    /// The actual explanation consisting of a PropositionalConjunction
     pub explanation: PropositionalConjunction,
 }
 
@@ -139,9 +143,12 @@ impl<Var: IntVar + 'static> Explanation<Var> {
 
 /// Stores the result of a propagation iteration by the cumulative propagators
 pub struct CumulativePropagationResult<Var> {
-    /// * `status` - The result of the propagation, determining whether there was a conflict or whether it was
+    /// The result of the propagation, determining whether there was a conflict or whether it was
     pub status: PropagationStatusCP,
-    /// * `explanations` - The explanations found during the propagation cycle; these explanations are required to be added to the appropriate structures before. These explanations could be [None] if a structural inconsistency is found
+    /// The explanations found during the propagation cycle;
+    /// these explanations are required to be added to the appropriate structures before.
+    ///
+    /// These explanations could be [None] if a structural inconsistency is found
     pub explanations: Option<Vec<Explanation<Var>>>,
 }
 

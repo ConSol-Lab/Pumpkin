@@ -97,14 +97,15 @@ impl TestSolver {
         self.assignment.get_lower_bound(var)
     }
 
-    pub fn increase_lower_bound(
+    pub fn increase_lower_bound_and_notify(
         &mut self,
         propagator: &mut TestPropagator,
         id: i32,
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let _ = self.assignment.tighten_lower_bound(var, value, None);
+        let result = self.assignment.tighten_lower_bound(var, value, None);
+        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let mut context = PropagationContext::new(
             &mut self.assignment,
             &mut self.assignment_propositional,

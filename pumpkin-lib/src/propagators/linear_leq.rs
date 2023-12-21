@@ -112,7 +112,7 @@ where
         _context: &PropagationContext,
         delta: Delta,
     ) -> PropositionalConjunction {
-        let i = delta.affected_local_id().unpack::<u32>();
+        let i = delta.affected_local_id().unpack();
         let bound = if i == self.x.len() as u32 {
             //Reification literal has been retrieved
             let DomainChange::LiteralAssignedFalse = self.reif.as_ref().unwrap().unpack(delta)

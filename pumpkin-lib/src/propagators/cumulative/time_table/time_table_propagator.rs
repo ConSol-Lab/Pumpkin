@@ -11,15 +11,16 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-/// Structures used for storing the data related to resource profiles; a [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
+/// Structures used for storing the data related to resource profiles;
+/// A [ResourceProfile] represents a rectangle where the height is the cumulative mandatory resource usage of the [profile tasks][ResourceProfile::profile_tasks]
 pub struct ResourceProfile<Var> {
-    /// * `start` - The start time of the [ResourceProfile] (inclusive)
+    /// The start time of the [ResourceProfile] (inclusive)
     pub start: i32,
-    /// * `end` - The end time of the [ResourceProfile] (inclusive)
+    /// The end time of the [ResourceProfile] (inclusive)
     pub end: i32,
-    /// * `profile_tasks` - The IDs of the tasks which are part of the profile
+    /// The IDs of the tasks which are part of the profile
     pub profile_tasks: Vec<Rc<Task<Var>>>,
-    /// * `height` - The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
+    /// The amount of cumulative resource usage of all [profile tasks][ResourceProfile::profile_tasks] (i.e. the height of the rectangle)
     pub height: i32,
 }
 
@@ -44,7 +45,8 @@ pub struct IteratorWithLength<
     pub length: usize,
 }
 
-/// A generic propagator which stores certain parts of the common behaviour for different time-table methods (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
+/// A generic propagator which stores certain parts of the common behaviour for different time-table methods
+/// (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub trait TimeTablePropagator<Var: IntVar + 'static> {
     ///Type of the generic iterator for iterating over the time-table without assuming the type of [TimeTableType][TimeTablePropagator::TimeTableType]
     type TimeTableIterator<'b>: Iterator<Item = &'b ResourceProfile<Var>>
@@ -70,7 +72,7 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
     /// The result of this method is either the time-table of type [TimeTableType][TimeTablePropagator::TimeTableType] or the tasks responsible for the conflict
     fn create_time_table(
         context: &PropagationContext,
-        params: &CumulativeParameters<Var>,
+        parameters: &CumulativeParameters<Var>,
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
@@ -104,24 +106,24 @@ pub trait TimeTablePropagator<Var: IntVar + 'static> {
 }
 
 pub fn should_enqueue<Var: IntVar + 'static>(
-    params: &mut CumulativeParameters<Var>,
+    parameters: &mut CumulativeParameters<Var>,
     updated_task: Rc<Task<Var>>,
     context: &PropagationContext,
     empty_time_table: bool,
 ) -> EnqueueDecision {
-    let task = &params.tasks[updated_task.id.unpack::<usize>()];
+    let task = &parameters.tasks[updated_task.id.unpack() as usize];
     pumpkin_assert_extreme!(
-        context.lower_bound(&task.start_variable) > params.bounds[task.id.unpack::<usize>()].0
-            || params.bounds[task.id.unpack::<usize>()].1
+        context.lower_bound(&task.start_variable) > parameters.bounds[task.id.unpack() as usize].0
+            || parameters.bounds[task.id.unpack() as usize].1
                 >= context.upper_bound(&task.start_variable)
     );
-    let old_lower_bound = params.bounds[task.id.unpack::<usize>()].0;
-    let old_upper_bound = params.bounds[task.id.unpack::<usize>()].1;
+    let old_lower_bound = parameters.bounds[task.id.unpack() as usize].0;
+    let old_upper_bound = parameters.bounds[task.id.unpack() as usize].1;
     //We check whether a mandatory part was extended/introduced
     if context.upper_bound(&task.start_variable)
         < context.lower_bound(&task.start_variable) + task.processing_time
     {
-        params.updated.push(Updated {
+        parameters.updated.push(Updated {
             task: Rc::clone(task),
             old_lower_bound,
             old_upper_bound,
@@ -129,12 +131,16 @@ pub fn should_enqueue<Var: IntVar + 'static>(
             new_upper_bound: context.upper_bound(&task.start_variable),
         });
     }
-    Util::update_bounds_task(context, &mut params.bounds, task);
+    Util::update_bounds_task(context, &mut parameters.bounds, task);
 
     // If the time-table is empty and we have not received any updates (e.g. no mandatory parts have been introduced since the last propagation)
     // then we can determine that no propagation will take place
     // It is not sufficient to check whether there have been no updates since it could be the case that a task which has been updated can now propagate due to an existing profile
-    (!empty_time_table || !params.updated.is_empty()).into()
+    if !empty_time_table || !parameters.updated.is_empty() {
+        EnqueueDecision::Enqueue
+    } else {
+        EnqueueDecision::Skip
+    }
 }
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
@@ -211,7 +217,8 @@ fn find_maximum_bound_and_profiles_upper_bound<
 
     let mut new_profile_tasks = HashSet::new();
     new_profile_tasks.extend(current_profile.profile_tasks.iter());
-    let mut bound = current_profile.start - propagating_task.processing_time; //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile;
+    //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile;
+    let mut bound = current_profile.start - propagating_task.processing_time;
     for next_profile in profiles.rev() {
         //Find all profiles before the current one which would propagate for the current task based on that profiles[propagating_index] propagated
         //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
@@ -270,7 +277,8 @@ pub fn var_has_overlap_with_interval<Var: IntVar + 'static>(
         context.lower_bound(&task.start_variable),
         context.upper_bound(&task.start_variable) + task.processing_time,
     ); //The release time of the task and the deadline
-    (start < upper_bound) && (lower_bound <= end) //Check whether there is any overlap between the two intervals (i.e. there exists a C such that start <= C <= end /\ lower_bound <= C <= upper_bound)
+       //Check whether there is any overlap between the two intervals (i.e. there exists a C such that start <= C <= end /\ lower_bound <= C <= upper_bound)
+    (start < upper_bound) && (lower_bound <= end)
 }
 
 /// Checks whether a propagation should occur based on the current state of the time-table
@@ -282,10 +290,10 @@ fn check_for_updates<
 >(
     context: &mut PropagationContext,
     iterator_with_length: IteratorWithLength<'a, Var, IteratorType>,
-    params: &CumulativeParameters<Var>,
+    parameters: &CumulativeParameters<Var>,
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
-    let mut tasks_to_consider = SparseSet::new(params.tasks.to_vec(), Task::get_id);
+    let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
     'profile_loop: for (index, profile) in iterator_with_length.iterator.clone().enumerate() {
         //Then we go over all the different tasks
         let mut task_index = 0;
@@ -309,7 +317,7 @@ fn check_for_updates<
                 &task,
                 profile,
                 index,
-                params,
+                parameters,
                 iterator_with_length.clone(),
                 &mut explanations,
             ) {
@@ -349,11 +357,11 @@ fn check_whether_task_can_be_updated_by_profile<
         height,
     }: &ResourceProfile<Var>,
     index: usize,
-    params: &CumulativeParameters<Var>,
+    parameters: &CumulativeParameters<Var>,
     iterator_with_length: IteratorWithLength<'a, Var, IteratorType>,
     explanations: &mut Vec<Explanation<Var>>,
 ) -> Result<bool, ()> {
-    if height + task.resource_usage <= params.capacity
+    if height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(context, task, *start, *end)
     {
         //The task cannot be propagated due to its resource usage being too low or it is part of the interval which means that it cannot be updated at all
@@ -370,7 +378,7 @@ fn check_whether_task_can_be_updated_by_profile<
                 index,
                 iterator_with_length.iterator.clone(),
                 task,
-                params.capacity,
+                parameters.capacity,
             );
             match Util::propagate_and_explain(
                 context,
@@ -400,14 +408,16 @@ fn check_whether_task_can_be_updated_by_profile<
         if end > &context.upper_bound(&task.start_variable)
             && *start - task.processing_time < context.upper_bound(&task.start_variable)
         {
-            //The current task has overlap with the current resource profile (i.e. end > ub(s) /\ start - p < ub(s)); this means that if the task starts at its latest starting time it would overlap with this ResourceProfile
+            //The current task has overlap with the current resource profile (i.e. end > ub(s) /\ start - p < ub(s));
+            //this means that if the task starts at its latest starting time it would overlap with this ResourceProfile
+            //
             //Based on this propagation, find the profile which now propagates to the lowest upper bound for this task
             let (upper_bound, new_profile_tasks) = find_maximum_bound_and_profiles_upper_bound(
                 context,
                 index,
                 task,
                 iterator_with_length,
-                params.capacity,
+                parameters.capacity,
             );
             match Util::propagate_and_explain(
                 context,

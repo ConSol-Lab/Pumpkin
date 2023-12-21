@@ -166,11 +166,11 @@ impl Util {
                 //Note that we assume that the index is the same as the local id of the task
                 match change {
                     DomainChange::LowerBound(value) => {
-                        reasons_for_propagation_lower_bound[task.id.unpack::<usize>()]
+                        reasons_for_propagation_lower_bound[task.id.unpack() as usize]
                             .insert(value, explanation);
                     }
                     DomainChange::UpperBound(value) => {
-                        reasons_for_propagation_upper_bound[task.id.unpack::<usize>()]
+                        reasons_for_propagation_upper_bound[task.id.unpack() as usize]
                             .insert(value, explanation);
                     }
                     _ => unreachable!(),
@@ -186,18 +186,18 @@ impl Util {
         reasons_for_propagation_upper_bound: &[HashMap<i32, PropositionalConjunction>],
         tasks: &[Rc<Task<Var>>],
     ) -> PropositionalConjunction {
-        let affected_task = &tasks[delta.affected_local_id().unpack::<usize>()];
+        let affected_task = &tasks[delta.affected_local_id().unpack() as usize];
         match affected_task.start_variable.unpack(delta) {
             DomainChange::LowerBound(value) => reasons_for_propagation_lower_bound
-                [affected_task.id.unpack::<usize>()]
-            .get(&value)
-            .unwrap()
-            .clone(),
+                [affected_task.id.unpack() as usize]
+                .get(&value)
+                .unwrap()
+                .clone(),
             DomainChange::UpperBound(value) => reasons_for_propagation_upper_bound
-                [affected_task.id.unpack::<usize>()]
-            .get(&value)
-            .unwrap()
-            .clone(),
+                [affected_task.id.unpack() as usize]
+                .get(&value)
+                .unwrap()
+                .clone(),
             _ => unreachable!(),
         }
     }
@@ -226,7 +226,7 @@ impl Util {
         bounds: &mut [(i32, i32)],
         task: &Rc<Task<Var>>,
     ) {
-        bounds[task.id.unpack::<usize>()] = (
+        bounds[task.id.unpack() as usize] = (
             context.lower_bound(&task.start_variable),
             context.upper_bound(&task.start_variable),
         );

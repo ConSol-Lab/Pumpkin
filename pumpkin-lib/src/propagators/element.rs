@@ -87,7 +87,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ElementProp<VX, VI, VE> {
         let dc = match id {
             ID_INDEX => self.index.unpack(delta),
             ID_RHS => self.rhs.unpack(delta),
-            i => self.array[(i.unpack::<u32>() - ID_X_OFFSET) as usize].unpack(delta),
+            i => self.array[(i.unpack() - ID_X_OFFSET) as usize].unpack(delta),
         };
         (id, dc)
     }
@@ -220,7 +220,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
                 conjunction![[self.index == i] & [x_i >= v]]
             }
             (id, DomainChange::Removal(v)) => {
-                let i = id.unpack::<u32>() - ID_X_OFFSET;
+                let i = id.unpack() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
@@ -228,7 +228,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
                 conjunction![[self.index == i] & [self.rhs != v]]
             }
             (id, DomainChange::UpperBound(v)) => {
-                let i = id.unpack::<u32>() - ID_X_OFFSET;
+                let i = id.unpack() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
@@ -236,7 +236,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
                 conjunction![[self.index == i] & [self.rhs <= v]]
             }
             (id, DomainChange::LowerBound(v)) => {
-                let i = id.unpack::<u32>() - ID_X_OFFSET;
+                let i = id.unpack() - ID_X_OFFSET;
                 debug_assert!(context.is_fixed(&self.index));
                 debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
 
