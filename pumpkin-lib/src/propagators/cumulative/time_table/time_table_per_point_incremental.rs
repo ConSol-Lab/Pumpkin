@@ -179,7 +179,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
             &mut self.parameters,
             updated_task,
             context,
-            self.time_table.is_empty() && !self.time_table_outdated,
+            self.time_table.is_empty(), // Time table could be out-of-date but if it is empty then backtracking will not make it more empty
         )
     }
 
