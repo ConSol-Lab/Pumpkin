@@ -33,7 +33,7 @@ pub struct TimeTablePerPointIncrementalProp<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Keeps track of whether the current state of the time-table is outdated (i.e. whether it needs to be recalculated from scratch)
-    /// 
+    ///
     /// Imagine the situation where a synchronisation takes place and the propagator eagerly recalculates the time-table
     /// but then another propagator finds a conflict and the time-table calculation was superfluous;
     /// this flag ensures that the recalculation is done lazily, only when required
@@ -84,7 +84,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         );
         if self.time_table_outdated {
             // The time-table needs to be recalculated from scratch anyways so we perform the calculation now
-            TimeTablePropagator::reset_structures(self, context);
+            TimeTablePropagator::reset_structures(self, context)?;
             self.time_table_outdated = false;
         } else {
             for Updated {

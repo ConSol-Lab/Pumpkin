@@ -1,13 +1,13 @@
 use std::{cmp::max, collections::HashSet, ops::Range, rc::Rc};
 
 use crate::{
-    basic_types::{variables::IntVar, Inconsistency},
+    basic_types::{variables::IntVar, Inconsistency, PropagationStatusCP},
     engine::{DomainChange, EnqueueDecision, PropagationContext},
     propagators::{
         CumulativeParameters, CumulativePropagationResult, Explanation, SparseSet, Task, Updated,
         Util,
     },
-    pumpkin_assert_extreme, pumpkin_assert_simple,
+    pumpkin_assert_extreme,
 };
 
 #[derive(Clone, Debug)]
@@ -62,12 +62,12 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
-    fn reset_structures(&mut self, context: &PropagationContext) {
-        let result = self.create_time_table_and_assign(context);
-        pumpkin_assert_simple!(
-            result.is_none(),
-            "Found error while backtracking, this indicates that a conflict was not reported by the current propagator"
-        );
+    fn reset_structures(&mut self, context: &PropagationContext) -> PropagationStatusCP {
+        if let Some(conflict_profile) = self.create_time_table_and_assign(context) {
+            //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
+            return Util::create_error_clause(context, &conflict_profile);
+        }
+        Ok(())
     }
 
     fn get_parameters(&self) -> &CumulativeParameters<Var>;
