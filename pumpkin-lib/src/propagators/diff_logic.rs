@@ -143,7 +143,7 @@ where
         // Note that the caching does not break the mapping of `LocalId`s to difference_vars.
         //  Whenever cached `PropagatorVariable`s were used in the tuple, their `LocalId`s simply
         //  map to an earlier offset in the `difference_vars` array.
-        let (div, rem) = (id.unpack::<u32>() / 4, id.unpack::<u32>() % 4);
+        let (div, rem) = (id.unpack() / 4, id.unpack() % 4);
         let diff_vars = &self.difference_vars[div as usize];
         match rem {
             0 => &diff_vars.0,

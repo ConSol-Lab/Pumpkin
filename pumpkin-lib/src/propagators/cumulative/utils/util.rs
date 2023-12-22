@@ -18,7 +18,10 @@ pub struct Util {}
 
 impl Util {
     /// Creates an explanation consisting of all bounds of the variables causing a propagation (See "Improving scheduling by Learning (Section 4.5) - Andreas Schutt")
-    /// * `change_and_explanation_bound` - The change (i.e. lower-bound or upper-bound change) and the explanation bound which should be used (Note that the explanation bound could be different from the actual propagation)
+    ///
+    /// `change_and_explanation_bound` stores the change (i.e. lower-bound or upper-bound change)
+    /// and the explanation bound which should be used
+    /// (Note that the explanation bound could be different from the actual propagation)
     pub fn create_naïve_explanation<'a, Var: IntVar + 'static>(
         change_and_explanation_bound: DomainChange,
         task: &Rc<Task<Var>>,
@@ -166,11 +169,11 @@ impl Util {
                 //Note that we assume that the index is the same as the local id of the task
                 match change {
                     DomainChange::LowerBound(value) => {
-                        reasons_for_propagation_lower_bound[task.id.unpack::<usize>()]
+                        reasons_for_propagation_lower_bound[task.id.unpack() as usize]
                             .insert(value, explanation);
                     }
                     DomainChange::UpperBound(value) => {
-                        reasons_for_propagation_upper_bound[task.id.unpack::<usize>()]
+                        reasons_for_propagation_upper_bound[task.id.unpack() as usize]
                             .insert(value, explanation);
                     }
                     _ => unreachable!(),
@@ -186,18 +189,18 @@ impl Util {
         reasons_for_propagation_upper_bound: &[HashMap<i32, PropositionalConjunction>],
         tasks: &[Rc<Task<Var>>],
     ) -> PropositionalConjunction {
-        let affected_task = &tasks[delta.affected_local_id().unpack::<usize>()];
+        let affected_task = &tasks[delta.affected_local_id().unpack() as usize];
         match affected_task.start_variable.unpack(delta) {
             DomainChange::LowerBound(value) => reasons_for_propagation_lower_bound
-                [affected_task.id.unpack::<usize>()]
-            .get(&value)
-            .unwrap()
-            .clone(),
+                [affected_task.id.unpack() as usize]
+                .get(&value)
+                .unwrap()
+                .clone(),
             DomainChange::UpperBound(value) => reasons_for_propagation_upper_bound
-                [affected_task.id.unpack::<usize>()]
-            .get(&value)
-            .unwrap()
-            .clone(),
+                [affected_task.id.unpack() as usize]
+                .get(&value)
+                .unwrap()
+                .clone(),
             _ => unreachable!(),
         }
     }
@@ -227,7 +230,7 @@ impl Util {
         bounds: &[(i32, i32)],
     ) -> bool {
         tasks.iter().all(|current| {
-            bounds[current.id.unpack::<usize>()]
+            bounds[current.id.unpack() as usize]
                 == (
                     context.lower_bound(&current.start_variable),
                     context.upper_bound(&current.start_variable),
@@ -235,17 +238,21 @@ impl Util {
         })
     }
 
+    /// Updates the bounds of the provided `task` to those stored in `context`
     pub fn update_bounds_task<Var: IntVar + 'static>(
         context: &PropagationContext,
         bounds: &mut [(i32, i32)],
         task: &Rc<Task<Var>>,
     ) {
-        bounds[task.id.unpack::<usize>()] = (
+        bounds[task.id.unpack() as usize] = (
             context.lower_bound(&task.start_variable),
             context.upper_bound(&task.start_variable),
         );
     }
 
+    /// Clears the provided `updated` and resets **all** bounds to those stored in `context`
+    ///
+    /// This method is predominantly used during bactracking/synchronisation
     pub fn reset_bounds_clear_updated<Var: IntVar + 'static>(
         context: &PropagationContext,
         updated: &mut Vec<Updated<Var>>,

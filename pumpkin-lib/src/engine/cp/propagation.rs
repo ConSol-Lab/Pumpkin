@@ -24,12 +24,8 @@ impl LocalId {
         LocalId(value)
     }
 
-    pub fn unpack<T: TryFrom<u32>>(self) -> T
-    where
-        <T as TryFrom<u32>>::Error: std::fmt::Debug,
-    {
-        T::try_from(self.0)
-            .expect("Could not convert between given type and expected type of `local_id`")
+    pub fn unpack(self) -> u32 {
+        self.0
     }
 }
 
@@ -465,16 +461,6 @@ pub enum EnqueueDecision {
     Enqueue,
     /// THe propagator should not be enqueued.
     Skip,
-}
-
-impl From<bool> for EnqueueDecision {
-    fn from(value: bool) -> Self {
-        if value {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
-    }
 }
 
 pub trait ConstraintProgrammingPropagator {

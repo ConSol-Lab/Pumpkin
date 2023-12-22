@@ -4,13 +4,14 @@
 ///
 /// Note that it is required that each element contained in [SparseSet::domain] can be uniquely mapped to an index in the range [0, |D|) (i.e. the mapping function is bijective)
 pub struct SparseSet<T> {
-    /// * `size` - The number of elements which are currently in the domain
+    /// The number of elements which are currently in the domain
     size: usize,
-    /// * `domain` - The current state of the domain, this structure guarantees that domain[..size] is in the actual domain
+    /// The current state of the domain, this structure guarantees that domain[..size] is part of the domain
     domain: Vec<T>,
-    /// * `indices` - The mapping of T to the indices in [SparseSet::domain]
+    /// Stores for each value of T what its corresponding index is in [SparseSet::domain]
     indices: Vec<usize>,
-    /// * `mapping` - A bijective function which takes as input an element `T` and returns an index in the range [0, |D_{original}|)
+    /// A bijective function which takes as input an element `T` and returns an index in the range [0, |D_{original}|)
+    /// to be used for retrieving values from [SparseSet::indices]
     mapping: fn(&T) -> usize,
 }
 
@@ -31,12 +32,12 @@ impl<T> SparseSet<T> {
         self.size == 0
     }
 
-    /// Determines whether the provided index is mapped to a non-removed value from the domain
+    /// Determines whether the provided `index` is mapped to a non-removed value from the domain
     pub fn has_next(&self, index: usize) -> bool {
         index < self.size
     }
 
-    /// Returns the element which is stored at the location of the index
+    /// Returns the element which is stored at the location of the `index`
     pub fn get(&self, index: usize) -> &T {
         &self.domain[index]
     }

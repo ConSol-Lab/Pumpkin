@@ -4,4 +4,3 @@ mod time_table_propagator;
 
 pub use time_table_per_point::*;
 pub use time_table_per_point_incremental::*;
-pub use time_table_propagator::*;

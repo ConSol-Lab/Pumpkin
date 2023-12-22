@@ -3,7 +3,6 @@ use std::{
     rc::Rc,
 };
 
-use crate::propagators::check_for_updates;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
@@ -11,14 +10,14 @@ use crate::{
         PropagationContext, PropagatorConstructorContext,
     },
     propagators::{
+        cumulative::time_table::time_table_propagator::{check_for_updates, generate_update_range},
         CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Updated, Util,
     },
     pumpkin_assert_extreme,
 };
 use crate::{propagators::TimeTablePerPointProp, pumpkin_assert_advanced};
 
-use super::{generate_update_range, should_enqueue, ResourceProfile, TimeTablePropagator};
-use crate::propagators::IteratorWithLength;
+use super::time_table_propagator::{should_enqueue, ResourceProfile, TimeTablePropagator};
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
 pub struct TimeTablePerPointIncrementalProp<Var> {
@@ -97,8 +96,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
                 //We first go over the lower update range and then we go over the lower update range
                 pumpkin_assert_extreme!(
                     !self.time_table.contains_key(&(t as u32))
-                    || !self.time_table.get(&(t as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack::<usize>() == task.id.unpack::<usize>()),
-                    "Attempted to insert mandatory part where it already exists at time point {t} for task {} in time-table per time-point propagator", task.id.unpack::<usize>());
+                    || !self.time_table.get(&(t as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
+                    "Attempted to insert mandatory part where it already exists at time point {t} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
 
                 //Add the updated profile to the ResourceProfile at time t
                 let current_profile: &mut ResourceProfile<Var> = self
@@ -119,11 +118,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         let CumulativePropagationResult {
             status,
             explanations,
-        } = check_for_updates(
-            context,
-            self.get_time_table_and_length(),
-            self.get_parameters(),
-        );
+        } = check_for_updates(context, &self.get_time_table(), self.get_parameters());
 
         Util::store_explanations(
             explanations,
@@ -162,7 +157,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        let updated_task = Rc::clone(&self.cumulative_params.tasks[local_id.unpack::<usize>()]);
+        let updated_task = Rc::clone(&self.cumulative_params.tasks[local_id.unpack() as usize]);
         should_enqueue(
             &mut self.cumulative_params,
             updated_task,
@@ -207,8 +202,6 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrementalProp<Var> {
-    type TimeTableIterator<'b> = std::collections::btree_map::Values<'b, u32, ResourceProfile<Var>>;
-
     type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
 
     fn create_time_table_and_assign(
@@ -261,11 +254,8 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrem
         &self.cumulative_params
     }
 
-    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
-        IteratorWithLength {
-            iterator: self.time_table.values(),
-            length: self.time_table.len(),
-        }
+    fn get_time_table(&self) -> Vec<&ResourceProfile<Var>> {
+        self.time_table.values().collect::<Vec<_>>()
     }
 }
 
@@ -464,7 +454,7 @@ mod tests {
         assert_eq!(solver.upper_bound(s2), 10);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        let notification_status = solver.increase_lower_bound(&mut propagator, 0, s1, 5);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
@@ -584,7 +574,7 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound(&mut propagator, 3, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 3, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
@@ -660,7 +650,7 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound(&mut propagator, 4, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 4, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
