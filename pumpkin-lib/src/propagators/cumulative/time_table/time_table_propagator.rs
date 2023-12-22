@@ -35,30 +35,16 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct IteratorWithLength<
-    'a,
-    Var: IntVar + 'static,
-    IteratorType: Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
-> {
-    pub iterator: IteratorType,
-    pub length: usize,
-}
-
 /// A generic propagator which stores certain parts of the common behaviour for different time-table methods
 /// (i.e. a propagator which stores [ResourceProfile]s per time-point and a propagator which stores [ResourceProfile]s over an interval)
 pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
-    ///Type of the generic iterator for iterating over the time-table without assuming the type of [TimeTableType][TimeTablePropagator::TimeTableType]
-    type TimeTableIterator<'b>: Iterator<Item = &'b ResourceProfile<Var>>
-        + Clone
-        + DoubleEndedIterator
-    where
-        Self: 'b;
     ///Type of the time-table which is returned when performing [TimeTablePropagator::create_time_table]
     type TimeTableType;
 
-    ///Returns a [TimeTableIterator][TimeTablePropagator::TimeTableIterator] and the number of profiles contained in the iterator
-    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>>;
+    /// Returns the time-table as a vector (to facilitate O(1) indexing operations)
+    ///
+    /// Assumptions: The profiles are sorted based on time-point & The profiles are non-overlapping
+    fn get_time_table(&self) -> Vec<&ResourceProfile<Var>>;
 
     /// See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table, optionally returning the profile responsible for the conflict (if such a conflict occurred)
     fn create_time_table_and_assign(
@@ -99,8 +85,7 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
             )
         } else {
             //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-            let iterator_with_length = self.get_time_table_and_length();
-            check_for_updates(context, iterator_with_length, self.get_parameters())
+            check_for_updates(context, &self.get_time_table(), self.get_parameters())
         }
     }
 }
@@ -146,20 +131,21 @@ pub(crate) fn should_enqueue<Var: IntVar + 'static>(
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
 /// This method assumes that the lower-bound has been propagated due to `profiles.nth(propagating_index)`
-fn find_maximum_bound_and_profiles_lower_bound<'a, Var: IntVar + 'static>(
+fn find_maximum_bound_and_profiles_lower_bound<Var: IntVar + 'static>(
     context: &PropagationContext,
     propagating_index: usize,
-    mut profiles: impl Iterator<Item = &'a ResourceProfile<Var>> + DoubleEndedIterator,
+    time_table: &[&ResourceProfile<Var>],
     propagating_task: &Rc<Task<Var>>,
     capacity: i32,
 ) -> (i32, Vec<Rc<Task<Var>>>) {
-    let mut current_profile = profiles
-        .nth(propagating_index)
-        .expect("Propagating profile did not exist within the provided iterator");
+    let mut current_profile = &time_table[propagating_index];
     let mut new_profile_tasks: HashSet<&Rc<Task<Var>>> = HashSet::new();
     new_profile_tasks.extend(current_profile.profile_tasks.iter());
     let mut bound = current_profile.end + 1; //We are updating the lower-bound so the original update will place the lower-bound after the end of the propagating profile
-    for next_profile in profiles {
+
+    let mut next_profile_index = propagating_index + 1;
+    while next_profile_index < time_table.len() {
+        let next_profile = &time_table[next_profile_index];
         //Go through all profiles starting from the propagating one
         //Find all profiles after the current one which would propagate for the current task based on that profiles[propagating_index] propagated
         //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
@@ -181,6 +167,7 @@ fn find_maximum_bound_and_profiles_lower_bound<'a, Var: IntVar + 'static>(
             //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
             break;
         }
+        next_profile_index += 1;
     }
     (
         bound,
@@ -193,53 +180,52 @@ fn find_maximum_bound_and_profiles_lower_bound<'a, Var: IntVar + 'static>(
 
 /// Determines the maximum bound for a given profile (i.e. given that a task profile propagated due to a profile, what is the best bound we can find based on other profiles)
 /// This method assumes that the upper-bound has been propagated due to `profiles.nth(propagating_index)`
-fn find_maximum_bound_and_profiles_upper_bound<
-    'a,
-    Var: IntVar + 'static,
-    IteratorType: Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
->(
+fn find_maximum_bound_and_profiles_upper_bound<Var: IntVar + 'static>(
     context: &PropagationContext,
     propagating_index: usize,
     propagating_task: &Rc<Task<Var>>,
-    IteratorWithLength {
-        iterator: mut profiles,
-        length: num_profiles,
-    }: IteratorWithLength<'a, Var, IteratorType>,
+    time_table: &[&ResourceProfile<Var>],
     capacity: i32,
 ) -> (i32, Vec<Rc<Task<Var>>>) {
     //We need to find the current profile and then proceed in reverse order
     //If we have the list [0, 1, 2, 3, 4, 5, 6] with propagating_index = 4 then we need to find the 2nd profile from the back
     //This is equal to taking the (num_profiles - propagating_index - 1)th profile (in the example the 7 - 4 - 1 = 2nd profile)
-    let mut current_profile = profiles
-        .nth_back(num_profiles - propagating_index - 1)
-        .expect("Propagating profile did not exist within the provided iterator");
+    let mut current_profile = &time_table[propagating_index];
 
     let mut new_profile_tasks = HashSet::new();
     new_profile_tasks.extend(current_profile.profile_tasks.iter());
     //We are updating the lower-bound so the original update will place the upper-bound such that it does not overlap with the current profile;
     let mut bound = current_profile.start - propagating_task.processing_time;
-    for next_profile in profiles.rev() {
-        //Find all profiles before the current one which would propagate for the current task based on that profiles[propagating_index] propagated
-        //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
-        if next_profile.height + propagating_task.resource_usage > capacity
-                && !has_mandatory_part_in_interval(
-                    context,
-                    propagating_task,
-                    next_profile.start,
-                    next_profile.end,
-                ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
-                && (current_profile.start - next_profile.end + 1) < propagating_task.processing_time
-        //The updated task necessarily overlaps with the previous profile after the update
-        {
-            bound = next_profile.start - propagating_task.processing_time;
-            new_profile_tasks.extend(next_profile.profile_tasks.iter());
-            current_profile = next_profile;
-        } else if (current_profile.start - next_profile.end + 1) >= propagating_task.processing_time
-        {
-            //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
-            break;
+
+    if propagating_index > 0 {
+        let mut previous_profile_index = propagating_index as i32 - 1;
+        while previous_profile_index >= 0 {
+            let previous_profile = &time_table[previous_profile_index as usize];
+            //Find all profiles before the current one which would propagate for the current task based on that profiles[propagating_index] propagated
+            //(i.e. find all profiles of which the task is not a part with less than propagating_task.processing_time between the profiles)
+            if previous_profile.height + propagating_task.resource_usage > capacity
+                    && !has_mandatory_part_in_interval(
+                        context,
+                        propagating_task,
+                        previous_profile.start,
+                        previous_profile.end,
+                    ) //If the updated task has a mandatory part in the current interval then it cannot be propagated by the current profile
+                    && (current_profile.start - previous_profile.end + 1) < propagating_task.processing_time
+            //The updated task necessarily overlaps with the previous profile after the update
+            {
+                bound = previous_profile.start - propagating_task.processing_time;
+                new_profile_tasks.extend(previous_profile.profile_tasks.iter());
+                current_profile = previous_profile;
+            } else if (current_profile.start - previous_profile.end + 1)
+                >= propagating_task.processing_time
+            {
+                //The distance between the current and the next profile is too great to propagate, since the ResourceProfiles are non-overlapping, we know that we can break from the loop
+                break;
+            }
+            previous_profile_index -= 1;
         }
     }
+
     (
         bound,
         new_profile_tasks
@@ -284,18 +270,14 @@ pub(crate) fn var_has_overlap_with_interval<Var: IntVar + 'static>(
 ///
 /// It goes over all profiles and all tasks and determines which ones should be propagated;
 /// Note that this method is not idempotent
-fn check_for_updates<
-    'a,
-    Var: IntVar + 'static,
-    IteratorType: Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
->(
+fn check_for_updates<Var: IntVar + 'static>(
     context: &mut PropagationContext,
-    iterator_with_length: IteratorWithLength<'a, Var, IteratorType>,
+    time_table: &[&ResourceProfile<Var>],
     parameters: &CumulativeParameters<Var>,
 ) -> CumulativePropagationResult<Var> {
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
-    'profile_loop: for (index, profile) in iterator_with_length.iterator.clone().enumerate() {
+    'profile_loop: for (index, profile) in time_table.iter().enumerate() {
         //Then we go over all the different tasks
         let mut task_index = 0;
         while tasks_to_consider.has_next(task_index) {
@@ -319,7 +301,7 @@ fn check_for_updates<
                 profile,
                 index,
                 parameters,
-                iterator_with_length.clone(),
+                time_table,
                 &mut explanations,
             ) {
                 Ok(should_break) => {
@@ -344,11 +326,7 @@ fn check_for_updates<
 /// If no conflict has been found then it will return whether the current loop should be exited (in the case that height + p <= c since it will also not hold for subsequent tasks due to the sorting)
 ///
 /// Note that this method can only find [Inconsistency::EmptyDomain] conflicts which means that we handle that error in the function which calls this one
-fn check_whether_task_can_be_updated_by_profile<
-    'a,
-    Var: IntVar + 'static,
-    IteratorType: Iterator<Item = &'a ResourceProfile<Var>> + Clone + DoubleEndedIterator,
->(
+fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
     ResourceProfile {
@@ -359,7 +337,7 @@ fn check_whether_task_can_be_updated_by_profile<
     }: &ResourceProfile<Var>,
     index: usize,
     parameters: &CumulativeParameters<Var>,
-    iterator_with_length: IteratorWithLength<'a, Var, IteratorType>,
+    time_table: &[&ResourceProfile<Var>],
     explanations: &mut Vec<Explanation<Var>>,
 ) -> Result<bool, ()> {
     if height + task.resource_usage <= parameters.capacity
@@ -377,7 +355,7 @@ fn check_whether_task_can_be_updated_by_profile<
             let (lower_bound, new_profile_tasks) = find_maximum_bound_and_profiles_lower_bound(
                 context,
                 index,
-                iterator_with_length.iterator.clone(),
+                time_table,
                 task,
                 parameters.capacity,
             );
@@ -417,7 +395,7 @@ fn check_whether_task_can_be_updated_by_profile<
                 context,
                 index,
                 task,
-                iterator_with_length,
+                time_table,
                 parameters.capacity,
             );
             match Util::propagate_and_explain(

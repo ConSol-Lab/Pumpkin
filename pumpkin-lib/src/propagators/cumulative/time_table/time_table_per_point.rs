@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::time_table_propagator::{
-    has_mandatory_part_in_interval, should_enqueue, var_has_overlap_with_interval,
-    IteratorWithLength, ResourceProfile, TimeTablePropagator,
+    has_mandatory_part_in_interval, should_enqueue, var_has_overlap_with_interval, ResourceProfile,
+    TimeTablePropagator,
 };
 
 /// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint -
@@ -225,8 +225,6 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<Var> {
-    type TimeTableIterator<'b> = std::collections::btree_map::Values<'b, u32, ResourceProfile<Var>>;
-
     type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
 
     fn create_time_table_and_assign(
@@ -279,11 +277,8 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
         &self.parameters
     }
 
-    fn get_time_table_and_length(&self) -> IteratorWithLength<Var, Self::TimeTableIterator<'_>> {
-        IteratorWithLength {
-            iterator: self.time_table.values(),
-            length: self.time_table.len(),
-        }
+    fn get_time_table(&self) -> Vec<&ResourceProfile<Var>> {
+        self.time_table.values().collect::<Vec<_>>()
     }
 }
 
