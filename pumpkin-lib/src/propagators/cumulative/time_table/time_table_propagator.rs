@@ -302,7 +302,7 @@ pub(crate) fn check_for_updates<Var: IntVar + 'static>(
                         )
                 })
             }),
-        "The profiles in the provided time-table were not maximal"
+        "There was overlap between profiles in the provided time-table"
     );
     let mut explanations: Vec<Explanation<Var>> = Vec::new();
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
