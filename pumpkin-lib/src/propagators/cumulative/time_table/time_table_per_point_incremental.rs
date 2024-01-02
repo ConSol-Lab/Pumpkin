@@ -11,7 +11,8 @@ use crate::{
     },
     propagators::{
         cumulative::time_table::time_table_propagator::{check_for_updates, generate_update_range},
-        CumulativeArgs, CumulativeParameters, CumulativePropagationResult, Task, Updated, Util,
+        CumulativeArgs, CumulativeParameters, PropagationStatusWithExplanation, Task, Updated,
+        Util,
     },
     pumpkin_assert_extreme,
 };
@@ -132,7 +133,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         self.parameters.updated.clear(); //We have processed all of the updates, we can clear the structure
                                          //We pass the entirety of the table to check due to the fact that the propagation of the current profile could lead to the propagation across multiple profiles
                                          //For example, if we have updated 1 resource profile which caused a propagation then this could cause another propagation by a profile which has not been updated
-        let CumulativePropagationResult {
+        let PropagationStatusWithExplanation {
             status,
             explanations,
         } = check_for_updates(context, &self.get_time_table(), self.get_parameters());
@@ -193,7 +194,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
 
     fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
         Util::initialise_at_root(true, &mut self.parameters, context);
-        let CumulativePropagationResult {
+        let PropagationStatusWithExplanation {
             status,
             explanations,
         } = TimeTablePropagator::propagate_from_scratch(self, context);
@@ -224,16 +225,16 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrem
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContext,
-    ) -> Option<Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), Vec<Rc<Task<Var>>>> {
         match <TimeTablePerPointIncrementalProp<Var> as TimeTablePropagator<Var>>::create_time_table(
             context,
             self.get_parameters(),
         ) {
             Ok(result) => {
                 self.time_table = result;
-                None
+                Ok(())
             }
-            Err(explanation) => Some(explanation),
+            Err(explanation) => Err(explanation),
         }
     }
 
@@ -521,7 +522,7 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(9),
+                s2.upper_bound_predicate(8),
                 s1.lower_bound_predicate(6),
                 s1.upper_bound_predicate(6),
             ]),

@@ -147,7 +147,7 @@ impl<Var: IntVar + 'static> Explanation<Var> {
 }
 
 /// Stores the result of a propagation iteration by the cumulative propagators
-pub struct CumulativePropagationResult<Var> {
+pub struct PropagationStatusWithExplanation<Var> {
     /// The result of the propagation, determining whether there was a conflict or whether it was
     pub status: PropagationStatusCP,
     /// The explanations found during the propagation cycle;
@@ -157,12 +157,12 @@ pub struct CumulativePropagationResult<Var> {
     pub explanations: Option<Vec<Explanation<Var>>>,
 }
 
-impl<Var: IntVar + 'static> CumulativePropagationResult<Var> {
+impl<Var: IntVar + 'static> PropagationStatusWithExplanation<Var> {
     pub fn new(
         status: PropagationStatusCP,
         explanations: Option<Vec<Explanation<Var>>>,
-    ) -> CumulativePropagationResult<Var> {
-        CumulativePropagationResult {
+    ) -> PropagationStatusWithExplanation<Var> {
+        PropagationStatusWithExplanation {
             status,
             explanations,
         }
