@@ -324,7 +324,7 @@ pub(crate) fn check_for_updates<Var: IntVar + 'static>(
                 continue;
             }
             task_index += 1;
-            match check_whether_task_can_be_updated_by_profile(
+            if check_whether_task_can_be_updated_by_profile(
                 context,
                 &task,
                 profile,
@@ -332,18 +332,13 @@ pub(crate) fn check_for_updates<Var: IntVar + 'static>(
                 parameters,
                 time_table,
                 &mut explanations,
-            ) {
-                Ok(should_break) => {
-                    if should_break {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    return PropagationStatusWithExplanation::new(
-                        Err(Inconsistency::EmptyDomain),
-                        Some(explanations),
-                    );
-                }
+            )
+            .is_err()
+            {
+                return PropagationStatusWithExplanation::new(
+                    Err(Inconsistency::EmptyDomain),
+                    Some(explanations),
+                );
             }
         }
     }
@@ -365,7 +360,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
     pumpkin_assert_moderate!(
         profile.height + task.resource_usage > capacity
             && task_has_overlap_with_interval(context, task, profile.start, profile.end)
-    , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity and the task should overlap with the profile");
+    , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
     (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.lower_bound(&task.start_variable) <= profile.end
 }
@@ -383,8 +378,7 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
 ) -> bool {
     pumpkin_assert_moderate!(
         profile.height + task.resource_usage > capacity
-            && task_has_overlap_with_interval(context, task, profile.start, profile.end)
-    , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity and the task should overlap with the profile");
+    , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
     (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
         && context.upper_bound(&task.start_variable) <= profile.end
 }
@@ -505,12 +499,12 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
     parameters: &CumulativeParameters<Var>,
     time_table: &[&ResourceProfile<Var>],
     explanations: &mut Vec<Explanation<Var>>,
-) -> Result<bool, ()> {
+) -> Result<(), ()> {
     if profile.height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
     {
         //The task cannot be propagated due to its resource usage being too low or it is part of the interval which means that it cannot be updated at all
-        return Ok(false);
+        return Ok(());
     } else if task_has_overlap_with_interval(context, task, profile.start, profile.end) {
         //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
         if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
@@ -536,5 +530,5 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
             )?;
         }
     }
-    Ok(false)
+    Ok(())
 }
