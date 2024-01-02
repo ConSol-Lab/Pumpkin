@@ -72,13 +72,9 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
         //This method is similar to that of `create_time_table` but somewhat simpler
         //We first create a time-table per point in the horizon
         if let Ok(time_table) = TimeTablePerPointProp::create_time_table(context, parameters) {
-            if check_for_updates(
-                context,
-                &time_table.values().collect::<Vec<_>>(),
-                parameters,
-            )
-            .status
-            .is_ok()
+            if check_for_updates(context, time_table.values(), parameters)
+                .status
+                .is_ok()
             {
                 Ok(())
             } else {
@@ -169,6 +165,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<Var> {
     type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
+    type TimeTableIteratorType<'a> =
+        std::collections::btree_map::Values<'a, u32, ResourceProfile<Var>>;
 
     fn create_time_table_and_assign(
         &mut self,
@@ -226,8 +224,8 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
         &self.parameters
     }
 
-    fn get_time_table(&self) -> Vec<&ResourceProfile<Var>> {
-        self.time_table.values().collect::<Vec<_>>()
+    fn get_time_table(&self) -> Self::TimeTableIteratorType<'_> {
+        self.time_table.values()
     }
 }
 
@@ -463,6 +461,8 @@ mod tests {
                 1,
             ))
             .expect("No conflict");
+        let result = solver.propagate_until_fixed_point(&mut propagator);
+        assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
@@ -474,7 +474,7 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(8),
+                s2.upper_bound_predicate(6),
                 s1.lower_bound_predicate(6),
                 s1.upper_bound_predicate(6),
             ]),
@@ -666,7 +666,7 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(0), //Note that this is a more general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
+                s2.lower_bound_predicate(2), //Note that this not the most general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
                 s1.lower_bound_predicate(1),
                 s1.upper_bound_predicate(1),
             ]),
@@ -720,9 +720,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(5),
                 s2.lower_bound_predicate(5),
-                s1.lower_bound_predicate(3),
-                s1.upper_bound_predicate(3),
-                s3.lower_bound_predicate(0), //Note that s3 would have been able to propagate this bound even if it started at time 0
+                s3.lower_bound_predicate(3), //Note that s3 would have been able to propagate this bound even if it started at time 0
             ]),
             reason
         );

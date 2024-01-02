@@ -161,6 +161,35 @@ impl TestSolver {
         propagator.propagator.propagate(&mut context)
     }
 
+    pub fn propagate_until_fixed_point(
+        &mut self,
+        propagator: &mut TestPropagator,
+    ) -> PropagationStatusCP {
+        let mut num_trail_entries =
+            self.assignment.num_trail_entries() + self.assignment_propositional.num_trail_entries();
+
+        loop {
+            {
+                // Specify the life-times to be able to retrieve the trail entries
+                let mut context = PropagationContext::new(
+                    &mut self.assignment,
+                    &mut self.assignment_propositional,
+                    propagator.id,
+                );
+                propagator.propagator.propagate(&mut context)?;
+            }
+            if self.assignment.num_trail_entries()
+                + self.assignment_propositional.num_trail_entries()
+                == num_trail_entries
+            {
+                break;
+            }
+            num_trail_entries = self.assignment.num_trail_entries()
+                + self.assignment_propositional.num_trail_entries();
+        }
+        Ok(())
+    }
+
     pub fn notify(
         &mut self,
         propagator: &mut TestPropagator,
