@@ -42,7 +42,11 @@ pub struct TimeTablePerPointProp<Var> {
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point
-type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
+pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
+
+/// The type of the time-table iterator used by propagators which use time-table reasoning per time-point
+pub(crate) type PerPointIteratorType<'a, Var> =
+    std::collections::btree_map::Values<'a, u32, ResourceProfile<Var>>;
 
 impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointProp<Var>>
 where
@@ -204,8 +208,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<Var> {
     type TimeTableType = PerPointTimeTableType<Var>;
-    type TimeTableIteratorType<'a> =
-        std::collections::btree_map::Values<'a, u32, ResourceProfile<Var>>;
+    type TimeTableIteratorType<'a> = PerPointIteratorType<'a, Var>;
 
     fn create_time_table_and_assign(
         &mut self,
