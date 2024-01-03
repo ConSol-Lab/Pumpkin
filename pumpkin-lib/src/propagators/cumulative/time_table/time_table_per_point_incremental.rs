@@ -20,10 +20,16 @@ use crate::{propagators::TimeTablePerPointProp, pumpkin_assert_advanced};
 
 use super::time_table_propagator::{should_enqueue, ResourceProfile, TimeTablePropagator};
 
-/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint - This method creates a [ResourceProfile] per time point rather than creating one over an interval
+/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint
+/// where a time-table is a structure which stores the mandatory resource usage of the tasks at different time-points -
+/// This method creates a [ResourceProfile] per time point rather than creating one over an interval (hence the name).
+/// Additionally, it avoids recalculating the time-table from scratch every time by making use of incrementality
+///
+/// See ["Improving Scheduling by Learning - Andreas Schutt (2011)"](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
+/// Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 for more information about time-table reasoning.
 pub struct TimeTablePerPointIncrementalProp<Var> {
-    /// Structure responsible for holding the time-table; currently it consists of a map to avoid unnecessary allocation for time-points at which no [ResourceProfile] is present |
-    /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
+    /// The key t (representing a time-point) holds the mandatory resource consumption of tasks at that time (stored in a [ResourceProfile]);
+    /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
     time_table: BTreeMap<u32, ResourceProfile<Var>>,
     /// For each variable, eagerly maps the explanation of the lower-bound change;
     /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
