@@ -379,11 +379,10 @@ fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
     }
 }
 
-/// The method checks whether the current task can be propagated by the provided profile and performs the propagation
+/// The method checks whether the current task can be propagated by the provided profile and (if appropriate) performs the propagation.
+/// It then returns whether any of the propagations led to a conflict or whether all propagations were succesful.
 ///
-/// If no conflict has been found then it will return whether the current loop should be exited (in the case that height + p <= c since it will also not hold for subsequent tasks due to the sorting)
-///
-/// Note that this method can only find [Inconsistency::EmptyDomain] conflicts which means that we handle that error in the function which calls this one
+/// Note that this method can only find [Inconsistency::EmptyDomain] conflicts which means that we handle that error in the parent function
 fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
