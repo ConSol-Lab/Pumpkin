@@ -3,6 +3,8 @@ use std::{
     rc::Rc,
 };
 
+use crate::propagators::PerPointIteratorType;
+use crate::propagators::PerPointTimeTableType;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
@@ -30,7 +32,7 @@ use super::time_table_propagator::{should_enqueue, ResourceProfile, TimeTablePro
 pub struct TimeTablePerPointIncrementalProp<Var> {
     /// The key t (representing a time-point) holds the mandatory resource consumption of tasks at that time (stored in a [ResourceProfile]);
     /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
-    time_table: BTreeMap<u32, ResourceProfile<Var>>,
+    time_table: PerPointTimeTableType<Var>,
     /// For each variable, eagerly maps the explanation of the lower-bound change;
     /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
@@ -142,7 +144,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         let PropagationStatusWithExplanation {
             status,
             explanations,
-        } = check_for_updates(context, &self.get_time_table(), self.get_parameters());
+        } = check_for_updates(context, self.get_time_table(), self.get_parameters());
 
         Util::store_explanations(
             explanations,
@@ -226,7 +228,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrementalProp<Var> {
-    type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
+    type TimeTableType = PerPointTimeTableType<Var>;
+    type TimeTableIteratorType<'a> = PerPointIteratorType<'a, Var>;
 
     fn create_time_table_and_assign(
         &mut self,
@@ -248,38 +251,15 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrem
         context: &PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
-        let mut profile: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
-        //First we go over all tasks and determine their mandatory parts
-        for task in parameters.tasks.iter() {
-            let upper_bound = context.upper_bound(&task.start_variable);
-            let lower_bound = context.lower_bound(&task.start_variable);
-
-            if upper_bound < lower_bound + task.processing_time {
-                //There is a mandatory part
-                for i in upper_bound..(lower_bound + task.processing_time) {
-                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
-                    let current_profile: &mut ResourceProfile<Var> = profile
-                        .entry(i as u32)
-                        .or_insert(ResourceProfile::default(i));
-                    current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(Rc::clone(task));
-
-                    if current_profile.height > parameters.capacity {
-                        //The addition of the current task to the resource profile has caused an overflow
-                        return Err(current_profile.profile_tasks.clone());
-                    }
-                }
-            }
-        }
-        Ok(profile)
+        TimeTablePerPointProp::create_time_table_per_point_from_scratch(context, parameters)
     }
 
     fn get_parameters(&self) -> &CumulativeParameters<Var> {
         &self.parameters
     }
 
-    fn get_time_table(&self) -> Vec<&ResourceProfile<Var>> {
-        self.time_table.values().collect::<Vec<_>>()
+    fn get_time_table(&self) -> Self::TimeTableIteratorType<'_> {
+        self.time_table.values()
     }
 }
 
@@ -349,18 +329,16 @@ mod tests {
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
-                {
-                    let expected = [
-                        s1.upper_bound_predicate(1),
-                        s1.lower_bound_predicate(1),
-                        s2.upper_bound_predicate(1),
-                        s2.lower_bound_predicate(1),
-                    ];
-                    expected
-                        .iter()
-                        .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                        && x.iter().all(|y| expected.contains(y))
-                }
+                let expected = [
+                    s1.upper_bound_predicate(1),
+                    s1.lower_bound_predicate(1),
+                    s2.upper_bound_predicate(1),
+                    s2.lower_bound_predicate(1),
+                ];
+                expected
+                    .iter()
+                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
+                    && x.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });
@@ -517,6 +495,8 @@ mod tests {
                 1,
             ))
             .expect("No conflict");
+        let result = solver.propagate_until_fixed_point(&mut propagator);
+        assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
@@ -528,7 +508,7 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(8),
+                s2.upper_bound_predicate(6),
                 s1.lower_bound_predicate(6),
                 s1.upper_bound_predicate(6),
             ]),
@@ -720,7 +700,7 @@ mod tests {
         );
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(0), //Note that this is a more general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
+                s2.lower_bound_predicate(2), //Note that this not the most general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
                 s1.lower_bound_predicate(1),
                 s1.upper_bound_predicate(1),
             ]),
@@ -774,9 +754,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(5),
                 s2.lower_bound_predicate(5),
-                s1.lower_bound_predicate(3),
-                s1.upper_bound_predicate(3),
-                s3.lower_bound_predicate(0), //Note that s3 would have been able to propagate this bound even if it started at time 0
+                s3.lower_bound_predicate(3), //Note that s3 would have been able to propagate this bound even if it started at time 0
             ]),
             reason
         );

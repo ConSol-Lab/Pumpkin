@@ -161,6 +161,61 @@ impl TestSolver {
         propagator.propagator.propagate(&mut context)
     }
 
+    pub fn propagate_until_fixed_point(
+        &mut self,
+        propagator: &mut TestPropagator,
+    ) -> PropagationStatusCP {
+        let mut num_trail_entries =
+            self.assignment.num_trail_entries() + self.assignment_propositional.num_trail_entries();
+        self.notify_propagator(propagator);
+        loop {
+            {
+                // Specify the life-times to be able to retrieve the trail entries
+                let mut context = PropagationContext::new(
+                    &mut self.assignment,
+                    &mut self.assignment_propositional,
+                    propagator.id,
+                );
+                propagator.propagator.propagate(&mut context)?;
+                self.notify_propagator(propagator);
+            }
+            if self.assignment.num_trail_entries()
+                + self.assignment_propositional.num_trail_entries()
+                == num_trail_entries
+            {
+                break;
+            }
+            num_trail_entries = self.assignment.num_trail_entries()
+                + self.assignment_propositional.num_trail_entries();
+        }
+        Ok(())
+    }
+
+    fn notify_propagator(&mut self, propagator: &mut TestPropagator) {
+        #[allow(clippy::useless_conversion)]
+        let events = self
+            .assignment
+            .drain_domain_events()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let mut context = PropagationContext::new(
+            &mut self.assignment,
+            &mut self.assignment_propositional,
+            propagator.id,
+        );
+        for (event, domain) in events {
+            for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
+                if propagator.id == propagator_var.propagator {
+                    propagator.propagator.notify(
+                        &mut context,
+                        propagator_var.variable,
+                        event.into(),
+                    );
+                }
+            }
+        }
+    }
+
     pub fn notify(
         &mut self,
         propagator: &mut TestPropagator,
