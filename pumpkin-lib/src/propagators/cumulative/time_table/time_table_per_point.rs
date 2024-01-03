@@ -30,7 +30,7 @@ use super::time_table_propagator::{
 pub struct TimeTablePerPointProp<Var> {
     /// The key t (representing a time-point) holds the mandatory resource consumption of tasks at that time (stored in a [ResourceProfile]);
     /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
-    time_table: BTreeMap<u32, ResourceProfile<Var>>,
+    time_table: PerPointTimeTableType<Var>,
     /// For each variable, eagerly maps the explanation of the lower-bound change;
     /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
     reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
@@ -40,6 +40,9 @@ pub struct TimeTablePerPointProp<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
 }
+
+/// The type of the time-table used by propagators which use time-table reasoning per time-point
+type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
 
 impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointProp<Var>>
 where
@@ -84,6 +87,42 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
             //There was a conflict while creating the time-table, we need to return an error
             Err(Inconsistency::from(PropositionalConjunction::default()))
         }
+    }
+
+    pub(crate) fn create_time_table_per_point_from_scratch(
+        context: &PropagationContext,
+        parameters: &CumulativeParameters<Var>,
+    ) -> Result<PerPointTimeTableType<Var>, Vec<Rc<Task<Var>>>> {
+        let mut time_table: PerPointTimeTableType<Var> = BTreeMap::new();
+        //First we go over all tasks and determine their mandatory parts
+        for task in parameters.tasks.iter() {
+            let upper_bound = context.upper_bound(&task.start_variable);
+            let lower_bound = context.lower_bound(&task.start_variable);
+
+            if upper_bound < lower_bound + task.processing_time {
+                //There is a mandatory part
+                for i in upper_bound..(lower_bound + task.processing_time) {
+                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
+                    let current_profile: &mut ResourceProfile<Var> = time_table
+                        .entry(i as u32)
+                        .or_insert(ResourceProfile::default(i));
+                    current_profile.height += task.resource_usage;
+                    current_profile.profile_tasks.push(Rc::clone(task));
+
+                    if current_profile.height > parameters.capacity {
+                        //The addition of the current task to the resource profile has caused an overflow
+                        return Err(current_profile.profile_tasks.clone());
+                    }
+                }
+            }
+        }
+        pumpkin_assert_extreme!(
+            time_table
+                .values()
+                .all(|profile| profile.start == profile.end),
+            "The TimeTablePerPoint method should only create profiles where `start == end`"
+        );
+        Ok(time_table)
     }
 }
 
@@ -164,7 +203,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
 }
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<Var> {
-    type TimeTableType = BTreeMap<u32, ResourceProfile<Var>>;
+    type TimeTableType = PerPointTimeTableType<Var>;
     type TimeTableIteratorType<'a> =
         std::collections::btree_map::Values<'a, u32, ResourceProfile<Var>>;
 
@@ -188,36 +227,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
         context: &PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
-        let mut time_table: BTreeMap<u32, ResourceProfile<Var>> = BTreeMap::new();
-        //First we go over all tasks and determine their mandatory parts
-        for task in parameters.tasks.iter() {
-            let upper_bound = context.upper_bound(&task.start_variable);
-            let lower_bound = context.lower_bound(&task.start_variable);
-
-            if upper_bound < lower_bound + task.processing_time {
-                //There is a mandatory part
-                for i in upper_bound..(lower_bound + task.processing_time) {
-                    //For every time-point of the mandatory part, add the resource usage of the current task to the ResourceProfile and add it to the profile tasks of the resource
-                    let current_profile: &mut ResourceProfile<Var> = time_table
-                        .entry(i as u32)
-                        .or_insert(ResourceProfile::default(i));
-                    current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(Rc::clone(task));
-
-                    if current_profile.height > parameters.capacity {
-                        //The addition of the current task to the resource profile has caused an overflow
-                        return Err(current_profile.profile_tasks.clone());
-                    }
-                }
-            }
-        }
-        pumpkin_assert_extreme!(
-            time_table
-                .values()
-                .all(|profile| profile.start == profile.end),
-            "The TimeTablePerPoint method should only create profiles where `start == end`"
-        );
-        Ok(time_table)
+        TimeTablePerPointProp::create_time_table_per_point_from_scratch(context, parameters)
     }
 
     fn get_parameters(&self) -> &CumulativeParameters<Var> {
