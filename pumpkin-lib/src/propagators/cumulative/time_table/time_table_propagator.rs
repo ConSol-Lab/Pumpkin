@@ -292,7 +292,7 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
         && context.upper_bound(&task.start_variable) <= profile.end
 }
 
-/// Propagates the lower-bound of the task to its maximum value based on the initial propagation by the task at `index`
+/// Propagates the lower-bound of the task to avoid overlap with the [ResourceProfile] `profile`
 fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
@@ -336,7 +336,7 @@ fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
     }
 }
 
-/// Propagates the upper-bound of the task to its maximum value based on the initial propagation by the task at `index`
+/// Propagates the upper-bound of the task to avoid overlap with the [ResourceProfile] `profile`
 fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
     context: &mut PropagationContext,
     task: &Rc<Task<Var>>,
