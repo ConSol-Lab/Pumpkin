@@ -1,4 +1,4 @@
-use crate::propagators::TimeTablePerPointIncrementalProp;
+use crate::propagators::{TimeTableOverIntervalProp, TimeTablePerPointIncrementalProp};
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{DomainChange, LocalId, PropagatorVariable},
@@ -77,6 +77,7 @@ impl<Var, T> CumulativeArgs<Var, T> {
 pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointProp<Var>>;
 pub type TimeTablePerPointIncremental<Var> =
     CumulativeArgs<Var, TimeTablePerPointIncrementalProp<Var>>;
+pub type TimeTableOverInterval<Var> = CumulativeArgs<Var, TimeTableOverIntervalProp<Var>>;
 
 #[derive(Debug)]
 /// Stores the information of an updated task
