@@ -5,7 +5,6 @@ use std::{
     rc::Rc,
 };
 
-use crate::pumpkin_assert_advanced;
 use crate::{
     basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
     engine::{
@@ -19,6 +18,7 @@ use crate::{
     },
 };
 use crate::{propagators::OverIntervalTimeTableType, pumpkin_assert_extreme};
+use crate::{pumpkin_assert_advanced, pumpkin_assert_moderate};
 
 use super::{
     time_table_propagator::{
@@ -92,7 +92,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
         time_table.binary_search_by(|profile| {
             if has_overlap_with_interval(
                 update_range.start,
-                update_range.end - 1,
+                update_range.end,
                 profile.start,
                 profile.end,
             ) {
@@ -133,7 +133,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
                 let profile = &time_table[left_profile_index];
                 if has_overlap_with_interval(
                     update_range.start,
-                    update_range.end - 1,
+                    update_range.end,
                     profile.start,
                     profile.end,
                 ) {
@@ -155,7 +155,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
             let profile = &time_table[right_profile_index];
             if has_overlap_with_interval(
                 update_range.start,
-                update_range.end - 1,
+                update_range.end,
                 profile.start,
                 profile.end,
             ) {
@@ -439,6 +439,14 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 } else {
                                     index_to_insert as u32 - 1
                                 },
+                            );
+
+                            pumpkin_assert_moderate!(
+                                index_to_insert <= self.time_table.len()
+                                    || index_to_insert >= self.time_table.len()
+                                    || self.time_table[index_to_insert].start
+                                        > update_range.end - 1,
+                                "The index to insert at is incorrect"
                             );
 
                             //Insert the new profile at its index
