@@ -170,7 +170,12 @@ pub(crate) fn task_has_overlap_with_interval<Var: IntVar + 'static>(
 }
 
 /// Determines whether the interval [lower_bound, upper_bound) overlaps with the interval [start, end]
-fn has_overlap_with_interval(lower_bound: i32, upper_bound: i32, start: i32, end: i32) -> bool {
+pub(crate) fn has_overlap_with_interval(
+    lower_bound: i32,
+    upper_bound: i32,
+    start: i32,
+    end: i32,
+) -> bool {
     start < upper_bound && lower_bound <= end
 }
 

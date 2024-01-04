@@ -52,8 +52,7 @@ pub struct TimeTableOverIntervalProp<Var> {
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
 /// The type of the time-table iterator used by propagators which use time-table reasoning over intervals
-pub(crate) type OverIntervalTimeTableTypeIteratorType<'a, Var> =
-    std::slice::Iter<'a, ResourceProfile<Var>>;
+pub(crate) type OverIntervalIteratorType<'a, Var> = std::slice::Iter<'a, ResourceProfile<Var>>;
 
 impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalProp<Var>>
 where
@@ -306,7 +305,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTableOverInt
 
 impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTableOverIntervalProp<Var> {
     type TimeTableType = OverIntervalTimeTableType<Var>;
-    type TimeTableIteratorType<'a> = OverIntervalTimeTableTypeIteratorType<'a, Var>;
+    type TimeTableIteratorType<'a> = OverIntervalIteratorType<'a, Var>;
 
     fn create_time_table_and_assign(
         &mut self,
