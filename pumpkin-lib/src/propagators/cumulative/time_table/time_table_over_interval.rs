@@ -129,13 +129,18 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
         // this allows us to build the time-table in a single pass
         events.sort_by(|a, b| {
             match a.time_stamp.cmp(&b.time_stamp) {
-                std::cmp::Ordering::Less => std::cmp::Ordering::Less,
-                // If the time_stamps are equal then we first go through the starts of mandatory parts
-                // While not necessary, it allows us to avoid certain checks when computing the time-table
+                // If the time_stamps are equal then we first go through the ends of the mandatory parts
+                // This allows us to build smaller explanations by ensuring that we report an error as soon as it can be found
                 std::cmp::Ordering::Equal => {
-                    b.change_in_resource_usage.cmp(&a.change_in_resource_usage)
+                    if a.change_in_resource_usage.signum() != b.change_in_resource_usage.signum() {
+                        // If a is the start (end) of a mandatory part and b is the end (start) of a mandatory part then we need to ensure that we go through the end of the mandatory part first
+                        a.change_in_resource_usage.cmp(&b.change_in_resource_usage)
+                    } else {
+                        // If both events are starts or both events are ends then we sort on the task id for easier reproducibility
+                        a.task.id.unpack().cmp(&b.task.id.unpack())
+                    }
                 }
-                std::cmp::Ordering::Greater => std::cmp::Ordering::Equal,
+                other_ordering => other_ordering,
             }
         });
 
@@ -175,14 +180,15 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
                 current_profile_tasks.push(task);
             } else {
                 // A profile is currently being created
+
+                // We have first traversed all of the ends of mandatory parts, meaning that any overflow will persist after processing all events at this time-point
+                if current_resource_usage > parameters.capacity {
+                    // An overflow has occurred due to mandatory parts
+                    return Err(current_profile_tasks);
+                }
+
                 // Potentially we need to end the current profile and start a new one due to the addition/removal of the current task
                 if start_of_interval != time_stamp {
-                    // The current interval should be ended due to the current task under consideration
-                    // Note that if `start_of_interval == time_stamp` then there is no profile should be ended
-                    if current_resource_usage > parameters.capacity {
-                        // An overflow has occurred due to mandatory parts
-                        return Err(current_profile_tasks);
-                    }
                     // We end the current profile, creating a profile from [start_of_interval, time_stamp)
                     time_table.push(ResourceProfile {
                         start: start_of_interval,
@@ -192,6 +198,11 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
                     });
                 }
                 // Process the current event, note that `change_in_resource_usage` can be negative
+                pumpkin_assert_simple!(
+                    change_in_resource_usage > 0
+                        || current_resource_usage >= change_in_resource_usage,
+                    "Processing this task would have caused negative resource usage which should not be possible"
+                );
                 current_resource_usage += change_in_resource_usage;
                 if current_resource_usage == 0 {
                     // No tasks have an active mandatory at the current `time_stamp`
