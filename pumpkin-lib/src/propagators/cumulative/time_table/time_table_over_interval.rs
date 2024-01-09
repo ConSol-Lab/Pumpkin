@@ -1,16 +1,14 @@
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
+use crate::engine::PropagationContextMut;
+use crate::engine::ReadDomains;
 use crate::{
-    basic_types::{
-        variables::IntVar, Inconsistency, PropagationStatusCP, PropositionalConjunction,
-    },
+    basic_types::{variables::IntVar, Inconsistency, PropagationStatusCP},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, EnqueueDecision,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, EnqueueDecision,
         PropagationContext, PropagatorConstructorContext,
     },
-    propagators::{
-        CumulativeArgs, CumulativeParameters, PropagationStatusWithExplanation, Task, Util,
-    },
+    propagators::{CumulativeArgs, CumulativeParameters, Task, Util},
     pumpkin_assert_extreme, pumpkin_assert_simple,
 };
 
@@ -38,12 +36,6 @@ pub struct TimeTableOverIntervalProp<Var> {
     /// Each elements holds the mandatory resource consumption of 1 or more tasks over an interval (stored in a [ResourceProfile]);
     /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
     time_table: OverIntervalTimeTableType<Var>,
-    /// For each variable, eagerly maps the explanation of the lower-bound change;
-    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
-    reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
-    /// For each variable, eagerly maps the explanation of the upper-bound change
-    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i <= bound\]
-    reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
 }
@@ -68,39 +60,24 @@ where
 
 impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
     pub fn new(parameters: CumulativeParameters<Var>) -> TimeTableOverIntervalProp<Var> {
-        let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); parameters.tasks.len()];
         TimeTableOverIntervalProp {
             time_table: Default::default(),
-            reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
-            reasons_for_propagation_upper_bound: reasons_for_propagation,
             parameters,
         }
     }
 
     pub(crate) fn debug_propagate_from_scratch_time_table_interval(
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
     ) -> PropagationStatusCP {
-        if let Ok(time_table) = TimeTableOverIntervalProp::create_time_table(context, parameters) {
-            if check_for_updates(context, time_table.iter(), parameters)
-                .status
-                .is_ok()
-            {
-                Ok(())
-            } else {
-                Err(Inconsistency::EmptyDomain)
-            }
-        } else {
-            //There was a conflict while creating the time-table, we need to return an error
-            Err(Inconsistency::from(PropositionalConjunction::default()))
-        }
+        let time_table = TimeTableOverIntervalProp::create_time_table(context, parameters)?;
+        check_for_updates(context, time_table.iter(), parameters)
     }
 
     pub(crate) fn create_time_table_over_interval_from_scratch(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<OverIntervalTimeTableType<Var>, Vec<Rc<Task<Var>>>> {
+    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
         // First we create a list of events with which we will create the time-table
         let mut events: Vec<Event<Var>> = Vec::new();
         // Then we go over every task
@@ -184,7 +161,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
                 // We have first traversed all of the ends of mandatory parts, meaning that any overflow will persist after processing all events at this time-point
                 if current_resource_usage > parameters.capacity {
                     // An overflow has occurred due to mandatory parts
-                    return Err(current_profile_tasks);
+                    return Err(Util::create_inconsistency(context, &current_profile_tasks));
                 }
 
                 // Potentially we need to end the current profile and start a new one due to the addition/removal of the current task
@@ -239,18 +216,8 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalProp<Var> {
 }
 
 impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTableOverIntervalProp<Var> {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
-        let PropagationStatusWithExplanation {
-            status,
-            explanations,
-        } = TimeTablePropagator::propagate_from_scratch(self, context);
-
-        Util::store_explanations(
-            explanations,
-            &mut self.reasons_for_propagation_lower_bound,
-            &mut self.reasons_for_propagation_upper_bound,
-        );
-        status
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        TimeTablePropagator::propagate_from_scratch(self, context)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -262,22 +229,9 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTableOverInt
         );
     }
 
-    fn get_reason_for_propagation(
-        &mut self,
-        _context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        Util::get_reason_for_propagation(
-            delta,
-            &self.reasons_for_propagation_lower_bound,
-            &self.reasons_for_propagation_upper_bound,
-            &self.parameters.tasks,
-        )
-    }
-
     fn notify(
         &mut self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -298,14 +252,14 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTableOverInt
         "CumulativeTimeTableOverInterval"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         Util::initialise_at_root(true, &mut self.parameters, context);
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         TimeTableOverIntervalProp::debug_propagate_from_scratch_time_table_interval(
             context,
@@ -320,24 +274,21 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTableOverIntervalPr
 
     fn create_time_table_and_assign(
         &mut self,
-        context: &PropagationContext,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
-        match <TimeTableOverIntervalProp<Var> as TimeTablePropagator<Var>>::create_time_table(
-            context,
-            self.get_parameters(),
-        ) {
-            Ok(result) => {
-                self.time_table = result;
-                Ok(())
-            }
-            Err(explanation) => Err(explanation),
-        }
+        context: &PropagationContextMut,
+    ) -> PropagationStatusCP {
+        let time_table =
+            <TimeTableOverIntervalProp<Var> as TimeTablePropagator<Var>>::create_time_table(
+                context,
+                self.get_parameters(),
+            )?;
+        self.time_table = time_table;
+        Ok(())
     }
 
     fn create_time_table(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
+    ) -> Result<Self::TimeTableType, Inconsistency> {
         TimeTableOverIntervalProp::create_time_table_over_interval_from_scratch(context, parameters)
     }
 
@@ -356,7 +307,7 @@ mod tests {
         basic_types::{
             ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
         },
-        engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
+        engine::{test_helper::TestSolver, EnqueueDecision},
         propagators::{ArgTask, TimeTableOverInterval},
     };
 
@@ -563,7 +514,7 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
+        solver
             .new_propagator(TimeTableOverInterval::new(
                 [
                     ArgTask {
@@ -587,10 +538,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(1), DomainChange::UpperBound(3)),
-        );
+        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(9),
@@ -755,7 +703,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
+        solver
             .new_propagator(TimeTableOverInterval::new(
                 [
                     ArgTask {
@@ -779,10 +727,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(1), DomainChange::LowerBound(5)),
-        );
+        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.lower_bound_predicate(0),
@@ -800,7 +745,7 @@ mod tests {
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
 
-        let mut propagator = solver
+        solver
             .new_propagator(TimeTableOverInterval::new(
                 [
                     ArgTask {
@@ -831,10 +776,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(2), DomainChange::LowerBound(7)),
-        );
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(5),
