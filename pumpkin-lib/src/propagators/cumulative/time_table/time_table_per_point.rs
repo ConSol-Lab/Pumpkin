@@ -174,16 +174,13 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
         &mut self,
         context: &PropagationContextMut,
     ) -> PropagationStatusCP {
-        match <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
-            context,
-            self.get_parameters(),
-        ) {
-            Ok(result) => {
-                self.time_table = result;
-                Ok(())
-            }
-            Err(explanation) => Err(explanation),
-        }
+        let time_table =
+            <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
+                context,
+                self.get_parameters(),
+            )?;
+        self.time_table = time_table;
+        Ok(())
     }
 
     fn create_time_table(
