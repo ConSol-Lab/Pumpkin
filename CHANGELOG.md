@@ -15,6 +15,14 @@
 * Implemented reified linear leq propagator.
 * Added disjunctive scheduling example through a difference logic model.
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
+* Added explicit support for constraints as an abstraction over propagators. The 
+  following constraints are provided:
+  * int_lin_ne
+  * int_lin_le
+  * int_lin_le_reif
+  * int_ne
+  * int_times
+  * all_different
 * Add support for variables with negative domain bounds.
 
 ## Bugfixes

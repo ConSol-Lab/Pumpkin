@@ -1,11 +1,11 @@
 use log::warn;
 use pumpkin_lib::{
     basic_types::{variables::IntVar, DomainId},
+    constraints::ConstraintsExt,
     engine::ConstraintSatisfactionSolver,
 };
 
 use super::{
-    constraints,
     instance::{FlatZincInstance, Variable, VariableMap},
     FlatZincError,
 };
@@ -71,9 +71,9 @@ fn compile_int_lin_ne(
         .iter()
         .zip(weights.iter())
         .map(|(x_i, &w_i)| x_i.scaled(w_i))
-        .collect();
+        .collect::<Box<[_]>>();
 
-    constraints::int_lin_ne(solver, x, c);
+    solver.int_lin_ne(x, c);
 
     Ok(())
 }
