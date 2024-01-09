@@ -3,19 +3,18 @@ use crate::basic_types::{
     PropositionalVariable,
 };
 
-use crate::engine::{Delta, PropagationContext, PropagatorId};
+use crate::engine::reason::ReasonRef;
+use crate::engine::{
+    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager,
+    SATEngineDataStructures, WatchListPropositional,
+};
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
 use crate::{predicate, pumpkin_assert_eq_simple, pumpkin_assert_moderate, pumpkin_assert_simple};
 
 use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
-use super::{
-    AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
-    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager, PropagatorVarId,
-    SATEngineDataStructures, WatchListPropositional,
-};
+use super::{AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures};
 
 pub struct SATCPMediator {
-    synchronised_literal_to_predicate: Vec<(Predicate, Option<PropagatorVarId>)>, //todo explain
     mapping_domain_to_equality_literals: Vec<Box<[Literal]>>,
     mapping_domain_to_lower_bound_literals: Vec<Box<[Literal]>>,
     mapping_literal_to_predicates: Vec<Vec<Predicate>>,
@@ -34,7 +33,6 @@ impl Default for SATCPMediator {
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
 
         SATCPMediator {
-            synchronised_literal_to_predicate: vec![],
             mapping_literal_to_predicates: vec![], //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
             mapping_domain_to_equality_literals: vec![],
             mapping_domain_to_lower_bound_literals: vec![],
@@ -63,25 +61,14 @@ impl SATCPMediator {
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
             let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
-            let propagator_id = assignments_integer
-                .get_propagator_id_on_trail(cp_trail_pos)
-                .expect(
-                    "None is not expected for the propagator identifier here, strange, must abort.",
-                );
+            let reason_ref = entry.reason.expect("CP trail entry should have a reason.");
 
             let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
-            let constraint_reference =
-                ConstraintReference::create_propagator_reference(propagator_id);
+            let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
 
-            let conflict_info = assignments_propositional.enqueue_propagated_literal(
-                literal,
-                constraint_reference,
-                None,
-            );
-
-            self.synchronised_literal_to_predicate[literal] =
-                (entry.predicate, entry.propagator_reason);
+            let conflict_info =
+                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
 
             if conflict_info.is_some() {
                 self.cp_trail_synced_position = cp_trail_pos + 1;
@@ -152,7 +139,9 @@ impl SATCPMediator {
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.mapping_literal_to_predicates[literal].len() {
             let predicate = self.mapping_literal_to_predicates[literal][j];
-            cp_data_structures.apply_predicate(&predicate, None)?;
+            cp_data_structures
+                .assignments_integer
+                .apply_predicate(&predicate, None)?;
         }
 
         Ok(())
@@ -213,11 +202,6 @@ impl SATCPMediator {
         //add an empty predicate vector for both polarities of the variable
         self.mapping_literal_to_predicates.push(vec![]);
         self.mapping_literal_to_predicates.push(vec![]);
-
-        self.synchronised_literal_to_predicate
-            .push((Predicate::get_dummy_predicate(), None));
-        self.synchronised_literal_to_predicate
-            .push((Predicate::get_dummy_predicate(), None));
 
         PropositionalVariable::new(new_variable_index)
     }
@@ -575,7 +559,6 @@ impl SATCPMediator {
         conflict_info: &ConflictInfo,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         match conflict_info {
             ConflictInfo::VirtualBinaryClause { lit1, lit2 } => self
@@ -590,9 +573,8 @@ impl SATCPMediator {
                 } else {
                     self.create_clause_from_propagation_reason(
                         *literal,
-                        reference.get_propagator_id(),
+                        reference.get_reason_ref(),
                         cp_data_structures,
-                        cp_propagators,
                         sat_data_structures,
                     )
                 }
@@ -624,7 +606,6 @@ impl SATCPMediator {
         clausal_propagator: &ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         pumpkin_assert_moderate!(
             !sat_data_structures
@@ -657,9 +638,8 @@ impl SATCPMediator {
         else {
             self.create_clause_from_propagation_reason(
                 propagated_literal,
-                constraint_reference.get_propagator_id(),
+                constraint_reference.get_reason_ref(),
                 cp_data_structures,
-                cp_propagators,
                 sat_data_structures,
             )
         }
@@ -668,55 +648,25 @@ impl SATCPMediator {
     fn create_clause_from_propagation_reason(
         &mut self,
         propagated_literal: Literal,
-        propagator_id: PropagatorId,
+        reason_ref: ReasonRef,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> ClauseReference {
-        let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
-        let delta = {
-            match synchonised_entry.1 {
-                Some(id) => Delta::from_predicate(id.variable, synchonised_entry.0),
-                None => Delta::from_literal(
-                    sat_data_structures
-                        .assignments_propositional
-                        .get_local_id_of_literal(propagated_literal)
-                        .expect("Literal is not synchronised but it does also not have a local id"),
-                    sat_data_structures
-                        .assignments_propositional
-                        .is_literal_assigned_true(propagated_literal),
-                ),
-            }
-        };
-
-        let context = PropagationContext::new(
-            &mut cp_data_structures.assignments_integer,
-            &mut sat_data_structures.assignments_propositional,
-            propagator_id,
-        );
-
-        let propagator = &mut cp_propagators[propagator_id.0 as usize];
-        let reason = propagator.get_reason_for_propagation(&context, delta);
-
-        // pumpkin_assert_advanced!(DebugHelper::debug_propagator_reason(
-        //     synchonised_entry.0,
-        //     &reason,
-        //     &cp_data_structures.assignments_integer,
-        //     propagator.as_ref(),
-        //     propagator_id.0
-        // ));
+        let (reason, assignments_integer) = cp_data_structures
+            .compute_reason(reason_ref, &sat_data_structures.assignments_propositional);
 
         //create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
         //important to keep propagated literal at the zero-th position
-        let explanation_literals =
-            std::iter::once(propagated_literal)
-                .chain(reason.iter().map(|&p| {
-                    !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
-                }))
-                .chain(reason.iter_literals().map(|&p| !p))
-                .collect();
+        let explanation_literals = std::iter::once(propagated_literal)
+            .chain(
+                reason
+                    .iter()
+                    .map(|&p| !self.get_predicate_literal(p, assignments_integer)),
+            )
+            .chain(reason.iter_literals().map(|&p| !p))
+            .collect();
 
         self.explanation_clause_manager
             .add_explanation_clause_unchecked(
@@ -744,7 +694,7 @@ impl SATCPMediator {
 
 #[cfg(test)]
 mod tests {
-    use crate::{basic_types::PredicateConstructor, engine::LocalId};
+    use crate::basic_types::PredicateConstructor;
 
     use super::*;
 
@@ -928,13 +878,12 @@ mod tests {
             &mut cp_data_structures,
         );
 
+        let dummy_reason = ReasonRef(0);
+
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             2,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -947,10 +896,7 @@ mod tests {
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             8,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -963,10 +909,7 @@ mod tests {
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             12,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_err());
         assert_eq!(

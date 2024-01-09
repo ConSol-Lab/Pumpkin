@@ -1,10 +1,10 @@
-use crate::engine::DomainEvents;
+use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
 use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
+    basic_types::{variables::IntVar, PropagationStatusCP},
     conjunction,
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
-        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
+        PropagatorConstructorContext, PropagatorVariable,
     },
 };
 
@@ -33,7 +33,7 @@ impl<VX: IntVar, VY: IntVar> CPPropagatorConstructor for NotEq<VX, VY> {
 }
 
 impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEqProp<VX, VY> {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         propagate_one_direction(&self.x, &self.y, context)?;
         propagate_one_direction(&self.y, &self.x, context)?;
 
@@ -41,30 +41,6 @@ impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEqProp<VX, V
     }
 
     fn synchronise(&mut self, _: &PropagationContext) {}
-
-    fn get_reason_for_propagation(
-        &mut self,
-        _context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        match delta.affected_local_id() {
-            ID_X => {
-                if let DomainChange::Removal(value) = self.x.unpack(delta) {
-                    conjunction!([self.y == value])
-                } else {
-                    unreachable!("Only a singular value can be removed by this propagator.");
-                }
-            }
-            ID_Y => {
-                if let DomainChange::Removal(value) = self.y.unpack(delta) {
-                    conjunction!([self.x == value])
-                } else {
-                    unreachable!("Only a singular value can be removed by this propagator.");
-                }
-            }
-            id => unreachable!("Unknown explanation code {id} for NotEq propagator"),
-        }
-    }
 
     fn priority(&self) -> u32 {
         1
@@ -74,13 +50,13 @@ impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEqProp<VX, V
         "NotEq"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         propagate_one_direction(&self.x, &self.y, context)?;
         propagate_one_direction(&self.y, &self.x, context)?;
@@ -92,7 +68,7 @@ impl<VX: IntVar, VY: IntVar> ConstraintProgrammingPropagator for NotEqProp<VX, V
 fn propagate_one_direction<VX: IntVar, VY: IntVar>(
     x: &PropagatorVariable<VX>,
     y: &PropagatorVariable<VY>,
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
 ) -> PropagationStatusCP {
     if !context.is_fixed(x) {
         return Ok(());
@@ -100,7 +76,7 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
 
     let value = context.lower_bound(x);
     if context.contains(y, value) {
-        context.remove(y, value)?;
+        context.remove(y, value, conjunction!([x == value]))?;
     }
 
     Ok(())
@@ -108,7 +84,7 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{conjunction, engine::test_helper::TestSolver};
+    use crate::{conjunction, engine::test_helper::TestSolver, predicate};
 
     use super::*;
 
@@ -125,8 +101,8 @@ mod tests {
 
         assert!(!solver.contains(x, 4));
 
-        let reason = solver.get_reason(&mut propagator, Delta::new(ID_X, DomainChange::Removal(4)));
-        assert_eq!(conjunction!([y == 4]), reason);
+        let reason = solver.get_reason_int(predicate![x != 4]);
+        assert_eq!(conjunction!([y == 4]), *reason);
     }
 
     #[test]
@@ -142,7 +118,7 @@ mod tests {
 
         assert!(!solver.contains(y, 4));
 
-        let reason = solver.get_reason(&mut propagator, Delta::new(ID_Y, DomainChange::Removal(4)));
-        assert_eq!(conjunction!([x == 4]), reason);
+        let reason = solver.get_reason_int(predicate![y != 4]);
+        assert_eq!(conjunction!([x == 4]), *reason);
     }
 }

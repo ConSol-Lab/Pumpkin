@@ -24,6 +24,7 @@
   * int_times
   * all_different
 * Add support for variables with negative domain bounds.
+* Added eager explanations to CP, lazy is still possible by passing a closure.
 
 ## Bugfixes
 

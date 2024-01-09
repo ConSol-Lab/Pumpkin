@@ -4,7 +4,7 @@ use super::sat::SATEngineDataStructures;
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
     ConstraintProgrammingPropagator, GlucoseRestartStrategy, LearnedClauseManager,
-    LearnedClauseMinimiser, PropagationContext, SATCPMediator, SatOptions,
+    LearnedClauseMinimiser, SATCPMediator, SatOptions,
 };
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
@@ -449,9 +449,7 @@ impl ConstraintSatisfactionSolver {
         self.sat_data_structures
             .assignments_propositional
             .increase_decision_level();
-        self.cp_data_structures
-            .assignments_integer
-            .increase_decision_level();
+        self.cp_data_structures.increase_decision_level();
     }
 
     fn write_to_certificate(&mut self) -> std::io::Result<()> {
@@ -583,11 +581,9 @@ impl ConstraintSatisfactionSolver {
         //      allow incremental synchronisation
         //      only call the subset of propagators that were notified since last backtrack
         for propagator_id in 0..self.cp_propagators.len() {
-            let context = PropagationContext::new(
-                &mut self.cp_data_structures.assignments_integer,
-                &mut self.sat_data_structures.assignments_propositional,
-                PropagatorId(propagator_id as u32),
-            );
+            let context = self
+                .cp_data_structures
+                .create_propagation_context(&self.sat_data_structures.assignments_propositional);
 
             self.cp_propagators[propagator_id].synchronise(&context);
         }
@@ -682,50 +678,45 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
-        if !self.cp_data_structures.propagator_queue.is_empty() {
-            let propagator_id = self.cp_data_structures.propagator_queue.pop();
-            let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-            let mut context = PropagationContext::new(
-                &mut self.cp_data_structures.assignments_integer,
-                &mut self.sat_data_structures.assignments_propositional,
-                propagator_id,
-            );
+        if self.cp_data_structures.propagator_queue.is_empty() {
+            return PropagationStatusOneStepCP::FixedPoint;
+        }
 
-            let propagation_status_cp = propagator.propagate(&mut context);
+        let propagator_id = self.cp_data_structures.propagator_queue.pop();
+        let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+        let mut context = self.cp_data_structures.create_propagation_context_mut(
+            &mut self.sat_data_structures.assignments_propositional,
+        );
 
-            match propagation_status_cp {
-                // An empty domain conflict will be caught by the clausal propagator.
-                Err(Inconsistency::EmptyDomain) => {
-                    return PropagationStatusOneStepCP::PropagationHappened;
+        match propagator.propagate(&mut context) {
+            // An empty domain conflict will be caught by the clausal propagator.
+            Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
+
+            // A propagator-specific reason for the current conflict.
+            Err(Inconsistency::Other(conflict_info)) => {
+                if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info {
+                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                        &self.cp_data_structures.assignments_integer,
+                        &self.sat_data_structures.assignments_propositional,
+                        &self.sat_cp_mediator,
+                        propositional_conjunction,
+                        propagator.as_ref(),
+                        propagator_id,
+                    ));
                 }
 
-                Err(Inconsistency::Other(conflict_info)) => {
-                    if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info
-                    {
-                        pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                            &self.cp_data_structures.assignments_integer,
-                            &self.sat_data_structures.assignments_propositional,
-                            &self.sat_cp_mediator,
-                            propositional_conjunction,
-                            propagator.as_ref(),
-                            propagator_id,
-                        ));
-                    }
+                PropagationStatusOneStepCP::ConflictDetected { conflict_info }
+            }
 
-                    return PropagationStatusOneStepCP::ConflictDetected { conflict_info };
-                }
+            Ok(()) => {
+                self.cp_data_structures.process_domain_events(
+                    &mut self.cp_propagators,
+                    &mut self.sat_data_structures.assignments_propositional,
+                );
 
-                Ok(()) => {
-                    self.cp_data_structures.process_domain_events(
-                        &mut self.cp_propagators,
-                        &mut self.sat_data_structures.assignments_propositional,
-                    );
-
-                    return PropagationStatusOneStepCP::PropagationHappened;
-                }
+                PropagationStatusOneStepCP::PropagationHappened
             }
         }
-        PropagationStatusOneStepCP::FixedPoint
     }
 }
 
@@ -750,10 +741,8 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let mut context = PropagationContext::new(
-            &mut self.cp_data_structures.assignments_integer,
+        let mut context = self.cp_data_structures.create_propagation_context_mut(
             &mut self.sat_data_structures.assignments_propositional,
-            new_propagator_id,
         );
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
@@ -906,14 +895,12 @@ impl ConstraintSatisfactionSolver {
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             } else {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             };
             self.learned_clause_manager
@@ -1023,7 +1010,6 @@ impl ConstraintSatisfactionSolver {
                 &mut self.sat_data_structures,
                 &mut self.cp_data_structures,
                 &mut self.sat_cp_mediator,
-                &mut self.cp_propagators,
             );
         }
 
@@ -1071,14 +1057,12 @@ impl ConstraintSatisfactionSolver {
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             } else {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             };
             self.learned_clause_manager
@@ -1234,10 +1218,9 @@ impl ConstraintSatisfactionSolver {
         if !is_extracting_core {
             // When this method is called during core extraction, the decision level is not
             // necessarily the decision level of learned_literals[0].
-            assert!(
-                self.get_decision_level()
-                    == assignments
-                        .get_literal_assignment_level(self.analysis_result.learned_literals[0]),
+            assert_eq!(
+                self.get_decision_level(),
+                assignments.get_literal_assignment_level(self.analysis_result.learned_literals[0]),
                 "The asserting literal must be at the highest level."
             );
         }
@@ -1257,9 +1240,9 @@ impl ConstraintSatisfactionSolver {
         );
 
         if learned_lits.len() >= 2 {
-            assert!(
-                self.analysis_result.backjump_level
-                    == assignments.get_literal_assignment_level(learned_lits[1]),
+            assert_eq!(
+                self.analysis_result.backjump_level,
+                assignments.get_literal_assignment_level(learned_lits[1]),
                 "Assertion level seems wrong."
             );
 
