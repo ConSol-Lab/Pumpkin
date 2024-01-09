@@ -1,7 +1,4 @@
-use std::{
-    fmt::Write,
-    io::{BufRead, BufReader, Read},
-};
+use std::io::{BufRead, BufReader, Read};
 
 use flatzinc::{convert_error, VerboseError};
 use log::warn;
@@ -13,18 +10,16 @@ use super::{
 
 pub fn parse(source: impl Read) -> Result<FlatZincInstance, FlatZincError> {
     let reader = BufReader::new(source);
-    let mut buf = String::new();
 
     let mut instance_builder = FlatZincInstance::builder();
 
     for line in reader.lines() {
         let line = line?;
-        write!(buf, "{}", line).unwrap();
 
         match flatzinc::statement::<VerboseError<&str>>(&line) {
             Ok((_, stmt)) => parse_statement(stmt, &mut instance_builder)?,
             Err(flatzinc::Err::Error(e)) | Err(flatzinc::Err::Failure(e)) => {
-                let error_msg = convert_error(buf.as_str(), e);
+                let error_msg = convert_error(line.as_str(), e);
                 return Err(FlatZincError::SyntaxError(error_msg.into()));
             }
             Err(_) => {
@@ -41,7 +36,7 @@ fn parse_statement(
     instance_builder: &mut FlatZincInstanceBuilder,
 ) -> Result<(), FlatZincError> {
     match stmt {
-        flatzinc::Stmt::Predicate(_) => todo!("implement predicate parsing"),
+        flatzinc::Stmt::Predicate(_) => Ok(()),
         flatzinc::Stmt::Comment(_) => Ok(()),
         flatzinc::Stmt::Parameter(par_decl) => parse_par_decl(par_decl, instance_builder),
         flatzinc::Stmt::Variable(var_decl) => parse_var_decl(var_decl, instance_builder),
@@ -136,6 +131,15 @@ fn parse_var_decl(
             };
 
             instance_builder.add_integer_variable_array(id.into(), array, is_output_variable);
+        }
+
+        flatzinc::VarDeclItem::Bool { id, expr, annos } => {
+            if expr.is_some() {
+                warn!("ignoring expression in bool variable declaration");
+            }
+
+            let is_output_variable = annos.iter().any(|ann| ann.id == "output_var");
+            instance_builder.add_bool_variable(id.into(), is_output_variable);
         }
 
         unknown => todo!("implement parse_var_decl for {unknown:#?}"),

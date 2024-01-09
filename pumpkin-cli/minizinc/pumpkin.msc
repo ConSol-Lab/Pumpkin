@@ -3,6 +3,7 @@
     "id": "nl.tudelft.algorithmics.pumpkin",
     "version": "0.1",
     "executable": "../../target/release/pumpkin-cli",
+    "mznlib": "./lib",
 
     "tags": ["cp", "lcg", "int"]
 }

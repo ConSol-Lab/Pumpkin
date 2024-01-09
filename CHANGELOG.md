@@ -16,11 +16,20 @@
 * Added disjunctive scheduling example through a difference logic model.
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
 * Added explicit support for constraints as an abstraction over propagators. The 
-  following constraints are provided:
+  following constraints are provided (also implemented for the FlatZinc compiler):
   * int_lin_ne
   * int_lin_le
   * int_lin_le_reif
+  * int_lin_eq
+  * int_lin_eq_reif
   * int_ne
+  * int_le
+  * int_le_reif
+  * int_lt
+  * int_lt_reif
+  * int_eq
+  * int_eq_reif
+  * int_plus
   * int_times
   * all_different
 * Add support for variables with negative domain bounds.

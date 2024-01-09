@@ -30,7 +30,7 @@ pub trait ConstraintsExt {
         self.post(LinearLeq::new(terms.into(), rhs));
     }
 
-    /// Adds the constraint `reif -> \sum terms_i <= rhs`.
+    /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
     fn int_lin_le_reif<Var: IntVar + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
@@ -50,12 +50,62 @@ pub trait ConstraintsExt {
         self.int_lin_le(negated, -rhs);
     }
 
+    /// Adds the constraint `reif -> (\sum terms_i = rhs)`.
+    fn int_lin_eq_reif<Var: IntVar + 'static>(
+        &mut self,
+        terms: impl Into<Box<[Var]>>,
+        rhs: i32,
+        reif: Literal,
+    ) {
+        let terms = terms.into();
+
+        self.int_lin_le_reif(terms.clone(), rhs, reif);
+
+        let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
+        self.int_lin_le_reif(negated, -rhs, reif);
+    }
+
     /// Adds the constraint `lhs != rhs`.
     fn int_ne<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
         self.int_lin_ne([lhs.scaled(1), rhs.scaled(-1)], 0);
     }
 
-    /// Adds the constraint `lhs
+    /// Adds the constraint `lhs <= rhs`.
+    fn int_le<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
+        self.int_lin_le([lhs.scaled(1), rhs.scaled(-1)], 0);
+    }
+
+    /// Adds the constraint `reif -> (lhs <= rhs)`.
+    fn int_le_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
+        self.int_lin_le_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif);
+    }
+
+    /// Adds the constraint `lhs < rhs`.
+    fn int_lt<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
+        self.int_le(lhs.scaled(1), rhs.offset(-1));
+    }
+
+    /// Adds the constraint `reif -> (lhs < rhs)`.
+    fn int_lt_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
+        self.int_le_reif(lhs.scaled(1), rhs.offset(-1), reif);
+    }
+
+    /// Adds the constraint `lhs = rhs`.
+    fn int_eq<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
+        self.int_lin_eq([lhs.scaled(1), rhs.scaled(-1)], 0);
+    }
+
+    /// Adds the constraint `reif -> (lhs = rhs)`.
+    fn int_eq_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
+        self.int_lin_eq_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif);
+    }
+
+    /// Adds the constraint `a + b = c`.
+    fn int_plus<Var: IntVar + 'static>(&mut self, a: Var, b: Var, c: Var) {
+        self.int_lin_eq([a.scaled(1), b.scaled(1), c.scaled(-1)], 0);
+    }
+
+    /// Adds the constraint `a * b = c`.
     fn int_times(
         &mut self,
         a: impl IntVar + 'static,

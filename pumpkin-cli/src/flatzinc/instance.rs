@@ -1,10 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     ops::{Deref, RangeInclusive},
     rc::Rc,
 };
 
-use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::basic_types::{DomainId, Literal};
 
 #[derive(Default)]
 pub struct FlatZincInstance {
@@ -13,6 +13,8 @@ pub struct FlatZincInstance {
 
     integer_variables: HashMap<Rc<str>, RangeInclusive<i32>>,
     array_of_integer_variables: HashMap<Rc<str>, Box<[Rc<str>]>>,
+
+    bool_variables: HashSet<Rc<str>>,
 
     output_variables: Vec<OutputVariable>,
 
@@ -32,10 +34,16 @@ impl FlatZincInstance {
         }
     }
 
-    pub fn iter_variables(&self) -> impl Iterator<Item = (Rc<str>, RangeInclusive<i32>)> + '_ {
+    pub fn iter_integer_variables(
+        &self,
+    ) -> impl Iterator<Item = (Rc<str>, RangeInclusive<i32>)> + '_ {
         self.integer_variables
             .iter()
             .map(|(id, bounds)| (Rc::clone(id), bounds.clone()))
+    }
+
+    pub fn iter_bool_variables(&self) -> impl Iterator<Item = Rc<str>> + '_ {
+        self.bool_variables.iter().cloned()
     }
 
     pub fn iter_constraints(&self) -> impl Iterator<Item = &flatzinc::ConstraintItem> + '_ {
@@ -88,6 +96,16 @@ impl FlatZincInstanceBuilder {
         }
     }
 
+    pub fn add_bool_variable(&mut self, id: Rc<str>, is_output_variable: bool) {
+        self.instance.bool_variables.insert(Rc::clone(&id));
+
+        if is_output_variable {
+            self.instance
+                .output_variables
+                .push(OutputVariable::Variable(id));
+        }
+    }
+
     pub fn build(self) -> FlatZincInstance {
         self.instance
     }
@@ -117,10 +135,12 @@ impl FlatZincInstanceBuilder {
 #[derive(Default)]
 pub struct VariableMap {
     integer_variables: BTreeMap<Rc<str>, DomainId>,
+    bool_variables: BTreeMap<Rc<str>, Literal>,
 }
 
 pub enum Variable {
     Integer(DomainId),
+    Bool(Literal),
 }
 
 impl VariableMap {
@@ -128,10 +148,15 @@ impl VariableMap {
         self.integer_variables.insert(id, domain);
     }
 
+    pub fn register_bool_variable(&mut self, id: Rc<str>, literal: Literal) {
+        self.bool_variables.insert(id, literal);
+    }
+
     pub fn resolve(&self, id: &str) -> Option<Variable> {
         self.integer_variables
             .get(id)
             .copied()
             .map(Variable::Integer)
+            .or_else(|| self.bool_variables.get(id).copied().map(Variable::Bool))
     }
 }

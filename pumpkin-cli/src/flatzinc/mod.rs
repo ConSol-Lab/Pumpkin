@@ -48,6 +48,12 @@ fn print_solution(
                         let value = solver.get_integer_assignments().get_lower_bound(domain_id);
                         println!("{id} = {value};");
                     }
+                    Variable::Bool(literal) => {
+                        let value = solver
+                            .get_propositional_assignments()
+                            .is_literal_assigned_true(literal);
+                        println!("{id} = {value};");
+                    }
                 }
             }
             OutputVariable::VariableArray(id) => {
@@ -61,6 +67,12 @@ fn print_solution(
                     match var {
                         Variable::Integer(domain_id) => {
                             let value = solver.get_integer_assignments().get_lower_bound(domain_id);
+                            write!(buf, "{value}").unwrap();
+                        }
+                        Variable::Bool(literal) => {
+                            let value = solver
+                                .get_propositional_assignments()
+                                .is_literal_assigned_true(literal);
                             write!(buf, "{value}").unwrap();
                         }
                     }
