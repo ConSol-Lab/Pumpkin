@@ -17,6 +17,16 @@
 * Added cumulative propagator(s)
   * Added propagator utilising time-table reasoning per time point
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
+* Added explicit support for constraints as an abstraction over propagators. The 
+  following constraints are provided:
+  * int_lin_ne
+  * int_lin_le
+  * int_lin_le_reif
+  * int_ne
+  * int_times
+  * all_different
+* Add support for variables with negative domain bounds.
+* Added eager explanations to CP, lazy is still possible by passing a closure.
 
 ## Bugfixes
 

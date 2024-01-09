@@ -3,6 +3,7 @@ mod cp_engine_data_structures;
 mod event_sink;
 mod propagation;
 mod propagator_queue;
+pub mod reason;
 pub mod test_helper;
 mod watch_list_cp;
 mod watch_list_propositional;

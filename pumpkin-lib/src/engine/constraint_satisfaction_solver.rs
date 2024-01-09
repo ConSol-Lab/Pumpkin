@@ -4,7 +4,7 @@ use super::sat::SATEngineDataStructures;
 use super::{
     AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
     ConstraintProgrammingPropagator, GlucoseRestartStrategy, LearnedClauseManager,
-    LearnedClauseMinimiser, PropagationContext, SATCPMediator, SatOptions,
+    LearnedClauseMinimiser, SATCPMediator, SatOptions,
 };
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::{
@@ -125,12 +125,54 @@ impl ConstraintSatisfactionSolver {
         self.solve_internal()
     }
 
-    //a clausal core is defined as an (implied) clause that contains only assumption literals
-    //  a core can be verified with reverse unit propagation (RUP)
-    //the function can fail if the assumptions were inconsistent, i.e., the assumptions contained x and !x
-    //  in that case one of the two inconsistent literals are returns as an error
-    //otherwise the function returns a clausal core
-    //  note that the returned clausal core may not necessarily be unique, nor the smallest
+    /// Returns an unsatisfiable core.
+    ///
+    /// We define an unsatisfiable core as a clause containing only negated assumption literals,
+    /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
+    /// assumptions which cannot be satisfied together with the rest of the formula. The clause is
+    /// not necessarily unique or minimal.
+    ///
+    /// The unsatisfiable core can be verified with reverse unit propagation (RUP).
+    ///
+    /// *Notes:*
+    ///   - If the solver is not in an unsatisfied state, this method will panic.
+    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions,
+    ///   this will return an empty vector.
+    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error
+    ///   is returned, with the literal being one of the inconsistent assumptions.
+    ///
+    /// # Example usage
+    /// ```rust
+    /// // We construct the following SAT instance:
+    /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
+    /// // And solve under the assumptions:
+    /// //   !x0 /\ x1 /\ !x2
+    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+    /// # use pumpkin_lib::basic_types::{PropositionalVariable, Literal};
+    /// let solver = ConstraintSatisfactionSolver::default();
+    ///
+    /// let mut solver = ConstraintSatisfactionSolver::default();
+    /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
+    ///
+    /// solver.add_permanent_clause(vec![x[0], x[1], x[2]]);
+    /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
+    ///
+    /// let assumptions = [!x[0], x[1], !x[2]];
+    /// solver.solve_under_assumptions(&assumptions, i64::MAX);
+    ///
+    /// let core = solver.extract_clausal_core().expect("the instance is unsatisfiable");
+    ///
+    /// // The order of the literals in the core is undefined, so we check for unordered equality.
+    /// assert_eq!(
+    ///     core.len(),
+    ///     assumptions.len(),
+    ///     "the core has the length of the number of assumptions"
+    /// );
+    /// assert!(
+    ///     core.iter().all(|&lit| assumptions.contains(&!lit)),
+    ///     "all literals in the core are negated assumptions"
+    /// );
+    /// ```
     pub fn extract_clausal_core(&mut self) -> Result<Vec<Literal>, Literal> {
         pumpkin_assert_simple!(self.debug_check_core_extraction());
 
@@ -407,9 +449,7 @@ impl ConstraintSatisfactionSolver {
         self.sat_data_structures
             .assignments_propositional
             .increase_decision_level();
-        self.cp_data_structures
-            .assignments_integer
-            .increase_decision_level();
+        self.cp_data_structures.increase_decision_level();
     }
 
     fn write_to_certificate(&mut self) -> std::io::Result<()> {
@@ -541,11 +581,9 @@ impl ConstraintSatisfactionSolver {
         //      allow incremental synchronisation
         //      only call the subset of propagators that were notified since last backtrack
         for propagator_id in 0..self.cp_propagators.len() {
-            let context = PropagationContext::new(
-                &mut self.cp_data_structures.assignments_integer,
-                &mut self.sat_data_structures.assignments_propositional,
-                PropagatorId(propagator_id as u32),
-            );
+            let context = self
+                .cp_data_structures
+                .create_propagation_context(&self.sat_data_structures.assignments_propositional);
 
             self.cp_propagators[propagator_id].synchronise(&context);
         }
@@ -640,50 +678,45 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
-        if !self.cp_data_structures.propagator_queue.is_empty() {
-            let propagator_id = self.cp_data_structures.propagator_queue.pop();
-            let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-            let mut context = PropagationContext::new(
-                &mut self.cp_data_structures.assignments_integer,
-                &mut self.sat_data_structures.assignments_propositional,
-                propagator_id,
-            );
+        if self.cp_data_structures.propagator_queue.is_empty() {
+            return PropagationStatusOneStepCP::FixedPoint;
+        }
 
-            let propagation_status_cp = propagator.propagate(&mut context);
+        let propagator_id = self.cp_data_structures.propagator_queue.pop();
+        let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+        let mut context = self.cp_data_structures.create_propagation_context_mut(
+            &mut self.sat_data_structures.assignments_propositional,
+        );
 
-            match propagation_status_cp {
-                // An empty domain conflict will be caught by the clausal propagator.
-                Err(Inconsistency::EmptyDomain) => {
-                    return PropagationStatusOneStepCP::PropagationHappened;
+        match propagator.propagate(&mut context) {
+            // An empty domain conflict will be caught by the clausal propagator.
+            Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
+
+            // A propagator-specific reason for the current conflict.
+            Err(Inconsistency::Other(conflict_info)) => {
+                if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info {
+                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                        &self.cp_data_structures.assignments_integer,
+                        &self.sat_data_structures.assignments_propositional,
+                        &self.sat_cp_mediator,
+                        propositional_conjunction,
+                        propagator.as_ref(),
+                        propagator_id,
+                    ));
                 }
 
-                Err(Inconsistency::Other(conflict_info)) => {
-                    if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info
-                    {
-                        pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                            &self.cp_data_structures.assignments_integer,
-                            &self.sat_data_structures.assignments_propositional,
-                            &self.sat_cp_mediator,
-                            propositional_conjunction,
-                            propagator.as_ref(),
-                            propagator_id,
-                        ));
-                    }
+                PropagationStatusOneStepCP::ConflictDetected { conflict_info }
+            }
 
-                    return PropagationStatusOneStepCP::ConflictDetected { conflict_info };
-                }
+            Ok(()) => {
+                self.cp_data_structures.process_domain_events(
+                    &mut self.cp_propagators,
+                    &mut self.sat_data_structures.assignments_propositional,
+                );
 
-                Ok(()) => {
-                    self.cp_data_structures.process_domain_events(
-                        &mut self.cp_propagators,
-                        &mut self.sat_data_structures.assignments_propositional,
-                    );
-
-                    return PropagationStatusOneStepCP::PropagationHappened;
-                }
+                PropagationStatusOneStepCP::PropagationHappened
             }
         }
-        PropagationStatusOneStepCP::FixedPoint
     }
 }
 
@@ -708,10 +741,8 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let mut context = PropagationContext::new(
-            &mut self.cp_data_structures.assignments_integer,
+        let mut context = self.cp_data_structures.create_propagation_context_mut(
             &mut self.sat_data_structures.assignments_propositional,
-            new_propagator_id,
         );
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
@@ -864,14 +895,12 @@ impl ConstraintSatisfactionSolver {
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             } else {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             };
             self.learned_clause_manager
@@ -981,7 +1010,6 @@ impl ConstraintSatisfactionSolver {
                 &mut self.sat_data_structures,
                 &mut self.cp_data_structures,
                 &mut self.sat_cp_mediator,
-                &mut self.cp_propagators,
             );
         }
 
@@ -1029,14 +1057,12 @@ impl ConstraintSatisfactionSolver {
                     &self.clausal_propagator,
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             } else {
                 self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
                 )
             };
             self.learned_clause_manager
@@ -1192,10 +1218,9 @@ impl ConstraintSatisfactionSolver {
         if !is_extracting_core {
             // When this method is called during core extraction, the decision level is not
             // necessarily the decision level of learned_literals[0].
-            assert!(
-                self.get_decision_level()
-                    == assignments
-                        .get_literal_assignment_level(self.analysis_result.learned_literals[0]),
+            assert_eq!(
+                self.get_decision_level(),
+                assignments.get_literal_assignment_level(self.analysis_result.learned_literals[0]),
                 "The asserting literal must be at the highest level."
             );
         }
@@ -1215,9 +1240,9 @@ impl ConstraintSatisfactionSolver {
         );
 
         if learned_lits.len() >= 2 {
-            assert!(
-                self.analysis_result.backjump_level
-                    == assignments.get_literal_assignment_level(learned_lits[1]),
+            assert_eq!(
+                self.analysis_result.backjump_level,
+                assignments.get_literal_assignment_level(learned_lits[1]),
                 "Assertion level seems wrong."
             );
 

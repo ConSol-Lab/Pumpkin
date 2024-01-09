@@ -1,12 +1,14 @@
-use crate::engine::DomainEvents;
+use crate::basic_types::{ConflictInfo, Inconsistency};
+use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
 use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
+    basic_types::{variables::IntVar, PropagationStatusCP},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, LocalId,
-        PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
+        PropagatorConstructorContext, PropagatorVariable,
     },
     predicate,
 };
+use std::rc::Rc;
 
 pub struct LinearNe<Var> {
     /// The terms which sum to the left-hand side.
@@ -18,18 +20,18 @@ pub struct LinearNe<Var> {
 /// Domain consistent propagator for the constraint `\sum x_i != rhs`, where `x_i` are integer variables
 /// and `rhs` is an integer constant.
 pub struct LinearNeProp<Var> {
-    terms: Box<[PropagatorVariable<Var>]>,
+    terms: Rc<[PropagatorVariable<Var>]>,
     rhs: i32,
 }
 
 impl<Var> CPPropagatorConstructor for LinearNe<Var>
 where
-    Var: IntVar,
+    Var: IntVar + 'static,
 {
     type Propagator = LinearNeProp<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let x: Box<[_]> = self
+        let x: Rc<[_]> = self
             .terms
             .iter()
             .enumerate()
@@ -47,39 +49,13 @@ where
 
 impl<Var> ConstraintProgrammingPropagator for LinearNeProp<Var>
 where
-    Var: IntVar,
+    Var: IntVar + 'static,
 {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
 
     fn synchronise(&mut self, _context: &PropagationContext) {}
-
-    fn get_reason_for_propagation(
-        &mut self,
-        context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        let i = delta.affected_local_id().unpack();
-        let change = self.terms[i as usize].unpack(delta);
-
-        let DomainChange::Removal(_) = change else {
-            unreachable!()
-        };
-
-        self.terms
-            .iter()
-            .enumerate()
-            .filter_map(|(j, x_j)| {
-                if j as u32 != i {
-                    Some(predicate![x_j == context.lower_bound(x_j)])
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
-            .into()
-    }
 
     fn priority(&self) -> u32 {
         0
@@ -89,16 +65,16 @@ where
         "LinearNe"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         // TODO: This is a great candidate to potentially make incremental. We can only propagate
-        // when there is one unfixed variable.
+        //  when there is one unfixed variable.
         let num_fixed = self
             .terms
             .iter()
@@ -126,9 +102,21 @@ where
             let unfixed_x_i = self
                 .terms
                 .iter()
-                .find(|x_i| !context.is_fixed(x_i))
+                .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
-            context.remove(unfixed_x_i, value_to_remove)?;
+            let terms = Rc::clone(&self.terms);
+            context.remove(
+                &self.terms[unfixed_x_i],
+                value_to_remove,
+                move |context: &PropagationContext| {
+                    terms
+                        .iter()
+                        .enumerate()
+                        .filter(|&(i, _)| i != unfixed_x_i)
+                        .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                        .collect()
+                },
+            )?;
         } else if lhs == self.rhs {
             debug_assert_eq!(num_fixed, self.terms.len());
 
@@ -136,9 +124,11 @@ where
                 .terms
                 .iter()
                 .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
-                .collect::<Vec<_>>();
+                .collect();
 
-            return Err(failure_reason.into());
+            return Err(Inconsistency::Other(ConflictInfo::Explanation(
+                failure_reason,
+            )));
         }
 
         Ok(())
@@ -191,24 +181,21 @@ mod tests {
     #[test]
     fn explanation_for_propagation() {
         let mut solver = TestSolver::default();
-        let x = solver.new_variable(2, 2);
-        let y = solver.new_variable(1, 5);
+        let x = solver.new_variable(2, 2).scaled(1);
+        let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
             .new_propagator(LinearNe {
-                terms: [x.scaled(1), y.scaled(-1)].into(),
+                terms: [x.clone(), y.clone()].into(),
                 rhs: 0,
             })
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(1), DomainChange::Removal(2)),
-        );
+        let reason = solver.get_reason_int(predicate![y != -2]);
 
-        assert_eq!(conjunction!([x == 2]), reason);
+        assert_eq!(conjunction!([x == 2]), *reason);
     }
 
     #[test]

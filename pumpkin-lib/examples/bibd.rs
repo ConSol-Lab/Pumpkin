@@ -13,9 +13,8 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::{
-    basic_types::{variables::IntVar, CSPSolverExecutionFlag},
+    basic_types::CSPSolverExecutionFlag, constraints::ConstraintsExt,
     engine::ConstraintSatisfactionSolver,
-    propagators::{IntTimes, LinearLeq},
 };
 
 #[allow(clippy::upper_case_acronyms)]
@@ -87,12 +86,12 @@ fn main() {
 
     // Enforce the row sum.
     for row in matrix.iter() {
-        linear_equal(&mut solver, row, bibd.row_sum as i32);
+        solver.int_lin_eq(row.clone(), bibd.row_sum as i32);
     }
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
-        linear_equal(&mut solver, &row, bibd.column_sum as i32);
+        solver.int_lin_eq(row, bibd.column_sum as i32);
     }
 
     // Enforce the dot product constraint.
@@ -112,15 +111,15 @@ fn main() {
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                solver.add_propagator(IntTimes {
-                    a: matrix[r1][col],
-                    b: matrix[r2][col],
-                    c: pairwise_product[r1][r2][col],
-                });
+                solver.int_times(
+                    matrix[r1][col],
+                    matrix[r2][col],
+                    pairwise_product[r1][r2][col],
+                );
             }
-            linear_less_than_equal(
-                &mut solver,
-                &pairwise_product[r1][r2],
+
+            solver.int_lin_le(
+                pairwise_product[r1][r2].clone(),
                 bibd.max_dot_product as i32,
             );
         }
@@ -153,14 +152,6 @@ fn main() {
     }
 }
 
-fn linear_less_than_equal<Var: IntVar + 'static>(
-    solver: &mut ConstraintSatisfactionSolver,
-    vars: &[Var],
-    c: i32,
-) {
-    solver.add_propagator(LinearLeq::new(vars.iter().cloned().collect(), c));
-}
-
 fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {
     let rows = matrix.len();
     let cols = matrix[0].as_ref().len();
@@ -172,15 +163,4 @@ fn transpose<T: Clone, Inner: AsRef<[T]>>(matrix: &[Inner]) -> Vec<Vec<T>> {
                 .collect()
         })
         .collect()
-}
-
-fn linear_equal<Var: IntVar + 'static>(
-    solver: &mut ConstraintSatisfactionSolver,
-    row: &[Var],
-    rhs: i32,
-) {
-    linear_less_than_equal(solver, row, rhs);
-
-    let negated = row.iter().map(|var| var.scaled(-1)).collect::<Vec<_>>();
-    linear_less_than_equal(solver, &negated, -rhs);
 }

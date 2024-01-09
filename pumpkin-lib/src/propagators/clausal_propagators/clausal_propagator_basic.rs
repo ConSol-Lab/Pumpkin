@@ -108,7 +108,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             .add_clause_unchecked(literals, true, clause_allocator)
             .expect("Add clause failed for some reason");
 
-        assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into(), None);
+        assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
 
         Some(clause_reference)
     }
@@ -257,11 +257,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                 //	watched_clause[0] is assigned false -> conflict
 
                 //can propagate?
-                let conflict_info = assignments.enqueue_propagated_literal(
-                    watched_clause[0],
-                    watched_clause_reference.into(),
-                    None,
-                );
+                let conflict_info = assignments
+                    .enqueue_propagated_literal(watched_clause[0], watched_clause_reference.into());
                 if let Some(conflict_info) = conflict_info {
                     //conflict detected, stop any further propagation and report the conflict
                     //  pumpkin_assert_advanced(state_.assignments_.IsAssignedFalse(watched_clause[0]), "Sanity check.");

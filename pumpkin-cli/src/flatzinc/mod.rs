@@ -1,5 +1,4 @@
 mod compiler;
-mod constraints;
 mod error;
 mod instance;
 mod parser;

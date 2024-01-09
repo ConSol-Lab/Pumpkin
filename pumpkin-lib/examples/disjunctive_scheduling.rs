@@ -4,8 +4,8 @@
 
 use pumpkin_lib::{
     basic_types::{variables::IntVar, Literal},
+    constraints::ConstraintsExt,
     engine::ConstraintSatisfactionSolver,
-    propagators::LinearLeq,
 };
 
 fn main() {
@@ -52,21 +52,11 @@ fn main() {
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
             //literal => s_y - s_x <= -p_y)
-            linear_less_than_equal_reified(
-                &mut solver,
-                &variables,
-                -(processing_times[y] as i32),
-                literal,
-            );
+            solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            linear_less_than_equal_reified(
-                &mut solver,
-                &variables,
-                processing_times[y] as i32,
-                !literal,
-            );
+            solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
 
             //Either x starts before y or y start before x
             let _ = solver.add_permanent_clause(vec![literal, precedence_literals[y][x]]);
@@ -101,15 +91,4 @@ fn main() {
             .collect::<Vec<_>>()
             .join(" - ")
     );
-}
-
-fn linear_less_than_equal_reified<Var: IntVar + 'static>(
-    solver: &mut ConstraintSatisfactionSolver,
-    vars: &[Var],
-    c: i32,
-    reif_literal: Literal,
-) {
-    if solver.add_propagator(LinearLeq::reified(vars.into(), c, reif_literal)) {
-        panic!("Adding propagator led to conflict");
-    }
 }

@@ -3,7 +3,8 @@
 
 use bitfield::{Bit, BitMut, BitRange};
 
-use crate::{engine::PropagatorId, pumpkin_assert_moderate};
+use crate::engine::reason::ReasonRef;
+use crate::pumpkin_assert_moderate;
 
 use super::ClauseReference;
 
@@ -17,8 +18,8 @@ pub struct ConstraintReference {
     //      the remaining 31 bits encode a literal that is part of the binary clause
     //      the other literal of the binary clause is to be recovered from the data structure that stores this constraint reference
     //      e.g., if ref 'r' is used as the reason for propagating variable x, then the binary clause is (x v r)
-    //2. propagator: the 31st bit is zero, and the 30th bit is one
-    //      the remaining 30 bit encode the propagator id
+    //2. reason_ref: the 31st bit is zero, and the 30th bit is one
+    //      the remaining 30 bit encode the reason reference
     //3. Allocated clause: both the 31st and 30th bit are zero
     //      the remaining 30 bits encode the clause id
     //      todo: this can be improved, there is no need to allocate an entire bit for CP propagators
@@ -33,22 +34,18 @@ pub struct ConstraintReference {
 
 //methods to create a constraint reference
 impl ConstraintReference {
-    pub fn create_null_reference() -> ConstraintReference {
-        ConstraintReference { code: 0 }
-    }
+    // TODO: replace with a NonZeroU32 and Option
+    pub const NULL: ConstraintReference = ConstraintReference { code: 0 };
 
     pub fn create_standard_clause_reference(clause_id: u32) -> ConstraintReference {
         pumpkin_assert_moderate!(ConstraintReference::is_valid_allocated_clause_id(clause_id));
         ConstraintReference { code: clause_id }
     }
 
-    pub fn create_propagator_reference(propagator_id: PropagatorId) -> ConstraintReference {
-        let propagator_id = propagator_id.0;
+    pub fn create_reason_reference(reason_ref: ReasonRef) -> ConstraintReference {
+        let reason_index = reason_ref.0;
 
-        pumpkin_assert_moderate!(ConstraintReference::are_two_most_significant_bits_zero(
-            propagator_id
-        ));
-        let mut code = propagator_id;
+        let mut code = reason_index;
         code.set_bit(30, true); //the 31st bit is zero, and the 30th bit is one
         ConstraintReference { code }
     }
@@ -72,15 +69,15 @@ impl ConstraintReference {
         ConstraintReference::are_two_most_significant_bits_zero(self.code)
     }
 
-    pub fn is_propagator(&self) -> bool {
+    pub fn is_cp_reason(&self) -> bool {
         <u32 as BitRange<u32>>::bit_range(&self.code, 31, 30) == 1
     }
 
-    pub fn get_propagator_id(&self) -> PropagatorId {
-        pumpkin_assert_moderate!(self.is_propagator());
+    pub fn get_reason_ref(&self) -> ReasonRef {
+        pumpkin_assert_moderate!(self.is_cp_reason());
         let mut id = self.code;
         id.set_bit(30, false); //clear the 30th bit, the 31st bit is assumed to already be cleared
-        PropagatorId(id)
+        ReasonRef(id)
     }
 
     //for internal purposes, not to be called usually
@@ -116,12 +113,8 @@ impl From<ClauseReference> for ConstraintReference {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::{ClauseReference, Literal},
-        engine::PropagatorId,
-    };
-
-    use super::ConstraintReference;
+    use super::*;
+    use crate::basic_types::Literal;
 
     #[test]
     fn test_binary_clause_conversion() {
@@ -130,7 +123,7 @@ mod tests {
             let clause_reference = ClauseReference::create_virtual_binary_clause_reference(literal);
             let constraint_reference: ConstraintReference = clause_reference.into();
             assert!(constraint_reference.is_clause());
-            assert!(!constraint_reference.is_propagator());
+            assert!(!constraint_reference.is_cp_reason());
         }
     }
 
@@ -140,16 +133,16 @@ mod tests {
         let clause_reference = ClauseReference::create_allocated_clause_reference(clause_id);
         let constraint_reference: ConstraintReference = clause_reference.into();
         assert!(constraint_reference.is_clause());
-        assert!(!constraint_reference.is_propagator());
+        assert!(!constraint_reference.is_cp_reason());
     }
 
     #[test]
     fn test_propagator_conversion() {
-        let propagator_id = PropagatorId(10);
-        let constraint_reference = ConstraintReference::create_propagator_reference(propagator_id);
+        let reason_ref = ReasonRef(10);
+        let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
         assert!(!constraint_reference.is_clause());
-        assert!(constraint_reference.is_propagator());
-        assert!(constraint_reference.get_propagator_id() == propagator_id);
+        assert!(constraint_reference.is_cp_reason());
+        assert_eq!(constraint_reference.get_reason_ref(), reason_ref);
     }
 
     #[test]
