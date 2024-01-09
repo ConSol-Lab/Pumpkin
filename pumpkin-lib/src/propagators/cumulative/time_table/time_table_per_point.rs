@@ -173,7 +173,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    ) -> PropagationStatusCP {
         match <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
             context,
             self.get_parameters(),

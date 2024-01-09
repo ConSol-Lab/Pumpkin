@@ -57,7 +57,7 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContextMut,
-    ) -> Result<(), Inconsistency>;
+    ) -> PropagationStatusCP;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
