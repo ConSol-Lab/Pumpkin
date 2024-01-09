@@ -125,12 +125,54 @@ impl ConstraintSatisfactionSolver {
         self.solve_internal()
     }
 
-    //a clausal core is defined as an (implied) clause that contains only assumption literals
-    //  a core can be verified with reverse unit propagation (RUP)
-    //the function can fail if the assumptions were inconsistent, i.e., the assumptions contained x and !x
-    //  in that case one of the two inconsistent literals are returns as an error
-    //otherwise the function returns a clausal core
-    //  note that the returned clausal core may not necessarily be unique, nor the smallest
+    /// Returns an unsatisfiable core.
+    ///
+    /// We define an unsatisfiable core as a clause containing only negated assumption literals,
+    /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
+    /// assumptions which cannot be satisfied together with the rest of the formula. The clause is
+    /// not necessarily unique or minimal.
+    ///
+    /// The unsatisfiable core can be verified with reverse unit propagation (RUP).
+    ///
+    /// *Notes:*
+    ///   - If the solver is not in an unsatisfied state, this method will panic.
+    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions,
+    ///   this will return an empty vector.
+    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error
+    ///   is returned, with the literal being one of the inconsistent assumptions.
+    ///
+    /// # Example usage
+    /// ```rust
+    /// // We construct the following SAT instance:
+    /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
+    /// // And solve under the assumptions:
+    /// //   !x0 /\ x1 /\ !x2
+    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+    /// # use pumpkin_lib::basic_types::{PropositionalVariable, Literal};
+    /// let solver = ConstraintSatisfactionSolver::default();
+    ///
+    /// let mut solver = ConstraintSatisfactionSolver::default();
+    /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
+    ///
+    /// solver.add_permanent_clause(vec![x[0], x[1], x[2]]);
+    /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
+    ///
+    /// let assumptions = [!x[0], x[1], !x[2]];
+    /// solver.solve_under_assumptions(&assumptions, i64::MAX);
+    ///
+    /// let core = solver.extract_clausal_core().expect("the instance is unsatisfiable");
+    ///
+    /// // The order of the literals in the core is undefined, so we check for unordered equality.
+    /// assert_eq!(
+    ///     core.len(),
+    ///     assumptions.len(),
+    ///     "the core has the length of the number of assumptions"
+    /// );
+    /// assert!(
+    ///     core.iter().all(|&lit| assumptions.contains(&!lit)),
+    ///     "all literals in the core are negated assumptions"
+    /// );
+    /// ```
     pub fn extract_clausal_core(&mut self) -> Result<Vec<Literal>, Literal> {
         pumpkin_assert_simple!(self.debug_check_core_extraction());
 
