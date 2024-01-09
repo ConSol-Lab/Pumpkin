@@ -1,12 +1,12 @@
 use std::{cmp::max, ops::Range, rc::Rc};
 
+use crate::basic_types::{Inconsistency, PropagationStatusCP};
+use crate::engine::{EmptyDomain, ReadDomains};
+use crate::propagators::ChangeWithBound;
 use crate::{
-    basic_types::{variables::IntVar, Inconsistency, PropagationStatusCP},
-    engine::{DomainChange, EnqueueDecision, PropagationContext},
-    propagators::{
-        CumulativeParameters, Explanation, PropagationStatusWithExplanation, SparseSet, Task,
-        Updated, Util,
-    },
+    basic_types::variables::IntVar,
+    engine::{EnqueueDecision, PropagationContextMut},
+    propagators::{CumulativeParameters, SparseSet, Task, Updated, Util},
     pumpkin_assert_advanced, pumpkin_assert_extreme, pumpkin_assert_moderate,
 };
 
@@ -55,25 +55,21 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     /// See method [create_time_table][TimeTablePropagator::create_time_table]; creates and assigns the time-table, if a conflict occurred then it returns an error containing the profile responsible for the conflict
     fn create_time_table_and_assign(
         &mut self,
-        context: &PropagationContext,
-    ) -> Result<(), Vec<Rc<Task<Var>>>>;
+        context: &PropagationContextMut,
+    ) -> PropagationStatusCP;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
     ///
     /// The result of this method is either the time-table of type [TimeTableType][TimeTablePropagator::TimeTableType] or the tasks responsible for the conflict
     fn create_time_table(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>>;
+    ) -> Result<Self::TimeTableType, Inconsistency>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
-    fn reset_structures(&mut self, context: &PropagationContext) -> PropagationStatusCP {
-        if let Err(conflict_profile) = self.create_time_table_and_assign(context) {
-            //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
-            return Util::create_error_clause(context, &conflict_profile);
-        }
-        Ok(())
+    fn reset_structures(&mut self, context: &PropagationContextMut) -> PropagationStatusCP {
+        self.create_time_table_and_assign(context)
     }
 
     fn get_parameters(&self) -> &CumulativeParameters<Var>;
@@ -81,18 +77,12 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     /// Propagates from scratch (i.e. it recalculates all data structures)
     fn propagate_from_scratch(
         &mut self,
-        context: &mut PropagationContext,
-    ) -> PropagationStatusWithExplanation<Var> {
-        if let Err(conflict_profile) = self.create_time_table_and_assign(context) {
-            //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
-            PropagationStatusWithExplanation::new(
-                Util::create_error_clause(context, &conflict_profile),
-                None,
-            )
-        } else {
-            //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-            check_for_updates(context, self.get_time_table(), self.get_parameters())
-        }
+        context: &mut PropagationContextMut,
+    ) -> PropagationStatusCP {
+        self.create_time_table_and_assign(context)?;
+        //No error has been found
+        //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
+        check_for_updates(context, self.get_time_table(), self.get_parameters())
     }
 }
 
@@ -100,7 +90,7 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
 pub(crate) fn should_enqueue<Var: IntVar + 'static>(
     parameters: &mut CumulativeParameters<Var>,
     updated_task: Rc<Task<Var>>,
-    context: &PropagationContext,
+    context: &PropagationContextMut,
     empty_time_table: bool,
 ) -> EnqueueDecision {
     let task = &parameters.tasks[updated_task.id.unpack() as usize];
@@ -141,7 +131,7 @@ pub(crate) fn should_enqueue<Var: IntVar + 'static>(
 
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the interval [start, end]
 pub(crate) fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
-    context: &PropagationContext,
+    context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -157,7 +147,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
 pub(crate) fn task_has_overlap_with_interval<Var: IntVar + 'static>(
-    context: &PropagationContext,
+    context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -184,10 +174,10 @@ pub(crate) fn has_overlap_with_interval(
 /// It goes over all profiles and all tasks and determines which ones should be propagated;
 /// Note that this method is not idempotent
 pub(crate) fn check_for_updates<'a, Var: IntVar + 'static>(
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
-) -> PropagationStatusWithExplanation<Var> {
+) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
         {
             let collected_time_table = time_table.clone().collect::<Vec<_>>();
@@ -219,7 +209,6 @@ pub(crate) fn check_for_updates<'a, Var: IntVar + 'static>(
         },
         "There was overlap between profiles in the provided time-table"
     );
-    let mut explanations: Vec<Explanation<Var>> = Vec::new();
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
     'profile_loop: for profile in time_table {
         //Then we go over all the different tasks
@@ -239,23 +228,10 @@ pub(crate) fn check_for_updates<'a, Var: IntVar + 'static>(
                 continue;
             }
             task_index += 1;
-            if check_whether_task_can_be_updated_by_profile(
-                context,
-                &task,
-                profile,
-                parameters,
-                &mut explanations,
-            )
-            .is_err()
-            {
-                return PropagationStatusWithExplanation::new(
-                    Err(Inconsistency::EmptyDomain),
-                    Some(explanations),
-                );
-            }
+            check_whether_task_can_be_updated_by_profile(context, &task, profile, parameters)?;
         }
     }
-    PropagationStatusWithExplanation::new(Ok(()), Some(explanations))
+    Ok(())
 }
 
 /// Determines whether the lower bound of a task can be propagated by a [ResourceProfile] with the provided start time and end time;
@@ -265,7 +241,7 @@ pub(crate) fn check_for_updates<'a, Var: IntVar + 'static>(
 ///
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
-    context: &PropagationContext,
+    context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -284,7 +260,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [ResourceProfile]
 /// Note: It is assumed that the task is known to overflow the [ResourceProfile]
 fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
-    context: &PropagationContext,
+    context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -298,12 +274,11 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
 
 /// Propagates the lower-bound of the task to avoid overlap with the [ResourceProfile] `profile`
 fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
-    explanations: &mut Vec<Explanation<Var>>,
-) -> Result<(), ()> {
+) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
         "Lower-bound of task is being propagated by profile while the conditions do not hold"
@@ -311,43 +286,22 @@ fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
     //The new lower-bound is set to be after the current profile
     let new_lower_bound = profile.end + 1;
     //Then we perform the actual propagation using this bound and the responsible tasks
-    match Util::propagate_and_explain(
+    Util::propagate_and_explain(
         context,
-        DomainChange::LowerBound(max(0, profile.start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
+        ChangeWithBound::LowerBound(max(0, profile.start - task.processing_time + 1)), //Use the minimum bound which would have propagated the profile at index
         task,
         new_lower_bound,
         &profile.profile_tasks,
-    ) {
-        Ok(explanation) => {
-            //The propagation was succesful, store the explanation and return
-            explanations.push(Explanation::new(
-                DomainChange::LowerBound(new_lower_bound),
-                Rc::clone(task),
-                explanation,
-            ));
-            Ok(())
-        }
-        Err(explanation) => {
-            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-            explanations.push(Explanation::new(
-                DomainChange::LowerBound(new_lower_bound),
-                Rc::clone(task),
-                explanation,
-            ));
-
-            Err(())
-        }
-    }
+    )
 }
 
 /// Propagates the upper-bound of the task to avoid overlap with the [ResourceProfile] `profile`
 fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
-    explanations: &mut Vec<Explanation<Var>>,
-) -> Result<(), ()> {
+) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
         "Upper-bound of task is being propagated by profile while the conditions do not hold"
@@ -355,32 +309,13 @@ fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
     //The new upper-bound is set such that if the task is started at its latest starting time, it will never overlap with the profile
     let new_upper_bound = profile.start - task.processing_time;
     //Then we perform the actual propagation using this bound and the responsible tasks
-    match Util::propagate_and_explain(
+    Util::propagate_and_explain(
         context,
-        DomainChange::UpperBound(max(context.upper_bound(&task.start_variable), profile.end)),
+        ChangeWithBound::UpperBound(max(context.upper_bound(&task.start_variable), profile.end)),
         task,
         new_upper_bound,
         &profile.profile_tasks,
-    ) {
-        Ok(explanation) => {
-            //The propagation was succesful, store the explanation and return
-            explanations.push(Explanation::new(
-                DomainChange::UpperBound(new_upper_bound),
-                Rc::clone(task),
-                explanation,
-            ));
-            Ok(())
-        }
-        Err(explanation) => {
-            explanations.push(Explanation::new(
-                DomainChange::UpperBound(new_upper_bound),
-                Rc::clone(task),
-                explanation,
-            ));
-            //We have propagated a task which led to an empty domain, return the explanations of the propagations and the inconsistency
-            Err(())
-        }
-    }
+    )
 }
 
 /// When a task is updated (i.e. its release time increased or its deadline decreased), this function determines at which times mandatory parts are added
@@ -413,12 +348,11 @@ pub fn generate_update_range<Var: IntVar + 'static>(
 ///
 /// Note that this method can only find [Inconsistency::EmptyDomain] conflicts which means that we handle that error in the parent function
 fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
-    explanations: &mut Vec<Explanation<Var>>,
-) -> Result<(), ()> {
+) -> Result<(), EmptyDomain> {
     if profile.height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
     {
@@ -427,22 +361,10 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
     } else if task_has_overlap_with_interval(context, task, profile.start, profile.end) {
         //The current task has an overlap with the current resource profile (i.e. it could be propagated by the current profile)
         if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            propagate_lower_bound_task_by_profile(
-                context,
-                task,
-                parameters,
-                profile,
-                explanations,
-            )?;
+            propagate_lower_bound_task_by_profile(context, task, parameters, profile)?;
         }
         if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            propagate_upper_bound_task_by_profile(
-                context,
-                task,
-                parameters,
-                profile,
-                explanations,
-            )?;
+            propagate_upper_bound_task_by_profile(context, task, parameters, profile)?;
         }
     }
     Ok(())

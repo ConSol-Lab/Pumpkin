@@ -7,7 +7,7 @@ use crate::{
     engine::{
         clause_allocators::{ClauseAllocatorInterface, ClauseInterface},
         constraint_satisfaction_solver::{ClausalPropagator, ConflictAnalysisResult},
-        sat_cp_mediator, CPEngineDataStructures, ConstraintProgrammingPropagator,
+        sat_cp_mediator, CPEngineDataStructures,
     },
     pumpkin_assert_moderate, pumpkin_assert_simple,
 };
@@ -39,7 +39,6 @@ impl LearnedClauseMinimiser {
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) {
         self.num_minimisation_calls += 1;
         self.num_literals_seen_total += analysis_result.learned_literals.len();
@@ -61,7 +60,6 @@ impl LearnedClauseMinimiser {
                 sat_data_structures,
                 cp_data_structures,
                 sat_cp_mediator,
-                cp_propagators,
             );
 
             let label = self.get_literal_label(!learned_literal);
@@ -106,7 +104,6 @@ impl LearnedClauseMinimiser {
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) {
         pumpkin_assert_moderate!(sat_data_structures
             .assignments_propositional
@@ -154,7 +151,6 @@ impl LearnedClauseMinimiser {
             clausal_propagator,
             sat_data_structures,
             cp_data_structures,
-            cp_propagators,
         );
 
         for i in 1..sat_data_structures
@@ -181,7 +177,6 @@ impl LearnedClauseMinimiser {
                 sat_data_structures,
                 cp_data_structures,
                 sat_cp_mediator,
-                cp_propagators,
             );
 
             //in case one of the antecedents is Poison, the input literal is not deemed redundant

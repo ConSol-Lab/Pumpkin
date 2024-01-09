@@ -1,10 +1,11 @@
 use crate::basic_types::Trail;
+use crate::engine::cp::reason::ReasonRef;
 use crate::{
     basic_types::{DomainId, IntegerVariableGeneratorIterator, Predicate},
     predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
 };
 
-use super::{event_sink::EventSink, IntDomainEvent, PropagatorId, PropagatorVarId};
+use super::{event_sink::EventSink, IntDomainEvent};
 
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {
@@ -46,20 +47,20 @@ impl AssignmentsInteger {
         *self.trail.last().unwrap()
     }
 
-    pub fn get_last_predicates_on_trail(&self, num_predicates: usize) -> Vec<Predicate> {
-        //perhaps this could be done with an iteration without needing to copy
+    pub fn get_last_predicates_on_trail(
+        &self,
+        num_predicates: usize,
+    ) -> impl Iterator<Item = Predicate> + '_ {
         self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
             .iter()
             .map(|e| e.predicate)
-            .collect::<Vec<Predicate>>()
     }
 
     pub fn get_last_entries_on_trail(
         &self,
         num_predicates: usize,
-    ) -> Vec<ConstraintProgrammingTrailEntry> {
-        //perhaps this could be done with an iteration without needing to copy
-        self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()].to_vec()
+    ) -> &[ConstraintProgrammingTrailEntry] {
+        &self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
     }
 
     //registers the domain of a new integer variable
@@ -76,13 +77,6 @@ impl AssignmentsInteger {
         self.events.grow();
 
         id
-    }
-
-    //todo explain that it can return None
-    pub fn get_propagator_id_on_trail(&self, index_on_trail: usize) -> Option<PropagatorId> {
-        self.trail[index_on_trail]
-            .propagator_reason
-            .map(|entry| entry.propagator)
     }
 
     pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
@@ -212,7 +206,7 @@ impl AssignmentsInteger {
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
-        propagator_reason: Option<PropagatorVarId>,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         if new_lower_bound <= self.get_lower_bound(domain_id) {
             return self.domains[domain_id].verify_consistency();
@@ -230,7 +224,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_reason,
+            reason,
         });
 
         let domain = &mut self.domains[domain_id];
@@ -243,7 +237,7 @@ impl AssignmentsInteger {
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
-        propagator_reason: Option<PropagatorVarId>,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         if new_upper_bound >= self.get_upper_bound(domain_id) {
             return self.domains[domain_id].verify_consistency();
@@ -261,7 +255,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_reason,
+            reason,
         });
 
         let domain = &mut self.domains[domain_id];
@@ -274,18 +268,18 @@ impl AssignmentsInteger {
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
-        propagator_reason: Option<PropagatorVarId>,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
 
         //only tighten the lower bound if needed
         if self.get_lower_bound(domain_id) < assigned_value {
-            self.tighten_lower_bound(domain_id, assigned_value, propagator_reason)?;
+            self.tighten_lower_bound(domain_id, assigned_value, reason)?;
         }
 
         //only tighten the uper bound if needed
         if self.get_upper_bound(domain_id) > assigned_value {
-            self.tighten_upper_bound(domain_id, assigned_value, propagator_reason)?;
+            self.tighten_upper_bound(domain_id, assigned_value, reason)?;
         }
 
         self.domains[domain_id].verify_consistency()
@@ -295,7 +289,7 @@ impl AssignmentsInteger {
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
-        propagator_reason: Option<PropagatorVarId>,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         if !self.domains[domain_id].contains(removed_value_from_domain) {
             return self.domains[domain_id].verify_consistency();
@@ -313,7 +307,7 @@ impl AssignmentsInteger {
             predicate,
             old_lower_bound,
             old_upper_bound,
-            propagator_reason,
+            reason,
         });
 
         let domain = &mut self.domains[domain_id];
@@ -329,7 +323,7 @@ impl AssignmentsInteger {
     pub fn apply_predicate(
         &mut self,
         predicate: &Predicate,
-        propagator_reason: Option<PropagatorVarId>,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         if self.does_predicate_hold(predicate) {
             return Ok(());
@@ -339,19 +333,19 @@ impl AssignmentsInteger {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => self.tighten_lower_bound(domain_id, lower_bound, propagator_reason),
+            } => self.tighten_lower_bound(domain_id, lower_bound, reason),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => self.tighten_upper_bound(domain_id, upper_bound, propagator_reason),
+            } => self.tighten_upper_bound(domain_id, upper_bound, reason),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => self.remove_value_from_domain(domain_id, not_equal_constant, propagator_reason),
+            } => self.remove_value_from_domain(domain_id, not_equal_constant, reason),
             Predicate::Equal {
                 domain_id,
                 equality_constant,
-            } => self.make_assignment(domain_id, equality_constant, propagator_reason),
+            } => self.make_assignment(domain_id, equality_constant, reason),
         }
     }
 
@@ -388,12 +382,33 @@ impl AssignmentsInteger {
     }
 }
 
+#[cfg(test)]
+impl AssignmentsInteger {
+    pub fn get_reason_for_predicate(&self, predicate: Predicate) -> ReasonRef {
+        self.trail
+            .iter()
+            .find_map(|entry| {
+                if entry.predicate == predicate {
+                    entry.reason
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| panic!("found a reason with predicate {}", predicate))
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
-    pub old_lower_bound: i32, //explicitly store the bound before the predicate was applied so that it is easier later on to update the bounds when backtracking
+    /// Explicitly store the bound before the predicate was applied so that it is easier later on
+    ///  to update the bounds when backtracking.
+    pub old_lower_bound: i32,
     pub old_upper_bound: i32,
-    pub propagator_reason: Option<PropagatorVarId>, //stores the id of the propagator that made the assignment, only makes sense if a propagation took place, e.g., does _not_ make sense in the case of a decision or if the update was due to synchronisation from the propositional trail
+    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a propagation
+    ///  took place, e.g., does _not_ make sense in the case of a decision or if the update was due
+    ///  to synchronisation from the propositional trail.
+    pub reason: Option<ReasonRef>,
 }
 
 /// This is the CP representation of a domain. It stores the individual values that are in the

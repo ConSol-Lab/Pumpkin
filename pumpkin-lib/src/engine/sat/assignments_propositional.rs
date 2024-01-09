@@ -2,7 +2,8 @@ use crate::basic_types::{
     ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
     PropositionalVariableGeneratorIterator, Trail,
 };
-use crate::engine::LocalId;
+#[cfg(test)]
+use crate::engine::reason::ReasonRef;
 use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
 
 #[derive(Clone)]
@@ -20,7 +21,7 @@ impl Default for AssignmentsPropositional {
             assignment_info: Default::default(),
             trail: Default::default(),
             true_literal: dummy_literal,
-            false_literal: dummy_literal,
+            false_literal: !dummy_literal,
         }
     }
 }
@@ -62,7 +63,6 @@ impl AssignmentsPropositional {
                 truth_value,
                 decision_level: _,
                 constraint_reference: _,
-                local_id: _,
             } => truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
         }
@@ -74,21 +74,8 @@ impl AssignmentsPropositional {
                 truth_value,
                 decision_level: _,
                 constraint_reference: _,
-                local_id: _,
             } => !truth_value,
             PropositionalAssignmentInfo::Unassigned => false,
-        }
-    }
-
-    pub fn get_local_id_of_literal(&self, literal: Literal) -> Option<LocalId> {
-        match self.assignment_info[literal.get_propositional_variable()] {
-            PropositionalAssignmentInfo::Assigned {
-                truth_value: _,
-                decision_level: _,
-                constraint_reference: _,
-                local_id,
-            } => local_id,
-            PropositionalAssignmentInfo::Unassigned => None,
         }
     }
 
@@ -135,7 +122,6 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
-                local_id: _,
             } => constraint_reference.is_null(),
         }
     }
@@ -151,7 +137,6 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
-                local_id: _,
             } => !constraint_reference.is_null(),
         }
     }
@@ -169,7 +154,6 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level,
                 constraint_reference: _,
-                local_id: _,
             } => decision_level,
         }
     }
@@ -190,7 +174,6 @@ impl AssignmentsPropositional {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
-                local_id: _,
             } => constraint_reference,
         }
     }
@@ -203,7 +186,6 @@ impl AssignmentsPropositional {
         &mut self,
         true_literal: Literal,
         constraint_reference: ConstraintReference,
-        local_id: Option<LocalId>,
     ) -> Option<ConflictInfo> {
         if self.is_literal_assigned_false(true_literal) {
             return Some(ConflictInfo::Propagation {
@@ -221,7 +203,6 @@ impl AssignmentsPropositional {
                 truth_value: true_literal.is_positive(),
                 decision_level: self.get_decision_level(),
                 constraint_reference,
-                local_id,
             };
 
         self.trail.push(true_literal);
@@ -238,21 +219,16 @@ impl AssignmentsPropositional {
     pub fn enqueue_decision_literal(&mut self, decision_literal: Literal) {
         pumpkin_assert_simple!(!self.is_literal_assigned(decision_literal));
 
-        self.make_assignment(
-            decision_literal,
-            ConstraintReference::create_null_reference(),
-            None,
-        );
+        self.make_assignment(decision_literal, ConstraintReference::NULL);
     }
 
     pub fn enqueue_propagated_literal(
         &mut self,
         propagated_literal: Literal,
         constraint_reference: ConstraintReference,
-        local_id: Option<LocalId>,
     ) -> Option<ConflictInfo> {
         pumpkin_assert_simple!(!constraint_reference.is_null());
-        self.make_assignment(propagated_literal, constraint_reference, local_id)
+        self.make_assignment(propagated_literal, constraint_reference)
     }
 
     /// This iterator returns the literals on the trail in _reverse_ order (LIFO)
@@ -278,23 +254,32 @@ impl AssignmentsPropositional {
     }
 }
 
+#[cfg(test)]
+impl AssignmentsPropositional {
+    pub fn get_reason_for_assignment(&self, literal: Literal, assignment: bool) -> ReasonRef {
+        if assignment {
+            assert!(
+                self.is_literal_assigned_true(literal),
+                "Literal {} is not assigned true",
+                literal
+            );
+        } else {
+            assert!(
+                self.is_literal_assigned_false(literal),
+                "Literal {} is not assigned false",
+                literal
+            );
+        }
+        self.get_literal_reason_constraint(literal).get_reason_ref()
+    }
+}
+
 #[derive(PartialEq, Clone, Default)]
 enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,
         decision_level: usize,
-
-        // TODO: There is a dependency between these two fields that we ideally
-        // want to encode at a type level. A `constraint_reference` points
-        // to a propagator if and only if `local_id` is `Some(_)`.
-        //
-        // Since a reference to a propagator will in most cases be accompanied
-        // by a local id, it would make sense to encode the local id within the
-        // reference. However, that impacts the layout of the type possibly
-        // hurting cache performance. This is pure speculation, and should be
-        // verified with benchmarks.
         constraint_reference: ConstraintReference,
-        local_id: Option<LocalId>,
     },
     #[default]
     Unassigned,
@@ -302,12 +287,7 @@ enum PropositionalAssignmentInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::{ConstraintReference, Literal, PropositionalVariable},
-        engine::{sat::assignments_propositional::PropositionalAssignmentInfo, PropagatorId},
-    };
-
-    use super::AssignmentsPropositional;
+    use super::*;
 
     #[test]
     pub fn already_assigned_literal_does_not_override_assignment_info() {
@@ -320,16 +300,14 @@ mod tests {
 
         let result = assignments_propositional.make_assignment(
             literal,
-            ConstraintReference::create_propagator_reference(PropagatorId(0)),
-            None,
+            ConstraintReference::create_reason_reference(ReasonRef(0)),
         );
         assert!(result.is_none());
         assert_eq!(assignments_propositional.trail.len(), 1);
         //Re-assigning a literal which is already true does not result in the info being overwritten
         let result_reassignment = assignments_propositional.make_assignment(
             literal,
-            ConstraintReference::create_propagator_reference(PropagatorId(1)),
-            None,
+            ConstraintReference::create_reason_reference(ReasonRef(1)),
         );
         assert!(result_reassignment.is_none());
         //Nor does it result in anything being added to the trail
@@ -339,10 +317,9 @@ mod tests {
                 truth_value: _,
                 decision_level: _,
                 constraint_reference,
-                local_id: _,
             } = assignments_propositional.assignment_info[literal.get_propositional_variable()]
             {
-                constraint_reference.get_propagator_id() == PropagatorId(0)
+                constraint_reference.get_reason_ref() == ReasonRef(0)
             } else {
                 false
             }
