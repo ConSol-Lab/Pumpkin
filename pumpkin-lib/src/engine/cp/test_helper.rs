@@ -2,13 +2,14 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use crate::basic_types::{
-    DomainId, Inconsistency, Literal, PropagationStatusCP, PropositionalConjunction,
+    DomainId, Inconsistency, Literal, Predicate, PropagationStatusCP, PropositionalConjunction,
     PropositionalVariable,
 };
+use crate::engine::reason::ReasonStore;
 use crate::engine::{
     AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
-    ConstraintProgrammingPropagator, Delta, DomainChange, EmptyDomain, EnqueueDecision,
-    IntDomainEvent, LocalId, OpaqueDomainEvent, PropagationContext, PropagatorConstructorContext,
+    ConstraintProgrammingPropagator, EmptyDomain, EnqueueDecision, IntDomainEvent, LocalId,
+    OpaqueDomainEvent, PropagationContext, PropagationContextMut, PropagatorConstructorContext,
     PropagatorId, WatchListCP,
 };
 use std::fmt::{Debug, Formatter};
@@ -18,40 +19,32 @@ use super::{DomainEvents, WatchListPropositional};
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default)]
 pub struct TestSolver {
-    assignment: AssignmentsInteger,
-    assignment_propositional: AssignmentsPropositional,
+    assignments_integer: AssignmentsInteger,
+    reason_store: ReasonStore,
+    assignments_propositional: AssignmentsPropositional,
     watch_list: WatchListCP,
     watch_list_propositional: WatchListPropositional,
     next_id: u32,
 }
 
-/// A wrapper around a propagator which also keeps track of the ID of the propagator in the test solver.
-pub struct TestPropagator {
-    propagator: Box<dyn ConstraintProgrammingPropagator>,
-    id: PropagatorId,
-}
+type Propagator = Box<dyn ConstraintProgrammingPropagator>;
 
-impl Debug for TestPropagator {
+impl Debug for Propagator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "TestPropagator for {} (id: {})",
-            self.propagator.name(),
-            self.id
-        )
+        write!(f, "test_helper::Propagator(<boxed value>)")
     }
 }
 
 impl TestSolver {
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.watch_list.grow();
-        self.assignment.grow(lb, ub)
+        self.assignments_integer.grow(lb, ub)
     }
 
     pub fn new_literal(&mut self) -> Literal {
-        let new_variable_index = self.assignment_propositional.num_propositional_variables();
+        let new_variable_index = self.assignments_propositional.num_propositional_variables();
         self.watch_list_propositional.grow();
-        self.assignment_propositional.grow();
+        self.assignments_propositional.grow();
 
         Literal::new(PropositionalVariable::new(new_variable_index), true)
     }
@@ -59,7 +52,7 @@ impl TestSolver {
     pub fn new_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<TestPropagator, Inconsistency>
+    ) -> Result<Propagator, Inconsistency>
     where
         Constructor: CPPropagatorConstructor,
         Constructor::Propagator: 'static,
@@ -67,51 +60,50 @@ impl TestSolver {
         let id = PropagatorId(self.next_id);
         self.next_id += 1;
 
-        let propagator = constructor.create_boxed(PropagatorConstructorContext::new(
+        let mut propagator = constructor.create_boxed(PropagatorConstructorContext::new(
             &mut self.watch_list,
             &mut self.watch_list_propositional,
             id,
         ));
 
-        let mut propagator1 = TestPropagator { propagator, id };
-        self.initialise_at_root(&mut propagator1)?;
+        self.initialise_at_root(&mut propagator)?;
 
-        Ok(propagator1)
+        Ok(propagator)
     }
 
-    pub fn initialise_at_root(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
-        propagator
-            .propagator
-            .initialise_at_root(&mut PropagationContext::new(
-                &mut self.assignment,
-                &mut self.assignment_propositional,
-                propagator.id,
-            ))
+    pub fn initialise_at_root(&mut self, propagator: &mut Propagator) -> PropagationStatusCP {
+        propagator.initialise_at_root(&mut PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+        ))
     }
 
     pub fn contains(&self, var: DomainId, value: i32) -> bool {
-        self.assignment.is_value_in_domain(var, value)
+        self.assignments_integer.is_value_in_domain(var, value)
     }
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {
-        self.assignment.get_lower_bound(var)
+        self.assignments_integer.get_lower_bound(var)
     }
 
     pub fn increase_lower_bound_and_notify(
         &mut self,
-        propagator: &mut TestPropagator,
+        propagator: &mut Propagator,
         id: i32,
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self.assignment.tighten_lower_bound(var, value, None);
+        let result = self
+            .assignments_integer
+            .tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let mut context = PropagationContext::new(
-            &mut self.assignment,
-            &mut self.assignment_propositional,
-            propagator.id,
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
         );
-        propagator.propagator.notify(
+        propagator.notify(
             &mut context,
             LocalId::from(id as u32),
             crate::engine::OpaqueDomainEvent::from(
@@ -124,175 +116,154 @@ impl TestSolver {
         )
     }
 
-    pub fn upper_bound(&self, var: DomainId) -> i32 {
-        self.assignment.get_upper_bound(var)
-    }
     pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignment.tighten_lower_bound(var, bound, None)
+        self.assignments_integer
+            .tighten_lower_bound(var, bound, None)
     }
 
     pub fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignment.tighten_upper_bound(var, bound, None)
+        self.assignments_integer
+            .tighten_upper_bound(var, bound, None)
     }
 
     pub fn set_literal(&mut self, var: Literal, val: bool) {
-        self.assignment_propositional
+        self.assignments_propositional
             .enqueue_decision_literal(if val { var } else { !var });
     }
 
     pub fn is_literal_true(&self, var: Literal) -> bool {
-        self.assignment_propositional.is_literal_assigned_true(var)
+        self.assignments_propositional.is_literal_assigned_true(var)
     }
 
     pub fn is_literal_false(&self, var: Literal) -> bool {
-        self.assignment_propositional.is_literal_assigned_false(var)
+        self.assignments_propositional
+            .is_literal_assigned_false(var)
+    }
+
+    pub fn upper_bound(&self, var: DomainId) -> i32 {
+        self.assignments_integer.get_upper_bound(var)
     }
 
     pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
-        self.assignment.remove_value_from_domain(var, value, None)
+        self.assignments_integer
+            .remove_value_from_domain(var, value, None)
     }
 
-    pub fn propagate(&mut self, propagator: &mut TestPropagator) -> PropagationStatusCP {
-        let mut context = PropagationContext::new(
-            &mut self.assignment,
-            &mut self.assignment_propositional,
-            propagator.id,
+    pub fn propagate(&mut self, propagator: &mut Propagator) -> PropagationStatusCP {
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
         );
-        propagator.propagator.propagate(&mut context)
+        propagator.propagate(&mut context)
     }
 
     pub fn propagate_until_fixed_point(
         &mut self,
-        propagator: &mut TestPropagator,
+        propagator: &mut Propagator,
     ) -> PropagationStatusCP {
-        let mut num_trail_entries =
-            self.assignment.num_trail_entries() + self.assignment_propositional.num_trail_entries();
+        let mut num_trail_entries = self.assignments_integer.num_trail_entries()
+            + self.assignments_propositional.num_trail_entries();
         self.notify_propagator(propagator);
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
-                let mut context = PropagationContext::new(
-                    &mut self.assignment,
-                    &mut self.assignment_propositional,
-                    propagator.id,
+                let mut context = PropagationContextMut::new(
+                    &mut self.assignments_integer,
+                    &mut self.reason_store,
+                    &mut self.assignments_propositional,
                 );
-                propagator.propagator.propagate(&mut context)?;
+                propagator.propagate(&mut context)?;
                 self.notify_propagator(propagator);
             }
-            if self.assignment.num_trail_entries()
-                + self.assignment_propositional.num_trail_entries()
+            if self.assignments_integer.num_trail_entries()
+                + self.assignments_propositional.num_trail_entries()
                 == num_trail_entries
             {
                 break;
             }
-            num_trail_entries = self.assignment.num_trail_entries()
-                + self.assignment_propositional.num_trail_entries();
+            num_trail_entries = self.assignments_integer.num_trail_entries()
+                + self.assignments_propositional.num_trail_entries();
         }
         Ok(())
     }
 
-    fn notify_propagator(&mut self, propagator: &mut TestPropagator) {
+    fn notify_propagator(&mut self, propagator: &mut Propagator) {
         #[allow(clippy::useless_conversion)]
         let events = self
-            .assignment
+            .assignments_integer
             .drain_domain_events()
             .into_iter()
             .collect::<Vec<_>>();
-        let mut context = PropagationContext::new(
-            &mut self.assignment,
-            &mut self.assignment_propositional,
-            propagator.id,
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
         );
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                if propagator.id == propagator_var.propagator {
-                    propagator.propagator.notify(
-                        &mut context,
-                        propagator_var.variable,
-                        event.into(),
-                    );
-                }
+                propagator.notify(&mut context, propagator_var.variable, event.into());
             }
         }
     }
 
     pub fn notify(
         &mut self,
-        propagator: &mut TestPropagator,
+        propagator: &mut Propagator,
         event: OpaqueDomainEvent,
         local_id: LocalId,
     ) -> EnqueueDecision {
-        propagator.propagator.notify(
-            &mut PropagationContext::new(
-                &mut self.assignment,
-                &mut self.assignment_propositional,
-                propagator.id,
+        propagator.notify(
+            &mut PropagationContextMut::new(
+                &mut self.assignments_integer,
+                &mut self.reason_store,
+                &mut self.assignments_propositional,
             ),
             local_id,
             event,
         )
     }
 
-    pub fn get_affected_locals(
-        &self,
-        propagator: &TestPropagator,
-        domain_id: DomainId,
-        event: IntDomainEvent,
-    ) -> impl Iterator<Item = LocalId> + '_ {
-        let id = propagator.id;
-        self.watch_list
-            .get_affected_propagators(event, domain_id)
-            .iter()
-            .filter_map(move |pvi| {
-                if pvi.propagator == id {
-                    Some(pvi.variable)
-                } else {
-                    None
-                }
-            })
-    }
-
     pub fn notify_changed(
         &mut self,
-        propagator: &mut TestPropagator,
-        domain_id: DomainId,
+        propagator: &mut Propagator,
+        id: DomainId,
         event: IntDomainEvent,
     ) {
-        for local_id in self
-            .get_affected_locals(propagator, domain_id, event)
-            .collect::<Vec<_>>()
-        {
-            self.notify(propagator, event.into(), local_id);
+        let opaque_event: OpaqueDomainEvent = event.into();
+        let propagator_var_ids = self.watch_list.get_affected_propagators(event, id).to_vec();
+        for pvi in propagator_var_ids {
+            assert_eq!(
+                pvi.propagator,
+                PropagatorId(0),
+                "We assume a single propagator per TestSolver in notify_changed"
+            );
+            let _ = self.notify(propagator, opaque_event.clone(), pvi.variable);
         }
     }
 
-    pub fn get_reason(
-        &mut self,
-        propagator: &mut TestPropagator,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        let context = PropagationContext::new(
-            &mut self.assignment,
-            &mut self.assignment_propositional,
-            propagator.id,
-        );
-        propagator
-            .propagator
-            .get_reason_for_propagation(&context, delta)
+    pub fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
+        let reason_ref = self.assignments_integer.get_reason_for_predicate(predicate);
+        let context =
+            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+        self.reason_store
+            .get_or_compute(reason_ref, &context)
+            .expect("reason_ref should not be stale")
     }
 
-    pub fn to_deltas(
-        &self,
-        propagator: &TestPropagator,
-        var: DomainId,
-        change: DomainChange,
-    ) -> Vec<Delta> {
-        self.watch_list
-            .get_affected_propagators(change.into(), var)
-            .iter()
-            .filter(|pv| pv.propagator == propagator.id)
-            .map(|pv| Delta::new(pv.variable, change))
-            .collect()
+    pub fn get_reason_bool(
+        &mut self,
+        literal: Literal,
+        assignment: bool,
+    ) -> &PropositionalConjunction {
+        let reason_ref = self
+            .assignments_propositional
+            .get_reason_for_assignment(literal, assignment);
+        let context =
+            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+        self.reason_store
+            .get_or_compute(reason_ref, &context)
+            .expect("reason_ref should not be stale")
     }
 
     pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {

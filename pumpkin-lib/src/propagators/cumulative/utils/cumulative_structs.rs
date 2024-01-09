@@ -1,11 +1,13 @@
 use crate::propagators::{TimeTableOverIntervalProp, TimeTablePerPointIncrementalProp};
 use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
-    engine::{DomainChange, LocalId, PropagatorVariable},
+    basic_types::{variables::IntVar, PropositionalConjunction},
+    engine::{LocalId, PropagatorVariable},
     propagators::TimeTablePerPointProp,
 };
 use std::rc::Rc;
 use std::{hash::Hash, marker::PhantomData};
+
+use super::ChangeWithBound;
 
 #[derive(Debug)]
 /// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
@@ -126,7 +128,7 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
 /// Stores the explanations
 pub struct Explanation<Var> {
     /// The domain change related to the event; contains the type of domain change and the value
-    pub change: DomainChange,
+    pub change: ChangeWithBound,
     /// The updated task
     pub task: Rc<Task<Var>>,
     /// The actual explanation consisting of a PropositionalConjunction
@@ -135,7 +137,7 @@ pub struct Explanation<Var> {
 
 impl<Var: IntVar + 'static> Explanation<Var> {
     pub fn new(
-        change: DomainChange,
+        change: ChangeWithBound,
         task: Rc<Task<Var>>,
         explanation: PropositionalConjunction,
     ) -> Explanation<Var> {
@@ -143,29 +145,6 @@ impl<Var: IntVar + 'static> Explanation<Var> {
             change,
             task,
             explanation,
-        }
-    }
-}
-
-/// Stores the result of a propagation iteration by the cumulative propagators
-pub struct PropagationStatusWithExplanation<Var> {
-    /// The result of the propagation, determining whether there was a conflict or whether it was
-    pub status: PropagationStatusCP,
-    /// The explanations found during the propagation cycle;
-    /// these explanations are required to be added to the appropriate structures before.
-    ///
-    /// These explanations could be [None] if a structural inconsistency is found
-    pub explanations: Option<Vec<Explanation<Var>>>,
-}
-
-impl<Var: IntVar + 'static> PropagationStatusWithExplanation<Var> {
-    pub fn new(
-        status: PropagationStatusCP,
-        explanations: Option<Vec<Explanation<Var>>>,
-    ) -> PropagationStatusWithExplanation<Var> {
-        PropagationStatusWithExplanation {
-            status,
-            explanations,
         }
     }
 }

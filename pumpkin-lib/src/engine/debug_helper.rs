@@ -1,9 +1,9 @@
 use log::{debug, warn};
 use std::iter::once;
 
+use crate::engine::PropagationContextMut;
 use crate::{
     basic_types::{Predicate, PropositionalConjunction},
-    engine::PropagationContext,
     propagators::clausal_propagators::ClausalPropagatorInterface,
     pumpkin_assert_simple,
 };
@@ -44,10 +44,11 @@ impl DebugHelper {
             let num_entries_on_propositional_trail_before_propagation =
                 assignments_propostional_clone.num_trail_entries();
 
-            let mut context = PropagationContext::new(
+            let mut reason_store = Default::default();
+            let mut context = PropagationContextMut::new(
                 &mut assignments_integer_clone,
+                &mut reason_store,
                 &mut assignments_propostional_clone,
-                PropagatorId(propagator_id as u32),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
@@ -165,10 +166,11 @@ impl DebugHelper {
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut context = PropagationContext::new(
+                let mut reason_store = Default::default();
+                let mut context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
+                    &mut reason_store,
                     &mut assignments_propositional_clone,
-                    PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);
@@ -220,10 +222,11 @@ impl DebugHelper {
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
                 //  now propagate using the debug propagation method
-                let mut context = PropagationContext::new(
+                let mut reason_store = Default::default();
+                let mut context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
+                    &mut reason_store,
                     &mut assignments_propositional_clone,
-                    PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);
@@ -270,10 +273,11 @@ impl DebugHelper {
 
         if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
             //  now propagate using the debug propagation method
-            let mut context = PropagationContext::new(
+            let mut reason_store = Default::default();
+            let mut context = PropagationContextMut::new(
                 &mut assignments_integer_clone,
+                &mut reason_store,
                 &mut assignments_propositional_clone,
-                propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
             assert!(debug_propagation_status_cp.is_err(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
@@ -319,10 +323,11 @@ impl DebugHelper {
                 );
 
             if outcome.is_ok() && adding_propositional_predicates_was_successful {
-                let mut context = PropagationContext::new(
+                let mut reason_store = Default::default();
+                let mut context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
+                    &mut reason_store,
                     &mut assignments_propositional_clone,
-                    propagator_id,
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);

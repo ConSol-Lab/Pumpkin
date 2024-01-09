@@ -3,21 +3,20 @@ use crate::basic_types::{
     PropositionalVariable,
 };
 
-use crate::engine::{Delta, PropagationContext, PropagatorId};
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
-use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
-
-use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
-use super::{
-    AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures,
-    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager, PropagatorVarId,
+use crate::engine::reason::ReasonRef;
+use crate::engine::{
+    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager,
     SATEngineDataStructures, WatchListPropositional,
 };
+use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::{predicate, pumpkin_assert_eq_simple, pumpkin_assert_moderate, pumpkin_assert_simple};
+
+use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
+use super::{AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures};
 
 pub struct SATCPMediator {
-    synchronised_literal_to_predicate: Vec<(Predicate, Option<PropagatorVarId>)>, //todo explain
-    mapping_domain_to_equality_literals: Vec<Vec<Literal>>,
-    mapping_domain_to_lower_bound_literals: Vec<Vec<Literal>>,
+    mapping_domain_to_equality_literals: Vec<Box<[Literal]>>,
+    mapping_domain_to_lower_bound_literals: Vec<Box<[Literal]>>,
     mapping_literal_to_predicates: Vec<Vec<Predicate>>,
     cp_trail_synced_position: usize, // assignments_integer.trail[cp_trail_synced_position] is the next entry that needs to be synchronised with the propositional assignment trail
     sat_trail_synced_position: usize, // this is the sat equivalent of the above, i.e., assignments_propositional.trail[sat_trail_synced_position] is the next literal on the trail that needs to be synchronised with the integer trail
@@ -28,9 +27,12 @@ pub struct SATCPMediator {
 
 impl Default for SATCPMediator {
     fn default() -> SATCPMediator {
+        // When the mediator is created for use in the ConstraintSatisfactionSolver, the true and
+        // false literals will be updated to match the solver's true and false literals. However,
+        // we set this up here to facilitate testing the mediator.
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
+
         SATCPMediator {
-            synchronised_literal_to_predicate: vec![],
             mapping_literal_to_predicates: vec![], //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
             mapping_domain_to_equality_literals: vec![],
             mapping_domain_to_lower_bound_literals: vec![],
@@ -38,7 +40,7 @@ impl Default for SATCPMediator {
             sat_trail_synced_position: 0,
             explanation_clause_manager: ExplanationClauseManager::default(),
             true_literal: dummy_literal,
-            false_literal: dummy_literal,
+            false_literal: !dummy_literal,
         }
     }
 }
@@ -59,25 +61,14 @@ impl SATCPMediator {
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
             let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
-            let propagator_id = assignments_integer
-                .get_propagator_id_on_trail(cp_trail_pos)
-                .expect(
-                    "None is not expected for the propagator identifier here, strange, must abort.",
-                );
+            let reason_ref = entry.reason.expect("CP trail entry should have a reason.");
 
             let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
-            let constraint_reference =
-                ConstraintReference::create_propagator_reference(propagator_id);
+            let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
 
-            let conflict_info = assignments_propositional.enqueue_propagated_literal(
-                literal,
-                constraint_reference,
-                None,
-            );
-
-            self.synchronised_literal_to_predicate[literal] =
-                (entry.predicate, entry.propagator_reason);
+            let conflict_info =
+                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
 
             if conflict_info.is_some() {
                 self.cp_trail_synced_position = cp_trail_pos + 1;
@@ -148,7 +139,9 @@ impl SATCPMediator {
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.mapping_literal_to_predicates[literal].len() {
             let predicate = self.mapping_literal_to_predicates[literal][j];
-            cp_data_structures.apply_predicate(&predicate, None)?;
+            cp_data_structures
+                .assignments_integer
+                .apply_predicate(&predicate, None)?;
         }
 
         Ok(())
@@ -175,7 +168,7 @@ impl SATCPMediator {
     pub fn create_new_propositional_variable_with_predicate(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
-        predicate: &Predicate,
+        predicate: Predicate,
         clausal_propagator: &mut ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
@@ -184,7 +177,7 @@ impl SATCPMediator {
             clausal_propagator,
             sat_data_structures,
         );
-        self.add_predicate_information_to_propositional_variable(variable, *predicate);
+        self.add_predicate_information_to_propositional_variable(variable, predicate);
         variable
     }
 
@@ -210,14 +203,12 @@ impl SATCPMediator {
         self.mapping_literal_to_predicates.push(vec![]);
         self.mapping_literal_to_predicates.push(vec![]);
 
-        self.synchronised_literal_to_predicate
-            .push((Predicate::get_dummy_predicate(), None));
-        self.synchronised_literal_to_predicate
-            .push((Predicate::get_dummy_predicate(), None));
-
         PropositionalVariable::new(new_variable_index)
     }
 
+    /// Create a new integer variable and tie it to a fresh propositional representation. The given
+    /// clausal propagator will be responsible for keeping the propositional representation
+    /// consistent.
     pub fn create_new_domain(
         &mut self,
         lower_bound: i32,
@@ -229,143 +220,42 @@ impl SATCPMediator {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Inconsistent bounds.");
         pumpkin_assert_simple!(self.debug_check_consistency(cp_data_structures));
 
-        let true_literal = sat_data_structures.assignments_propositional.true_literal;
-        let false_literal = sat_data_structures.assignments_propositional.false_literal;
+        // 1. Create the integer domain.
+        let domain_id = cp_data_structures.new_integer_domain(lower_bound, upper_bound);
 
-        //creating a variable entails three main operations:
-        //	creating the domain of the variable
-        //	creating literals to capture predicates (domain operations)
-        //	creating a mapping of predicates to their corresponding domain operations
-
-        let domain_id = cp_data_structures
-            .assignments_integer
-            .grow(lower_bound, upper_bound);
-
-        cp_data_structures.watch_list_cp.grow();
-
-        //create the propositional representation of the integer variable
-        //  this is done using a unary representation
-        //	currently everything is done eagerly
-        let mut lower_bound_literals = Vec::new(); //[i] is the literal [x >= i]
-
-        //create lower bound literals [x >= k]
-
-        //  set trivial cases below the lower bound
-        for _i in 0..=lower_bound {
-            lower_bound_literals.push(true_literal);
-        }
-
-        //  create propositional literals for the remaining lower bound literals
-        for i in (lower_bound + 1)..=upper_bound {
-            let lower_bound_predicate = Predicate::LowerBound {
-                domain_id,
-                lower_bound: i,
-            };
-
-            let propositional_variable = self.create_new_propositional_variable_with_predicate(
-                &mut cp_data_structures.watch_list_propositional,
-                &lower_bound_predicate,
-                clausal_propagator,
-                sat_data_structures,
-            );
-
-            lower_bound_literals.push(Literal::new(propositional_variable, true));
-        }
-
-        // Push the literal ~[x >= upper_bound + 1]
-        lower_bound_literals.push(false_literal);
-        pumpkin_assert_simple!(lower_bound_literals.len() == (upper_bound + 2) as usize);
-
-        //add clauses to define the variables appropriately
-
-        //	define lower bound literals
-        //		[x >= value+1] -> [x >= value]
-        //		special case (skipped in the loop): [x >= lower_bound+1] -> [x >= lower_bound], but since [x >= lower_bound] is trivially true this is ignored
-        for i in ((lower_bound + 2) as usize)..=(upper_bound as usize) {
-            clausal_propagator.add_permanent_implication_unchecked(
-                lower_bound_literals[i],
-                lower_bound_literals[i - 1],
-                &mut sat_data_structures.clause_allocator,
-            );
-        }
-
-        //create equality literals [x == k]
-
-        //  set trivial cases below the lower bound
-        let mut equality_literals: Vec<Literal> = Vec::new(); //[i] is the literal [x = i]
-        for _i in 0..lower_bound {
-            equality_literals.push(false_literal);
-        }
-
-        //  corner case #1: [x == lower_bound] <-> ~[x >= lower_bound+1]
-        equality_literals.push(!lower_bound_literals[(lower_bound + 1) as usize]);
-        //add the predicate information to the [x == lower_bound] literal
-        //  in this case the variable [x == lower_bound] also has the meaning ![x >= lower_bound+1]
-        //  note that meanings are attached to variables, so we need to be careful about the polarity of the literal when attaching
-        //  here we say [x >= lower_bound+1] <-> [x != lower_bound]
-        self.add_predicate_information_to_propositional_variable(
-            lower_bound_literals[(lower_bound + 1) as usize].get_propositional_variable(),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant: lower_bound,
-            },
+        // 2. Create the propositional representation.
+        self.create_propositional_representation(
+            domain_id,
+            clausal_propagator,
+            sat_data_structures,
+            cp_data_structures,
         );
 
-        for i in (lower_bound + 1)..upper_bound {
-            let equality_predicate = Predicate::Equal {
-                domain_id,
-                equality_constant: i,
-            };
+        domain_id
+    }
 
-            let propositional_variable = self.create_new_propositional_variable_with_predicate(
-                &mut cp_data_structures.watch_list_propositional,
-                &equality_predicate,
-                clausal_propagator,
-                sat_data_structures,
-            );
+    /// Eagerly create the propositional representation of the integer variable. This is done using a unary representation.
+    fn create_propositional_representation(
+        &mut self,
+        domain_id: DomainId,
+        clausal_propagator: &mut ClausalPropagator,
+        sat_data_structures: &mut SATEngineDataStructures,
+        cp_data_structures: &mut CPEngineDataStructures,
+    ) {
+        let lower_bound_literals = self.create_lower_bound_literals(
+            cp_data_structures,
+            domain_id,
+            clausal_propagator,
+            sat_data_structures,
+        );
 
-            equality_literals.push(Literal::new(propositional_variable, true));
-        }
-
-        if lower_bound < upper_bound {
-            //  corner case #2: [x == upper_bound] <-> [x >= upper_bound]}
-            equality_literals.push(lower_bound_literals[upper_bound as usize]);
-            //add predicate information to the [x == upper_bound] literal
-            self.add_predicate_information_to_propositional_variable(
-                lower_bound_literals[upper_bound as usize].get_propositional_variable(),
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant: upper_bound,
-                },
-            );
-        }
-
-        pumpkin_assert_simple!(equality_literals.len() == (upper_bound + 1) as usize);
-
-        //	define equality literals
-        //		[x == value] <-> [x >= value] AND ~[x >= value + 1]
-        //		recall from above that [x == lower_bound] and [x == upper_bound] are effectively defined by being set to the corresponding lower bound literals, and so are skipped
-        for i in ((lower_bound + 1) as usize)..(upper_bound as usize) {
-            //one side of the implication <-
-            clausal_propagator.add_permanent_ternary_clause_unchecked(
-                !lower_bound_literals[i],
-                lower_bound_literals[i + 1],
-                equality_literals[i],
-                &mut sat_data_structures.clause_allocator,
-            );
-            //the other side of the implication ->
-            clausal_propagator.add_permanent_implication_unchecked(
-                equality_literals[i],
-                lower_bound_literals[i],
-                &mut sat_data_structures.clause_allocator,
-            );
-
-            clausal_propagator.add_permanent_implication_unchecked(
-                equality_literals[i],
-                !lower_bound_literals[i + 1],
-                &mut sat_data_structures.clause_allocator,
-            );
-        }
+        let equality_literals = self.create_equality_literals(
+            domain_id,
+            &lower_bound_literals,
+            cp_data_structures,
+            clausal_propagator,
+            sat_data_structures,
+        );
 
         self.mapping_domain_to_lower_bound_literals
             .push(lower_bound_literals);
@@ -376,16 +266,166 @@ impl SATCPMediator {
         // Add clause to select at least one equality.
         clausal_propagator
             .add_permanent_clause(
-                equality_literals,
+                equality_literals.into(),
                 &mut sat_data_structures.assignments_propositional,
                 &mut sat_data_structures.clause_allocator,
             )
             .expect("at least one equality must hold");
-
-        domain_id
     }
 
-    pub fn add_predicate_information_to_propositional_variable(
+    /// Create the literals representing [x == v] for all values v in the initial domain.
+    fn create_equality_literals(
+        &mut self,
+        domain_id: DomainId,
+        lower_bound_literals: &[Literal],
+        cp_data_structures: &mut CPEngineDataStructures,
+        clausal_propagator: &mut ClausalPropagator,
+        sat_data_structures: &mut SATEngineDataStructures,
+    ) -> Box<[Literal]> {
+        assert!(
+            lower_bound_literals.len() >= 2,
+            "the lower bound literals should contain at least two literals"
+        );
+
+        let lower_bound = cp_data_structures
+            .assignments_integer
+            .get_lower_bound(domain_id);
+        let upper_bound = cp_data_structures
+            .assignments_integer
+            .get_upper_bound(domain_id);
+
+        // The literal at index i is [x == lb(x) + i].
+        let mut equality_literals: Vec<Literal> = Vec::new();
+
+        // Edge case where i = 0: [x == lb(x)] <-> ~[x >= lb(x) + 1]
+        equality_literals.push(!lower_bound_literals[1]);
+
+        // Add the predicate information to the [x == lower_bound] literal.
+        //
+        // Because the predicates are attached to propositional variables (which we treat as true
+        // literals), we have to be mindful of the polarity of the predicate.
+        self.add_predicate_information_to_propositional_variable(
+            lower_bound_literals[1].get_propositional_variable(),
+            predicate![domain_id != lower_bound],
+        );
+
+        for value in (lower_bound + 1)..upper_bound {
+            let propositional_variable = self.create_new_propositional_variable_with_predicate(
+                &mut cp_data_structures.watch_list_propositional,
+                predicate![domain_id == value],
+                clausal_propagator,
+                sat_data_structures,
+            );
+
+            equality_literals.push(Literal::new(propositional_variable, true));
+        }
+
+        if lower_bound < upper_bound {
+            // Edge case [x == ub(x)] <-> [x >= ub(x)].
+            let equals_ub = lower_bound_literals[lower_bound_literals.len() - 2];
+            equality_literals.push(equals_ub);
+            self.add_predicate_information_to_propositional_variable(
+                equals_ub.get_propositional_variable(),
+                predicate![domain_id == upper_bound],
+            );
+        }
+
+        pumpkin_assert_eq_simple!(
+            equality_literals.len(),
+            (upper_bound - lower_bound + 1) as usize
+        );
+
+        // Enforce consistency of the equality literals through the following clauses:
+        // [x == value] <-> [x >= value] AND ~[x >= value + 1]
+        //
+        // The equality literals for the bounds are skipped, as they are already defined above.
+        for value in (lower_bound + 1)..upper_bound {
+            let idx = value.abs_diff(lower_bound) as usize;
+
+            // One side of the implication <-
+            clausal_propagator.add_permanent_ternary_clause_unchecked(
+                !lower_bound_literals[idx],
+                lower_bound_literals[idx + 1],
+                equality_literals[idx],
+                &mut sat_data_structures.clause_allocator,
+            );
+
+            // The other side of the implication ->
+            clausal_propagator.add_permanent_implication_unchecked(
+                equality_literals[idx],
+                lower_bound_literals[idx],
+                &mut sat_data_structures.clause_allocator,
+            );
+
+            clausal_propagator.add_permanent_implication_unchecked(
+                equality_literals[idx],
+                !lower_bound_literals[idx + 1],
+                &mut sat_data_structures.clause_allocator,
+            );
+        }
+
+        equality_literals.into()
+    }
+
+    /// Eagerly create the literals that encode the bounds of the integer variable.
+    fn create_lower_bound_literals(
+        &mut self,
+        cp_data_structures: &mut CPEngineDataStructures,
+        domain_id: DomainId,
+        clausal_propagator: &mut ClausalPropagator,
+        sat_data_structures: &mut SATEngineDataStructures,
+    ) -> Box<[Literal]> {
+        let lower_bound = cp_data_structures
+            .assignments_integer
+            .get_lower_bound(domain_id);
+        let upper_bound = cp_data_structures
+            .assignments_integer
+            .get_upper_bound(domain_id);
+
+        // The literal at index i is [x >= lb(x) + i].
+        let mut lower_bound_literals = Vec::new();
+
+        // The integer variable will always be at least the lower bound of the initial domain.
+        lower_bound_literals.push(self.true_literal);
+
+        for value in (lower_bound + 1)..=upper_bound {
+            let propositional_variable = self.create_new_propositional_variable_with_predicate(
+                &mut cp_data_structures.watch_list_propositional,
+                predicate![domain_id <= value],
+                clausal_propagator,
+                sat_data_structures,
+            );
+
+            lower_bound_literals.push(Literal::new(propositional_variable, true));
+        }
+
+        // The integer variable is never bigger than the upper bound of the initial domain.
+        lower_bound_literals.push(self.false_literal);
+
+        pumpkin_assert_eq_simple!(
+            lower_bound_literals.len(),
+            (upper_bound - lower_bound + 2) as usize
+        );
+
+        // Enforce consistency over the lower bound literals by adding the following clause:
+        // [x >= v + 1] -> [x >= v].
+        //
+        // Special case (skipped in the loop): [x >= lb(x) + 1] -> [x >= lb(x)], but
+        // [x >= lb(x)] is trivially true.
+        for v in (lower_bound + 2)..=upper_bound {
+            let idx = v.abs_diff(lower_bound) as usize;
+
+            clausal_propagator.add_permanent_implication_unchecked(
+                lower_bound_literals[idx],
+                lower_bound_literals[idx - 1],
+                &mut sat_data_structures.clause_allocator,
+            );
+        }
+
+        lower_bound_literals.into()
+    }
+
+    fn add_predicate_information_to_propositional_variable(
         &mut self,
         variable: PropositionalVariable,
         predicate: Predicate,
@@ -439,17 +479,19 @@ impl SATCPMediator {
         lower_bound: i32,
         assignments_integer: &AssignmentsInteger,
     ) -> Literal {
-        if lower_bound < assignments_integer.get_initial_lower_bound(domain) {
-            //The lower bound is lower than the initial bound, this will always hold
-            self.true_literal
-        } else if lower_bound as usize >= self.mapping_domain_to_lower_bound_literals[domain].len()
-        {
-            self.false_literal
-        } else if lower_bound.is_negative() {
-            self.true_literal
-        } else {
-            self.mapping_domain_to_lower_bound_literals[domain][lower_bound as usize]
+        let initial_lower_bound = assignments_integer.get_initial_lower_bound(domain);
+        let initial_upper_bound = assignments_integer.get_initial_upper_bound(domain);
+
+        if lower_bound < initial_lower_bound {
+            return self.true_literal;
         }
+
+        if lower_bound > initial_upper_bound {
+            return self.false_literal;
+        }
+
+        let literal_idx = lower_bound.abs_diff(initial_lower_bound) as usize;
+        self.mapping_domain_to_lower_bound_literals[domain][literal_idx]
     }
 
     pub fn get_upper_bound_literal(
@@ -458,25 +500,33 @@ impl SATCPMediator {
         upper_bound: i32,
         assignments_integer: &AssignmentsInteger,
     ) -> Literal {
-        if upper_bound < assignments_integer.get_initial_lower_bound(domain) {
-            //The upper bound can never be lower than the initial lower bound, return false
-            return self.false_literal;
-        }
         !self.get_lower_bound_literal(domain, upper_bound + 1, assignments_integer)
     }
 
-    pub fn get_equality_literal(&self, domain: DomainId, equality_constant: i32) -> Literal {
-        if equality_constant as usize >= self.mapping_domain_to_equality_literals[domain].len()
-            || equality_constant.is_negative()
-        {
-            self.false_literal
-        } else {
-            self.mapping_domain_to_equality_literals[domain][equality_constant as usize]
+    pub fn get_equality_literal(
+        &self,
+        domain: DomainId,
+        equality_constant: i32,
+        assignments_integer: &AssignmentsInteger,
+    ) -> Literal {
+        let initial_lower_bound = assignments_integer.get_initial_lower_bound(domain);
+        let initial_upper_bound = assignments_integer.get_initial_upper_bound(domain);
+
+        if equality_constant < initial_lower_bound || equality_constant > initial_upper_bound {
+            return self.false_literal;
         }
+
+        let literal_idx = equality_constant.abs_diff(initial_lower_bound) as usize;
+        self.mapping_domain_to_equality_literals[domain][literal_idx]
     }
 
-    pub fn get_inequality_literal(&self, domain: DomainId, not_equal_constant: i32) -> Literal {
-        !self.get_equality_literal(domain, not_equal_constant)
+    pub fn get_inequality_literal(
+        &self,
+        domain: DomainId,
+        not_equal_constant: i32,
+        assignments_integer: &AssignmentsInteger,
+    ) -> Literal {
+        !self.get_equality_literal(domain, not_equal_constant, assignments_integer)
     }
 
     pub fn get_predicate_literal(
@@ -496,11 +546,11 @@ impl SATCPMediator {
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => self.get_inequality_literal(domain_id, not_equal_constant),
+            } => self.get_inequality_literal(domain_id, not_equal_constant, assignments_integer),
             Predicate::Equal {
                 domain_id,
                 equality_constant,
-            } => self.get_equality_literal(domain_id, equality_constant),
+            } => self.get_equality_literal(domain_id, equality_constant, assignments_integer),
         }
     }
 
@@ -509,7 +559,6 @@ impl SATCPMediator {
         conflict_info: &ConflictInfo,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         match conflict_info {
             ConflictInfo::VirtualBinaryClause { lit1, lit2 } => self
@@ -524,9 +573,8 @@ impl SATCPMediator {
                 } else {
                     self.create_clause_from_propagation_reason(
                         *literal,
-                        reference.get_propagator_id(),
+                        reference.get_reason_ref(),
                         cp_data_structures,
-                        cp_propagators,
                         sat_data_structures,
                     )
                 }
@@ -558,7 +606,6 @@ impl SATCPMediator {
         clausal_propagator: &ClausalPropagator,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> ClauseReference {
         pumpkin_assert_moderate!(
             !sat_data_structures
@@ -591,9 +638,8 @@ impl SATCPMediator {
         else {
             self.create_clause_from_propagation_reason(
                 propagated_literal,
-                constraint_reference.get_propagator_id(),
+                constraint_reference.get_reason_ref(),
                 cp_data_structures,
-                cp_propagators,
                 sat_data_structures,
             )
         }
@@ -602,55 +648,25 @@ impl SATCPMediator {
     fn create_clause_from_propagation_reason(
         &mut self,
         propagated_literal: Literal,
-        propagator_id: PropagatorId,
+        reason_ref: ReasonRef,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> ClauseReference {
-        let synchonised_entry = self.synchronised_literal_to_predicate[propagated_literal];
-        let delta = {
-            match synchonised_entry.1 {
-                Some(id) => Delta::from_predicate(id.variable, synchonised_entry.0),
-                None => Delta::from_literal(
-                    sat_data_structures
-                        .assignments_propositional
-                        .get_local_id_of_literal(propagated_literal)
-                        .expect("Literal is not synchronised but it does also not have a local id"),
-                    sat_data_structures
-                        .assignments_propositional
-                        .is_literal_assigned_true(propagated_literal),
-                ),
-            }
-        };
-
-        let context = PropagationContext::new(
-            &mut cp_data_structures.assignments_integer,
-            &mut sat_data_structures.assignments_propositional,
-            propagator_id,
-        );
-
-        let propagator = &mut cp_propagators[propagator_id.0 as usize];
-        let reason = propagator.get_reason_for_propagation(&context, delta);
-
-        // pumpkin_assert_advanced!(DebugHelper::debug_propagator_reason(
-        //     synchonised_entry.0,
-        //     &reason,
-        //     &cp_data_structures.assignments_integer,
-        //     propagator.as_ref(),
-        //     propagator_id.0
-        // ));
+        let (reason, assignments_integer) = cp_data_structures
+            .compute_reason(reason_ref, &sat_data_structures.assignments_propositional);
 
         //create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
         //important to keep propagated literal at the zero-th position
-        let explanation_literals =
-            std::iter::once(propagated_literal)
-                .chain(reason.iter().map(|&p| {
-                    !self.get_predicate_literal(p, &cp_data_structures.assignments_integer)
-                }))
-                .chain(reason.iter_literals().map(|&p| !p))
-                .collect();
+        let explanation_literals = std::iter::once(propagated_literal)
+            .chain(
+                reason
+                    .iter()
+                    .map(|&p| !self.get_predicate_literal(p, assignments_integer)),
+            )
+            .chain(reason.iter_literals().map(|&p| !p))
+            .collect();
 
         self.explanation_clause_manager
             .add_explanation_clause_unchecked(
@@ -678,7 +694,7 @@ impl SATCPMediator {
 
 #[cfg(test)]
 mod tests {
-    use crate::{basic_types::PredicateConstructor, engine::LocalId};
+    use crate::basic_types::PredicateConstructor;
 
     use super::*;
 
@@ -706,7 +722,7 @@ mod tests {
     }
 
     #[test]
-    fn negative_lower_bound() {
+    fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
         let mut mediator = SATCPMediator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
@@ -729,6 +745,125 @@ mod tests {
     }
 
     #[test]
+    fn new_domain_with_negative_lower_bound() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+
+        let lb = -2;
+        let ub = 2;
+
+        let domain_id = mediator.create_new_domain(
+            lb,
+            ub,
+            &mut ClausalPropagator::default(),
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+
+        assert_eq!(
+            lb,
+            cp_data_structures
+                .assignments_integer
+                .get_lower_bound(domain_id)
+        );
+
+        assert_eq!(
+            ub,
+            cp_data_structures
+                .assignments_integer
+                .get_upper_bound(domain_id)
+        );
+
+        assert_eq!(
+            mediator.true_literal,
+            mediator.get_lower_bound_literal(
+                domain_id,
+                lb,
+                &cp_data_structures.assignments_integer
+            )
+        );
+
+        assert_eq!(
+            mediator.false_literal,
+            mediator.get_upper_bound_literal(
+                domain_id,
+                lb - 1,
+                &cp_data_structures.assignments_integer
+            )
+        );
+
+        assert!(sat_data_structures
+            .assignments_propositional
+            .is_literal_unassigned(mediator.get_equality_literal(
+                domain_id,
+                lb,
+                &cp_data_structures.assignments_integer
+            )));
+
+        assert_eq!(
+            mediator.false_literal,
+            mediator.get_equality_literal(
+                domain_id,
+                lb - 1,
+                &cp_data_structures.assignments_integer
+            )
+        );
+
+        for value in (lb + 1)..ub {
+            let literal = mediator.get_lower_bound_literal(
+                domain_id,
+                value,
+                &cp_data_structures.assignments_integer,
+            );
+
+            assert!(sat_data_structures
+                .assignments_propositional
+                .is_literal_unassigned(literal));
+
+            assert!(sat_data_structures
+                .assignments_propositional
+                .is_literal_unassigned(mediator.get_equality_literal(
+                    domain_id,
+                    value,
+                    &cp_data_structures.assignments_integer
+                )));
+        }
+
+        assert_eq!(
+            mediator.false_literal,
+            mediator.get_lower_bound_literal(
+                domain_id,
+                ub + 1,
+                &cp_data_structures.assignments_integer
+            )
+        );
+        assert_eq!(
+            mediator.true_literal,
+            mediator.get_upper_bound_literal(
+                domain_id,
+                ub,
+                &cp_data_structures.assignments_integer
+            )
+        );
+        assert!(sat_data_structures
+            .assignments_propositional
+            .is_literal_unassigned(mediator.get_equality_literal(
+                domain_id,
+                ub,
+                &cp_data_structures.assignments_integer
+            )));
+        assert_eq!(
+            mediator.false_literal,
+            mediator.get_equality_literal(
+                domain_id,
+                ub + 1,
+                &cp_data_structures.assignments_integer
+            )
+        );
+    }
+
+    #[test]
     fn clausal_propagation_is_synced_until_right_before_conflict() {
         let mut mediator = SATCPMediator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
@@ -743,13 +878,12 @@ mod tests {
             &mut cp_data_structures,
         );
 
+        let dummy_reason = ReasonRef(0);
+
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             2,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -762,10 +896,7 @@ mod tests {
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             8,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -778,10 +909,7 @@ mod tests {
         let result = cp_data_structures.assignments_integer.tighten_lower_bound(
             domain_id,
             12,
-            Some(PropagatorVarId {
-                propagator: PropagatorId(0),
-                variable: LocalId::from(0),
-            }),
+            Some(dummy_reason),
         );
         assert!(result.is_err());
         assert_eq!(
