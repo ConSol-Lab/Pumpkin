@@ -64,11 +64,11 @@ impl Util {
         PropositionalConjunction::from(explanation)
     }
 
-    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
-    pub fn create_error_clause<Var: IntVar + 'static>(
+    /// Create the error inconsistency consisting of the lower- and upper-bounds of the provided conflict tasks
+    pub fn create_inconsistency<Var: IntVar + 'static>(
         context: &PropagationContextMut,
         conflict_tasks: &[Rc<Task<Var>>],
-    ) -> PropagationStatusCP {
+    ) -> Inconsistency {
         let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
         for task in conflict_tasks.iter() {
             error_clause.push(
@@ -81,9 +81,15 @@ impl Util {
             );
         }
 
-        Err(Inconsistency::from(PropositionalConjunction::from(
-            error_clause,
-        )))
+        Inconsistency::from(PropositionalConjunction::from(error_clause))
+    }
+
+    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
+    pub fn create_error_clause<Var: IntVar + 'static>(
+        context: &PropagationContextMut,
+        conflict_tasks: &[Rc<Task<Var>>],
+    ) -> PropagationStatusCP {
+        Err(Util::create_inconsistency(context, conflict_tasks))
     }
 
     /// Propagates the start variable of `propagating_task` to the provided `propagation_value` and eagerly calculates the explanation given the `profile_tasks` which were responsible for the propagation

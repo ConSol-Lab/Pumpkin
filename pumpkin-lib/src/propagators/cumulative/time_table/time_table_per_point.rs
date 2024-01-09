@@ -8,7 +8,7 @@ use crate::{
         CPPropagatorConstructor, ConstraintProgrammingPropagator, EnqueueDecision,
         PropagationContext, PropagationContextMut, PropagatorConstructorContext,
     },
-    propagators::{CumulativeArgs, CumulativeParameters, Task, Util},
+    propagators::{CumulativeArgs, CumulativeParameters, Util},
     pumpkin_assert_extreme,
 };
 
@@ -76,7 +76,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
     pub(crate) fn create_time_table_per_point_from_scratch(
         context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<PerPointTimeTableType<Var>, Vec<Rc<Task<Var>>>> {
+    ) -> Result<PerPointTimeTableType<Var>, Inconsistency> {
         let mut time_table: PerPointTimeTableType<Var> = BTreeMap::new();
         //First we go over all tasks and determine their mandatory parts
         for task in parameters.tasks.iter() {
@@ -95,7 +95,10 @@ impl<Var: IntVar + 'static> TimeTablePerPointProp<Var> {
 
                     if current_profile.height > parameters.capacity {
                         //The addition of the current task to the resource profile has caused an overflow
-                        return Err(current_profile.profile_tasks.clone());
+                        return Err(Util::create_inconsistency(
+                            context,
+                            &current_profile.profile_tasks,
+                        ));
                     }
                 }
             }
@@ -170,7 +173,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContextMut,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), Inconsistency> {
         match <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
             context,
             self.get_parameters(),
@@ -186,7 +189,7 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointProp<V
     fn create_time_table(
         context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
+    ) -> Result<Self::TimeTableType, Inconsistency> {
         TimeTablePerPointProp::create_time_table_per_point_from_scratch(context, parameters)
     }
 

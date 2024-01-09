@@ -1,6 +1,6 @@
 use std::{cmp::max, rc::Rc};
 
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::{Inconsistency, PropagationStatusCP};
 use crate::engine::{EmptyDomain, ReadDomains};
 use crate::propagators::ChangeWithBound;
 use crate::{
@@ -57,7 +57,7 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     fn create_time_table_and_assign(
         &mut self,
         context: &PropagationContextMut,
-    ) -> Result<(), Vec<Rc<Task<Var>>>>;
+    ) -> Result<(), Inconsistency>;
 
     /// Creates a time-table consisting of [ResourceProfile]s which represent rectangles with a start and end (both inclusive) consisting of tasks with a cumulative height
     /// Assumptions: The time-table is sorted based on start time and none of the profiles overlap - generally, it is assumed that the calculated [ResourceProfile]s are maximal
@@ -66,7 +66,7 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
     fn create_time_table(
         context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>>;
+    ) -> Result<Self::TimeTableType, Inconsistency>;
 
     /// Resets the data structures after backtracking/backjumping - generally this means recreating the time-table from scratch
     fn reset_structures(&mut self, context: &PropagationContextMut) {
@@ -84,13 +84,10 @@ pub(crate) trait TimeTablePropagator<Var: IntVar + 'static> {
         &mut self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
-        if let Err(conflict_profile) = self.create_time_table_and_assign(context) {
-            //We have found a ResourceProfile which overloads the resource capacity, create an error clause using the responsible profiles
-            Util::create_error_clause(context, &conflict_profile)
-        } else {
-            //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
-            check_for_updates(context, self.get_time_table(), self.get_parameters())
-        }
+        self.create_time_table_and_assign(context)?;
+        //No error has been found
+        //Check for updates (i.e. go over all profiles and all tasks and check whether an update can take place)
+        check_for_updates(context, self.get_time_table(), self.get_parameters())
     }
 }
 
