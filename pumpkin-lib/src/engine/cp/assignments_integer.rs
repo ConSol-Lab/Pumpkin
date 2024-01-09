@@ -85,13 +85,15 @@ impl AssignmentsInteger {
 
     pub fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
+        let event_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
             let domain_id = entry.predicate.get_domain();
             domains[domain_id].undo_trail_entry(entry);
         });
         AssignmentsInteger {
+            trail: Default::default(),
             domains,
-            ..Default::default()
+            events: event_sink,
         }
     }
 }

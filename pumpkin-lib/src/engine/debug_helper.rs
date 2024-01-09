@@ -395,7 +395,12 @@ impl DebugHelper {
                 );
                 return false;
             }
-            assignments_propositional.enqueue_decision_literal(literal);
+            if !assignments_propositional.is_literal_assigned(literal) {
+                // It could be the case that the explanation of a failure/propagation contains a predicate which is always true
+                // For example, if we have a variable x \in [0..10] and the explanation contains [x >= -1] then this will always evaluate to the true literal
+                // However, the true literal is always assigned leading to checks related to this enqueuing failing
+                assignments_propositional.enqueue_decision_literal(literal);
+            }
         }
         true
     }

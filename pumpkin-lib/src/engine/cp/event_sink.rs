@@ -17,6 +17,13 @@ pub struct EventSink {
 }
 
 impl EventSink {
+    pub fn new(num_domains: usize) -> Self {
+        let mut event_sink: EventSink = Default::default();
+        for _ in 0..num_domains {
+            event_sink.grow();
+        }
+        event_sink
+    }
     pub fn grow(&mut self) {
         self.present.push(EnumSet::new());
     }
