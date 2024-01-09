@@ -20,7 +20,7 @@ impl Default for AssignmentsPropositional {
             assignment_info: Default::default(),
             trail: Default::default(),
             true_literal: dummy_literal,
-            false_literal: dummy_literal,
+            false_literal: !dummy_literal,
         }
     }
 }

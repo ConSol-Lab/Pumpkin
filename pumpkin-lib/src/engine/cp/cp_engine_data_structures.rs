@@ -35,6 +35,11 @@ impl Default for CPEngineDataStructures {
 }
 
 impl CPEngineDataStructures {
+    pub fn new_integer_domain(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+        self.watch_list_cp.grow();
+        self.assignments_integer.grow(lower_bound, upper_bound)
+    }
+
     pub fn backtrack(
         &mut self,
         backtrack_level: usize,

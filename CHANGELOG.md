@@ -15,6 +15,7 @@
 * Implemented reified linear leq propagator.
 * Added disjunctive scheduling example through a difference logic model.
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
+* Add support for variables with negative domain bounds.
 
 ## Bugfixes
 
