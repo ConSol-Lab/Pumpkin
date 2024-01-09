@@ -1,7 +1,7 @@
 use pumpkin_lib::{
     basic_types::{variables::IntVar, CSPSolverExecutionFlag},
+    constraints::ConstraintsExt,
     engine::ConstraintSatisfactionSolver,
-    propagators::NotEq,
 };
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
         .map(|_| solver.create_new_integer_variable(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
-    all_different(&mut solver, &variables);
+    solver.all_different(variables.clone());
 
     let diag1 = variables
         .iter()
@@ -36,8 +36,8 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    all_different(&mut solver, &diag1);
-    all_different(&mut solver, &diag2);
+    solver.all_different(diag1);
+    solver.all_different(diag2);
 
     match solver.solve(i64::MAX) {
         CSPSolverExecutionFlag::Feasible => {
@@ -69,22 +69,6 @@ fn main() {
 
         CSPSolverExecutionFlag::Timeout => {
             println!("Timeout.");
-        }
-    }
-}
-
-fn all_different<Var: IntVar + std::fmt::Debug + 'static>(
-    solver: &mut ConstraintSatisfactionSolver,
-    variables: &[Var],
-) {
-    for i in 0..variables.len() {
-        for j in i + 1..variables.len() {
-            let not_eq = NotEq {
-                x: variables[i].clone(),
-                y: variables[j].clone(),
-            };
-
-            solver.add_propagator(not_eq);
         }
     }
 }

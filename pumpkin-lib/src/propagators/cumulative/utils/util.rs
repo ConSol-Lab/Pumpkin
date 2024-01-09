@@ -1,18 +1,24 @@
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
+use crate::engine::{EmptyDomain, ReadDomains};
 use crate::{
     basic_types::{
         variables::IntVar, Inconsistency, Predicate, PredicateConstructor, PropagationStatusCP,
         PropositionalConjunction,
     },
     engine::{
-        Delta, DomainChange, DomainEvents, LocalId, PropagationContext,
+        DomainEvents, LocalId, PropagationContext, PropagationContextMut,
         PropagatorConstructorContext,
     },
     pumpkin_assert_simple,
 };
 
-use super::{ArgTask, CumulativeParameters, Explanation, Task, Updated};
+use super::{ArgTask, CumulativeParameters, Task, Updated};
+
+pub enum ChangeWithBound {
+    LowerBound(i32),
+    UpperBound(i32),
+}
 
 pub struct Util {}
 
@@ -23,22 +29,25 @@ impl Util {
     /// and the explanation bound which should be used
     /// (Note that the explanation bound could be different from the actual propagation)
     pub fn create_naïve_explanation<'a, Var: IntVar + 'static>(
-        change_and_explanation_bound: DomainChange,
+        change_and_explanation_bound: &ChangeWithBound,
         task: &Rc<Task<Var>>,
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         profile_tasks: impl Iterator<Item = &'a Rc<Task<Var>>>,
     ) -> PropositionalConjunction {
         let mut explanation: Vec<Predicate> = Vec::new();
 
         //First we include the lower- or upper-bound of the task
         match change_and_explanation_bound {
-            DomainChange::LowerBound(explanation_bound) => {
-                explanation.push(task.start_variable.lower_bound_predicate(explanation_bound));
+            ChangeWithBound::LowerBound(explanation_bound) => {
+                explanation.push(
+                    task.start_variable
+                        .lower_bound_predicate(*explanation_bound),
+                );
             }
-            DomainChange::UpperBound(explanation_bound) => {
-                explanation.push(task.start_variable.upper_bound_predicate(explanation_bound))
-            }
-            _ => unreachable!(),
+            ChangeWithBound::UpperBound(explanation_bound) => explanation.push(
+                task.start_variable
+                    .upper_bound_predicate(*explanation_bound),
+            ),
         }
 
         //Then we go through all of the tasks and add their lower/upper-bounds to the explanation
@@ -55,11 +64,11 @@ impl Util {
         PropositionalConjunction::from(explanation)
     }
 
-    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
-    pub fn create_error_clause<Var: IntVar + 'static>(
-        context: &PropagationContext,
+    /// Create the error inconsistency consisting of the lower- and upper-bounds of the provided conflict tasks
+    pub fn create_inconsistency<Var: IntVar + 'static>(
+        context: &PropagationContextMut,
         conflict_tasks: &[Rc<Task<Var>>],
-    ) -> PropagationStatusCP {
+    ) -> Inconsistency {
         let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
         for task in conflict_tasks.iter() {
             error_clause.push(
@@ -72,41 +81,46 @@ impl Util {
             );
         }
 
-        Err(Inconsistency::from(PropositionalConjunction::from(
-            error_clause,
-        )))
+        Inconsistency::from(PropositionalConjunction::from(error_clause))
+    }
+
+    /// Create the error clause consisting of the lower- and upper-bounds of the provided conflict tasks
+    pub fn create_error_clause<Var: IntVar + 'static>(
+        context: &PropagationContextMut,
+        conflict_tasks: &[Rc<Task<Var>>],
+    ) -> PropagationStatusCP {
+        Err(Util::create_inconsistency(context, conflict_tasks))
     }
 
     /// Propagates the start variable of `propagating_task` to the provided `propagation_value` and eagerly calculates the explanation given the `profile_tasks` which were responsible for the propagation
     pub fn propagate_and_explain<Var: IntVar + 'static>(
-        context: &mut PropagationContext,
-        change_and_explanation_bound: DomainChange,
+        context: &mut PropagationContextMut,
+        change_and_explanation_bound: ChangeWithBound,
         propagating_task: &Rc<Task<Var>>,
         propagation_value: i32,
         profile_tasks: &[Rc<Task<Var>>],
-    ) -> Result<PropositionalConjunction, PropositionalConjunction> {
+    ) -> Result<(), EmptyDomain> {
         pumpkin_assert_simple!(
             !profile_tasks.is_empty(),
             "A propagation has to have occurred due to another task"
         );
         let explanation = Util::create_naïve_explanation(
-            change_and_explanation_bound,
+            &change_and_explanation_bound,
             propagating_task,
             context,
             profile_tasks.iter(),
         );
-        let result = match change_and_explanation_bound {
-            DomainChange::LowerBound(_) => {
-                context.set_lower_bound(&propagating_task.start_variable, propagation_value)
-            }
-            DomainChange::UpperBound(_) => {
-                context.set_upper_bound(&propagating_task.start_variable, propagation_value)
-            }
-            _ => unreachable!(),
-        };
-        match result {
-            Result::Err(_) => Err(explanation),
-            Result::Ok(_) => Ok(explanation),
+        match change_and_explanation_bound {
+            ChangeWithBound::LowerBound(_) => context.set_lower_bound(
+                &propagating_task.start_variable,
+                propagation_value,
+                explanation,
+            ),
+            ChangeWithBound::UpperBound(_) => context.set_upper_bound(
+                &propagating_task.start_variable,
+                propagation_value,
+                explanation,
+            ),
         }
     }
 
@@ -153,63 +167,11 @@ impl Util {
         )
     }
 
-    /// This task stores the propagations in the correct structure based on whether the explanation concerns a lower-bound update or an upper-bound update
-    pub fn store_explanations<Var: IntVar + 'static>(
-        explanations: Option<Vec<Explanation<Var>>>,
-        reasons_for_propagation_lower_bound: &mut [HashMap<i32, PropositionalConjunction>],
-        reasons_for_propagation_upper_bound: &mut [HashMap<i32, PropositionalConjunction>],
-    ) {
-        if let Some(explanations) = explanations {
-            for Explanation {
-                change,
-                task,
-                explanation,
-            } in explanations
-            {
-                //Note that we assume that the index is the same as the local id of the task
-                match change {
-                    DomainChange::LowerBound(value) => {
-                        reasons_for_propagation_lower_bound[task.id.unpack() as usize]
-                            .insert(value, explanation);
-                    }
-                    DomainChange::UpperBound(value) => {
-                        reasons_for_propagation_upper_bound[task.id.unpack() as usize]
-                            .insert(value, explanation);
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        }
-    }
-
-    /// Returns the reason for a propagation based on the provided [Delta] and the structures in which the reasons are stored
-    pub fn get_reason_for_propagation<Var: IntVar + 'static>(
-        delta: Delta,
-        reasons_for_propagation_lower_bound: &[HashMap<i32, PropositionalConjunction>],
-        reasons_for_propagation_upper_bound: &[HashMap<i32, PropositionalConjunction>],
-        tasks: &[Rc<Task<Var>>],
-    ) -> PropositionalConjunction {
-        let affected_task = &tasks[delta.affected_local_id().unpack() as usize];
-        match affected_task.start_variable.unpack(delta) {
-            DomainChange::LowerBound(value) => reasons_for_propagation_lower_bound
-                [affected_task.id.unpack() as usize]
-                .get(&value)
-                .unwrap()
-                .clone(),
-            DomainChange::UpperBound(value) => reasons_for_propagation_upper_bound
-                [affected_task.id.unpack() as usize]
-                .get(&value)
-                .unwrap()
-                .clone(),
-            _ => unreachable!(),
-        }
-    }
-
     /// Initialises the bounds at the root
     pub fn initialise_at_root<Var: IntVar + 'static>(
         update_bounds: bool,
         params: &mut CumulativeParameters<Var>,
-        context: &PropagationContext,
+        context: &PropagationContextMut,
     ) {
         if update_bounds {
             params.bounds.clear();
@@ -225,7 +187,7 @@ impl Util {
     }
 
     pub fn check_bounds_equal_at_propagation<Var: IntVar + 'static>(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         tasks: &[Rc<Task<Var>>],
         bounds: &[(i32, i32)],
     ) -> bool {
@@ -240,7 +202,7 @@ impl Util {
 
     /// Updates the bounds of the provided `task` to those stored in `context`
     pub fn update_bounds_task<Var: IntVar + 'static>(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         bounds: &mut [(i32, i32)],
         task: &Rc<Task<Var>>,
     ) {

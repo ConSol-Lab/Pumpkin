@@ -4,12 +4,9 @@
 
 use std::cmp::Ordering;
 
+use crate::engine::reason::ReasonRef;
+use crate::engine::{AssignmentsInteger, EmptyDomain, IntDomainEvent, OpaqueDomainEvent, Watchers};
 use enumset::EnumSet;
-
-use crate::engine::{
-    AssignmentsInteger, Delta, DomainChange, EmptyDomain, IntDomainEvent, OpaqueDomainEvent,
-    PropagatorVarId, Watchers,
-};
 
 use super::{DomainId, Predicate, PredicateConstructor};
 
@@ -34,7 +31,7 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain>;
 
     /// Tighten the lower bound of the domain of this variable.
@@ -42,7 +39,7 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain>;
 
     /// Tighten the upper bound of the domain of this variable.
@@ -50,14 +47,11 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
-
-    /// Decode a delta into the change it represents for this variable.
-    fn unpack_delta(&self, delta: Delta) -> DomainChange;
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
@@ -103,35 +97,31 @@ impl IntVar for DomainId {
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        assignment.remove_value_from_domain(*self, value, Some(reason))
+        assignment.remove_value_from_domain(*self, value, reason)
     }
 
     fn set_lower_bound(
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        assignment.tighten_lower_bound(*self, value, Some(reason))
+        assignment.tighten_lower_bound(*self, value, reason)
     }
 
     fn set_upper_bound(
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        assignment.tighten_upper_bound(*self, value, Some(reason))
+        assignment.tighten_upper_bound(*self, value, reason)
     }
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
         watchers.watch_all(*self, events);
-    }
-
-    fn unpack_delta(&self, delta: Delta) -> DomainChange {
-        delta.unwrap_change()
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
@@ -224,7 +214,7 @@ where
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         if let Some(v) = self.invert(value) {
             self.inner.remove(assignment, v, reason)
@@ -237,7 +227,7 @@ where
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         let inverted = self
             .invert(value)
@@ -254,7 +244,7 @@ where
         &self,
         assignment: &mut AssignmentsInteger,
         value: i32,
-        reason: PropagatorVarId,
+        reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         let inverted = self
             .invert(value)
@@ -274,27 +264,6 @@ where
             events = events.symmetrical_difference(bound);
         }
         self.inner.watch_all(watchers, events);
-    }
-
-    fn unpack_delta(&self, delta: Delta) -> DomainChange {
-        match self.inner.unpack_delta(delta) {
-            DomainChange::Removal(value) => DomainChange::Removal(self.map(value)),
-            DomainChange::LowerBound(lower_bound) => {
-                if self.scale >= 0 {
-                    DomainChange::LowerBound(self.map(lower_bound))
-                } else {
-                    DomainChange::UpperBound(self.map(lower_bound))
-                }
-            }
-            DomainChange::UpperBound(upper_bound) => {
-                if self.scale >= 0 {
-                    DomainChange::UpperBound(self.map(upper_bound))
-                } else {
-                    DomainChange::LowerBound(self.map(upper_bound))
-                }
-            }
-            _ => unreachable!(),
-        }
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {

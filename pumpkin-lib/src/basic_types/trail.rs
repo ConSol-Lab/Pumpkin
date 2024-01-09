@@ -44,6 +44,12 @@ impl<T> Trail<T> {
     pub fn push(&mut self, elem: T) {
         self.trail.push(elem)
     }
+
+    /// Only used in `crate::engine::cp::reason::ReasonStore` to replace a lazy reason with its
+    ///   result.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.trail.get_mut(index)
+    }
 }
 
 impl<T> Deref for Trail<T> {

@@ -1,23 +1,19 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    rc::Rc,
-};
+use std::{collections::BTreeMap, rc::Rc};
 
-use crate::propagators::PerPointIteratorType;
-use crate::propagators::PerPointTimeTableType;
+use crate::{basic_types::Inconsistency, propagators::PerPointTimeTableType};
 use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP, PropositionalConjunction},
+    basic_types::{variables::IntVar, PropagationStatusCP},
     engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, EnqueueDecision,
+        CPPropagatorConstructor, ConstraintProgrammingPropagator, EnqueueDecision,
         PropagationContext, PropagatorConstructorContext,
     },
     propagators::{
         cumulative::time_table::time_table_propagator::{check_for_updates, generate_update_range},
-        CumulativeArgs, CumulativeParameters, PropagationStatusWithExplanation, Task, Updated,
-        Util,
+        CumulativeArgs, CumulativeParameters, Updated, Util,
     },
     pumpkin_assert_extreme,
 };
+use crate::{engine::PropagationContextMut, propagators::PerPointIteratorType};
 use crate::{propagators::TimeTablePerPointProp, pumpkin_assert_advanced};
 
 use super::time_table_propagator::{should_enqueue, ResourceProfile, TimeTablePropagator};
@@ -33,12 +29,6 @@ pub struct TimeTablePerPointIncrementalProp<Var> {
     /// The key t (representing a time-point) holds the mandatory resource consumption of tasks at that time (stored in a [ResourceProfile]);
     /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
     time_table: PerPointTimeTableType<Var>,
-    /// For each variable, eagerly maps the explanation of the lower-bound change;
-    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i >= bound\]
-    reasons_for_propagation_lower_bound: Vec<HashMap<i32, PropositionalConjunction>>,
-    /// For each variable, eagerly maps the explanation of the upper-bound change
-    /// For a task i (representing a map in the [Vec]), \[bound\] stores the explanation for \[s_i <= bound\]
-    reasons_for_propagation_upper_bound: Vec<HashMap<i32, PropositionalConjunction>>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Keeps track of whether the current state of the time-table is outdated (i.e. whether it needs to be recalculated from scratch)
@@ -67,12 +57,8 @@ where
 
 impl<Var: IntVar + 'static> TimeTablePerPointIncrementalProp<Var> {
     pub fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointIncrementalProp<Var> {
-        let reasons_for_propagation: Vec<HashMap<i32, PropositionalConjunction>> =
-            vec![HashMap::new(); parameters.tasks.len()];
         TimeTablePerPointIncrementalProp {
             time_table: BTreeMap::new(),
-            reasons_for_propagation_lower_bound: reasons_for_propagation.to_vec(),
-            reasons_for_propagation_upper_bound: reasons_for_propagation,
             parameters,
             time_table_outdated: false,
         }
@@ -82,7 +68,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointIncrementalProp<Var> {
 impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
     for TimeTablePerPointIncrementalProp<Var>
 {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             Util::check_bounds_equal_at_propagation(
                 context,
@@ -141,17 +127,7 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         self.parameters.updated.clear(); //We have processed all of the updates, we can clear the structure
                                          //We pass the entirety of the table to check due to the fact that the propagation of the current profile could lead to the propagation across multiple profiles
                                          //For example, if we have updated 1 resource profile which caused a propagation then this could cause another propagation by a profile which has not been updated
-        let PropagationStatusWithExplanation {
-            status,
-            explanations,
-        } = check_for_updates(context, self.get_time_table(), self.get_parameters());
-
-        Util::store_explanations(
-            explanations,
-            &mut self.reasons_for_propagation_lower_bound,
-            &mut self.reasons_for_propagation_upper_bound,
-        );
-        status
+        check_for_updates(context, self.get_time_table(), self.get_parameters())
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -164,22 +140,9 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         self.time_table_outdated = true;
     }
 
-    fn get_reason_for_propagation(
-        &mut self,
-        _context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        Util::get_reason_for_propagation(
-            delta,
-            &self.reasons_for_propagation_lower_bound,
-            &self.reasons_for_propagation_upper_bound,
-            &self.parameters.tasks,
-        )
-    }
-
     fn notify(
         &mut self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
         local_id: crate::engine::LocalId,
         _event: crate::engine::OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -200,24 +163,14 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         "CumulativeTimeTablePerPoint"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         Util::initialise_at_root(true, &mut self.parameters, context);
-        let PropagationStatusWithExplanation {
-            status,
-            explanations,
-        } = TimeTablePropagator::propagate_from_scratch(self, context);
-
-        Util::store_explanations(
-            explanations,
-            &mut self.reasons_for_propagation_lower_bound,
-            &mut self.reasons_for_propagation_upper_bound,
-        );
-        status
+        TimeTablePropagator::propagate_from_scratch(self, context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         //Use the same debug propagator from `TimeTablePerPoint`
         TimeTablePerPointProp::debug_propagate_from_scratch_time_table_point(
@@ -233,24 +186,21 @@ impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTablePerPointIncrem
 
     fn create_time_table_and_assign(
         &mut self,
-        context: &PropagationContext,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
-        match <TimeTablePerPointIncrementalProp<Var> as TimeTablePropagator<Var>>::create_time_table(
-            context,
-            self.get_parameters(),
-        ) {
-            Ok(result) => {
-                self.time_table = result;
-                Ok(())
-            }
-            Err(explanation) => Err(explanation),
-        }
+        context: &PropagationContextMut,
+    ) -> PropagationStatusCP {
+        let time_table =
+            <TimeTablePerPointProp<Var> as TimeTablePropagator<Var>>::create_time_table(
+                context,
+                self.get_parameters(),
+            )?;
+        self.time_table = time_table;
+        Ok(())
     }
 
     fn create_time_table(
-        context: &PropagationContext,
+        context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Vec<Rc<Task<Var>>>> {
+    ) -> Result<Self::TimeTableType, Inconsistency> {
         TimeTablePerPointProp::create_time_table_per_point_from_scratch(context, parameters)
     }
 
@@ -269,7 +219,7 @@ mod tests {
         basic_types::{
             ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
         },
-        engine::{test_helper::TestSolver, Delta, DomainChange, EnqueueDecision, LocalId},
+        engine::{test_helper::TestSolver, EnqueueDecision},
         propagators::{ArgTask, TimeTablePerPointIncremental},
     };
 
@@ -502,10 +452,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(1), DomainChange::UpperBound(3)),
-        );
+        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(6),
@@ -670,7 +617,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
+        solver
             .new_propagator(TimeTablePerPointIncremental::new(
                 [
                     ArgTask {
@@ -694,10 +641,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(1), DomainChange::LowerBound(5)),
-        );
+        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.lower_bound_predicate(2), //Note that this not the most general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval
@@ -715,7 +659,7 @@ mod tests {
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
 
-        let mut propagator = solver
+        solver
             .new_propagator(TimeTablePerPointIncremental::new(
                 [
                     ArgTask {
@@ -746,10 +690,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason(
-            &mut propagator,
-            Delta::new(LocalId::from(2), DomainChange::LowerBound(7)),
-        );
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 s2.upper_bound_predicate(5),

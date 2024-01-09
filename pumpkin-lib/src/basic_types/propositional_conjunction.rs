@@ -2,17 +2,19 @@ use super::{Literal, Predicate};
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Vec<Predicate>,
-    literals_in_conjunction: Vec<Literal>,
+    predicates_in_conjunction: Box<[Predicate]>,
+    literals_in_conjunction: Box<[Literal]>,
 }
 
 impl PropositionalConjunction {
-    pub fn and(&mut self, predicate: Predicate) {
-        self.predicates_in_conjunction.push(predicate);
-    }
-
-    pub fn and_literal(&mut self, literal: Literal) {
-        self.literals_in_conjunction.push(literal);
+    pub fn new(
+        predicates_in_conjunction: Box<[Predicate]>,
+        literals_in_conjunction: Box<[Literal]>,
+    ) -> Self {
+        PropositionalConjunction {
+            predicates_in_conjunction,
+            literals_in_conjunction,
+        }
     }
 
     pub fn num_predicates(&self) -> u32 {
@@ -28,11 +30,21 @@ impl PropositionalConjunction {
     }
 }
 
-impl From<Vec<Predicate>> for PropositionalConjunction {
-    fn from(predicates_in_conjunction: Vec<Predicate>) -> Self {
+impl FromIterator<Predicate> for PropositionalConjunction {
+    fn from_iter<T: IntoIterator<Item = Predicate>>(iter: T) -> Self {
+        let vec = iter.into_iter().collect();
         PropositionalConjunction {
-            predicates_in_conjunction,
-            literals_in_conjunction: Vec::new(),
+            predicates_in_conjunction: vec,
+            literals_in_conjunction: Default::default(),
+        }
+    }
+}
+
+impl From<Vec<Predicate>> for PropositionalConjunction {
+    fn from(vec: Vec<Predicate>) -> Self {
+        PropositionalConjunction {
+            predicates_in_conjunction: vec.into_boxed_slice(),
+            literals_in_conjunction: Default::default(),
         }
     }
 }
@@ -40,8 +52,8 @@ impl From<Vec<Predicate>> for PropositionalConjunction {
 impl From<Predicate> for PropositionalConjunction {
     fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
-            predicates_in_conjunction: Vec::from([predicate]),
-            literals_in_conjunction: Vec::new(),
+            predicates_in_conjunction: Box::new([predicate]),
+            literals_in_conjunction: Default::default(),
         }
     }
 }
@@ -139,10 +151,8 @@ mod tests {
 
         let x = DomainId { id: 0 };
         let y = DomainId { id: 1 };
-        let conjunction = PropositionalConjunction {
-            predicates_in_conjunction: vec![predicate![x >= 5], predicate![y == 1]],
-            literals_in_conjunction: Vec::new(),
-        };
+        let conjunction =
+            PropositionalConjunction::from(vec![predicate![x >= 5], predicate![y == 1]]);
         assert_eq!(conjunction!([x >= 5] & [y == 1]), conjunction);
     }
 
@@ -155,10 +165,7 @@ mod tests {
             x: DomainId { id: 0 },
         };
 
-        let conjunction = PropositionalConjunction {
-            predicates_in_conjunction: vec![predicate![w.x == 1]],
-            literals_in_conjunction: Vec::new(),
-        };
+        let conjunction = PropositionalConjunction::from(vec![predicate![w.x == 1]]);
 
         assert_eq!(conjunction!([w.x == 1]), conjunction);
     }

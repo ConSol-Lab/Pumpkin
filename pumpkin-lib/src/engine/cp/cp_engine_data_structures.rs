@@ -1,15 +1,12 @@
-use crate::{
-    basic_types::{DomainId, Predicate},
-    engine::AssignmentsPropositional,
-    pumpkin_assert_simple,
+use crate::basic_types::{DomainId, Predicate, PropositionalConjunction};
+use crate::engine::reason::{ReasonRef, ReasonStore};
+use crate::engine::{
+    AssignmentsInteger, AssignmentsPropositional, BooleanDomainEvent,
+    ConstraintProgrammingPropagator, EnqueueDecision, IntDomainEvent, PropagationContext,
+    PropagationContextMut, PropagatorQueue, WatchListCP, WatchListPropositional,
 };
+use crate::pumpkin_assert_simple;
 use std::cmp::min;
-
-use super::{
-    AssignmentsInteger, BooleanDomainEvent, ConstraintProgrammingPropagator, EmptyDomain,
-    EnqueueDecision, IntDomainEvent, PropagationContext, PropagatorQueue, PropagatorVarId,
-    WatchListCP, WatchListPropositional,
-};
 
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
@@ -17,6 +14,7 @@ pub struct CPEngineDataStructures {
     pub watch_list_propositional: WatchListPropositional,
     pub propagator_queue: PropagatorQueue,
 
+    reason_store: ReasonStore,
     propositional_trail_index: usize,
     event_drain: Vec<(IntDomainEvent, DomainId)>,
 }
@@ -28,6 +26,7 @@ impl Default for CPEngineDataStructures {
             watch_list_cp: WatchListCP::default(),
             watch_list_propositional: WatchListPropositional::default(),
             propagator_queue: PropagatorQueue::new(5),
+            reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
             event_drain: vec![],
         }
@@ -35,6 +34,16 @@ impl Default for CPEngineDataStructures {
 }
 
 impl CPEngineDataStructures {
+    pub fn increase_decision_level(&mut self) {
+        self.reason_store.increase_decision_level();
+        self.assignments_integer.increase_decision_level();
+    }
+
+    pub fn new_integer_domain(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+        self.watch_list_cp.grow();
+        self.assignments_integer.grow(lower_bound, upper_bound)
+    }
+
     pub fn backtrack(
         &mut self,
         backtrack_level: usize,
@@ -50,11 +59,28 @@ impl CPEngineDataStructures {
             assignment_propositional.num_trail_entries(),
         );
         self.assignments_integer.synchronise(backtrack_level);
+        self.reason_store.synchronise(backtrack_level);
         self.propagator_queue.clear();
+    }
+
+    /// Returning `AssignmentsInteger` too is a workaround to allow its usage after a
+    ///  call to this. The other option is to inline this method, but then you need to
+    ///  expose `self.reason_store` as a public field.
+    pub fn compute_reason(
+        &mut self,
+        reason_ref: ReasonRef,
+        assignments_propositional: &AssignmentsPropositional,
+    ) -> (&PropositionalConjunction, &AssignmentsInteger) {
+        let context = PropagationContext::new(&self.assignments_integer, assignments_propositional);
+        let reason = self.reason_store.get_or_compute(reason_ref, &context);
+        (
+            reason.expect("reason reference should not be stale"),
+            &self.assignments_integer,
+        )
     }
 }
 
-//methods for motifying the domains of variables
+//methods for modifying the domains of variables
 //  note that modifying the domain will inform propagators about the changes through the notify functions
 impl CPEngineDataStructures {
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
@@ -76,10 +102,10 @@ impl CPEngineDataStructures {
         for (event, domain) in self.event_drain.drain(..) {
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
                 let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
-                let mut context = PropagationContext::new(
+                let mut context = PropagationContextMut::new(
                     &mut self.assignments_integer,
+                    &mut self.reason_store,
                     assignments_propositional,
-                    propagator_var.propagator,
                 );
 
                 let enqueue_decision =
@@ -100,10 +126,10 @@ impl CPEngineDataStructures {
                     .get_affected_propagators(event, affected_literal)
                 {
                     let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
-                    let mut context = PropagationContext::new(
+                    let mut context = PropagationContextMut::new(
                         &mut self.assignments_integer,
+                        &mut self.reason_store,
                         assignments_propositional,
-                        propagator_var.propagator,
                     );
 
                     let enqueue_decision =
@@ -121,53 +147,22 @@ impl CPEngineDataStructures {
         true
     }
 
-    //changes the domains according to the predicate
-    //  in case the predicate is already true, no changes happen
-    //  however in case the predicate would lead to inconsistent domains, e.g., decreasing the upper bound past the lower bound
-    //      pumpkin asserts will make the program crash
-    pub fn apply_predicate(
-        &mut self,
-        predicate: &Predicate,
-        propagator_reason: Option<PropagatorVarId>,
-    ) -> Result<(), EmptyDomain> {
-        if self.does_predicate_hold(predicate) {
-            return Ok(());
-        }
+    pub fn create_propagation_context_mut<'a>(
+        &'a mut self,
+        assignments_propositional: &'a mut AssignmentsPropositional,
+    ) -> PropagationContextMut {
+        PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            assignments_propositional,
+        )
+    }
 
-        match *predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => self.assignments_integer.tighten_lower_bound(
-                domain_id,
-                lower_bound,
-                propagator_reason,
-            ),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => self.assignments_integer.tighten_upper_bound(
-                domain_id,
-                upper_bound,
-                propagator_reason,
-            ),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => self.assignments_integer.remove_value_from_domain(
-                domain_id,
-                not_equal_constant,
-                propagator_reason,
-            ),
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => self.assignments_integer.make_assignment(
-                domain_id,
-                equality_constant,
-                propagator_reason,
-            ),
-        }
+    pub fn create_propagation_context<'a>(
+        &'a self,
+        assignments_propositional: &'a AssignmentsPropositional,
+    ) -> PropagationContext {
+        PropagationContext::new(&self.assignments_integer, assignments_propositional)
     }
 
     pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {

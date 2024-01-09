@@ -2,11 +2,11 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
 use crate::basic_types::variables::IntVar;
-use crate::basic_types::{Predicate, PropagationStatusCP, PropositionalConjunction};
+use crate::basic_types::{PropagationStatusCP, PropositionalConjunction};
 use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvents,
-    EnqueueDecision, LocalId, OpaqueDomainEvent, PropagationContext, PropagatorConstructorContext,
-    PropagatorVariable,
+    CPPropagatorConstructor, ConstraintProgrammingPropagator, DomainEvents, EnqueueDecision,
+    LocalId, OpaqueDomainEvent, PropagationContext, PropagationContextMut,
+    PropagatorConstructorContext, PropagatorVariable, ReadDomains,
 };
 use crate::predicate;
 
@@ -33,8 +33,6 @@ pub struct DiffLogicProp<V> {
     /// The set of updated variables since the last propagation.
     // potential optimisation: bitset?
     updated: HashSet<LocalId>,
-    /// The y_1 var (value) responsible for the change to y_2 with new upperbound (key).
-    reasons: HashMap<(PropagatorVariable<V>, i32), Predicate>,
     /// Worklist used in propagation, kept here to save on allocations.
     worklist: VecDeque<PropagatorVariable<V>>,
 }
@@ -127,7 +125,6 @@ where
                 .collect(),
             difference_vars: difference_vars.into_boxed_slice(),
             updated: Default::default(),
-            reasons: Default::default(),
             worklist: Default::default(),
         }
     }
@@ -159,13 +156,12 @@ impl<V> ConstraintProgrammingPropagator for DiffLogicProp<V>
 where
     V: IntVar + Hash + Eq,
 {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         for &y_start in &self.updated {
             propagate_shared::<false, V>(
                 &self.elementary_constraints,
                 context,
                 &self.local_id_to_var(y_start).clone(),
-                &mut self.reasons,
                 &mut self.worklist,
             )?;
         }
@@ -175,7 +171,7 @@ where
 
     fn notify(
         &mut self,
-        _context: &mut PropagationContext,
+        _context: &mut PropagationContextMut,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -183,21 +179,8 @@ where
         EnqueueDecision::Enqueue
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, _context: &PropagationContext) {
         self.updated.clear();
-        self.reasons.retain(|k, _| context.upper_bound(&k.0) <= k.1);
-    }
-
-    fn get_reason_for_propagation(
-        &mut self,
-        _context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        let var = self.local_id_to_var(delta.affected_local_id());
-        let DomainChange::UpperBound(ub) = var.unpack(delta) else {
-            unreachable!()
-        };
-        vec![*self.reasons.get(&(var.clone(), ub)).unwrap()].into()
     }
 
     fn priority(&self) -> u32 {
@@ -208,13 +191,12 @@ where
         "DiffLogic"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
             propagate_shared::<true, V>(
                 &self.elementary_constraints,
                 context,
                 y_start,
-                &mut self.reasons,
                 &mut self.worklist,
             )?;
         }
@@ -223,14 +205,13 @@ where
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
             propagate_shared::<false, V>(
                 &self.elementary_constraints,
                 context,
                 y_start,
-                &mut Default::default(),
                 &mut Default::default(),
             )?;
         }
@@ -241,9 +222,8 @@ where
 #[allow(clippy::type_complexity)]
 fn propagate_shared<const CYCLE_CHECK: bool, V>(
     elementary_constraints: &HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
-    context: &mut PropagationContext,
+    context: &mut PropagationContextMut,
     y_start: &PropagatorVariable<V>,
-    reasons: &mut HashMap<(PropagatorVariable<V>, i32), Predicate>,
     worklist: &mut VecDeque<PropagatorVariable<V>>,
 ) -> PropagationStatusCP
 where
@@ -269,8 +249,8 @@ where
                         return Err(cycle_reason.into());
                     }
                 }
-                reasons.insert((y2.clone(), y2_ub_max), reason);
-                context.set_upper_bound(y2, y2_ub_max)?;
+                let reason: PropositionalConjunction = reason.into();
+                context.set_upper_bound(y2, y2_ub_max, reason)?;
                 worklist.push_back(y2.clone());
             }
         }
@@ -284,7 +264,7 @@ mod tests {
     use crate::basic_types::{ConflictInfo, Inconsistency};
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::IntDomainEvent::{LowerBound, UpperBound};
+    use crate::engine::IntDomainEvent::UpperBound;
 
     #[test]
     fn initialisation_and_propagation() {
@@ -313,7 +293,8 @@ mod tests {
         assert_eq!(5, solver.upper_bound(x_2));
 
         solver.set_upper_bound(x_2, 4).expect("no empty domains");
-        solver.notify_changed(&mut propagator, x_2, UpperBound);
+        #[allow(clippy::identity_op)]
+        solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 1 + 2));
         solver
             .propagate(&mut propagator)
             .expect("no empty domains or negative cycles");
@@ -328,7 +309,8 @@ mod tests {
         assert_eq!(-3, solver.lower_bound(x_0));
 
         solver.set_lower_bound(x_1, -1).expect("no empty domains");
-        solver.notify_changed(&mut propagator, x_1, LowerBound);
+        #[allow(clippy::erasing_op, clippy::identity_op)]
+        solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 0 + 3));
         solver
             .propagate(&mut propagator)
             .expect("no empty domains or negative cycles");
@@ -353,7 +335,7 @@ mod tests {
         // f1   x_0 + 1 <= x_1
         // f2   x_1 + 2 <= x_2
 
-        let mut propagator = solver
+        let _ = solver
             .new_propagator(DiffLogic {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
@@ -365,15 +347,12 @@ mod tests {
         assert_eq!(0, solver.lower_bound(x_2)); // by f2 + transitivity from f1
         assert_eq!(3, solver.upper_bound(x_1)); // by f2
 
-        let mut delta_x_1_lb = solver.to_deltas(&propagator, x_1, DomainChange::LowerBound(-2));
-        assert_eq!(1, delta_x_1_lb.len());
-        let reason_x_1_lb = solver.get_reason(&mut propagator, delta_x_1_lb.pop().unwrap());
-        assert_eq!(conjunction!([x_0 >= -3]), reason_x_1_lb);
+        let flipped_x_1 = x_1.scaled(-1);
+        let reason_x_1_lb = solver.get_reason_int(predicate![flipped_x_1 <= 2]);
+        assert_eq!(conjunction!([x_0 >= -3]), *reason_x_1_lb);
 
-        let mut delta_x_0_ub = solver.to_deltas(&propagator, x_0, DomainChange::UpperBound(2));
-        assert_eq!(1, delta_x_0_ub.len());
-        let reason_x_0_ub = solver.get_reason(&mut propagator, delta_x_0_ub.pop().unwrap());
-        assert_eq!(conjunction!([x_1 <= 3]), reason_x_0_ub);
+        let reason_x_0_ub = solver.get_reason_int(predicate![x_0 <= 2]);
+        assert_eq!(conjunction!([x_1 <= 3]), *reason_x_0_ub);
     }
 
     #[test]

@@ -1,14 +1,13 @@
-use slice_dst::SliceWithHeader;
 use std::cell::OnceCell;
 use std::cmp::{max, min};
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::basic_types::variables::IntVar;
-use crate::basic_types::{PropagationStatusCP, PropositionalConjunction};
+use crate::basic_types::PropagationStatusCP;
 use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, Delta, DomainChange, DomainEvents,
-    LocalId, PropagationContext, PropagatorConstructorContext, PropagatorVariable,
+    CPPropagatorConstructor, ConstraintProgrammingPropagator, DomainEvents, LocalId,
+    PropagationContext, PropagationContextMut, PropagatorConstructorContext, PropagatorVariable,
+    ReadDomains,
 };
 use crate::{conjunction, predicate};
 
@@ -21,11 +20,9 @@ pub struct Element<VX, VI, VE> {
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
 pub struct ElementProp<VX, VI, VE> {
-    array: Box<[PropagatorVariable<VX>]>,
+    array: Rc<[PropagatorVariable<VX>]>,
     index: PropagatorVariable<VI>,
     rhs: PropagatorVariable<VE>,
-    propagations_index: HashMap<i32, Rc<SliceWithHeader<PropositionalConjunction, i32>>>,
-    propagations_rhs: HashMap<i32, Rc<SliceWithHeader<PropositionalConjunction, i32>>>,
 }
 
 const ID_INDEX: LocalId = LocalId::from(0);
@@ -36,7 +33,7 @@ const ID_X_OFFSET: u32 = 2;
 /// Iterator through the domain values of an IntVar; keeps a reference to the context
 /// Use `for_domain_values!` if you want mutable access to the context while iterating
 fn iter_values<'c, Var: IntVar>(
-    context: &'c PropagationContext,
+    context: &'c PropagationContextMut,
     var: &'c PropagatorVariable<Var>,
 ) -> impl Iterator<Item = i32> + 'c {
     (context.lower_bound(var)..=context.upper_bound(var)).filter(|i| context.contains(var, *i))
@@ -53,7 +50,7 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntVar, VI: IntVar, VE: IntVar> CPPropagatorConstructor for Element<VX, VI, VE> {
+impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor for Element<VX, VI, VE> {
     type Propagator = ElementProp<VX, VI, VE>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -74,29 +71,14 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> CPPropagatorConstructor for Element<VX,
             array,
             index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX),
             rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS),
-            propagations_index: HashMap::new(),
-            propagations_rhs: HashMap::new(),
         }
     }
 }
 
-impl<VX: IntVar, VI: IntVar, VE: IntVar> ElementProp<VX, VI, VE> {
-    /// Helper for `<Element as ConstraintProgrammingPropagator>::get_reason_for_propagation`
-    fn interpret_delta(&self, delta: Delta) -> (LocalId, DomainChange) {
-        let id = delta.affected_local_id();
-        let dc = match id {
-            ID_INDEX => self.index.unpack(delta),
-            ID_RHS => self.rhs.unpack(delta),
-            i => self.array[(i.unpack() - ID_X_OFFSET) as usize].unpack(delta),
-        };
-        (id, dc)
-    }
-}
-
-impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
+impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
     for ElementProp<VX, VI, VE>
 {
-    fn propagate(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
             // At this point, we should post x_i = e as a new constraint, but that's not an option
@@ -104,29 +86,31 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
             let i = context.lower_bound(&self.index);
             let x_i = &self.array[i as usize];
 
-            // place to put reason if necessary
-            let rhs_reason = OnceCell::new();
+            let lb = max(context.lower_bound(&self.rhs), context.lower_bound(x_i));
+            let ub = min(context.upper_bound(&self.rhs), context.upper_bound(x_i));
 
-            let lb = min(context.lower_bound(&self.rhs), context.lower_bound(x_i));
-            let ub = max(context.upper_bound(&self.rhs), context.upper_bound(x_i));
-
-            context.set_lower_bound(&self.rhs, lb)?;
-            context.set_lower_bound(x_i, lb)?;
-            context.set_upper_bound(&self.rhs, ub)?;
-            context.set_upper_bound(x_i, ub)?;
+            context.set_lower_bound(
+                &self.rhs,
+                lb,
+                conjunction!([self.index == i] & [x_i >= lb]),
+            )?;
+            context.set_lower_bound(x_i, lb, conjunction!([self.index == i] & [self.rhs >= lb]))?;
+            context.set_upper_bound(
+                &self.rhs,
+                ub,
+                conjunction!([self.index == i] & [x_i <= ub]),
+            )?;
+            context.set_upper_bound(x_i, ub, conjunction!([self.index == i] & [self.rhs <= ub]))?;
 
             for v in lb..=ub {
                 if !context.contains(&self.rhs, v) && context.contains(x_i, v) {
-                    context.remove(x_i, v)?;
+                    context.remove(x_i, v, conjunction!([self.index == i] & [self.rhs != v]))?;
                 } else if context.contains(&self.rhs, v) && !context.contains(x_i, v) {
-                    self.propagations_rhs.insert(
+                    context.remove(
+                        &self.rhs,
                         v,
-                        // N.B. rhs_reason is loop-independent
-                        Rc::clone(rhs_reason.get_or_init(|| {
-                            SliceWithHeader::new(predicate![self.index == i].into(), [i])
-                        })),
-                    );
-                    context.remove(&self.rhs, v)?;
+                        conjunction!([self.index == i] & [self.array[i as usize] != v]),
+                    )?;
                 }
             }
         } else {
@@ -135,17 +119,22 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
             for_domain_values!(context, &self.index, |i| {
                 let x_i = &self.array[i as usize];
                 if !iter_values(context, &self.rhs).any(|e| context.contains(x_i, e)) {
-                    self.propagations_index.insert(
-                        i,
-                        // N.B. index_reason is loop-independent
-                        Rc::clone(index_reason.get_or_init(|| {
-                            SliceWithHeader::new(
-                                context.describe_domain(&self.rhs).into(),
-                                iter_values(context, &self.rhs).collect::<Vec<_>>(),
-                            )
-                        })),
-                    );
-                    context.remove(&self.index, i)?;
+                    // N.B. index_reason is loop-independent
+                    let reason_info = Rc::clone(index_reason.get_or_init(|| {
+                        Rc::new((
+                            context.describe_domain(&self.rhs),
+                            iter_values(context, &self.rhs).collect::<Vec<_>>(),
+                        ))
+                    }));
+                    let x_i = (*x_i).clone();
+                    context.remove(&self.index, i, move |_context: &PropagationContext| {
+                        let mut reason = reason_info.0.clone();
+                        reason_info
+                            .1
+                            .iter()
+                            .for_each(|e| reason.push(predicate![x_i != *e]));
+                        reason.into()
+                    })?;
                 }
             });
 
@@ -156,96 +145,29 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
                     .map(|i| &self.array[i as usize])
                     .any(|x_i| context.contains(x_i, e))
                 {
-                    self.propagations_rhs.insert(
-                        e,
-                        // N.B. rhs_reason is loop-independent
-                        Rc::clone(rhs_reason.get_or_init(|| {
-                            SliceWithHeader::new(
-                                context.describe_domain(&self.index).into(),
-                                iter_values(context, &self.index).collect::<Vec<_>>(),
-                            )
-                        })),
-                    );
-                    context.remove(&self.rhs, e)?;
+                    // N.B. rhs_reason is loop-independent
+                    let reason_info = Rc::clone(rhs_reason.get_or_init(|| {
+                        Rc::new((
+                            context.describe_domain(&self.index),
+                            iter_values(context, &self.index).collect::<Vec<_>>(),
+                        ))
+                    }));
+                    let array = Rc::clone(&self.array);
+                    context.remove(&self.rhs, e, move |_context: &PropagationContext| {
+                        let mut reason = reason_info.0.clone();
+                        reason_info
+                            .1
+                            .iter()
+                            .for_each(|i| reason.push(predicate![array[*i as usize] != e]));
+                        reason.into()
+                    })?;
                 }
             });
         }
         Ok(())
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
-        // clean up old reason information
-        self.propagations_rhs
-            .retain(|&k, _| !context.contains(&self.rhs, k));
-        self.propagations_index
-            .retain(|&k, _| !context.contains(&self.index, k));
-    }
-
-    fn get_reason_for_propagation(
-        &mut self,
-        context: &PropagationContext,
-        delta: Delta,
-    ) -> PropositionalConjunction {
-        match self.interpret_delta(delta) {
-            (ID_INDEX, DomainChange::Removal(i)) => {
-                let x_i = &self.array[i as usize];
-                let reason_info = self.propagations_index.get(&i).unwrap();
-                let mut reason = reason_info.header.clone();
-                reason_info
-                    .slice
-                    .iter()
-                    .for_each(|e| reason.and(predicate![x_i != *e]));
-                reason
-            }
-            (ID_INDEX, _) => unreachable!(),
-            (ID_RHS, DomainChange::Removal(e)) => {
-                let reason_info = self.propagations_rhs.get(&e).unwrap();
-                let mut reason = reason_info.header.clone();
-                reason_info
-                    .slice
-                    .iter()
-                    .for_each(|i| reason.and(predicate![self.array[*i as usize] != e]));
-                reason
-            }
-            (ID_RHS, DomainChange::UpperBound(v)) => {
-                debug_assert!(context.is_fixed(&self.index));
-                let i = context.lower_bound(&self.index);
-                let x_i = &self.array[i as usize];
-                conjunction![[self.index == i] & [x_i <= v]]
-            }
-            (ID_RHS, DomainChange::LowerBound(v)) => {
-                debug_assert!(context.is_fixed(&self.index));
-                let i = context.lower_bound(&self.index);
-                let x_i = &self.array[i as usize];
-                conjunction![[self.index == i] & [x_i >= v]]
-            }
-            (id, DomainChange::Removal(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
-                debug_assert!(context.is_fixed(&self.index));
-                debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
-
-                let i = i as i32;
-                conjunction![[self.index == i] & [self.rhs != v]]
-            }
-            (id, DomainChange::UpperBound(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
-                debug_assert!(context.is_fixed(&self.index));
-                debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
-
-                let i = i as i32;
-                conjunction![[self.index == i] & [self.rhs <= v]]
-            }
-            (id, DomainChange::LowerBound(v)) => {
-                let i = id.unpack() - ID_X_OFFSET;
-                debug_assert!(context.is_fixed(&self.index));
-                debug_assert_eq!(i, context.lower_bound(&self.index) as u32);
-
-                let i = i as i32;
-                conjunction![[self.index == i] & [self.rhs >= v]]
-            }
-            (_, _) => unreachable!(),
-        }
-    }
+    fn synchronise(&mut self, _context: &PropagationContext) {}
 
     fn priority(&self) -> u32 {
         // Priority higher than int_times/linear_eq/not_eq_propagator because it's much more
@@ -257,18 +179,18 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
         "Element"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         // Ensure index is non-negative
-        context.set_lower_bound(&self.index, 0)?;
+        context.set_lower_bound(&self.index, 0, conjunction!())?;
         // Ensure index <= no. of x_j
-        context.set_upper_bound(&self.index, self.array.len() as i32)?;
+        context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
 
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContext,
+        context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         // Close to duplicate of `propagate` for now, without saving reason stuff...
         if context.is_fixed(&self.index) {
@@ -278,19 +200,19 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
             let lb = min(context.lower_bound(&self.rhs), context.lower_bound(x_i));
             let ub = max(context.upper_bound(&self.rhs), context.upper_bound(x_i));
 
-            context.set_lower_bound(&self.rhs, lb)?;
-            context.set_lower_bound(x_i, lb)?;
-            context.set_upper_bound(&self.rhs, ub)?;
-            context.set_upper_bound(x_i, ub)?;
+            context.set_lower_bound(&self.rhs, lb, conjunction!())?;
+            context.set_lower_bound(x_i, lb, conjunction!())?;
+            context.set_upper_bound(&self.rhs, ub, conjunction!())?;
+            context.set_upper_bound(x_i, ub, conjunction!())?;
 
             for_domain_values!(context, x_i, |e| {
                 if !context.contains(&self.rhs, e) {
-                    context.remove(x_i, e)?;
+                    context.remove(x_i, e, conjunction!())?;
                 }
             });
             for_domain_values!(context, &self.rhs, |e| {
                 if !context.contains(x_i, e) {
-                    context.remove(&self.rhs, e)?;
+                    context.remove(&self.rhs, e, conjunction!())?;
                 }
             });
         } else {
@@ -298,7 +220,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
             for_domain_values!(context, &self.index, |i| {
                 let x_i = &self.array[i as usize];
                 if !iter_values(context, &self.rhs).any(|e| context.contains(x_i, e)) {
-                    context.remove(&self.index, i)?;
+                    context.remove(&self.index, i, conjunction!())?;
                 }
             });
             // Remove values from e when for no values of i: x_i = e
@@ -307,7 +229,7 @@ impl<VX: IntVar, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
                     .map(|i| &self.array[i as usize])
                     .any(|x_i| context.contains(x_i, e))
                 {
-                    context.remove(&self.rhs, e)?;
+                    context.remove(&self.rhs, e, conjunction!())?;
                 }
             });
         }
@@ -365,22 +287,19 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let index_delta = Delta::new(ID_INDEX, DomainChange::Removal(3));
-        let rhs_delta = Delta::new(ID_RHS, DomainChange::Removal(6));
-
-        let index_reason = solver.get_reason(&mut propagator, index_delta);
-        let rhs_reason = solver.get_reason(&mut propagator, rhs_delta);
-
+        let index_reason = solver.get_reason_int(predicate![index != 3]);
         // reason for index removal 3 is that `x_3 != e`
         assert_eq!(
-            index_reason,
+            *index_reason,
             conjunction!(
                 [rhs >= 6] & [rhs <= 9] & [x_3 != 6] & [x_3 != 7] & [x_3 != 8] & [x_3 != 9]
             )
         );
+
+        let rhs_reason = solver.get_reason_int(predicate![rhs != 6]);
         // reason for rhs removal 6 is that for all valid indices i `x_i != 6`
         assert_eq!(
-            rhs_reason,
+            *rhs_reason,
             conjunction!([index >= 1] & [index <= 2] & [x_1 != 6] & [x_2 != 6])
         );
     }
@@ -404,19 +323,16 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let x1_ub_delta = Delta::new(LocalId::from(ID_X_OFFSET + 1), DomainChange::UpperBound(9));
-        let x1_8_delta = Delta::new(LocalId::from(ID_X_OFFSET + 1), DomainChange::Removal(8));
-        let rhs_delta = Delta::new(ID_RHS, DomainChange::LowerBound(7));
-
-        let x1_ub_reason = solver.get_reason(&mut propagator, x1_ub_delta);
-        let x1_8_reason = solver.get_reason(&mut propagator, x1_8_delta);
-        let rhs_reason = solver.get_reason(&mut propagator, rhs_delta);
-
+        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9]);
         // reason for x_1 <= 9 is that `x_1 == e` and `e <= 9`
-        assert_eq!(x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
+        assert_eq!(*x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
+
+        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8]);
         // reason for x_1 removal 8 is that `x_1 == e` and `e != 8`
-        assert_eq!(x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
+        assert_eq!(*x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
+
+        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7]);
         // reason for `rhs >= 7` is that `x_1 >= 7`
-        assert_eq!(rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
+        assert_eq!(*rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
     }
 }
