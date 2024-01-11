@@ -391,7 +391,7 @@ impl SATCPMediator {
         for value in (lower_bound + 1)..=upper_bound {
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
                 &mut cp_data_structures.watch_list_propositional,
-                predicate![domain_id <= value],
+                predicate![domain_id >= value],
                 clausal_propagator,
                 sat_data_structures,
             );
@@ -937,6 +937,34 @@ mod tests {
                     .is_literal_assigned_true(literal),
                 "Literal for lower-bound {lower_bound} is not assigned"
             );
+        }
+    }
+
+    #[test]
+    fn check_correspondence_predicates_creating_new_int_domain() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+        let mut clausal_propagator = ClausalPropagator::default();
+
+        let lower_bound = 0;
+        let upper_bound = 10;
+        let domain_id = mediator.create_new_domain(
+            lower_bound,
+            upper_bound,
+            &mut clausal_propagator,
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+
+        for bound in lower_bound + 1..upper_bound {
+            let lower_bound_predicate = predicate![domain_id >= bound];
+            let equality_predicate = predicate![domain_id == bound];
+            for predicate in [lower_bound_predicate, equality_predicate] {
+                let literal = mediator
+                    .get_predicate_literal(predicate, &cp_data_structures.assignments_integer);
+                assert!(mediator.mapping_literal_to_predicates[literal].contains(&predicate))
+            }
         }
     }
 }
