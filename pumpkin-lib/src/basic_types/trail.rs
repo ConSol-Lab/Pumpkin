@@ -1,7 +1,8 @@
-use crate::pumpkin_assert_simple;
 use std::iter::Rev;
 use std::ops::Deref;
 use std::vec::Drain;
+
+use crate::pumpkin_assert_simple;
 
 #[derive(Clone)]
 pub struct Trail<T> {

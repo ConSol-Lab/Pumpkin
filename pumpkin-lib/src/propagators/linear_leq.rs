@@ -1,12 +1,17 @@
-use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
-use crate::{
-    basic_types::{variables::IntVar, Literal, PropagationStatusCP, PropositionalConjunction},
-    engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
-        PropagatorConstructorContext, PropagatorVariable,
-    },
-    predicate,
-};
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::Literal;
+use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
+use crate::predicate;
 
 pub struct LinearLeq<Var> {
     pub x: Box<[Var]>,
@@ -186,9 +191,9 @@ fn perform_propagation<Var: IntVar>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{conjunction, engine::test_helper::TestSolver};
-
     use super::*;
+    use crate::conjunction;
+    use crate::engine::test_helper::TestSolver;
 
     #[test]
     fn test_bounds_are_propagated() {

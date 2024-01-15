@@ -1,8 +1,7 @@
-use pumpkin_lib::{
-    basic_types::{variables::IntVar, CSPSolverExecutionFlag},
-    constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::variables::IntVar;
+use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {
     let n = std::env::args()

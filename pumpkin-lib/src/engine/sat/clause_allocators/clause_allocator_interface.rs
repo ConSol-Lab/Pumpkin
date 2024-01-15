@@ -1,6 +1,6 @@
-use crate::basic_types::{ClauseReference, Literal};
-
 use super::ClauseInterface;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
 
 //the trait requires the [] operator
 //  and its corresponding Clause must implement the ClauseInterface

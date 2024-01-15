@@ -1,8 +1,12 @@
-use std::process::{Command, Output};
+use std::process::Command;
+use std::process::Output;
 
-use integration_tests::{
-    ensure_release_binary_built, run_solution_checker, run_solver, Checker, CheckerOutput, Files,
-};
+use integration_tests::ensure_release_binary_built;
+use integration_tests::run_solution_checker;
+use integration_tests::run_solver;
+use integration_tests::Checker;
+use integration_tests::CheckerOutput;
+use integration_tests::Files;
 
 macro_rules! test_wcnf_instance {
     ($name:ident) => {

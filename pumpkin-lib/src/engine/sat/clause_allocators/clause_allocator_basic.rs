@@ -1,12 +1,11 @@
+use super::ClauseAllocatorInterface;
+use super::ClauseBasic;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-
-use super::ClauseAllocatorInterface;
-use super::ClauseBasic;
 
 #[derive(Default)]
 pub struct ClauseAllocatorBasic {

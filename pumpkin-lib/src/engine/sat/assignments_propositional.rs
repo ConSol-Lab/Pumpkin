@@ -1,10 +1,13 @@
-use crate::basic_types::{
-    ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
-    PropositionalVariableGeneratorIterator, Trail,
-};
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::Literal;
+use crate::basic_types::PropositionalVariable;
+use crate::basic_types::PropositionalVariableGeneratorIterator;
+use crate::basic_types::Trail;
 #[cfg(test)]
 use crate::engine::reason::ReasonRef;
-use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Clone)]
 pub struct AssignmentsPropositional {

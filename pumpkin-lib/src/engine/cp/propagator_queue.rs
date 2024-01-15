@@ -3,9 +3,8 @@ use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use crate::pumpkin_assert_moderate;
-
 use super::PropagatorId;
+use crate::pumpkin_assert_moderate;
 
 pub struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,

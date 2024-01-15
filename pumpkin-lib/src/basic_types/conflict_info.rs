@@ -1,4 +1,6 @@
-use super::{ConstraintReference, Literal, PropositionalConjunction};
+use super::ConstraintReference;
+use super::Literal;
+use super::PropositionalConjunction;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConflictInfo {

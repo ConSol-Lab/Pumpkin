@@ -1,8 +1,10 @@
-use bitfield::{Bit, BitMut, BitRange};
+use bitfield::Bit;
+use bitfield::BitMut;
+use bitfield::BitRange;
 
+use super::ConstraintReference;
+use super::Literal;
 use crate::pumpkin_assert_moderate;
-
-use super::{ConstraintReference, Literal};
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct ClauseReference {
@@ -72,9 +74,11 @@ impl From<ConstraintReference> for ClauseReference {
 
 #[cfg(test)]
 mod tests {
-    use bitfield::{BitMut, BitRange};
+    use bitfield::BitMut;
+    use bitfield::BitRange;
 
-    use crate::basic_types::{ClauseReference, Literal};
+    use crate::basic_types::ClauseReference;
+    use crate::basic_types::Literal;
 
     #[test]
     fn test_binary_clause_creation() {

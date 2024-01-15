@@ -19,9 +19,8 @@ impl SequenceGeneratorInterface for ConstantSequence {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
-
     use super::ConstantSequence;
+    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
 
     #[test]
     fn test_basic() {

@@ -1,6 +1,5 @@
-use crate::pumpkin_assert_moderate;
-
 use super::PropositionalVariable;
+use crate::pumpkin_assert_moderate;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Literal {

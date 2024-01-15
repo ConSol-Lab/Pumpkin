@@ -1,18 +1,19 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 use sat_cp_mediator::SATCPMediator;
 
-use crate::{
-    basic_types::Literal,
-    engine::{
-        clause_allocators::{ClauseAllocatorInterface, ClauseInterface},
-        constraint_satisfaction_solver::{ClausalPropagator, ConflictAnalysisResult},
-        sat_cp_mediator, CPEngineDataStructures,
-    },
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
-use super::{AssignmentsPropositional, SATEngineDataStructures};
+use super::AssignmentsPropositional;
+use super::SATEngineDataStructures;
+use crate::basic_types::Literal;
+use crate::engine::clause_allocators::ClauseAllocatorInterface;
+use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ConflictAnalysisResult;
+use crate::engine::sat_cp_mediator;
+use crate::engine::CPEngineDataStructures;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Default)]
 pub struct LearnedClauseMinimiser {

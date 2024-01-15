@@ -1,12 +1,14 @@
-use std::io::{BufRead, BufReader, Read};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
 
-use flatzinc::{convert_error, VerboseError};
+use flatzinc::convert_error;
+use flatzinc::VerboseError;
 use log::warn;
 
-use super::{
-    instance::{FlatZincInstance, FlatZincInstanceBuilder},
-    FlatZincError,
-};
+use super::instance::FlatZincInstance;
+use super::instance::FlatZincInstanceBuilder;
+use super::FlatZincError;
 
 pub fn parse(source: impl Read) -> Result<FlatZincInstance, FlatZincError> {
     let reader = BufReader::new(source);

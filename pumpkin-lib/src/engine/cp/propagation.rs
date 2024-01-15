@@ -1,17 +1,27 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::{
-    ConstraintReference, Inconsistency, Literal, Predicate, PredicateConstructor,
-    PropagationStatusCP,
-};
-use crate::engine::reason::{Reason, ReasonStore};
-use crate::engine::AssignmentsPropositional;
-use enumset::{enum_set, EnumSet};
-use std::ops::{Index, IndexMut};
+use std::ops::Index;
+use std::ops::IndexMut;
 
-use super::{
-    AssignmentsInteger, BooleanDomainEvent, EmptyDomain, IntDomainEvent, WatchListCP,
-    WatchListPropositional, Watchers, WatchersPropositional,
-};
+use enumset::enum_set;
+use enumset::EnumSet;
+
+use super::AssignmentsInteger;
+use super::BooleanDomainEvent;
+use super::EmptyDomain;
+use super::IntDomainEvent;
+use super::WatchListCP;
+use super::WatchListPropositional;
+use super::Watchers;
+use super::WatchersPropositional;
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PredicateConstructor;
+use crate::basic_types::PropagationStatusCP;
+use crate::engine::reason::Reason;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsPropositional;
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.

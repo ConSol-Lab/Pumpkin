@@ -1,12 +1,13 @@
 //reason code -> constraint reference?
 //change reason code names in assignments for instance
 
-use bitfield::{Bit, BitMut, BitRange};
-
-use crate::engine::reason::ReasonRef;
-use crate::pumpkin_assert_moderate;
+use bitfield::Bit;
+use bitfield::BitMut;
+use bitfield::BitRange;
 
 use super::ClauseReference;
+use crate::engine::reason::ReasonRef;
+use crate::pumpkin_assert_moderate;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct ConstraintReference {

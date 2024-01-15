@@ -16,4 +16,5 @@ pub use learned_clause_manager::SatOptions;
 pub use learned_clause_minimiser::LearnedClauseMinimiser;
 pub use propositional_value_selector::PropositionalValueSelector;
 pub use propositional_variable_selector::PropositionalVariableSelector;
-pub use sat_engine_data_structures::{LearnedClauseSortingStrategy, SATEngineDataStructures};
+pub use sat_engine_data_structures::LearnedClauseSortingStrategy;
+pub use sat_engine_data_structures::SATEngineDataStructures;

@@ -1,7 +1,7 @@
-use crate::basic_types::DomainId;
 use enumset::EnumSet;
 
 use super::IntDomainEvent;
+use crate::basic_types::DomainId;
 
 /// While a propagator runs, the propagations it performs are captured as events in the event sink.
 /// When the propagator finishes, the event sink is drained to notify all the propagators that

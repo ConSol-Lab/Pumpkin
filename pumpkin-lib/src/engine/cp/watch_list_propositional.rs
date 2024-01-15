@@ -1,7 +1,8 @@
-use crate::basic_types::Literal;
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
+use enumset::EnumSetType;
 
 use super::PropagatorVarId;
+use crate::basic_types::Literal;
 
 pub struct WatchListPropositional {
     watchers: Vec<WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable

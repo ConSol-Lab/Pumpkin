@@ -1,14 +1,17 @@
 use log::warn;
 
-use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
-use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP},
-    conjunction,
-    engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
-        PropagatorConstructorContext, PropagatorVariable,
-    },
-};
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::PropagationStatusCP;
+use crate::conjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
 
 /// A bounds-consistent propagator for maintaining the constraint `a * b = c`. The propagator
 /// assumes `a, b, c >= 0`.
@@ -162,9 +165,10 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use crate::{conjunction, engine::test_helper::TestSolver, predicate};
-
     use super::*;
+    use crate::conjunction;
+    use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
 
     #[test]
     fn bounds_of_a_and_b_propagate_bounds_c() {

@@ -2,7 +2,8 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::{flatzinc::FlatZincError, parsers::dimacs::DimacsParseError};
+use crate::flatzinc::FlatZincError;
+use crate::parsers::dimacs::DimacsParseError;
 
 pub type PumpkinResult<T> = Result<T, PumpkinError>;
 

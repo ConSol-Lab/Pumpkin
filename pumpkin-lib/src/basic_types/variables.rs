@@ -4,11 +4,17 @@
 
 use std::cmp::Ordering;
 
-use crate::engine::reason::ReasonRef;
-use crate::engine::{AssignmentsInteger, EmptyDomain, IntDomainEvent, OpaqueDomainEvent, Watchers};
 use enumset::EnumSet;
 
-use super::{DomainId, Predicate, PredicateConstructor};
+use super::DomainId;
+use super::Predicate;
+use super::PredicateConstructor;
+use crate::engine::reason::ReasonRef;
+use crate::engine::AssignmentsInteger;
+use crate::engine::EmptyDomain;
+use crate::engine::IntDomainEvent;
+use crate::engine::OpaqueDomainEvent;
+use crate::engine::Watchers;
 
 pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     type AffineView: IntVar;

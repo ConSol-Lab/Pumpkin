@@ -10,11 +10,14 @@ num_literals -> 4 bytes
 activity -> 4 bytes, only if learned
  */
 
-use bitfield::{Bit, BitMut, BitRange, BitRangeMut};
-
-use crate::{basic_types::Literal, pumpkin_assert_moderate};
+use bitfield::Bit;
+use bitfield::BitMut;
+use bitfield::BitRange;
+use bitfield::BitRangeMut;
 
 use super::ClauseInterface;
+use crate::basic_types::Literal;
+use crate::pumpkin_assert_moderate;
 
 #[repr(C)] //important to keep the c layout since the code below relies on this layout
 pub struct ClauseInlined {
@@ -210,10 +213,9 @@ impl std::ops::IndexMut<u32> for ClauseInlined {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        basic_types::Literal,
-        engine::clause_allocators::{ClauseInlined, ClauseInterface},
-    };
+    use crate::basic_types::Literal;
+    use crate::engine::clause_allocators::ClauseInlined;
+    use crate::engine::clause_allocators::ClauseInterface;
 
     #[test]
     fn test_clause_creation() {

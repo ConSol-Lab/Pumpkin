@@ -1,20 +1,32 @@
 #![cfg(test)]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
-use crate::basic_types::{
-    DomainId, Inconsistency, Literal, Predicate, PropagationStatusCP, PropositionalConjunction,
-    PropositionalVariable,
-};
-use crate::engine::reason::ReasonStore;
-use crate::engine::{
-    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
-    ConstraintProgrammingPropagator, EmptyDomain, EnqueueDecision, IntDomainEvent, LocalId,
-    OpaqueDomainEvent, PropagationContext, PropagationContextMut, PropagatorConstructorContext,
-    PropagatorId, WatchListCP,
-};
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use super::WatchListPropositional;
+use crate::basic_types::DomainId;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::PropositionalVariable;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::EmptyDomain;
+use crate::engine::EnqueueDecision;
+use crate::engine::IntDomainEvent;
+use crate::engine::LocalId;
+use crate::engine::OpaqueDomainEvent;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorId;
+use crate::engine::WatchListCP;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default)]

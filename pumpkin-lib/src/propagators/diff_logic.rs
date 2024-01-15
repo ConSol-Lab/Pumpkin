@@ -1,13 +1,22 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::hash::Hash;
 
 use crate::basic_types::variables::IntVar;
-use crate::basic_types::{PropagationStatusCP, PropositionalConjunction};
-use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, DomainEvents, EnqueueDecision,
-    LocalId, OpaqueDomainEvent, PropagationContext, PropagationContextMut,
-    PropagatorConstructorContext, PropagatorVariable, ReadDomains,
-};
+use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::EnqueueDecision;
+use crate::engine::LocalId;
+use crate::engine::OpaqueDomainEvent;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
 use crate::predicate;
 
 type DiffLogicVariables<V> = (
@@ -261,7 +270,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::{ConflictInfo, Inconsistency};
+    use crate::basic_types::ConflictInfo;
+    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
     use crate::engine::IntDomainEvent::UpperBound;

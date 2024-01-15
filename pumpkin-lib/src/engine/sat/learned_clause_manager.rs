@@ -1,14 +1,14 @@
-use crate::{
-    basic_types::{ClauseReference, Literal},
-    engine::{
-        clause_allocators::{ClauseAllocatorInterface, ClauseInterface},
-        constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator},
-    },
-    propagators::clausal_propagators::ClausalPropagatorInterface,
-    pumpkin_assert_moderate,
-};
-
-use super::{AssignmentsPropositional, LearnedClauseSortingStrategy, SATEngineDataStructures};
+use super::AssignmentsPropositional;
+use super::LearnedClauseSortingStrategy;
+use super::SATEngineDataStructures;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
+use crate::engine::clause_allocators::ClauseAllocatorInterface;
+use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::pumpkin_assert_moderate;
 
 pub struct SatOptions {
     pub max_clause_activity: f32,

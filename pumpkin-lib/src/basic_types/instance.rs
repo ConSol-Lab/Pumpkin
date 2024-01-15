@@ -1,8 +1,9 @@
 use std::fs;
 
+use super::FileFormat;
+use super::Literal;
+use super::Solution;
 use crate::basic_types::PropositionalVariable;
-
-use super::{FileFormat, Literal, Solution};
 
 #[derive(Default)]
 pub struct Instance {

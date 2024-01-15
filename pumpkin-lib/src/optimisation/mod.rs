@@ -1,16 +1,17 @@
 mod linear_search;
 mod optimiser;
 
+use std::time::Duration;
+
 pub use linear_search::*;
 use log::debug;
 pub use optimiser::*;
 
-use std::time::Duration;
-
-use crate::{
-    basic_types::{CSPSolverExecutionFlag, Function, Literal, Stopwatch},
-    engine::ConstraintSatisfactionSolver,
-};
+use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::Function;
+use crate::basic_types::Literal;
+use crate::basic_types::Stopwatch;
+use crate::engine::ConstraintSatisfactionSolver;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.

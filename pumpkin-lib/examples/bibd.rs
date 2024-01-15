@@ -12,10 +12,9 @@
 //! - `l(v - 1) = r(k - 1)`
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_lib::{
-    basic_types::CSPSolverExecutionFlag, constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {

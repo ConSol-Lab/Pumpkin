@@ -1,9 +1,10 @@
-use crate::{
-    basic_types::{ClauseReference, Literal},
-    pumpkin_assert_moderate, pumpkin_assert_ne_simple,
-};
-
-use super::{ClauseAllocatorInterface, ClauseInlined, ClauseInterface};
+use super::ClauseAllocatorInterface;
+use super::ClauseInlined;
+use super::ClauseInterface;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_ne_simple;
 
 //todo
 //  + dynamic size allocation - currently the maximum amount is allocated (2^30 u32s)

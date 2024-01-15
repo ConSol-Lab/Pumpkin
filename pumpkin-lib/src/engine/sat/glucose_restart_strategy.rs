@@ -1,13 +1,12 @@
-use crate::{
-    basic_types::{
-        moving_average::{CumulativeMovingAverage, MovingAverageInterface, WindowedMovingAverage},
-        sequence_generators::{
-            ConstantSequence, GeometricSequence, LubySequence, SequenceGeneratorInterface,
-            SequenceGeneratorType,
-        },
-    },
-    engine::SatisfactionSolverOptions,
-};
+use crate::basic_types::moving_average::CumulativeMovingAverage;
+use crate::basic_types::moving_average::MovingAverageInterface;
+use crate::basic_types::moving_average::WindowedMovingAverage;
+use crate::basic_types::sequence_generators::ConstantSequence;
+use crate::basic_types::sequence_generators::GeometricSequence;
+use crate::basic_types::sequence_generators::LubySequence;
+use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
+use crate::basic_types::sequence_generators::SequenceGeneratorType;
+use crate::engine::SatisfactionSolverOptions;
 
 pub struct GlucoseRestartStrategy {
     //considering making the fields generic?

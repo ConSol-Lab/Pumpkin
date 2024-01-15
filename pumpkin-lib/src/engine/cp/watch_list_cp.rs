@@ -1,7 +1,8 @@
-use crate::basic_types::DomainId;
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
+use enumset::EnumSetType;
 
 use super::PropagatorVarId;
+use crate::basic_types::DomainId;
 
 #[derive(Default)]
 pub struct WatchListCP {

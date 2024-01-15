@@ -1,4 +1,5 @@
-use crate::basic_types::{PropositionalConjunction, Trail};
+use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::Trail;
 use crate::engine::PropagationContext;
 use crate::pumpkin_assert_simple;
 
@@ -109,13 +110,11 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::DomainId,
-        conjunction,
-        engine::{AssignmentsInteger, AssignmentsPropositional},
-    };
-
     use super::*;
+    use crate::basic_types::DomainId;
+    use crate::conjunction;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {

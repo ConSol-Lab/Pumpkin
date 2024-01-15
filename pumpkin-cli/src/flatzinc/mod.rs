@@ -3,14 +3,18 @@ mod error;
 mod instance;
 mod parser;
 
-use std::{fmt::Write, fs::File, path::Path};
+use std::fmt::Write;
+use std::fs::File;
+use std::path::Path;
 
-use pumpkin_lib::{basic_types::CSPSolverExecutionFlag, engine::ConstraintSatisfactionSolver};
-
-use crate::flatzinc::instance::{OutputVariable, Variable};
-
-use self::instance::{FlatZincInstance, VariableMap};
 pub use error::*;
+use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+
+use self::instance::FlatZincInstance;
+use self::instance::VariableMap;
+use crate::flatzinc::instance::OutputVariable;
+use crate::flatzinc::instance::Variable;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";

@@ -29,9 +29,8 @@ impl SequenceGeneratorInterface for GeometricSequence {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
-
     use super::GeometricSequence;
+    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
 
     #[test]
     fn test_2_pow_n() {

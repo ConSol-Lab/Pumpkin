@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{
-    engine::{AssignmentsInteger, AssignmentsPropositional, ConstraintSatisfactionSolver},
-    pumpkin_assert_moderate,
-};
-
-use super::{DomainId, Literal, Solution, WeightedLiteral};
+use super::DomainId;
+use super::Literal;
+use super::Solution;
+use super::WeightedLiteral;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_moderate;
 
 #[derive(Clone, Default)]
 pub struct Function {

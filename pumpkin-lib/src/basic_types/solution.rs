@@ -1,9 +1,10 @@
-use crate::{
-    engine::{AssignmentsInteger, AssignmentsPropositional},
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
-use super::{DomainId, Literal, PropositionalVariable};
+use super::DomainId;
+use super::Literal;
+use super::PropositionalVariable;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 pub struct Solution {
     truth_values: Vec<bool>,

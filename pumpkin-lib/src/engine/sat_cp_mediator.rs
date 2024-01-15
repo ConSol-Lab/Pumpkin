@@ -1,18 +1,26 @@
-use crate::basic_types::{
-    ClauseReference, ConflictInfo, ConstraintReference, DomainId, Literal, Predicate,
-    PropositionalVariable,
-};
-
+use super::constraint_satisfaction_solver::ClausalPropagator;
+use super::constraint_satisfaction_solver::ClauseAllocator;
+use super::AssignmentsInteger;
+use super::AssignmentsPropositional;
+use super::CPEngineDataStructures;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::DomainId;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalVariable;
 use crate::engine::reason::ReasonRef;
-use crate::engine::{
-    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager,
-    SATEngineDataStructures, WatchListPropositional,
-};
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::EmptyDomain;
+use crate::engine::ExplanationClauseManager;
+use crate::engine::SATEngineDataStructures;
+use crate::engine::WatchListPropositional;
+use crate::predicate;
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
-use crate::{predicate, pumpkin_assert_eq_simple, pumpkin_assert_moderate, pumpkin_assert_simple};
-
-use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
-use super::{AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures};
+use crate::pumpkin_assert_eq_simple;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 pub struct SATCPMediator {
     mapping_domain_to_equality_literals: Vec<Box<[Literal]>>,
@@ -694,9 +702,8 @@ impl SATCPMediator {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::PredicateConstructor;
-
     use super::*;
+    use crate::basic_types::PredicateConstructor;
 
     #[test]
     fn negative_upper_bound() {

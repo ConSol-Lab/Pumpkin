@@ -1,11 +1,13 @@
+use super::event_sink::EventSink;
+use super::IntDomainEvent;
+use crate::basic_types::DomainId;
+use crate::basic_types::IntegerVariableGeneratorIterator;
+use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
 use crate::engine::cp::reason::ReasonRef;
-use crate::{
-    basic_types::{DomainId, IntegerVariableGeneratorIterator, Predicate},
-    predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
-use super::{event_sink::EventSink, IntDomainEvent};
+use crate::predicate;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {

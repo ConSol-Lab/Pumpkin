@@ -1,15 +1,14 @@
-use log::debug;
 use std::collections::HashMap;
 
-use crate::{
-    basic_types::{Literal, WeightedLiteral},
-    engine::ConstraintSatisfactionSolver,
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
+use log::debug;
 
-use super::pseudo_boolean_constraint_encoder::{
-    EncodingError, PseudoBooleanConstraintEncoderInterface,
-};
+use super::pseudo_boolean_constraint_encoder::EncodingError;
+use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
+use crate::basic_types::Literal;
+use crate::basic_types::WeightedLiteral;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 //encodes the constraint \sum w_i x_i <= k
 

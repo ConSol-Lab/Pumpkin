@@ -1,10 +1,8 @@
-use crate::{
-    basic_types::{ClauseReference, Literal},
-    engine::constraint_satisfaction_solver::ClauseAllocator,
-    pumpkin_assert_moderate,
-};
-
 use super::clause_allocators::ClauseAllocatorInterface;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::pumpkin_assert_moderate;
 
 #[derive(Default)]
 pub struct ExplanationClauseManager {

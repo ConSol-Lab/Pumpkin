@@ -12,20 +12,19 @@
 //! It should be noted that the parsers should not be used as DIMACS validators. Even though they
 //! should only accept valid DIMACS files, the errors are not extremely detailed. Perhaps this
 //! could change over time, however.
-use std::{
-    io::{BufRead, BufReader, Read},
-    num::NonZeroI32,
-    str::FromStr,
-};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
+use std::num::NonZeroI32;
+use std::str::FromStr;
 
-use pumpkin_lib::{
-    basic_types::{Function, Literal, PropositionalVariable},
-    engine::{
-        ConstraintSatisfactionSolver, SATEngineDataStructures, SatOptions,
-        SatisfactionSolverOptions,
-    },
-};
-
+use pumpkin_lib::basic_types::Function;
+use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::basic_types::PropositionalVariable;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::engine::SATEngineDataStructures;
+use pumpkin_lib::engine::SatOptions;
+use pumpkin_lib::engine::SatisfactionSolverOptions;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.

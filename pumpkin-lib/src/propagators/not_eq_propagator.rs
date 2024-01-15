@@ -1,12 +1,15 @@
-use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
-use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP},
-    conjunction,
-    engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
-        PropagatorConstructorContext, PropagatorVariable,
-    },
-};
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::PropagationStatusCP;
+use crate::conjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
 
 pub struct NotEqProp<VX, VY> {
     x: PropagatorVariable<VX>,
@@ -84,9 +87,10 @@ fn propagate_one_direction<VX: IntVar, VY: IntVar>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{conjunction, engine::test_helper::TestSolver, predicate};
-
     use super::*;
+    use crate::conjunction;
+    use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
 
     #[test]
     fn propagator_removes_from_x_the_fixed_value_of_y() {

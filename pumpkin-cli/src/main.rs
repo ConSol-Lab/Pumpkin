@@ -3,22 +3,33 @@ mod flatzinc;
 mod parsers;
 mod result;
 
-use clap::Parser;
-use log::{error, info, warn, LevelFilter};
-use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink, WcnfInstance};
-use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
-use pumpkin_lib::encoders::PseudoBooleanEncoding;
-use pumpkin_lib::optimisation::{LinearSearch, OptimisationResult, OptimisationSolver};
 use std::fmt::Debug;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
-use std::{io::Write, path::PathBuf};
 
+use clap::Parser;
+use log::error;
+use log::info;
+use log::warn;
+use log::LevelFilter;
+use parsers::dimacs::parse_cnf;
+use parsers::dimacs::parse_wcnf;
+use parsers::dimacs::CSPSolverArgs;
+use parsers::dimacs::SolverDimacsSink;
+use parsers::dimacs::WcnfInstance;
+use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::basic_types::*;
+use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::engine::*;
-
-use result::{PumpkinError, PumpkinResult};
+use pumpkin_lib::optimisation::LinearSearch;
+use pumpkin_lib::optimisation::OptimisationResult;
+use pumpkin_lib::optimisation::OptimisationSolver;
+use result::PumpkinError;
+use result::PumpkinResult;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use log::warn;
 
+use super::ClausalPropagatorInterface;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
@@ -14,8 +15,6 @@ use crate::engine::ExplanationClauseManager;
 use crate::engine::Preprocessor;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-
-use super::ClausalPropagatorInterface;
 
 #[derive(Default)]
 pub struct ClausalPropagatorBasic {

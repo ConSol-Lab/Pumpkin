@@ -1,11 +1,12 @@
 //! Crate to run integration tests for the solver.
 
-use std::{
-    fs::File,
-    path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
-    time::Duration,
-};
+use std::fs::File;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
+use std::time::Duration;
 
 use wait_timeout::ChildExt;
 

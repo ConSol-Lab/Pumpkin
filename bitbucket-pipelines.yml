@@ -4,6 +4,7 @@ definitions:
   caches:
     cargo: /usr/local/cargo
     rust-target: $BITBUCKET_CLONE_DIR/target
+    rustup-nightly: /usr/local/rustup/nightly-x86_64-unknown-linux-gnu
 
 pipelines:
   branches:
@@ -12,6 +13,7 @@ pipelines:
           caches:
             - cargo
             - rust-target
+            - rustup-nightly
 
           script:
             - echo "Build project"                    ; cargo build --release
@@ -27,6 +29,7 @@ pipelines:
           caches:
             - cargo
             - rust-target
+            - rustup-nightly
 
           script:
             - echo "Build project"                    ; cargo build --release

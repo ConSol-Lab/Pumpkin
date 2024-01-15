@@ -1,15 +1,21 @@
 use std::cell::OnceCell;
-use std::cmp::{max, min};
+use std::cmp::max;
+use std::cmp::min;
 use std::rc::Rc;
 
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, DomainEvents, LocalId,
-    PropagationContext, PropagationContextMut, PropagatorConstructorContext, PropagatorVariable,
-    ReadDomains,
-};
-use crate::{conjunction, predicate};
+use crate::conjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
+use crate::predicate;
 
 pub struct Element<VX, VI, VE> {
     pub array: Box<[VX]>,
@@ -239,10 +245,9 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagat
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
-
-    use super::*;
 
     #[test]
     fn cocp_m4co_example() {

@@ -1,25 +1,41 @@
+use std::fs::File;
+use std::io::Write;
+
+use log::warn;
+
 use super::clause_allocators::ClauseAllocatorBasic;
 use super::cp::CPEngineDataStructures;
 use super::sat::SATEngineDataStructures;
-use super::{
-    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
-    ConstraintProgrammingPropagator, GlucoseRestartStrategy, LearnedClauseManager,
-    LearnedClauseMinimiser, SATCPMediator, SatOptions,
-};
+use super::AssignmentsInteger;
+use super::AssignmentsPropositional;
+use super::CPPropagatorConstructor;
+use super::ConstraintProgrammingPropagator;
+use super::GlucoseRestartStrategy;
+use super::LearnedClauseManager;
+use super::LearnedClauseMinimiser;
+use super::SATCPMediator;
+use super::SatOptions;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
-use crate::basic_types::{
-    BranchingDecision, CSPSolverExecutionFlag, ConflictInfo, ConstraintOperationError, DomainId,
-    Inconsistency, Literal, PropagationStatusOneStepCP, PropositionalVariable, Stopwatch,
-};
+use crate::basic_types::BranchingDecision;
+use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::DomainId;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::PropagationStatusOneStepCP;
+use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Stopwatch;
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::{DebugHelper, PropagatorConstructorContext, PropagatorId};
-use crate::propagators::clausal_propagators::{ClausalPropagatorBasic, ClausalPropagatorInterface};
-use crate::{
-    pumpkin_assert_advanced, pumpkin_assert_extreme, pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-use log::warn;
-use std::fs::File;
-use std::io::Write;
+use crate::engine::DebugHelper;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorId;
+use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
+use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 pub type ClausalPropagator = ClausalPropagatorBasic;
 pub type ClauseAllocator = ClauseAllocatorBasic;
@@ -1540,9 +1556,9 @@ impl Default for ConstraintSatisfactionSolver {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::{CSPSolverExecutionFlag, Literal};
-
     use super::ConstraintSatisfactionSolver;
+    use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::basic_types::Literal;
 
     fn is_same_core(core1: &Vec<Literal>, core2: &Vec<Literal>) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))

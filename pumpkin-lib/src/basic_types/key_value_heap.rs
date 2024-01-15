@@ -6,7 +6,8 @@ It allows increasing/decreasing the values of its entries
 
 //the implementation could be more efficient, currently more comparisons are done than necessary when sifting, and possibly the recursion could be unrolled
 
-use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Default)]
 pub struct KeyValueHeap {

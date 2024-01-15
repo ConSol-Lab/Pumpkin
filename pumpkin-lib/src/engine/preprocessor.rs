@@ -1,6 +1,5 @@
-use crate::basic_types::Literal;
-
 use super::AssignmentsPropositional;
+use crate::basic_types::Literal;
 
 pub struct Preprocessor {}
 

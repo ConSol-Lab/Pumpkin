@@ -8,10 +8,14 @@ pub mod test_helper;
 mod watch_list_cp;
 mod watch_list_propositional;
 
-pub use assignments_integer::{AssignmentsInteger, ConstraintProgrammingTrailEntry, EmptyDomain};
+pub use assignments_integer::AssignmentsInteger;
+pub use assignments_integer::ConstraintProgrammingTrailEntry;
+pub use assignments_integer::EmptyDomain;
 pub use cp_engine_data_structures::CPEngineDataStructures;
 pub use event_sink::*;
 pub use propagation::*;
 pub use propagator_queue::PropagatorQueue;
-pub use watch_list_cp::{IntDomainEvent, WatchListCP, Watchers};
+pub use watch_list_cp::IntDomainEvent;
+pub use watch_list_cp::WatchListCP;
+pub use watch_list_cp::Watchers;
 pub use watch_list_propositional::*;

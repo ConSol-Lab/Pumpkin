@@ -1,0 +1,5 @@
+# imports are single line only to better work with line-based diffs like git
+imports_granularity = "Item"
+# imports are sorted to better work with line-based diffs like git
+group_imports = "StdExternalCrate"
+

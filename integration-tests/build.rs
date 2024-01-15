@@ -1,4 +1,7 @@
-use std::{error::Error, ffi::OsStr, path::Path, process::Command};
+use std::error::Error;
+use std::ffi::OsStr;
+use std::path::Path;
+use std::process::Command;
 
 fn main() {
     if let Err(e) = run() {

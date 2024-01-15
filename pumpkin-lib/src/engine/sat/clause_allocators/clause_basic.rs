@@ -1,8 +1,8 @@
-use crate::{
-    basic_types::Literal, pumpkin_assert_advanced, pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
 use super::ClauseInterface;
+use crate::basic_types::Literal;
+use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[allow(clippy::len_without_is_empty)] // The clause will always have at least two literals.
 pub struct ClauseBasic {

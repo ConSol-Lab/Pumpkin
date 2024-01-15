@@ -1,14 +1,12 @@
 use std::time::Instant;
 
-use crate::{
-    basic_types::Literal,
-    encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen,
-    engine::ConstraintSatisfactionSolver, pumpkin_assert_eq_simple, pumpkin_assert_simple,
-};
-
-use super::{
-    pseudo_boolean_constraint_encoder::EncodingError, PseudoBooleanConstraintEncoderInterface,
-};
+use super::pseudo_boolean_constraint_encoder::EncodingError;
+use super::PseudoBooleanConstraintEncoderInterface;
+use crate::basic_types::Literal;
+use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_eq_simple;
+use crate::pumpkin_assert_simple;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental

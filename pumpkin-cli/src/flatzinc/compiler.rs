@@ -1,17 +1,15 @@
 use log::warn;
-use pumpkin_lib::{
-    basic_types::{
-        variables::{AffineView, IntVar},
-        DomainId, Literal,
-    },
-    constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::variables::AffineView;
+use pumpkin_lib::basic_types::variables::IntVar;
+use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
-use super::{
-    instance::{FlatZincInstance, Variable, VariableMap},
-    FlatZincError,
-};
+use super::instance::FlatZincInstance;
+use super::instance::Variable;
+use super::instance::VariableMap;
+use super::FlatZincError;
 
 pub fn compile(
     instance: &FlatZincInstance,

@@ -1,14 +1,19 @@
-use crate::basic_types::{ConflictInfo, Inconsistency};
-use crate::engine::{DomainEvents, PropagationContext, PropagationContextMut, ReadDomains};
-use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP},
-    engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, LocalId,
-        PropagatorConstructorContext, PropagatorVariable,
-    },
-    predicate,
-};
 use std::rc::Rc;
+
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
+use crate::predicate;
 
 pub struct LinearNe<Var> {
     /// The terms which sum to the left-hand side.
@@ -137,9 +142,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{basic_types::Inconsistency, conjunction, engine::test_helper::TestSolver};
-
     use super::*;
+    use crate::basic_types::Inconsistency;
+    use crate::conjunction;
+    use crate::engine::test_helper::TestSolver;
 
     #[test]
     fn test_value_is_removed() {

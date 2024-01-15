@@ -1,8 +1,11 @@
 use std::cmp::Ordering;
 
-use pumpkin_lib::basic_types::{FileFormat, Instance, Solution};
+use pumpkin_lib::basic_types::FileFormat;
+use pumpkin_lib::basic_types::Instance;
+use pumpkin_lib::basic_types::Solution;
 
-use crate::result::{PumpkinError, PumpkinResult};
+use crate::result::PumpkinError;
+use crate::result::PumpkinResult;
 
 #[allow(dead_code)]
 pub fn verify_cnf_solution(file_location: &str, solution: &Solution) -> PumpkinResult<()> {

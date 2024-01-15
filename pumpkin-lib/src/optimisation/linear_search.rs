@@ -1,12 +1,15 @@
-use crate::{
-    basic_types::{CSPSolverExecutionFlag, Function, Solution, Stopwatch},
-    encoders::{PseudoBooleanConstraintEncoder, PseudoBooleanEncoding},
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
 use log::info;
 
 use super::OptimisationResult;
+use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::Function;
+use crate::basic_types::Solution;
+use crate::basic_types::Stopwatch;
+use crate::encoders::PseudoBooleanConstraintEncoder;
+use crate::encoders::PseudoBooleanEncoding;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 pub struct LinearSearch {
     upper_bound_encoding: PseudoBooleanEncoding,

@@ -1,8 +1,7 @@
 use std::collections::VecDeque;
 
-use crate::pumpkin_assert_simple;
-
 use super::MovingAverageInterface;
+use crate::pumpkin_assert_simple;
 
 pub struct WindowedMovingAverage {
     window_size: u64,

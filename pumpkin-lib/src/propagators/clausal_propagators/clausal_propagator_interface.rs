@@ -1,10 +1,10 @@
-use crate::{
-    basic_types::{ClauseReference, ConflictInfo, ConstraintOperationError, Literal},
-    engine::{
-        constraint_satisfaction_solver::ClauseAllocator, AssignmentsPropositional,
-        ExplanationClauseManager,
-    },
-};
+use crate::basic_types::ClauseReference;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::Literal;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::ExplanationClauseManager;
 
 pub trait ClausalPropagatorInterface {
     fn grow(&mut self);

@@ -7,17 +7,17 @@
 ///     encoders are expected to implement this trait
 /// PseudoBooleanConstraintEncoder acts as a wrapper around the interface structs
 use std::time::Instant;
-use thiserror::Error;
 
 use log::debug;
+use thiserror::Error;
 
-use crate::{
-    basic_types::{Function, Literal, WeightedLiteral},
-    engine::ConstraintSatisfactionSolver,
-    pumpkin_assert_simple,
-};
-
-use super::{CardinalityNetworkEncoder, GeneralisedTotaliserEncoder};
+use super::CardinalityNetworkEncoder;
+use super::GeneralisedTotaliserEncoder;
+use crate::basic_types::Function;
+use crate::basic_types::Literal;
+use crate::basic_types::WeightedLiteral;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_simple;
 
 pub trait PseudoBooleanConstraintEncoderInterface {
     /// Add clauses that encode \sum w_i x_i <= k and returns the encoder object

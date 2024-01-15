@@ -1,5 +1,6 @@
 use super::AssignmentsPropositional;
-use crate::basic_types::{KeyValueHeap, PropositionalVariable};
+use crate::basic_types::KeyValueHeap;
+use crate::basic_types::PropositionalVariable;
 
 pub struct PropositionalVariableSelector {
     heap: KeyValueHeap,

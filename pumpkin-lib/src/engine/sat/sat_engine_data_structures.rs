@@ -1,10 +1,12 @@
-use crate::{
-    basic_types::{BranchingDecision, ClauseReference, Literal},
-    engine::constraint_satisfaction_solver::ClauseAllocator,
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
-use super::{AssignmentsPropositional, PropositionalValueSelector, PropositionalVariableSelector};
+use super::AssignmentsPropositional;
+use super::PropositionalValueSelector;
+use super::PropositionalVariableSelector;
+use crate::basic_types::BranchingDecision;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Default)]
 pub struct SATEngineDataStructures {

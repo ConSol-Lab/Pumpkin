@@ -1,18 +1,20 @@
-use log::{debug, warn};
 use std::iter::once;
 
-use crate::engine::PropagationContextMut;
-use crate::{
-    basic_types::{Predicate, PropositionalConjunction},
-    propagators::clausal_propagators::ClausalPropagatorInterface,
-    pumpkin_assert_simple,
-};
+use log::debug;
+use log::warn;
 
-use super::{
-    constraint_satisfaction_solver::ClausalPropagator, cp::AssignmentsInteger,
-    AssignmentsPropositional, ConstraintProgrammingPropagator, PropagatorId, SATCPMediator,
-    SATEngineDataStructures,
-};
+use super::constraint_satisfaction_solver::ClausalPropagator;
+use super::cp::AssignmentsInteger;
+use super::AssignmentsPropositional;
+use super::ConstraintProgrammingPropagator;
+use super::PropagatorId;
+use super::SATCPMediator;
+use super::SATEngineDataStructures;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::PropagationContextMut;
+use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::pumpkin_assert_simple;
 
 pub struct DebugHelper {}
 

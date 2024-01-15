@@ -4,11 +4,13 @@
 //!
 //! The naming of the constraints follows the MiniZinc standard library where possible.
 
-use crate::{
-    basic_types::{variables::IntVar, Literal},
-    engine::{CPPropagatorConstructor, ConstraintSatisfactionSolver},
-    propagators::{IntTimes, LinearLeq, LinearNe},
-};
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::Literal;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::propagators::IntTimes;
+use crate::propagators::LinearLeq;
+use crate::propagators::LinearNe;
 
 /// Provides common constraint implementations.
 pub trait ConstraintsExt {

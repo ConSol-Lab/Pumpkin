@@ -1,12 +1,22 @@
-use crate::basic_types::{DomainId, Predicate, PropositionalConjunction};
-use crate::engine::reason::{ReasonRef, ReasonStore};
-use crate::engine::{
-    AssignmentsInteger, AssignmentsPropositional, BooleanDomainEvent,
-    ConstraintProgrammingPropagator, EnqueueDecision, IntDomainEvent, PropagationContext,
-    PropagationContextMut, PropagatorQueue, WatchListCP, WatchListPropositional,
-};
-use crate::pumpkin_assert_simple;
 use std::cmp::min;
+
+use crate::basic_types::DomainId;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::reason::ReasonRef;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::BooleanDomainEvent;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::EnqueueDecision;
+use crate::engine::IntDomainEvent;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorQueue;
+use crate::engine::WatchListCP;
+use crate::engine::WatchListPropositional;
+use crate::pumpkin_assert_simple;
 
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
