@@ -57,8 +57,14 @@ impl OptimisationSolver {
         let initial_solve_result = self.csp_solver.solve(stopwatch.get_remaining_time_budget());
 
         match initial_solve_result {
-            CSPSolverExecutionFlag::Infeasible => OptimisationResult::Infeasible,
-            CSPSolverExecutionFlag::Timeout => OptimisationResult::Unknown,
+            CSPSolverExecutionFlag::Infeasible => {
+                self.csp_solver.log_statistics();
+                OptimisationResult::Infeasible
+            }
+            CSPSolverExecutionFlag::Timeout => {
+                self.csp_solver.log_statistics();
+                OptimisationResult::Unknown
+            }
             _ => {
                 debug!(
                     "Initial solution took {} seconds",

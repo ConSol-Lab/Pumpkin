@@ -1,6 +1,8 @@
 use std::fs::File;
 use std::io::Write;
+use std::time::Instant;
 
+use log::info;
 use log::warn;
 
 use super::clause_allocators::ClauseAllocatorBasic;
@@ -15,6 +17,8 @@ use super::LearnedClauseManager;
 use super::LearnedClauseMinimiser;
 use super::SATCPMediator;
 use super::SatOptions;
+use crate::basic_types::moving_average::CumulativeMovingAverage;
+use crate::basic_types::moving_average::MovingAverageInterface;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 use crate::basic_types::BranchingDecision;
 use crate::basic_types::CSPSolverExecutionFlag;
@@ -91,7 +95,7 @@ impl ConstraintSatisfactionSolver {
             cp_propagators: vec![],
             sat_cp_mediator: SATCPMediator::default(),
             seen: vec![],
-            counters: Counters::new(),
+            counters: Counters::default(),
             internal_parameters: solver_options,
             stopwatch: Stopwatch::new(i64::MAX),
             analysis_result: ConflictAnalysisResult::default(),
@@ -137,8 +141,14 @@ impl ConstraintSatisfactionSolver {
             return CSPSolverExecutionFlag::Infeasible;
         }
 
+        let start_time = Instant::now();
+
         self.initialise(assumptions, time_limit_in_seconds);
-        self.solve_internal()
+        let result = self.solve_internal();
+
+        self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
+
+        result
     }
 
     /// Returns an unsatisfiable core.
@@ -254,6 +264,10 @@ impl ConstraintSatisfactionSolver {
 
     pub fn get_state(&self) -> &CSPSolverState {
         &self.state
+    }
+
+    pub fn log_statistics(&self) {
+        self.counters.log_statistics()
     }
 
     pub fn create_new_propositional_variable(&mut self) -> PropositionalVariable {
@@ -528,12 +542,19 @@ impl ConstraintSatisfactionSolver {
             self.counters.num_unit_clauses_learned +=
                 (self.analysis_result.learned_literals.len() == 1) as u64;
         } else {
+            self.counters
+                .average_learned_clause_length
+                .add_term(self.analysis_result.learned_literals.len() as u64);
+
             //important to get trail length before the backtrack
             let num_variables_assigned_before_conflict = &self
                 .sat_data_structures
                 .assignments_propositional
                 .num_trail_entries();
 
+            self.counters
+                .average_backtrack_amount
+                .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
             self.backtrack(self.analysis_result.backjump_level);
 
             self.learned_clause_manager.add_learned_clause(
@@ -607,8 +628,8 @@ impl ConstraintSatisfactionSolver {
 
     fn propagate_enqueued(&mut self) {
         let num_assigned_variables_old = self
-            .sat_data_structures
-            .assignments_propositional
+            .cp_data_structures
+            .assignments_integer
             .num_trail_entries();
 
         loop {
@@ -676,8 +697,8 @@ impl ConstraintSatisfactionSolver {
         self.counters.num_conflicts += self.state.conflicting() as u64;
 
         self.counters.num_propagations += self
-            .sat_data_structures
-            .assignments_propositional
+            .cp_data_structures
+            .assignments_integer
             .num_trail_entries() as u64
             - num_assigned_variables_old as u64;
 
@@ -913,11 +934,15 @@ impl ConstraintSatisfactionSolver {
                     &mut self.cp_data_structures,
                 )
             } else {
-                self.sat_cp_mediator.get_conflict_reason_clause_reference(
+                let conflict = self.sat_cp_mediator.get_conflict_reason_clause_reference(
                     self.state.get_conflict_info(),
                     &mut self.sat_data_structures,
                     &mut self.cp_data_structures,
-                )
+                );
+                self.counters
+                    .average_conflict_size
+                    .add_term(self.sat_data_structures.clause_allocator[conflict].len() as u64);
+                conflict
             };
             self.learned_clause_manager
                 .update_clause_lbd_and_bump_activity(
@@ -1377,21 +1402,54 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-struct Counters {
+#[derive(Default)]
+pub struct Counters {
     pub num_decisions: u64,
     pub num_conflicts: u64,
-    pub num_propagations: u64,
-    pub num_unit_clauses_learned: u64,
+    average_conflict_size: CumulativeMovingAverage,
+    num_propagations: u64,
+    num_unit_clauses_learned: u64,
+    average_learned_clause_length: CumulativeMovingAverage,
+    time_spent_in_solver: u64,
+    average_backtrack_amount: CumulativeMovingAverage,
 }
 
+const STATISTIC_PREFIX: &str = "x";
+
 impl Counters {
-    fn new() -> Counters {
-        Counters {
-            num_decisions: 0,
-            num_conflicts: 0,
-            num_propagations: 0,
-            num_unit_clauses_learned: 0,
-        }
+    fn log_statistics(&self) {
+        info!(
+            "{STATISTIC_PREFIX} Number of Decisions: {}",
+            self.num_decisions
+        );
+        info!(
+            "{STATISTIC_PREFIX} Number of Conflicts: {}",
+            self.num_conflicts
+        );
+        info!(
+            "{STATISTIC_PREFIX} Average Size of Conflict Explanation: {}",
+            self.average_conflict_size.value()
+        );
+        info!(
+            "{STATISTIC_PREFIX} Number of Propagations: {}",
+            self.num_propagations
+        );
+        info!(
+            "{STATISTIC_PREFIX} Number of Learned Unit Clauses: {}",
+            self.num_unit_clauses_learned
+        );
+        info!(
+            "{STATISTIC_PREFIX} Average Learned Clause Length: {}",
+            self.average_learned_clause_length.value()
+        );
+        info!(
+            "{STATISTIC_PREFIX} Time Spent in Solver in ms: {}",
+            self.time_spent_in_solver
+        );
+        info!(
+            "{STATISTIC_PREFIX} Average Backtrack Amount: {}",
+            self.average_backtrack_amount.value()
+        )
     }
 }
 

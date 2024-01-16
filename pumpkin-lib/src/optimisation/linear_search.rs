@@ -45,11 +45,11 @@ impl LinearSearch {
 
         println!("o {}", best_objective_value);
         info!(
-            "Current objective is {} after {} seconds",
+            "Current objective is {} after {} seconds ({} ms)",
             best_objective_value,
-            stopwatch.get_elapsed_time()
+            stopwatch.get_elapsed_time(),
+            stopwatch.get_elapsed_time_millis(),
         );
-
         let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
             objective_function,
             csp_solver,
@@ -57,7 +57,8 @@ impl LinearSearch {
         );
 
         loop {
-            if best_objective_value == upper_bound_encoder.get_constant_term() {
+            if best_objective_value == objective_function.get_constant_term() {
+                csp_solver.log_statistics();
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value,
@@ -74,6 +75,7 @@ impl LinearSearch {
             //in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
+                csp_solver.log_statistics();
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value,
@@ -105,18 +107,21 @@ impl LinearSearch {
 
                     println!("o {}", best_objective_value);
                     info!(
-                        "Current objective is {} after {} seconds",
+                        "Current objective is {} after {} seconds ({} ms)",
                         best_objective_value,
-                        stopwatch.get_elapsed_time()
+                        stopwatch.get_elapsed_time(),
+                        stopwatch.get_elapsed_time_millis(),
                     );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
+                    csp_solver.log_statistics();
                     return OptimisationResult::Optimal {
                         solution: best_solution,
                         objective_value: best_objective_value,
                     };
                 }
                 CSPSolverExecutionFlag::Timeout => {
+                    csp_solver.log_statistics();
                     return OptimisationResult::Satisfiable {
                         best_solution,
                         objective_value: best_objective_value,

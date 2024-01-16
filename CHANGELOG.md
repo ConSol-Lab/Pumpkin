@@ -14,6 +14,8 @@
 * Added support for propagating literals in CP propagators.
 * Implemented reified linear leq propagator.
 * Added disjunctive scheduling example through a difference logic model.
+* Extended collection of statistics to include conflict size, learned clause length and backtrack amount
+* Added logging of statistics using `info!` when using the `OptimisationSolver` 
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
 * Added explicit support for constraints as an abstraction over propagators. The 
   following constraints are provided (also implemented for the FlatZinc compiler):

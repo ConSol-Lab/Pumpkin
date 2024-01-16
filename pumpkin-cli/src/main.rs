@@ -15,6 +15,7 @@ use clap::Parser;
 use log::error;
 use log::info;
 use log::warn;
+use log::Level;
 use log::LevelFilter;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::parse_wcnf;
@@ -144,11 +145,11 @@ fn configure_logging(
     env_logger::Builder::new()
         .format(move |buf, record| {
             write!(buf, "c ")?;
-            if !omit_timestamp {
+            if record.level() != Level::Info && !omit_timestamp {
                 write!(buf, "{} ", buf.timestamp())?;
             }
             write!(buf, "{} ", record.level())?;
-            if !omit_call_site {
+            if record.level() != Level::Info && !omit_call_site {
                 write!(
                     buf,
                     "[{}:{}] ",
