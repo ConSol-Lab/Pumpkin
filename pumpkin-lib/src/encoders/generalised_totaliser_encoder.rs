@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use log::debug;
 
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
+use crate::basic_types::HashMap;
 use crate::basic_types::Literal;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -116,7 +115,7 @@ impl GeneralisedTotaliserEncoder {
 
         //these are to be used in the loop below
         //  will be reused to avoid allocating each iteration
-        let mut value_to_literal_map: HashMap<u64, Literal> = HashMap::new();
+        let mut value_to_literal_map: HashMap<u64, Literal> = HashMap::default();
         let mut partial_sums: Vec<u64> = Vec::new();
 
         //  in each iteration, the literals of the next_layer are created and appropriate clauses are added to capture the partial sums

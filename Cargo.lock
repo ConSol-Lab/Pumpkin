@@ -375,6 +375,7 @@ dependencies = [
  "bitfield",
  "enumset",
  "env_logger",
+ "fnv",
  "log",
  "slice-dst",
  "thiserror",

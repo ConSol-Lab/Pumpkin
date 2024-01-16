@@ -17,6 +17,7 @@
 * Extended collection of statistics to include conflict size, learned clause length and backtrack amount
 * Added logging of statistics using `info!` when using the `OptimisationSolver` 
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
+* Added a deterministic hashing function for reproducibility + added pre-commit hook to detect hash-based structure usage from std
 * Added explicit support for constraints as an abstraction over propagators. The 
   following constraints are provided (also implemented for the FlatZinc compiler):
   * int_lin_ne

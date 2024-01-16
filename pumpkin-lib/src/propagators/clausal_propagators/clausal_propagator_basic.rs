@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use log::warn;
 
 use super::ClausalPropagatorInterface;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::HashMap;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
@@ -327,7 +326,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         //  note that not every clause in the clause manager necessarily appears in the watch list
 
         //  first compute the histogram for each clause present
-        let mut clause_ids: HashMap<ClauseReference, usize> = HashMap::new();
+        let mut clause_ids: HashMap<ClauseReference, usize> = HashMap::default();
 
         //counting the number of binary clause watchers is a proxy
         //  in case the number is uneven we have a problem

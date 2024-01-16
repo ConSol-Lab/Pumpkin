@@ -1,9 +1,9 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use super::PropagatorId;
+use crate::basic_types::HashSet;
 use crate::pumpkin_assert_moderate;
 
 pub struct PropagatorQueue {
@@ -16,7 +16,7 @@ impl PropagatorQueue {
     pub fn new(num_priority_levels: u32) -> PropagatorQueue {
         PropagatorQueue {
             queues: vec![VecDeque::new(); num_priority_levels as usize],
-            present_propagators: HashSet::new(),
+            present_propagators: HashSet::default(),
             present_priorities: BinaryHeap::new(),
         }
     }

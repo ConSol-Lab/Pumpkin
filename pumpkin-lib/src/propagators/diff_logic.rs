@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::hash::Hash;
 
 use crate::basic_types::variables::IntVar;
+use crate::basic_types::HashMap;
+use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::CPPropagatorConstructor;

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use super::DomainId;
+use super::HashMap;
 use super::Literal;
 use super::Solution;
 use super::WeightedLiteral;

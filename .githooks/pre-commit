@@ -2,5 +2,6 @@
 
 set -eux
 
+./scripts/hash.sh
 ./scripts/fmt.sh
 ./scripts/clippy.sh

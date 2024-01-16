@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
-
 use sat_cp_mediator::SATCPMediator;
 
 use super::AssignmentsPropositional;
 use super::SATEngineDataStructures;
+use crate::basic_types::HashMap;
+use crate::basic_types::HashSet;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;

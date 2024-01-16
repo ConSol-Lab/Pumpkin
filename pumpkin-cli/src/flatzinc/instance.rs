@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ops::Deref;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::basic_types::HashMap;
+use pumpkin_lib::basic_types::HashSet;
 use pumpkin_lib::basic_types::Literal;
 
 #[derive(Default)]
