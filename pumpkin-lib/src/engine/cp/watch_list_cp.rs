@@ -7,6 +7,7 @@ use crate::basic_types::DomainId;
 #[derive(Default)]
 pub struct WatchListCP {
     watchers: Vec<WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    is_watching_anything: bool,
 }
 
 pub struct Watchers<'a> {
@@ -33,6 +34,10 @@ pub enum IntDomainEvent {
 impl WatchListCP {
     pub fn grow(&mut self) {
         self.watchers.push(WatcherCP::default());
+    }
+
+    pub fn is_watching_anything(&self) -> bool {
+        self.is_watching_anything
     }
 
     pub fn num_domains(&self) -> u32 {
@@ -79,6 +84,7 @@ impl<'a> Watchers<'a> {
     }
 
     pub fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
+        self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {

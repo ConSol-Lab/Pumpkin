@@ -6,12 +6,14 @@ use crate::basic_types::Literal;
 
 pub struct WatchListPropositional {
     watchers: Vec<WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    is_watching_anything: bool,
 }
 
 impl Default for WatchListPropositional {
     fn default() -> Self {
         Self {
             watchers: vec![WatcherPropositional::default()],
+            is_watching_anything: false,
         }
     }
 }
@@ -48,6 +50,10 @@ impl WatchListPropositional {
         self.watchers.len() as u32
     }
 
+    pub fn is_watching_anything(&self) -> bool {
+        self.is_watching_anything
+    }
+
     pub fn get_affected_propagators(
         &self,
         event: BooleanDomainEvent,
@@ -74,6 +80,7 @@ impl<'a> WatchersPropositional<'a> {
     }
 
     pub fn watch_all(&mut self, domain: Literal, events: EnumSet<BooleanDomainEvent>) {
+        self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {

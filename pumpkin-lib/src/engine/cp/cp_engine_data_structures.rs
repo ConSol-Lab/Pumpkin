@@ -100,41 +100,19 @@ impl CPEngineDataStructures {
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
         assignments_propositional: &mut AssignmentsPropositional,
     ) -> bool {
-        self.event_drain
-            .extend(self.assignments_integer.drain_domain_events());
+        // If there are no variables being watched then there is no reason to perform these operations
+        if self.watch_list_cp.is_watching_anything() {
+            self.event_drain
+                .extend(self.assignments_integer.drain_domain_events());
 
-        if self.event_drain.is_empty()
-            && self.propositional_trail_index == assignments_propositional.num_trail_entries()
-        {
-            return false;
-        }
-
-        for (event, domain) in self.event_drain.drain(..) {
-            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
-                let mut context = PropagationContextMut::new(
-                    &mut self.assignments_integer,
-                    &mut self.reason_store,
-                    assignments_propositional,
-                );
-
-                let enqueue_decision =
-                    propagator.notify(&mut context, propagator_var.variable, event.into());
-
-                if enqueue_decision == EnqueueDecision::Enqueue {
-                    self.propagator_queue
-                        .enqueue_propagator(propagator_var.propagator, propagator.priority());
-                }
+            if self.event_drain.is_empty()
+                && self.propositional_trail_index == assignments_propositional.num_trail_entries()
+            {
+                return false;
             }
-        }
 
-        for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
-            let literal = assignments_propositional.get_trail_entry(i);
-            for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
-                for propagator_var in self
-                    .watch_list_propositional
-                    .get_affected_propagators(event, affected_literal)
-                {
+            for (event, domain) in self.event_drain.drain(..) {
+                for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
                     let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
                     let mut context = PropagationContextMut::new(
                         &mut self.assignments_integer,
@@ -143,7 +121,7 @@ impl CPEngineDataStructures {
                     );
 
                     let enqueue_decision =
-                        propagator.notify_literal(&mut context, propagator_var.variable, event);
+                        propagator.notify(&mut context, propagator_var.variable, event.into());
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         self.propagator_queue
@@ -152,7 +130,37 @@ impl CPEngineDataStructures {
                 }
             }
         }
-        self.propositional_trail_index = assignments_propositional.num_trail_entries();
+
+        // If there are no literals being watched then there is no reason to perform these operations
+        if self.watch_list_propositional.is_watching_anything() {
+            for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
+                let literal = assignments_propositional.get_trail_entry(i);
+                for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
+                    for propagator_var in self
+                        .watch_list_propositional
+                        .get_affected_propagators(event, affected_literal)
+                    {
+                        let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
+                        let mut context = PropagationContextMut::new(
+                            &mut self.assignments_integer,
+                            &mut self.reason_store,
+                            assignments_propositional,
+                        );
+
+                        let enqueue_decision =
+                            propagator.notify_literal(&mut context, propagator_var.variable, event);
+
+                        if enqueue_decision == EnqueueDecision::Enqueue {
+                            self.propagator_queue.enqueue_propagator(
+                                propagator_var.propagator,
+                                propagator.priority(),
+                            );
+                        }
+                    }
+                }
+            }
+            self.propositional_trail_index = assignments_propositional.num_trail_entries();
+        }
 
         true
     }
