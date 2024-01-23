@@ -44,3 +44,4 @@
 state to indicate the bounds were in the domain.
 * The OptimisationSolver did not have the correct exit conditions nor was it bounding the literals correctly when creating the encoder if literals were assigned at the root level
 * The creation of `AssignmentsInteger` for debug purposes did not properly create the `EventSink` leading to out-of-bounds errors + one of the debug checks failed when a predicate which was always true/false was added
+* Set C++ -std language version to make sure integration test tools build properly on MacOS

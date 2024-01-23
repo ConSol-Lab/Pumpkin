@@ -34,6 +34,7 @@ fn compile_c_binary<Source: AsRef<Path>>(
         .any(|source| source.as_ref().extension() == Some(OsStr::new("cc")))
     {
         build.cpp(true);
+        build.std("c++17");
     }
 
     let compiler = build.try_get_compiler()?;
