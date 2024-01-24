@@ -1,164 +1,108 @@
-use std::collections::BTreeMap;
-use std::ops::Deref;
-use std::ops::RangeInclusive;
+use std::fmt::Display;
+use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::basic_types::HashMap;
-use pumpkin_lib::basic_types::HashSet;
 use pumpkin_lib::basic_types::Literal;
 
 #[derive(Default)]
 pub struct FlatZincInstance {
-    integer_array_parameters: HashMap<Rc<str>, Box<[i32]>>,
-    integer_parameters: HashMap<Rc<str>, i32>,
-
-    integer_variables: HashMap<Rc<str>, RangeInclusive<i32>>,
-    array_of_integer_variables: HashMap<Rc<str>, Box<[Rc<str>]>>,
-
-    bool_variables: HashSet<Rc<str>>,
-
-    output_variables: Vec<OutputVariable>,
-
-    constraints: Vec<flatzinc::ConstraintItem>,
-}
-
-#[derive(Clone)]
-pub enum OutputVariable {
-    Variable(Rc<str>),
-    VariableArray(Rc<str>),
+    pub(super) outputs: Vec<Output>,
 }
 
 impl FlatZincInstance {
-    pub fn builder() -> FlatZincInstanceBuilder {
-        FlatZincInstanceBuilder {
-            instance: Default::default(),
+    pub fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
+        self.outputs.iter()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Output {
+    Bool(VariableOutput<Literal>),
+    Int(VariableOutput<DomainId>),
+    ArrayOfBool(ArrayOutput<Literal>),
+    ArrayOfInt(ArrayOutput<DomainId>),
+}
+
+impl Output {
+    pub fn bool(id: Rc<str>, literal: Literal) -> Output {
+        Output::Bool(VariableOutput {
+            id,
+            variable: literal,
+        })
+    }
+
+    pub fn array_of_bool(id: Rc<str>, shape: Box<[(i32, i32)]>, contents: Rc<[Literal]>) -> Output {
+        Output::ArrayOfBool(ArrayOutput {
+            id,
+            shape,
+            contents,
+        })
+    }
+
+    pub fn int(id: Rc<str>, domain_id: DomainId) -> Output {
+        Output::Int(VariableOutput {
+            id,
+            variable: domain_id,
+        })
+    }
+
+    pub fn array_of_int(id: Rc<str>, shape: Box<[(i32, i32)]>, contents: Rc<[DomainId]>) -> Output {
+        Output::ArrayOfInt(ArrayOutput {
+            id,
+            shape,
+            contents,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VariableOutput<T> {
+    id: Rc<str>,
+    variable: T,
+}
+
+impl<T> VariableOutput<T> {
+    pub fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
+        println!("{} = {};", self.id, value(&self.variable));
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArrayOutput<T> {
+    id: Rc<str>,
+    /// The shape of the array is a sequence of index sets. The number of elements in this sequence
+    /// corresponds to the dimensionality of the array, and the element in the sequence at index i denotes
+    /// the index set used in dimension i.
+    /// Example: [(1, 5), (2, 4)] describes a 2d array, where the first dimension in indexed with
+    /// an element of 1..5, and the second dimension is indexed with an element from 2..4.
+    shape: Box<[(i32, i32)]>,
+    contents: Rc<[T]>,
+}
+
+impl<T> ArrayOutput<T> {
+    pub fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
+        let mut array_buf = String::new();
+
+        for element in self.contents.iter() {
+            let value = value(element);
+            write!(array_buf, "{value}, ").unwrap();
         }
-    }
 
-    pub fn iter_integer_variables(
-        &self,
-    ) -> impl Iterator<Item = (Rc<str>, RangeInclusive<i32>)> + '_ {
-        self.integer_variables
-            .iter()
-            .map(|(id, bounds)| (Rc::clone(id), bounds.clone()))
-    }
-
-    pub fn iter_bool_variables(&self) -> impl Iterator<Item = Rc<str>> + '_ {
-        self.bool_variables.iter().cloned()
-    }
-
-    pub fn iter_constraints(&self) -> impl Iterator<Item = &flatzinc::ConstraintItem> + '_ {
-        self.constraints.iter()
-    }
-
-    pub fn resolve_array_integer_constants(&self, id: &str) -> Option<Box<[i32]>> {
-        self.integer_array_parameters.get(id).cloned()
-    }
-
-    pub fn resolve_integer_constant(&self, id: &str) -> Option<i32> {
-        self.integer_parameters.get(id).copied()
-    }
-
-    pub fn resolve_variable_array(&self, id: &str) -> Option<&[Rc<str>]> {
-        self.array_of_integer_variables
-            .get(id)
-            .map(|array| array.deref())
-    }
-
-    pub fn iter_output_variables(&self) -> impl Iterator<Item = OutputVariable> + '_ {
-        self.output_variables.iter().cloned()
-    }
-}
-
-pub struct FlatZincInstanceBuilder {
-    instance: FlatZincInstance,
-}
-
-impl FlatZincInstanceBuilder {
-    pub fn add_integer_array_parameter(&mut self, id: Rc<str>, values: Box<[i32]>) {
-        self.instance.integer_array_parameters.insert(id, values);
-    }
-
-    pub fn add_integer_variable(
-        &mut self,
-        id: Rc<str>,
-        lb: i32,
-        ub: i32,
-        is_output_variable: bool,
-    ) {
-        self.instance
-            .integer_variables
-            .insert(Rc::clone(&id), lb..=ub);
-
-        if is_output_variable {
-            self.instance
-                .output_variables
-                .push(OutputVariable::Variable(id));
+        let mut shape_buf = String::new();
+        for (min, max) in self.shape.iter() {
+            write!(shape_buf, "{min}..{max}, ").unwrap();
         }
-    }
 
-    pub fn add_bool_variable(&mut self, id: Rc<str>, is_output_variable: bool) {
-        self.instance.bool_variables.insert(Rc::clone(&id));
-
-        if is_output_variable {
-            self.instance
-                .output_variables
-                .push(OutputVariable::Variable(id));
+        if !array_buf.is_empty() {
+            // Remove trailing comma and space.
+            array_buf.truncate(array_buf.len() - 2);
         }
-    }
 
-    pub fn build(self) -> FlatZincInstance {
-        self.instance
-    }
-
-    pub fn add_integer_variable_array(
-        &mut self,
-        id: Rc<str>,
-        array: Box<[Rc<str>]>,
-        is_output_variable: bool,
-    ) {
-        self.instance
-            .array_of_integer_variables
-            .insert(Rc::clone(&id), array);
-
-        if is_output_variable {
-            self.instance
-                .output_variables
-                .push(OutputVariable::VariableArray(id));
-        }
-    }
-
-    pub fn add_constraint_item(&mut self, constraint_decl: flatzinc::ConstraintItem) {
-        self.instance.constraints.push(constraint_decl);
-    }
-}
-
-#[derive(Default)]
-pub struct VariableMap {
-    integer_variables: BTreeMap<Rc<str>, DomainId>,
-    bool_variables: BTreeMap<Rc<str>, Literal>,
-}
-
-pub enum Variable {
-    Integer(DomainId),
-    Bool(Literal),
-}
-
-impl VariableMap {
-    pub fn register_integer_variable(&mut self, id: Rc<str>, domain: DomainId) {
-        self.integer_variables.insert(id, domain);
-    }
-
-    pub fn register_bool_variable(&mut self, id: Rc<str>, literal: Literal) {
-        self.bool_variables.insert(id, literal);
-    }
-
-    pub fn resolve(&self, id: &str) -> Option<Variable> {
-        self.integer_variables
-            .get(id)
-            .copied()
-            .map(Variable::Integer)
-            .or_else(|| self.bool_variables.get(id).copied().map(Variable::Bool))
+        let num_dimensions = self.shape.len();
+        println!(
+            "{} = array{num_dimensions}d({shape_buf}[{array_buf}]);",
+            self.id
+        );
     }
 }
