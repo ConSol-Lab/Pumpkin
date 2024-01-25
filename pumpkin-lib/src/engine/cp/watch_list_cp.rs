@@ -3,10 +3,11 @@ use enumset::EnumSetType;
 
 use super::PropagatorVarId;
 use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
 
 #[derive(Default)]
 pub struct WatchListCP {
-    watchers: Vec<WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<DomainId, WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
     is_watching_anything: bool,
 }
 

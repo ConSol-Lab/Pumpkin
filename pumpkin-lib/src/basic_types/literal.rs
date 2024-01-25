@@ -1,4 +1,5 @@
 use super::PropositionalVariable;
+use super::StorageKey;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -9,7 +10,7 @@ pub struct Literal {
 impl Literal {
     pub fn new(propositional_variable: PropositionalVariable, is_positive: bool) -> Literal {
         Literal {
-            code: propositional_variable.index() * 2 + (is_positive as u32),
+            code: propositional_variable.index() as u32 * 2 + (is_positive as u32),
         }
     }
 
@@ -54,15 +55,8 @@ impl std::fmt::Display for Literal {
     }
 }
 
-impl<T> std::ops::Index<Literal> for Vec<T> {
-    type Output = T;
-    fn index(&self, index_literal: Literal) -> &T {
-        self.index(index_literal.to_u32() as usize)
-    }
-}
-
-impl<T> std::ops::IndexMut<Literal> for Vec<T> {
-    fn index_mut(&mut self, index_literal: Literal) -> &mut T {
-        self.index_mut(index_literal.to_u32() as usize)
+impl StorageKey for Literal {
+    fn index(&self) -> usize {
+        self.to_u32() as usize
     }
 }

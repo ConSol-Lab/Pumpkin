@@ -1,8 +1,9 @@
+use crate::basic_types::KeyedVec;
 use crate::basic_types::PropositionalVariable;
 
 #[derive(Default)]
 pub struct PropositionalValueSelector {
-    truth_values: Vec<CandidateTruthAssignment>,
+    truth_values: KeyedVec<PropositionalVariable, CandidateTruthAssignment>,
 }
 
 struct CandidateTruthAssignment {

@@ -1,4 +1,5 @@
 use super::DomainId;
+use super::KeyedVec;
 use super::Literal;
 use super::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
@@ -7,8 +8,8 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 pub struct Solution {
-    truth_values: Vec<bool>,
-    integer_values: Vec<i32>,
+    truth_values: KeyedVec<PropositionalVariable, bool>,
+    integer_values: KeyedVec<DomainId, i32>,
 }
 
 impl Solution {
@@ -16,10 +17,13 @@ impl Solution {
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) -> Solution {
-        let mut truth_values =
-            vec![true; assignments_propositional.num_propositional_variables() as usize];
+        let mut truth_values = KeyedVec::new(vec![
+            true;
+            assignments_propositional.num_propositional_variables()
+                as usize
+        ]);
 
-        let mut integer_values = vec![0; assignments_integer.num_domains() as usize];
+        let mut integer_values = KeyedVec::new(vec![0; assignments_integer.num_domains() as usize]);
 
         Solution::update_propositional_values(&mut truth_values, assignments_propositional);
 
@@ -83,7 +87,7 @@ impl Solution {
     }
 
     fn update_propositional_values(
-        truth_values: &mut [bool],
+        truth_values: &mut KeyedVec<PropositionalVariable, bool>,
         assignments_propositional: &AssignmentsPropositional,
     ) {
         for propositional_variable in assignments_propositional.get_propositional_variables() {
@@ -91,18 +95,21 @@ impl Solution {
                 assignments_propositional.is_variable_assigned(propositional_variable),
                 "The solution struct expects that all propositional variables are assigned."
             );
-            truth_values[propositional_variable.index() as usize] =
+            truth_values[propositional_variable] =
                 assignments_propositional.is_variable_assigned_true(propositional_variable);
         }
     }
 
-    fn update_integer_values(integer_values: &mut [i32], assignments_integer: &AssignmentsInteger) {
+    fn update_integer_values(
+        integer_values: &mut KeyedVec<DomainId, i32>,
+        assignments_integer: &AssignmentsInteger,
+    ) {
         for domain in assignments_integer.get_domains() {
             pumpkin_assert_simple!(
                 assignments_integer.is_domain_assigned(domain),
                 "The solution struct expects that all integer variables are assigned."
             );
-            integer_values[domain.id as usize] = assignments_integer.get_assigned_value(domain);
+            integer_values[domain] = assignments_integer.get_assigned_value(domain);
         }
     }
 }
@@ -116,7 +123,8 @@ impl std::ops::Index<DomainId> for Solution {
 
 impl std::ops::Index<PropositionalVariable> for Solution {
     type Output = bool;
-    fn index(&self, propositional_variable: PropositionalVariable) -> &bool {
-        &self.truth_values[propositional_variable]
+
+    fn index(&self, index: PropositionalVariable) -> &Self::Output {
+        &self.truth_values[index]
     }
 }

@@ -2,6 +2,7 @@ use enumset::EnumSet;
 
 use super::IntDomainEvent;
 use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
 
 /// While a propagator runs, the propagations it performs are captured as events in the event sink.
 /// When the propagator finishes, the event sink is drained to notify all the propagators that
@@ -12,7 +13,7 @@ use crate::basic_types::DomainId;
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone)]
 pub struct EventSink {
-    present: Vec<EnumSet<IntDomainEvent>>,
+    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
     events: Vec<(IntDomainEvent, DomainId)>,
 }
 

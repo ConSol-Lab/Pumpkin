@@ -1,5 +1,6 @@
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::PropositionalVariableGeneratorIterator;
@@ -11,7 +12,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone)]
 pub struct AssignmentsPropositional {
-    assignment_info: Vec<PropositionalAssignmentInfo>,
+    assignment_info: KeyedVec<PropositionalVariable, PropositionalAssignmentInfo>,
     trail: Trail<Literal>,
     pub true_literal: Literal,
     pub false_literal: Literal,
@@ -249,7 +250,7 @@ impl AssignmentsPropositional {
 
     pub fn debug_create_empty_clone(&self) -> Self {
         AssignmentsPropositional {
-            assignment_info: vec![Default::default(); self.assignment_info.len()],
+            assignment_info: KeyedVec::new(vec![Default::default(); self.assignment_info.len()]),
             trail: Default::default(),
             true_literal: self.true_literal,
             false_literal: self.false_literal,

@@ -2,17 +2,18 @@ use enumset::EnumSet;
 use enumset::EnumSetType;
 
 use super::PropagatorVarId;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 
 pub struct WatchListPropositional {
-    watchers: Vec<WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<Literal, WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
     is_watching_anything: bool,
 }
 
 impl Default for WatchListPropositional {
     fn default() -> Self {
         Self {
-            watchers: vec![WatcherPropositional::default()],
+            watchers: KeyedVec::new(vec![WatcherPropositional::default()]),
             is_watching_anything: false,
         }
     }

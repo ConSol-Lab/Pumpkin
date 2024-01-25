@@ -5,6 +5,7 @@ use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashMap;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
@@ -17,7 +18,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Default)]
 pub struct ClausalPropagatorBasic {
-    pub watch_lists: Vec<Vec<ClauseWatcher>>,
+    pub watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
     pub next_position_on_trail_to_propagate: usize,
     pub permanent_clauses: Vec<ClauseReference>,
     is_in_infeasible_state: bool,

@@ -1,3 +1,5 @@
+use super::StorageKey;
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct PropositionalVariable {
     index: u32,
@@ -7,10 +9,6 @@ impl PropositionalVariable {
     pub fn new(index: u32) -> PropositionalVariable {
         PropositionalVariable { index }
     }
-
-    pub fn index(&self) -> u32 {
-        self.index
-    }
 }
 
 impl std::fmt::Display for PropositionalVariable {
@@ -19,16 +17,9 @@ impl std::fmt::Display for PropositionalVariable {
     }
 }
 
-impl<T> std::ops::Index<PropositionalVariable> for Vec<T> {
-    type Output = T;
-    fn index(&self, variable: PropositionalVariable) -> &T {
-        self.index(variable.index() as usize)
-    }
-}
-
-impl<T> std::ops::IndexMut<PropositionalVariable> for Vec<T> {
-    fn index_mut(&mut self, variable: PropositionalVariable) -> &mut T {
-        self.index_mut(variable.index() as usize)
+impl StorageKey for PropositionalVariable {
+    fn index(&self) -> usize {
+        self.index as usize
     }
 }
 

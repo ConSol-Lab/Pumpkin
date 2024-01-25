@@ -1,6 +1,7 @@
 use super::AssignmentsPropositional;
 use crate::basic_types::KeyValueHeap;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::StorageKey;
 
 pub struct PropositionalVariableSelector {
     heap: KeyValueHeap,
@@ -28,17 +29,17 @@ impl PropositionalVariableSelector {
 
     pub fn bump_activity(&mut self, variable: PropositionalVariable) {
         //scale the activities if the values are too large
-        let activity = self.heap.get_value(variable.index());
+        let activity = self.heap.get_value(variable.index() as u32);
         if activity + self.increment >= self.max_threshold {
             self.heap.divide_values(self.max_threshold);
             self.increment /= self.max_threshold;
         }
         //now perform the standard bumping
-        self.heap.increment(variable.index(), self.increment);
+        self.heap.increment(variable.index() as u32, self.increment);
     }
 
     pub fn restore(&mut self, variable: PropositionalVariable) {
-        self.heap.restore_key(variable.index());
+        self.heap.restore_key(variable.index() as u32);
     }
 
     pub fn decay_activities(&mut self) {

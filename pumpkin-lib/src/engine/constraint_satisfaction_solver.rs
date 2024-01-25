@@ -26,10 +26,12 @@ use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::DomainId;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Stopwatch;
+use crate::basic_types::StorageKey;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::DebugHelper;
 use crate::engine::PropagatorConstructorContext;
@@ -54,7 +56,7 @@ pub struct ConstraintSatisfactionSolver {
     restart_strategy: GlucoseRestartStrategy,
     cp_propagators: Vec<Box<dyn ConstraintProgrammingPropagator>>,
     sat_cp_mediator: SATCPMediator,
-    seen: Vec<bool>,
+    seen: KeyedVec<PropositionalVariable, bool>,
     counters: Counters,
     internal_parameters: SatisfactionSolverOptions,
     stopwatch: Stopwatch,
@@ -94,7 +96,7 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: GlucoseRestartStrategy::new(&solver_options),
             cp_propagators: vec![],
             sat_cp_mediator: SATCPMediator::default(),
-            seen: vec![],
+            seen: KeyedVec::default(),
             counters: Counters::default(),
             internal_parameters: solver_options,
             stopwatch: Stopwatch::new(i64::MAX),

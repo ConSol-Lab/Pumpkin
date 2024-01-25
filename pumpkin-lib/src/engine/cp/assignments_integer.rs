@@ -2,6 +2,7 @@ use super::event_sink::EventSink;
 use super::IntDomainEvent;
 use crate::basic_types::DomainId;
 use crate::basic_types::IntegerVariableGeneratorIterator;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
 use crate::engine::cp::reason::ReasonRef;
@@ -12,7 +13,7 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Default)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
-    domains: Vec<IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
+    domains: KeyedVec<DomainId, IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
 
     events: EventSink,
 }

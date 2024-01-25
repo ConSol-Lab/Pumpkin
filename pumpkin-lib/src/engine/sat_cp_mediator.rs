@@ -7,6 +7,7 @@ use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalVariable;
@@ -23,9 +24,9 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 pub struct SATCPMediator {
-    mapping_domain_to_equality_literals: Vec<Box<[Literal]>>,
-    mapping_domain_to_lower_bound_literals: Vec<Box<[Literal]>>,
-    mapping_literal_to_predicates: Vec<Vec<Predicate>>,
+    mapping_domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    mapping_domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    mapping_literal_to_predicates: KeyedVec<Literal, Vec<Predicate>>,
     cp_trail_synced_position: usize, // assignments_integer.trail[cp_trail_synced_position] is the next entry that needs to be synchronised with the propositional assignment trail
     sat_trail_synced_position: usize, // this is the sat equivalent of the above, i.e., assignments_propositional.trail[sat_trail_synced_position] is the next literal on the trail that needs to be synchronised with the integer trail
     pub explanation_clause_manager: ExplanationClauseManager,
@@ -41,9 +42,9 @@ impl Default for SATCPMediator {
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
 
         SATCPMediator {
-            mapping_literal_to_predicates: vec![], //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
-            mapping_domain_to_equality_literals: vec![],
-            mapping_domain_to_lower_bound_literals: vec![],
+            mapping_literal_to_predicates: KeyedVec::default(), //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
+            mapping_domain_to_equality_literals: KeyedVec::default(),
+            mapping_domain_to_lower_bound_literals: KeyedVec::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
             explanation_clause_manager: ExplanationClauseManager::default(),
@@ -444,22 +445,22 @@ impl SATCPMediator {
         );
 
         //create a closure for convenience that adds predicates to literals
-        let closure_add_predicate_to_literal = |literal: Literal,
-                                                predicate: Predicate,
-                                                mapping_literal_to_predicates: &mut Vec<
-            Vec<Predicate>,
-        >| {
-            pumpkin_assert_simple!(
-                !mapping_literal_to_predicates[literal].contains(&predicate),
-                "The predicate is already attached to the literal, cannot do this twice."
-            );
-            //resize the mapping vector if necessary
-            if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
-                mapping_literal_to_predicates.resize((literal.to_u32() + 1) as usize, Vec::new());
-            }
-            //append the predicate - note that the assert makes sure the same predicate is never added twice
-            mapping_literal_to_predicates[literal].push(predicate);
-        };
+        let closure_add_predicate_to_literal =
+            |literal: Literal,
+             predicate: Predicate,
+             mapping_literal_to_predicates: &mut KeyedVec<Literal, Vec<Predicate>>| {
+                pumpkin_assert_simple!(
+                    !mapping_literal_to_predicates[literal].contains(&predicate),
+                    "The predicate is already attached to the literal, cannot do this twice."
+                );
+                //resize the mapping vector if necessary
+                if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
+                    mapping_literal_to_predicates
+                        .resize((literal.to_u32() + 1) as usize, Vec::new());
+                }
+                //append the predicate - note that the assert makes sure the same predicate is never added twice
+                mapping_literal_to_predicates[literal].push(predicate);
+            };
 
         //now use the closure to add the predicate to both the positive and negative literals
 

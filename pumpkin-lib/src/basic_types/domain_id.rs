@@ -1,3 +1,5 @@
+use super::StorageKey;
+
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct DomainId {
     pub id: u32,
@@ -9,16 +11,9 @@ impl DomainId {
     }
 }
 
-impl<T> std::ops::Index<DomainId> for Vec<T> {
-    type Output = T;
-    fn index(&self, index_variable: DomainId) -> &T {
-        self.index(index_variable.id as usize)
-    }
-}
-
-impl<T> std::ops::IndexMut<DomainId> for Vec<T> {
-    fn index_mut(&mut self, index_variable: DomainId) -> &mut T {
-        self.index_mut(index_variable.id as usize)
+impl StorageKey for DomainId {
+    fn index(&self) -> usize {
+        self.id as usize
     }
 }
 
