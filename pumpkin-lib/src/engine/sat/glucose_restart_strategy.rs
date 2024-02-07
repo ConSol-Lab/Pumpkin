@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use crate::basic_types::moving_average::CumulativeMovingAverage;
 use crate::basic_types::moving_average::MovingAverageInterface;
 use crate::basic_types::moving_average::WindowedMovingAverage;
@@ -6,6 +9,7 @@ use crate::basic_types::sequence_generators::GeometricSequence;
 use crate::basic_types::sequence_generators::LubySequence;
 use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
+use crate::engine::debug_helper::DebugDyn;
 use crate::engine::SatisfactionSolverOptions;
 
 pub struct GlucoseRestartStrategy {
@@ -20,6 +24,41 @@ pub struct GlucoseRestartStrategy {
     num_assigned_variables_moving_average: Box<dyn MovingAverageInterface>,
     num_restarts: i64,
     num_blocked_restarts: i64,
+}
+
+impl Debug for GlucoseRestartStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GlucoseRestartStrategy")
+            .field(
+                "restart_sequence_generator",
+                &DebugDyn::from("SequenceGeneratorInterface"),
+            )
+            .field(
+                "num_conflicts_until_restart",
+                &self.num_conflicts_until_restart,
+            )
+            .field(
+                "min_num_conflicts_before_first_restart",
+                &self.min_num_conflicts_before_first_restart,
+            )
+            .field(
+                "lbd_short_term_moving_average",
+                &DebugDyn::from("MovingAverageInterface"),
+            )
+            .field("lbd_coef", &self.lbd_coef)
+            .field(
+                "lbd_long_term_moving_average",
+                &DebugDyn::from("MovingAverageInterface"),
+            )
+            .field("num_variables_coef", &self.num_variables_coef)
+            .field(
+                "num_assigned_variables_moving_average",
+                &DebugDyn::from("MovingAverageInterface"),
+            )
+            .field("num_restarts", &self.num_restarts)
+            .field("num_blocked_restarts", &self.num_blocked_restarts)
+            .finish()
+    }
 }
 
 /*impl Default for GlucoseRestartStrategy {

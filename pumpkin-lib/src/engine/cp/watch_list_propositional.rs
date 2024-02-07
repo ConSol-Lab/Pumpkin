@@ -5,6 +5,7 @@ use super::PropagatorVarId;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 
+#[derive(Debug)]
 pub struct WatchListPropositional {
     watchers: KeyedVec<Literal, WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
     is_watching_anything: bool,
@@ -19,6 +20,7 @@ impl Default for WatchListPropositional {
     }
 }
 
+#[derive(Debug)]
 pub struct WatchersPropositional<'a> {
     propagator_var: PropagatorVarId,
     watch_list: &'a mut WatchListPropositional,
@@ -97,7 +99,7 @@ impl<'a> WatchersPropositional<'a> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WatcherPropositional {
     pub assigned_true_watchers: Vec<PropagatorVarId>,
     pub assigned_false_watchers: Vec<PropagatorVarId>,

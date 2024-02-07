@@ -258,10 +258,12 @@ impl VariableEquivalences {
         let equiv_1 = self.classes.swap_remove(equiv_1_idx);
         let domain_1 = self.domains.swap_remove(equiv_1_idx);
 
-        // rewire the last class that was moved by calls to `swap_remove`
-        self.classes[equiv_1_idx].iter().for_each(|class| {
-            self.belongs_to.insert(Rc::clone(class), equiv_1_idx);
-        });
+        if equiv_1_idx != self.classes.len() {
+            // rewire the last class that was moved by calls to `swap_remove`
+            self.classes[equiv_1_idx].iter().for_each(|class| {
+                self.belongs_to.insert(Rc::clone(class), equiv_1_idx);
+            });
+        }
 
         self.classes[equiv_2_idx].extend(equiv_1);
         self.domains[equiv_2_idx].merge(domain_1);

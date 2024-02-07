@@ -21,7 +21,7 @@ pub trait ConstraintsExt {
 
     /// Adds the constraint `\sum terms_i != rhs`.
     fn int_lin_ne<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
-        self.post(LinearNe {
+        let _ = self.post(LinearNe {
             terms: terms.into(),
             rhs,
         });
@@ -29,7 +29,7 @@ pub trait ConstraintsExt {
 
     /// Adds the constraint `\sum terms_i <= rhs`.
     fn int_lin_le<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
-        self.post(LinearLeq::new(terms.into(), rhs));
+        let _ = self.post(LinearLeq::new(terms.into(), rhs));
     }
 
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
@@ -39,7 +39,7 @@ pub trait ConstraintsExt {
         rhs: i32,
         reif: Literal,
     ) {
-        self.post(LinearLeq::reified(terms.into(), rhs, reif));
+        let _ = self.post(LinearLeq::reified(terms.into(), rhs, reif));
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
@@ -114,7 +114,7 @@ pub trait ConstraintsExt {
         b: impl IntVar + 'static,
         c: impl IntVar + 'static,
     ) {
-        self.post(IntTimes { a, b, c });
+        let _ = self.post(IntTimes { a, b, c });
     }
 
     /// Adds the constraint that all variables must be distinct.

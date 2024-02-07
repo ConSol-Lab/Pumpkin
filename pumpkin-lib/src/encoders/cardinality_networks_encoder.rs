@@ -15,6 +15,7 @@ use crate::pumpkin_assert_simple;
 /// Reference:
 /// Asín, Roberto, et al. Cardinality networks: a theoretical and empirical study.
 /// Constraints, 2011, 16: 195-221.
+#[derive(Debug)]
 pub struct CardinalityNetworkEncoder {
     literals: Vec<Literal>,
     output: Vec<Literal>,
@@ -302,7 +303,7 @@ impl CardinalityNetworkEncoder {
         let d_prime = self.card(&a[k as usize..], k, csp_solver)?;
 
         let mut c = self.s_merge(&d, &d_prime, csp_solver)?;
-        c.remove(c.len() - 1);
+        let _ = c.remove(c.len() - 1);
 
         Some(c)
     }

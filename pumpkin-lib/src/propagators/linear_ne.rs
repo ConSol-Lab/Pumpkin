@@ -15,6 +15,7 @@ use crate::engine::PropagatorVariable;
 use crate::engine::ReadDomains;
 use crate::predicate;
 
+#[derive(Debug)]
 pub struct LinearNe<Var> {
     /// The terms which sum to the left-hand side.
     pub terms: Box<[Var]>,
@@ -24,6 +25,7 @@ pub struct LinearNe<Var> {
 
 /// Domain consistent propagator for the constraint `\sum x_i != rhs`, where `x_i` are integer variables
 /// and `rhs` is an integer constant.
+#[derive(Debug)]
 pub struct LinearNeProp<Var> {
     terms: Rc<[PropagatorVariable<Var>]>,
     rhs: i32,

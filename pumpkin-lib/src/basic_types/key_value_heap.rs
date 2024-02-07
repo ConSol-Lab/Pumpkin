@@ -9,7 +9,7 @@ It allows increasing/decreasing the values of its entries
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct KeyValueHeap {
     values: Vec<f64>, //contains the values stored as a heap. The value of key i is in position map_key_to_position[i]
     map_key_to_position: Vec<u32>, //[i] shows the location of the value of the key i in the values_ array

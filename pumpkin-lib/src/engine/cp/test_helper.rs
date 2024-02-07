@@ -29,7 +29,7 @@ use crate::engine::PropagatorId;
 use crate::engine::WatchListCP;
 
 /// A container for CP variables, which can be used to test propagators.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TestSolver {
     assignments_integer: AssignmentsInteger,
     reason_store: ReasonStore,
@@ -172,7 +172,7 @@ impl TestSolver {
                 PropagatorId(0),
                 "We assume a single propagator per TestSolver in notify_changed"
             );
-            let _ = self.notify(propagator, opaque_event.clone(), pvi.variable);
+            let _ = self.notify(propagator, opaque_event, pvi.variable);
         }
     }
 

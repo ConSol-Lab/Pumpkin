@@ -1,14 +1,14 @@
-use super::DomainId;
-use super::HashMap;
-use super::Literal;
-use super::Solution;
-use super::WeightedLiteral;
+use crate::basic_types::DomainId;
+use crate::basic_types::HashMap;
+use crate::basic_types::Literal;
+use crate::basic_types::Solution;
+use crate::basic_types::WeightedLiteral;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Function {
     weighted_literals: HashMap<Literal, u64>,
     weighted_integers: HashMap<DomainId, u64>,
@@ -29,14 +29,14 @@ impl Function {
                     self.constant_term += weight;
                 }
                 std::cmp::Ordering::Equal => {
-                    self.weighted_literals.remove(&negative_literal);
+                    let _ = self.weighted_literals.remove(&negative_literal);
                     self.constant_term += weight;
                 }
                 std::cmp::Ordering::Greater => {
                     let diff = weight - *opposite_weight;
                     self.constant_term += *opposite_weight;
-                    self.weighted_literals.remove(&negative_literal);
-                    self.weighted_literals.insert(literal, diff);
+                    let _ = self.weighted_literals.remove(&negative_literal);
+                    let _ = self.weighted_literals.insert(literal, diff);
                 }
             }
         } else {

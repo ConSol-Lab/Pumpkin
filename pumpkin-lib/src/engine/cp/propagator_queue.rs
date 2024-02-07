@@ -2,10 +2,11 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 
-use super::PropagatorId;
 use crate::basic_types::HashSet;
+use crate::engine::cp::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
+#[derive(Debug)]
 pub struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,
     present_propagators: HashSet<PropagatorId>,
@@ -33,7 +34,7 @@ impl PropagatorQueue {
                 self.present_priorities.push(Reverse(priority));
             }
             self.queues[priority as usize].push_back(propagator_id);
-            self.present_propagators.insert(propagator_id);
+            let _ = self.present_propagators.insert(propagator_id);
         }
     }
 
@@ -45,10 +46,10 @@ impl PropagatorQueue {
 
         let next_propagator_id = self.queues[top_priority].pop_front().unwrap();
 
-        self.present_propagators.remove(&next_propagator_id);
+        let _ = self.present_propagators.remove(&next_propagator_id);
 
         if self.queues[top_priority].is_empty() {
-            self.present_priorities.pop();
+            let _ = self.present_priorities.pop();
         }
 
         next_propagator_id

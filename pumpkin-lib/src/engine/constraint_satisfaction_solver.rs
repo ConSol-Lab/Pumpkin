@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
@@ -5,18 +7,6 @@ use std::time::Instant;
 use log::info;
 use log::warn;
 
-use super::clause_allocators::ClauseAllocatorBasic;
-use super::cp::CPEngineDataStructures;
-use super::sat::SATEngineDataStructures;
-use super::AssignmentsInteger;
-use super::AssignmentsPropositional;
-use super::CPPropagatorConstructor;
-use super::ConstraintProgrammingPropagator;
-use super::GlucoseRestartStrategy;
-use super::LearnedClauseManager;
-use super::LearnedClauseMinimiser;
-use super::SATCPMediator;
-use super::SatOptions;
 use crate::basic_types::moving_average::CumulativeMovingAverage;
 use crate::basic_types::moving_average::MovingAverageInterface;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
@@ -32,10 +22,23 @@ use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
+use crate::engine::clause_allocators::ClauseAllocatorBasic;
 use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::cp::CPEngineDataStructures;
+use crate::engine::debug_helper::DebugDyn;
+use crate::engine::sat::SATEngineDataStructures;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::DebugHelper;
+use crate::engine::GlucoseRestartStrategy;
+use crate::engine::LearnedClauseManager;
+use crate::engine::LearnedClauseMinimiser;
 use crate::engine::PropagatorConstructorContext;
 use crate::engine::PropagatorId;
+use crate::engine::SATCPMediator;
+use crate::engine::SatOptions;
 use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
 use crate::pumpkin_assert_advanced;
@@ -63,6 +66,33 @@ pub struct ConstraintSatisfactionSolver {
     analysis_result: ConflictAnalysisResult,
 }
 
+impl Debug for ConstraintSatisfactionSolver {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let cp_propagators: Vec<_> = self
+            .cp_propagators
+            .iter()
+            .map(|_| DebugDyn::from("ConstraintProgrammingPropagator"))
+            .collect();
+        f.debug_struct("ConstraintSatisfactionSolver")
+            .field("state", &self.state)
+            .field("sat_data_structures", &self.sat_data_structures)
+            .field("cp_data_structures", &self.cp_data_structures)
+            .field("clausal_propagator", &self.clausal_propagator)
+            .field("learned_clause_manager", &self.learned_clause_manager)
+            .field("learned_clause_minimiser", &self.learned_clause_minimiser)
+            .field("restart_strategy", &self.restart_strategy)
+            .field("cp_propagators", &cp_propagators)
+            .field("sat_cp_mediator", &self.sat_cp_mediator)
+            .field("seen", &self.seen)
+            .field("counters", &self.counters)
+            .field("internal_parameters", &self.internal_parameters)
+            .field("stopwatch", &self.stopwatch)
+            .field("analysis_result", &self.analysis_result)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct SatisfactionSolverOptions {
     // see the main.rs parameters for more details
     /// Parameters related to restarts
@@ -683,7 +713,8 @@ impl ConstraintSatisfactionSolver {
                     break;
                 }
                 PropagationStatusOneStepCP::ConflictDetected { conflict_info } => {
-                    self.sat_cp_mediator
+                    let _ = self
+                        .sat_cp_mediator
                         .synchronise_propositional_trail_based_on_integer_trail(
                             &mut self.sat_data_structures.assignments_propositional,
                             &self.cp_data_structures.assignments_integer,
@@ -748,7 +779,7 @@ impl ConstraintSatisfactionSolver {
             }
 
             Ok(()) => {
-                self.cp_data_structures.process_domain_events(
+                let _ = self.cp_data_structures.process_domain_events(
                     &mut self.cp_propagators,
                     &mut self.sat_data_structures.assignments_propositional,
                 );
@@ -1404,7 +1435,7 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct Counters {
     pub num_decisions: u64,
     pub num_conflicts: u64,
@@ -1455,13 +1486,13 @@ impl Counters {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ConflictAnalysisResult {
     pub learned_literals: Vec<Literal>,
     pub backjump_level: usize,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 enum CSPSolverStateInternal {
     #[default]
     Ready,
@@ -1483,7 +1514,7 @@ enum CSPSolverStateInternal {
     Timeout,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CSPSolverState {
     internal_state: CSPSolverStateInternal,
 }

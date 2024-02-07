@@ -1,6 +1,7 @@
 use super::AssignmentsPropositional;
 use crate::basic_types::Literal;
 
+#[derive(Debug, Copy, Clone)]
 pub struct Preprocessor {}
 
 impl Preprocessor {

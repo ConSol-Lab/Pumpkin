@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use super::MovingAverageInterface;
 use crate::pumpkin_assert_simple;
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct WindowedMovingAverage {
     window_size: u64,
     windowed_sum: u64,

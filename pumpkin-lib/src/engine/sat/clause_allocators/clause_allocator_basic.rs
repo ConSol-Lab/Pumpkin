@@ -7,7 +7,7 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ClauseAllocatorBasic {
     allocated_clauses: Vec<ClauseBasic>,
     deleted_clause_references: Vec<ClauseReference>,

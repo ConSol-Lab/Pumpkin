@@ -5,12 +5,13 @@ use super::PropagatorVarId;
 use crate::basic_types::DomainId;
 use crate::basic_types::KeyedVec;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WatchListCP {
     watchers: KeyedVec<DomainId, WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
     is_watching_anything: bool,
 }
 
+#[derive(Debug)]
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
     watch_list: &'a mut WatchListCP,
@@ -103,7 +104,7 @@ impl<'a> Watchers<'a> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WatcherCP {
     // FIXME measure performance of these vectors, they are treated as sets
     pub lower_bound_watchers: Vec<PropagatorVarId>,

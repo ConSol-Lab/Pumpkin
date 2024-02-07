@@ -6,9 +6,9 @@ use std::cmp::Ordering;
 
 use enumset::EnumSet;
 
-use super::DomainId;
-use super::Predicate;
-use super::PredicateConstructor;
+use crate::basic_types::DomainId;
+use crate::basic_types::Predicate;
+use crate::basic_types::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
 use crate::engine::EmptyDomain;

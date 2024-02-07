@@ -1,6 +1,6 @@
 use super::MovingAverageInterface;
 
-#[derive(Default)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct CumulativeMovingAverage {
     sum: u64,
     num_terms: u64,

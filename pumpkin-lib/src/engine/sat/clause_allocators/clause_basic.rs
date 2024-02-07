@@ -5,6 +5,7 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 #[allow(clippy::len_without_is_empty)] // The clause will always have at least two literals.
+#[derive(Debug)]
 pub struct ClauseBasic {
     literals: Vec<Literal>,
     is_learned: bool,

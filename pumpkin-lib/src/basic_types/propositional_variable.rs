@@ -1,6 +1,6 @@
 use super::StorageKey;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct PropositionalVariable {
     index: u32,
 }
@@ -23,6 +23,7 @@ impl StorageKey for PropositionalVariable {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct PropositionalVariableGeneratorIterator {
     current_index: u32,
     end_index: u32,

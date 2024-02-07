@@ -10,7 +10,7 @@ use crate::engine::reason::ReasonRef;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssignmentsPropositional {
     assignment_info: KeyedVec<PropositionalVariable, PropositionalAssignmentInfo>,
     trail: Trail<Literal>,
@@ -223,7 +223,7 @@ impl AssignmentsPropositional {
     pub fn enqueue_decision_literal(&mut self, decision_literal: Literal) {
         pumpkin_assert_simple!(!self.is_literal_assigned(decision_literal));
 
-        self.make_assignment(decision_literal, ConstraintReference::NULL);
+        let _ = self.make_assignment(decision_literal, ConstraintReference::NULL);
     }
 
     pub fn enqueue_propagated_literal(
@@ -278,7 +278,7 @@ impl AssignmentsPropositional {
     }
 }
 
-#[derive(PartialEq, Clone, Default)]
+#[derive(PartialEq, Clone, Default, Debug)]
 enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,

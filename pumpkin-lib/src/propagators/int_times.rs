@@ -15,12 +15,14 @@ use crate::engine::ReadDomains;
 
 /// A bounds-consistent propagator for maintaining the constraint `a * b = c`. The propagator
 /// assumes `a, b, c >= 0`.
+#[derive(Debug)]
 pub struct IntTimesProp<VA, VB, VC> {
     a: PropagatorVariable<VA>,
     b: PropagatorVariable<VB>,
     c: PropagatorVariable<VC>,
 }
 
+#[derive(Debug)]
 pub struct IntTimes<VA, VB, VC> {
     pub a: VA,
     pub b: VB,

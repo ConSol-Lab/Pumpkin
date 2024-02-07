@@ -1,11 +1,11 @@
 use std::fs;
 
-use super::FileFormat;
-use super::Literal;
-use super::Solution;
+use crate::basic_types::FileFormat;
+use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Solution;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Instance {
     pub hard_clauses: Vec<Vec<Literal>>,
     pub soft_clauses: Vec<SoftClause>,
@@ -150,7 +150,7 @@ impl Instance {
 
             if raw_integers.peek() == Some(&(top_weight as i64)) {
                 //hard clauses start with the top weight value
-                raw_integers.next(); //remove the first value from consideration
+                let _ = raw_integers.next(); //remove the first value from consideration
                 let literals: Vec<Literal> = raw_integers
                     .map(|v| match v.cmp(&0) {
                         std::cmp::Ordering::Greater => {
@@ -198,6 +198,7 @@ impl Instance {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct SoftClause {
     pub literals: Vec<Literal>,
     pub weight: u64,

@@ -11,6 +11,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
+#[derive(Debug, Copy, Clone)]
 pub struct LinearSearch {
     upper_bound_encoding: PseudoBooleanEncoding,
 }

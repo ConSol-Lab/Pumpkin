@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+#[derive(Debug, Copy, Clone)]
 pub struct Stopwatch {
     time_limit_in_seconds: i64,
     time_start: Instant,

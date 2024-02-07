@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+use std::fmt::Formatter;
 /// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
 /// The idea is to separate the 'preprocessing' of the input and encoding algorithm
 ///     this way all encoders can benefit from the same preprocessing
@@ -17,6 +19,7 @@ use crate::basic_types::Function;
 use crate::basic_types::Literal;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
 
 pub trait PseudoBooleanConstraintEncoderInterface {
@@ -53,7 +56,7 @@ pub enum PseudoBooleanEncoding {
 }
 
 impl std::fmt::Display for PseudoBooleanEncoding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PseudoBooleanEncoding::GTE => write!(f, "gte"),
             PseudoBooleanEncoding::CNE => write!(f, "cne"),
@@ -62,6 +65,7 @@ impl std::fmt::Display for PseudoBooleanEncoding {
 }
 
 /// main struct through which encoders are to be used
+#[derive(Debug)]
 pub struct PseudoBooleanConstraintEncoder {
     state: State,
     constant_term: u64,
@@ -74,6 +78,25 @@ enum State {
     Encoded(Box<dyn PseudoBooleanConstraintEncoderInterface>),
     Preprocessed(Vec<WeightedLiteral>),
     TriviallySatisfied,
+}
+
+impl Debug for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            State::New(weighted_literals) => {
+                f.debug_tuple("New").field(&weighted_literals).finish()
+            }
+            State::Encoded(_) => f
+                .debug_tuple("Encoded")
+                .field(&DebugDyn::from("PseudoBooleanConstraintEncoderInterface"))
+                .finish(),
+            State::Preprocessed(weighted_literals) => f
+                .debug_tuple("Preprocessed")
+                .field(&weighted_literals)
+                .finish(),
+            State::TriviallySatisfied => f.debug_tuple("TriviallySatisfied").finish(),
+        }
+    }
 }
 
 impl PseudoBooleanConstraintEncoder {
@@ -327,7 +350,7 @@ impl PseudoBooleanConstraintEncoder {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum EncodingError {
     #[error("Constraint detected conflict at root level by propagation")]
     RootPropagationConflict,

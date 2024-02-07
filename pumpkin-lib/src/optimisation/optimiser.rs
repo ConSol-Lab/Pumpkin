@@ -1,6 +1,7 @@
 use crate::basic_types::Solution;
 
 /// The result of calling [`OptimisationSolver::solve()`].
+#[derive(Debug)]
 pub enum OptimisationResult {
     /// There exists no solution with a better objective value than this one.
     Optimal {

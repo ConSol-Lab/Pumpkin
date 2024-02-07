@@ -1,11 +1,12 @@
 use crate::basic_types::KeyedVec;
 use crate::basic_types::PropositionalVariable;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PropositionalValueSelector {
     truth_values: KeyedVec<PropositionalVariable, CandidateTruthAssignment>,
 }
 
+#[derive(Debug)]
 struct CandidateTruthAssignment {
     pub value: bool,
     pub frozen: bool,

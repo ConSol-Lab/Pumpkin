@@ -1,6 +1,6 @@
-use super::ConflictInfo;
-use super::Predicate;
-use super::PropositionalConjunction;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalConjunction;
 use crate::engine::EmptyDomain;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed

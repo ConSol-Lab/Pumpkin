@@ -1,7 +1,3 @@
-use sat_cp_mediator::SATCPMediator;
-
-use super::AssignmentsPropositional;
-use super::SATEngineDataStructures;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::basic_types::Literal;
@@ -9,12 +5,14 @@ use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
 use crate::engine::constraint_satisfaction_solver::ConflictAnalysisResult;
-use crate::engine::sat_cp_mediator;
+use crate::engine::sat::AssignmentsPropositional;
+use crate::engine::sat::SATEngineDataStructures;
+use crate::engine::sat_cp_mediator::SATCPMediator;
 use crate::engine::CPEngineDataStructures;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct LearnedClauseMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, //could consider direct hashing here
@@ -209,7 +207,7 @@ impl LearnedClauseMinimiser {
     }
 
     fn mark_decision_level_as_allowed(&mut self, decision_level: usize) {
-        self.allowed_decision_levels.insert(decision_level);
+        let _ = self.allowed_decision_levels.insert(decision_level);
     }
 
     fn is_literal_assigned_seen(&self, literal: Literal) -> bool {
@@ -234,7 +232,7 @@ impl LearnedClauseMinimiser {
                 || self.is_literal_assigned_seen(literal),
             "Cannot assign the label of an already labelled literal"
         );
-        self.label_assignments.insert(literal, Some(label));
+        let _ = self.label_assignments.insert(literal, Some(label));
     }
 
     fn is_literal_label_already_computed(&self, literal: Literal) -> bool {
@@ -255,7 +253,8 @@ impl LearnedClauseMinimiser {
 
         //mark literals from the initial learned clause
         //   the asserting literal is always kept
-        self.label_assignments
+        let _ = self
+            .label_assignments
             .insert(analysis_result.learned_literals[0], Some(Label::Keep));
         //  go through the other literals
         for i in 1..analysis_result.learned_literals.len() {
@@ -298,7 +297,7 @@ impl LearnedClauseMinimiser {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum Label {
     Seen, //'Present'
     Poison,

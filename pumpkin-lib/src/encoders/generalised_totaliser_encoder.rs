@@ -13,6 +13,7 @@ use crate::pumpkin_assert_simple;
 
 //implementation is done based on the paper:
 //"Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben Martins, and Vasco Manquinho.  CP'15.
+#[derive(Debug)]
 pub struct GeneralisedTotaliserEncoder {
     index_last_added_weighted_literal: usize,
     layers: Vec<Layer>,
@@ -174,7 +175,7 @@ impl GeneralisedTotaliserEncoder {
                 for partial_sum in &partial_sums {
                     let variable = csp_solver.create_new_propositional_variable();
                     let literal = Literal::new(variable, true);
-                    value_to_literal_map.insert(*partial_sum, literal);
+                    let _ = value_to_literal_map.insert(*partial_sum, literal);
                     next_layer_node.push(WeightedLiteral {
                         literal,
                         weight: *partial_sum,
@@ -263,6 +264,7 @@ impl GeneralisedTotaliserEncoder {
     }
 }
 
+#[derive(Debug)]
 struct Layer {
     pub nodes: Vec<Vec<WeightedLiteral>>,
 }

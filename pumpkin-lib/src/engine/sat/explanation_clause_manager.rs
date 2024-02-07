@@ -4,7 +4,7 @@ use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::pumpkin_assert_moderate;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExplanationClauseManager {
     explanation_clauses: Vec<ClauseReference>,
 }

@@ -4,14 +4,6 @@ use std::ops::IndexMut;
 use enumset::enum_set;
 use enumset::EnumSet;
 
-use super::AssignmentsInteger;
-use super::BooleanDomainEvent;
-use super::EmptyDomain;
-use super::IntDomainEvent;
-use super::WatchListCP;
-use super::WatchListPropositional;
-use super::Watchers;
-use super::WatchersPropositional;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
@@ -19,6 +11,14 @@ use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::cp::AssignmentsInteger;
+use crate::engine::cp::BooleanDomainEvent;
+use crate::engine::cp::EmptyDomain;
+use crate::engine::cp::IntDomainEvent;
+use crate::engine::cp::WatchListCP;
+use crate::engine::cp::WatchListPropositional;
+use crate::engine::cp::Watchers;
+use crate::engine::cp::WatchersPropositional;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::AssignmentsPropositional;
@@ -118,7 +118,7 @@ pub struct PropagatorVarId {
 
 /// A wrapper for a domain event, which forces the propagator implementation to map the event
 /// through the variable view.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct OpaqueDomainEvent(IntDomainEvent);
 
 impl From<IntDomainEvent> for OpaqueDomainEvent {
@@ -133,6 +133,7 @@ impl OpaqueDomainEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagationContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
@@ -150,6 +151,7 @@ impl<'a> PropagationContext<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagationContextMut<'a> {
     assignments_integer: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
@@ -313,6 +315,7 @@ pub trait CPPropagatorConstructor {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
     watch_list_propositional: &'a mut WatchListPropositional,
@@ -403,6 +406,7 @@ impl DomainEvents {
         DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::Assign));
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct DomainEvents {
     int_events: Option<EnumSet<IntDomainEvent>>,
     boolean_events: Option<EnumSet<BooleanDomainEvent>>,

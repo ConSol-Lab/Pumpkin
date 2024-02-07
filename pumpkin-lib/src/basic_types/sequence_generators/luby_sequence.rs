@@ -5,6 +5,7 @@ use super::SequenceGeneratorInterface;
 //  The above sequence is multiplied with a given constant 'base_value'
 //Generating the next element is computed in constant time using Knuth's 'reluctant doubling' formula
 //Note that overflows are not taken into account
+#[derive(Debug, Copy, Clone)]
 pub struct LubySequence {
     u: i64,
     v: i64,

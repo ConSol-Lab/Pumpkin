@@ -16,7 +16,7 @@ use crate::engine::Preprocessor;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ClausalPropagatorInlineBinary {
     pub watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
     pub next_position_on_trail_to_propagate: usize,
@@ -104,7 +104,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             }
         } else {
             //standard case - the clause has at least two unassigned literals
-            self.add_clause_unchecked(literals, false, clause_allocator);
+            let _ = self.add_clause_unchecked(literals, false, clause_allocator);
         }
 
         Ok(())
@@ -120,8 +120,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
         // binary clause - these have special treatment and are stored directly in the watch lists
         if literals.len() == 2 {
             let second_literal = literals[1]; // need to store this in case the clause is binary
-            self.add_clause_unchecked(literals, true, clause_allocator);
-            assignments.enqueue_propagated_literal(
+            let _ = self.add_clause_unchecked(literals, true, clause_allocator);
+            let _ = assignments.enqueue_propagated_literal(
                 asserting_literal,
                 ClauseReference::create_virtual_binary_clause_reference(second_literal).into(),
             );
@@ -132,7 +132,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
             let clause_reference = self
                 .add_clause_unchecked(literals, true, clause_allocator)
                 .expect("Add clause failed for some reason");
-            assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+            let _ =
+                assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
             Some(clause_reference)
         }
     }
@@ -180,7 +181,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
         c: Literal,
         clause_allocator: &mut ClauseAllocator,
     ) {
-        self.add_clause_unchecked(vec![a, b, c], false, clause_allocator);
+        let _ = self.add_clause_unchecked(vec![a, b, c], false, clause_allocator);
     }
 
     fn propagate(
@@ -238,7 +239,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
 
                     //propagate
                     if assignments.is_literal_unassigned(cached_literal) {
-                        assignments.enqueue_propagated_literal(
+                        let _ = assignments.enqueue_propagated_literal(
                             cached_literal,
                             watched_clause_reference.into(),
                         );
@@ -377,7 +378,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorInlineBinary {
                     .iter()
                     .position(|x| x.clause_reference == clause_reference)
                     .unwrap();
-                watchers.swap_remove(index);
+                let _ = watchers.swap_remove(index);
             };
 
         let watched_literal1 = clause[0];
@@ -604,7 +605,7 @@ impl ClausalPropagatorInlineBinary {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ClauseWatcher {
     cached_literal: Literal,
     clause_reference: ClauseReference,

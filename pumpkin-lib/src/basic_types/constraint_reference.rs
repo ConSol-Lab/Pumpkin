@@ -1,15 +1,18 @@
 //reason code -> constraint reference?
 //change reason code names in assignments for instance
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use bitfield::Bit;
 use bitfield::BitMut;
 use bitfield::BitRange;
 
-use super::ClauseReference;
+use crate::basic_types::ClauseReference;
 use crate::engine::reason::ReasonRef;
 use crate::pumpkin_assert_moderate;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConstraintReference {
     //the constraint reference may refer to a virtual binary clause, an allocated clause, or a propagator
     //  note that the user can only distinguish between a clause and a propagator (bu not whether a virtual or allocated clause)
@@ -31,6 +34,25 @@ pub struct ConstraintReference {
     //note: having both 31st and 30th bit set to one cannot take place, this combination could be used in the future for some other indicator
     //          but in that case then the binary clause will only have 30 bits to work with, whereas currently it has 31 bits
     code: u32,
+}
+
+impl Debug for ConstraintReference {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ConstraintReference")?;
+        if self.is_cp_reason() {
+            write!(f, "::Reason({:?})", self.get_reason_ref())
+        } else if self.is_virtual_binary_clause() {
+            write!(
+                f,
+                "::VirtualBinaryClause({})",
+                self.as_clause_reference()
+                    .get_virtual_binary_clause_literal()
+            )
+        } else {
+            debug_assert!(self.is_allocated_clause());
+            write!(f, "::AllocatedClause({})", self.get_code())
+        }
+    }
 }
 
 //methods to create a constraint reference
@@ -67,17 +89,18 @@ impl ConstraintReference {
     }
 
     fn is_allocated_clause(&self) -> bool {
-        ConstraintReference::are_two_most_significant_bits_zero(self.code)
+        ConstraintReference::two_most_significant_bits(self.code) == 0
     }
 
     pub fn is_cp_reason(&self) -> bool {
-        <u32 as BitRange<u32>>::bit_range(&self.code, 31, 30) == 1
+        ConstraintReference::two_most_significant_bits(self.code) == 1
     }
 
     pub fn get_reason_ref(&self) -> ReasonRef {
         pumpkin_assert_moderate!(self.is_cp_reason());
         let mut id = self.code;
-        id.set_bit(30, false); //clear the 30th bit, the 31st bit is assumed to already be cleared
+        //clear the 30th bit, the 31st bit is assumed to already be cleared
+        id.set_bit(30, false);
         ReasonRef(id)
     }
 
@@ -95,12 +118,12 @@ impl ConstraintReference {
 }
 
 impl ConstraintReference {
-    fn are_two_most_significant_bits_zero(number: u32) -> bool {
-        <u32 as BitRange<u32>>::bit_range(&number, 31, 30) == 0
+    fn two_most_significant_bits(number: u32) -> u32 {
+        <u32 as BitRange<u32>>::bit_range(&number, 31, 30)
     }
 
     fn is_valid_allocated_clause_id(clause_id: u32) -> bool {
-        ConstraintReference::are_two_most_significant_bits_zero(clause_id)
+        ConstraintReference::two_most_significant_bits(clause_id) == 0
     }
 }
 
@@ -148,16 +171,13 @@ mod tests {
 
     #[test]
     fn test_two_most_significant_bits() {
-        assert!(ConstraintReference::are_two_most_significant_bits_zero(5));
-        assert!(ConstraintReference::are_two_most_significant_bits_zero(0));
-        assert!(!ConstraintReference::are_two_most_significant_bits_zero(
-            1 << 31
-        ));
-        assert!(!ConstraintReference::are_two_most_significant_bits_zero(
-            3 << 30
-        ));
-        assert!(ConstraintReference::are_two_most_significant_bits_zero(
-            !(3 << 30)
-        ));
+        assert_eq!(ConstraintReference::two_most_significant_bits(5), 0);
+        assert_eq!(ConstraintReference::two_most_significant_bits(0), 0);
+        assert_ne!(ConstraintReference::two_most_significant_bits(1 << 31), 0);
+        assert_ne!(ConstraintReference::two_most_significant_bits(3 << 30), 0);
+        assert_eq!(
+            ConstraintReference::two_most_significant_bits(!(3 << 30)),
+            0
+        );
     }
 }

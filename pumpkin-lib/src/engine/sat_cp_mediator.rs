@@ -1,8 +1,3 @@
-use super::constraint_satisfaction_solver::ClausalPropagator;
-use super::constraint_satisfaction_solver::ClauseAllocator;
-use super::AssignmentsInteger;
-use super::AssignmentsPropositional;
-use super::CPEngineDataStructures;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
@@ -11,7 +6,12 @@ use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalVariable;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::reason::ReasonRef;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::CPEngineDataStructures;
 use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::EmptyDomain;
 use crate::engine::ExplanationClauseManager;
@@ -23,6 +23,7 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
+#[derive(Debug)]
 pub struct SATCPMediator {
     mapping_domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
     mapping_domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
@@ -132,7 +133,7 @@ impl SATCPMediator {
         //  and the newly added entries are already present on the propositional trail
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
 
-        cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
+        let _ = cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
 
         Ok(())
     }
@@ -927,7 +928,7 @@ mod tests {
             12
         );
 
-        mediator.synchronise_propositional_trail_based_on_integer_trail(
+        let _ = mediator.synchronise_propositional_trail_based_on_integer_trail(
             &mut sat_data_structures.assignments_propositional,
             &cp_data_structures.assignments_integer,
             &mut clausal_propagator,

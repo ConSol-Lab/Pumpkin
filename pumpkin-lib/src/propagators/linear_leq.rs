@@ -13,6 +13,7 @@ use crate::engine::PropagatorVariable;
 use crate::engine::ReadDomains;
 use crate::predicate;
 
+#[derive(Debug)]
 pub struct LinearLeq<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
@@ -34,6 +35,7 @@ impl<Var: IntVar + 'static> LinearLeq<Var> {
 }
 
 /// Propagator for the constraint `reif => \sum x_i <= c`.
+#[derive(Debug)]
 pub struct LinearLeqProp<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
@@ -47,47 +49,26 @@ where
     type Propagator = LinearLeqProp<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        if let Some(literal) = self.reif {
-            let x: Box<[_]> = self
-                .x
-                .iter()
-                .enumerate()
-                .map(|(i, x_i)| {
-                    context.register(
-                        x_i.clone(),
-                        DomainEvents::LOWER_BOUND,
-                        LocalId::from(i as u32),
-                    )
-                })
-                .collect();
-            LinearLeqProp::<Var> {
-                x,
-                c: self.c,
-                reif: Some(context.register_literal(
-                    literal,
-                    DomainEvents::ANY_BOOL,
-                    LocalId::from(self.x.len() as u32),
-                )),
-            }
-        } else {
-            let x: Box<[_]> = self
-                .x
-                .iter()
-                .enumerate()
-                .map(|(i, x_i)| {
-                    context.register(
-                        x_i.clone(),
-                        DomainEvents::LOWER_BOUND,
-                        LocalId::from(i as u32),
-                    )
-                })
-                .collect();
-            LinearLeqProp::<Var> {
-                x,
-                c: self.c,
-                reif: None,
-            }
-        }
+        let x: Box<[_]> = self
+            .x
+            .iter()
+            .enumerate()
+            .map(|(i, x_i)| {
+                context.register(
+                    x_i.clone(),
+                    DomainEvents::LOWER_BOUND,
+                    LocalId::from(i as u32),
+                )
+            })
+            .collect();
+        let reif = self.reif.map(|literal| {
+            context.register_literal(
+                literal,
+                DomainEvents::ANY_BOOL,
+                LocalId::from(self.x.len() as u32),
+            )
+        });
+        LinearLeqProp::<Var> { x, c: self.c, reif }
     }
 }
 

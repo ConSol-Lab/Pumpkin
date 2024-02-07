@@ -1,8 +1,9 @@
-use super::AssignmentsPropositional;
 use crate::basic_types::KeyValueHeap;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
+use crate::engine::sat::AssignmentsPropositional;
 
+#[derive(Debug)]
 pub struct PropositionalVariableSelector {
     heap: KeyValueHeap,
     increment: f64,
@@ -62,7 +63,7 @@ impl PropositionalVariableSelector {
                 //note that some variables on the heap may already be assigned because a lazy data structure is used
                 //  in case an assigned variable is next, remove it from the heap, and loop again
                 if assignments.is_variable_assigned(candidate_variable) {
-                    self.heap.pop_max();
+                    let _ = self.heap.pop_max();
                 } else {
                     return Some(candidate_variable);
                 }

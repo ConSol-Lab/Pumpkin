@@ -18,6 +18,7 @@ use crate::engine::WatchListCP;
 use crate::engine::WatchListPropositional;
 use crate::pumpkin_assert_simple;
 
+#[derive(Debug)]
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
     pub watch_list_cp: WatchListCP,

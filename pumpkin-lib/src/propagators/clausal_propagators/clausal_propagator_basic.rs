@@ -16,7 +16,7 @@ use crate::engine::Preprocessor;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ClausalPropagatorBasic {
     pub watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
     pub next_position_on_trail_to_propagate: usize,
@@ -89,7 +89,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             }
         } else {
             //standard case - the clause has at least two unassigned literals
-            self.add_clause_unchecked(literals, false, clause_allocator);
+            let _ = self.add_clause_unchecked(literals, false, clause_allocator);
         }
 
         Ok(())
@@ -107,7 +107,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             .add_clause_unchecked(literals, true, clause_allocator)
             .expect("Add clause failed for some reason");
 
-        assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+        let _ = assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
 
         Some(clause_reference)
     }
@@ -136,7 +136,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         rhs: Literal,
         clause_allocator: &mut ClauseAllocator,
     ) {
-        self.add_clause_unchecked(vec![!lhs, rhs], false, clause_allocator);
+        let _ = self.add_clause_unchecked(vec![!lhs, rhs], false, clause_allocator);
     }
 
     fn add_permanent_ternary_clause_unchecked(
@@ -146,7 +146,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         c: Literal,
         clause_allocator: &mut ClauseAllocator,
     ) {
-        self.add_clause_unchecked(vec![a, b, c], false, clause_allocator);
+        let _ = self.add_clause_unchecked(vec![a, b, c], false, clause_allocator);
     }
 
     fn propagate(
@@ -301,7 +301,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                     .iter()
                     .position(|x| x.clause_reference == clause_reference)
                     .unwrap();
-                watchers.swap_remove(index);
+                let _ = watchers.swap_remove(index);
             };
 
         let watched_literal1 = clause[0];
@@ -477,7 +477,7 @@ impl ClausalPropagatorBasic {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ClauseWatcher {
     cached_literal: Literal,
     clause_reference: ClauseReference,

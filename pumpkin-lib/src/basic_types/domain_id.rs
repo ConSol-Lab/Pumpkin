@@ -29,6 +29,7 @@ impl std::fmt::Debug for DomainId {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub struct IntegerVariableGeneratorIterator {
     current_index: u32,
     end_index: u32,

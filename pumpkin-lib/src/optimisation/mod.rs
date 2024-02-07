@@ -15,6 +15,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.
+#[derive(Debug)]
 pub struct OptimisationSolver {
     csp_solver: ConstraintSatisfactionSolver,
     objective_function: Function,

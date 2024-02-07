@@ -1,21 +1,41 @@
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::iter::once;
 
 use log::debug;
 use log::warn;
 
-use super::constraint_satisfaction_solver::ClausalPropagator;
-use super::cp::AssignmentsInteger;
-use super::AssignmentsPropositional;
-use super::ConstraintProgrammingPropagator;
-use super::PropagatorId;
-use super::SATCPMediator;
-use super::SATEngineDataStructures;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::cp::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorId;
+use crate::engine::SATCPMediator;
+use crate::engine::SATEngineDataStructures;
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
 use crate::pumpkin_assert_simple;
 
+#[derive(Copy, Clone)]
+pub struct DebugDyn<'a> {
+    trait_name: &'a str,
+}
+
+impl<'a> DebugDyn<'a> {
+    pub fn from(trait_name: &'a str) -> Self {
+        DebugDyn { trait_name }
+    }
+}
+
+impl<'a> Debug for DebugDyn<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<dyn {}>", self.trait_name)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct DebugHelper {}
 
 impl DebugHelper {

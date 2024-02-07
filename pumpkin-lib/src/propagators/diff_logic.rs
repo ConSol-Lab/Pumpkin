@@ -184,7 +184,7 @@ where
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        self.updated.insert(local_id);
+        let _ = self.updated.insert(local_id);
         EnqueueDecision::Enqueue
     }
 
@@ -304,7 +304,7 @@ mod tests {
 
         solver.set_upper_bound(x_2, 4).expect("no empty domains");
         #[allow(clippy::identity_op)]
-        solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 1 + 2));
+        let _ = solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 1 + 2));
         solver
             .propagate(&mut propagator)
             .expect("no empty domains or negative cycles");
@@ -320,7 +320,7 @@ mod tests {
 
         solver.set_lower_bound(x_1, -1).expect("no empty domains");
         #[allow(clippy::erasing_op, clippy::identity_op)]
-        solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 0 + 3));
+        let _ = solver.notify(&mut propagator, UpperBound.into(), LocalId::from(4 * 0 + 3));
         solver
             .propagate(&mut propagator)
             .expect("no empty domains or negative cycles");

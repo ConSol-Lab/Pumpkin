@@ -11,11 +11,13 @@ use crate::engine::PropagatorConstructorContext;
 use crate::engine::PropagatorVariable;
 use crate::engine::ReadDomains;
 
+#[derive(Debug)]
 pub struct NotEqProp<VX, VY> {
     x: PropagatorVariable<VX>,
     y: PropagatorVariable<VY>,
 }
 
+#[derive(Debug)]
 pub struct NotEq<VX, VY> {
     pub x: VX,
     pub y: VY,

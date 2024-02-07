@@ -1,16 +1,16 @@
-use super::event_sink::EventSink;
-use super::IntDomainEvent;
 use crate::basic_types::DomainId;
 use crate::basic_types::IntegerVariableGeneratorIterator;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
+use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
+use crate::engine::cp::IntDomainEvent;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: KeyedVec<DomainId, IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
@@ -403,7 +403,7 @@ impl AssignmentsInteger {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
@@ -423,7 +423,7 @@ pub struct ConstraintProgrammingTrailEntry {
 ///
 /// When the domain is in an empty state, `lower_bound > upper_bound` and the state of the
 /// `is_value_in_domain` field is undefined.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct IntegerDomainExplicit {
     id: DomainId,
 

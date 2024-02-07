@@ -1,6 +1,6 @@
 use super::DomainId;
 
-#[derive(Clone, PartialEq, Eq, Copy)]
+#[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Predicate {
     LowerBound {
         domain_id: DomainId,

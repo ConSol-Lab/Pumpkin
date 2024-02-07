@@ -1,14 +1,14 @@
-use super::AssignmentsPropositional;
-use super::PropositionalValueSelector;
-use super::PropositionalVariableSelector;
 use crate::basic_types::BranchingDecision;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::sat::AssignmentsPropositional;
+use crate::engine::sat::PropositionalValueSelector;
+use crate::engine::sat::PropositionalVariableSelector;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SATEngineDataStructures {
     pub assignments_propositional: AssignmentsPropositional,
     pub propositional_variable_selector: PropositionalVariableSelector,

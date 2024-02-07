@@ -10,6 +10,7 @@ use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
 use crate::pumpkin_assert_moderate;
 
+#[derive(Debug, Copy, Clone)]
 pub struct SatOptions {
     pub max_clause_activity: f32,
     pub clause_activity_decay_factor: f32,
@@ -30,7 +31,7 @@ impl Default for SatOptions {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct LearnedClauses {
     low_lbd: Vec<ClauseReference>,
     high_lbd: Vec<ClauseReference>,
@@ -38,6 +39,7 @@ struct LearnedClauses {
 
 //todo explain the learned clause removal strategy
 
+#[derive(Debug)]
 pub struct LearnedClauseManager {
     learned_clauses: LearnedClauses,
     parameters: SatOptions,

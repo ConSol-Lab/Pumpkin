@@ -10,6 +10,7 @@ use crate::pumpkin_assert_ne_simple;
 //  + dynamic size allocation - currently the maximum amount is allocated (2^30 u32s)
 //  + garbage collection
 
+#[derive(Debug)]
 pub struct ClauseAllocatorLinear {
     data: Vec<u32>, //allocating a fixed block for now
     next_location: u32,
@@ -36,8 +37,8 @@ impl ClauseAllocatorInterface<ClauseInlined> for ClauseAllocatorLinear {
         let clause_reference =
             ClauseReference::create_allocated_clause_reference(self.next_location);
 
-        ClauseInlined::create_clause_at_memory_location(
-            &mut self.data[self.next_location as usize] as *mut u32,
+        let _ = ClauseInlined::create_clause_at_memory_location(
+            &mut self.data[self.next_location as usize],
             literals.as_slice(),
             is_learned,
         );
@@ -73,13 +74,13 @@ impl ClauseAllocatorInterface<ClauseInlined> for ClauseAllocatorLinear {
 impl ClauseAllocatorLinear {
     fn get_pointer(&self, clause_reference: ClauseReference) -> *const ClauseInlined {
         pumpkin_assert_moderate!(clause_reference.is_allocated_clause());
-        let ptr_u32 = &self.data[clause_reference.get_code() as usize] as *const u32;
+        let ptr_u32: *const u32 = &self.data[clause_reference.get_code() as usize];
         ptr_u32.cast::<ClauseInlined>()
     }
 
     fn get_pointer_mut(&mut self, clause_reference: ClauseReference) -> *mut ClauseInlined {
         pumpkin_assert_moderate!(clause_reference.is_allocated_clause());
-        let ptr_u32 = &mut self.data[clause_reference.get_code() as usize] as *mut u32;
+        let ptr_u32: *mut u32 = &mut self.data[clause_reference.get_code() as usize];
         ptr_u32.cast::<ClauseInlined>()
     }
 }
