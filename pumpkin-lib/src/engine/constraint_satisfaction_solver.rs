@@ -337,6 +337,14 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    pub fn get_upper_bound_literal(&self, domain: DomainId, upper_bound: i32) -> Literal {
+        self.sat_cp_mediator.get_upper_bound_literal(
+            domain,
+            upper_bound,
+            &self.cp_data_structures.assignments_integer,
+        )
+    }
+
     pub fn get_integer_assignments(&self) -> &AssignmentsInteger {
         &self.cp_data_structures.assignments_integer
     }

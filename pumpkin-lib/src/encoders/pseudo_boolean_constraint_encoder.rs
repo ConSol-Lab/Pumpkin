@@ -15,6 +15,7 @@ use thiserror::Error;
 
 use super::CardinalityNetworkEncoder;
 use super::GeneralisedTotaliserEncoder;
+use super::SingleIntegerEncoder;
 use crate::basic_types::Function;
 use crate::basic_types::Literal;
 use crate::basic_types::WeightedLiteral;
@@ -53,6 +54,7 @@ pub trait PseudoBooleanConstraintEncoderInterface {
 pub enum PseudoBooleanEncoding {
     GTE,
     CNE,
+    SingleInteger,
 }
 
 impl std::fmt::Display for PseudoBooleanEncoding {
@@ -60,6 +62,7 @@ impl std::fmt::Display for PseudoBooleanEncoding {
         match self {
             PseudoBooleanEncoding::GTE => write!(f, "gte"),
             PseudoBooleanEncoding::CNE => write!(f, "cne"),
+            PseudoBooleanEncoding::SingleInteger => write!(f, "single_integer"),
         }
     }
 }
@@ -78,6 +81,8 @@ enum State {
     Encoded(Box<dyn PseudoBooleanConstraintEncoderInterface>),
     Preprocessed(Vec<WeightedLiteral>),
     TriviallySatisfied,
+    SingleIntegerNew(Vec<WeightedLiteral>),
+    SingleInteger(SingleIntegerEncoder),
 }
 
 impl Debug for State {
@@ -95,6 +100,14 @@ impl Debug for State {
                 .field(&weighted_literals)
                 .finish(),
             State::TriviallySatisfied => f.debug_tuple("TriviallySatisfied").finish(),
+            State::SingleIntegerNew(weighted_literals) => f
+                .debug_tuple("SingleIntegerNew")
+                .field(&weighted_literals)
+                .finish(),
+            State::SingleInteger(_) => f
+                .debug_tuple("SingleInteger")
+                .field(&DebugDyn::from("PseudoBooleanConstraintEncoderInterface"))
+                .finish(),
         }
     }
 }
@@ -117,6 +130,15 @@ impl PseudoBooleanConstraintEncoder {
         }
     }
 
+    pub fn from_single_integer_function(weighted_literals: Vec<WeightedLiteral>) -> Self {
+        Self {
+            state: State::SingleIntegerNew(weighted_literals),
+            constant_term: 0,
+            k_previous: 0,
+            encoding_algorithm: PseudoBooleanEncoding::SingleInteger,
+        }
+    }
+
     pub fn from_weighted_literal_vector(
         weighted_literals: Vec<WeightedLiteral>,
         encoding_algorithm: PseudoBooleanEncoding,
@@ -134,6 +156,7 @@ impl PseudoBooleanConstraintEncoder {
                 .map(|lit| WeightedLiteral {
                     literal: *lit,
                     weight: 1,
+                    bound: None,
                 })
                 .collect(),
             encoding_algorithm,
@@ -145,11 +168,22 @@ impl PseudoBooleanConstraintEncoder {
         csp_solver: &mut ConstraintSatisfactionSolver,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Self {
-        let mut encoder = PseudoBooleanConstraintEncoder::new(
-            function.get_function_as_weighted_literals_vector(csp_solver),
-            encoding_algorithm,
-        );
-        encoder.constant_term = function.get_constant_term();
+        let single_integer_case = function.get_weighted_literals().len() == 0
+            && function.get_weighted_integers().len() == 1;
+        let mut encoder = if single_integer_case {
+            PseudoBooleanConstraintEncoder::from_single_integer_function(
+                function.get_function_as_weighted_literals_vector(csp_solver),
+            )
+        } else {
+            PseudoBooleanConstraintEncoder::new(
+                function.get_function_as_weighted_literals_vector(csp_solver),
+                encoding_algorithm,
+            )
+        };
+        if !single_integer_case {
+            encoder.constant_term = function.get_constant_term();
+        }
+
         encoder
     }
 
@@ -178,9 +212,9 @@ impl PseudoBooleanConstraintEncoder {
                 pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
 
                 pumpkin_assert_simple!(
-                    k >= self.constant_term,
-                    "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
-                );
+                        k >= self.constant_term,
+                        "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
+                    );
 
                 encoder.strengthen_at_most_k(k - self.constant_term, csp_solver)?;
             }
@@ -200,6 +234,21 @@ impl PseudoBooleanConstraintEncoder {
             }
 
             State::TriviallySatisfied => {}
+            State::SingleInteger(ref mut encoder) => {
+                pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
+
+                pumpkin_assert_simple!(
+                        k >= self.constant_term,
+                        "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
+                    );
+                encoder.strengthen_at_most_k(k, csp_solver)?
+            }
+            State::SingleIntegerNew(ref mut weighted_literals) => {
+                let literals = std::mem::take(weighted_literals);
+                let encoder = SingleIntegerEncoder::encode_at_most_k(literals, k, csp_solver)?;
+                self.state = State::SingleInteger(encoder);
+                self.k_previous = k;
+            }
         }
 
         Ok(())
@@ -346,6 +395,9 @@ impl PseudoBooleanConstraintEncoder {
                     CardinalityNetworkEncoder::encode_at_most_k(weighted_literals, k, csp_solver)?;
                 Ok(Box::new(encoder))
             }
+            PseudoBooleanEncoding::SingleInteger => {
+                unreachable!("The SingleInteger encoder is always created in a concrete manner")
+            }
         }
     }
 }
@@ -354,8 +406,8 @@ impl PseudoBooleanConstraintEncoder {
 pub enum EncodingError {
     #[error("Constraint detected conflict at root level by propagation")]
     RootPropagationConflict,
-    #[error("Strenthening caused conflict")]
-    CannotStrenthen,
+    #[error("Strengthening caused conflict")]
+    CannotStrengthen,
     #[error("Constraint is trivially unsatisfiable")]
     TriviallyUnsatisfiable,
 }

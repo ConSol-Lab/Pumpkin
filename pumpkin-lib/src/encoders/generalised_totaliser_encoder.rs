@@ -67,7 +67,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                     .add_unit_clause(!weighted_literals[i].literal)
                     .is_err()
                 {
-                    return Err(EncodingError::CannotStrenthen);
+                    return Err(EncodingError::CannotStrengthen);
                 }
             } else {
                 //the first time a literal no longer exceeds k, we can stop
@@ -179,6 +179,7 @@ impl GeneralisedTotaliserEncoder {
                     next_layer_node.push(WeightedLiteral {
                         literal,
                         weight: *partial_sum,
+                        bound: None,
                     });
                 }
 

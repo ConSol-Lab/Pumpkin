@@ -119,6 +119,7 @@ impl Function {
             .map(|p| WeightedLiteral {
                 literal: *p.0,
                 weight: *p.1,
+                bound: None,
             })
             .collect();
 
@@ -137,7 +138,11 @@ impl Function {
             //  the literals before those contribute to the objective function but not in a way that can be changed
             for i in (lower_bound + 1)..=upper_bound {
                 let literal = csp_solver.get_lower_bound_literal(domain_id, i);
-                weighted_literals.push(WeightedLiteral { literal, weight });
+                weighted_literals.push(WeightedLiteral {
+                    literal,
+                    weight,
+                    bound: Some(i),
+                });
             }
         }
 

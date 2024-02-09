@@ -3,7 +3,7 @@ use std::time::Instant;
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
 use crate::basic_types::Literal;
-use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen;
+use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrengthen;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
@@ -82,7 +82,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
             .add_unit_clause(!self.output[k as usize])
             .is_err()
         {
-            Err(CannotStrenthen)
+            Err(CannotStrengthen)
         } else {
             Ok(())
         }

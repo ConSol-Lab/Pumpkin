@@ -49,3 +49,4 @@ state to indicate the bounds were in the domain.
 * Added a variable to the watchlists to prevent traversing the literal and/or integer trail when no variable is being watched
 * The creation of `AssignmentsInteger` for debug purposes did not properly create the `EventSink` leading to out-of-bounds errors + one of the debug checks failed when a predicate which was always true/false was added
 * Set C++ -std language version to make sure integration test tools build properly on MacOS
+* Prevent unnecessary encoding from taking place when the objective function is a single integer variable
