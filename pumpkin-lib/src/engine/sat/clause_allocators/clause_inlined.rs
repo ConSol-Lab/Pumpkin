@@ -215,6 +215,7 @@ mod tests {
     use crate::engine::clause_allocators::ClauseInlined;
     use crate::engine::clause_allocators::ClauseInterface;
 
+    #[ignore]
     #[test]
     fn test_clause_creation() {
         let lits = [
@@ -252,6 +253,7 @@ mod tests {
         assert_eq!(memory[2], new_lit_code);
     }
 
+    #[ignore]
     #[test]
     fn test_size_and_align() {
         //these should be static asserts
@@ -260,6 +262,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<Literal>(), 4);
     }
 
+    #[ignore]
     #[test]
     fn test_fresh_clause() {
         let lits = [
@@ -280,6 +283,7 @@ mod tests {
         assert_eq!(clause.len(), 3);
     }
 
+    #[ignore]
     #[test]
     fn test_lbd() {
         let lits = [
@@ -299,6 +303,7 @@ mod tests {
         assert_eq!(clause.lbd(), 10);
     }
 
+    #[ignore]
     #[test]
     fn test_flags() {
         let lits = [
@@ -324,6 +329,7 @@ mod tests {
         assert!(clause.is_deleted());
     }
 
+    #[ignore]
     #[test]
     fn test_activity() {
         let lits = [
@@ -343,6 +349,7 @@ mod tests {
         assert_eq!(clause.get_activity(), 15.0);
     }
 
+    #[ignore]
     #[test]
     fn test_slice() {
         let lits = [

@@ -1651,7 +1651,7 @@ mod tests {
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::Literal;
 
-    fn is_same_core(core1: &Vec<Literal>, core2: &Vec<Literal>) -> bool {
+    fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
