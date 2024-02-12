@@ -152,6 +152,29 @@ impl DebugHelper {
         propagator: &dyn ConstraintProgrammingPropagator,
         propagator_id: u32,
     ) -> bool {
+        let reason: PropositionalConjunction = reason
+            .iter()
+            .cloned()
+            .filter(|&predicate| predicate != Predicate::True)
+            .collect();
+
+        if reason
+            .iter()
+            .any(|&predicate| predicate == Predicate::False)
+        {
+            panic!(
+                "The reason for propagation should not contain the trivially false predicate.
+Propagator: {},    
+id: {},
+The reported propagation reason: {},
+Propagated predicate: {}",
+                propagator.name(),
+                propagator_id,
+                reason,
+                propagated_predicate
+            );
+        }
+
         if reason
             .iter()
             .map(|p| p.get_domain())
@@ -204,7 +227,7 @@ impl DebugHelper {
 
                 //The predicate was either a propagation for the assignments_integer or assignments_propositional
                 assert!(
-                    assignments_integer_clone.does_predicate_hold(&propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
+                    assignments_integer_clone.does_predicate_hold(propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
                     "{}",
                     format!("Debug propagation could not obtain the propagated predicate given the provided reason.\nPropagator: '{}'\nPropagator id: {}\nReported reason: {}\nReported propagation: {}", propagator.name(), propagator_id, reason, propagated_predicate)
                 );
@@ -334,7 +357,7 @@ impl DebugHelper {
                 assignments_propositional.debug_create_empty_clone();
 
             let negated_predicate = !*predicate;
-            let outcome = assignments_integer_clone.apply_predicate(&negated_predicate, None);
+            let outcome = assignments_integer_clone.apply_predicate(negated_predicate, None);
 
             let adding_propositional_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
@@ -379,7 +402,7 @@ impl DebugHelper {
         predicates: &[Predicate],
     ) -> bool {
         for predicate in predicates {
-            let outcome = assignments_integer.apply_predicate(predicate, None);
+            let outcome = assignments_integer.apply_predicate(*predicate, None);
             match outcome {
                 Ok(()) => {
                     //do nothing, everything is okay

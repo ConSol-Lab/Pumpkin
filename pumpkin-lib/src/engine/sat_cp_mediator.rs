@@ -151,7 +151,7 @@ impl SATCPMediator {
             let predicate = self.mapping_literal_to_predicates[literal][j];
             cp_data_structures
                 .assignments_integer
-                .apply_predicate(&predicate, None)?;
+                .apply_predicate(predicate, None)?;
         }
 
         Ok(())
@@ -561,6 +561,8 @@ impl SATCPMediator {
                 domain_id,
                 equality_constant,
             } => self.get_equality_literal(domain_id, equality_constant, assignments_integer),
+            Predicate::False => self.false_literal,
+            Predicate::True => self.true_literal,
         }
     }
 

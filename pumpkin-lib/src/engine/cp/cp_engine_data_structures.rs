@@ -184,7 +184,7 @@ impl CPEngineDataStructures {
         PropagationContext::new(&self.assignments_integer, assignments_propositional)
     }
 
-    pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {
+    pub fn does_predicate_hold(&self, predicate: Predicate) -> bool {
         self.assignments_integer.does_predicate_hold(predicate)
     }
 }

@@ -90,8 +90,9 @@ impl AssignmentsInteger {
         let mut domains = self.domains.clone();
         let event_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
-            let domain_id = entry.predicate.get_domain();
-            domains[domain_id].undo_trail_entry(entry);
+            if let Some(domain_id) = entry.predicate.get_domain() {
+                domains[domain_id].undo_trail_entry(entry);
+            }
         });
         AssignmentsInteger {
             trail: Default::default(),
@@ -321,20 +322,28 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
-    //changes the domains according to the predicate
-    //  in case the predicate is already true, no changes happen
-    //  however in case the predicate would lead to inconsistent domains, e.g., decreasing the upper bound past the lower bound
-    //      pumpkin asserts will make the program crash
+    /// Apply the given predicate to the integer domains.
+    ///
+    /// In case where the predicate is already true, this does nothing. If instead applying the
+    /// predicate leads to an inconsistent domain, the error variant is returned. One special case
+    /// is when `predicate` is `Predicate::False`, which will always trigger the error variant.
+    /// However, since this should never happen in normal operation of the solver, it will cause a
+    /// panic.
     pub fn apply_predicate(
         &mut self,
-        predicate: &Predicate,
+        predicate: Predicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_simple!(
+            predicate != Predicate::False && predicate != Predicate::True,
+            "Trivially false and true predicates should not be applied, but handled elsewhere.",
+        );
+
         if self.does_predicate_hold(predicate) {
             return Ok(());
         }
 
-        match *predicate {
+        match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
@@ -351,11 +360,14 @@ impl AssignmentsInteger {
                 domain_id,
                 equality_constant,
             } => self.make_assignment(domain_id, equality_constant, reason),
+
+            Predicate::False => Err(EmptyDomain),
+            Predicate::True => Ok(()),
         }
     }
 
-    pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {
-        match *predicate {
+    pub fn does_predicate_hold(&self, predicate: Predicate) -> bool {
+        match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
@@ -372,6 +384,9 @@ impl AssignmentsInteger {
                 domain_id,
                 equality_constant,
             } => self.is_domain_assigned_to_value(domain_id, equality_constant),
+
+            Predicate::True => true,
+            Predicate::False => false,
         }
     }
 
@@ -381,8 +396,9 @@ impl AssignmentsInteger {
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
-            let domain_id = entry.predicate.get_domain();
-            self.domains[domain_id].undo_trail_entry(&entry);
+            if let Some(domain_id) = entry.predicate.get_domain() {
+                self.domains[domain_id].undo_trail_entry(&entry);
+            }
         })
     }
 }
