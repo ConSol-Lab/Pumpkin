@@ -99,6 +99,34 @@ impl CompilationContext<'_> {
             })
     }
 
+    pub fn resolve_bool_variable_array(
+        &self,
+        expr: &flatzinc::Expr,
+    ) -> Result<Rc<[Literal]>, FlatZincError> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => self
+                .boolean_variable_arrays
+                .get(id.as_str())
+                .cloned()
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: id.as_str().into(),
+                    expected_type: "boolean variable array".into(),
+                }),
+
+            flatzinc::Expr::ArrayOfBool(array) => array
+                .iter()
+                .map(|elem| {
+                    if let flatzinc::BoolExpr::VarParIdentifier(id) = elem {
+                        self.resolve_bool_variable_from_identifier(id)
+                    } else {
+                        Err(FlatZincError::UnexpectedExpr)
+                    }
+                })
+                .collect(),
+            _ => Err(FlatZincError::UnexpectedExpr),
+        }
+    }
+
     pub fn resolve_array_integer_constants(
         &self,
         expr: &flatzinc::Expr,
@@ -178,7 +206,7 @@ impl CompilationContext<'_> {
             })
     }
 
-    pub fn resolve_variable_array(
+    pub fn resolve_integer_variable_array(
         &self,
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[DomainId]>, FlatZincError> {

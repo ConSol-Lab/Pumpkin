@@ -34,6 +34,21 @@
   * int_eq_reif
   * int_plus
   * int_times
+  * array_bool_and
+  * array_bool_or
+  * array_bool_element
+  * array_var_bool_element
+  * bool2int
+  * bool_and
+  * bool_clause
+  * bool_eq
+  * bool_eq_reif
+  * bool_le
+  * bool_le_reif
+  * bool_lt
+  * bool_lt_reif
+  * bool_not
+  * bool_or
   * all_different
 * Add support for variables with negative domain bounds.
 * Added eager explanations to CP, lazy is still possible by passing a closure.

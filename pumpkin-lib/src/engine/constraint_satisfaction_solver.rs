@@ -18,6 +18,7 @@ use crate::basic_types::DomainId;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Stopwatch;
@@ -389,6 +390,11 @@ impl ConstraintSatisfactionSolver {
 
         self.backtrack(0);
         self.state.declare_ready();
+    }
+
+    pub fn get_literal(&self, predicate: Predicate) -> Literal {
+        self.sat_cp_mediator
+            .get_predicate_literal(predicate, &self.cp_data_structures.assignments_integer)
     }
 }
 
