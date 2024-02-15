@@ -8,6 +8,11 @@ use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::predicate;
 
+use super::constraints::int_eq_reif;
+use super::constraints::int_le_reif;
+use super::constraints::int_lin_eq_reif;
+use super::constraints::int_lin_le_reif;
+use super::constraints::int_lt_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::FlatZincError;
@@ -41,7 +46,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                |solver, terms, rhs, reif| solver.int_lin_le_reif(terms, rhs, reif),
+                int_lin_le_reif,
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
@@ -55,7 +60,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                |solver, terms, rhs, reif| solver.int_lin_eq_reif(terms, rhs, reif),
+                int_lin_eq_reif,
             )?,
             "int_ne" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
@@ -73,7 +78,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 exprs,
                 annos,
                 "int_le_reif",
-                |solver, a, b, reif| solver.int_le_reif(a, b, reif),
+                int_le_reif,
             )?,
             "int_lt" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
@@ -85,7 +90,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 exprs,
                 annos,
                 "int_lt_reif",
-                |solver, a, b, reif| solver.int_lt_reif(a, b, reif),
+                int_lt_reif,
             )?,
             "int_eq" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_eq", |solver, a, b| {
@@ -97,7 +102,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 exprs,
                 annos,
                 "int_eq_reif",
-                |solver, a, b, reif| solver.int_eq_reif(a, b, reif),
+                int_eq_reif,
             )?,
             "int_plus" => compile_int_plus(context, exprs, annos)?,
             "int_times" => compile_int_times(context, exprs, annos)?,
@@ -147,8 +152,8 @@ fn compile_bool_not(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    context.solver.add_permanent_implication_unchecked(a, !b);
-    context.solver.add_permanent_implication_unchecked(b, !a);
+    let _ = context.solver.add_permanent_clause(vec![!a, !b]);
+    let _ = context.solver.add_permanent_clause(vec![!b, !a]);
 
     Ok(())
 }
@@ -163,18 +168,10 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    context
-        .solver
-        .add_permanent_ternary_clause_unchecked(!a, !b, r);
-    context
-        .solver
-        .add_permanent_ternary_clause_unchecked(!a, b, !r);
-    context
-        .solver
-        .add_permanent_ternary_clause_unchecked(a, !b, !r);
-    context
-        .solver
-        .add_permanent_ternary_clause_unchecked(a, b, r);
+    let _ = context.solver.add_permanent_clause(vec![!a, !b, r]);
+    let _ = context.solver.add_permanent_clause(vec![!a, b, !r]);
+    let _ = context.solver.add_permanent_clause(vec![a, !b, !r]);
+    let _ = context.solver.add_permanent_clause(vec![a, b, r]);
 
     Ok(())
 }
@@ -190,8 +187,8 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    context.solver.add_permanent_implication_unchecked(a, b);
-    context.solver.add_permanent_implication_unchecked(b, a);
+    let _ = context.solver.add_permanent_clause(vec![!a, b]);
+    let _ = context.solver.add_permanent_clause(vec![!b, a]);
 
     Ok(())
 }
@@ -225,12 +222,10 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    context.solver.add_permanent_implication_unchecked(r, a);
-    context.solver.add_permanent_implication_unchecked(r, b);
+    let _ = context.solver.add_permanent_clause(vec![!r, a]);
+    let _ = context.solver.add_permanent_clause(vec![!r, b]);
 
-    context
-        .solver
-        .add_permanent_ternary_clause_unchecked(!a, !b, r);
+    let _ = context.solver.add_permanent_clause(vec![!a, !b, r]);
 
     Ok(())
 }
@@ -249,8 +244,8 @@ fn compile_bool2int(
 
     let b_lit = context.solver.get_literal(predicate![b == 1]);
 
-    context.solver.add_permanent_implication_unchecked(a, b_lit);
-    context.solver.add_permanent_implication_unchecked(b_lit, a);
+    let _ = context.solver.add_permanent_clause(vec![!a, b_lit]);
+    let _ = context.solver.add_permanent_clause(vec![!b_lit, a]);
 
     Ok(())
 }
@@ -273,9 +268,7 @@ fn compile_bool_or(
 
     // \/clause -> r
     clause.iter().for_each(|&literal| {
-        context
-            .solver
-            .add_permanent_implication_unchecked(!literal, r)
+        let _ = context.solver.add_permanent_clause(vec![literal, r]);
     });
 
     Ok(())
@@ -303,12 +296,10 @@ fn compile_array_var_bool_element(
             .add_permanent_clause(vec![!predicate_lit, !array[i], rhs]);
 
         // rhs -> [index = i] /\ array[i]
-        context
+        let _ = context
             .solver
-            .add_permanent_implication_unchecked(rhs, predicate_lit);
-        context
-            .solver
-            .add_permanent_implication_unchecked(rhs, array[i]);
+            .add_permanent_clause(vec![!rhs, predicate_lit]);
+        let _ = context.solver.add_permanent_clause(vec![!rhs, array[i]]);
     }
 
     Ok(())
@@ -333,9 +324,7 @@ fn compile_array_bool_and(
 
     // r -> /\conjunction
     conjunction.iter().for_each(|&literal| {
-        context
-            .solver
-            .add_permanent_implication_unchecked(r, literal)
+        let _ = context.solver.add_permanent_clause(vec![!r, literal]);
     });
 
     Ok(())

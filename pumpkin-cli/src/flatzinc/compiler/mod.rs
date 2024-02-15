@@ -1,4 +1,5 @@
 mod collect_domains;
+mod constraints;
 mod context;
 mod create_objective;
 mod define_constants;

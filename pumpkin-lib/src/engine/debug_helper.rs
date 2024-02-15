@@ -5,6 +5,7 @@ use std::iter::once;
 use log::debug;
 use log::warn;
 
+use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
@@ -207,6 +208,7 @@ Propagated predicate: {}",
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &reason_predicates,
+                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -263,6 +265,7 @@ Propagated predicate: {}",
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &failing_predicates,
+                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -314,6 +317,7 @@ Propagated predicate: {}",
                 &mut assignments_propositional_clone,
                 sat_cp_mediator,
                 &reason_predicates,
+                &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
             );
 
         if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -365,6 +369,7 @@ Propagated predicate: {}",
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &reason_predicates,
+                    &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if outcome.is_ok() && adding_propositional_predicates_was_successful {
@@ -428,6 +433,7 @@ impl DebugHelper {
         assignments_propositional: &mut AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
         predicates: &[Predicate],
+        literals: &[Literal],
     ) -> bool {
         for predicate in predicates {
             let literal = sat_cp_mediator.get_predicate_literal(*predicate, assignments_integer);
@@ -446,6 +452,9 @@ impl DebugHelper {
                 // However, the true literal is always assigned leading to checks related to this enqueuing failing
                 assignments_propositional.enqueue_decision_literal(literal);
             }
+        }
+        for literal in literals {
+            assignments_propositional.enqueue_decision_literal(*literal);
         }
         true
     }

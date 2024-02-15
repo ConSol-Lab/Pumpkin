@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::basic_types::ConstraintOperationError;
 use pumpkin_lib::basic_types::Solution;
 use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::engine::AssignmentsInteger;
@@ -62,18 +63,18 @@ impl<'a> MinizincOptimiser<'a> {
         loop {
             self.csp_solver.restore_state_at_root();
 
-            if self.should_terminate(best_objective_value) {
+            if self.strengthen(best_objective_value).is_err() {
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value,
                 };
-            } else {
-                self.strengthen(best_objective_value);
             }
 
             let solve_result = self.csp_solver.solve(stopwatch.get_remaining_time_budget());
             match solve_result {
                 CSPSolverExecutionFlag::Feasible => {
+                    self.debug_bound_change(best_objective_value);
+
                     best_objective_value = self
                         .csp_solver
                         .get_integer_assignments()
@@ -105,45 +106,16 @@ impl<'a> MinizincOptimiser<'a> {
         }
     }
 
-    fn should_terminate(&self, best_objective_value: i64) -> bool {
-        pumpkin_assert_simple!(
-            self.csp_solver.get_state().is_ready(),
-            "Expected the solver to be in the root state"
-        );
+    fn strengthen(&mut self, best_objective_value: i64) -> Result<(), ConstraintOperationError> {
         match self.objective_function {
-            FlatzincObjective::Maximize(domain) => {
-                // The upper-bound might prevent us from strengthening it further
+            FlatzincObjective::Maximize(domain) => self.csp_solver.add_unit_clause(
                 self.csp_solver
-                    .get_integer_assignments()
-                    .get_upper_bound(domain) as i64
-                    <= best_objective_value + 1
-            }
-            FlatzincObjective::Minimize(domain) => {
-                // The lower-bound might prevent us from strengthening it further
+                    .get_lower_bound_literal(domain, (best_objective_value + 1) as i32),
+            ),
+            FlatzincObjective::Minimize(domain) => self.csp_solver.add_unit_clause(
                 self.csp_solver
-                    .get_integer_assignments()
-                    .get_lower_bound(domain) as i64
-                    >= best_objective_value - 1
-            }
-        }
-    }
-
-    fn strengthen(&mut self, best_objective_value: i64) {
-        match self.objective_function {
-            FlatzincObjective::Maximize(domain) => {
-                let result = self.csp_solver.add_unit_clause(
-                    self.csp_solver
-                        .get_lower_bound_literal(domain, (best_objective_value + 1) as i32),
-                );
-                pumpkin_assert_simple!(result.is_ok())
-            }
-            FlatzincObjective::Minimize(domain) => {
-                let result = self.csp_solver.add_unit_clause(
-                    self.csp_solver
-                        .get_upper_bound_literal(domain, (best_objective_value - 1) as i32),
-                );
-                pumpkin_assert_simple!(result.is_ok())
-            }
+                    .get_upper_bound_literal(domain, (best_objective_value - 1) as i32),
+            ),
         }
     }
 
@@ -153,5 +125,45 @@ impl<'a> MinizincOptimiser<'a> {
 
     fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
         self.csp_solver.get_propositional_assignments()
+    }
+
+    fn debug_bound_change(&self, best_objective_value: i64) {
+        pumpkin_assert_simple!(
+            match self.objective_function {
+                FlatzincObjective::Maximize(_) => {
+                    (self
+                        .csp_solver
+                        .get_integer_assignments()
+                        .get_assigned_value(*self.objective_function.get_domain())
+                        as i64)
+                        > best_objective_value
+                }
+                FlatzincObjective::Minimize(_) => {
+                    (self
+                        .csp_solver
+                        .get_integer_assignments()
+                        .get_assigned_value(*self.objective_function.get_domain())
+                        as i64)
+                        < best_objective_value
+                }
+            },
+            "{}",
+            match self.objective_function {
+                FlatzincObjective::Maximize(_) => format!(
+                    "The current bound {} should be larger than the previous bound {}",
+                    self.csp_solver
+                        .get_integer_assignments()
+                        .get_assigned_value(*self.objective_function.get_domain()),
+                    best_objective_value
+                ),
+                FlatzincObjective::Minimize(_) => format!(
+                    "The current bound {} should be smaller than the previous bound {}",
+                    self.csp_solver
+                        .get_integer_assignments()
+                        .get_assigned_value(*self.objective_function.get_domain()),
+                    best_objective_value
+                ),
+            }
+        );
     }
 }
