@@ -321,6 +321,36 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    pub fn create_new_integer_variable_sparse(&mut self, mut values: Vec<i32>) -> DomainId {
+        assert!(
+            !values.is_empty(),
+            "cannot create a variable with an empty domain"
+        );
+
+        values.sort();
+        values.dedup();
+
+        let lower_bound = values[0];
+        let upper_bound = values[values.len() - 1];
+
+        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound);
+
+        let mut next_idx = 0;
+        for value in lower_bound..=upper_bound {
+            if value == values[next_idx] {
+                next_idx += 1;
+            } else {
+                self.cp_data_structures
+                    .assignments_integer
+                    .remove_value_from_domain(domain_id, value, None)
+                    .expect("the domain should not be empty");
+            }
+        }
+        assert_eq!(next_idx, values.len() + 1);
+
+        domain_id
+    }
+
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
         std::iter::from_fn(|| Some(self.create_new_propositional_variable()))
             .map(|var| Literal::new(var, true))

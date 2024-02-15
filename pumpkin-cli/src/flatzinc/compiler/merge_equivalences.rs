@@ -57,6 +57,10 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 let other_id = context.identifiers.get_interned(identifier);
                 context.integer_equivalences.merge(id, other_id);
             }
+
+            SingleVarDecl::IntInSet { .. } => {
+                // We do not handle exquivalences for sparse-set domains.
+            }
         }
     }
     Ok(())

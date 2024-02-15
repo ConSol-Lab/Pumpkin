@@ -69,6 +69,21 @@ fn parse_var_decl(
             Ok(())
         }
 
+        flatzinc::VarDeclItem::IntInSet {
+            id,
+            set,
+            expr,
+            annos,
+        } => {
+            ast.add_variable_decl(SingleVarDecl::IntInSet {
+                id,
+                set,
+                expr,
+                annos,
+            });
+            Ok(())
+        }
+
         flatzinc::VarDeclItem::ArrayOfBool {
             ix,
             id,
@@ -104,26 +119,35 @@ fn parse_var_decl(
             id,
             annos,
             array_expr,
-            lb,
-            ub,
+            ..
         } => {
-            ast.add_variable_array(VarArrayDecl::IntInRange {
+            ast.add_variable_array(VarArrayDecl::Int {
                 ix,
                 id,
                 annos,
                 array_expr,
-                lb,
-                ub,
+            });
+            Ok(())
+        }
+
+        flatzinc::VarDeclItem::ArrayOfIntInSet {
+            ix,
+            id,
+            annos,
+            array_expr,
+            set: _,
+        } => {
+            ast.add_variable_array(VarArrayDecl::Int {
+                ix,
+                id,
+                annos,
+                array_expr,
             });
             Ok(())
         }
 
         flatzinc::VarDeclItem::Int { .. } => {
             Err(FlatZincError::UnsupportedVariable("unbounded int".into()))
-        }
-
-        flatzinc::VarDeclItem::IntInSet { .. } | flatzinc::VarDeclItem::ArrayOfIntInSet { .. } => {
-            Err(FlatZincError::UnsupportedVariable("sparse int".into()))
         }
 
         flatzinc::VarDeclItem::Float { .. }

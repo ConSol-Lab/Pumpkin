@@ -82,6 +82,13 @@ pub enum SingleVarDecl {
         expr: Option<flatzinc::IntExpr>,
         annos: flatzinc::expressions::Annotations,
     },
+
+    IntInSet {
+        id: String,
+        set: Vec<i128>,
+        expr: Option<flatzinc::IntExpr>,
+        annos: flatzinc::expressions::Annotations,
+    },
 }
 
 pub enum VarArrayDecl {
@@ -96,13 +103,5 @@ pub enum VarArrayDecl {
         id: String,
         annos: Vec<flatzinc::Annotation>,
         array_expr: Option<flatzinc::ArrayOfIntExpr>,
-    },
-    IntInRange {
-        ix: flatzinc::IndexSet,
-        id: String,
-        annos: Vec<flatzinc::Annotation>,
-        array_expr: Option<flatzinc::ArrayOfIntExpr>,
-        lb: i128,
-        ub: i128,
     },
 }

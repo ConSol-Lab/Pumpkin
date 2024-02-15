@@ -70,16 +70,6 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                 id,
                 annos,
                 array_expr,
-            }
-            | VarArrayDecl::IntInRange {
-                ix: _,
-                id,
-                annos,
-                array_expr,
-                // Bounds on the type here are ignored, instead the bounds on the variables in the
-                // array are used.
-                lb: _,
-                ub: _,
             } => {
                 let id = context.identifiers.get_interned(id);
                 let contents =
