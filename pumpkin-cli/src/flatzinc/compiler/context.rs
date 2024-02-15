@@ -193,7 +193,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    fn resolve_integer_variable_from_identifier(
+    pub fn resolve_integer_variable_from_identifier(
         &self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
@@ -238,7 +238,7 @@ impl CompilationContext<'_> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Identifiers {
     interned_identifiers: HashSet<Rc<str>>,
 }

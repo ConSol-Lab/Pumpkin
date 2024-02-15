@@ -2,6 +2,7 @@ mod ast;
 mod compiler;
 mod error;
 mod instance;
+mod minizinc_optimiser;
 mod parser;
 
 use std::fs::File;
@@ -10,8 +11,12 @@ use std::path::Path;
 
 pub use error::*;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::engine::AssignmentsInteger;
+use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::optimisation::OptimisationResult;
 
+use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::instance::FlatZincInstance;
 use crate::flatzinc::instance::Output;
 
@@ -26,10 +31,33 @@ pub fn solve(
 
     let instance = parse_and_compile(&mut solver, instance)?;
 
-    match solver.solve(i64::MAX) {
-        CSPSolverExecutionFlag::Feasible => print_solution(&solver, &instance),
-        CSPSolverExecutionFlag::Infeasible => println!("{MSG_UNSATISFIABLE}"),
-        CSPSolverExecutionFlag::Timeout => println!("{MSG_UNKNOWN}"),
+    if let Some(objective_function) = &instance.objective_function {
+        let mut optimisation_solver =
+            MinizincOptimiser::new(solver, *objective_function, &instance);
+        match optimisation_solver.solve(None) {
+            OptimisationResult::Optimal {
+                solution: _,
+                objective_value: _,
+            } => {
+                println!("==========");
+            }
+            OptimisationResult::Satisfiable {
+                best_solution: _,
+                objective_value: _,
+            } => {}
+            OptimisationResult::Infeasible => println!("{MSG_UNSATISFIABLE}"),
+            OptimisationResult::Unknown => println!("{MSG_UNKNOWN}"),
+        }
+    } else {
+        match solver.solve(i64::MAX) {
+            CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
+                solver.get_integer_assignments(),
+                solver.get_propositional_assignments(),
+                &instance,
+            ),
+            CSPSolverExecutionFlag::Infeasible => println!("{MSG_UNSATISFIABLE}"),
+            CSPSolverExecutionFlag::Timeout => println!("{MSG_UNKNOWN}"),
+        }
     }
 
     Ok(())
@@ -43,28 +71,28 @@ fn parse_and_compile(
     compiler::compile(ast, solver)
 }
 
-fn print_solution(solver: &ConstraintSatisfactionSolver, instance: &FlatZincInstance) {
+fn print_solution_from_solver(
+    assignments_integer: &AssignmentsInteger,
+    assignments_propositional: &AssignmentsPropositional,
+    instance: &FlatZincInstance,
+) {
     for output_specification in instance.outputs() {
         match output_specification {
             Output::Bool(output) => output.print_value(|literal| {
-                solver
-                    .get_propositional_assignments()
-                    .is_literal_assigned_true(*literal)
+                assignments_propositional.is_literal_assigned_true(*literal)
             }),
 
-            Output::Int(output) => output.print_value(|domain_id| {
-                solver.get_integer_assignments().get_lower_bound(*domain_id)
-            }),
+            Output::Int(output) => {
+                output.print_value(|domain_id| assignments_integer.get_lower_bound(*domain_id))
+            }
 
             Output::ArrayOfBool(output) => output.print_value(|literal| {
-                solver
-                    .get_propositional_assignments()
-                    .is_literal_assigned_true(*literal)
+                assignments_propositional.is_literal_assigned_true(*literal)
             }),
 
-            Output::ArrayOfInt(output) => output.print_value(|domain_id| {
-                solver.get_integer_assignments().get_lower_bound(*domain_id)
-            }),
+            Output::ArrayOfInt(output) => {
+                output.print_value(|domain_id| assignments_integer.get_lower_bound(*domain_id))
+            }
         }
     }
 

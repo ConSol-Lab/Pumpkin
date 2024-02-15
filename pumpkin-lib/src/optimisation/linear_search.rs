@@ -62,7 +62,7 @@ impl LinearSearch {
                 csp_solver.log_statistics();
                 return OptimisationResult::Optimal {
                     solution: best_solution,
-                    objective_value: best_objective_value,
+                    objective_value: best_objective_value as i64,
                 };
             }
 
@@ -79,7 +79,7 @@ impl LinearSearch {
                 csp_solver.log_statistics();
                 return OptimisationResult::Optimal {
                     solution: best_solution,
-                    objective_value: best_objective_value,
+                    objective_value: best_objective_value as i64,
                 };
             }
 
@@ -118,14 +118,14 @@ impl LinearSearch {
                     csp_solver.log_statistics();
                     return OptimisationResult::Optimal {
                         solution: best_solution,
-                        objective_value: best_objective_value,
+                        objective_value: best_objective_value as i64,
                     };
                 }
                 CSPSolverExecutionFlag::Timeout => {
                     csp_solver.log_statistics();
                     return OptimisationResult::Satisfiable {
                         best_solution,
-                        objective_value: best_objective_value,
+                        objective_value: best_objective_value as i64,
                     };
                 }
             }

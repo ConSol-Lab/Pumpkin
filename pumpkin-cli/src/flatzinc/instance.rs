@@ -5,9 +5,28 @@ use std::rc::Rc;
 use pumpkin_lib::basic_types::DomainId;
 use pumpkin_lib::basic_types::Literal;
 
+/// The objective function of a FlatZinc model,
+/// consisting of the direction (e.g. maximization or minimization) and the integer variable which is being optimised
+#[derive(Debug, Clone, Copy)]
+pub enum FlatzincObjective {
+    Maximize(DomainId),
+    Minimize(DomainId),
+}
+
+impl FlatzincObjective {
+    /// Returns the [DomainId] of the objective function
+    pub fn get_domain(&self) -> &DomainId {
+        match self {
+            FlatzincObjective::Maximize(domain) => domain,
+            FlatzincObjective::Minimize(domain) => domain,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
+    pub(super) objective_function: Option<FlatzincObjective>,
 }
 
 impl FlatZincInstance {

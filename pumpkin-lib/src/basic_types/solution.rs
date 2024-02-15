@@ -87,6 +87,10 @@ impl Solution {
         }
     }
 
+    pub fn get_integer_value(&self, domain: DomainId) -> i32 {
+        self.integer_values[domain]
+    }
+
     fn update_propositional_values(
         truth_values: &mut KeyedVec<PropositionalVariable, bool>,
         assignments_propositional: &AssignmentsPropositional,
