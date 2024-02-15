@@ -1,6 +1,5 @@
 //! Compile constraints into CP propagators
 
-use log::warn;
 use pumpkin_lib::basic_types::variables::AffineView;
 use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::DomainId;
@@ -345,12 +344,8 @@ fn compile_array_bool_and(
 fn compile_int_plus(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on int_plus");
-    }
-
     check_parameters!(exprs, 3, "int_plus");
 
     let a = context.resolve_integer_variable(&exprs[0])?;
@@ -365,12 +360,8 @@ fn compile_int_plus(
 fn compile_int_times(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on int_times");
-    }
-
     check_parameters!(exprs, 3, "int_times");
 
     let a = context.resolve_integer_variable(&exprs[0])?;
@@ -385,14 +376,10 @@ fn compile_int_times(
 fn compile_binary_int_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
     predicate_name: &str,
     post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId),
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on {predicate_name}");
-    }
-
     check_parameters!(exprs, 2, predicate_name);
 
     let a = context.resolve_integer_variable(&exprs[0])?;
@@ -406,14 +393,10 @@ fn compile_binary_int_predicate(
 fn compile_reified_binary_int_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
     predicate_name: &str,
     post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId, Literal),
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on {predicate_name}");
-    }
-
     check_parameters!(exprs, 3, predicate_name);
 
     let a = context.resolve_integer_variable(&exprs[0])?;
@@ -428,14 +411,10 @@ fn compile_reified_binary_int_predicate(
 fn compile_int_lin_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
     predicate_name: &str,
     post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, Box<[AffineView<DomainId>]>, i32),
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on {predicate_name}");
-    }
-
     check_parameters!(exprs, 3, predicate_name);
 
     let weights = context.resolve_array_integer_constants(&exprs[0])?;
@@ -456,7 +435,7 @@ fn compile_int_lin_predicate(
 fn compile_reified_int_lin_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
     predicate_name: &str,
     post_constraint: impl FnOnce(
         &mut ConstraintSatisfactionSolver,
@@ -465,10 +444,6 @@ fn compile_reified_int_lin_predicate(
         Literal,
     ),
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on {predicate_name}");
-    }
-
     check_parameters!(exprs, 4, predicate_name);
 
     let weights = context.resolve_array_integer_constants(&exprs[0])?;
@@ -490,12 +465,8 @@ fn compile_reified_int_lin_predicate(
 fn compile_all_different(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    annos: &[flatzinc::Annotation],
+    _: &[flatzinc::Annotation],
 ) -> Result<(), FlatZincError> {
-    if !annos.is_empty() {
-        warn!("ignoring annotations on fzn_all_different");
-    }
-
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
