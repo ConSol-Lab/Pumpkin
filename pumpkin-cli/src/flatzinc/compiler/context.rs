@@ -31,6 +31,10 @@ pub struct CompilationContext<'a> {
     pub boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub literal_equivalences: VariableEquivalences,
+    /// A literal which is always true, can be used when using bool constants in the solver
+    pub constant_bool_true: Literal,
+    /// A literal which is always false, can be used when using bool constants in the solver
+    pub constant_bool_false: Literal,
 
     /// All integer parameters.
     pub integer_parameters: HashMap<Rc<str>, i32>,
@@ -49,6 +53,9 @@ pub struct CompilationContext<'a> {
 
 impl CompilationContext<'_> {
     pub fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
+        let true_literal = solver.get_propositional_assignments().true_literal;
+        let false_literal = solver.get_propositional_assignments().false_literal;
+
         CompilationContext {
             solver,
             identifiers: Default::default(),
@@ -60,6 +67,8 @@ impl CompilationContext<'_> {
             boolean_variable_map: Default::default(),
             boolean_variable_arrays: Default::default(),
             literal_equivalences: Default::default(),
+            constant_bool_true: true_literal,
+            constant_bool_false: false_literal,
 
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
@@ -78,10 +87,19 @@ impl CompilationContext<'_> {
     //     self.integer_parameters.get(identifier).copied()
     // }
 
-    pub fn resolve_bool_variable(&self, expr: &flatzinc::Expr) -> Result<Literal, FlatZincError> {
+    pub fn resolve_bool_variable(
+        &mut self,
+        expr: &flatzinc::Expr,
+    ) -> Result<Literal, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
-
+            flatzinc::Expr::Bool(value) => {
+                if *value {
+                    Ok(self.constant_bool_true)
+                } else {
+                    Ok(self.constant_bool_false)
+                }
+            }
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }
@@ -181,14 +199,17 @@ impl CompilationContext<'_> {
     }
 
     pub fn resolve_integer_variable(
-        &self,
+        &mut self,
         expr: &flatzinc::Expr,
     ) -> Result<DomainId, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => {
                 self.resolve_integer_variable_from_identifier(id)
             }
-
+            flatzinc::Expr::Int(val) => Ok(*self.constant_domain_ids.entry(*val as i32).or_insert(
+                self.solver
+                    .create_new_integer_variable(*val as i32, *val as i32),
+            )),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }

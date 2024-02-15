@@ -33,12 +33,8 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => {
-                                    context.solver.get_propositional_assignments().true_literal
-                                }
-                                BoolExpr::Bool(false) => {
-                                    context.solver.get_propositional_assignments().false_literal
-                                }
+                                BoolExpr::Bool(true) => context.constant_bool_true,
+                                BoolExpr::Bool(false) => context.constant_bool_false,
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
                                     let representative =
