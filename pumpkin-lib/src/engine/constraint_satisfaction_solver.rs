@@ -836,11 +836,25 @@ impl ConstraintSatisfactionSolver {
 
 //methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
+    /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
+    /// through propagation, this will return `false`. If not, this returns `true`.
+    ///
+    /// The caller should ensure the solver is in the root state before calling this, either
+    /// because no call to [`Self::solve()`] has been made, or because [`Self::restore_state_at_root()`] was
+    /// called.
+    ///
+    /// If the solver is already in a conflicting state, i.e. a previous call to this method
+    /// already returned `false`, calling this again will not alter the solver in any way, and
+    /// `false` will be returned again.
     pub fn add_propagator<Constructor>(&mut self, constructor: Constructor) -> bool
     where
         Constructor: CPPropagatorConstructor,
         Constructor::Propagator: 'static,
     {
+        if self.state.conflicting() {
+            return false;
+        }
+
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
         let constructor_context = PropagatorConstructorContext::new(
             &mut self.cp_data_structures.watch_list_cp,
