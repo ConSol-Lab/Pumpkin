@@ -71,27 +71,30 @@ impl SATCPMediator {
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
             let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
-            let reason_ref = entry.reason.expect("CP trail entry should have a reason.");
+            // It could be the case that the reason is `None`
+            // due to a SAT propagation being put on the trail during `synchronise_integer_trail_based_on_propositional_trail`
+            // In that case we do not synchronise since we assume that the SAT trail is already aware of the information
+            if let Some(reason_ref) = entry.reason {
+                let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
-            let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
+                let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
 
-            let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
+                let conflict_info = assignments_propositional
+                    .enqueue_propagated_literal(literal, constraint_reference);
 
-            let conflict_info =
-                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
+                if conflict_info.is_some() {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return conflict_info;
+                }
 
-            if conflict_info.is_some() {
-                self.cp_trail_synced_position = cp_trail_pos + 1;
-                return conflict_info;
-            }
-
-            //It could occur that one of these propagations caused a conflict in which case the SAT-view and the CP-view are unsynchronised
-            //We need to ensure that the views are synchronised up to the CP trail entry which caused the conflict
-            if let Err(e) =
-                clausal_propagator.propagate(assignments_propositional, clause_allocator)
-            {
-                self.cp_trail_synced_position = cp_trail_pos + 1;
-                return Some(e);
+                //It could occur that one of these propagations caused a conflict in which case the SAT-view and the CP-view are unsynchronised
+                //We need to ensure that the views are synchronised up to the CP trail entry which caused the conflict
+                if let Err(e) =
+                    clausal_propagator.propagate(assignments_propositional, clause_allocator)
+                {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return Some(e);
+                }
             }
         }
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
