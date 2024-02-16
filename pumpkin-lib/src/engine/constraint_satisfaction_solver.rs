@@ -862,7 +862,10 @@ impl ConstraintSatisfactionSolver {
         Constructor: CPPropagatorConstructor,
         Constructor::Propagator: 'static,
     {
-        if self.state.conflicting() {
+        if self.state.conflicting()
+            || self.state.is_infeasible()
+            || self.state.is_infeasible_under_assumptions()
+        {
             return false;
         }
 
@@ -885,6 +888,7 @@ impl ConstraintSatisfactionSolver {
         );
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
+            self.state.declare_infeasible();
             false
         } else {
             self.propagate_enqueued();
