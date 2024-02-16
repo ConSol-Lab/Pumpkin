@@ -25,6 +25,8 @@ pub struct Element<VX, VI, VE> {
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
+///
+/// Note that this propagator is 0-indexed
 pub struct ElementProp<VX, VI, VE> {
     array: Rc<[PropagatorVariable<VX>]>,
     index: PropagatorVariable<VI>,

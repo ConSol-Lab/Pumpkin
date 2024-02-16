@@ -8,6 +8,7 @@ use crate::basic_types::variables::IntVar;
 use crate::basic_types::Literal;
 use crate::engine::CPPropagatorConstructor;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::propagators::element::Element;
 use crate::propagators::IntTimes;
 use crate::propagators::LinearLeq;
 use crate::propagators::LinearNe;
@@ -18,6 +19,20 @@ pub trait ConstraintsExt {
     where
         Constructor: CPPropagatorConstructor,
         Constructor::Propagator: 'static;
+
+    /// Adds the constraint `array[index] = rhs`.
+    fn array_var_int_element<ElementVar: IntVar + 'static>(
+        &mut self,
+        index: impl IntVar + 'static,
+        array: impl Into<Box<[ElementVar]>>,
+        rhs: impl IntVar + 'static,
+    ) {
+        let _ = self.post(Element {
+            index,
+            array: array.into(),
+            rhs,
+        });
+    }
 
     /// Adds the constraint `\sum terms_i != rhs`.
     fn int_lin_ne<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {

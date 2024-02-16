@@ -22,6 +22,9 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
         match id.as_str() {
+            // We rewrite `array_int_element` to `array_var_int_element`.
+            "array_int_element" => compile_array_var_int_element(context, exprs)?,
+            "array_var_int_element" => compile_array_var_int_element(context, exprs)?,
             "int_lin_ne" => {
                 compile_int_lin_predicate(
                     context,
@@ -138,6 +141,23 @@ macro_rules! check_parameters {
             });
         }
     };
+}
+
+fn compile_array_var_int_element(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, "array_var_int_element");
+
+    let index = context.resolve_integer_variable(&exprs[0])?.offset(-1);
+    let array = context.resolve_integer_variable_array(&exprs[1])?;
+    let rhs = context.resolve_integer_variable(&exprs[2])?;
+
+    context
+        .solver
+        .array_var_int_element(index, array.as_ref(), rhs);
+
+    Ok(())
 }
 
 fn compile_bool_not(
