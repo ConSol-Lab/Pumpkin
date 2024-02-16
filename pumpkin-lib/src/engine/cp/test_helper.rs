@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use super::WatchListPropositional;
+use crate::basic_types::variables::IntVar;
 use crate::basic_types::DomainId;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::Literal;
@@ -91,8 +92,8 @@ impl TestSolver {
         ))
     }
 
-    pub fn contains(&self, var: DomainId, value: i32) -> bool {
-        self.assignments_integer.is_value_in_domain(var, value)
+    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+        var.contains(&self.assignments_integer, value)
     }
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {

@@ -36,10 +36,7 @@ pub trait ConstraintsExt {
 
     /// Adds the constraint `\sum terms_i != rhs`.
     fn int_lin_ne<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
-        let _ = self.post(LinearNe {
-            terms: terms.into(),
-            rhs,
-        });
+        let _ = self.post(LinearNe::new(terms.into(), rhs));
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
