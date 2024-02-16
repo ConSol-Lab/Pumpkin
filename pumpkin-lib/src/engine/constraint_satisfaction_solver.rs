@@ -345,6 +345,13 @@ impl ConstraintSatisfactionSolver {
                     .assignments_integer
                     .remove_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
+                self.sat_data_structures
+                    .assignments_propositional
+                    .enqueue_decision_literal(self.sat_cp_mediator.get_inequality_literal(
+                        domain_id,
+                        value,
+                        &self.cp_data_structures.assignments_integer,
+                    ))
             }
         }
         pumpkin_assert_simple!(
