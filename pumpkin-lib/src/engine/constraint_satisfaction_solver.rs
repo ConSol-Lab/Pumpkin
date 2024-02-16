@@ -321,6 +321,7 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    /// Creates an integer variable with a domain containing only the values in `values`
     pub fn create_new_integer_variable_sparse(&mut self, mut values: Vec<i32>) -> DomainId {
         assert!(
             !values.is_empty(),
@@ -346,7 +347,10 @@ impl ConstraintSatisfactionSolver {
                     .expect("the domain should not be empty");
             }
         }
-        assert_eq!(next_idx, values.len() + 1);
+        pumpkin_assert_simple!(
+            next_idx == values.len(),
+            "Expected all values to have been processed"
+        );
 
         domain_id
     }
