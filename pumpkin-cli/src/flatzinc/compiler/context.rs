@@ -108,13 +108,26 @@ impl CompilationContext<'_> {
         &self,
         identifier: &str,
     ) -> Result<Literal, FlatZincError> {
-        self.boolean_variable_map
+        if let Some(literal) = self
+            .boolean_variable_map
             .get(&self.literal_equivalences.representative(identifier))
-            .copied()
-            .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                identifier: identifier.into(),
-                expected_type: "bool variable".into(),
-            })
+        {
+            Ok(*literal)
+        } else {
+            self.boolean_parameters
+                .get(&self.literal_equivalences.representative(identifier))
+                .map(|value| {
+                    if *value {
+                        self.constant_bool_true
+                    } else {
+                        self.constant_bool_false
+                    }
+                })
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: identifier.into(),
+                    expected_type: "bool variable".into(),
+                })
+        }
     }
 
     pub fn resolve_bool_variable_array(
@@ -122,14 +135,30 @@ impl CompilationContext<'_> {
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[Literal]>, FlatZincError> {
         match expr {
-            flatzinc::Expr::VarParIdentifier(id) => self
-                .boolean_variable_arrays
-                .get(id.as_str())
-                .cloned()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: id.as_str().into(),
-                    expected_type: "boolean variable array".into(),
-                }),
+            flatzinc::Expr::VarParIdentifier(id) => {
+                if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
+                    Ok(Rc::clone(literal))
+                } else {
+                    self.boolean_array_parameters
+                        .get(id.as_str())
+                        .map(|array| {
+                            array
+                                .iter()
+                                .map(|value| {
+                                    if *value {
+                                        self.constant_bool_true
+                                    } else {
+                                        self.constant_bool_false
+                                    }
+                                })
+                                .collect()
+                        })
+                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                            identifier: id.as_str().into(),
+                            expected_type: "boolean variable array".into(),
+                        })
+                }
+            }
 
             flatzinc::Expr::ArrayOfBool(array) => array
                 .iter()
@@ -206,40 +235,69 @@ impl CompilationContext<'_> {
             flatzinc::Expr::VarParIdentifier(id) => {
                 self.resolve_integer_variable_from_identifier(id)
             }
-            flatzinc::Expr::Int(val) => Ok(*self.constant_domain_ids.entry(*val as i32).or_insert(
-                self.solver
-                    .create_new_integer_variable(*val as i32, *val as i32),
-            )),
+            flatzinc::Expr::Int(val) => Ok(*self
+                .constant_domain_ids
+                .entry(*val as i32)
+                .or_insert_with(|| {
+                    self.solver
+                        .create_new_integer_variable(*val as i32, *val as i32)
+                })),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
     }
 
     pub fn resolve_integer_variable_from_identifier(
-        &self,
+        &mut self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
-        self.integer_variable_map
+        if let Some(domain_id) = self
+            .integer_variable_map
             .get(&self.integer_equivalences.representative(identifier))
-            .copied()
-            .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                identifier: identifier.into(),
-                expected_type: "integer variable".into(),
-            })
+        {
+            Ok(*domain_id)
+        } else {
+            self.integer_parameters
+                .get(&self.integer_equivalences.representative(identifier))
+                .map(|value| {
+                    *self
+                        .constant_domain_ids
+                        .entry(*value)
+                        .or_insert_with(|| self.solver.create_new_integer_variable(*value, *value))
+                })
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: identifier.into(),
+                    expected_type: "integer variable".into(),
+                })
+        }
     }
 
     pub fn resolve_integer_variable_array(
-        &self,
+        &mut self,
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[DomainId]>, FlatZincError> {
         match expr {
-            flatzinc::Expr::VarParIdentifier(id) => self
-                .integer_variable_arrays
-                .get(id.as_str())
-                .cloned()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: id.as_str().into(),
-                    expected_type: "integer variable array".into(),
-                }),
+            flatzinc::Expr::VarParIdentifier(id) => {
+                if let Some(domain_id) = self.integer_variable_arrays.get(id.as_str()) {
+                    Ok(Rc::clone(domain_id))
+                } else {
+                    self.integer_array_parameters
+                        .get(id.as_str())
+                        .map(|array| {
+                            array
+                                .iter()
+                                .map(|value| {
+                                    *self.constant_domain_ids.entry(*value).or_insert_with(|| {
+                                        self.solver.create_new_integer_variable(*value, *value)
+                                    })
+                                })
+                                .collect()
+                        })
+                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                            identifier: id.as_str().into(),
+                            expected_type: "integer variable array".into(),
+                        })
+                }
+            }
 
             // The AST is not correct here. Since the type of an in-place array containing only
             // identifiers cannot be determined, and the parser attempts to parse ArrayOfBool
