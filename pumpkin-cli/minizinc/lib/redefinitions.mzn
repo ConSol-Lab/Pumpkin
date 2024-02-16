@@ -1,3 +1,5 @@
+include "nosets.mzn";
+
 % Boolean Constraints
 
 predicate array_bool_element(var int: b, array [int] of bool: as, var bool: c) = 
