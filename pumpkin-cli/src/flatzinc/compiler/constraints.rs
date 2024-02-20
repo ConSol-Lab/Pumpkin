@@ -57,3 +57,23 @@ pub fn int_eq_reif(
 ) {
     int_lin_eq_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif);
 }
+
+pub fn int_ne_reif(
+    solver: &mut ConstraintSatisfactionSolver,
+    a: DomainId,
+    b: DomainId,
+    reif: Literal,
+) {
+    solver.int_ne_reif(a, b, reif);
+    solver.int_eq_reif(a, b, !reif);
+}
+
+pub fn int_lin_ne_reif(
+    solver: &mut ConstraintSatisfactionSolver,
+    terms: Box<[AffineView<DomainId>]>,
+    rhs: i32,
+    reif: Literal,
+) {
+    solver.int_lin_ne_reif(terms.clone(), rhs, reif);
+    solver.int_lin_eq_reif(terms, rhs, !reif)
+}

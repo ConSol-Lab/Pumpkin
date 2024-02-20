@@ -39,6 +39,16 @@ pub trait ConstraintsExt {
         let _ = self.post(LinearNe::new(terms.into(), rhs));
     }
 
+    /// Adds the constraint `reif -> \sum terms_i != rhs`.
+    fn int_lin_ne_reif<Var: IntVar + 'static>(
+        &mut self,
+        terms: impl Into<Box<[Var]>>,
+        rhs: i32,
+        reif: Literal,
+    ) {
+        let _ = self.post(LinearNe::reified(terms.into(), rhs, reif));
+    }
+
     /// Adds the constraint `\sum terms_i <= rhs`.
     fn int_lin_le<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
         let _ = self.post(LinearLeq::new(terms.into(), rhs));
@@ -82,6 +92,11 @@ pub trait ConstraintsExt {
     /// Adds the constraint `lhs != rhs`.
     fn int_ne<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
         self.int_lin_ne([lhs.scaled(1), rhs.scaled(-1)], 0);
+    }
+
+    /// Adds the constraint `reif -> lhs != rhs`.
+    fn int_ne_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
+        self.int_lin_ne_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs <= rhs`.

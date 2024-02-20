@@ -12,7 +12,9 @@ use super::constraints::int_eq_reif;
 use super::constraints::int_le_reif;
 use super::constraints::int_lin_eq_reif;
 use super::constraints::int_lin_le_reif;
+use super::constraints::int_lin_ne_reif;
 use super::constraints::int_lt_reif;
+use super::constraints::int_ne_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::FlatZincError;
@@ -34,7 +36,13 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                     |solver, terms, rhs| solver.int_lin_ne(terms, rhs),
                 )?;
             }
-            "int_lin_ne_reif" => todo!("the LinearNe propagator does not yet support reification"),
+            "int_lin_ne_reif" => compile_reified_int_lin_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lin_ne_reif",
+                int_lin_ne_reif,
+            )?,
             "int_lin_le" => {
                 compile_int_lin_predicate(
                     context,
@@ -70,7 +78,13 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                     solver.int_ne(a, b)
                 })?
             }
-            "int_ne_reif" => todo!("the LinearNe propagator does not yet support reification"),
+            "int_ne_reif" => compile_reified_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_ne_reif",
+                int_ne_reif,
+            )?,
             "int_le" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
                     solver.int_le(a, b)
