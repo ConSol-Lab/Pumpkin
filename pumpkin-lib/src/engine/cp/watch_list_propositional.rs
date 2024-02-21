@@ -7,7 +7,9 @@ use crate::basic_types::Literal;
 
 #[derive(Debug)]
 pub struct WatchListPropositional {
-    watchers: KeyedVec<Literal, WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<Literal, WatcherPropositional>, /* contains propagator ids of propagators
+                                                        * that watch domain changes of the i-th
+                                                        * integer variable */
     is_watching_anything: bool,
 }
 
@@ -42,7 +44,7 @@ impl BooleanDomainEvent {
     }
 }
 
-//public functions
+// public functions
 impl WatchListPropositional {
     pub fn grow(&mut self) {
         self.watchers.push(WatcherPropositional::default());

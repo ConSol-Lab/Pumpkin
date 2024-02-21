@@ -6,7 +6,8 @@ use pumpkin_lib::basic_types::DomainId;
 use pumpkin_lib::basic_types::Literal;
 
 /// The objective function of a FlatZinc model,
-/// consisting of the direction (e.g. maximization or minimization) and the integer variable which is being optimised
+/// consisting of the direction (e.g. maximization or minimization) and the integer variable which
+/// is being optimised
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FlatzincObjective {
     Maximize(DomainId),
@@ -99,8 +100,8 @@ impl<T> VariableOutput<T> {
 pub(crate) struct ArrayOutput<T> {
     id: Rc<str>,
     /// The shape of the array is a sequence of index sets. The number of elements in this sequence
-    /// corresponds to the dimensionality of the array, and the element in the sequence at index i denotes
-    /// the index set used in dimension i.
+    /// corresponds to the dimensionality of the array, and the element in the sequence at index i
+    /// denotes the index set used in dimension i.
     /// Example: [(1, 5), (2, 4)] describes a 2d array, where the first dimension in indexed with
     /// an element of 1..5, and the second dimension is indexed with an element from 2..4.
     shape: Box<[(i32, i32)]>,

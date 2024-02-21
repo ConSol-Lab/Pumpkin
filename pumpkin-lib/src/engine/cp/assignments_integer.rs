@@ -13,7 +13,8 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
-    domains: KeyedVec<DomainId, IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
+    domains: KeyedVec<DomainId, IntegerDomainExplicit>, /* indicates if value j is in the domain
+                                                         * of the integer variable */
 
     events: EventSink,
 }
@@ -66,9 +67,10 @@ impl AssignmentsInteger {
         &self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
     }
 
-    //registers the domain of a new integer variable
-    //note that this is an internal method that does _not_ allocate additional information necessary for the solver apart from the domain
-    //when creating a new integer variable, use create_new_domain_id in the ConstraintSatisfactionSolver
+    // registers the domain of a new integer variable
+    // note that this is an internal method that does _not_ allocate additional information
+    // necessary for the solver apart from the domain when creating a new integer variable, use
+    // create_new_domain_id in the ConstraintSatisfactionSolver
     pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         let id = DomainId {
             id: self.num_domains(),
@@ -102,7 +104,7 @@ impl AssignmentsInteger {
     }
 }
 
-//methods for getting info about the domains
+// methods for getting info about the domains
 impl AssignmentsInteger {
     pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].lower_bound
@@ -206,7 +208,7 @@ impl AssignmentsInteger {
     }
 }
 
-//methods to change the domains
+// methods to change the domains
 impl AssignmentsInteger {
     pub fn tighten_lower_bound(
         &mut self,
@@ -278,12 +280,12 @@ impl AssignmentsInteger {
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
 
-        //only tighten the lower bound if needed
+        // only tighten the lower bound if needed
         if self.get_lower_bound(domain_id) < assigned_value {
             self.tighten_lower_bound(domain_id, assigned_value, reason)?;
         }
 
-        //only tighten the uper bound if needed
+        // only tighten the uper bound if needed
         if self.get_upper_bound(domain_id) > assigned_value {
             self.tighten_upper_bound(domain_id, assigned_value, reason)?;
         }
@@ -426,9 +428,9 @@ pub struct ConstraintProgrammingTrailEntry {
     ///  to update the bounds when backtracking.
     pub old_lower_bound: i32,
     pub old_upper_bound: i32,
-    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a propagation
-    ///  took place, e.g., does _not_ make sense in the case of a decision or if the update was due
-    ///  to synchronisation from the propositional trail.
+    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
+    /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
+    /// the update was due  to synchronisation from the propositional trail.
     pub reason: Option<ReasonRef>,
 }
 

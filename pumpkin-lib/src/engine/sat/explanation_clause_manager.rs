@@ -28,8 +28,9 @@ impl ExplanationClauseManager {
     }
 
     pub fn clean_up_explanation_clauses(&mut self, clause_allocator: &mut ClauseAllocator) {
-        //the idea is to delete clauses in reverse order
-        //  so that in the future, when we implement manual memory management, we can simply skip large blocks of memory without inspection
+        // the idea is to delete clauses in reverse order
+        //  so that in the future, when we implement manual memory management, we can simply skip
+        // large blocks of memory without inspection
         for clause_reference in self.explanation_clauses.iter().rev() {
             clause_allocator.delete_clause(*clause_reference);
         }

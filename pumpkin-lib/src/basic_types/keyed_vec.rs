@@ -2,7 +2,8 @@ use std::marker::PhantomData;
 use std::ops::Index;
 use std::ops::IndexMut;
 
-/// Structure for storing elements of type `Value`, the structure can only be indexed by structures of type `Key`.
+/// Structure for storing elements of type `Value`, the structure can only be indexed by structures
+/// of type `Key`.
 ///
 /// Almost all features of this structure require that `Key` implements the [StorageKey] trait.
 ///

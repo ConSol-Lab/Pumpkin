@@ -17,21 +17,24 @@ impl ClauseAllocatorInterface<ClauseBasic> for ClauseAllocatorBasic {
     type Clause = ClauseBasic;
 
     fn create_clause(&mut self, literals: Vec<Literal>, is_learned: bool) -> ClauseReference {
-        //todo - add assert to ensure that the clause is as we expect, e.g., no duplicate literals. Normally preprocess_clause would get rid of this. Perhaps could move the responsibility to the clause manager, and have an unchecked version for learned clauses
+        // todo - add assert to ensure that the clause is as we expect, e.g., no duplicate literals.
+        // Normally preprocess_clause would get rid of this. Perhaps could move the responsibility
+        // to the clause manager, and have an unchecked version for learned clauses
         pumpkin_assert_simple!(literals.len() >= 2);
 
         if self.deleted_clause_references.is_empty() {
-            //create a new clause reference, unseen before
+            // create a new clause reference, unseen before
             let clause_reference = ClauseReference::create_allocated_clause_reference(
                 self.allocated_clauses.len() as u32 + 1,
-            ); // we keep clause reference id zero as the null value, never to be allocated at that position
+            ); // we keep clause reference id zero as the null value, never to be allocated at that
+               // position
 
             self.allocated_clauses
                 .push(ClauseBasic::new(literals, is_learned));
 
             clause_reference
         } else {
-            //reuse a clause reference from the deleted clause pool
+            // reuse a clause reference from the deleted clause pool
             let clause_reference = self.deleted_clause_references.pop().unwrap();
             self.allocated_clauses[clause_reference.get_code() as usize - 1] =
                 ClauseBasic::new(literals, is_learned);
@@ -54,9 +57,10 @@ impl ClauseAllocatorInterface<ClauseBasic> for ClauseAllocatorBasic {
         pumpkin_assert_moderate!(
             clause_reference.get_code() - 1 < self.allocated_clauses.len() as u32
         );
-        //note that in the current implementation 'deleting' a clause simply labels its clause reference as available
-        //  so next time a new clause is created, it can freely take the value of a previous deleted clause
-        //  this may change if we change the clause allocation mechanism as usual in SAT solvers
+        // note that in the current implementation 'deleting' a clause simply labels its clause
+        // reference as available  so next time a new clause is created, it can freely take
+        // the value of a previous deleted clause  this may change if we change the clause
+        // allocation mechanism as usual in SAT solvers
         pumpkin_assert_moderate!(
             !self.get_clause(clause_reference).is_deleted(),
             "Cannot delete an already deleted clause."

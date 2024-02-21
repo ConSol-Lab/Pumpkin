@@ -3,12 +3,14 @@ use enumset::EnumSet;
 use crate::basic_types::DomainId;
 use crate::basic_types::KeyedVec;
 use crate::engine::cp::IntDomainEvent;
+#[cfg(doc)]
+use crate::engine::DomainEvents;
 
-/// While a propagator runs, the propagations it performs are captured as events in the event sink.
-/// When the propagator finishes, the event sink is drained to notify all the propagators that
-/// subscribe to those events.
+/// While a propagator runs (see [`propagators`][crate::propagators]), the propagations it performs
+/// are captured as events in the event sink. When the propagator finishes, the event sink is
+/// drained to notify all the propagators that subscribe to those [`IntDomainEvent`].
 ///
-/// Triggering any [`DomainEvent`] will also trigger the event [`DomainEvent::Any`].
+/// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone, Debug)]

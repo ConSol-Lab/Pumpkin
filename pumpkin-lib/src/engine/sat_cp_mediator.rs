@@ -28,8 +28,14 @@ pub struct SATCPMediator {
     mapping_domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
     mapping_domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
     mapping_literal_to_predicates: KeyedVec<Literal, Vec<Predicate>>,
-    cp_trail_synced_position: usize, // assignments_integer.trail[cp_trail_synced_position] is the next entry that needs to be synchronised with the propositional assignment trail
-    sat_trail_synced_position: usize, // this is the sat equivalent of the above, i.e., assignments_propositional.trail[sat_trail_synced_position] is the next literal on the trail that needs to be synchronised with the integer trail
+    /// [`AssignmentsInteger::trail`]
+    /// [[cp_trail_synced_position][SATCPMediator::cp_trail_synced_position]] is the next entry
+    /// that needs to be synchronised with [AssignmentsPropositional::trail].
+    cp_trail_synced_position: usize,
+    /// This is the SAT equivalent of the above, i.e., [AssignmentsPropositional::trail]
+    /// [[sat_trail_synced_position][SATCPMediator::sat_trail_synced_position]] is the next
+    /// [Literal] on the trail that needs to be synchronised with [AssignmentsInteger::trail].
+    sat_trail_synced_position: usize,
     pub explanation_clause_manager: ExplanationClauseManager,
     pub true_literal: Literal,
     pub false_literal: Literal,
@@ -38,12 +44,17 @@ pub struct SATCPMediator {
 impl Default for SATCPMediator {
     fn default() -> SATCPMediator {
         // When the mediator is created for use in the ConstraintSatisfactionSolver, the true and
-        // false literals will be updated to match the solver's true and false literals. However,
-        // we set this up here to facilitate testing the mediator.
+        // how are you doing this is gibberish false literals will be updated to match the
+        // solver's true and false literals. However, we set this up here to facilitate
+        // testing the mediator.
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
 
         SATCPMediator {
-            mapping_literal_to_predicates: KeyedVec::default(), //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
+            // `mapping_literal_to_predicates[literal]` is the vector of predicates associated with
+            // the literal. Usually there is only one or two predicates associated with a literal,
+            // but due to preprocessing, it could be that one literal is associated with two or more
+            // predicates
+            mapping_literal_to_predicates: KeyedVec::default(),
             mapping_domain_to_equality_literals: KeyedVec::default(),
             mapping_domain_to_lower_bound_literals: KeyedVec::default(),
             cp_trail_synced_position: 0,
@@ -55,7 +66,7 @@ impl Default for SATCPMediator {
     }
 }
 
-//methods for synchronising trails
+// methods for synchronising trails
 impl SATCPMediator {
     pub fn synchronise_propositional_trail_based_on_integer_trail(
         &mut self,
@@ -64,16 +75,20 @@ impl SATCPMediator {
         clausal_propagator: &mut ClausalPropagator,
         clause_allocator: &mut ClauseAllocator,
     ) -> Option<ConflictInfo> {
-        //for each entry on the integer trail, we now add the equivalent propositional representation on the propositional trail
-        //  note that only one literal per predicate will be stored
-        //      since the clausal propagator will propagate other literals to ensure that the meaning of the literal is respected
-        //          e.g., placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1] to true
+        // for each entry on the integer trail, we now add the equivalent propositional
+        // representation on the propositional trail  note that only one literal per
+        // predicate will be stored      since the clausal propagator will propagate other
+        // literals to ensure that the meaning of the literal is respected          e.g.,
+        // placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1]
+        // to true
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
             let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
             // It could be the case that the reason is `None`
-            // due to a SAT propagation being put on the trail during `synchronise_integer_trail_based_on_propositional_trail`
-            // In that case we do not synchronise since we assume that the SAT trail is already aware of the information
+            // due to a SAT propagation being put on the trail during
+            // `synchronise_integer_trail_based_on_propositional_trail` In that case we
+            // do not synchronise since we assume that the SAT trail is already aware of the
+            // information
             if let Some(reason_ref) = entry.reason {
                 let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
@@ -87,8 +102,10 @@ impl SATCPMediator {
                     return conflict_info;
                 }
 
-                //It could occur that one of these propagations caused a conflict in which case the SAT-view and the CP-view are unsynchronised
-                //We need to ensure that the views are synchronised up to the CP trail entry which caused the conflict
+                // It could occur that one of these propagations caused a conflict in which case the
+                // SAT-view and the CP-view are unsynchronised We need to ensure
+                // that the views are synchronised up to the CP trail entry which caused the
+                // conflict
                 if let Err(e) =
                     clausal_propagator.propagate(assignments_propositional, clause_allocator)
                 {
@@ -112,12 +129,14 @@ impl SATCPMediator {
             "We can only sychronise the propositional trail if the integer trail is already sychronised."
         );
 
-        //this could possibly be improved if it shows up as a performance hotspot
-        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the literals to the propositional stack
-        //  and update the next_domain_trail_position pointer to go pass the entries that surely are not going to lead to any changes
-        //  this would only work if the next_domain_trail pointer is already at the end of the stack, think about this, could be useful for propagators
-        //      and might be useful for a custom domain propagator
-        //  this would also simplify the code below, no additional checks would be needed? Not sure.
+        // this could possibly be improved if it shows up as a performance hotspot
+        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the
+        // literals to the propositional stack  and update the next_domain_trail_position
+        // pointer to go pass the entries that surely are not going to lead to any changes
+        //  this would only work if the next_domain_trail pointer is already at the end of the
+        // stack, think about this, could be useful for propagators      and might be useful
+        // for a custom domain propagator  this would also simplify the code below, no
+        // additional checks would be needed? Not sure.
 
         if cp_data_structures.assignments_integer.num_domains() == 0 || cp_propagators.is_empty() {
             self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
@@ -131,9 +150,10 @@ impl SATCPMediator {
             self.synchronise_literal(literal, cp_data_structures)?;
         }
         self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
-        //the newly added entries to the trail do not need to be synchronise with the propositional trail
-        //  this is because the integer trail was already synchronise when this method was called
-        //  and the newly added entries are already present on the propositional trail
+        // the newly added entries to the trail do not need to be synchronise with the propositional
+        // trail  this is because the integer trail was already synchronise when this method
+        // was called  and the newly added entries are already present on the propositional
+        // trail
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
 
         let _ = cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
@@ -146,7 +166,7 @@ impl SATCPMediator {
         literal: Literal,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> Result<(), EmptyDomain> {
-        //recall that a literal may be linked to multiple predicates
+        // recall that a literal may be linked to multiple predicates
         //  e.g., this may happen when in preprocessing two literals are detected to be equal
         //  so now we loop for each predicate and make necessary updates
         //  (although currently we do not have any serious preprocessing!)
@@ -176,7 +196,7 @@ impl SATCPMediator {
     }
 }
 
-//methods for creating new variables
+// methods for creating new variables
 impl SATCPMediator {
     pub fn create_new_propositional_variable_with_predicate(
         &mut self,
@@ -212,7 +232,7 @@ impl SATCPMediator {
         sat_data_structures.propositional_variable_selector.grow();
         sat_data_structures.propositional_value_selector.grow();
 
-        //add an empty predicate vector for both polarities of the variable
+        // add an empty predicate vector for both polarities of the variable
         self.mapping_literal_to_predicates.push(vec![]);
         self.mapping_literal_to_predicates.push(vec![]);
 
@@ -247,7 +267,8 @@ impl SATCPMediator {
         domain_id
     }
 
-    /// Eagerly create the propositional representation of the integer variable. This is done using a unary representation.
+    /// Eagerly create the propositional representation of the integer variable. This is done using
+    /// a unary representation.
     fn create_propositional_representation(
         &mut self,
         domain_id: DomainId,
@@ -448,7 +469,7 @@ impl SATCPMediator {
             "The predicate is already attached to the _negative_ literal, cannot do this twice."
         );
 
-        //create a closure for convenience that adds predicates to literals
+        // create a closure for convenience that adds predicates to literals
         let closure_add_predicate_to_literal =
             |literal: Literal,
              predicate: Predicate,
@@ -457,16 +478,17 @@ impl SATCPMediator {
                     !mapping_literal_to_predicates[literal].contains(&predicate),
                     "The predicate is already attached to the literal, cannot do this twice."
                 );
-                //resize the mapping vector if necessary
+                // resize the mapping vector if necessary
                 if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
                     mapping_literal_to_predicates
                         .resize((literal.to_u32() + 1) as usize, Vec::new());
                 }
-                //append the predicate - note that the assert makes sure the same predicate is never added twice
+                // append the predicate - note that the assert makes sure the same predicate is
+                // never added twice
                 mapping_literal_to_predicates[literal].push(predicate);
             };
 
-        //now use the closure to add the predicate to both the positive and negative literals
+        // now use the closure to add the predicate to both the positive and negative literals
 
         let positive_literal = Literal::new(variable, true);
         closure_add_predicate_to_literal(
@@ -484,7 +506,7 @@ impl SATCPMediator {
     }
 }
 
-//methods for getting simple information on the interface of SAT and CP
+// methods for getting simple information on the interface of SAT and CP
 impl SATCPMediator {
     pub fn get_lower_bound_literal(
         &self,
@@ -595,7 +617,7 @@ impl SATCPMediator {
                 }
             }
             ConflictInfo::Explanation(propositional_conjunction) => {
-                //create the explanation clause
+                // create the explanation clause
                 //  allocate a fresh vector each time might be a performance bottleneck
                 //  todo better ways
                 let explanation_literals = propositional_conjunction
@@ -640,7 +662,7 @@ impl SATCPMediator {
             .assignments_propositional
             .get_variable_reason_constraint(propagated_literal.get_propositional_variable());
 
-        //Case 1: the literal was propagated by the clausal propagator
+        // Case 1: the literal was propagated by the clausal propagator
         if constraint_reference.is_clause() {
             clausal_propagator.get_literal_propagation_clause_reference(
                 propagated_literal,
@@ -649,7 +671,8 @@ impl SATCPMediator {
                 &mut self.explanation_clause_manager,
             )
         }
-        //Case 2: the literal was placed on the propositional trail while synchronising the CP trail with the propositional trail
+        // Case 2: the literal was placed on the propositional trail while synchronising the CP
+        // trail with the propositional trail
         else {
             self.create_clause_from_propagation_reason(
                 propagated_literal,
@@ -670,10 +693,10 @@ impl SATCPMediator {
         let (reason, assignments_integer) = cp_data_structures
             .compute_reason(reason_ref, &sat_data_structures.assignments_propositional);
 
-        //create the explanation clause
+        // create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
-        //important to keep propagated literal at the zero-th position
+        // important to keep propagated literal at the zero-th position
         let explanation_literals = std::iter::once(propagated_literal)
             .chain(
                 reason

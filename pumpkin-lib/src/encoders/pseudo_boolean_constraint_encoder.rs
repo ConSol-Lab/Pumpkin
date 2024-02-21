@@ -24,14 +24,17 @@ use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
 
 pub trait PseudoBooleanConstraintEncoderInterface {
-    /// Add clauses that encode \sum w_i x_i <= k and returns the encoder object
-    /// The encoder can later be used to strengthen the constraint (see 'strengthen_at_most_k')
-    /// The method assumes the input is meaningful so the encoding cannot trivially fail, i.e.,
-    ///     \sum w_i > k
-    ///     0 < w_i <= k
-    ///     x_i unassigned    
-    ///     weighted_literals is not empty
-    /// Recall that this trait is used in combination with 'PseudoBooleanConstraintEncoder<T>', which ensures the above conditions are met
+    /// Add clauses that encode \sum w_i x_i <= k and returns a [`PseudoBooleanConstraintEncoder`]
+    /// object. The encoder can later be used to strengthen the constraint (see
+    /// [`strengthen_at_most_k`][PseudoBooleanConstraintEncoderInterface::strengthen_at_most_k])
+    /// The method assumes the input is meaningful so the encoding cannot trivially fail:
+    ///     - \sum w_i > k
+    ///     - 0 < w_i <= k
+    ///     - x_i unassigned
+    ///     - weighted_literals is not empty
+    ///
+    /// Recall that this trait is used in combination with [`PseudoBooleanConstraintEncoder`],
+    /// which ensures the above conditions are met
     fn encode_at_most_k(
         weighted_literals: Vec<WeightedLiteral>,
         k: u64,
@@ -41,7 +44,9 @@ pub trait PseudoBooleanConstraintEncoderInterface {
         Self: Sized;
 
     /// Incrementally strengthen the encoding to encode \sum w_i x_i <= k
-    /// Assumes the k is smaller than the previous k, and that encode_at_most_k has been called some time before
+    /// Assumes the k is smaller than the previous k, and that
+    /// [`encode_at_most_k`][PseudoBooleanConstraintEncoderInterface::encode_at_most_k] has been
+    /// called some time before
     fn strengthen_at_most_k(
         &mut self,
         k: u64,
@@ -271,15 +276,17 @@ impl PseudoBooleanConstraintEncoder {
             .sum::<u64>();
 
         if preprocessed_weighted_literals.is_empty() {
-            //All literals are assigned at the root level, it is thus trivially satisfied
+            // All literals are assigned at the root level, it is thus trivially satisfied
             self.state = State::TriviallySatisfied;
         } else if sum_weight <= initial_k - self.constant_term {
-            //The sum of the weights of the literals assigned at the root level is lower than the initial_k - constant_term
-            //This means that this constraint is currently satisfied (but might be strengthened in the future)
+            // The sum of the weights of the literals assigned at the root level is lower than the
+            // initial_k - constant_term This means that this constraint is currently
+            // satisfied (but might be strengthened in the future)
             self.state = State::Preprocessed(preprocessed_weighted_literals);
         } else {
-            //We need to constrain the preprocessed literals further to ensure that it encodes the initial value
-            //We know that `constant_term` is already assigned, we thus need to constraint the remaining variables to `initial_k - constant_term`
+            // We need to constrain the preprocessed literals further to ensure that it encodes the
+            // initial value We know that `constant_term` is already assigned, we thus
+            // need to constraint the remaining variables to `initial_k - constant_term`
             self.state = State::Encoded(Self::create_encoder(
                 preprocessed_weighted_literals,
                 initial_k - self.constant_term,
@@ -304,21 +311,22 @@ impl PseudoBooleanConstraintEncoder {
         k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> Result<Vec<WeightedLiteral>, EncodingError> {
-        //preprocess the input before the initial encoding considering the following:
-        //  1. Terms that are assigned at the root level are removed
-        //      True literals decrease the right-hand side
-        //      Falsified literals can be removed without modifying the right-hand side
-        //  2. The constant term on the left-hand side effectively reduces the right-hand side
-        //      in case the constant term is greater than the left-hand side, we have a trivial conflict
+        // preprocess the input before the initial encoding considering the following:
+        //  1. Terms that are assigned at the root level are removed True literals decrease the
+        //     right-hand side Falsified literals can be removed without modifying the right-hand
+        //     side
+        //  2. The constant term on the left-hand side effectively reduces the right-hand side in
+        //     case the constant term is greater than the left-hand side, we have a trivial conflict
         //  3. Literals with weights exceeding the right-hand side are propagated to zero
-        //  4. If setting every left-hand side literal to true still does not violate the constant, no encoding is needed
+        //  4. If setting every left-hand side literal to true still does not violate the constant,
+        //     no encoding is needed
 
-        //there are more rules we could consider adding to preprocessing in the future (todo):
+        // there are more rules we could consider adding to preprocessing in the future (todo):
         //  remove duplicate literals by merging into one literal
         //  remove literals of opposite polarity and change the constant term
         //  divide the weights by the GCD?
 
-        //the preprocessing could be implemented more efficiency but probably is not the bottleneck
+        // the preprocessing could be implemented more efficiency but probably is not the bottleneck
 
         self.k_previous = k;
 
@@ -361,7 +369,7 @@ impl PseudoBooleanConstraintEncoder {
             }
         }
 
-        //collect terms that are not assigned at the root level
+        // collect terms that are not assigned at the root level
         let unassigned_weighted_literals: Vec<WeightedLiteral> = weighted_literals
             .iter()
             .filter(|term| {

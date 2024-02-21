@@ -37,7 +37,7 @@ struct LearnedClauses {
     high_lbd: Vec<ClauseReference>,
 }
 
-//todo explain the learned clause removal strategy
+// todo explain the learned clause removal strategy
 
 #[derive(Debug)]
 pub struct LearnedClauseManager {
@@ -67,8 +67,9 @@ impl LearnedClauseManager {
             assignments,
             clause_allocator,
         );
-        //only update if the clause is treated as a standard clause
-        //  note that in case of binary clauses, these may be stored directly in the watch lists and not as a standard clause
+        // only update if the clause is treated as a standard clause
+        //  note that in case of binary clauses, these may be stored directly in the watch lists and
+        // not as a standard clause
         if let Some(clause_reference) = result {
             self.update_lbd(clause_reference, assignments, clause_allocator);
 
@@ -85,17 +86,17 @@ impl LearnedClauseManager {
         sat_data_structures: &mut SATEngineDataStructures,
         clausal_propagator: &mut ClausalPropagator,
     ) {
-        //only consider clause removals once the threshold is reached
+        // only consider clause removals once the threshold is reached
         if self.learned_clauses.high_lbd.len()
             <= self.parameters.num_high_lbd_learned_clauses_max as usize
         {
             return;
         }
 
-        //we divide the procedure in two steps:
+        // we divide the procedure in two steps:
         //  + promote clauses that are in the high lbd group but achieved low lbd
         //  + remove roughly of the clauses that have high lbd
-        //this could be done in a single step but for simplicity we keep it as two separate steps
+        // this could be done in a single step but for simplicity we keep it as two separate steps
 
         self.promote_high_lbd_clauses(sat_data_structures);
 
@@ -107,23 +108,25 @@ impl LearnedClauseManager {
         sat_data_structures: &mut SATEngineDataStructures,
         clausal_propagator: &mut ClausalPropagator,
     ) {
-        //roughly half of the learned clauses will be removed
+        // roughly half of the learned clauses will be removed
 
         self.sort_high_lbd_clauses_by_quality_decreasing_order(sat_data_structures);
 
-        //the removal is done in two phases
-        //  in the first phase, clauses are deleted but the clause references are not removed from self.learned_clauses
-        //  in the second phase, the corresponding clause references are removed from the learned clause vector
+        // the removal is done in two phases
+        //  in the first phase, clauses are deleted but the clause references are not removed from
+        // self.learned_clauses  in the second phase, the corresponding clause references
+        // are removed from the learned clause vector
         let mut num_clauses_to_remove = self.learned_clauses.high_lbd.len() as u64
             - self.parameters.num_high_lbd_learned_clauses_max / 2;
-        //note the 'rev', since we give priority to poor clauses for deletion
-        //  even though we aim to remove half of the clauses, less could be removed if many clauses are protected or in propagation
+        // note the 'rev', since we give priority to poor clauses for deletion
+        //  even though we aim to remove half of the clauses, less could be removed if many clauses
+        // are protected or in propagation
         for &clause_reference in self.learned_clauses.high_lbd.iter().rev() {
             if num_clauses_to_remove == 0 {
                 break;
             }
 
-            //protected clauses are skipped
+            // protected clauses are skipped
             if sat_data_structures.clause_allocator[clause_reference]
                 .is_protected_against_deletion()
             {
@@ -132,19 +135,19 @@ impl LearnedClauseManager {
                 continue;
             }
 
-            //clauses that are currently in propagation are skipped
+            // clauses that are currently in propagation are skipped
             //  otherwise there may be problems with conflict analysis
             if sat_data_structures.is_clause_propagating(clause_reference) {
                 continue;
             }
 
-            //remove the clause from the watch list
+            // remove the clause from the watch list
             clausal_propagator.remove_clause_from_consideration(
                 sat_data_structures.clause_allocator[clause_reference].get_literal_slice(),
                 clause_reference,
             );
 
-            //delete the clause
+            // delete the clause
             sat_data_structures
                 .clause_allocator
                 .delete_clause(clause_reference);
@@ -161,10 +164,11 @@ impl LearnedClauseManager {
         &mut self,
         sat_data_structures: &mut SATEngineDataStructures,
     ) {
-        //sort the learned clauses
-        //the ordering is such that the better clauses are in the front
+        // sort the learned clauses
+        // the ordering is such that the better clauses are in the front
         //  note that this is not the most efficient sorting comparison, but will do for now
-        //  e.g., sort_by_lbd could be moved out, and the comparison of floats could be changed possibly
+        //  e.g., sort_by_lbd could be moved out, and the comparison of floats could be changed
+        // possibly
         self.learned_clauses
             .high_lbd
             .sort_unstable_by(|clause_reference1, clause_reference2| {
@@ -177,7 +181,8 @@ impl LearnedClauseManager {
 
                 match self.parameters.high_lbd_learned_clause_sorting_strategy {
                     LearnedClauseSortingStrategy::Activity => {
-                        //note that here we reverse clause1 and clause2, because a higher value for activity is better
+                        // note that here we reverse clause1 and clause2, because a higher value for
+                        // activity is better
                         clause2
                             .get_activity()
                             .partial_cmp(&clause1.get_activity())
@@ -187,7 +192,8 @@ impl LearnedClauseManager {
                         if clause1.lbd() != clause2.lbd() {
                             clause1.lbd().cmp(&clause2.lbd())
                         } else {
-                            //note that here we reverse clause1 and clause2, because a higher value for activity is better
+                            // note that here we reverse clause1 and clause2, because a higher value
+                            // for activity is better
                             clause2
                                 .get_activity()
                                 .partial_cmp(&clause1.get_activity())
@@ -199,7 +205,7 @@ impl LearnedClauseManager {
     }
 
     fn promote_high_lbd_clauses(&mut self, sat_data_structures: &mut SATEngineDataStructures) {
-        //promote clauses: we do this in two passes for simplicity of implementation
+        // promote clauses: we do this in two passes for simplicity of implementation
         //  add the clauses references to the low_lbd group
         for &clause_reference in &self.learned_clauses.high_lbd {
             let lbd = sat_data_structures.clause_allocator[clause_reference].lbd();
@@ -257,7 +263,7 @@ impl LearnedClauseManager {
                 .all(|lit| assignments.is_literal_assigned(*lit)),
             "Cannot compute LBD if not all literals are assigned."
         );
-        //the LBD is the number of literals at different decision levels
+        // the LBD is the number of literals at different decision levels
         //  this implementation should be improved
         let mut codes: Vec<usize> = literals
             .iter()
@@ -266,7 +272,7 @@ impl LearnedClauseManager {
                 if level > 0 {
                     Some(level)
                 } else {
-                    //level zero should not be counted towards the LBD
+                    // level zero should not be counted towards the LBD
                     None
                 }
             })
@@ -281,14 +287,14 @@ impl LearnedClauseManager {
         clause_reference: ClauseReference,
         clause_allocator: &mut ClauseAllocator,
     ) {
-        //check if bumping the activity would lead to a large activity value
+        // check if bumping the activity would lead to a large activity value
         if clause_allocator.get_clause(clause_reference).get_activity() + self.clause_bump_increment
             > self.parameters.max_clause_activity
         {
-            //if so, rescale all activity values
+            // if so, rescale all activity values
             self.rescale_clause_activities(clause_allocator);
         }
-        //at this point, it is safe to increase the activity value
+        // at this point, it is safe to increase the activity value
         clause_allocator
             .get_mutable_clause(clause_reference)
             .increase_activity(self.clause_bump_increment);

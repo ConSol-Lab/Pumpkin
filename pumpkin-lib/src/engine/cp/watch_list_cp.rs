@@ -7,7 +7,9 @@ use crate::basic_types::KeyedVec;
 
 #[derive(Default, Debug)]
 pub struct WatchListCP {
-    watchers: KeyedVec<DomainId, WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<DomainId, WatcherCP>, /* contains propagator ids of propagators that
+                                              * watch domain changes of the i-th integer
+                                              * variable */
     is_watching_anything: bool,
 }
 
@@ -32,7 +34,7 @@ pub enum IntDomainEvent {
     Removal,
 }
 
-//public functions
+// public functions
 impl WatchListCP {
     pub fn grow(&mut self) {
         self.watchers.push(WatcherCP::default());

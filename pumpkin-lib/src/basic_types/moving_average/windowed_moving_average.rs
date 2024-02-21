@@ -25,7 +25,7 @@ impl MovingAverageInterface for WindowedMovingAverage {
     fn add_term(&mut self, new_term: u64) {
         pumpkin_assert_simple!(self.values_in_window.len() <= self.window_size as usize);
 
-        //if the window is full, then remove an element to make room for the new term
+        // if the window is full, then remove an element to make room for the new term
         if self.values_in_window.len() == self.window_size as usize {
             self.windowed_sum -= self.values_in_window.pop_front().unwrap();
         }
@@ -35,10 +35,10 @@ impl MovingAverageInterface for WindowedMovingAverage {
     }
 
     fn value(&self) -> f64 {
-        /*pumpkin_assert_simple!(
-            self.values_in_window.len() == self.window_size as usize,
-            "Todo double check this condition, not sure if needed."
-        );*/
+        // pumpkin_assert_simple!(
+        // self.values_in_window.len() == self.window_size as usize,
+        // "Todo double check this condition, not sure if needed."
+        // );
 
         if !self.values_in_window.is_empty() {
             (self.windowed_sum as f64) / (self.values_in_window.len() as f64)
@@ -52,7 +52,7 @@ impl MovingAverageInterface for WindowedMovingAverage {
 
         match interval_length.cmp(&self.window_size) {
             std::cmp::Ordering::Less => {
-                //remove excess values
+                // remove excess values
                 let num_removals = self.window_size - interval_length;
                 for _i in 0..num_removals {
                     self.windowed_sum -= self.values_in_window.pop_front().unwrap();
@@ -60,7 +60,7 @@ impl MovingAverageInterface for WindowedMovingAverage {
                 self.window_size = interval_length;
             }
             std::cmp::Ordering::Greater => {
-                //allow for more values by increasing the window size
+                // allow for more values by increasing the window size
                 self.window_size = interval_length
             }
             std::cmp::Ordering::Equal => { /*do nothing*/ }

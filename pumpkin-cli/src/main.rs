@@ -59,8 +59,8 @@ struct Args {
     #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
     learning_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
-    /// Decides whether learned clauses are minimised as a post-processing step after computing the 1uip
-    /// Minimisation is done according to the idea proposed by Van Gelder
+    /// Decides whether learned clauses are minimised as a post-processing step after computing the
+    /// 1uip Minimisation is done according to the idea proposed by Van Gelder
     #[arg(long = "learning-minimise", value_parser = learned_clause_minimisation_parser, default_value_t = true.into())]
     learning_clause_minimisation: CliArg<bool>,
 
@@ -70,7 +70,8 @@ struct Args {
     restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
 
     /// The base interval length is used as a multiplier to the restart sequence.
-    /// For example, constant restarts with base interval 100 means a retart is triggered every 100 conflicts.
+    /// For example, constant restarts with base interval 100 means a retart is triggered every 100
+    /// conflicts.
     #[arg(long = "restart-base-interval", default_value_t = 50)]
     restart_base_interval: u64,
 
@@ -85,18 +86,21 @@ struct Args {
 
     /// Used to determine if a restart should be blocked (part of Glucose restarts).
     /// To be used in combination with "restarts-num-assigned-window".
-    /// A restart is blocked if the number of assigned propositional variables is must greater than the average number of assigned variables in the recent past
-    /// A greater/lower value for num-assigned-coef means fewer/more blocked restarts
+    /// A restart is blocked if the number of assigned propositional variables is must greater than
+    /// the average number of assigned variables in the recent past A greater/lower value for
+    /// num-assigned-coef means fewer/more blocked restarts
     #[arg(long = "restart-num-assigned-coef", default_value_t = 1.4)]
     restart_num_assigned_coef: f64,
 
-    /// Used to determine the length of the recent past that should be considered when deciding on blocking restarts (part of Glucose restarts).
-    /// The solver considers the last num-assigned-window conflicts as the reference point for the number of assigned variables
+    /// Used to determine the length of the recent past that should be considered when deciding on
+    /// blocking restarts (part of Glucose restarts). The solver considers the last
+    /// num-assigned-window conflicts as the reference point for the number of assigned variables
     #[arg(long = "restart-num-assigned-window", default_value_t = 5000)]
     restart_num_assigned_window: u64,
 
-    /// The coefficient in the geometric sequence x_i = x_{i-1} * geometric-coef, x_1 = "restarts-base-interval"
-    /// Used only if "restarts-sequence-generator" is assigned to "geometric".
+    /// The coefficient in the geometric sequence x_i = x_{i-1} * geometric-coef, x_1 =
+    /// "restarts-base-interval" Used only if "restarts-sequence-generator" is assigned to
+    /// "geometric".
     #[arg(long = "restart-geometric-coef")]
     restart_geometric_coef: Option<f64>,
 

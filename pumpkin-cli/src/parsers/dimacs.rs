@@ -240,7 +240,7 @@ where
                         self.start_literal(b, true);
                     }
 
-                    //covers the exotic case of having an empty clause in the dimacs file
+                    // covers the exotic case of having an empty clause in the dimacs file
                     b'0' => self.finish_clause()?,
 
                     b'-' => self.start_literal(&b'-', false),
@@ -554,7 +554,8 @@ impl DimacsSink for SolverDimacsSink {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
-            // The soft clause is a unit clause, we can use the literal in the objective directly without needing an additional selector variable.
+            // The soft clause is a unit clause, we can use the literal in the objective directly
+            // without needing an additional selector variable.
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.

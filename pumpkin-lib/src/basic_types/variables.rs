@@ -72,7 +72,8 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     fn offset(&self, offset: i32) -> Self::AffineView;
 }
 
-/// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the domain of `x`.
+/// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
+/// domain of `x`.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
     inner: Inner,

@@ -3,9 +3,9 @@
 //! - https://en.wikipedia.org/wiki/Block_design#Pairwise_balanced_uniform_designs_(2-designs_or_BIBDs)
 //! - https://mathworld.wolfram.com/BlockDesign.html
 //!
-//! Informally, the `BIBD(v, b, r, k, l)` problem looks for a binary `v * b` matrix such that all rows sum to
-//! `r`, all columns sum to `k`, and the dot product between any two distinct rows is at most `l` (any
-//! two pairs of rows have at most `l` overlapping 1s in their columns).
+//! Informally, the `BIBD(v, b, r, k, l)` problem looks for a binary `v * b` matrix such that all
+//! rows sum to `r`, all columns sum to `k`, and the dot product between any two distinct rows is at
+//! most `l` (any two pairs of rows have at most `l` overlapping 1s in their columns).
 //!
 //! The parameters are not independent, but satisfy the following conditions:
 //! - `bk = vr`

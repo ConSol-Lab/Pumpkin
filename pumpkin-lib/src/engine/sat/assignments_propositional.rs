@@ -57,7 +57,8 @@ impl AssignmentsPropositional {
     }
 
     pub fn get_propositional_variables(&self) -> PropositionalVariableGeneratorIterator {
-        //we start from 1 to ignore the special variable with index zero, which is always assigned at the root to true
+        // we start from 1 to ignore the special variable with index zero, which is always assigned
+        // at the root to true
         PropositionalVariableGeneratorIterator::new(1, self.num_propositional_variables())
     }
 
@@ -308,13 +309,14 @@ mod tests {
         );
         assert!(result.is_none());
         assert_eq!(assignments_propositional.trail.len(), 1);
-        //Re-assigning a literal which is already true does not result in the info being overwritten
+        // Re-assigning a literal which is already true does not result in the info being
+        // overwritten
         let result_reassignment = assignments_propositional.make_assignment(
             literal,
             ConstraintReference::create_reason_reference(ReasonRef(1)),
         );
         assert!(result_reassignment.is_none());
-        //Nor does it result in anything being added to the trail
+        // Nor does it result in anything being added to the trail
         assert_eq!(assignments_propositional.trail.len(), 1);
         assert!({
             if let PropositionalAssignmentInfo::Assigned {

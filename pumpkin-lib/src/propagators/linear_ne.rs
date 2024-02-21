@@ -45,8 +45,8 @@ impl<Var> LinearNe<Var> {
     }
 }
 
-/// Domain consistent propagator for the constraint `reif => \sum x_i != rhs`, where `x_i` are integer variables
-/// and `rhs` is an integer constant.
+/// Domain consistent propagator for the constraint `reif => \sum x_i != rhs`, where `x_i` are
+/// integer variables and `rhs` is an integer constant.
 #[derive(Debug)]
 pub struct LinearNeProp<Var> {
     terms: Rc<[PropagatorVariable<Var>]>,
@@ -164,7 +164,8 @@ where
             )?;
         } else if lhs == self.rhs {
             if reified && !context.is_literal_fixed(self.reif.as_ref().unwrap()) {
-                // Conflict was found but we can set the reified literal to false to satisfy the constraint
+                // Conflict was found but we can set the reified literal to false to satisfy the
+                // constraint
                 let reason: PropositionalConjunction = self
                     .terms
                     .iter()
@@ -173,7 +174,8 @@ where
 
                 context.assign_literal(self.reif.as_ref().unwrap(), false, reason)?;
             } else if !reified || context.is_literal_true(self.reif.as_ref().unwrap()) {
-                // Conflict was found, either the constraint is not reified or the reification variable is already true
+                // Conflict was found, either the constraint is not reified or the reification
+                // variable is already true
 
                 let failure_reason: Vec<_> = self
                     .terms

@@ -111,7 +111,7 @@ pub struct SatisfactionSolverOptions {
     pub certificate_file: Option<File>,
 }
 
-//methods that offer basic functionality
+// methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
     pub fn new(
         sat_options: SatOptions,
@@ -134,7 +134,7 @@ impl ConstraintSatisfactionSolver {
             analysis_result: ConflictAnalysisResult::default(),
         };
 
-        //we introduce a dummy variable set to true at the root level
+        // we introduce a dummy variable set to true at the root level
         //  this is useful for convenience when a fact needs to be expressed that is always true
         //  e.g., this makes writing propagator explanations easier for corner cases
         let root_variable = csp_solver
@@ -219,7 +219,9 @@ impl ConstraintSatisfactionSolver {
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// solver.solve_under_assumptions(&assumptions, i64::MAX);
     ///
-    /// let core = solver.extract_clausal_core().expect("the instance is unsatisfiable");
+    /// let core = solver
+    ///     .extract_clausal_core()
+    ///     .expect("the instance is unsatisfiable");
     ///
     /// // The order of the literals in the core is undefined, so we check for unordered equality.
     /// assert_eq!(
@@ -241,12 +243,13 @@ impl ConstraintSatisfactionSolver {
 
         let violated_assumption = self.state.get_violated_assumption();
 
-        //we consider three cases:
+        // we consider three cases:
         //  1. The assumption is falsified at the root level
-        //  2. The assumption is inconsistent with other assumptions, e.g., x and !x given as assumptions
+        //  2. The assumption is inconsistent with other assumptions, e.g., x and !x given as
+        //     assumptions
         //  3. Standard case
 
-        //Case one: the assumption is falsified at the root level
+        // Case one: the assumption is falsified at the root level
         if self
             .sat_data_structures
             .assignments_propositional
@@ -255,7 +258,7 @@ impl ConstraintSatisfactionSolver {
             self.restore_state_at_root();
             Ok(vec![violated_assumption])
         }
-        //Case two: the assumption is inconsistent with other assumptions
+        // Case two: the assumption is inconsistent with other assumptions
         //  i.e., the assumptions contain both literal 'x' and '~x'
         //  not sure what would be the best output in this case, possibly a special flag?
         //      for now we return the reason (x && ~x)
@@ -267,11 +270,12 @@ impl ConstraintSatisfactionSolver {
             self.restore_state_at_root();
             Err(violated_assumption)
         }
-        //Case three: the standard case, proceed with core extraction
-        //performs resolution on all implied assumptions until only decision assumptions are left
+        // Case three: the standard case, proceed with core extraction
+        // performs resolution on all implied assumptions until only decision assumptions are left
         //  the violating assumption is used as the starting point
-        //  at this point, any reason clause encountered will contains only assumptions, but some assumptions might be implied
-        //  this corresponds to the all-decision CDCL learning scheme
+        //  at this point, any reason clause encountered will contains only assumptions, but some
+        // assumptions might be implied  this corresponds to the all-decision CDCL learning
+        // scheme
         else {
             self.compute_all_decision_learning_helper(Some(!violated_assumption), true);
             self.analysis_result
@@ -402,8 +406,8 @@ impl ConstraintSatisfactionSolver {
             .assignments_propositional
             .get_propositional_variables()
         {
-            //variable values get assigned the value as in the current assignment
-            //note: variables created after calling this method may follow a different strategy
+            // variable values get assigned the value as in the current assignment
+            // note: variables created after calling this method may follow a different strategy
             let new_truth_value = self
                 .sat_data_structures
                 .assignments_propositional
@@ -439,7 +443,7 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-//methods that serve as the main building blocks
+// methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
     fn initialise(&mut self, assumptions: &[Literal], time_limit_in_seconds: i64) {
         pumpkin_assert_simple!(!self.state.is_infeasible_under_assumptions(), "Solver is not expected to be in the infeasible under assumptions state when initialising. Missed extracting the core?");
@@ -482,7 +486,7 @@ impl ConstraintSatisfactionSolver {
                     return flag;
                 }
             }
-            //conflict
+            // conflict
             else {
                 if self
                     .sat_data_structures
@@ -530,7 +534,7 @@ impl ConstraintSatisfactionSolver {
 
     // returns true if the assumption was successfully enqueued, and false otherwise
     fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
-        //Case 1: the assumption is unassigned, assign it
+        // Case 1: the assumption is unassigned, assign it
         if self
             .sat_data_structures
             .assignments_propositional
@@ -540,7 +544,7 @@ impl ConstraintSatisfactionSolver {
                 .assignments_propositional
                 .enqueue_decision_literal(assumption_literal);
             true
-        //Case 2: the assumption has already been set to true
+        // Case 2: the assumption has already been set to true
         //  this happens when other assumptions propagated the literal
         //  or the assumption is already set to true at the root level
         } else if self
@@ -548,12 +552,13 @@ impl ConstraintSatisfactionSolver {
             .assignments_propositional
             .is_literal_assigned_true(assumption_literal)
         {
-            //in this case, do nothing
-            //  note that the solver will then increase the decision level without enqueuing a decision literal
-            //  this is necessary because by convention the solver will try to assign the i-th assumption literal at decision level i+1
+            // in this case, do nothing
+            //  note that the solver will then increase the decision level without enqueuing a
+            // decision literal  this is necessary because by convention the solver will
+            // try to assign the i-th assumption literal at decision level i+1
             true
         }
-        //Case 3: the assumption literal is in conflict with the input assumption
+        // Case 3: the assumption literal is in conflict with the input assumption
         //  which means the instance is infeasible under the current assumptions
         else {
             self.state
@@ -585,13 +590,14 @@ impl ConstraintSatisfactionSolver {
         Ok(())
     }
 
-    //changes the state based on the conflict analysis result given as input
-    //i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal, and updates internal data structures for simple moving averages
-    //note that no propagation is done, this is left to the solver
+    // changes the state based on the conflict analysis result given as input
+    // i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal,
+    // and updates internal data structures for simple moving averages note that no propagation
+    // is done, this is left to the solver
     fn resolve_conflict(&mut self) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
-        //compute the learned clause
+        // compute the learned clause
         //  the result is stored in self.analysis_result
         self.compute_1uip();
 
@@ -608,9 +614,11 @@ impl ConstraintSatisfactionSolver {
             );
         }
 
-        //unit clauses are treated in a special way: they are added as decision literals at decision level 0
+        // unit clauses are treated in a special way: they are added as decision literals at
+        // decision level 0
         if self.analysis_result.learned_literals.len() == 1 {
-            //important to notify about the conflict _before_ backtracking removes literals from the trail
+            // important to notify about the conflict _before_ backtracking removes literals from
+            // the trail
             self.restart_strategy.notify_conflict(
                 1,
                 self.sat_data_structures
@@ -633,7 +641,7 @@ impl ConstraintSatisfactionSolver {
                 .average_learned_clause_length
                 .add_term(self.analysis_result.learned_literals.len() as u64);
 
-            //important to get trail length before the backtrack
+            // important to get trail length before the backtrack
             let num_variables_assigned_before_conflict = &self
                 .sat_data_structures
                 .assignments_propositional
@@ -645,7 +653,7 @@ impl ConstraintSatisfactionSolver {
             self.backtrack(self.analysis_result.backjump_level);
 
             self.learned_clause_manager.add_learned_clause(
-                self.analysis_result.learned_literals.clone(), //todo not ideal with clone
+                self.analysis_result.learned_literals.clone(), // todo not ideal with clone
                 &mut self.clausal_propagator,
                 &mut self.sat_data_structures.assignments_propositional,
                 &mut self.sat_data_structures.clause_allocator,
@@ -661,16 +669,16 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    //a 'restart' differs from backtracking to level zero
-    //   in that a restart backtracks to decision level zero and then performs additional operations,
-    //      e.g., clean up learned clauses, adjust restart frequency, etc.
+    // a 'restart' differs from backtracking to level zero
+    //   in that a restart backtracks to decision level zero and then performs additional
+    // operations,      e.g., clean up learned clauses, adjust restart frequency, etc.
     fn restart_during_search(&mut self) {
         pumpkin_assert_simple!(
             self.sat_data_structures.are_all_assumptions_assigned(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
-        //no point backtracking past the assumption level
+        // no point backtracking past the assumption level
         if self.get_decision_level() <= self.sat_data_structures.assumptions.len() {
             return;
         }
@@ -695,12 +703,13 @@ impl ConstraintSatisfactionSolver {
             backtrack_level,
             &self.sat_data_structures.assignments_propositional,
         );
-        //  note that sat_cp_mediator sync should be called after the sat/cp data structures backtrack
+        //  note that sat_cp_mediator sync should be called after the sat/cp data structures
+        // backtrack
         self.sat_cp_mediator.synchronise(
             &self.sat_data_structures.assignments_propositional,
             &self.cp_data_structures.assignments_integer,
         );
-        //for now all propagators are called to synchronise
+        // for now all propagators are called to synchronise
         //  in the future this will be improved in two ways:
         //      allow incremental synchronisation
         //      only call the subset of propagators that were notified since last backtrack
@@ -753,16 +762,17 @@ impl ConstraintSatisfactionSolver {
                 )
                 .expect("should not be an error");
 
-            //propagate boolean propagators - todo add these special-case propagators
+            // propagate boolean propagators - todo add these special-case propagators
 
-            //propagate (conventional) CP propagators
+            // propagate (conventional) CP propagators
             let propagation_status_one_step_cp = self.propagate_cp_one_step();
 
             match propagation_status_one_step_cp {
                 PropagationStatusOneStepCP::PropagationHappened => {
-                    //do nothing, the result will be that the clausal propagator will go next
-                    //  recall that the idea is to always propagate simpler propagators before more complex ones
-                    //  after a cp propagation was done one step, it is time to go to the clausal propagator
+                    // do nothing, the result will be that the clausal propagator will go next
+                    //  recall that the idea is to always propagate simpler propagators before more
+                    // complex ones  after a cp propagation was done one step,
+                    // it is time to go to the clausal propagator
                 }
                 PropagationStatusOneStepCP::FixedPoint => {
                     break;
@@ -779,7 +789,7 @@ impl ConstraintSatisfactionSolver {
                     self.state.declare_conflict(conflict_info);
                     break;
                 }
-            } //end match
+            } // end match
         }
 
         self.counters.num_conflicts += self.state.conflicting() as u64;
@@ -790,7 +800,7 @@ impl ConstraintSatisfactionSolver {
             .num_trail_entries() as u64
             - num_assigned_variables_old as u64;
 
-        //Only check fixed point propagation if there was no reported conflict.
+        // Only check fixed point propagation if there was no reported conflict.
         pumpkin_assert_extreme!(
             self.state.conflicting()
                 || DebugHelper::debug_fixed_point_propagation(
@@ -845,14 +855,14 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-//methods for adding constraints (propagators and clauses)
+// methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///
     /// The caller should ensure the solver is in the root state before calling this, either
-    /// because no call to [`Self::solve()`] has been made, or because [`Self::restore_state_at_root()`] was
-    /// called.
+    /// because no call to [`Self::solve()`] has been made, or because
+    /// [`Self::restore_state_at_root()`] was called.
     ///
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
@@ -945,7 +955,7 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_simple!(self.get_decision_level() == 0);
         pumpkin_assert_simple!(self.is_propagation_complete());
 
-        //if the literal representing the unit clause is unassigned, assign it
+        // if the literal representing the unit clause is unassigned, assign it
         if self
             .sat_data_structures
             .assignments_propositional
@@ -963,7 +973,7 @@ impl ConstraintSatisfactionSolver {
                 Ok(())
             }
         }
-        //the unit clause is already present, no need to do anything
+        // the unit clause is already present, no need to do anything
         else if self
             .sat_data_structures
             .assignments_propositional
@@ -971,14 +981,14 @@ impl ConstraintSatisfactionSolver {
         {
             Ok(())
         }
-        //the unit clause is falsified at the root level
+        // the unit clause is falsified at the root level
         else {
             Err(ConstraintOperationError::InfeasibleClause)
         }
     }
 }
 
-//methods for getting simple info out of the solver
+// methods for getting simple info out of the solver
 impl ConstraintSatisfactionSolver {
     pub fn is_propagation_complete(&self) -> bool {
         self.clausal_propagator.is_propagation_complete(
@@ -1004,9 +1014,9 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
-//methods for conflict analysis
+// methods for conflict analysis
 impl ConstraintSatisfactionSolver {
-    //computes the 1uip and stores it in 'analysis_result'
+    // computes the 1uip and stores it in 'analysis_result'
     fn compute_1uip(&mut self) {
         pumpkin_assert_simple!(self.debug_conflict_analysis_proconditions());
 
@@ -1014,7 +1024,9 @@ impl ConstraintSatisfactionSolver {
             1,
             self.sat_data_structures
                 .assignments_propositional
-                .true_literal, //dummy literal, the point is that we allocate space for the asserting literal, which will by convention be placed at index 0
+                .true_literal, /* dummy literal, the point is that we allocate space for the
+                                * asserting literal, which will by convention be placed at index
+                                * 0 */
         );
         self.analysis_result.backjump_level = 0;
 
@@ -1031,7 +1043,7 @@ impl ConstraintSatisfactionSolver {
                 next_literal,
                 &self.sat_data_structures.assignments_propositional
             ));
-            //note that the 'next_literal' is only None in the first iteration
+            // note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
                 self.sat_cp_mediator.get_propagation_clause_reference(
                     propagated_literal,
@@ -1057,13 +1069,14 @@ impl ConstraintSatisfactionSolver {
                     &mut self.sat_data_structures.clause_allocator,
                 );
 
-            //process the reason literal
-            //	i.e., perform resolution and update other related internal data structures
-            let start_index = next_literal.is_some() as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
+            // process the reason literal
+            // 	i.e., perform resolution and update other related internal data structures
+            let start_index = next_literal.is_some() as usize; // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
+                                                               // in case the clause represents a propagation
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {
-                //only consider non-root assignments that have not been considered before
+                // only consider non-root assignments that have not been considered before
                 let is_root_assignment = self
                     .sat_data_structures
                     .assignments_propositional
@@ -1071,7 +1084,7 @@ impl ConstraintSatisfactionSolver {
                 let seen = self.seen[reason_literal.get_propositional_variable()];
 
                 if !is_root_assignment && !seen {
-                    //mark the variable as seen so that we do not process it more than once
+                    // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
                     self.sat_data_structures
@@ -1092,10 +1105,11 @@ impl ConstraintSatisfactionSolver {
                     num_current_decision_level_literals_to_inspect +=
                         is_current_level_assignment as usize;
 
-                    //literals from previous decision levels are considered for the learned clause
+                    // literals from previous decision levels are considered for the learned clause
                     if !is_current_level_assignment {
                         self.analysis_result.learned_literals.push(reason_literal);
-                        //the highest decision level literal must be placed at index 1 to prepare the clause for propagation
+                        // the highest decision level literal must be placed at index 1 to prepare
+                        // the clause for propagation
                         if literal_decision_level > self.analysis_result.backjump_level {
                             self.analysis_result.backjump_level = literal_decision_level;
 
@@ -1110,8 +1124,8 @@ impl ConstraintSatisfactionSolver {
                 }
             }
 
-            //after resolution took place, find the next literal on the trail that is relevant for this conflict
-            //only literals that have been seen so far are relevant
+            // after resolution took place, find the next literal on the trail that is relevant for
+            // this conflict only literals that have been seen so far are relevant
             //  note that there may be many literals that are not relevant
             while !self.seen[self
                 .sat_data_structures
@@ -1124,17 +1138,18 @@ impl ConstraintSatisfactionSolver {
                     "The current decision level trail has been overrun, mostly likely caused by an incorrectly implemented cp propagator?");
             }
 
-            //make appropriate adjustments to prepare for the next iteration
+            // make appropriate adjustments to prepare for the next iteration
             next_literal = Some(
                 self.sat_data_structures
                     .assignments_propositional
                     .get_trail_entry(next_trail_index),
             );
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false; //the same literal cannot be encountered more than once on the trail, so we can clear the flag here
+            self.seen[next_literal.unwrap().get_propositional_variable()] = false; // the same literal cannot be encountered more than once on the trail, so we can clear
+                                                                                   // the flag here
             num_current_decision_level_literals_to_inspect -= 1;
             next_trail_index -= 1;
 
-            //once the counters hits zero we stop, the 1UIP has been found
+            // once the counters hits zero we stop, the 1UIP has been found
             //  the next literal is the asserting literal
             if num_current_decision_level_literals_to_inspect == 0 {
                 self.analysis_result.learned_literals[0] = !next_literal.unwrap();
@@ -1142,7 +1157,7 @@ impl ConstraintSatisfactionSolver {
             }
         }
 
-        //clear the seen flags for literals in the learned clause
+        // clear the seen flags for literals in the learned clause
         //  note that other flags have already been cleaned above in the previous loop
         for literal in &self.analysis_result.learned_literals {
             self.seen[literal.get_propositional_variable()] = false;
@@ -1165,26 +1180,29 @@ impl ConstraintSatisfactionSolver {
             .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
 
         pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false));
-        //the return value is stored in the input 'analysis_result'
+        // the return value is stored in the input 'analysis_result'
     }
 
-    //computes the learned clause containing only decision literals and stores it in 'analysis_result'
+    // computes the learned clause containing only decision literals and stores it in
+    // 'analysis_result'
     #[allow(dead_code)]
     fn compute_all_decision_learning(&mut self, is_extracting_core: bool) {
         self.compute_all_decision_learning_helper(None, is_extracting_core);
     }
 
-    //the helper is used to facilitate usage when extracting the clausal core
+    // the helper is used to facilitate usage when extracting the clausal core
     //  normal conflict analysis would use 'compute_all_decision_learning'
     fn compute_all_decision_learning_helper(
         &mut self,
         mut next_literal: Option<Literal>,
         is_extracting_core: bool,
     ) {
-        //the code is similar to 1uip learning with small differences to accomodate the all-decision learning scheme
+        // the code is similar to 1uip learning with small differences to accomodate the
+        // all-decision learning scheme
         pumpkin_assert_simple!(
             next_literal.is_some() || self.debug_conflict_analysis_proconditions()
-        ); //when using this function when extracting the core, no conflict acutally takes place, but the preconditions expect a conflict clause, so we skip this check
+        ); // when using this function when extracting the core, no conflict acutally takes place, but
+           // the preconditions expect a conflict clause, so we skip this check
 
         self.analysis_result.learned_literals.clear();
         self.analysis_result.backjump_level = 0;
@@ -1197,7 +1215,7 @@ impl ConstraintSatisfactionSolver {
             - 1;
 
         loop {
-            //note that the 'next_literal' is only None in the first iteration
+            // note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
                 self.sat_cp_mediator.get_propagation_clause_reference(
                     propagated_literal,
@@ -1219,13 +1237,14 @@ impl ConstraintSatisfactionSolver {
                     &mut self.sat_data_structures.clause_allocator,
                 );
 
-            //process the reason literal
-            //	i.e., perform resolution and update other related internal data structures
-            let start_index = next_literal.is_some() as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
+            // process the reason literal
+            // 	i.e., perform resolution and update other related internal data structures
+            let start_index = next_literal.is_some() as usize; // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
+                                                               // in case the clause represents a propagation
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {
-                //only consider non-root assignments that have not been considered before
+                // only consider non-root assignments that have not been considered before
                 let is_root_assignment = self
                     .sat_data_structures
                     .assignments_propositional
@@ -1233,7 +1252,7 @@ impl ConstraintSatisfactionSolver {
                 let seen = self.seen[reason_literal.get_propositional_variable()];
 
                 if !is_root_assignment && !seen {
-                    //mark the variable as seen so that we do not process it more than once
+                    // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
                     self.sat_data_structures
@@ -1245,7 +1264,7 @@ impl ConstraintSatisfactionSolver {
                             .assignments_propositional
                             .is_literal_propagated(reason_literal) as i32;
 
-                    //only decision literals are kept for the learned clause
+                    // only decision literals are kept for the learned clause
                     if self
                         .sat_data_structures
                         .assignments_propositional
@@ -1260,8 +1279,8 @@ impl ConstraintSatisfactionSolver {
                 break;
             }
 
-            //after resolution took place, find the next literal on the trail that is relevant for this conflict
-            //only literals that have been seen so far are relevant
+            // after resolution took place, find the next literal on the trail that is relevant for
+            // this conflict only literals that have been seen so far are relevant
             //  note that there may be many literals that are not relevant
             while !self.seen[self
                 .sat_data_structures
@@ -1280,13 +1299,14 @@ impl ConstraintSatisfactionSolver {
                 next_trail_index -= 1;
             }
 
-            //make appropriate adjustments to prepare for the next iteration
+            // make appropriate adjustments to prepare for the next iteration
             next_literal = Some(
                 self.sat_data_structures
                     .assignments_propositional
                     .get_trail_entry(next_trail_index),
             );
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false; //the same literal cannot be encountered more than once on the trail, so we can clear the flag here
+            self.seen[next_literal.unwrap().get_propositional_variable()] = false; // the same literal cannot be encountered more than once on the trail, so we can clear
+                                                                                   // the flag here
             next_trail_index -= 1;
             num_propagated_literals_left_to_inspect -= 1;
 
@@ -1298,17 +1318,17 @@ impl ConstraintSatisfactionSolver {
             );
         }
 
-        //clear the seen flags for literals in the learned clause
+        // clear the seen flags for literals in the learned clause
         //  note that other flags have already been cleaned above in the previous loop
         for literal in &self.analysis_result.learned_literals {
             self.seen[literal.get_propositional_variable()] = false;
         }
 
-        //set the literals in the learned clause in the expected order
+        // set the literals in the learned clause in the expected order
         //  the propagated literal at index 0
         //  the second highest decision level literal at index 1
 
-        //the above could have been updated during the analysis
+        // the above could have been updated during the analysis
         //  but instead we do it here using this helper function
         let place_max_in_front = |lits: &mut [Literal]| {
             let assignments = &self.sat_data_structures.assignments_propositional;
@@ -1341,11 +1361,11 @@ impl ConstraintSatisfactionSolver {
             .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
 
         pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(is_extracting_core));
-        //the return value is stored in the input 'analysis_result'
+        // the return value is stored in the input 'analysis_result'
     }
 
     fn debug_check_conflict_analysis_result(&self, is_extracting_core: bool) -> bool {
-        //debugging method: performs sanity checks on the learned clause
+        // debugging method: performs sanity checks on the learned clause
 
         let assignments = &self.sat_data_structures.assignments_propositional;
         let learned_lits = &self.analysis_result.learned_literals;
@@ -1409,14 +1429,16 @@ impl ConstraintSatisfactionSolver {
         next_literal: Option<Literal>,
         assignments_propositional: &AssignmentsPropositional,
     ) -> bool {
-        //in conflict analysis, literals are examined in reverse order on the trail
-        //the examined literals are expected to be:
+        // in conflict analysis, literals are examined in reverse order on the trail
+        // the examined literals are expected to be:
         //  1. from the same decision level - the current (last) decision level
         //  2. propagated, unless the literal is the decision literal of the current decision level
         //  3. not root assignments
-        //failing any of the conditions above means something went wrong with the conflict analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
+        // failing any of the conditions above means something went wrong with the conflict
+        // analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
 
-        //note that in the first iteration, the next_literal will be set to None, so we can skip this check
+        // note that in the first iteration, the next_literal will be set to None, so we can skip
+        // this check
         match next_literal {
             None => true,
             Some(next_literal) => {
@@ -1571,12 +1593,12 @@ enum CSPSolverStateInternal {
     Ready,
     Solving,
     ContainsSolution,
-    /*ConflictClausal {
-        conflict_clause: ConflictInfo,
-    },
-    ConflictCP {
-        conflict_reason: PropositionalConjunction,
-    },*/
+    // ConflictClausal {
+    // conflict_clause: ConflictInfo,
+    // },
+    // ConflictCP {
+    // conflict_reason: PropositionalConjunction,
+    // },
     Conflict {
         conflict_info: ConflictInfo,
     },
@@ -1606,7 +1628,7 @@ impl CSPSolverState {
             self.internal_state,
             CSPSolverStateInternal::Conflict { conflict_info: _ }
         )
-        //self.is_clausal_conflict() || self.is_cp_conflict()
+        // self.is_clausal_conflict() || self.is_cp_conflict()
     }
 
     pub fn is_infeasible(&self) -> bool {
@@ -1691,7 +1713,7 @@ impl CSPSolverState {
     }
 }
 
-//the defaults below are used only for the tests
+// the defaults below are used only for the tests
 //  could rethink if we can do this a different way, e.g., using cli default values
 impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
@@ -1732,19 +1754,19 @@ mod tests {
         res1: &Result<Vec<Literal>, Literal>,
         res2: &Result<Vec<Literal>, Literal>,
     ) -> bool {
-        //if the two results disagree on the outcome, can already return false
+        // if the two results disagree on the outcome, can already return false
         if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
             println!("diff");
             println!("{:?}", res1.clone().unwrap());
             false
         }
-        //if both results are errors, check if the two errors are the same
+        // if both results are errors, check if the two errors are the same
         else if res1.is_err() {
             println!("err");
             res1.clone().unwrap_err().get_propositional_variable()
                 == res2.clone().unwrap_err().get_propositional_variable()
         }
-        //otherwise the two results are both ok
+        // otherwise the two results are both ok
         else {
             println!("ok");
             is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
@@ -1821,7 +1843,7 @@ mod tests {
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]), //the core gets computed before inconsistency is detected
+            Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
         );
     }
 
@@ -1854,7 +1876,9 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]), //could return inconsistent assumptions, however inconsistency will not be detected given the order of the assumptions
+            Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
+                                                   * however inconsistency will not be detected
+                                                   * given the order of the assumptions */
         );
     }
 
@@ -1896,7 +1920,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Feasible,
-            Ok(vec![]), //will be ignored in the test
+            Ok(vec![]), // will be ignored in the test
         );
     }
 }

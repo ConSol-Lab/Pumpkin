@@ -17,14 +17,13 @@ pub struct ClauseReference {
     /// A packed representation of either a virtual binary clause of a reference to an allocated
     ///  clause.
     ///
-    /// 1. Binary clause:
-    ///     The 31st bit is one (31st bit -> most significant bit).
-    ///     The remaining 31 bits encode a literal that is part of the binary clause.
-    ///     The other literal of the binary clause is to be recovered from the data structure that
-    ///      stores this constraint reference. For example, if ref 'r' is used as the reason for
-    ///      propagating variable x, then the binary clause is (x v r).
-    /// 2. Allocated clause:
-    ///     Both the 31st and 30th bit are zero, the remaining 30 bits encode the clause id.
+    /// 1. Binary clause: The 31st bit is one (31st bit -> most significant bit). The remaining 31
+    ///    bits encode a literal that is part of the binary clause. The other literal of the binary
+    ///    clause is to be recovered from the data structure that stores this constraint reference.
+    ///    For example, if ref 'r' is used as the reason for propagating variable x, then the
+    ///    binary clause is (x v r).
+    /// 2. Allocated clause: Both the 31st and 30th bit are zero, the remaining 30 bits encode the
+    ///    clause id.
     ///
     /// N.B. having both 31st and 30th bit set or having the 31st not set with the 30th bit set
     ///  cannot take place, this combination could be used in the future for some other indicator.

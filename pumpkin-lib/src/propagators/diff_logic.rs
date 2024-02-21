@@ -253,8 +253,8 @@ where
                 if CYCLE_CHECK {
                     cycle_reason.push(reason);
                     if y2 == y_start {
-                        // return Inconsistency::Other without a reason, since this check happens only
-                        //  at the root.
+                        // return Inconsistency::Other without a reason, since this check happens
+                        // only  at the root.
                         return Err(cycle_reason.into());
                     }
                 }

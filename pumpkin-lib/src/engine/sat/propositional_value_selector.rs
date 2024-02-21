@@ -25,7 +25,7 @@ impl PropositionalValueSelector {
     }
 
     pub fn update_if_not_frozen(&mut self, variable: PropositionalVariable, new_truth_value: bool) {
-        //probably better to avoid the explicit 'if' statement
+        // probably better to avoid the explicit 'if' statement
         if !self.truth_values[variable].frozen {
             self.truth_values[variable].value = new_truth_value;
         }

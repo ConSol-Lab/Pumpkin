@@ -1,4 +1,6 @@
 use crate::basic_types::Solution;
+#[cfg(doc)]
+use crate::optimisation::OptimisationSolver;
 
 /// The result of calling [`OptimisationSolver::solve()`].
 #[derive(Debug)]

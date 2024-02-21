@@ -15,8 +15,9 @@ pub(crate) fn run(
     match &ast.solve_item.goal {
         Goal::Satisfy => Ok(None),
         Goal::OptimizeBool(optimization_type, bool_expr) => {
-            // The objective function will be parsed as a bool because that is the first identifier it will find
-            // For now we assume that the objective function is a single integer
+            // The objective function will be parsed as a bool because that is the first identifier
+            // it will find For now we assume that the objective function is a single
+            // integer
 
             let domain = match bool_expr {
                 BoolExpr::Bool(_) => unreachable!(

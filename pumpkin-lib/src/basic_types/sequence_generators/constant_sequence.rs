@@ -1,6 +1,6 @@
 use super::SequenceGeneratorInterface;
 
-//A sequence that generates the same value
+// A sequence that generates the same value
 #[derive(Debug, Copy, Clone)]
 pub struct ConstantSequence {
     constant_value: i64,

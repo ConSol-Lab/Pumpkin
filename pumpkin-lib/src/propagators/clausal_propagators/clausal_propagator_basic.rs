@@ -26,7 +26,7 @@ pub struct ClausalPropagatorBasic {
 
 impl ClausalPropagatorInterface for ClausalPropagatorBasic {
     fn grow(&mut self) {
-        //increase the watch list, once for each polarity
+        // increase the watch list, once for each polarity
         self.watch_lists.push(vec![]);
         self.watch_lists.push(vec![]);
     }
@@ -65,16 +65,18 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
 
         let literals = Preprocessor::preprocess_clause(literals, assignments);
 
-        //infeasible at the root? Note that we do not add the original clause to the database in this case
+        // infeasible at the root? Note that we do not add the original clause to the database in
+        // this case
         if literals.is_empty() {
             self.is_in_infeasible_state = true;
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        //is unit clause? Unit clauses are added as root assignments, rather than as actual clauses
-        //	in case the clause is satisfied at the root, the PreprocessClause method will return a unit clause with a literal that is satisfied at the root
+        // is unit clause? Unit clauses are added as root assignments, rather than as actual clauses
+        // 	in case the clause is satisfied at the root, the PreprocessClause method will return a
+        // unit clause with a literal that is satisfied at the root
 
-        //add clause unit
+        // add clause unit
         if literals.len() == 1 {
             if assignments.is_literal_assigned_false(literals[0]) {
                 self.is_in_infeasible_state = true;
@@ -88,7 +90,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                 }
             }
         } else {
-            //standard case - the clause has at least two unassigned literals
+            // standard case - the clause has at least two unassigned literals
             let _ = self.add_clause_unchecked(literals, false, clause_allocator);
         }
 
@@ -155,35 +157,38 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         clause_manager: &mut ClauseAllocator,
     ) -> Result<(), ConflictInfo> {
         pumpkin_assert_simple!(!self.is_in_infeasible_state);
-        //this function is implemented as one long function
-        //  dividing this function into several smaller functions would normally make sense for readability
-        //  however this is a performance hotspot, so it is hard to divide the code into smaller bits without degrading the performance
-        //  so the decision was to not divide the function into smaller parts and simply have one long function
+        // this function is implemented as one long function
+        //  dividing this function into several smaller functions would normally make sense for
+        // readability  however this is a performance hotspot, so it is hard to divide the
+        // code into smaller bits without degrading the performance  so the decision was to
+        // not divide the function into smaller parts and simply have one long function
         while self.next_position_on_trail_to_propagate < assignments.num_trail_entries() {
             let true_literal =
                 assignments.get_trail_entry(self.next_position_on_trail_to_propagate);
             pumpkin_assert_simple!(assignments.is_literal_assigned_true(true_literal));
 
-            //effectively remove all watches from this true_literal
-            //then go through the previous watches one by one and insert them as indicated (some might be placed back in the watch list of this true_literal)
-            //if a conflict takes place, put back the remaining clauses into the watch list of this true_literal and report the conflict
-            //empty watch lists are immediately skipped
+            // effectively remove all watches from this true_literal
+            // then go through the previous watches one by one and insert them as indicated (some
+            // might be placed back in the watch list of this true_literal)
+            // if a conflict takes place, put back the remaining clauses into the watch list of this
+            // true_literal and report the conflict empty watch lists are immediately
+            // skipped
             if self.watch_lists[!true_literal].is_empty() {
                 self.next_position_on_trail_to_propagate += 1;
                 continue;
             }
 
-            //effectively, we are resizing the watch list to size zero for this literal
+            // effectively, we are resizing the watch list to size zero for this literal
             //  and in the loop we will add some of the old watches back
             let mut end_index: usize = 0;
             let mut current_index: usize = 0;
             while current_index < self.watch_lists[!true_literal].len() {
-                //inspect if the cached literal is already set to true
-                //if so, no need to go further in the memory to check the clause
-                //often this literal will be true in practice so it is a good heuristic to check
+                // inspect if the cached literal is already set to true
+                // if so, no need to go further in the memory to check the clause
+                // often this literal will be true in practice so it is a good heuristic to check
                 let cached_literal = self.watch_lists[!true_literal][current_index].cached_literal;
                 if assignments.is_literal_assigned_true(cached_literal) {
-                    //keep the watcher, the clause is satisfied, no propagation can take place
+                    // keep the watcher, the clause is satisfied, no propagation can take place
                     self.watch_lists[!true_literal][end_index] =
                         self.watch_lists[!true_literal][current_index];
                     current_index += 1;
@@ -196,21 +201,23 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
 
                 let watched_clause = clause_manager.get_mutable_clause(watched_clause_reference);
 
-                //standard clause propagation starts here
+                // standard clause propagation starts here
 
-                //place the considered literal at position 1 for simplicity
+                // place the considered literal at position 1 for simplicity
                 if watched_clause[0] == !true_literal {
                     watched_clause[0] = watched_clause[1];
                     watched_clause[1] = !true_literal;
                 }
 
-                //check the other watched literal to see if the clause is already satisfied
-                //  check if this would help in the condition: next_watch_pointer->cached_literal != watched_clause[0] &&
+                // check the other watched literal to see if the clause is already satisfied
+                //  check if this would help in the condition: next_watch_pointer->cached_literal !=
+                // watched_clause[0] &&
                 if assignments.is_literal_assigned_true(watched_clause[0]) {
-                    //take the true literal as the new cached literal -> todo need to check if this makes sense
+                    // take the true literal as the new cached literal -> todo need to check if this
+                    // makes sense
                     self.watch_lists[!true_literal][current_index].cached_literal =
                         watched_clause[0];
-                    //keep the watcher, the clause is satisfied, no propagation can take place
+                    // keep the watcher, the clause is satisfied, no propagation can take place
                     self.watch_lists[!true_literal][end_index] =
                         self.watch_lists[!true_literal][current_index];
                     current_index += 1;
@@ -218,14 +225,15 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                     continue;
                 }
 
-                //look for another nonfalsified literal to replace one of the watched literals
+                // look for another nonfalsified literal to replace one of the watched literals
                 let mut found_new_watch = false;
-                //start from index 2 since we are skipping watched literals
+                // start from index 2 since we are skipping watched literals
                 for i in 2..watched_clause.len() {
-                    //find a literal that is either true or unassigned, i.e., not assigned false
+                    // find a literal that is either true or unassigned, i.e., not assigned false
                     if !assignments.is_literal_assigned_false(watched_clause[i]) {
-                        //would it make sense to set the cached literal here if this new literal will be set to true?
-                        //replace the watched literal, add the clause to the watch list of the new watcher literal
+                        // would it make sense to set the cached literal here if this new literal
+                        // will be set to true? replace the watched literal,
+                        // add the clause to the watch list of the new watcher literal
                         watched_clause[1] = watched_clause[i];
                         watched_clause[i] = !true_literal;
 
@@ -235,33 +243,36 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                         });
 
                         found_new_watch = true;
-                        break; //no propagation is taking place, go to the next clause.
+                        break; // no propagation is taking place, go to the next clause.
                     }
                 }
 
                 if found_new_watch {
-                    //note this clause is effectively removed from the watch list of true_literal, since we are only incrementing the current index, and not copying anything to the end_index location
+                    // note this clause is effectively removed from the watch list of true_literal,
+                    // since we are only incrementing the current index, and not copying anything to
+                    // the end_index location
                     current_index += 1;
                     continue;
                 }
 
-                //keep the current watch for this literal
+                // keep the current watch for this literal
                 self.watch_lists[!true_literal][end_index] =
                     self.watch_lists[!true_literal][current_index];
                 end_index += 1;
                 current_index += 1;
 
-                //at this point, nonwatched literals and literal[1] are assigned false. There are two scenarios:
-                //	watched_clause[0] is unassigned -> propagate the literal to true
-                //	watched_clause[0] is assigned false -> conflict
+                // at this point, nonwatched literals and literal[1] are assigned false. There are
+                // two scenarios: 	watched_clause[0] is unassigned -> propagate the
+                // literal to true 	watched_clause[0] is assigned false -> conflict
 
-                //can propagate?
+                // can propagate?
                 let conflict_info = assignments
                     .enqueue_propagated_literal(watched_clause[0], watched_clause_reference.into());
                 if let Some(conflict_info) = conflict_info {
-                    //conflict detected, stop any further propagation and report the conflict
-                    //  pumpkin_assert_advanced(state_.assignments_.IsAssignedFalse(watched_clause[0]), "Sanity check.");
-                    //readd the remaining watchers to the watch list
+                    // conflict detected, stop any further propagation and report the conflict
+                    //  pumpkin_assert_advanced(state_.assignments_.
+                    // IsAssignedFalse(watched_clause[0]), "Sanity check.");
+                    // readd the remaining watchers to the watch list
                     while current_index < self.watch_lists[!true_literal].len() {
                         self.watch_lists[!true_literal][end_index] =
                             self.watch_lists[!true_literal][current_index];
@@ -281,7 +292,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
     fn synchronise(&mut self, trail_size: usize) {
         pumpkin_assert_simple!(self.next_position_on_trail_to_propagate >= trail_size);
         self.next_position_on_trail_to_propagate = trail_size;
-        //self.next_position_on_trail_to_propagate =
+        // self.next_position_on_trail_to_propagate =
         //    std::cmp::min(self.next_position_on_trail_to_propagate, trail_size);
     }
 
@@ -294,7 +305,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         clause: &[Literal],
         clause_reference: ClauseReference,
     ) {
-        //for now a simple implementation, in the future it could be worthwhile considering lazy data structure or batch removals
+        // for now a simple implementation, in the future it could be worthwhile considering lazy
+        // data structure or batch removals
         let remove_clause_from_watchers =
             |watchers: &mut Vec<ClauseWatcher>, clause_reference: ClauseReference| {
                 let index = watchers
@@ -323,13 +335,13 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
 
         assert!(self.is_propagation_complete(assignments.num_trail_entries()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
 
-        //check that each clause that appears in the watch list appears exactly twice
+        // check that each clause that appears in the watch list appears exactly twice
         //  note that not every clause in the clause manager necessarily appears in the watch list
 
         //  first compute the histogram for each clause present
         let mut clause_ids: HashMap<ClauseReference, usize> = HashMap::default();
 
-        //counting the number of binary clause watchers is a proxy
+        // counting the number of binary clause watchers is a proxy
         //  in case the number is uneven we have a problem
         assert!(
             self.watch_lists
@@ -374,20 +386,21 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             "There is a watcher with a cached literal that is not present in the clause."
         );
 
-        //check for each literal that has been propagated by the clausal propagator
+        // check for each literal that has been propagated by the clausal propagator
         //  whether the propagation was justified, i.e.,
         //      the clause is in the watch list
         //      the clause associated with the propagation has the literal at position 0
         //      the other literals in the clause are all set to false
-        //      the propagation level of the propagated literal is equal to the max level of the other literals
+        //      the propagation level of the propagated literal is equal to the max level of the
+        // other literals
         for literal_code in 0..self.watch_lists.len() {
             let literal = Literal::u32_to_literal(literal_code as u32);
-            //skip root assignments since the info is not correct tracked for root assignments
+            // skip root assignments since the info is not correct tracked for root assignments
             if assignments.is_literal_root_assignment(literal) {
                 continue;
             }
 
-            //we only consider literals that have been assigned true through propagation
+            // we only consider literals that have been assigned true through propagation
             //  literals that take value false can be ignored since their negation will be checked
             if assignments.is_literal_propagated(literal)
                 && assignments.is_literal_assigned_true(literal)
@@ -409,7 +422,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                             .all(|x| assignments.is_literal_assigned_false(*x)),
                         "A clause is recorded as the reason for propagation, but the other literals are not all false."
                     );
-                    //ensure propagation was done at the correct decision level
+                    // ensure propagation was done at the correct decision level
                     let lit_max_decision_level = *clause.get_literal_slice()[1..]
                         .iter()
                         .max_by_key(|x| assignments.get_literal_assignment_level(**x))
@@ -424,7 +437,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             }
         }
 
-        //check if the propagator missed a falsified clause or a propagation
+        // check if the propagator missed a falsified clause or a propagation
         clause_ids.iter().for_each(|x| {
             let clause = clause_allocator.get_clause(*x.0);
             assert!(
@@ -482,9 +495,9 @@ pub struct ClauseWatcher {
     cached_literal: Literal,
     clause_reference: ClauseReference,
 }
-/*pub enum ClausePreprocessingOutcome {
-    SatisfiedAtRoot,
-    FalsifiedAtRoot,
-    UnitClause { literal: Literal },
-    PreprocessedClause { clause: Vec<Literal> },
-}*/
+// pub enum ClausePreprocessingOutcome {
+// SatisfiedAtRoot,
+// FalsifiedAtRoot,
+// UnitClause { literal: Literal },
+// PreprocessedClause { clause: Vec<Literal> },
+// }

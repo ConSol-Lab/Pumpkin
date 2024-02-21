@@ -58,8 +58,8 @@ impl Solution {
             self.integer_values.len() <= assignments_integer.num_domains() as usize
         );
 
-        //it could be that more variables have been added to the problem since last this time struct has seen a solution
-        //  e.g., encoding the upper bound
+        // it could be that more variables have been added to the problem since last this time
+        // struct has seen a solution  e.g., encoding the upper bound
         //  in that case it is important to resize internal data structures
         if self.truth_values.len()
             < assignments_propositional.num_propositional_variables() as usize

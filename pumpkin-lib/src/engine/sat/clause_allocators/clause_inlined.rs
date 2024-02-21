@@ -1,15 +1,13 @@
 //! Do not use the code in this file, it is not sound, i.e. it violates Rust's safety rules
-/*
-Memory layout for a clause:
-LBD -> 29 bits
-is_learned -> 1 bit (1 << 29)
-is_deleted -> 1 bit (1 << 30)
-is_protected -> 1 bit (1 << 31)
-----32 bits----
-num_literals -> 4 bytes
-[array of literals]
-activity -> 4 bytes, only if learned
- */
+// Memory layout for a clause:
+// LBD -> 29 bits
+// is_learned -> 1 bit (1 << 29)
+// is_deleted -> 1 bit (1 << 30)
+// is_protected -> 1 bit (1 << 31)
+// ----32 bits----
+// num_literals -> 4 bytes
+// [array of literals]
+// activity -> 4 bytes, only if learned
 
 use bitfield::Bit;
 use bitfield::BitMut;
@@ -20,13 +18,14 @@ use super::ClauseInterface;
 use crate::basic_types::Literal;
 use crate::pumpkin_assert_moderate;
 
-#[repr(C)] //important to keep the c layout since the code below relies on this layout
+#[repr(C)] // important to keep the c layout since the code below relies on this layout
 #[derive(Debug, Copy, Clone)]
 pub struct ClauseInlined {
     lbd_and_flags: u32,
     num_literals: u32,
     literals: [Literal; 0],
-    //activity is implicit and is not given as part of the fields, the activity is stored after the literals
+    // activity is implicit and is not given as part of the fields, the activity is stored after
+    // the literals
 }
 
 impl ClauseInlined {
@@ -81,7 +80,7 @@ impl ClauseInterface for ClauseInlined {
         pumpkin_assert_moderate!(self.is_learned());
         // SAFETY: violated
         unsafe {
-            //for learned clauses, the activity is stored right after the literals
+            // for learned clauses, the activity is stored right after the literals
             let ptr_literal: *const Literal =
                 self.literals.get_unchecked(self.num_literals as usize);
             let ptr_f32 = ptr_literal.cast::<f32>();
@@ -141,7 +140,7 @@ impl ClauseInlined {
         pumpkin_assert_moderate!(self.is_learned());
         // SAFETY: violated
         unsafe {
-            //for learned clauses, the activity is stored right after the literals
+            // for learned clauses, the activity is stored right after the literals
             let ptr_literal: *mut Literal =
                 self.literals.get_unchecked_mut(self.num_literals as usize);
             let ptr_f32 = ptr_literal.cast::<f32>();
@@ -153,7 +152,7 @@ impl ClauseInlined {
         pumpkin_assert_moderate!(self.is_learned());
         // SAFETY: violated
         unsafe {
-            //for learned clauses, the activity is stored right after the literals
+            // for learned clauses, the activity is stored right after the literals
             let ptr_literal: *mut Literal =
                 self.literals.get_unchecked_mut(self.num_literals as usize);
             let ptr_f32 = ptr_literal.cast::<f32>();
@@ -161,7 +160,7 @@ impl ClauseInlined {
         }
     }
 
-    //this method assumes that enough memory is available at the location
+    // this method assumes that enough memory is available at the location
     //  see 'num_bytes_required_for_clause'
     #[allow(clippy::mut_from_ref)]
     pub fn create_clause_at_memory_location(
@@ -188,14 +187,14 @@ impl ClauseInlined {
         }
     }
 
-    //since we manually manage the memory for the clause
-    //it is important to know exactly the size of the clause
+    // since we manually manage the memory for the clause
+    // it is important to know exactly the size of the clause
     //  note that size_of will not report the correct value, so we have this method
     pub fn num_u32s_required_for_clause(num_literals: u32, is_learned: bool) -> u32 {
         1 + //lbd and flags
          1 + //storing the number of literals
          num_literals + //the literals
-         is_learned as u32 //activity for learned clauses
+         is_learned as u32 // activity for learned clauses
     }
 }
 
@@ -264,7 +263,7 @@ mod tests {
     #[ignore]
     #[test]
     fn test_size_and_align() {
-        //these should be static asserts
+        // these should be static asserts
         assert_eq!(std::mem::size_of::<ClauseInlined>(), 8);
         assert_eq!(std::mem::align_of::<ClauseInlined>(), 4);
         assert_eq!(std::mem::size_of::<Literal>(), 4);

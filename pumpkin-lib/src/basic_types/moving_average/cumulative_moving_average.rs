@@ -21,7 +21,7 @@ impl MovingAverageInterface for CumulativeMovingAverage {
     }
 
     fn adapt(&mut self, _interval_length: u64) {
-        //do nothing
+        // do nothing
     }
 }
 

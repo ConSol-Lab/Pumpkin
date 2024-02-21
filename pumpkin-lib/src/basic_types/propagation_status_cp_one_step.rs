@@ -16,7 +16,7 @@ impl PropagationStatusOneStepCP {
         )
     }
 
-    /*pub fn conflict_detected(&self) -> bool {
-        !self.no_conflict()
-    }*/
+    // pub fn conflict_detected(&self) -> bool {
+    // !self.no_conflict()
+    // }
 }

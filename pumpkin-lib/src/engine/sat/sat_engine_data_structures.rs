@@ -42,8 +42,9 @@ impl SATEngineDataStructures {
         if self.are_all_assumptions_assigned() {
             None
         } else {
-            //the convention is that at decision level i, the (i-1)th assumption is set
-            //  note that the decision level is increased before calling branching hence the minus one
+            // the convention is that at decision level i, the (i-1)th assumption is set
+            //  note that the decision level is increased before calling branching hence the minus
+            // one
             Some(self.assumptions[self.assignments_propositional.get_decision_level() - 1])
         }
     }
@@ -97,11 +98,11 @@ impl SATEngineDataStructures {
             "Virtual clause support not yet implemented."
         );
 
-        //we determine whether the clause is propagating by using the following reasoning:
-        //  the literal at position 0 is set to true - this is the convention with the clausal propagator
-        //  the reason for propagation of the literal is the input clause
+        // we determine whether the clause is propagating by using the following reasoning:
+        //  the literal at position 0 is set to true - this is the convention with the clausal
+        // propagator  the reason for propagation of the literal is the input clause
 
-        //the code could be simplified
+        // the code could be simplified
 
         let propagated_literal = self.clause_allocator[clause_reference][0];
         if self

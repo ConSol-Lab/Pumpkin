@@ -25,7 +25,7 @@ impl ClauseBasic {
             is_learned,
             is_deleted: false,
             is_protected_aganst_deletion: false,
-            lbd: num_literals, //pessimistic lbd
+            lbd: num_literals, // pessimistic lbd
             activity: 0.0,
         }
     }
@@ -61,7 +61,7 @@ impl ClauseInterface for ClauseBasic {
         self.activity
     }
 
-    //note that this does _not_ delete the clause, it simply marks it as if it was deleted
+    // note that this does _not_ delete the clause, it simply marks it as if it was deleted
     //  to delete a clause, use the ClauseManager
     //  could restrict access of this method in the future
     fn mark_deleted(&mut self) {

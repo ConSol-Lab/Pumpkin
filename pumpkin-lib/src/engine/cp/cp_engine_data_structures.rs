@@ -91,8 +91,9 @@ impl CPEngineDataStructures {
     }
 }
 
-//methods for modifying the domains of variables
-//  note that modifying the domain will inform propagators about the changes through the notify functions
+// methods for modifying the domains of variables
+//  note that modifying the domain will inform propagators about the changes through the notify
+// functions
 impl CPEngineDataStructures {
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
     /// true is returned.
@@ -101,7 +102,8 @@ impl CPEngineDataStructures {
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
         assignments_propositional: &mut AssignmentsPropositional,
     ) -> bool {
-        // If there are no variables being watched then there is no reason to perform these operations
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
         if self.watch_list_cp.is_watching_anything() {
             self.event_drain
                 .extend(self.assignments_integer.drain_domain_events());
@@ -132,7 +134,8 @@ impl CPEngineDataStructures {
             }
         }
 
-        // If there are no literals being watched then there is no reason to perform these operations
+        // If there are no literals being watched then there is no reason to perform these
+        // operations
         if self.watch_list_propositional.is_watching_anything() {
             for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
                 let literal = assignments_propositional.get_trail_entry(i);

@@ -73,7 +73,7 @@ impl LinearSearch {
             let encoding_status =
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
 
-            //in case some cases infeasibility can be detected while constraining the upper bound
+            // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
                 csp_solver.log_statistics();
@@ -95,7 +95,8 @@ impl LinearSearch {
                         "Each iteration of linear search must yield a strictly better solution."
                     );
 
-                    //need to include a simple refinement step here, since it could be that the returned solution can be trivially improved
+                    // need to include a simple refinement step here, since it could be that the
+                    // returned solution can be trivially improved
 
                     best_objective_value = objective_function.evaluate_assignment(
                         csp_solver.get_propositional_assignments(),

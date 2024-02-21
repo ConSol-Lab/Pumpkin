@@ -1,10 +1,10 @@
 use super::SequenceGeneratorInterface;
 
-//Given constants 'a' and 'm', the i-th element f(i) in a geometric sequence is computed as:
+// Given constants 'a' and 'm', the i-th element f(i) in a geometric sequence is computed as:
 //  f(i) = f(i-1) * m
 //  f(0) = a
-//When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since intermediate values will be rounded down
-//Note that overflows are not taken into account
+// When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since
+// intermediate values will be rounded down Note that overflows are not taken into account
 #[derive(Debug, Copy, Clone)]
 pub struct GeometricSequence {
     current_value: i64,

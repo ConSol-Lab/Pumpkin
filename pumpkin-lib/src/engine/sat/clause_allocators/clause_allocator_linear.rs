@@ -7,13 +7,13 @@ use crate::basic_types::Literal;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_simple;
 
-//todo
+// todo
 //  + dynamic size allocation - currently the maximum amount is allocated (2^30 u32s)
 //  + garbage collection
 
 #[derive(Debug)]
 pub struct ClauseAllocatorLinear {
-    data: Vec<u32>, //allocating a fixed block for now
+    data: Vec<u32>, // allocating a fixed block for now
     next_location: u32,
     deleted_clause_space_usage: u32,
 }
@@ -22,7 +22,7 @@ impl Default for ClauseAllocatorLinear {
     fn default() -> Self {
         ClauseAllocatorLinear {
             data: vec![0; 1 << 30],
-            next_location: 1, //keeping zero for the null pointer
+            next_location: 1, // keeping zero for the null pointer
             deleted_clause_space_usage: 0,
         }
     }
@@ -32,7 +32,9 @@ impl ClauseAllocatorInterface<ClauseInlined> for ClauseAllocatorLinear {
     type Clause = ClauseInlined;
 
     fn create_clause(&mut self, literals: Vec<Literal>, is_learned: bool) -> ClauseReference {
-        //todo - add assert to ensure that the clause is as we expect, e.g., no duplicate literals. Normally preprocess_clause would get rid of this. Perhaps could move the responsibility to the clause manager, and have an unchecked version for learned clauses
+        // todo - add assert to ensure that the clause is as we expect, e.g., no duplicate literals.
+        // Normally preprocess_clause would get rid of this. Perhaps could move the responsibility
+        // to the clause manager, and have an unchecked version for learned clauses
         pumpkin_assert_ne_simple!(literals.len(), 0);
 
         let clause_reference =
@@ -51,23 +53,28 @@ impl ClauseAllocatorInterface<ClauseInlined> for ClauseAllocatorLinear {
     }
 
     fn get_mutable_clause(&mut self, clause_reference: ClauseReference) -> &mut ClauseInlined {
-        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't
+        // deleted...
         unsafe { &mut *self.get_pointer_mut(clause_reference) }
     }
 
     fn get_clause(&self, clause_reference: ClauseReference) -> &ClauseInlined {
-        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't
+        // deleted...
         unsafe { &*self.get_pointer(clause_reference) }
     }
 
     fn delete_clause(&mut self, clause_reference: ClauseReference) {
-        //for now we do not really delete clauses, we only take note of clause deletion
+        // for now we do not really delete clauses, we only take note of clause deletion
         let ptr_clause = self.get_pointer_mut(clause_reference);
-        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't
+        // deleted...
         let num_literals = unsafe { (*ptr_clause).len() };
-        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't
+        // deleted...
         let is_learned = unsafe { (*ptr_clause).is_learned() };
-        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't
+        // deleted...
         unsafe {
             (*ptr_clause).mark_deleted();
         }
