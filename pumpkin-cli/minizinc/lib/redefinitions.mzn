@@ -16,5 +16,3 @@ predicate bool_or(var bool: a, var bool: b, var bool: r) = array_bool_or([a, b],
 
 predicate set_in_reif(var int: x, set of int: S, var bool: r) = par_set_in_reif(x, S, r);
 predicate par_set_in_reif(var int: x, set of int: S, var bool: r);
-
-predicate set_in_reif(var int: x, var set of int: S, var bool: r) = abort("Set variables are not supported");
