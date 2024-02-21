@@ -9,6 +9,7 @@ use crate::basic_types::Literal;
 use crate::engine::CPPropagatorConstructor;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::propagators::element::Element;
+use crate::propagators::maximum::Maximum;
 use crate::propagators::IntTimes;
 use crate::propagators::LinearLeq;
 use crate::propagators::LinearNe;
@@ -153,6 +154,31 @@ pub trait ConstraintsExt {
                 self.int_ne(variables[i].clone(), variables[j].clone());
             }
         }
+    }
+
+    /// Posts the constraint `max(array) = m`.
+    fn maximum<Var: IntVar + 'static>(
+        &mut self,
+        array: impl Into<Box<[Var]>>,
+        rhs: impl IntVar + 'static,
+    ) {
+        let _ = self.post(Maximum {
+            array: array.into(),
+            rhs,
+        });
+    }
+
+    /// Posts the constraint `min(array) = m`.
+    fn minimum<Var: IntVar + 'static>(
+        &mut self,
+        array: impl IntoIterator<Item = Var>,
+        rhs: impl IntVar + 'static,
+    ) {
+        let array = array
+            .into_iter()
+            .map(|var| var.scaled(-1))
+            .collect::<Box<_>>();
+        self.maximum(array, rhs.scaled(-1));
     }
 }
 

@@ -4,6 +4,7 @@ pub(crate) mod element;
 mod int_times;
 mod linear_leq;
 mod linear_ne;
+pub mod maximum;
 mod not_eq_propagator;
 
 pub use int_times::*;

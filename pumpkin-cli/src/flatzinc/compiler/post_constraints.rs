@@ -31,9 +31,13 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
         match id.as_str() {
+            "array_int_maximum" => compile_array_int_maximum(context, exprs)?,
+            "array_int_minimum" => compile_array_int_minimum(context, exprs)?,
+
             // We rewrite `array_int_element` to `array_var_int_element`.
             "array_int_element" => compile_array_var_int_element(context, exprs)?,
             "array_var_int_element" => compile_array_var_int_element(context, exprs)?,
+
             "int_lin_ne" => {
                 compile_int_lin_predicate(
                     context,
@@ -130,6 +134,8 @@ pub(crate) fn run(
             )?,
             "int_plus" => compile_int_plus(context, exprs, annos)?,
             "int_times" => compile_int_times(context, exprs, annos)?,
+            "int_max" => compile_int_max(context, exprs)?,
+            "int_min" => compile_int_min(context, exprs)?,
             "fzn_all_different_int" => compile_all_different(context, exprs, annos)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs)?,
@@ -164,6 +170,64 @@ macro_rules! check_parameters {
             });
         }
     };
+}
+
+fn compile_array_int_maximum(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 2, "array_int_maximum");
+
+    let rhs = context.resolve_integer_variable(&exprs[0])?;
+    let array = context.resolve_integer_variable_array(&exprs[1])?;
+
+    context.solver.maximum(array.as_ref(), rhs);
+
+    Ok(())
+}
+
+fn compile_array_int_minimum(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 2, "array_int_minimum");
+
+    let rhs = context.resolve_integer_variable(&exprs[0])?;
+    let array = context.resolve_integer_variable_array(&exprs[1])?;
+
+    context.solver.minimum(array.iter().copied(), rhs);
+
+    Ok(())
+}
+
+fn compile_int_max(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, "int_max");
+
+    let a = context.resolve_integer_variable(&exprs[0])?;
+    let b = context.resolve_integer_variable(&exprs[1])?;
+    let c = context.resolve_integer_variable(&exprs[2])?;
+
+    context.solver.maximum([a, b], c);
+
+    Ok(())
+}
+
+fn compile_int_min(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, "int_min");
+
+    let a = context.resolve_integer_variable(&exprs[0])?;
+    let b = context.resolve_integer_variable(&exprs[1])?;
+    let c = context.resolve_integer_variable(&exprs[2])?;
+
+    context.solver.minimum([a, b], c);
+
+    Ok(())
 }
 
 fn compile_set_in_reif(

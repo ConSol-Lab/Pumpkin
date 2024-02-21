@@ -34,6 +34,10 @@
   * int_eq_reif
   * int_plus
   * int_times
+  * int_max
+  * int_min
+  * int_array_maximum
+  * int_array_minimum
   * array_bool_and
   * array_bool_or
   * array_bool_element
