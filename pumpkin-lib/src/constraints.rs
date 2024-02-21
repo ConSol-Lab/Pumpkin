@@ -8,6 +8,7 @@ use crate::basic_types::variables::IntVar;
 use crate::basic_types::Literal;
 use crate::engine::CPPropagatorConstructor;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::propagators::absolute_value::AbsoluteValue;
 use crate::propagators::element::Element;
 use crate::propagators::maximum::Maximum;
 use crate::propagators::IntTimes;
@@ -143,6 +144,11 @@ pub trait ConstraintsExt {
         c: impl IntVar + 'static,
     ) {
         let _ = self.post(IntTimes { a, b, c });
+    }
+
+    /// Adds the constraint `|signed| = absolute`.
+    fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) {
+        let _ = self.post(AbsoluteValue { signed, absolute });
     }
 
     /// Adds the constraint that all variables must be distinct.

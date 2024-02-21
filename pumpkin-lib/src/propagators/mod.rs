@@ -1,3 +1,4 @@
+pub(crate) mod absolute_value;
 pub mod clausal_propagators;
 mod diff_logic;
 pub(crate) mod element;

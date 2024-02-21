@@ -134,6 +134,11 @@ pub(crate) fn run(
             )?,
             "int_plus" => compile_int_plus(context, exprs, annos)?,
             "int_times" => compile_int_times(context, exprs, annos)?,
+            "int_abs" => {
+                compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
+                    solver.int_abs(a, b)
+                })?
+            }
             "int_max" => compile_int_max(context, exprs)?,
             "int_min" => compile_int_min(context, exprs)?,
             "fzn_all_different_int" => compile_all_different(context, exprs, annos)?,
