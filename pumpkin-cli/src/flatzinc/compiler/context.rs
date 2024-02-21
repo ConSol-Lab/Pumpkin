@@ -49,6 +49,18 @@ pub struct CompilationContext<'a> {
     pub constant_domain_ids: HashMap<i32, DomainId>,
     /// A mapping from integer variable array identifiers to slices of domain ids.
     pub integer_variable_arrays: HashMap<Rc<str>, Rc<[DomainId]>>,
+
+    /// All set parameters.
+    pub set_constants: HashMap<Rc<str>, Set>,
+}
+
+/// A set parameter.
+#[derive(Clone, Debug)]
+pub enum Set {
+    /// A set defined by the interval `lower_bound..=upper_bound`.
+    Interval { lower_bound: i32, upper_bound: i32 },
+    /// A set defined by some values.
+    Sparse { values: Box<[i32]> },
 }
 
 impl CompilationContext<'_> {
@@ -76,6 +88,8 @@ impl CompilationContext<'_> {
             integer_equivalences: Default::default(),
             constant_domain_ids: Default::default(),
             integer_variable_arrays: Default::default(),
+
+            set_constants: Default::default(),
         }
     }
 
@@ -313,6 +327,50 @@ impl CompilationContext<'_> {
                 })
                 .collect(),
             _ => Err(FlatZincError::UnexpectedExpr),
+        }
+    }
+
+    pub fn resolve_set_constant(&self, expr: &flatzinc::Expr) -> Result<Set, FlatZincError> {
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => {
+                self.set_constants.get(id.as_str()).cloned().ok_or(
+                    FlatZincError::InvalidIdentifier {
+                        identifier: id.clone().into(),
+                        expected_type: "set of int".into(),
+                    },
+                )
+            }
+
+            flatzinc::Expr::Set(set_literal) => match set_literal {
+                flatzinc::SetLiteralExpr::IntInRange(lower_bound_expr, upper_bound_expr) => {
+                    let lower_bound = self.resolve_int_expr(lower_bound_expr)?;
+                    let upper_bound = self.resolve_int_expr(upper_bound_expr)?;
+
+                    Ok(Set::Interval {
+                        lower_bound,
+                        upper_bound,
+                    })
+                }
+                flatzinc::SetLiteralExpr::SetInts(exprs) => {
+                    let values = exprs
+                        .iter()
+                        .map(|expr| self.resolve_int_expr(expr))
+                        .collect::<Result<_, _>>()?;
+
+                    Ok(Set::Sparse { values })
+                }
+
+                flatzinc::SetLiteralExpr::BoundedFloat(_, _)
+                | flatzinc::SetLiteralExpr::SetFloats(_) => panic!("float values are unsupported"),
+            },
+
+            flatzinc::Expr::Bool(_)
+            | flatzinc::Expr::Int(_)
+            | flatzinc::Expr::Float(_)
+            | flatzinc::Expr::ArrayOfBool(_)
+            | flatzinc::Expr::ArrayOfInt(_)
+            | flatzinc::Expr::ArrayOfFloat(_)
+            | flatzinc::Expr::ArrayOfSet(_) => Err(FlatZincError::UnexpectedExpr),
         }
     }
 }

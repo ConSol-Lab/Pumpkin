@@ -58,6 +58,23 @@ pub fn int_eq_reif(
     int_lin_eq_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif);
 }
 
+pub fn array_bool_or(
+    solver: &mut ConstraintSatisfactionSolver,
+    clause: impl Into<Vec<Literal>>,
+    reif: Literal,
+) {
+    let mut clause = clause.into();
+
+    // \/clause -> r
+    clause.iter().for_each(|&literal| {
+        let _ = solver.add_permanent_clause(vec![!literal, reif]);
+    });
+
+    // r -> \/clause
+    clause.insert(0, !reif);
+    let _ = solver.add_permanent_clause(clause);
+}
+
 pub fn int_ne_reif(
     solver: &mut ConstraintSatisfactionSolver,
     a: DomainId,

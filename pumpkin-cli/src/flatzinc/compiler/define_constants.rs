@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use super::context::CompilationContext;
+use super::context::Set;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::FlatZincError;
 
@@ -40,8 +41,34 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                     .insert(context.identifiers.get_interned(id), value);
             }
 
-            flatzinc::ParDeclItem::SetOfInt { .. } | flatzinc::ParDeclItem::ArrayOfSet { .. } => {
-                todo!("implement integer set parameters")
+            flatzinc::ParDeclItem::SetOfInt { id, set_literal } => {
+                let set = match set_literal {
+                    flatzinc::SetLiteral::IntRange(lower_bound, upper_bound) => Set::Interval {
+                        lower_bound: i32::try_from(*lower_bound)?,
+                        upper_bound: i32::try_from(*upper_bound)?,
+                    },
+
+                    flatzinc::SetLiteral::SetInts(values) => {
+                        let values = values
+                            .iter()
+                            .copied()
+                            .map(i32::try_from)
+                            .collect::<Result<_, _>>()?;
+
+                        Set::Sparse { values }
+                    }
+
+                    flatzinc::SetLiteral::BoundedFloat(_, _)
+                    | flatzinc::SetLiteral::SetFloats(_) => panic!("float values are unsupported"),
+                };
+
+                context
+                    .set_constants
+                    .insert(context.identifiers.get_interned(id), set);
+            }
+
+            flatzinc::ParDeclItem::ArrayOfSet { .. } => {
+                todo!("implement array of integer set parameters")
             }
 
             flatzinc::ParDeclItem::Float { .. } | flatzinc::ParDeclItem::ArrayOfFloat { .. } => {

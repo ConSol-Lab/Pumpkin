@@ -17,6 +17,8 @@ use super::constraints::int_lt_reif;
 use super::constraints::int_ne_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
+use crate::flatzinc::compiler::constraints::array_bool_or;
+use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 
 pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
@@ -138,6 +140,8 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs)?,
             "bool_not" => compile_bool_not(context, exprs)?,
 
+            "par_set_in_reif" => compile_set_in_reif(context, exprs)?,
+
             unknown => todo!("unsupported constraint {unknown}"),
         }
     }
@@ -155,6 +159,55 @@ macro_rules! check_parameters {
             });
         }
     };
+}
+
+fn compile_set_in_reif(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, "par_set_in_reif");
+
+    let variable = context.resolve_integer_variable(&exprs[0])?;
+    let set = context.resolve_set_constant(&exprs[1])?;
+    let reif = context.resolve_bool_variable(&exprs[2])?;
+
+    match set {
+        Set::Interval {
+            lower_bound,
+            upper_bound,
+        } => {
+            let lb_variable = *context
+                .constant_domain_ids
+                .entry(lower_bound)
+                .or_insert_with(|| {
+                    context
+                        .solver
+                        .create_new_integer_variable(lower_bound, lower_bound)
+                });
+            let ub_variable = *context
+                .constant_domain_ids
+                .entry(upper_bound)
+                .or_insert_with(|| {
+                    context
+                        .solver
+                        .create_new_integer_variable(upper_bound, upper_bound)
+                });
+
+            int_le_reif(context.solver, variable, ub_variable, reif);
+            int_le_reif(context.solver, lb_variable, variable, reif);
+        }
+
+        Set::Sparse { values } => {
+            let clause = values
+                .iter()
+                .map(|&value| context.solver.get_literal(predicate![variable == value]))
+                .collect::<Vec<_>>();
+
+            array_bool_or(context.solver, clause, reif);
+        }
+    }
+
+    Ok(())
 }
 
 fn compile_array_var_int_element(
@@ -293,17 +346,7 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    // r <-> \/clause
-
-    // r -> \/clause
-    let mut implication = clause.to_vec();
-    implication.insert(0, !r);
-    let _ = context.solver.add_permanent_clause(implication);
-
-    // \/clause -> r
-    clause.iter().for_each(|&literal| {
-        let _ = context.solver.add_permanent_clause(vec![literal, r]);
-    });
+    array_bool_or(context.solver, clause.as_ref(), r);
 
     Ok(())
 }
