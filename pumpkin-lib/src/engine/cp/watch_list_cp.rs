@@ -107,8 +107,8 @@ impl<'a> Watchers<'a> {
 #[derive(Default, Debug)]
 struct WatcherCP {
     // FIXME measure performance of these vectors, they are treated as sets
-    pub lower_bound_watchers: Vec<PropagatorVarId>,
-    pub upper_bound_watchers: Vec<PropagatorVarId>,
-    pub assign_watchers: Vec<PropagatorVarId>,
-    pub removal_watchers: Vec<PropagatorVarId>,
+    lower_bound_watchers: Vec<PropagatorVarId>,
+    upper_bound_watchers: Vec<PropagatorVarId>,
+    assign_watchers: Vec<PropagatorVarId>,
+    removal_watchers: Vec<PropagatorVarId>,
 }

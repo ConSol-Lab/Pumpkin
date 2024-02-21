@@ -1,3 +1,4 @@
+//! Do not use the code in this file, it is not sound, i.e. it violates Rust's safety rules
 /*
 Memory layout for a clause:
 LBD -> 29 bits
@@ -65,6 +66,7 @@ impl ClauseInterface for ClauseInlined {
     }
 
     fn get_literal_slice(&self) -> &[Literal] {
+        // SAFETY: violated
         unsafe {
             std::slice::from_raw_parts(self.literals.get_unchecked(0), self.num_literals as usize)
         }
@@ -77,6 +79,7 @@ impl ClauseInterface for ClauseInlined {
 
     fn get_activity(&self) -> f32 {
         pumpkin_assert_moderate!(self.is_learned());
+        // SAFETY: violated
         unsafe {
             //for learned clauses, the activity is stored right after the literals
             let ptr_literal: *const Literal =
@@ -136,6 +139,7 @@ impl ClauseInlined {
 
     fn set_activity(&mut self, new_value: f32) {
         pumpkin_assert_moderate!(self.is_learned());
+        // SAFETY: violated
         unsafe {
             //for learned clauses, the activity is stored right after the literals
             let ptr_literal: *mut Literal =
@@ -147,6 +151,7 @@ impl ClauseInlined {
 
     fn get_activity_internal(&mut self) -> &mut f32 {
         pumpkin_assert_moderate!(self.is_learned());
+        // SAFETY: violated
         unsafe {
             //for learned clauses, the activity is stored right after the literals
             let ptr_literal: *mut Literal =
@@ -164,6 +169,7 @@ impl ClauseInlined {
         literals: &[Literal],
         is_learned: bool,
     ) -> &mut ClauseInlined {
+        // SAFETY: violated
         unsafe {
             let clause = loc.cast::<ClauseInlined>();
             (*clause).update_lbd(literals.len() as u32);
@@ -197,6 +203,7 @@ impl std::ops::Index<u32> for ClauseInlined {
     type Output = Literal;
     fn index(&self, index: u32) -> &Literal {
         pumpkin_assert_moderate!(index < self.num_literals);
+        // SAFETY: violated
         unsafe { self.literals.get_unchecked(index as usize) }
     }
 }
@@ -204,6 +211,7 @@ impl std::ops::Index<u32> for ClauseInlined {
 impl std::ops::IndexMut<u32> for ClauseInlined {
     fn index_mut(&mut self, index: u32) -> &mut Literal {
         pumpkin_assert_moderate!(index < self.num_literals);
+        // SAFETY: violated
         unsafe { self.literals.get_unchecked_mut(index as usize) }
     }
 }

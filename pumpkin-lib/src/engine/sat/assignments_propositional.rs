@@ -294,7 +294,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn already_assigned_literal_does_not_override_assignment_info() {
+    fn already_assigned_literal_does_not_override_assignment_info() {
         let mut assignments_propositional = AssignmentsPropositional::default();
         let literal = Literal::new(
             PropositionalVariable::new(assignments_propositional.num_propositional_variables()),

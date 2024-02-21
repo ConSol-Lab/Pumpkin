@@ -1,5 +1,7 @@
 //! Compile constraints into CP propagators
 
+use std::rc::Rc;
+
 use pumpkin_lib::basic_types::variables::AffineView;
 use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::DomainId;
@@ -21,7 +23,10 @@ use crate::flatzinc::compiler::constraints::array_bool_or;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
@@ -474,6 +479,13 @@ fn compile_reified_binary_int_predicate(
     Ok(())
 }
 
+fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
+    vars.iter()
+        .zip(weights.iter())
+        .map(|(x_i, &w_i)| x_i.scaled(w_i))
+        .collect::<Box<[_]>>()
+}
+
 fn compile_int_lin_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
@@ -487,11 +499,7 @@ fn compile_int_lin_predicate(
     let vars = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    let terms = vars
-        .iter()
-        .zip(weights.iter())
-        .map(|(x_i, &w_i)| x_i.scaled(w_i))
-        .collect::<Box<[_]>>();
+    let terms = weighted_vars(weights, vars);
 
     post_constraint(context.solver, terms, rhs);
 
@@ -517,11 +525,7 @@ fn compile_reified_int_lin_predicate(
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
     let reif = context.resolve_bool_variable(&exprs[3])?;
 
-    let terms = vars
-        .iter()
-        .zip(weights.iter())
-        .map(|(x_i, &w_i)| x_i.scaled(w_i))
-        .collect::<Box<[_]>>();
+    let terms = weighted_vars(weights, vars);
 
     post_constraint(context.solver, terms, rhs, reif);
 

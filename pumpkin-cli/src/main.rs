@@ -390,9 +390,9 @@ fn stringify_solution(
             }
         })
         .chain(if terminate_with_zero {
-            std::iter::once("0".to_string())
+            std::iter::once(String::from("0"))
         } else {
-            std::iter::once("".to_string())
+            std::iter::once(String::new())
         })
         .collect::<String>()
 }

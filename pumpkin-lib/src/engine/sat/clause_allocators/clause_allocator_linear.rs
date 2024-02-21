@@ -1,3 +1,4 @@
+//! Do not use the code in this file, it is not sound, i.e. it violates Rust's safety rules
 use super::ClauseAllocatorInterface;
 use super::ClauseInlined;
 use super::ClauseInterface;
@@ -50,18 +51,23 @@ impl ClauseAllocatorInterface<ClauseInlined> for ClauseAllocatorLinear {
     }
 
     fn get_mutable_clause(&mut self, clause_reference: ClauseReference) -> &mut ClauseInlined {
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
         unsafe { &mut *self.get_pointer_mut(clause_reference) }
     }
 
     fn get_clause(&self, clause_reference: ClauseReference) -> &ClauseInlined {
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
         unsafe { &*self.get_pointer(clause_reference) }
     }
 
     fn delete_clause(&mut self, clause_reference: ClauseReference) {
         //for now we do not really delete clauses, we only take note of clause deletion
         let ptr_clause = self.get_pointer_mut(clause_reference);
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
         let num_literals = unsafe { (*ptr_clause).len() };
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
         let is_learned = unsafe { (*ptr_clause).is_learned() };
+        // SAFETY: should be ok as long as the ClauseReference was created by self, and wasn't deleted...
         unsafe {
             (*ptr_clause).mark_deleted();
         }

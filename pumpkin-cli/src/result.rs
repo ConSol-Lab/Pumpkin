@@ -2,14 +2,14 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::flatzinc::FlatZincError;
+use crate::flatzinc::error::FlatZincError;
 use crate::parsers::dimacs::DimacsParseError;
 
-pub type PumpkinResult<T> = Result<T, PumpkinError>;
+pub(crate) type PumpkinResult<T> = Result<T, PumpkinError>;
 
 #[derive(Error, Debug)]
 #[allow(dead_code)]
-pub enum PumpkinError {
+pub(crate) enum PumpkinError {
     #[error("Hard clauses violated")]
     InconsistentSolution,
     #[error("Reported objective value is lower than the actual value")]
@@ -29,7 +29,7 @@ pub enum PumpkinError {
 }
 
 impl PumpkinError {
-    pub fn invalid_instance(path: impl Display) -> Self {
+    pub(crate) fn invalid_instance(path: impl Display) -> Self {
         Self::InvalidInstanceFile(format!("{}", path))
     }
 }

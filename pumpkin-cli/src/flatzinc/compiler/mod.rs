@@ -15,7 +15,7 @@ use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
 use super::FlatZincError;
 
-pub fn compile(
+pub(crate) fn compile(
     ast: FlatZincAst,
     solver: &mut ConstraintSatisfactionSolver,
 ) -> Result<FlatZincInstance, FlatZincError> {

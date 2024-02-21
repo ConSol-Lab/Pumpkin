@@ -8,7 +8,10 @@ use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::compiler::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, expr, annos: _ } => {
@@ -152,7 +155,7 @@ mod tests {
 
         let mut solver = ConstraintSatisfactionSolver::default();
         let mut context = CompilationContext::new(&mut solver);
-        context.boolean_parameters.insert("FalsePar".into(), false);
+        let _ = context.boolean_parameters.insert("FalsePar".into(), false);
 
         run(&ast, &mut context).expect("no errors");
 
@@ -214,7 +217,7 @@ mod tests {
 
         let mut solver = ConstraintSatisfactionSolver::default();
         let mut context = CompilationContext::new(&mut solver);
-        context.integer_parameters.insert("IntPar".into(), 3);
+        let _ = context.integer_parameters.insert("IntPar".into(), 3);
 
         run(&ast, &mut context).expect("no errors");
 

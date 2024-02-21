@@ -24,7 +24,7 @@ impl ClauseAllocatorInterface<ClauseBasic> for ClauseAllocatorBasic {
             //create a new clause reference, unseen before
             let clause_reference = ClauseReference::create_allocated_clause_reference(
                 self.allocated_clauses.len() as u32 + 1,
-            ); ////we keep clause reference id zero as the null value, never to be allocated at that position
+            ); // we keep clause reference id zero as the null value, never to be allocated at that position
 
             self.allocated_clauses
                 .push(ClauseBasic::new(literals, is_learned));
@@ -86,15 +86,9 @@ impl std::fmt::Display for ClauseAllocatorBasic {
         let clauses_string = &self
             .allocated_clauses
             .iter()
-            .fold(String::new(), |acc, clause| {
-                acc + &clause.to_string() + "\n"
-            });
+            .fold(String::new(), |acc, clause| format!("{acc}{clause}\n"));
 
-        write!(
-            f,
-            "Num clauses: {}\n{}",
-            self.allocated_clauses.len(),
-            clauses_string
-        )
+        let num_clauses = self.allocated_clauses.len();
+        write!(f, "Num clauses: {num_clauses}\n{clauses_string}")
     }
 }

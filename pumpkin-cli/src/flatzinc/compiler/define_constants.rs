@@ -7,7 +7,10 @@ use super::context::Set;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for parameter_decl in &ast.parameter_decls {
         match parameter_decl {
             flatzinc::ParDeclItem::Bool { id, bool } => {
@@ -62,7 +65,7 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                     | flatzinc::SetLiteral::SetFloats(_) => panic!("float values are unsupported"),
                 };
 
-                context
+                let _ = context
                     .set_constants
                     .insert(context.identifiers.get_interned(id), set);
             }

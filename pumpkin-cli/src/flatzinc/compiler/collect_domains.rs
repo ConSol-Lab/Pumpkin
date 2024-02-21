@@ -1,5 +1,7 @@
 //! Compilation phase that builds a map from flatzinc variables to solver domains.
 
+use std::rc::Rc;
+
 use flatzinc::Annotation;
 
 use super::context::CompilationContext;
@@ -8,7 +10,10 @@ use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, annos, .. } => {
@@ -70,7 +75,9 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                         .collect::<Result<Vec<_>, _>>()?;
 
                     let domain_id = context.solver.create_new_integer_variable_sparse(values);
-                    context.integer_variable_map.insert(id.clone(), domain_id);
+                    let _ = context
+                        .integer_variable_map
+                        .insert(Rc::clone(&id), domain_id);
 
                     domain_id
                 };

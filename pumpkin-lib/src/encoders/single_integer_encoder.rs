@@ -61,9 +61,29 @@ impl PseudoBooleanConstraintEncoderInterface for SingleIntegerEncoder {
 #[cfg(test)]
 mod tests {
     use super::SingleIntegerEncoder;
+    use crate::basic_types::DomainId;
     use crate::basic_types::WeightedLiteral;
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
     use crate::engine::ConstraintSatisfactionSolver;
+
+    fn weighted_literals(
+        csp_solver: &mut ConstraintSatisfactionSolver,
+        lower_bound: i32,
+        upper_bound: i32,
+        domain: DomainId,
+        weight: u64,
+    ) -> Vec<WeightedLiteral> {
+        ((lower_bound + 1)..=upper_bound)
+            .map(|i| {
+                let literal = csp_solver.get_lower_bound_literal(domain, i);
+                WeightedLiteral {
+                    literal,
+                    weight,
+                    bound: Some(i),
+                }
+            })
+            .collect::<Vec<_>>()
+    }
 
     #[test]
     fn test_valid_encode_at_most_k_returns_encoder() {
@@ -73,16 +93,8 @@ mod tests {
 
         let weight = 1;
         let k = 5;
-        let weighted_literals = ((lower_bound + 1)..=upper_bound)
-            .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
-                WeightedLiteral {
-                    literal,
-                    weight,
-                    bound: Some(i),
-                }
-            })
-            .collect::<Vec<_>>();
+        let weighted_literals =
+            weighted_literals(&mut csp_solver, lower_bound, upper_bound, domain, weight);
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
@@ -103,16 +115,8 @@ mod tests {
             csp_solver.add_unit_clause(csp_solver.get_lower_bound_literal(domain, k as i32 + 1));
 
         let weight = 1;
-        let weighted_literals = ((lower_bound + 1)..=upper_bound)
-            .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
-                WeightedLiteral {
-                    literal,
-                    weight,
-                    bound: Some(i),
-                }
-            })
-            .collect::<Vec<_>>();
+        let weighted_literals =
+            weighted_literals(&mut csp_solver, lower_bound, upper_bound, domain, weight);
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_err())
@@ -126,16 +130,8 @@ mod tests {
 
         let weight = 1;
         let k = 15;
-        let weighted_literals = ((lower_bound + 1)..=upper_bound)
-            .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
-                WeightedLiteral {
-                    literal,
-                    weight,
-                    bound: Some(i),
-                }
-            })
-            .collect::<Vec<_>>();
+        let weighted_literals =
+            weighted_literals(&mut csp_solver, lower_bound, upper_bound, domain, weight);
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
@@ -156,16 +152,8 @@ mod tests {
 
         let weight = 1;
         let k = 15;
-        let weighted_literals = ((lower_bound + 1)..=upper_bound)
-            .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
-                WeightedLiteral {
-                    literal,
-                    weight,
-                    bound: Some(i),
-                }
-            })
-            .collect::<Vec<_>>();
+        let weighted_literals =
+            weighted_literals(&mut csp_solver, lower_bound, upper_bound, domain, weight);
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
@@ -188,16 +176,8 @@ mod tests {
 
         let weight = 1;
         let k = 15;
-        let weighted_literals = ((lower_bound + 1)..=upper_bound)
-            .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
-                WeightedLiteral {
-                    literal,
-                    weight,
-                    bound: Some(i),
-                }
-            })
-            .collect::<Vec<_>>();
+        let weighted_literals =
+            weighted_literals(&mut csp_solver, lower_bound, upper_bound, domain, weight);
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());

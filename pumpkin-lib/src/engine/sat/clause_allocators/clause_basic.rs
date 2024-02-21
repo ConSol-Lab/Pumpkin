@@ -110,12 +110,12 @@ impl std::fmt::Display for ClauseBasic {
         let clause_string = &self
             .literals
             .iter()
-            .fold(String::new(), |acc, lit| acc + &lit.to_string() + ",");
+            .fold(String::new(), |acc, lit| format!("{acc}{lit},"));
 
         write!(
             f,
-            "({})[learned:{}, deleted:{}]",
-            clause_string, self.is_learned, self.is_deleted
+            "({clause_string})[learned:{}, deleted:{}]",
+            self.is_learned, self.is_deleted
         )
     }
 }

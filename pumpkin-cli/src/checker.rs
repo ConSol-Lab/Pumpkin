@@ -8,7 +8,7 @@ use crate::result::PumpkinError;
 use crate::result::PumpkinResult;
 
 #[allow(dead_code)]
-pub fn verify_cnf_solution(file_location: &str, solution: &Solution) -> PumpkinResult<()> {
+pub(crate) fn verify_cnf_solution(file_location: &str, solution: &Solution) -> PumpkinResult<()> {
     let mut instance = Instance::default();
     instance.read_file(file_location, FileFormat::CnfDimacsPLine)?;
 
@@ -20,7 +20,7 @@ pub fn verify_cnf_solution(file_location: &str, solution: &Solution) -> PumpkinR
 }
 
 #[allow(dead_code)]
-pub fn verify_wcnf_solution(
+pub(crate) fn verify_wcnf_solution(
     file_location: &str,
     solution: &Solution,
     reported_objective_value: u64,

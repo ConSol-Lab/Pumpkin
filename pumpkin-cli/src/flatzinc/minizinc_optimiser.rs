@@ -14,14 +14,14 @@ use super::instance::FlatZincInstance;
 use super::instance::FlatzincObjective;
 use super::print_solution_from_solver;
 
-pub struct MinizincOptimiser<'a> {
+pub(crate) struct MinizincOptimiser<'a> {
     csp_solver: ConstraintSatisfactionSolver,
     objective_function: FlatzincObjective,
     instance: &'a FlatZincInstance,
 }
 
 impl<'a> MinizincOptimiser<'a> {
-    pub fn new(
+    pub(crate) fn new(
         csp_solver: ConstraintSatisfactionSolver,
         objective_function: FlatzincObjective,
         instance: &'a FlatZincInstance,
@@ -33,7 +33,7 @@ impl<'a> MinizincOptimiser<'a> {
         }
     }
 
-    pub fn solve(&mut self, time_limit: Option<Duration>) -> OptimisationResult {
+    pub(crate) fn solve(&mut self, time_limit: Option<Duration>) -> OptimisationResult {
         let stopwatch = Stopwatch::new(
             time_limit
                 .map(|limit| limit.as_secs() as i64)

@@ -267,11 +267,11 @@ impl GeneralisedTotaliserEncoder {
 
 #[derive(Debug)]
 struct Layer {
-    pub nodes: Vec<Vec<WeightedLiteral>>,
+    nodes: Vec<Vec<WeightedLiteral>>,
 }
 
 impl Layer {
-    pub fn new() -> Layer {
+    fn new() -> Layer {
         Layer { nodes: vec![] }
     }
 }

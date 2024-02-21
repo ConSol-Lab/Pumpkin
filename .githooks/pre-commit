@@ -5,3 +5,4 @@ set -eux
 ./scripts/hash.sh
 ./scripts/fmt.sh
 ./scripts/clippy.sh
+./scripts/deny.sh

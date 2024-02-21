@@ -68,33 +68,38 @@ impl MovingAverageInterface for WindowedMovingAverage {
     }
 }
 
-#[test]
-fn test_constant_value() {
-    let constant_value = 100;
-    let mut constant_average = WindowedMovingAverage::new(5);
-    for _i in 0..1000 {
-        constant_average.add_term(constant_value);
-        assert!(constant_average.value() == constant_value as f64);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constant_value() {
+        let constant_value = 100;
+        let mut constant_average = WindowedMovingAverage::new(5);
+        for _i in 0..1000 {
+            constant_average.add_term(constant_value);
+            assert!(constant_average.value() == constant_value as f64);
+        }
     }
-}
 
-#[test]
-fn test_empty() {
-    let empty_sum = WindowedMovingAverage::new(10);
-    assert!(empty_sum.value() == 0.0);
-}
+    #[test]
+    fn test_empty() {
+        let empty_sum = WindowedMovingAverage::new(10);
+        assert!(empty_sum.value() == 0.0);
+    }
 
-#[test]
-fn test_simple1() {
-    let mut constant_average = WindowedMovingAverage::new(2);
-    constant_average.add_term(10);
-    assert!(constant_average.value() == 10.0);
-    constant_average.add_term(30);
-    assert!(constant_average.value() == 20.0);
-    constant_average.add_term(30);
-    assert!(constant_average.value() == 30.0);
-    constant_average.add_term(10);
-    assert!(constant_average.value() == 20.0);
-    constant_average.add_term(90);
-    assert!(constant_average.value() == 50.0);
+    #[test]
+    fn test_simple1() {
+        let mut constant_average = WindowedMovingAverage::new(2);
+        constant_average.add_term(10);
+        assert!(constant_average.value() == 10.0);
+        constant_average.add_term(30);
+        assert!(constant_average.value() == 20.0);
+        constant_average.add_term(30);
+        assert!(constant_average.value() == 30.0);
+        constant_average.add_term(10);
+        assert!(constant_average.value() == 20.0);
+        constant_average.add_term(90);
+        assert!(constant_average.value() == 50.0);
+    }
 }

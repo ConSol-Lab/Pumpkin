@@ -141,7 +141,7 @@ mod tests {
     fn test_bitfield() {
         let mut m: u32 = 0;
         m.set_bit(31, true);
-        assert_eq!(m, (1 << 31));
+        assert_eq!(m, 1 << 31);
         m.set_bit(0, true);
         m.set_bit(1, true);
         m.set_bit(2, true);

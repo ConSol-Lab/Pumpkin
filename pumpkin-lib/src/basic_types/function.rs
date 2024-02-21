@@ -155,9 +155,3 @@ impl Function {
         weighted_literals
     }
 }
-
-#[derive(Clone)]
-pub struct WeightedInteger {
-    pub domain_id: DomainId,
-    pub weight: u64,
-}

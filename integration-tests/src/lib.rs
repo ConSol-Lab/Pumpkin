@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use wait_timeout::ChildExt;
 
+#[derive(Debug)]
 pub struct Files {
     pub instance_file: PathBuf,
     pub proof_file: PathBuf,
@@ -95,6 +96,7 @@ pub fn get_executable(path: impl AsRef<Path>) -> PathBuf {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum CheckerOutput {
     Panic,
     Acceptable,
@@ -116,9 +118,10 @@ pub fn run_solution_checker<Check: Checker>(files: Files) {
     let checker_exe = get_executable(format!("{}/{}", env!("OUT_DIR"), Check::executable_name()));
 
     let mut command = Command::new(checker_exe);
-    command.stdout(Stdio::piped());
-    command.stdin(Stdio::null());
-    command.stderr(Stdio::piped());
+    let _ = command
+        .stdout(Stdio::piped())
+        .stdin(Stdio::null())
+        .stderr(Stdio::piped());
 
     Check::prepare_command(&mut command, &files);
 

@@ -13,6 +13,7 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::basic_types::DomainId;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -59,6 +60,16 @@ impl BIBD {
     }
 }
 
+fn create_matrix(solver: &mut ConstraintSatisfactionSolver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
+    (0..bibd.rows)
+        .map(|_| {
+            (0..bibd.columns)
+                .map(|_| solver.create_new_integer_variable(0, 1))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+}
+
 fn main() {
     env_logger::init();
 
@@ -75,13 +86,7 @@ fn main() {
     let mut solver = ConstraintSatisfactionSolver::default();
 
     // Create 0-1 integer variables that make up the matrix.
-    let matrix = (0..bibd.rows)
-        .map(|_| {
-            (0..bibd.columns)
-                .map(|_| solver.create_new_integer_variable(0, 1))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+    let matrix = create_matrix(&mut solver, &bibd);
 
     // Enforce the row sum.
     for row in matrix.iter() {
@@ -96,15 +101,7 @@ fn main() {
     // Enforce the dot product constraint.
     // pairwise_product[r1][r2][col] = matrix[r1][col] * matrix[r2][col]
     let pairwise_product = (0..bibd.rows)
-        .map(|_| {
-            (0..bibd.rows)
-                .map(|_| {
-                    (0..bibd.columns)
-                        .map(|_| solver.create_new_integer_variable(0, 1))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
+        .map(|_| create_matrix(&mut solver, &bibd))
         .collect::<Vec<_>>();
 
     for r1 in 0..bibd.rows as usize {
@@ -133,9 +130,9 @@ fn main() {
                     .iter()
                     .map(|&var| {
                         if solver.get_integer_assignments().get_assigned_value(var) == 1 {
-                            "| * ".to_string()
+                            String::from("| * ")
                         } else {
-                            "|   ".to_string()
+                            String::from("|   ")
                         }
                     })
                     .collect::<String>();

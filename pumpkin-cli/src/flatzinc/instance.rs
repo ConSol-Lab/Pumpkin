@@ -8,14 +8,14 @@ use pumpkin_lib::basic_types::Literal;
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which is being optimised
 #[derive(Debug, Clone, Copy)]
-pub enum FlatzincObjective {
+pub(crate) enum FlatzincObjective {
     Maximize(DomainId),
     Minimize(DomainId),
 }
 
 impl FlatzincObjective {
     /// Returns the [DomainId] of the objective function
-    pub fn get_domain(&self) -> &DomainId {
+    pub(crate) fn get_domain(&self) -> &DomainId {
         match self {
             FlatzincObjective::Maximize(domain) => domain,
             FlatzincObjective::Minimize(domain) => domain,
@@ -24,19 +24,19 @@ impl FlatzincObjective {
 }
 
 #[derive(Default)]
-pub struct FlatZincInstance {
+pub(crate) struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
     pub(super) objective_function: Option<FlatzincObjective>,
 }
 
 impl FlatZincInstance {
-    pub fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
+    pub(crate) fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
         self.outputs.iter()
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Output {
+pub(crate) enum Output {
     Bool(VariableOutput<Literal>),
     Int(VariableOutput<DomainId>),
     ArrayOfBool(ArrayOutput<Literal>),
@@ -44,14 +44,18 @@ pub enum Output {
 }
 
 impl Output {
-    pub fn bool(id: Rc<str>, literal: Literal) -> Output {
+    pub(crate) fn bool(id: Rc<str>, literal: Literal) -> Output {
         Output::Bool(VariableOutput {
             id,
             variable: literal,
         })
     }
 
-    pub fn array_of_bool(id: Rc<str>, shape: Box<[(i32, i32)]>, contents: Rc<[Literal]>) -> Output {
+    pub(crate) fn array_of_bool(
+        id: Rc<str>,
+        shape: Box<[(i32, i32)]>,
+        contents: Rc<[Literal]>,
+    ) -> Output {
         Output::ArrayOfBool(ArrayOutput {
             id,
             shape,
@@ -59,14 +63,18 @@ impl Output {
         })
     }
 
-    pub fn int(id: Rc<str>, domain_id: DomainId) -> Output {
+    pub(crate) fn int(id: Rc<str>, domain_id: DomainId) -> Output {
         Output::Int(VariableOutput {
             id,
             variable: domain_id,
         })
     }
 
-    pub fn array_of_int(id: Rc<str>, shape: Box<[(i32, i32)]>, contents: Rc<[DomainId]>) -> Output {
+    pub(crate) fn array_of_int(
+        id: Rc<str>,
+        shape: Box<[(i32, i32)]>,
+        contents: Rc<[DomainId]>,
+    ) -> Output {
         Output::ArrayOfInt(ArrayOutput {
             id,
             shape,
@@ -76,19 +84,19 @@ impl Output {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VariableOutput<T> {
+pub(crate) struct VariableOutput<T> {
     id: Rc<str>,
     variable: T,
 }
 
 impl<T> VariableOutput<T> {
-    pub fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
+    pub(crate) fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
         println!("{} = {};", self.id, value(&self.variable));
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ArrayOutput<T> {
+pub(crate) struct ArrayOutput<T> {
     id: Rc<str>,
     /// The shape of the array is a sequence of index sets. The number of elements in this sequence
     /// corresponds to the dimensionality of the array, and the element in the sequence at index i denotes
@@ -100,7 +108,7 @@ pub struct ArrayOutput<T> {
 }
 
 impl<T> ArrayOutput<T> {
-    pub fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
+    pub(crate) fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
         let mut array_buf = String::new();
 
         for element in self.contents.iter() {

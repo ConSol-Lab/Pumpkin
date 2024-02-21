@@ -8,8 +8,8 @@ pub struct PropositionalValueSelector {
 
 #[derive(Debug)]
 struct CandidateTruthAssignment {
-    pub value: bool,
-    pub frozen: bool,
+    value: bool,
+    frozen: bool,
 }
 
 impl PropositionalValueSelector {

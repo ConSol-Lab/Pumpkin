@@ -454,7 +454,7 @@ struct IntegerDomainExplicit {
 }
 
 impl IntegerDomainExplicit {
-    pub fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
+    fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Cannot create an empty domain.");
 
         let size = upper_bound - lower_bound + 1;

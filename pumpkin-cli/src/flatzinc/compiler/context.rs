@@ -10,53 +10,53 @@ use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
-pub struct CompilationContext<'a> {
+pub(crate) struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
-    pub solver: &'a mut ConstraintSatisfactionSolver,
+    pub(crate) solver: &'a mut ConstraintSatisfactionSolver,
 
     /// All identifiers occuring in the model. The identifiers are interned, to support cheap
     /// cloning.
-    pub identifiers: Identifiers,
+    pub(crate) identifiers: Identifiers,
 
     /// Identifiers of variables that are outputs.
-    pub outputs: Vec<Output>,
+    pub(crate) outputs: Vec<Output>,
 
     /// All boolean parameters.
-    pub boolean_parameters: HashMap<Rc<str>, bool>,
+    pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
-    pub boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
+    pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
     /// A mapping from boolean model variables to solver literals.
-    pub boolean_variable_map: HashMap<Rc<str>, Literal>,
+    pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
     /// A mapping from boolean variable array identifiers to slices of literals.
-    pub boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
+    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
-    pub literal_equivalences: VariableEquivalences,
+    pub(crate) literal_equivalences: VariableEquivalences,
     /// A literal which is always true, can be used when using bool constants in the solver
-    pub constant_bool_true: Literal,
+    pub(crate) constant_bool_true: Literal,
     /// A literal which is always false, can be used when using bool constants in the solver
-    pub constant_bool_false: Literal,
+    pub(crate) constant_bool_false: Literal,
 
     /// All integer parameters.
-    pub integer_parameters: HashMap<Rc<str>, i32>,
+    pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
-    pub integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
+    pub(crate) integer_array_parameters: HashMap<Rc<str>, Rc<[i32]>>,
     /// A mapping from integer model variables to solver literals.
-    pub integer_variable_map: HashMap<Rc<str>, DomainId>,
+    pub(crate) integer_variable_map: HashMap<Rc<str>, DomainId>,
     /// The equivalence classes for integer variables. The associated data is the bounds for the
     /// domain of the representative of the equivalence class..
-    pub integer_equivalences: VariableEquivalences,
+    pub(crate) integer_equivalences: VariableEquivalences,
     /// Only instantiate single domain for every constant variable.
-    pub constant_domain_ids: HashMap<i32, DomainId>,
+    pub(crate) constant_domain_ids: HashMap<i32, DomainId>,
     /// A mapping from integer variable array identifiers to slices of domain ids.
-    pub integer_variable_arrays: HashMap<Rc<str>, Rc<[DomainId]>>,
+    pub(crate) integer_variable_arrays: HashMap<Rc<str>, Rc<[DomainId]>>,
 
     /// All set parameters.
-    pub set_constants: HashMap<Rc<str>, Set>,
+    pub(crate) set_constants: HashMap<Rc<str>, Set>,
 }
 
 /// A set parameter.
 #[derive(Clone, Debug)]
-pub enum Set {
+pub(crate) enum Set {
     /// A set defined by the interval `lower_bound..=upper_bound`.
     Interval { lower_bound: i32, upper_bound: i32 },
     /// A set defined by some values.
@@ -64,7 +64,7 @@ pub enum Set {
 }
 
 impl CompilationContext<'_> {
-    pub fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
+    pub(crate) fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
         let true_literal = solver.get_propositional_assignments().true_literal;
         let false_literal = solver.get_propositional_assignments().false_literal;
 
@@ -101,7 +101,7 @@ impl CompilationContext<'_> {
     //     self.integer_parameters.get(identifier).copied()
     // }
 
-    pub fn resolve_bool_variable(
+    pub(crate) fn resolve_bool_variable(
         &mut self,
         expr: &flatzinc::Expr,
     ) -> Result<Literal, FlatZincError> {
@@ -118,7 +118,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_bool_variable_from_identifier(
+    pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
         identifier: &str,
     ) -> Result<Literal, FlatZincError> {
@@ -144,7 +144,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_bool_variable_array(
+    pub(crate) fn resolve_bool_variable_array(
         &self,
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[Literal]>, FlatZincError> {
@@ -188,7 +188,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_array_integer_constants(
+    pub(crate) fn resolve_array_integer_constants(
         &self,
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[i32]>, FlatZincError> {
@@ -209,25 +209,25 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_integer_constant_from_expr(
+    pub(crate) fn resolve_integer_constant_from_expr(
         &self,
         expr: &flatzinc::Expr,
     ) -> Result<i32, FlatZincError> {
-        match expr {
-            flatzinc::Expr::VarParIdentifier(id) => self
-                .integer_parameters
-                .get(id.as_str())
-                .copied()
-                .ok_or_else(|| FlatZincError::InvalidIdentifier {
-                    identifier: id.as_str().into(),
-                    expected_type: "constant integer".into(),
-                }),
-            flatzinc::Expr::Int(value) => i32::try_from(*value).map_err(Into::into),
-            _ => Err(FlatZincError::UnexpectedExpr),
+        fn try_into_int_expr(expr: flatzinc::Expr) -> Option<flatzinc::IntExpr> {
+            match expr {
+                flatzinc::Expr::VarParIdentifier(id) => {
+                    Some(flatzinc::IntExpr::VarParIdentifier(id))
+                }
+                flatzinc::Expr::Int(value) => Some(flatzinc::IntExpr::Int(value)),
+                _ => None,
+            }
         }
+        try_into_int_expr(expr.clone())
+            .ok_or(FlatZincError::UnexpectedExpr)
+            .and_then(|e| self.resolve_int_expr(&e))
     }
 
-    pub fn resolve_int_expr(&self, expr: &flatzinc::IntExpr) -> Result<i32, FlatZincError> {
+    pub(crate) fn resolve_int_expr(&self, expr: &flatzinc::IntExpr) -> Result<i32, FlatZincError> {
         match expr {
             flatzinc::IntExpr::Int(value) => i32::try_from(*value).map_err(Into::into),
             flatzinc::IntExpr::VarParIdentifier(id) => self
@@ -241,7 +241,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_integer_variable(
+    pub(crate) fn resolve_integer_variable(
         &mut self,
         expr: &flatzinc::Expr,
     ) -> Result<DomainId, FlatZincError> {
@@ -260,7 +260,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_integer_variable_from_identifier(
+    pub(crate) fn resolve_integer_variable_from_identifier(
         &mut self,
         identifier: &str,
     ) -> Result<DomainId, FlatZincError> {
@@ -285,7 +285,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_integer_variable_array(
+    pub(crate) fn resolve_integer_variable_array(
         &mut self,
         expr: &flatzinc::Expr,
     ) -> Result<Rc<[DomainId]>, FlatZincError> {
@@ -330,7 +330,7 @@ impl CompilationContext<'_> {
         }
     }
 
-    pub fn resolve_set_constant(&self, expr: &flatzinc::Expr) -> Result<Set, FlatZincError> {
+    pub(crate) fn resolve_set_constant(&self, expr: &flatzinc::Expr) -> Result<Set, FlatZincError> {
         match expr {
             flatzinc::Expr::VarParIdentifier(id) => {
                 self.set_constants.get(id.as_str()).cloned().ok_or(
@@ -376,17 +376,17 @@ impl CompilationContext<'_> {
 }
 
 #[derive(Default, Debug)]
-pub struct Identifiers {
+pub(crate) struct Identifiers {
     interned_identifiers: HashSet<Rc<str>>,
 }
 
 impl Identifiers {
-    pub fn get_interned(&mut self, identifier: &str) -> Rc<str> {
+    pub(crate) fn get_interned(&mut self, identifier: &str) -> Rc<str> {
         if let Some(interned) = self.interned_identifiers.get(identifier) {
-            interned.clone()
+            Rc::clone(interned)
         } else {
             let interned: Rc<str> = identifier.into();
-            self.interned_identifiers.insert(interned.clone());
+            let _ = self.interned_identifiers.insert(Rc::clone(&interned));
 
             interned
         }
@@ -394,7 +394,7 @@ impl Identifiers {
 }
 
 #[derive(Debug, Default)]
-pub struct VariableEquivalences {
+pub(crate) struct VariableEquivalences {
     /// The equivalence classes.
     classes: Vec<BTreeSet<Rc<str>>>,
     /// The domain information associated with each equivalence class.
@@ -411,7 +411,7 @@ impl VariableEquivalences {
     ///  - The two variables are already in the same equivalence class: this is a no-op.
     ///  - One of the variables, or both, have do not belong to an equivalence class. In this case
     ///  the method will panic.
-    pub fn merge(&mut self, variable_1: Rc<str>, variable_2: Rc<str>) {
+    pub(crate) fn merge(&mut self, variable_1: Rc<str>, variable_2: Rc<str>) {
         let equiv_1_idx = self.belongs_to.get(&variable_1).copied().unwrap();
         let equiv_2_idx = self.belongs_to.get(&variable_2).copied().unwrap();
 
@@ -426,19 +426,20 @@ impl VariableEquivalences {
         if equiv_1_idx != self.classes.len() {
             // rewire the last class that was moved by calls to `swap_remove`
             self.classes[equiv_1_idx].iter().for_each(|class| {
-                self.belongs_to.insert(Rc::clone(class), equiv_1_idx);
+                let _ = self.belongs_to.insert(Rc::clone(class), equiv_1_idx);
             });
         }
 
         self.classes[equiv_2_idx].extend(equiv_1);
         self.domains[equiv_2_idx].merge(domain_1);
-        self.belongs_to.insert(variable_1, equiv_2_idx);
+        let _ = self.belongs_to.insert(variable_1, equiv_2_idx);
     }
 
     /// Create a new equivalence class with the given representative.
-    pub fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
-        self.belongs_to
-            .insert(representative.clone(), self.classes.len());
+    pub(crate) fn create_equivalence_class(&mut self, representative: Rc<str>, lb: i32, ub: i32) {
+        let _ = self
+            .belongs_to
+            .insert(Rc::clone(&representative), self.classes.len());
         self.classes.push([representative].into());
         self.domains.push(Domain::from(lb, ub));
     }
@@ -446,7 +447,7 @@ impl VariableEquivalences {
     /// Get the name of the representative variable of the equivalence class the given variable
     /// belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
-    pub fn representative(&self, variable: &str) -> Rc<str> {
+    pub(crate) fn representative(&self, variable: &str) -> Rc<str> {
         let equiv_idx = self.belongs_to[variable];
 
         self.classes[equiv_idx].first().cloned().unwrap()
@@ -454,40 +455,40 @@ impl VariableEquivalences {
 
     /// Get the domain for the given variable, based on the equivalence class it belongs to.
     /// If the variable doesn't belong to an equivalence class, this method panics.
-    pub fn domain(&self, variable: &str) -> Domain {
+    pub(crate) fn domain(&self, variable: &str) -> Domain {
         let equiv_idx = self.belongs_to[variable];
 
         self.domains[equiv_idx]
     }
 
-    pub fn is_defined(&self, variable: &str) -> bool {
+    pub(crate) fn is_defined(&self, variable: &str) -> bool {
         self.belongs_to.contains_key(variable)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Domain {
-    pub lb: i32,
-    pub ub: i32,
+pub(crate) struct Domain {
+    pub(crate) lb: i32,
+    pub(crate) ub: i32,
 }
 
 impl Domain {
-    pub fn merge(&mut self, other: Domain) {
+    pub(crate) fn merge(&mut self, other: Domain) {
         let lb = i32::max(self.lb, other.lb);
         let ub = i32::min(self.ub, other.ub);
 
         *self = Domain::from(lb, ub);
     }
 
-    pub fn is_constant(&self) -> bool {
+    pub(crate) fn is_constant(&self) -> bool {
         self.lb == self.ub
     }
 
-    pub fn from(lb: i32, ub: i32) -> Self {
+    pub(crate) fn from(lb: i32, ub: i32) -> Self {
         Domain { lb, ub }
     }
 
-    pub fn into_literal(self, solver: &mut ConstraintSatisfactionSolver) -> Literal {
+    pub(crate) fn into_literal(self, solver: &mut ConstraintSatisfactionSolver) -> Literal {
         match self {
             Domain { lb, ub } if lb == ub && lb == 1 => {
                 solver.get_propositional_assignments().true_literal
@@ -499,7 +500,7 @@ impl Domain {
         }
     }
 
-    pub fn into_variable(self, solver: &mut ConstraintSatisfactionSolver) -> DomainId {
+    pub(crate) fn into_variable(self, solver: &mut ConstraintSatisfactionSolver) -> DomainId {
         solver.create_new_integer_variable(self.lb, self.ub)
     }
 }

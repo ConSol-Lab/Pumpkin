@@ -3,7 +3,7 @@ use std::num::TryFromIntError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum FlatZincError {
+pub(crate) enum FlatZincError {
     #[error("failed to read instance file")]
     Io(#[from] std::io::Error),
 

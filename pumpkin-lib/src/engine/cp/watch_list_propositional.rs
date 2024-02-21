@@ -101,6 +101,6 @@ impl<'a> WatchersPropositional<'a> {
 
 #[derive(Default, Debug)]
 struct WatcherPropositional {
-    pub assigned_true_watchers: Vec<PropagatorVarId>,
-    pub assigned_false_watchers: Vec<PropagatorVarId>,
+    assigned_true_watchers: Vec<PropagatorVarId>,
+    assigned_false_watchers: Vec<PropagatorVarId>,
 }

@@ -8,7 +8,7 @@ use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::instance::FlatzincObjective;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(
+pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<Option<FlatzincObjective>, FlatZincError> {

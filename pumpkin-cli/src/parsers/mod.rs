@@ -1,1 +1,1 @@
-pub mod dimacs;
+pub(crate) mod dimacs;

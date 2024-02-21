@@ -11,7 +11,7 @@ use super::ast::SingleVarDecl;
 use super::ast::VarArrayDecl;
 use super::FlatZincError;
 
-pub fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
+pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
     let reader = BufReader::new(source);
 
     let mut ast_builder = FlatZincAst::builder();

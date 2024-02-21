@@ -5,7 +5,10 @@ use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::compiler::context::CompilationContext;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for single_var_decl in &ast.single_variables {
         match single_var_decl {
             SingleVarDecl::Bool { id, expr, .. } => {

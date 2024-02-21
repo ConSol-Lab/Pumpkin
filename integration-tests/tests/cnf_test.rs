@@ -1,3 +1,4 @@
+#![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 use std::process::Command;
 use std::process::Output;
 
@@ -112,8 +113,8 @@ impl Checker for CnfChecker {
     }
 
     fn prepare_command(cmd: &mut Command, files: &Files) {
-        cmd.arg(&files.instance_file);
-        cmd.arg(&files.log_file);
+        let _ = cmd.arg(&files.instance_file);
+        let _ = cmd.arg(&files.log_file);
     }
 
     fn parse_checker_output(output: &Output) -> CheckerOutput {

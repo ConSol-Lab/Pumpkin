@@ -27,12 +27,12 @@ type DiffLogicVariables<V> = (
 );
 
 /// Bounds consistent propagator for a set of constraints `x_i + \delta <= x_j`.
-pub struct DiffLogic<V> {
-    pub difference_constraints: Box<[(V, i32, V)]>,
+pub(crate) struct DiffLogic<V> {
+    pub(crate) difference_constraints: Box<[(V, i32, V)]>,
 }
 
 #[derive(Default)]
-pub struct DiffLogicProp<V> {
+pub(crate) struct DiffLogicProp<V> {
     #[allow(clippy::type_complexity)]
     /// The elementary constraints of the form `(y_1 <= v) => (y_2 <= v + d)`.
     elementary_constraints: HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,

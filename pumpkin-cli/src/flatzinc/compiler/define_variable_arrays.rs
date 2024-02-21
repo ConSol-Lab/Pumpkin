@@ -18,7 +18,10 @@ use crate::flatzinc::ast::VarArrayDecl;
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
-pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), FlatZincError> {
+pub(crate) fn run(
+    ast: &FlatZincAst,
+    context: &mut CompilationContext,
+) -> Result<(), FlatZincError> {
     for array_decl in &ast.variable_arrays {
         match array_decl {
             VarArrayDecl::Bool {
@@ -56,13 +59,13 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
 
                 if let Some(shape) = is_output_array(annos) {
                     context.outputs.push(Output::array_of_bool(
-                        id.clone(),
+                        Rc::clone(&id),
                         shape,
-                        contents.clone(),
+                        Rc::clone(&contents),
                     ));
                 }
 
-                context.boolean_variable_arrays.insert(id, contents);
+                let _ = context.boolean_variable_arrays.insert(id, contents);
             }
 
             VarArrayDecl::Int {
@@ -104,12 +107,14 @@ pub fn run(ast: &FlatZincAst, context: &mut CompilationContext) -> Result<(), Fl
                     };
 
                 if let Some(shape) = is_output_array(annos) {
-                    context
-                        .outputs
-                        .push(Output::array_of_int(id.clone(), shape, contents.clone()));
+                    context.outputs.push(Output::array_of_int(
+                        Rc::clone(&id),
+                        shape,
+                        Rc::clone(&contents),
+                    ));
                 }
 
-                context.integer_variable_arrays.insert(id, contents);
+                let _ = context.integer_variable_arrays.insert(id, contents);
             }
         }
     }

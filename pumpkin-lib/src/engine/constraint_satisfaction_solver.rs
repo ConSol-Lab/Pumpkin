@@ -1059,7 +1059,7 @@ impl ConstraintSatisfactionSolver {
 
             //process the reason literal
             //	i.e., perform resolution and update other related internal data structures
-            let start_index = (next_literal.is_some()) as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
+            let start_index = next_literal.is_some() as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {
@@ -1221,7 +1221,7 @@ impl ConstraintSatisfactionSolver {
 
             //process the reason literal
             //	i.e., perform resolution and update other related internal data structures
-            let start_index = (next_literal.is_some()) as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
+            let start_index = next_literal.is_some() as usize; //note that the start index will be either 0 or 1 - the idea is to skip the 0th literal in case the clause represents a propagation
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {

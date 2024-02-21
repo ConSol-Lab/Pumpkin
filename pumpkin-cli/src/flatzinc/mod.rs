@@ -1,6 +1,6 @@
 mod ast;
 mod compiler;
-mod error;
+pub(crate) mod error;
 mod instance;
 mod minizinc_optimiser;
 mod parser;
@@ -9,7 +9,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-pub use error::*;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
@@ -17,13 +16,14 @@ use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::OptimisationResult;
 
 use self::minizinc_optimiser::MinizincOptimiser;
+use crate::flatzinc::error::FlatZincError;
 use crate::flatzinc::instance::FlatZincInstance;
 use crate::flatzinc::instance::Output;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 
-pub fn solve(
+pub(crate) fn solve(
     mut solver: ConstraintSatisfactionSolver,
     instance: impl AsRef<Path>,
 ) -> Result<(), FlatZincError> {
@@ -211,7 +211,8 @@ mod tests {
         let instance = "var 1..5: SomeVar;\nsolve satisfy;";
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        parse_and_compile(&mut solver, instance.as_bytes()).expect("compilation should succeed");
+        let _ = parse_and_compile(&mut solver, instance.as_bytes())
+            .expect("compilation should succeed");
 
         let domains = solver
             .get_integer_assignments()
@@ -234,7 +235,8 @@ mod tests {
          "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        parse_and_compile(&mut solver, instance.as_bytes()).expect("compilation should succeed");
+        let _ = parse_and_compile(&mut solver, instance.as_bytes())
+            .expect("compilation should succeed");
 
         let domains = solver
             .get_integer_assignments()
@@ -257,7 +259,8 @@ mod tests {
          "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        parse_and_compile(&mut solver, instance.as_bytes()).expect("compilation should succeed");
+        let _ = parse_and_compile(&mut solver, instance.as_bytes())
+            .expect("compilation should succeed");
 
         let domains = solver
             .get_integer_assignments()
