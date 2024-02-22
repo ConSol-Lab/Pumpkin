@@ -59,4 +59,8 @@ impl StorageKey for Literal {
     fn index(&self) -> usize {
         self.to_u32() as usize
     }
+
+    fn create_from_index(index: usize) -> Self {
+        Literal { code: index as u32 }
+    }
 }

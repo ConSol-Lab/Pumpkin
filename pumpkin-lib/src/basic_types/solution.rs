@@ -7,7 +7,7 @@ use crate::engine::AssignmentsPropositional;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Solution {
     truth_values: KeyedVec<PropositionalVariable, bool>,
     integer_values: KeyedVec<DomainId, i32>,

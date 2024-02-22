@@ -15,6 +15,10 @@ impl StorageKey for DomainId {
     fn index(&self) -> usize {
         self.id as usize
     }
+
+    fn create_from_index(index: usize) -> Self {
+        DomainId { id: index as u32 }
+    }
 }
 
 impl std::fmt::Display for DomainId {

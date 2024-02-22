@@ -10,6 +10,7 @@ use std::io::Read;
 use std::path::Path;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -31,10 +32,14 @@ pub(crate) fn solve(
 
     let instance = parse_and_compile(&mut solver, instance)?;
 
+    // TODO: add proper search procedure here
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+
     if let Some(objective_function) = &instance.objective_function {
         let mut optimisation_solver =
             MinizincOptimiser::new(solver, *objective_function, &instance);
-        match optimisation_solver.solve(None) {
+        match optimisation_solver.solve(None, brancher) {
             OptimisationResult::Optimal {
                 solution: _,
                 objective_value: _,
@@ -49,7 +54,7 @@ pub(crate) fn solve(
             OptimisationResult::Unknown => println!("{MSG_UNKNOWN}"),
         }
     } else {
-        match solver.solve(i64::MAX) {
+        match solver.solve(i64::MAX, &mut brancher) {
             CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
                 solver.get_integer_assignments(),
                 solver.get_propositional_assignments(),

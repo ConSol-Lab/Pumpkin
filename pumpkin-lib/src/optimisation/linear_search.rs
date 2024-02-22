@@ -5,6 +5,8 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::Function;
 use crate::basic_types::Solution;
 use crate::basic_types::Stopwatch;
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::encoders::PseudoBooleanConstraintEncoder;
 use crate::encoders::PseudoBooleanEncoding;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -28,6 +30,7 @@ impl LinearSearch {
         csp_solver: &mut ConstraintSatisfactionSolver,
         objective_function: &Function,
         stopwatch: &Stopwatch,
+        mut brancher: impl Brancher,
     ) -> OptimisationResult {
         pumpkin_assert_simple!(
             csp_solver.get_state().has_solution(),
@@ -57,21 +60,32 @@ impl LinearSearch {
             self.upper_bound_encoding,
         );
 
+        let mut first_iteration = true;
+
         loop {
             if best_objective_value == objective_function.get_constant_term() {
                 csp_solver.log_statistics();
                 return OptimisationResult::Optimal {
-                    solution: best_solution,
+                    solution: best_solution.clone(),
                     objective_value: best_objective_value as i64,
                 };
             }
 
-            csp_solver.set_solution_guided_search();
-
-            csp_solver.restore_state_at_root();
+            csp_solver.restore_state_at_root(&mut brancher);
 
             let encoding_status =
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
+
+            if first_iteration {
+                brancher.on_encoding_objective_function(
+                    &csp_solver
+                        .get_propositional_assignments()
+                        .get_propositional_variables()
+                        .collect::<Vec<_>>(),
+                );
+
+                first_iteration = false;
+            }
 
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
@@ -83,7 +97,14 @@ impl LinearSearch {
                 };
             }
 
-            let csp_execution_flag = csp_solver.solve(stopwatch.get_remaining_time_budget());
+            brancher.on_solution(&SelectionContext::new(
+                csp_solver.get_integer_assignments(),
+                csp_solver.get_propositional_assignments(),
+                &Default::default(),
+            ));
+
+            let csp_execution_flag =
+                csp_solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher);
 
             match csp_execution_flag {
                 CSPSolverExecutionFlag::Feasible => {

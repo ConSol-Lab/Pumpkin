@@ -1,18 +1,12 @@
-use crate::basic_types::BranchingDecision;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::sat::AssignmentsPropositional;
-use crate::engine::sat::PropositionalValueSelector;
-use crate::engine::sat::PropositionalVariableSelector;
-use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]
 pub struct SATEngineDataStructures {
     pub assignments_propositional: AssignmentsPropositional,
-    pub propositional_variable_selector: PropositionalVariableSelector,
-    pub propositional_value_selector: PropositionalValueSelector,
     pub clause_allocator: ClauseAllocator,
     pub assumptions: Vec<Literal>,
 }
@@ -38,7 +32,7 @@ impl SATEngineDataStructures {
         self.assignments_propositional.get_decision_level() > self.assumptions.len()
     }
 
-    fn peek_next_assumption_literal(&self) -> Option<Literal> {
+    pub fn peek_next_assumption_literal(&self) -> Option<Literal> {
         if self.are_all_assumptions_assigned() {
             None
         } else {
@@ -49,47 +43,11 @@ impl SATEngineDataStructures {
         }
     }
 
-    pub fn get_next_branching_decision(&mut self) -> Option<BranchingDecision> {
-        if let Some(assumption_literal) = self.peek_next_assumption_literal() {
-            return Some(BranchingDecision::Assumption { assumption_literal });
-        }
-
-        if let Some(decision_variable) = self
-            .propositional_variable_selector
-            .peek_next_variable(&self.assignments_propositional)
-        {
-            let selected_value = self
-                .propositional_value_selector
-                .select_value(decision_variable);
-
-            let decision_literal = Literal::new(decision_variable, selected_value);
-
-            pumpkin_assert_moderate!(self
-                .assignments_propositional
-                .is_literal_unassigned(decision_literal));
-
-            Some(BranchingDecision::StandardDecision { decision_literal })
-        } else {
-            None
-        }
-    }
-
-    pub fn backtrack(&mut self, backtrack_level: usize) {
+    pub fn backtrack(&mut self, backtrack_level: usize) -> impl Iterator<Item = Literal> + '_ {
         pumpkin_assert_simple!(
             backtrack_level < self.assignments_propositional.get_decision_level()
         );
-
-        self.assignments_propositional
-            .synchronise(backtrack_level)
-            .for_each(|literal| {
-                self.propositional_variable_selector
-                    .restore(literal.get_propositional_variable());
-
-                self.propositional_value_selector.update_if_not_frozen(
-                    literal.get_propositional_variable(),
-                    literal.is_positive(),
-                );
-            });
+        self.assignments_propositional.synchronise(backtrack_level)
     }
 
     pub fn is_clause_propagating(&self, clause_reference: ClauseReference) -> bool {

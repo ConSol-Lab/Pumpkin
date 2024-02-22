@@ -5,6 +5,7 @@
 
 use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -64,7 +65,11 @@ fn main() {
         }
     }
 
-    if solver.solve(i64::MAX) == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    if solver.solve(i64::MAX, &mut brancher)
+        == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible
+    {
         panic!("Infeasibility Detected")
     }
 

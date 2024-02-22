@@ -10,7 +10,6 @@ use log::warn;
 use crate::basic_types::moving_average::CumulativeMovingAverage;
 use crate::basic_types::moving_average::MovingAverageInterface;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
-use crate::basic_types::BranchingDecision;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
@@ -23,6 +22,8 @@ use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::engine::clause_allocators::ClauseAllocatorBasic;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::cp::CPEngineDataStructures;
@@ -169,6 +170,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         assumptions: &[Literal],
         time_limit_in_seconds: i64,
+        brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
         if self.state.is_infeasible() {
             return CSPSolverExecutionFlag::Infeasible;
@@ -177,7 +179,7 @@ impl ConstraintSatisfactionSolver {
         let start_time = Instant::now();
 
         self.initialise(assumptions, time_limit_in_seconds);
-        let result = self.solve_internal();
+        let result = self.solve_internal(brancher);
 
         self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
 
@@ -208,6 +210,7 @@ impl ConstraintSatisfactionSolver {
     /// //   !x0 /\ x1 /\ !x2
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
     /// # use pumpkin_lib::basic_types::{PropositionalVariable, Literal};
+    /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
     ///
     /// let mut solver = ConstraintSatisfactionSolver::default();
@@ -217,10 +220,16 @@ impl ConstraintSatisfactionSolver {
     /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
-    /// solver.solve_under_assumptions(&assumptions, i64::MAX);
+    /// let variables = solver
+    ///     .get_propositional_assignments()
+    ///     .get_propositional_variables()
+    ///     .collect::<Vec<_>>();
+    /// let mut brancher =
+    ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    /// solver.solve_under_assumptions(&assumptions, i64::MAX, &mut brancher);
     ///
     /// let core = solver
-    ///     .extract_clausal_core()
+    ///     .extract_clausal_core(&mut brancher)
     ///     .expect("the instance is unsatisfiable");
     ///
     /// // The order of the literals in the core is undefined, so we check for unordered equality.
@@ -234,7 +243,10 @@ impl ConstraintSatisfactionSolver {
     ///     "all literals in the core are negated assumptions"
     /// );
     /// ```
-    pub fn extract_clausal_core(&mut self) -> Result<Vec<Literal>, Literal> {
+    pub fn extract_clausal_core(
+        &mut self,
+        brancher: &mut impl Brancher,
+    ) -> Result<Vec<Literal>, Literal> {
         pumpkin_assert_simple!(self.debug_check_core_extraction());
 
         if self.state.is_infeasible() {
@@ -255,7 +267,7 @@ impl ConstraintSatisfactionSolver {
             .assignments_propositional
             .is_literal_root_assignment(violated_assumption)
         {
-            self.restore_state_at_root();
+            self.restore_state_at_root(brancher);
             Ok(vec![violated_assumption])
         }
         // Case two: the assumption is inconsistent with other assumptions
@@ -267,7 +279,7 @@ impl ConstraintSatisfactionSolver {
             .assignments_propositional
             .is_literal_propagated(violated_assumption)
         {
-            self.restore_state_at_root();
+            self.restore_state_at_root(brancher);
             Err(violated_assumption)
         }
         // Case three: the standard case, proceed with core extraction
@@ -277,26 +289,23 @@ impl ConstraintSatisfactionSolver {
         // assumptions might be implied  this corresponds to the all-decision CDCL learning
         // scheme
         else {
-            self.compute_all_decision_learning_helper(Some(!violated_assumption), true);
+            self.compute_all_decision_learning_helper(Some(!violated_assumption), true, brancher);
             self.analysis_result
                 .learned_literals
                 .push(!violated_assumption);
             pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption));
-            self.restore_state_at_root();
+            self.restore_state_at_root(brancher);
             Ok(self.analysis_result.learned_literals.clone())
         }
     }
 
-    pub fn solve(&mut self, time_limit_in_seconds: i64) -> CSPSolverExecutionFlag {
+    pub fn solve(
+        &mut self,
+        time_limit_in_seconds: i64,
+        brancher: &mut impl Brancher,
+    ) -> CSPSolverExecutionFlag {
         let dummy_assumptions: Vec<Literal> = vec![];
-        self.solve_under_assumptions(&dummy_assumptions, time_limit_in_seconds)
-    }
-
-    pub fn reset_variable_selection(&mut self, random_seed: i64) {
-        pumpkin_assert_simple!(self.state.is_ready());
-        self.sat_data_structures
-            .propositional_variable_selector
-            .reset(random_seed);
+        self.solve_under_assumptions(&dummy_assumptions, time_limit_in_seconds, brancher)
     }
 
     pub fn get_state(&self) -> &CSPSolverState {
@@ -395,45 +404,13 @@ impl ConstraintSatisfactionSolver {
         &self.cp_data_structures.assignments_integer
     }
 
-    pub fn set_solution_guided_search(&mut self) {
-        pumpkin_assert_simple!(
-            self.state.has_solution(),
-            "Cannot set solution guided search without a solution in the solver."
-        );
-
-        for variable in self
-            .sat_data_structures
-            .assignments_propositional
-            .get_propositional_variables()
-        {
-            // variable values get assigned the value as in the current assignment
-            // note: variables created after calling this method may follow a different strategy
-            let new_truth_value = self
-                .sat_data_structures
-                .assignments_propositional
-                .is_variable_assigned_true(variable);
-
-            self.sat_data_structures
-                .propositional_value_selector
-                .update_and_freeze(variable, new_truth_value);
-        }
-    }
-
-    pub fn set_fixed_phases_for_variables(&mut self, literals: &[Literal]) {
-        for literal in literals {
-            self.sat_data_structures
-                .propositional_value_selector
-                .update_and_freeze(literal.get_propositional_variable(), literal.is_positive());
-        }
-    }
-
-    pub fn restore_state_at_root(&mut self) {
+    pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
             self.state.has_solution() && self.get_decision_level() > 0
                 || self.state.is_infeasible_under_assumptions()
         );
 
-        self.backtrack(0);
+        self.backtrack(0, brancher);
         self.state.declare_ready();
     }
 
@@ -459,7 +436,7 @@ impl ConstraintSatisfactionSolver {
         self.seen.resize(num_propositional_variables, false);
     }
 
-    fn solve_internal(&mut self) -> CSPSolverExecutionFlag {
+    fn solve_internal(&mut self, brancher: &mut impl Brancher) -> CSPSolverExecutionFlag {
         loop {
             if self.stopwatch.get_remaining_time_budget() <= 0 {
                 self.state.declare_timeout();
@@ -476,12 +453,12 @@ impl ConstraintSatisfactionSolver {
 
             if self.state.no_conflict() {
                 if self.restart_strategy.should_restart() {
-                    self.restart_during_search();
+                    self.restart_during_search(brancher);
                 }
 
                 self.declare_new_decision_level();
 
-                let branching_result = self.enqueue_next_decision();
+                let branching_result = self.enqueue_next_decision(brancher);
                 if let Err(flag) = branching_result {
                     return flag;
                 }
@@ -497,39 +474,42 @@ impl ConstraintSatisfactionSolver {
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
-                self.resolve_conflict();
+                self.resolve_conflict(brancher);
 
                 self.learned_clause_manager.decay_clause_activities();
 
-                self.sat_data_structures
-                    .propositional_variable_selector
-                    .decay_activities();
+                brancher.on_conflict()
             }
         }
     }
 
-    fn enqueue_next_decision(&mut self) -> Result<(), CSPSolverExecutionFlag> {
-        match self.sat_data_structures.get_next_branching_decision() {
-            Some(branching_decision) => match branching_decision {
-                BranchingDecision::Assumption { assumption_literal } => {
-                    let success = self.enqueue_assumption_literal(assumption_literal);
-                    if !success {
-                        return Err(CSPSolverExecutionFlag::Infeasible);
-                    }
-                }
-                BranchingDecision::StandardDecision { decision_literal } => {
-                    self.counters.num_decisions += 1;
-                    self.sat_data_structures
-                        .assignments_propositional
-                        .enqueue_decision_literal(decision_literal);
-                }
-            },
-            None => {
+    fn enqueue_next_decision(
+        &mut self,
+        brancher: &mut impl Brancher,
+    ) -> Result<(), CSPSolverExecutionFlag> {
+        if let Some(assumption_literal) = self.sat_data_structures.peek_next_assumption_literal() {
+            let success = self.enqueue_assumption_literal(assumption_literal);
+            if !success {
+                return Err(CSPSolverExecutionFlag::Infeasible);
+            }
+            Ok(())
+        } else {
+            let decided_literal = brancher.next_decision(&SelectionContext::new(
+                &self.cp_data_structures.assignments_integer,
+                &self.sat_data_structures.assignments_propositional,
+                &self.sat_cp_mediator,
+            ));
+            if let Some(literal) = decided_literal {
+                self.counters.num_decisions += 1;
+                self.sat_data_structures
+                    .assignments_propositional
+                    .enqueue_decision_literal(literal);
+                Ok(())
+            } else {
                 self.state.declare_solution_found();
-                return Err(CSPSolverExecutionFlag::Feasible);
+                Err(CSPSolverExecutionFlag::Feasible)
             }
         }
-        Ok(())
     }
 
     // returns true if the assumption was successfully enqueued, and false otherwise
@@ -594,19 +574,19 @@ impl ConstraintSatisfactionSolver {
     // i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal,
     // and updates internal data structures for simple moving averages note that no propagation
     // is done, this is left to the solver
-    fn resolve_conflict(&mut self) {
+    fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
         // compute the learned clause
         //  the result is stored in self.analysis_result
-        self.compute_1uip();
+        self.compute_1uip(brancher);
 
-        self.process_learned_clause();
+        self.process_learned_clause(brancher);
 
         self.state.declare_solving();
     }
 
-    fn process_learned_clause(&mut self) {
+    fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
         if let Err(write_error) = self.write_to_certificate() {
             warn!(
                 "Failed to update the certificate file, error message: {}",
@@ -626,7 +606,7 @@ impl ConstraintSatisfactionSolver {
                     .num_trail_entries(),
             );
 
-            self.backtrack(0);
+            self.backtrack(0, brancher);
 
             let unit_clause = self.analysis_result.learned_literals[0];
 
@@ -650,7 +630,7 @@ impl ConstraintSatisfactionSolver {
             self.counters
                 .average_backtrack_amount
                 .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
-            self.backtrack(self.analysis_result.backjump_level);
+            self.backtrack(self.analysis_result.backjump_level, brancher);
 
             self.learned_clause_manager.add_learned_clause(
                 self.analysis_result.learned_literals.clone(), // todo not ideal with clone
@@ -672,7 +652,7 @@ impl ConstraintSatisfactionSolver {
     // a 'restart' differs from backtracking to level zero
     //   in that a restart backtracks to decision level zero and then performs additional
     // operations,      e.g., clean up learned clauses, adjust restart frequency, etc.
-    fn restart_during_search(&mut self) {
+    fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
             self.sat_data_structures.are_all_assumptions_assigned(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
@@ -683,15 +663,20 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        self.backtrack(0);
+        self.backtrack(0, brancher);
 
         self.restart_strategy.notify_restart();
     }
 
-    fn backtrack(&mut self, backtrack_level: usize) {
+    fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        self.sat_data_structures.backtrack(backtrack_level);
+        let unassigned_literals = self.sat_data_structures.backtrack(backtrack_level);
+
+        unassigned_literals.for_each(|literal| {
+            brancher.on_unassign_literal(literal);
+            // TODO: We should also backtrack on the integer variables here
+        });
 
         self.clausal_propagator.synchronise(
             self.sat_data_structures
@@ -1017,7 +1002,7 @@ impl ConstraintSatisfactionSolver {
 // methods for conflict analysis
 impl ConstraintSatisfactionSolver {
     // computes the 1uip and stores it in 'analysis_result'
-    fn compute_1uip(&mut self) {
+    fn compute_1uip(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(self.debug_conflict_analysis_proconditions());
 
         self.analysis_result.learned_literals.resize(
@@ -1087,9 +1072,8 @@ impl ConstraintSatisfactionSolver {
                     // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
-                    self.sat_data_structures
-                        .propositional_variable_selector
-                        .bump_activity(reason_literal.get_propositional_variable());
+                    // TODO: add case for integer variables
+                    brancher.on_appearance_in_conflict_literal(reason_literal);
 
                     let literal_decision_level = self
                         .sat_data_structures
@@ -1186,8 +1170,12 @@ impl ConstraintSatisfactionSolver {
     // computes the learned clause containing only decision literals and stores it in
     // 'analysis_result'
     #[allow(dead_code)]
-    fn compute_all_decision_learning(&mut self, is_extracting_core: bool) {
-        self.compute_all_decision_learning_helper(None, is_extracting_core);
+    fn compute_all_decision_learning(
+        &mut self,
+        is_extracting_core: bool,
+        brancher: &mut impl Brancher,
+    ) {
+        self.compute_all_decision_learning_helper(None, is_extracting_core, brancher);
     }
 
     // the helper is used to facilitate usage when extracting the clausal core
@@ -1196,6 +1184,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         mut next_literal: Option<Literal>,
         is_extracting_core: bool,
+        brancher: &mut impl Brancher,
     ) {
         // the code is similar to 1uip learning with small differences to accomodate the
         // all-decision learning scheme
@@ -1255,9 +1244,8 @@ impl ConstraintSatisfactionSolver {
                     // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
-                    self.sat_data_structures
-                        .propositional_variable_selector
-                        .bump_activity(reason_literal.get_propositional_variable());
+                    // TODO: add case for integer variables
+                    brancher.on_appearance_in_conflict_literal(reason_literal);
 
                     num_propagated_literals_left_to_inspect +=
                         self.sat_data_structures
@@ -1745,6 +1733,7 @@ mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::Literal;
+    use crate::branching::IndependentVariableValueBrancher;
 
     fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1779,13 +1768,14 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: Result<Vec<Literal>, Literal>,
     ) {
-        let flag = solver.solve_under_assumptions(&assumptions, i64::MAX);
-
+        let mut search =
+            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+        let flag = solver.solve_under_assumptions(&assumptions, i64::MAX, &mut search);
         assert!(flag == expected_flag, "The flags do not match.");
 
         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
             assert!(
-                is_result_the_same(&solver.extract_clausal_core(), &expected_result),
+                is_result_the_same(&solver.extract_clausal_core(&mut search), &expected_result),
                 "The result is not the same"
             );
         }

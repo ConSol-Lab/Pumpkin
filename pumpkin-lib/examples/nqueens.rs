@@ -1,5 +1,6 @@
 use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -38,7 +39,9 @@ fn main() {
     solver.all_different(diag1);
     solver.all_different(diag2);
 
-    match solver.solve(i64::MAX) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    match solver.solve(i64::MAX, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
 

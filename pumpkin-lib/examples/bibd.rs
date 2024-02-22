@@ -14,6 +14,7 @@
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -121,7 +122,9 @@ fn main() {
         }
     }
 
-    match solver.solve(i64::MAX) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    match solver.solve(i64::MAX, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 

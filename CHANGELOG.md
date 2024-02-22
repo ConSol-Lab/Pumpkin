@@ -59,6 +59,7 @@
 * Add support for variables with negative domain bounds.
 * Added eager explanations to CP, lazy is still possible by passing a closure.
 * Added KeyedVec structure which ensures that structures can only be indexed by one type of key
+* Added initial setup for programmable search
 * Add support for optimization functions MiniZinc
 
 ## Bugfixes

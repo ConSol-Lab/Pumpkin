@@ -26,7 +26,7 @@ use crate::pumpkin_assert_simple;
 pub trait PseudoBooleanConstraintEncoderInterface {
     /// Add clauses that encode \sum w_i x_i <= k and returns a [`PseudoBooleanConstraintEncoder`]
     /// object. The encoder can later be used to strengthen the constraint (see
-    /// [`strengthen_at_most_k`][PseudoBooleanConstraintEncoderInterface::strengthen_at_most_k])
+    /// [`PseudoBooleanConstraintEncoderInterface::strengthen_at_most_k`])
     /// The method assumes the input is meaningful so the encoding cannot trivially fail:
     ///     - \sum w_i > k
     ///     - 0 < w_i <= k
@@ -45,7 +45,7 @@ pub trait PseudoBooleanConstraintEncoderInterface {
 
     /// Incrementally strengthen the encoding to encode \sum w_i x_i <= k
     /// Assumes the k is smaller than the previous k, and that
-    /// [`encode_at_most_k`][PseudoBooleanConstraintEncoderInterface::encode_at_most_k] has been
+    /// [`PseudoBooleanConstraintEncoderInterface::encode_at_most_k`] has been
     /// called some time before
     fn strengthen_at_most_k(
         &mut self,

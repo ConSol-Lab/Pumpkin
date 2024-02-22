@@ -4,6 +4,7 @@ use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ConstraintOperationError;
 use pumpkin_lib::basic_types::Solution;
 use pumpkin_lib::basic_types::Stopwatch;
+use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -33,14 +34,20 @@ impl<'a> MinizincOptimiser<'a> {
         }
     }
 
-    pub(crate) fn solve(&mut self, time_limit: Option<Duration>) -> OptimisationResult {
+    pub(crate) fn solve(
+        &mut self,
+        time_limit: Option<Duration>,
+        mut brancher: impl Brancher,
+    ) -> OptimisationResult {
         let stopwatch = Stopwatch::new(
             time_limit
                 .map(|limit| limit.as_secs() as i64)
                 .unwrap_or(i64::MAX),
         );
 
-        let initial_solve = self.csp_solver.solve(stopwatch.get_remaining_time_budget());
+        let initial_solve = self
+            .csp_solver
+            .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
         match initial_solve {
             CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
                 self.get_integer_assignments(),
@@ -61,7 +68,7 @@ impl<'a> MinizincOptimiser<'a> {
         );
 
         loop {
-            self.csp_solver.restore_state_at_root();
+            self.csp_solver.restore_state_at_root(&mut brancher);
 
             if self.strengthen(best_objective_value).is_err() {
                 return OptimisationResult::Optimal {
@@ -70,7 +77,9 @@ impl<'a> MinizincOptimiser<'a> {
                 };
             }
 
-            let solve_result = self.csp_solver.solve(stopwatch.get_remaining_time_budget());
+            let solve_result = self
+                .csp_solver
+                .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
             match solve_result {
                 CSPSolverExecutionFlag::Feasible => {
                     self.debug_bound_change(best_objective_value);

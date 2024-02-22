@@ -68,6 +68,14 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     pub fn iter(&self) -> impl Iterator<Item = &'_ Value> {
         self.elements.iter()
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &'_ mut Value> {
+        self.elements.iter_mut()
+    }
+
+    pub fn swap(&mut self, a: usize, b: usize) {
+        self.elements.swap(a, b)
+    }
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
@@ -84,13 +92,31 @@ impl<Key: StorageKey, Value> Index<Key> for KeyedVec<Key, Value> {
     }
 }
 
+impl<Key: StorageKey, Value> Index<&Key> for KeyedVec<Key, Value> {
+    type Output = Value;
+
+    fn index(&self, index: &Key) -> &Self::Output {
+        &self.elements[index.index()]
+    }
+}
+
 impl<Key: StorageKey, Value> IndexMut<Key> for KeyedVec<Key, Value> {
     fn index_mut(&mut self, index: Key) -> &mut Self::Output {
         &mut self.elements[index.index()]
     }
 }
 
+impl StorageKey for usize {
+    fn index(&self) -> usize {
+        *self
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        index
+    }
+}
 /// A simple trait which requires that the structures implementing this trait can generate an index.
 pub trait StorageKey {
     fn index(&self) -> usize;
+    fn create_from_index(index: usize) -> Self;
 }

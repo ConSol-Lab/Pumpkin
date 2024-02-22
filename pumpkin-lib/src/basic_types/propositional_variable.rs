@@ -21,6 +21,10 @@ impl StorageKey for PropositionalVariable {
     fn index(&self) -> usize {
         self.index as usize
     }
+
+    fn create_from_index(index: usize) -> Self {
+        PropositionalVariable::new(index as u32)
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

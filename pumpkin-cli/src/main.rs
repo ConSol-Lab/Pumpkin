@@ -24,6 +24,7 @@ use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::WcnfInstance;
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::basic_types::*;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
@@ -278,13 +279,16 @@ fn wcnf_problem(
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
 
+    let brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
+
     let mut solver = OptimisationSolver::new(
         csp_solver,
         objective_function,
         LinearSearch::new(upper_bound_encoding),
     );
 
-    let result = match solver.solve(time_limit) {
+    let result = match solver.solve(time_limit, brancher) {
         OptimisationResult::Optimal {
             solution,
             objective_value,
@@ -339,7 +343,9 @@ fn cnf_problem(
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
 
-    let solution = match csp_solver.solve(time_limit_in_secs(time_limit)) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
+    let solution = match csp_solver.solve(time_limit_in_secs(time_limit), &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let solution = Solution::new(
                 csp_solver.get_propositional_assignments(),

@@ -271,6 +271,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         let reason = self.reason_store.push(reason.into());
+
         var.inner
             .set_lower_bound(self.assignments_integer, bound, Some(reason))
     }

@@ -29,12 +29,12 @@ pub struct SATCPMediator {
     mapping_domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
     mapping_literal_to_predicates: KeyedVec<Literal, Vec<Predicate>>,
     /// [`AssignmentsInteger::trail`]
-    /// [[cp_trail_synced_position][SATCPMediator::cp_trail_synced_position]] is the next entry
-    /// that needs to be synchronised with [AssignmentsPropositional::trail].
+    /// [[`SATCPMediator::cp_trail_synced_position`]] is the next entry
+    /// that needs to be synchronised with [`AssignmentsPropositional::trail`].
     cp_trail_synced_position: usize,
-    /// This is the SAT equivalent of the above, i.e., [AssignmentsPropositional::trail]
-    /// [[sat_trail_synced_position][SATCPMediator::sat_trail_synced_position]] is the next
-    /// [Literal] on the trail that needs to be synchronised with [AssignmentsInteger::trail].
+    /// This is the SAT equivalent of the above, i.e., [`AssignmentsPropositional::trail`]
+    /// [[`SATCPMediator::sat_trail_synced_position`]] is the next
+    /// [`Literal`] on the trail that needs to be synchronised with [`AssignmentsInteger::trail`].
     sat_trail_synced_position: usize,
     pub explanation_clause_manager: ExplanationClauseManager,
     pub true_literal: Literal,
@@ -229,8 +229,6 @@ impl SATCPMediator {
         watch_list_propositional.grow();
 
         sat_data_structures.assignments_propositional.grow();
-        sat_data_structures.propositional_variable_selector.grow();
-        sat_data_structures.propositional_value_selector.grow();
 
         // add an empty predicate vector for both polarities of the variable
         self.mapping_literal_to_predicates.push(vec![]);

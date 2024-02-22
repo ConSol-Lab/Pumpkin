@@ -5,8 +5,10 @@ use crate::basic_types::KeyedVec;
 use crate::engine::cp::IntDomainEvent;
 #[cfg(doc)]
 use crate::engine::DomainEvents;
+#[cfg(doc)]
+use crate::propagators;
 
-/// While a propagator runs (see [`propagators`][crate::propagators]), the propagations it performs
+/// While a propagator runs (see [`propagators`]), the propagations it performs
 /// are captured as events in the event sink. When the propagator finishes, the event sink is
 /// drained to notify all the propagators that subscribe to those [`IntDomainEvent`].
 ///
