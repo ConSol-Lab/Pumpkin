@@ -203,7 +203,7 @@ impl CompilationContext<'_> {
                 }),
             flatzinc::Expr::ArrayOfInt(exprs) => exprs
                 .iter()
-                .map(|e| self.resolve_int_expr(e))
+                .map(|e| self.resolve_int_expr_to_const(e))
                 .collect::<Result<Rc<[i32]>, _>>(),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
@@ -224,10 +224,13 @@ impl CompilationContext<'_> {
         }
         try_into_int_expr(expr.clone())
             .ok_or(FlatZincError::UnexpectedExpr)
-            .and_then(|e| self.resolve_int_expr(&e))
+            .and_then(|e| self.resolve_int_expr_to_const(&e))
     }
 
-    pub(crate) fn resolve_int_expr(&self, expr: &flatzinc::IntExpr) -> Result<i32, FlatZincError> {
+    pub(crate) fn resolve_int_expr_to_const(
+        &self,
+        expr: &flatzinc::IntExpr,
+    ) -> Result<i32, FlatZincError> {
         match expr {
             flatzinc::IntExpr::Int(value) => i32::try_from(*value).map_err(Into::into),
             flatzinc::IntExpr::VarParIdentifier(id) => self
@@ -238,6 +241,24 @@ impl CompilationContext<'_> {
                     identifier: id.as_str().into(),
                     expected_type: "constant integer".into(),
                 }),
+        }
+    }
+
+    pub(crate) fn resolve_int_expr(
+        &mut self,
+        expr: &flatzinc::IntExpr,
+    ) -> Result<DomainId, FlatZincError> {
+        match expr {
+            flatzinc::IntExpr::Int(value) => Ok(*self
+                .constant_domain_ids
+                .entry(*value as i32)
+                .or_insert_with(|| {
+                    self.solver
+                        .create_new_integer_variable(*value as i32, *value as i32)
+                })),
+            flatzinc::IntExpr::VarParIdentifier(id) => {
+                self.resolve_integer_variable_from_identifier(id)
+            }
         }
     }
 
@@ -312,6 +333,10 @@ impl CompilationContext<'_> {
                         })
                 }
             }
+            flatzinc::Expr::ArrayOfInt(array) => array
+                .iter()
+                .map(|elem| self.resolve_int_expr(elem))
+                .collect::<Result<Rc<[DomainId]>, _>>(),
 
             // The AST is not correct here. Since the type of an in-place array containing only
             // identifiers cannot be determined, and the parser attempts to parse ArrayOfBool
@@ -343,8 +368,8 @@ impl CompilationContext<'_> {
 
             flatzinc::Expr::Set(set_literal) => match set_literal {
                 flatzinc::SetLiteralExpr::IntInRange(lower_bound_expr, upper_bound_expr) => {
-                    let lower_bound = self.resolve_int_expr(lower_bound_expr)?;
-                    let upper_bound = self.resolve_int_expr(upper_bound_expr)?;
+                    let lower_bound = self.resolve_int_expr_to_const(lower_bound_expr)?;
+                    let upper_bound = self.resolve_int_expr_to_const(upper_bound_expr)?;
 
                     Ok(Set::Interval {
                         lower_bound,
@@ -354,7 +379,7 @@ impl CompilationContext<'_> {
                 flatzinc::SetLiteralExpr::SetInts(exprs) => {
                     let values = exprs
                         .iter()
-                        .map(|expr| self.resolve_int_expr(expr))
+                        .map(|expr| self.resolve_int_expr_to_const(expr))
                         .collect::<Result<_, _>>()?;
 
                     Ok(Set::Sparse { values })
