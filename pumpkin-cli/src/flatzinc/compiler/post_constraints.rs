@@ -144,7 +144,12 @@ pub(crate) fn run(
             "fzn_all_different_int" => compile_all_different(context, exprs, annos)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs)?,
-            "array_var_bool_element" => compile_array_var_bool_element(context, exprs)?,
+            "array_bool_element" => {
+                compile_array_var_bool_element(context, exprs, "array_bool_element")?
+            }
+            "array_var_bool_element" => {
+                compile_array_var_bool_element(context, exprs, "array_var_bool_element")?
+            }
             "array_bool_or" => compile_bool_or(context, exprs)?,
             "array_bool_xor" => todo!("implement support for array_bool_xor"),
 
@@ -428,8 +433,9 @@ fn compile_bool_or(
 fn compile_array_var_bool_element(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
+    name: &str,
 ) -> Result<(), FlatZincError> {
-    check_parameters!(exprs, 3, "array_bool_element");
+    check_parameters!(exprs, 3, name);
 
     let index = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_bool_variable_array(&exprs[1])?;
