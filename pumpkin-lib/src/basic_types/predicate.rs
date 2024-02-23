@@ -76,44 +76,6 @@ impl Predicate {
         }
     }
 
-    pub fn map(&mut self, mut f: impl FnMut(i32) -> i32) {
-        match self {
-            Predicate::LowerBound { lower_bound, .. } => *lower_bound = f(*lower_bound),
-            Predicate::UpperBound { upper_bound, .. } => *upper_bound = f(*upper_bound),
-            Predicate::NotEqual {
-                not_equal_constant, ..
-            } => *not_equal_constant = f(*not_equal_constant),
-            Predicate::Equal {
-                equality_constant, ..
-            } => *equality_constant = f(*equality_constant),
-            Predicate::False | Predicate::True => {}
-        }
-    }
-
-    pub fn flip_bound(&mut self) {
-        match *self {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => {
-                *self = Predicate::UpperBound {
-                    domain_id,
-                    upper_bound: lower_bound,
-                }
-            }
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => {
-                *self = Predicate::LowerBound {
-                    domain_id,
-                    lower_bound: upper_bound,
-                }
-            }
-            _ => {}
-        }
-    }
-
     pub fn get_dummy_predicate() -> Predicate {
         let domain_id = DomainId { id: u32::MAX };
         Predicate::Equal {

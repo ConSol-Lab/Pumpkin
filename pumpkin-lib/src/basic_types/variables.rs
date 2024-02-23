@@ -30,6 +30,10 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
 
     /// Get a predicate description (bounds + holes) of the domain of this variable.
     /// N.B. can be very expensive with large domains, and very large with holey domains
+    ///
+    /// This should not be used to explicitly check for holes in the domain, but only to build
+    /// explanations. If views change the observed domain, they will not change this description,
+    /// because it should be a description of the domain in the solver.
     fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate>;
 
     /// Remove a value from the domain of this variable.
@@ -235,16 +239,9 @@ where
     }
 
     fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
-        let mut result = self.inner.describe_domain(assignment);
-        if self.scale < 0 {
-            result.iter_mut().for_each(|p| {
-                p.map(|v| self.map(v));
-                p.flip_bound()
-            })
-        } else {
-            result.iter_mut().for_each(|p| p.map(|v| self.map(v)))
-        }
-        result
+        // The description should not actually change. It is a description of the domain as seen by
+        // the solver, not as seen by the user of this view.
+        self.inner.describe_domain(assignment)
     }
 
     fn remove(
