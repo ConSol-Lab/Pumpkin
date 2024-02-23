@@ -2,7 +2,10 @@ use pumpkin_lib::basic_types::variables::AffineView;
 use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::DomainId;
 use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::basic_types::WeightedLiteral;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::encoders::PseudoBooleanConstraintEncoder;
+use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 pub(crate) fn int_lin_le_reif(
@@ -93,4 +96,49 @@ pub(crate) fn int_lin_ne_reif(
 ) {
     solver.int_lin_ne_reif(terms.clone(), rhs, reif);
     solver.int_lin_eq_reif(terms, rhs, !reif)
+}
+
+pub(crate) fn bool_lin_le(
+    solver: &mut ConstraintSatisfactionSolver,
+    weights: &[i32],
+    bools: &[Literal],
+    rhs: i32,
+) {
+    let terms = weights
+        .iter()
+        .copied()
+        .zip(bools.iter().copied())
+        .map(|(weight, literal)| {
+            let weight =
+                u64::try_from(weight).expect("bool_lin_le with negative weights is not supported");
+            WeightedLiteral {
+                literal,
+                weight,
+                bound: None,
+            }
+        })
+        .collect();
+
+    let rhs = u64::try_from(rhs)
+        .expect("negative rhs is not supported, since all weights should also be positive");
+
+    let mut encoder = PseudoBooleanConstraintEncoder::new(terms, PseudoBooleanEncoding::GTE);
+    let _ = encoder.constrain_at_most_k(rhs, solver);
+}
+
+pub(crate) fn bool_lin_eq(
+    solver: &mut ConstraintSatisfactionSolver,
+    weights: &[i32],
+    bools: &[Literal],
+    rhs: i32,
+) {
+    bool_lin_le(solver, weights, bools, rhs);
+
+    let inverted = bools.iter().map(|&literal| !literal).collect::<Box<_>>();
+    bool_lin_le(
+        solver,
+        weights,
+        &inverted,
+        weights.iter().sum::<i32>() - rhs,
+    );
 }

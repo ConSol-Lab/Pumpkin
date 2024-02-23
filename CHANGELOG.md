@@ -44,6 +44,8 @@
   * array_bool_element
   * array_var_bool_element
   * bool2int
+  * bool_lin_le
+  * bool_lin_eq
   * bool_and
   * bool_clause
   * bool_eq

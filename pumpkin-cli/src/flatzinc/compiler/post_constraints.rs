@@ -10,6 +10,8 @@ use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::predicate;
 
+use super::constraints::bool_lin_eq;
+use super::constraints::bool_lin_le;
 use super::constraints::int_eq_reif;
 use super::constraints::int_le_reif;
 use super::constraints::int_lin_eq_reif;
@@ -154,6 +156,14 @@ pub(crate) fn run(
             "array_bool_xor" => todo!("implement support for array_bool_xor"),
 
             "bool2int" => compile_bool2int(context, exprs)?,
+
+            "bool_lin_eq" => {
+                compile_bool_lin_predicate(context, exprs, "bool_lin_eq", bool_lin_eq)?
+            }
+
+            "bool_lin_le" => {
+                compile_bool_lin_predicate(context, exprs, "bool_lin_le", bool_lin_le)?
+            }
 
             "bool_and" => compile_bool_and(context, exprs)?,
             "bool_clause" => compile_bool_clause(context, exprs)?,
@@ -603,6 +613,23 @@ fn compile_reified_int_lin_predicate(
     let terms = weighted_vars(weights, vars);
 
     post_constraint(context.solver, terms, rhs, reif);
+
+    Ok(())
+}
+
+fn compile_bool_lin_predicate(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    name: &str,
+    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, &[i32], &[Literal], i32),
+) -> Result<(), FlatZincError> {
+    check_parameters!(exprs, 3, name);
+
+    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+    let bools = context.resolve_bool_variable_array(&exprs[1])?;
+    let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
+
+    post_constraint(context.solver, &weights, &bools, rhs);
 
     Ok(())
 }
