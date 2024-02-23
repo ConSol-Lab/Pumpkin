@@ -77,6 +77,13 @@ pub struct PropagatorVariable<Var> {
     inner: Var,
 }
 
+impl<Var> PropagatorVariable<Var> {
+    #[cfg(test)]
+    pub fn new(variable: Var) -> Self {
+        Self { inner: variable }
+    }
+}
+
 impl PropagatorVariable<Literal> {
     pub fn get_literal(&self) -> Literal {
         self.inner
@@ -248,9 +255,13 @@ impl PropagationContextMut<'_> {
         value: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-        var.inner
-            .remove(self.assignments_integer, value, Some(reason))
+        if var.inner.contains(self.assignments_integer, value) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .remove(self.assignments_integer, value, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn set_upper_bound<Var: IntVar, R: Into<Reason>>(
@@ -259,9 +270,13 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-        var.inner
-            .set_upper_bound(self.assignments_integer, bound, Some(reason))
+        if bound < var.inner.upper_bound(self.assignments_integer) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .set_upper_bound(self.assignments_integer, bound, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn set_lower_bound<Var: IntVar, R: Into<Reason>>(
@@ -270,10 +285,13 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-
-        var.inner
-            .set_lower_bound(self.assignments_integer, bound, Some(reason))
+        if bound > var.inner.lower_bound(self.assignments_integer) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .set_lower_bound(self.assignments_integer, bound, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn assign_literal<R: Into<Reason>>(
@@ -282,14 +300,20 @@ impl PropagationContextMut<'_> {
         bound: bool,
         reason: R,
     ) -> Result<(), Inconsistency> {
-        let reason = self.reason_store.push(reason.into());
-        let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
-            if bound { var.inner } else { !var.inner },
-            ConstraintReference::create_reason_reference(reason),
-        );
-        if let Some(conflict_info) = enqueue_result {
-            return Err(Inconsistency::Other(conflict_info));
+        if !self
+            .assignments_propositional
+            .is_literal_assigned(var.inner)
+        {
+            let reason = self.reason_store.push(reason.into());
+            let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
+                if bound { var.inner } else { !var.inner },
+                ConstraintReference::create_reason_reference(reason),
+            );
+            if let Some(conflict_info) = enqueue_result {
+                return Err(Inconsistency::Other(conflict_info));
+            }
         }
+
         Ok(())
     }
 }
@@ -519,4 +543,111 @@ pub trait ConstraintProgrammingPropagator {
         &self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP;
+}
+
+#[cfg(test)]
+mod tests {
+    use assignments_integer::AssignmentsInteger;
+
+    use super::PropagationContextMut;
+    use crate::basic_types::Literal;
+    use crate::basic_types::PropositionalVariable;
+    use crate::conjunction;
+    use crate::engine::cp::assignments_integer;
+    use crate::engine::reason::ReasonStore;
+    use crate::engine::AssignmentsPropositional;
+    use crate::engine::PropagatorVariable;
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_lower_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.set_lower_bound(&PropagatorVariable::new(domain), 2, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_upper_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.set_upper_bound(&PropagatorVariable::new(domain), 15, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_remove() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result = context.remove(&PropagatorVariable::new(domain), 15, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_fixed_literal() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+        assignments_propositional.grow();
+        let literal = Literal::new(PropositionalVariable::new(0), true);
+        assignments_propositional.enqueue_decision_literal(literal);
+
+        assert!(assignments_propositional.is_literal_assigned_true(literal));
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.assign_literal(&PropagatorVariable::new(literal), false, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
 }
