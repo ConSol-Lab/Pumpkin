@@ -205,6 +205,9 @@ impl TestSolver {
         let actual_lb = self.lower_bound(var);
         let actual_ub = self.upper_bound(var);
 
-        assert_eq!((lb, ub), (actual_lb, actual_ub), "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]");
+        assert_eq!(
+            (lb, ub), (actual_lb, actual_ub),
+            "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
+        );
     }
 }

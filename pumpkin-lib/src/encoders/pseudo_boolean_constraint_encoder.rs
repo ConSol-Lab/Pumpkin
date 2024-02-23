@@ -214,12 +214,18 @@ impl PseudoBooleanConstraintEncoder {
                 self.create_encoding(literals, k, csp_solver)?
             }
             State::Encoded(ref mut encoder) => {
-                pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
+                pumpkin_assert_simple!(
+                    self.k_previous > k,
+                    "The strenthened k value for the right hand side is not smaller than the previous k."
+                );
 
                 pumpkin_assert_simple!(
-                        k >= self.constant_term,
-                        "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
-                    );
+                    k >= self.constant_term,
+                    "The k is below the trivial lower bound, probably an error?
+                         k={}, constant_term={}",
+                    k,
+                    self.constant_term
+                );
 
                 encoder.strengthen_at_most_k(k - self.constant_term, csp_solver)?;
             }
@@ -240,12 +246,18 @@ impl PseudoBooleanConstraintEncoder {
 
             State::TriviallySatisfied => {}
             State::SingleInteger(ref mut encoder) => {
-                pumpkin_assert_simple!(self.k_previous > k, "The strenthened k value for the right hand side is not smaller than the previous k.");
+                pumpkin_assert_simple!(
+                    self.k_previous > k,
+                    "The strenthened k value for the right hand side
+                     is not smaller than the previous k."
+                );
 
                 pumpkin_assert_simple!(
-                        k >= self.constant_term,
-                        "The k is below the trivial lower bound, probably an error? k={}, constant_term={}", k, self.constant_term
-                    );
+                    k >= self.constant_term,
+                    "The k is below the trivial lower bound,
+                         probably an error? k={k}, constant_term={}",
+                    self.constant_term
+                );
                 encoder.strengthen_at_most_k(k, csp_solver)?
             }
             State::SingleIntegerNew(ref mut weighted_literals) => {
@@ -304,7 +316,7 @@ impl PseudoBooleanConstraintEncoder {
     }
 
     /// Initialises internal data structures
-    /// Returns the preprocessed weighted literals    
+    /// Returns the preprocessed weighted literals
     fn initialise_and_preprocess(
         &mut self,
         weighted_literals: Vec<WeightedLiteral>,

@@ -1,6 +1,7 @@
 use crate::basic_types::Literal;
 
-#[allow(clippy::len_without_is_empty)] // does not make sense to have a is_empty() function since clauses are never empty
+// Does not make sense to have an is_empty() function since clauses are never empty
+#[allow(clippy::len_without_is_empty)]
 pub trait ClauseInterface:
     std::ops::Index<u32, Output = Literal> + std::ops::IndexMut<u32, Output = Literal>
 {

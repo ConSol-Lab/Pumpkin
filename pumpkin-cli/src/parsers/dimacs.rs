@@ -5,7 +5,7 @@
 //! To invoke the parser, there are two options:
 //!  - For a CNF file, the [`parse_cnf`] function can be called,
 //!  - For a WCNF file, the ['parse_wcnf`] function can be called.
-//!  
+//!
 //! Both these functions operate on a type that implements the [`DimacsSink`] trait, which is
 //! serves as an interface between the consumer of the parsed contents of the file.
 //!

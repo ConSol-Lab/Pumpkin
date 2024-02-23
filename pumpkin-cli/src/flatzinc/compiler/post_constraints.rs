@@ -402,7 +402,7 @@ fn compile_bool2int(
 ) -> Result<(), FlatZincError> {
     // TODO: Perhaps we want to add a phase in the compiler that directly uses the literal
     // corresponding to the predicate [b = 1] for the boolean parameter in this constraint.
-    // See https://emir-demirovic.atlassian.net/jira/software/projects/PUM/boards/1?selectedIssue=PUM-89
+    // See https://emir-demirovic.atlassian.net/browse/PUM-89
     check_parameters!(exprs, 2, "bool2int");
 
     let a = context.resolve_bool_variable(&exprs[0])?;

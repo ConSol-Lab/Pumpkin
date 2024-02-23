@@ -1,6 +1,6 @@
 //! A model for the balanced incomplete block design problem. For a formal definition of the
 //! problem, see:
-//! - https://en.wikipedia.org/wiki/Block_design#Pairwise_balanced_uniform_designs_(2-designs_or_BIBDs)
+//! - https://w.wiki/9F4h
 //! - https://mathworld.wolfram.com/BlockDesign.html
 //!
 //! Informally, the `BIBD(v, b, r, k, l)` problem looks for a binary `v * b` matrix such that all

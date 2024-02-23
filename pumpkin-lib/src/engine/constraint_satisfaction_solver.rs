@@ -423,7 +423,11 @@ impl ConstraintSatisfactionSolver {
 // methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
     fn initialise(&mut self, assumptions: &[Literal], time_limit_in_seconds: i64) {
-        pumpkin_assert_simple!(!self.state.is_infeasible_under_assumptions(), "Solver is not expected to be in the infeasible under assumptions state when initialising. Missed extracting the core?");
+        pumpkin_assert_simple!(
+            !self.state.is_infeasible_under_assumptions(),
+            "Solver is not expected to be in the infeasible under assumptions state when initialising.
+             Missed extracting the core?"
+        );
 
         let num_propositional_variables = self
             .sat_data_structures
@@ -873,7 +877,12 @@ impl ConstraintSatisfactionSolver {
 
         let propagator_to_add = constructor.create_boxed(constructor_context);
 
-        pumpkin_assert_simple!(propagator_to_add.priority() <= 3, "The propagator priority exceeds 3. Currently we only support values up to 3, but this can easily be changed if there is a good reason.");
+        pumpkin_assert_simple!(
+            propagator_to_add.priority() <= 3,
+            "The propagator priority exceeds 3.
+             Currently we only support values up to 3,
+             but this can easily be changed if there is a good reason."
+        );
 
         self.cp_propagators.push(propagator_to_add);
 
@@ -1056,8 +1065,10 @@ impl ConstraintSatisfactionSolver {
 
             // process the reason literal
             // 	i.e., perform resolution and update other related internal data structures
-            let start_index = next_literal.is_some() as usize; // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
-                                                               // in case the clause represents a propagation
+
+            // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
+            // in case the clause represents a propagation
+            let start_index = next_literal.is_some() as usize;
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {
@@ -1118,8 +1129,21 @@ impl ConstraintSatisfactionSolver {
                 .get_propositional_variable()]
             {
                 next_trail_index -= 1;
-                pumpkin_assert_advanced!(self.sat_data_structures.assignments_propositional.get_literal_assignment_level(self.sat_data_structures.assignments_propositional.get_trail_entry(next_trail_index)) == self.sat_data_structures.assignments_propositional.get_decision_level(),
-                    "The current decision level trail has been overrun, mostly likely caused by an incorrectly implemented cp propagator?");
+                pumpkin_assert_advanced!(
+                    self.sat_data_structures
+                        .assignments_propositional
+                        .get_literal_assignment_level(
+                            self.sat_data_structures
+                                .assignments_propositional
+                                .get_trail_entry(next_trail_index)
+                        )
+                        == self
+                            .sat_data_structures
+                            .assignments_propositional
+                            .get_decision_level(),
+                    "The current decision level trail has been overrun,
+                     mostly likely caused by an incorrectly implemented cp propagator?"
+                );
             }
 
             // make appropriate adjustments to prepare for the next iteration
@@ -1128,8 +1152,9 @@ impl ConstraintSatisfactionSolver {
                     .assignments_propositional
                     .get_trail_entry(next_trail_index),
             );
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false; // the same literal cannot be encountered more than once on the trail, so we can clear
-                                                                                   // the flag here
+            // the same literal cannot be encountered more than once on the trail, so we can clear
+            // the flag here
+            self.seen[next_literal.unwrap().get_propositional_variable()] = false;
             num_current_decision_level_literals_to_inspect -= 1;
             next_trail_index -= 1;
 
@@ -1190,8 +1215,8 @@ impl ConstraintSatisfactionSolver {
         // all-decision learning scheme
         pumpkin_assert_simple!(
             next_literal.is_some() || self.debug_conflict_analysis_proconditions()
-        ); // when using this function when extracting the core, no conflict acutally takes place, but
-           // the preconditions expect a conflict clause, so we skip this check
+        ); // when using this function when extracting the core, no conflict acutally takes place,
+           // but the preconditions expect a conflict clause, so we skip this check
 
         self.analysis_result.learned_literals.clear();
         self.analysis_result.backjump_level = 0;
@@ -1228,8 +1253,9 @@ impl ConstraintSatisfactionSolver {
 
             // process the reason literal
             // 	i.e., perform resolution and update other related internal data structures
-            let start_index = next_literal.is_some() as usize; // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
-                                                               // in case the clause represents a propagation
+            let start_index = next_literal.is_some() as usize;
+            // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
+            // in case the clause represents a propagation
             for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
                 .get_literal_slice()[start_index..]
             {
@@ -1293,8 +1319,9 @@ impl ConstraintSatisfactionSolver {
                     .assignments_propositional
                     .get_trail_entry(next_trail_index),
             );
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false; // the same literal cannot be encountered more than once on the trail, so we can clear
-                                                                                   // the flag here
+            // the same literal cannot be encountered more than once on the trail, so we can clear
+            // the flag here
+            self.seen[next_literal.unwrap().get_propositional_variable()] = false;
             next_trail_index -= 1;
             num_propagated_literals_left_to_inspect -= 1;
 
@@ -1468,7 +1495,10 @@ impl ConstraintSatisfactionSolver {
                 .contains(&self.state.get_violated_assumption()));
             true
         } else {
-            panic!("Cannot extract core unless the solver is either infeasible or infeasible under assumptions.");
+            panic!(
+                "Cannot extract core unless the solver is either infeasible
+                 or infeasible under assumptions."
+            );
         }
     }
 
@@ -1639,7 +1669,10 @@ impl CSPSolverState {
         {
             violated_assumption
         } else {
-            panic!("Cannot extract violated assumption without getting the solver into the infeasible under assumptions state.");
+            panic!(
+                "Cannot extract violated assumption without getting the solver into the infeasible
+                 under assumptions state."
+            );
         }
     }
 

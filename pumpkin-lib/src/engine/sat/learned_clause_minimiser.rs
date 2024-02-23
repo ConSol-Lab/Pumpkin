@@ -78,11 +78,8 @@ impl LearnedClauseMinimiser {
                         .assignments_propositional
                         .get_literal_assignment_level(learned_literal)
                 {
-                    analysis_result.learned_literals.swap(1, end_position - 1); // notice the minus
-                                                                                // one, since we
-                                                                                // already incremented
-                                                                                // end_position
-                                                                                // above
+                    // Notice the minus one, since we already incremented `end_position` above
+                    analysis_result.learned_literals.swap(1, end_position - 1);
                 }
             }
         }

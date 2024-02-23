@@ -126,7 +126,8 @@ impl<
     /// Removes the entry with key 'key' (temporarily) from the heap if the key is present,
     /// otherwise does nothing. Its value remains recorded internally and is available upon
     /// calling [`KeyValueHeap::restore_key`]. The value can still be subjected to
-    /// [`KeyValueHeap::divide_values`].  
+    /// [`KeyValueHeap::divide_values`].
+    ///
     /// The run-time complexity of this operation is O(logn)
     pub fn delete_key(&mut self, key: Key) {
         if self.is_key_present(key) {

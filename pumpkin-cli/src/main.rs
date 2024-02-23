@@ -57,17 +57,30 @@ struct Args {
     learning_lbd_threshold: u32,
 
     /// Decides which clauses will be removed when cleaning up the learned clauses.
-    #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
+    #[arg(
+        short = 'l',
+        long = "learning-sorting-strategy",
+        value_parser = learned_clause_sorting_strategy_parser,
+        default_value_t = LearnedClauseSortingStrategy::Activity.into()
+    )]
     learning_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1uip Minimisation is done according to the idea proposed by Van Gelder
-    #[arg(long = "learning-minimise", value_parser = learned_clause_minimisation_parser, default_value_t = true.into())]
+    #[arg(
+        long = "learning-minimise",
+        value_parser = learned_clause_minimisation_parser,
+        default_value_t = true.into()
+    )]
     learning_clause_minimisation: CliArg<bool>,
 
     /// Decides the sequence based on which the restarts are performed.
     /// To be used in combination with "restarts-base-interval"
-    #[arg(long = "restart-sequence", value_parser = sequence_generator_parser, default_value_t = SequenceGeneratorType::Constant.into())]
+    #[arg(
+        long = "restart-sequence",
+        value_parser = sequence_generator_parser,
+        default_value_t = SequenceGeneratorType::Constant.into()
+    )]
     restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
 
     /// The base interval length is used as a multiplier to the restart sequence.
@@ -127,7 +140,11 @@ struct Args {
     omit_call_site: bool,
 
     /// The encoding to use for the upper bound constraint in an optimisation problem.
-    #[arg(long = "upper-bound-encoding", value_parser = upper_bound_encoding_parser, default_value_t = PseudoBooleanEncoding::GTE.into())]
+    #[arg(
+        long = "upper-bound-encoding",
+        value_parser = upper_bound_encoding_parser,
+        default_value_t = PseudoBooleanEncoding::GTE.into()
+    )]
     upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify

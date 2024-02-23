@@ -77,7 +77,11 @@ impl DebugHelper {
             let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {:?}", propagator.name(), propagator_id, failure_reason);
+                warn!(
+                    "Propagator '{}' with id '{propagator_id}' seems to have missed a conflict in its regular propagation algorithms!
+                     Aborting!\n
+                     Expected reason: {failure_reason:?}", propagator.name()
+                );
                 panic!();
             }
 
@@ -90,9 +94,8 @@ impl DebugHelper {
 
             if num_missed_propagations > 0 {
                 eprintln!(
-                    "Propagator '{}' with id '{}' missed predicates:",
+                    "Propagator '{}' with id '{propagator_id}' missed predicates:",
                     propagator.name(),
-                    propagator_id
                 );
 
                 for idx in num_entries_on_trail_before_propagation
@@ -166,14 +169,11 @@ impl DebugHelper {
         {
             panic!(
                 "The reason for propagation should not contain the trivially false predicate.
-Propagator: {},    
-id: {},
-The reported propagation reason: {},
-Propagated predicate: {}",
+                 Propagator: {},
+                 id: {propagator_id},
+                 The reported propagation reason: {reason},
+                 Propagated predicate: {propagated_predicate}",
                 propagator.name(),
-                propagator_id,
-                reason,
-                propagated_predicate
             );
         }
 
@@ -182,11 +182,13 @@ Propagated predicate: {}",
             .map(|p| p.get_domain())
             .any(|domain| domain == propagated_predicate.get_domain())
         {
-            panic!("{}", format!("The reason for propagation should not contain the integer variable that was propagated.
-            Propagator: {},    
-            id: {},
-            The reported propagation reason: {},
-            Propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
+            panic!("The reason for propagation should not contain the integer variable that was propagated.
+             Propagator: {propagator_id},
+             id: {reason},
+             The reported propagation reason: {propagated_predicate},
+             Propagated predicate: {}",
+             propagator.name()
+            );
         }
 
         // two checks are done
@@ -225,21 +227,33 @@ Propagated predicate: {}",
 
                 assert!(
                     debug_propagation_status_cp.is_ok(),
-                    "{}",
-                    format!("Debug propagation detected a conflict when consider a reason for propagation by the propagator '{}' with id '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
+                    "Debug propagation detected a conflict when consider a reason for propagation
+                     by the propagator '{}' with id '{propagator_id}'.\n
+                     The reported reason: {reason}\n
+                     Reported propagated predicate: {propagated_predicate}",
+                    propagator.name()
+                );
 
                 // The predicate was either a propagation for the assignments_integer or
                 // assignments_propositional
                 assert!(
                     assignments_integer_clone.does_predicate_hold(propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
-                    "{}",
-                    format!("Debug propagation could not obtain the propagated predicate given the provided reason.\nPropagator: '{}'\nPropagator id: {}\nReported reason: {}\nReported propagation: {}", propagator.name(), propagator_id, reason, propagated_predicate)
+                    "Debug propagation could not obtain the propagated predicate given the provided reason.\n
+                     Propagator: '{}'\n
+                     Propagator id: {propagator_id}\n
+                     Reported reason: {reason}\n
+                     Reported propagation: {propagated_predicate}",
+                    propagator.name()
                 );
             } else {
                 // if even adding the predicates failed, the method adding the predicates would have
                 // printed debug info already  so we just need to add more
                 // information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a reason was given by the propagator.", propagator.name(), propagator_id));
+                panic!(
+                    "Bug detected for '{}' propagator with id '{propagator_id}'
+                     after a reason was given by the propagator.",
+                    propagator.name()
+                );
             }
         }
 
@@ -285,14 +299,22 @@ Propagated predicate: {}",
 
                 assert!(
                     debug_propagation_status_cp.is_err(),
-                    "{}",
-                    format!("Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\nPropagator: '{}'\nPropagator id: '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate)
+                    "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
+                     Propagator: '{}'\n
+                     Propagator id: '{propagator_id}'.\n
+                     The reported reason: {reason}\n
+                     Reported propagated predicate: {propagated_predicate}",
+                    propagator.name()
                 );
             } else {
                 // if even adding the predicates failed, the method adding the predicates would have
                 // printed debug info already  so we just need to add more
                 // information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after trying to negate the reason for propagator.", propagator.name(), propagator_id));
+                panic!(
+                    "Bug detected for '{}' propagator with id '{propagator_id}'
+                     after trying to negate the reason for propagator.",
+                    propagator.name(),
+                );
             }
         }
         true
@@ -334,12 +356,22 @@ Propagated predicate: {}",
                 &mut assignments_propositional_clone,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
-            assert!(debug_propagation_status_cp.is_err(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
+            assert!(
+                debug_propagation_status_cp.is_err(),
+                "Debug propagation could not reproduce the conflict reported
+                 by the propagator '{}' with id '{propagator_id}'.\n
+                 The reported failure: {failure_reason}",
+                propagator.name()
+            );
         } else {
             // if even adding the predicates failed, the method adding the predicates would have
             // printed debug info already  so we just need to add more information to
             // indicate where the failure happened
-            panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a failure reason was given by the propagator.", propagator.name(), propagator_id));
+            panic!(
+                "Bug detected for '{}' propagator with id '{propagator_id}' after a failure reason
+                 was given by the propagator.",
+                propagator.name()
+            );
         }
     }
 
@@ -396,11 +428,10 @@ Propagated predicate: {}",
         }
         if !found_nonconflicting_state_at_root {
             panic!(
-                "Negating the reason for failure was still leading to failure for propagator '{}' with id '{}'.\n
-                        The reported failure: {}\n",
-                        propagator.name(),
-                        propagator_id,
-                        failure_reason
+                "Negating the reason for failure was still leading to failure
+                 for propagator '{}' with id '{propagator_id}'.\n
+                 The reported failure: {failure_reason}\n",
+                propagator.name(),
             );
         }
     }
@@ -423,9 +454,8 @@ impl DebugHelper {
                     //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
                     debug!(
                         "Trivial failure detected in the given reason.\n
-                                The reported failure: {}\n
-                                Failure detected after trying to apply '{}'.",
-                        predicate, predicate
+                         The reported failure: {predicate}\n
+                         Failure detected after trying to apply '{predicate}'.",
                     );
                     return false;
                 }
@@ -446,9 +476,8 @@ impl DebugHelper {
             if assignments_propositional.is_literal_assigned_false(literal) {
                 debug!(
                     "Trivial failure detected in the given reason.\n
-                            The reported failure: {}\n
-                            Failure detected after trying to apply '{}'.",
-                    predicate, predicate
+                     The reported failure: {predicate}\n
+                     Failure detected after trying to apply '{predicate}'.",
                 );
                 return false;
             }

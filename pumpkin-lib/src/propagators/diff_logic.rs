@@ -394,7 +394,8 @@ mod tests {
                 || cycle.eq(&conjunction!([x_0 >= -9] & [x_1 >= -10]))
                 || cycle.eq(&conjunction!([x_0 <= 9] & [x_1 <= 10]))
                 || cycle.eq(&conjunction!([x_0 <= 10] & [x_1 <= 9])),
-            "Cycle is not based on first propagation of either upper or lower bounds, but instead has: {}",
+            "Cycle is not based on first propagation of either upper or lower bounds,
+             but instead has: {}",
             cycle,
         );
     }

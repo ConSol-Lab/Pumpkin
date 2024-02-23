@@ -125,8 +125,10 @@ impl SATCPMediator {
         cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(
-            self.cp_trail_synced_position == cp_data_structures.assignments_integer.num_trail_entries(),
-            "We can only sychronise the propositional trail if the integer trail is already sychronised."
+            self.cp_trail_synced_position
+                == cp_data_structures.assignments_integer.num_trail_entries(),
+            "We can only sychronise the propositional trail if the integer trail is already
+             sychronised."
         );
 
         // this could possibly be improved if it shows up as a performance hotspot

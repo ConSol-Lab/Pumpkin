@@ -151,13 +151,17 @@ fn is_output_array(annos: &[Annotation]) -> Option<Box<[(i32, i32)]>> {
                                     SetLiteralExpr::BoundedFloat(_, _)
                                     | SetLiteralExpr::SetFloats(_)
                                     | SetLiteralExpr::SetInts(_) => panic!(
-                                        "expected interval set as the index sets for the output_array annotation"
+                                        "expected interval set as the index sets
+                                         for the output_array annotation"
                                     ),
 
                                     SetLiteralExpr::IntInRange(min, max) => match (min, max) {
                                         (IntExpr::Int(min), IntExpr::Int(max)) => (min, max),
 
-                                        _ => panic!("expected interval sets to be delimited with integer expressions, not identifiers"),
+                                        _ => panic!(
+                                            "expected interval sets to be delimited with
+                                             integer expressions, not identifiers"
+                                        ),
                                     },
                                 },
                                 SetExpr::VarParIdentifier(_) => panic!(
@@ -165,8 +169,10 @@ fn is_output_array(annos: &[Annotation]) -> Option<Box<[(i32, i32)]>> {
                                 ),
                             })
                             .map(|(&min, &max)| {
-                                (i32::try_from(min).expect("integer too large"),
-                                 i32::try_from(max).expect("integer too large"))
+                                (
+                                    i32::try_from(min).expect("integer too large"),
+                                    i32::try_from(max).expect("integer too large"),
+                                )
                             })
                             .collect(),
                     ),

@@ -65,7 +65,11 @@ impl ClauseAllocatorInterface<ClauseBasic> for ClauseAllocatorBasic {
             !self.get_clause(clause_reference).is_deleted(),
             "Cannot delete an already deleted clause."
         );
-        pumpkin_assert_advanced!(!self.deleted_clause_references.contains(&clause_reference), "Somehow the id of the deleted clause is already present in the internal data structures, meaning we are deleting the clause twice, unexpected.");
+        pumpkin_assert_advanced!(
+            !self.deleted_clause_references.contains(&clause_reference),
+            "Somehow the id of the deleted clause is already present in the internal data structure,
+             meaning we are deleting the clause twice, unexpected."
+        );
 
         self.get_mutable_clause(clause_reference).mark_deleted();
         self.deleted_clause_references.push(clause_reference);

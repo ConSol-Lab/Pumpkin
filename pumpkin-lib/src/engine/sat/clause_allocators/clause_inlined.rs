@@ -187,14 +187,15 @@ impl ClauseInlined {
         }
     }
 
-    // since we manually manage the memory for the clause
-    // it is important to know exactly the size of the clause
-    //  note that size_of will not report the correct value, so we have this method
+    /// Since we manually manage the memory for the clause
+    /// it is important to know exactly the size of the clause
+    /// note that size_of will not report the correct value, so we have this method
     pub fn num_u32s_required_for_clause(num_literals: u32, is_learned: bool) -> u32 {
-        1 + //lbd and flags
-         1 + //storing the number of literals
-         num_literals + //the literals
-         is_learned as u32 // activity for learned clauses
+        // 1 for lbd and flags
+        // 1 for storing the number of literals
+        // `num_literals` for the literals
+        // `is_learned` for the activity of the learned clauses
+        1 + 1 + num_literals + is_learned as u32
     }
 }
 

@@ -73,7 +73,10 @@ where
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if context.lower_bound(&self.a).is_negative() || context.lower_bound(&self.b).is_negative()
         {
-            warn!("IntTimes does not support variables with negative bounds, but it is instantiated with them. The behavior will likely not be correct.");
+            warn!(
+                "IntTimes does not support variables with negative bounds,
+            but it is instantiated with them. The behavior will likely not be correct."
+            );
         }
 
         self.propagate(context)

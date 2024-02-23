@@ -89,10 +89,13 @@ impl GlucoseRestartStrategy {
                 SequenceGeneratorType::Geometric => Box::new(GeometricSequence::new(
                     solver_options.restart_base_interval as i64,
                     solver_options.restart_geometric_coef.expect(
-                        "Using the geometric sequence for restarts, but the parameter restarts-geometric-coef is not defined.",
+                        "Using the geometric sequence for restarts,
+                        but the parameter restarts-geometric-coef is not defined.",
                     ),
                 )),
-                SequenceGeneratorType::Luby => Box::new(LubySequence::new(solver_options.restart_base_interval as i64)),
+                SequenceGeneratorType::Luby => Box::new(LubySequence::new(
+                    solver_options.restart_base_interval as i64,
+                )),
             };
 
         let num_conflicts_until_restart = restart_sequence_generator.next();
