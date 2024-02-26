@@ -54,11 +54,12 @@ fn main() {
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
             // literal => s_y - s_x <= -p_y)
-            solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
+            let _ =
+                solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
+            let _ = solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
 
             // Either x starts before y or y start before x
             let _ = solver.add_permanent_clause(vec![literal, precedence_literals[y][x]]);

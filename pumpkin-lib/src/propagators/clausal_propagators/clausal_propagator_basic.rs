@@ -57,7 +57,10 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         clause_allocator: &mut ClauseAllocator,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(assignments.is_at_the_root_level());
-        pumpkin_assert_simple!(!self.is_in_infeasible_state);
+
+        if self.is_in_infeasible_state {
+            return Err(ConstraintOperationError::InfeasibleState);
+        }
 
         if literals.is_empty() {
             warn!("Adding empty clause, unusual!");

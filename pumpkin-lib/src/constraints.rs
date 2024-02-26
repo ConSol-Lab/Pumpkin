@@ -15,7 +15,9 @@ use crate::propagators::IntTimes;
 use crate::propagators::LinearLeq;
 use crate::propagators::LinearNe;
 
-/// Provides common constraint implementations.
+/// Provides common constraint implementations. Methods return false if the problem becomes
+/// trivially unsatisfiable after adding the constraint, or when the solver was already in an
+/// infeasible state.
 pub trait ConstraintsExt {
     fn post<Constructor>(&mut self, constructor: Constructor) -> bool
     where
@@ -28,17 +30,21 @@ pub trait ConstraintsExt {
         index: impl IntVar + 'static,
         array: impl Into<Box<[ElementVar]>>,
         rhs: impl IntVar + 'static,
-    ) {
-        let _ = self.post(Element {
+    ) -> bool {
+        self.post(Element {
             index,
             array: array.into(),
             rhs,
-        });
+        })
     }
 
     /// Adds the constraint `\sum terms_i != rhs`.
-    fn int_lin_ne<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
-        let _ = self.post(LinearNe::new(terms.into(), rhs));
+    fn int_lin_ne<Var: IntVar + 'static>(
+        &mut self,
+        terms: impl Into<Box<[Var]>>,
+        rhs: i32,
+    ) -> bool {
+        self.post(LinearNe::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> \sum terms_i != rhs`.
@@ -47,13 +53,17 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) {
-        let _ = self.post(LinearNe::reified(terms.into(), rhs, reif));
+    ) -> bool {
+        self.post(LinearNe::reified(terms.into(), rhs, reif))
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
-    fn int_lin_le<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
-        let _ = self.post(LinearLeq::new(terms.into(), rhs));
+    fn int_lin_le<Var: IntVar + 'static>(
+        &mut self,
+        terms: impl Into<Box<[Var]>>,
+        rhs: i32,
+    ) -> bool {
+        self.post(LinearLeq::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
@@ -62,18 +72,24 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) {
-        let _ = self.post(LinearLeq::reified(terms.into(), rhs, reif));
+    ) -> bool {
+        self.post(LinearLeq::reified(terms.into(), rhs, reif))
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
-    fn int_lin_eq<Var: IntVar + 'static>(&mut self, terms: impl Into<Box<[Var]>>, rhs: i32) {
+    fn int_lin_eq<Var: IntVar + 'static>(
+        &mut self,
+        terms: impl Into<Box<[Var]>>,
+        rhs: i32,
+    ) -> bool {
         let terms = terms.into();
 
-        self.int_lin_le(terms.clone(), rhs);
+        if !self.int_lin_le(terms.clone(), rhs) {
+            return false;
+        }
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.int_lin_le(negated, -rhs);
+        self.int_lin_le(negated, -rhs)
     }
 
     /// Adds the constraint `reif -> (\sum terms_i = rhs)`.
@@ -82,58 +98,60 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) {
+    ) -> bool {
         let terms = terms.into();
 
-        self.int_lin_le_reif(terms.clone(), rhs, reif);
+        if !self.int_lin_le_reif(terms.clone(), rhs, reif) {
+            return false;
+        }
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.int_lin_le_reif(negated, -rhs, reif);
+        self.int_lin_le_reif(negated, -rhs, reif)
     }
 
     /// Adds the constraint `lhs != rhs`.
-    fn int_ne<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
-        self.int_lin_ne([lhs.scaled(1), rhs.scaled(-1)], 0);
+    fn int_ne<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+        self.int_lin_ne([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> lhs != rhs`.
-    fn int_ne_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
+    fn int_ne_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
         self.int_lin_ne_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs <= rhs`.
-    fn int_le<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
-        self.int_lin_le([lhs.scaled(1), rhs.scaled(-1)], 0);
+    fn int_le<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+        self.int_lin_le([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> (lhs <= rhs)`.
-    fn int_le_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
-        self.int_lin_le_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif);
+    fn int_le_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+        self.int_lin_le_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs < rhs`.
-    fn int_lt<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
-        self.int_le(lhs.scaled(1), rhs.offset(-1));
+    fn int_lt<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+        self.int_le(lhs.scaled(1), rhs.offset(-1))
     }
 
     /// Adds the constraint `reif -> (lhs < rhs)`.
-    fn int_lt_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
-        self.int_le_reif(lhs.scaled(1), rhs.offset(-1), reif);
+    fn int_lt_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+        self.int_le_reif(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
     /// Adds the constraint `lhs = rhs`.
-    fn int_eq<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) {
-        self.int_lin_eq([lhs.scaled(1), rhs.scaled(-1)], 0);
+    fn int_eq<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+        self.int_lin_eq([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> (lhs = rhs)`.
-    fn int_eq_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) {
-        self.int_lin_eq_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif);
+    fn int_eq_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+        self.int_lin_eq_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `a + b = c`.
-    fn int_plus<Var: IntVar + 'static>(&mut self, a: Var, b: Var, c: Var) {
-        self.int_lin_eq([a.scaled(1), b.scaled(1), c.scaled(-1)], 0);
+    fn int_plus<Var: IntVar + 'static>(&mut self, a: Var, b: Var, c: Var) -> bool {
+        self.int_lin_eq([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
     }
 
     /// Adds the constraint `a * b = c`.
@@ -142,24 +160,28 @@ pub trait ConstraintsExt {
         a: impl IntVar + 'static,
         b: impl IntVar + 'static,
         c: impl IntVar + 'static,
-    ) {
-        let _ = self.post(IntTimes { a, b, c });
+    ) -> bool {
+        self.post(IntTimes { a, b, c })
     }
 
     /// Adds the constraint `|signed| = absolute`.
-    fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) {
-        let _ = self.post(AbsoluteValue { signed, absolute });
+    fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) -> bool {
+        self.post(AbsoluteValue { signed, absolute })
     }
 
     /// Adds the constraint that all variables must be distinct.
-    fn all_different<Var: IntVar + 'static>(&mut self, variables: impl Into<Box<[Var]>>) {
+    fn all_different<Var: IntVar + 'static>(&mut self, variables: impl Into<Box<[Var]>>) -> bool {
         let variables = variables.into();
 
         for i in 0..variables.len() {
             for j in i + 1..variables.len() {
-                self.int_ne(variables[i].clone(), variables[j].clone());
+                if !self.int_ne(variables[i].clone(), variables[j].clone()) {
+                    return false;
+                }
             }
         }
+
+        true
     }
 
     /// Posts the constraint `max(array) = m`.
@@ -167,11 +189,11 @@ pub trait ConstraintsExt {
         &mut self,
         array: impl Into<Box<[Var]>>,
         rhs: impl IntVar + 'static,
-    ) {
-        let _ = self.post(Maximum {
+    ) -> bool {
+        self.post(Maximum {
             array: array.into(),
             rhs,
-        });
+        })
     }
 
     /// Posts the constraint `min(array) = m`.
@@ -179,12 +201,12 @@ pub trait ConstraintsExt {
         &mut self,
         array: impl IntoIterator<Item = Var>,
         rhs: impl IntVar + 'static,
-    ) {
+    ) -> bool {
         let array = array
             .into_iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<_>>();
-        self.maximum(array, rhs.scaled(-1));
+        self.maximum(array, rhs.scaled(-1))
     }
 }
 

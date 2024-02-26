@@ -324,7 +324,13 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+        assert!(
+            !self.is_in_infeasible_state(),
+            "variables cannot be created in an infeasible state"
+        );
+
         self.sat_cp_mediator.create_new_domain(
             lower_bound,
             upper_bound,
@@ -861,10 +867,7 @@ impl ConstraintSatisfactionSolver {
         Constructor: CPPropagatorConstructor,
         Constructor::Propagator: 'static,
     {
-        if self.state.conflicting()
-            || self.state.is_infeasible()
-            || self.state.is_infeasible_under_assumptions()
-        {
+        if self.is_in_infeasible_state() {
             return false;
         }
 
@@ -899,6 +902,12 @@ impl ConstraintSatisfactionSolver {
 
             self.state.conflicting()
         }
+    }
+
+    fn is_in_infeasible_state(&mut self) -> bool {
+        self.state.conflicting()
+            || self.state.is_infeasible()
+            || self.state.is_infeasible_under_assumptions()
     }
 
     pub fn add_permanent_clause(

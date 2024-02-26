@@ -13,13 +13,13 @@ pub(crate) fn int_lin_le_reif(
     terms: Box<[AffineView<DomainId>]>,
     rhs: i32,
     reif: Literal,
-) {
-    solver.int_lin_le_reif(terms.clone(), rhs, reif);
-    solver.int_lin_le_reif(
-        terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
-        -rhs - 1,
-        !reif,
-    );
+) -> bool {
+    solver.int_lin_le_reif(terms.clone(), rhs, reif)
+        && solver.int_lin_le_reif(
+            terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
+            -rhs - 1,
+            !reif,
+        )
 }
 
 pub(crate) fn int_lin_eq_reif(
@@ -27,11 +27,9 @@ pub(crate) fn int_lin_eq_reif(
     terms: Box<[AffineView<DomainId>]>,
     rhs: i32,
     reif: Literal,
-) {
-    int_lin_le_reif(solver, terms.clone(), rhs, reif);
-
+) -> bool {
     let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-    int_lin_le_reif(solver, negated, -rhs, !reif);
+    int_lin_le_reif(solver, terms, rhs, reif) && int_lin_le_reif(solver, negated, -rhs, !reif)
 }
 
 pub(crate) fn int_le_reif(
@@ -39,7 +37,7 @@ pub(crate) fn int_le_reif(
     a: DomainId,
     b: DomainId,
     reif: Literal,
-) {
+) -> bool {
     int_lin_le_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
 }
 
@@ -48,7 +46,7 @@ pub(crate) fn int_lt_reif(
     a: DomainId,
     b: DomainId,
     reif: Literal,
-) {
+) -> bool {
     int_lin_le_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), -1, reif)
 }
 
@@ -57,25 +55,26 @@ pub(crate) fn int_eq_reif(
     a: DomainId,
     b: DomainId,
     reif: Literal,
-) {
-    int_lin_eq_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif);
+) -> bool {
+    int_lin_eq_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
 }
 
 pub(crate) fn array_bool_or(
     solver: &mut ConstraintSatisfactionSolver,
     clause: impl Into<Vec<Literal>>,
     reif: Literal,
-) {
+) -> bool {
     let mut clause = clause.into();
 
     // \/clause -> r
-    clause.iter().for_each(|&literal| {
-        let _ = solver.add_permanent_clause(vec![!literal, reif]);
-    });
+    let all_implications = clause
+        .iter()
+        .all(|&literal| solver.add_permanent_clause(vec![!literal, reif]).is_ok());
 
     // r -> \/clause
     clause.insert(0, !reif);
-    let _ = solver.add_permanent_clause(clause);
+
+    all_implications && solver.add_permanent_clause(clause).is_ok()
 }
 
 pub(crate) fn int_ne_reif(
@@ -83,9 +82,8 @@ pub(crate) fn int_ne_reif(
     a: DomainId,
     b: DomainId,
     reif: Literal,
-) {
-    solver.int_ne_reif(a, b, reif);
-    solver.int_eq_reif(a, b, !reif);
+) -> bool {
+    solver.int_ne_reif(a, b, reif) && solver.int_eq_reif(a, b, !reif)
 }
 
 pub(crate) fn int_lin_ne_reif(
@@ -93,9 +91,8 @@ pub(crate) fn int_lin_ne_reif(
     terms: Box<[AffineView<DomainId>]>,
     rhs: i32,
     reif: Literal,
-) {
-    solver.int_lin_ne_reif(terms.clone(), rhs, reif);
-    solver.int_lin_eq_reif(terms, rhs, !reif)
+) -> bool {
+    solver.int_lin_ne_reif(terms.clone(), rhs, reif) && solver.int_lin_eq_reif(terms, rhs, !reif)
 }
 
 pub(crate) fn bool_lin_le(
@@ -103,7 +100,7 @@ pub(crate) fn bool_lin_le(
     weights: &[i32],
     bools: &[Literal],
     rhs: i32,
-) {
+) -> bool {
     let terms = weights
         .iter()
         .copied()
@@ -123,7 +120,7 @@ pub(crate) fn bool_lin_le(
         .expect("negative rhs is not supported, since all weights should also be positive");
 
     let mut encoder = PseudoBooleanConstraintEncoder::new(terms, PseudoBooleanEncoding::GTE);
-    let _ = encoder.constrain_at_most_k(rhs, solver);
+    encoder.constrain_at_most_k(rhs, solver).is_ok()
 }
 
 pub(crate) fn bool_lin_eq(
@@ -131,8 +128,10 @@ pub(crate) fn bool_lin_eq(
     weights: &[i32],
     bools: &[Literal],
     rhs: i32,
-) {
-    bool_lin_le(solver, weights, bools, rhs);
+) -> bool {
+    if !bool_lin_le(solver, weights, bools, rhs) {
+        return false;
+    }
 
     let inverted = bools.iter().map(|&literal| !literal).collect::<Box<_>>();
     bool_lin_le(
@@ -140,5 +139,5 @@ pub(crate) fn bool_lin_eq(
         weights,
         &inverted,
         weights.iter().sum::<i32>() - rhs,
-    );
+    )
 }

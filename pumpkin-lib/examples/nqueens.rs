@@ -21,7 +21,7 @@ fn main() {
         .map(|_| solver.create_new_integer_variable(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
-    solver.all_different(variables.clone());
+    let _ = solver.all_different(variables.clone());
 
     let diag1 = variables
         .iter()
@@ -36,8 +36,8 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    solver.all_different(diag1);
-    solver.all_different(diag2);
+    let _ = solver.all_different(diag1);
+    let _ = solver.all_different(diag2);
 
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
