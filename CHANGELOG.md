@@ -39,6 +39,7 @@
   * int_min
   * int_array_maximum
   * int_array_minimum
+  * array_bool_xor
   * array_bool_and
   * array_bool_or
   * array_bool_element
@@ -56,6 +57,7 @@
   * bool_lt_reif
   * bool_not
   * bool_or
+  * bool_xor
   * all_different
   * set_in_reif
 * Add support for variables with negative domain bounds.

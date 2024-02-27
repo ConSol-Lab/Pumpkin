@@ -149,7 +149,8 @@ pub(crate) fn run(
                 compile_array_var_bool_element(context, exprs, "array_var_bool_element")?
             }
             "array_bool_or" => compile_bool_or(context, exprs)?,
-            "array_bool_xor" => todo!("implement support for array_bool_xor"),
+            "pumpkin_bool_xor" => compile_bool_xor(context, exprs)?,
+            "pumpkin_bool_xor_reif" => compile_bool_xor_reif(context, exprs)?,
 
             "bool2int" => compile_bool2int(context, exprs)?,
 
@@ -424,6 +425,42 @@ fn compile_bool_or(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     Ok(array_bool_or(context.solver, clause.as_ref(), r))
+}
+
+fn compile_bool_xor(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "pumpkin_bool_xor");
+
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_bool_variable(&exprs[1])?;
+
+    let c1 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
+    let c2 = context.solver.add_permanent_clause(vec![b, a]).is_ok();
+
+    Ok(c1 && c2)
+}
+
+fn compile_bool_xor_reif(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "pumpkin_bool_xor_reif");
+
+    let a = context.resolve_bool_variable(&exprs[0])?;
+    let b = context.resolve_bool_variable(&exprs[1])?;
+    let r = context.resolve_bool_variable(&exprs[2])?;
+
+    let c1 = context
+        .solver
+        .add_permanent_clause(vec![!a, !b, !r])
+        .is_ok();
+    let c2 = context.solver.add_permanent_clause(vec![!a, b, r]).is_ok();
+    let c3 = context.solver.add_permanent_clause(vec![a, !b, r]).is_ok();
+    let c4 = context.solver.add_permanent_clause(vec![a, b, !r]).is_ok();
+
+    Ok(c1 && c2 && c3 && c4)
 }
 
 fn compile_array_var_bool_element(
