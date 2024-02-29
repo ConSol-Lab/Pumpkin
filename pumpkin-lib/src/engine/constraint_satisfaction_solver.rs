@@ -900,7 +900,7 @@ impl ConstraintSatisfactionSolver {
         } else {
             self.propagate_enqueued();
 
-            self.state.conflicting()
+            self.state.no_conflict()
         }
     }
 
