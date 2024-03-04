@@ -7,9 +7,8 @@ use std::time::Instant;
 use log::info;
 use log::warn;
 
-use crate::basic_types::moving_average::CumulativeMovingAverage;
-use crate::basic_types::moving_average::MovingAverageInterface;
-use crate::basic_types::sequence_generators::SequenceGeneratorType;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
@@ -34,11 +33,11 @@ use crate::engine::AssignmentsPropositional;
 use crate::engine::CPPropagatorConstructor;
 use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::DebugHelper;
-use crate::engine::GlucoseRestartStrategy;
 use crate::engine::LearnedClauseManager;
 use crate::engine::LearnedClauseMinimiser;
 use crate::engine::PropagatorConstructorContext;
 use crate::engine::PropagatorId;
+use crate::engine::RestartStrategy;
 use crate::engine::SATCPMediator;
 use crate::engine::SatOptions;
 use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
@@ -58,7 +57,7 @@ pub struct ConstraintSatisfactionSolver {
     clausal_propagator: ClausalPropagator,
     learned_clause_manager: LearnedClauseManager,
     learned_clause_minimiser: LearnedClauseMinimiser,
-    restart_strategy: GlucoseRestartStrategy,
+    restart_strategy: RestartStrategy,
     cp_propagators: Vec<Box<dyn ConstraintProgrammingPropagator>>,
     sat_cp_mediator: SATCPMediator,
     seen: KeyedVec<PropositionalVariable, bool>,
@@ -97,19 +96,65 @@ impl Debug for ConstraintSatisfactionSolver {
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
     // see the main.rs parameters for more details
-    /// Parameters related to restarts
-    pub restart_sequence_generator_type: SequenceGeneratorType,
-    pub restart_base_interval: u64,
-    pub restart_min_num_conflicts_before_first_restart: u64,
-    pub restart_lbd_coef: f64,
-    pub restart_num_assigned_coef: f64,
-    pub restart_num_assigned_window: u64,
-    pub restart_geometric_coef: Option<f64>,
-
+    pub restart_options: RestartOptions,
     pub learning_clause_minimisation: bool,
 
     /// Certificate output file or None if certificate output is disabled.
     pub certificate_file: Option<File>,
+}
+
+use crate::basic_types::sequence_generators::SequenceGeneratorType;
+#[cfg(doc)]
+use crate::engine::RestartStrategy;
+/// Parameters related to the restarts as provided to [`RestartStrategy`].
+#[derive(Debug, Clone, Copy)]
+pub struct RestartOptions {
+    /// Decides the sequence based on which the restarts are performed.
+    /// To be used in combination with [`RestartOptions::base_interval`]
+    pub sequence_generator_type: SequenceGeneratorType,
+    /// The base interval length is used as a multiplier to the restart sequence.
+    /// For example, constant restarts with base interval 100 means a retart is triggered every 100
+    /// conflicts.
+    pub base_interval: u64,
+    /// The minimum number of conflicts to be reached before the first restart is considered
+    pub min_num_conflicts_before_first_restart: u64,
+    /// Used to determine if a restart should be forced (part of [`RestartStrategy`]).
+    /// The state is "bad" if the current LBD value (see [`RestartStrategy`] for a
+    /// definition) is much greater than the global LBD average A greater/lower value for
+    /// lbd-coef means a less/more frequent restart policy
+    pub lbd_coef: f64,
+    /// Used to determine if a restart should be blocked (part of [`RestartStrategy`]).
+    /// To be used in combination with
+    /// [`RestartOptions::num_assigned_window`].
+    /// A restart is blocked if the number of assigned propositional variables is must greater than
+    /// the average number of assigned variables in the recent past A greater/lower value for
+    /// [`RestartOptions::num_assigned_coef`] means fewer/more blocked restarts
+    pub num_assigned_coef: f64,
+    /// Used to determine the length of the recent past that should be considered when deciding on
+    /// blocking restarts (part of [`RestartStrategy`]). The solver considers the last
+    /// [`RestartOptions::num_assigned_window`] conflicts as the reference point for the
+    /// number of assigned variables
+    pub num_assigned_window: u64,
+    /// The coefficient in the geometric sequence `x_i = x_{i-1} * geometric-coef` where `x_1 =
+    /// `[`RestartOptions::base_interval`] Used only if
+    /// [`RestartOptions::sequence_generator_type`] is assigned to
+    /// [`SequenceGeneratorType::Geometric`].
+    pub geometric_coef: Option<f64>,
+}
+
+impl Default for RestartOptions {
+    fn default() -> Self {
+        // The values which are used are based on [Glucose](https://github.com/audemard/glucose).
+        Self {
+            sequence_generator_type: SequenceGeneratorType::Constant,
+            base_interval: 50,
+            min_num_conflicts_before_first_restart: 10000,
+            lbd_coef: 1.25,
+            num_assigned_coef: 1.4,
+            num_assigned_window: 5000,
+            geometric_coef: None,
+        }
+    }
 }
 
 // methods that offer basic functionality
@@ -125,7 +170,7 @@ impl ConstraintSatisfactionSolver {
             clausal_propagator: ClausalPropagator::default(),
             learned_clause_manager: LearnedClauseManager::new(sat_options),
             learned_clause_minimiser: LearnedClauseMinimiser::default(),
-            restart_strategy: GlucoseRestartStrategy::new(&solver_options),
+            restart_strategy: RestartStrategy::new(solver_options.restart_options),
             cp_propagators: vec![],
             sat_cp_mediator: SATCPMediator::default(),
             seen: KeyedVec::default(),
@@ -659,9 +704,11 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    // a 'restart' differs from backtracking to level zero
-    //   in that a restart backtracks to decision level zero and then performs additional
-    // operations,      e.g., clean up learned clauses, adjust restart frequency, etc.
+    /// Performs a restart during the search process; it is only called when it has been determined
+    /// to be necessary by the [`ConstraintSatisfactionSolver::restart_strategy`]. A 'restart'
+    /// differs from backtracking to level zero in that a restart backtracks to decision level
+    /// zero and then performs additional operations, e.g., clean up learned clauses, adjust
+    /// restart frequency, etc.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
             self.sat_data_structures.are_all_assumptions_assigned(),
@@ -1748,14 +1795,8 @@ impl CSPSolverState {
 impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
+            restart_options: RestartOptions::default(),
             certificate_file: None,
-            restart_sequence_generator_type: SequenceGeneratorType::Constant,
-            restart_base_interval: 50,
-            restart_min_num_conflicts_before_first_restart: 10000,
-            restart_lbd_coef: 1.25,
-            restart_num_assigned_coef: 1.4,
-            restart_num_assigned_window: 5000,
-            restart_geometric_coef: None,
             learning_clause_minimisation: true,
         }
     }

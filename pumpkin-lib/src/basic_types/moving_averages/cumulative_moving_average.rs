@@ -1,4 +1,4 @@
-use super::MovingAverageInterface;
+use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
 pub struct CumulativeMovingAverage {
@@ -6,7 +6,7 @@ pub struct CumulativeMovingAverage {
     num_terms: u64,
 }
 
-impl MovingAverageInterface for CumulativeMovingAverage {
+impl MovingAverage for CumulativeMovingAverage {
     fn add_term(&mut self, new_term: u64) {
         self.sum += new_term;
         self.num_terms += 1
@@ -28,7 +28,7 @@ impl MovingAverageInterface for CumulativeMovingAverage {
 #[cfg(test)]
 mod tests {
     use super::CumulativeMovingAverage;
-    use crate::basic_types::moving_average::MovingAverageInterface;
+    use crate::basic_types::moving_averages::MovingAverage;
 
     #[test]
     fn test_constant_value() {

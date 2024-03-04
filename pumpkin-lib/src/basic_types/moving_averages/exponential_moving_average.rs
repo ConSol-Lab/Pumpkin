@@ -18,14 +18,14 @@ use std::cmp::min;
 
 use bitfield::BitRange;
 
-use super::MovingAverageInterface;
+use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
 pub struct ExponentialMovingAverage {
     x_current: u64,
     current_value: u64,
 }
-impl MovingAverageInterface for ExponentialMovingAverage {
+impl MovingAverage for ExponentialMovingAverage {
     // adds a term to the exponential moving average according to the formula above, including
     // smoothing. The input term is expected to be in a proper integer, e.g., not given in
     // fixed-point arithmetic form.

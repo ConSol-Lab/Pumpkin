@@ -1,4 +1,4 @@
-use super::SequenceGeneratorInterface;
+use super::SequenceGenerator;
 
 // Given constants 'a' and 'm', the i-th element f(i) in a geometric sequence is computed as:
 //  f(i) = f(i-1) * m
@@ -20,7 +20,7 @@ impl GeometricSequence {
     }
 }
 
-impl SequenceGeneratorInterface for GeometricSequence {
+impl SequenceGenerator for GeometricSequence {
     fn next(&mut self) -> i64 {
         let next_value = self.current_value;
         self.current_value = (self.current_value as f64 * self.multiplication_factor) as i64;
@@ -31,7 +31,7 @@ impl SequenceGeneratorInterface for GeometricSequence {
 #[cfg(test)]
 mod tests {
     use super::GeometricSequence;
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
+    use crate::basic_types::sequence_generators::SequenceGenerator;
 
     #[test]
     fn test_2_pow_n() {

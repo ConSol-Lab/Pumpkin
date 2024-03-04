@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::MovingAverageInterface;
+use super::MovingAverage;
 use crate::pumpkin_assert_simple;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
@@ -21,7 +21,7 @@ impl WindowedMovingAverage {
     }
 }
 
-impl MovingAverageInterface for WindowedMovingAverage {
+impl MovingAverage for WindowedMovingAverage {
     fn add_term(&mut self, new_term: u64) {
         pumpkin_assert_simple!(self.values_in_window.len() <= self.window_size as usize);
 

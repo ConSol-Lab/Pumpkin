@@ -71,6 +71,7 @@
 * When backtracking, the CP view of individual domains did not correctly update 
 state to indicate the bounds were in the domain.
 * The OptimisationSolver did not have the correct exit conditions nor was it bounding the literals correctly when creating the encoder if literals were assigned at the root level
+* The search strategy did not perform any restarts, this should now have been fixed
 
 ## Refactors
 * Added a variable to the watchlists to prevent traversing the literal and/or integer trail when no variable is being watched

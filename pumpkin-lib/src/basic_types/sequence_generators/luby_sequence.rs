@@ -1,4 +1,4 @@
-use super::SequenceGeneratorInterface;
+use super::SequenceGenerator;
 
 // The Luby sequence is a recursive sequence of the form:
 // 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
@@ -22,7 +22,7 @@ impl LubySequence {
     }
 }
 
-impl SequenceGeneratorInterface for LubySequence {
+impl SequenceGenerator for LubySequence {
     fn next(&mut self) -> i64 {
         // The implementation follows Donald Knuth's 'reluctant doubling' formula
         let next_value = self.v;
@@ -39,7 +39,7 @@ impl SequenceGeneratorInterface for LubySequence {
 #[cfg(test)]
 mod tests {
     use super::LubySequence;
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
+    use crate::basic_types::sequence_generators::SequenceGenerator;
 
     #[test]
     fn test_base_1() {

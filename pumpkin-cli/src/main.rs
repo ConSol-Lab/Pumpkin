@@ -26,6 +26,7 @@ use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::constraint_satisfaction_solver::RestartOptions;
 use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
 use pumpkin_lib::optimisation::OptimisationResult;
@@ -233,14 +234,16 @@ fn run() -> PumpkinResult<()> {
     };
 
     let solver_options = SatisfactionSolverOptions {
-        restart_sequence_generator_type: args.restart_sequence_generator_type.inner,
-        restart_base_interval: args.restart_base_interval,
-        restart_min_num_conflicts_before_first_restart: args
-            .restarts_min_num_conflicts_before_first_restart,
-        restart_lbd_coef: args.restart_lbd_coef,
-        restart_num_assigned_coef: args.restart_num_assigned_coef,
-        restart_num_assigned_window: args.restart_num_assigned_window,
-        restart_geometric_coef: args.restart_geometric_coef,
+        restart_options: RestartOptions {
+            sequence_generator_type: args.restart_sequence_generator_type.inner,
+            base_interval: args.restart_base_interval,
+            min_num_conflicts_before_first_restart: args
+                .restarts_min_num_conflicts_before_first_restart,
+            lbd_coef: args.restart_lbd_coef,
+            num_assigned_coef: args.restart_num_assigned_coef,
+            num_assigned_window: args.restart_num_assigned_window,
+            geometric_coef: args.restart_geometric_coef,
+        },
         certificate_file,
         learning_clause_minimisation: args.learning_clause_minimisation.inner,
     };

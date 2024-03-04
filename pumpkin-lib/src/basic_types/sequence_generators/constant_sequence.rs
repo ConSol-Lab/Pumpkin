@@ -1,4 +1,4 @@
-use super::SequenceGeneratorInterface;
+use super::SequenceGenerator;
 
 // A sequence that generates the same value
 #[derive(Debug, Copy, Clone)]
@@ -12,7 +12,7 @@ impl ConstantSequence {
     }
 }
 
-impl SequenceGeneratorInterface for ConstantSequence {
+impl SequenceGenerator for ConstantSequence {
     fn next(&mut self) -> i64 {
         self.constant_value
     }
@@ -21,7 +21,7 @@ impl SequenceGeneratorInterface for ConstantSequence {
 #[cfg(test)]
 mod tests {
     use super::ConstantSequence;
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
+    use crate::basic_types::sequence_generators::SequenceGenerator;
 
     #[test]
     fn test_basic() {

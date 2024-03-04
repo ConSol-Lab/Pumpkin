@@ -13,7 +13,7 @@ mod instance;
 mod key_value_heap;
 mod keyed_vec;
 mod literal;
-pub mod moving_average;
+pub mod moving_averages;
 mod predicate;
 mod propagation_status_cp;
 mod propagation_status_cp_one_step;
