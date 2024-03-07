@@ -2,7 +2,7 @@
 
 set -eux
 
-./scripts/hash.sh
-./scripts/fmt.sh
-./scripts/clippy.sh
-./scripts/deny.sh
+./scripts/fmt.sh --pre-commit
+./scripts/hash.sh --pre-commit
+./scripts/clippy.sh --pre-commit
+./scripts/deny.sh --pre-commit
