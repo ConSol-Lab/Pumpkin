@@ -14,6 +14,8 @@
 * Added support for propagating literals in CP propagators.
 * Implemented reified linear leq propagator.
 * Added disjunctive scheduling example through a difference logic model.
+* Added cumulative propagator(s)
+  * Added propagator utilising time-table reasoning per time point
 * Extended collection of statistics to include conflict size, learned clause length and backtrack amount
 * Added logging of statistics using `info!` when using the `OptimisationSolver` 
 * Refactored the CP and propositional trails, and extracted a trail abstraction.

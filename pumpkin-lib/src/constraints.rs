@@ -11,9 +11,11 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::propagators::absolute_value::AbsoluteValue;
 use crate::propagators::element::Element;
 use crate::propagators::maximum::Maximum;
+use crate::propagators::ArgTask;
 use crate::propagators::IntTimes;
 use crate::propagators::LinearLeq;
 use crate::propagators::LinearNe;
+use crate::propagators::TimeTablePerPoint;
 
 /// Provides common constraint implementations. Methods return false if the problem becomes
 /// trivially unsatisfiable after adding the constraint, or when the solver was already in an
@@ -182,6 +184,18 @@ pub trait ConstraintsExt {
         }
 
         true
+    }
+
+    fn cumulative<Var: IntVar + 'static + std::fmt::Debug>(
+        &mut self,
+        tasks: &[ArgTask<Var>],
+        capacity: i32,
+    ) {
+        // TODO: how to differentiate between different strategies
+        let _ = self.post(TimeTablePerPoint::new(
+            tasks.iter().cloned().collect(),
+            capacity,
+        ));
     }
 
     /// Posts the constraint `max(array) = m`.

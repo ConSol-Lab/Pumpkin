@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use super::DomainEvents;
 use super::WatchListPropositional;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::DomainId;
@@ -100,6 +101,35 @@ impl TestSolver {
         self.assignments_integer.get_lower_bound(var)
     }
 
+    pub fn increase_lower_bound_and_notify(
+        &mut self,
+        propagator: &mut Propagator,
+        id: i32,
+        var: DomainId,
+        value: i32,
+    ) -> EnqueueDecision {
+        let result = self
+            .assignments_integer
+            .tighten_lower_bound(var, value, None);
+        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+        );
+        propagator.notify(
+            &mut context,
+            LocalId::from(id as u32),
+            crate::engine::OpaqueDomainEvent::from(
+                DomainEvents::LOWER_BOUND
+                    .get_int_events()
+                    .iter()
+                    .next()
+                    .unwrap(),
+            ),
+        )
+    }
+
     pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
         self.assignments_integer
             .tighten_lower_bound(var, bound, None)
@@ -140,6 +170,35 @@ impl TestSolver {
             &mut self.assignments_propositional,
         );
         propagator.propagate(&mut context)
+    }
+
+    pub fn propagate_until_fixed_point(
+        &mut self,
+        propagator: &mut Propagator,
+    ) -> PropagationStatusCP {
+        let mut num_trail_entries = self.assignments_integer.num_trail_entries()
+            + self.assignments_propositional.num_trail_entries();
+
+        loop {
+            {
+                // Specify the life-times to be able to retrieve the trail entries
+                let mut context = PropagationContextMut::new(
+                    &mut self.assignments_integer,
+                    &mut self.reason_store,
+                    &mut self.assignments_propositional,
+                );
+                propagator.propagate(&mut context)?;
+            }
+            if self.assignments_integer.num_trail_entries()
+                + self.assignments_propositional.num_trail_entries()
+                == num_trail_entries
+            {
+                break;
+            }
+            num_trail_entries = self.assignments_integer.num_trail_entries()
+                + self.assignments_propositional.num_trail_entries();
+        }
+        Ok(())
     }
 
     pub fn notify(
