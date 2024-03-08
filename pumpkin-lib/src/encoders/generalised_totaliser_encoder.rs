@@ -9,11 +9,11 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-// encodes the constraint \sum w_i x_i <= k
-
-// implementation is done based on the paper:
-//"Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben Martins,
-//"Generalized and Vasco Manquinho.  CP'15.
+/// Implementation of the generalized totalizer encoding for pseudo-boolean constraints.
+///
+/// # Bibliography
+/// \[1] "Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben
+/// Martins, Vasco Manquinho; CP '15
 #[derive(Debug)]
 pub struct GeneralisedTotaliserEncoder {
     index_last_added_weighted_literal: usize,

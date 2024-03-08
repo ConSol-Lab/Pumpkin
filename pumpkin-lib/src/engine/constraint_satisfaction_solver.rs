@@ -1,3 +1,6 @@
+//! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
+//! using a Lazy Clause Generation approach.
+
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fs::File;
@@ -50,6 +53,68 @@ use crate::pumpkin_assert_simple;
 pub type ClausalPropagator = ClausalPropagatorBasic;
 pub type ClauseAllocator = ClauseAllocatorBasic;
 
+/// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
+/// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
+/// approach.
+///
+/// The solver maintains two views of the problem, a Constraint Programming (CP) view and a SAT
+/// view. It requires that all of the propagators which are added, are able to explain the
+/// propagations and conflicts they have made/found. It then uses standard SAT concepts such as
+/// 1UIP (see \[2\]) to learn clauses (also called nogoods in the CP field, see \[3\]) to avoid
+/// unnecessary exploration of the search space while utilizing the search procedure benefits from
+/// constraint programming (e.g. by preventing the exponential blow-up of problem encodings).
+///
+/// # Practical
+/// The [`ConstraintSatisfactionSolver`] makes use of certain options which allow the user to
+/// influence the behaviour of the solver; see for example the [`SatisfactionSolverOptions`] and the
+/// [`SatOptions`].
+///
+/// The solver switches between making decisions using implementations of the [`Brancher`] (which
+/// are passed to the [`ConstraintSatisfactionSolver::solve`] method) and propagation (use
+/// [`ConstraintSatisfactionSolver::add_propagator`] to add a propagator). If a conflict is found by
+/// any of the propagators (including the clausal one) then the solver will analyse the conflict
+/// using 1UIP reasoning and backtrack if possible.
+///
+/// ## Example
+/// This example will show how to set-up the [`ConstraintSatisfactionSolver`] to solve a simple not
+/// equals problem between two variables. Note that any constraint is added in the form of
+/// propagators.
+/// ```
+/// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+/// # use pumpkin_lib::propagators::NotEq;
+/// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+/// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+/// // We create a solver with default options (note that this is only possible in a testing environment)
+/// let mut solver = ConstraintSatisfactionSolver::default();
+///
+/// // Now we create the two variables for which we want to define the propagator
+/// let x = solver.create_new_integer_variable(0, 10);
+/// let y = solver.create_new_integer_variable(0, 10);
+///
+/// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
+/// let no_root_level_conflict = solver.add_propagator(NotEq {x, y});
+/// assert!(no_root_level_conflict);
+///
+/// // We create a branching strategy, in our case we will simply use the default one
+/// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+///
+/// // Then we solve the problem given a time-limit and a branching strategy
+/// let result = solver.solve(i64::MAX, &mut brancher);
+///
+/// // Now we check that the result is feasible and that the chosen values for the two variables are different
+/// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
+/// assert!(solver.get_integer_assignments().get_assigned_value(x) != solver.get_integer_assignments().get_assigned_value(y));
+/// ```
+///
+/// # Bibliography
+/// \[1\] T. Feydy and P. J. Stuckey, ‘Lazy clause generation reengineered’, in International
+/// Conference on Principles and Practice of Constraint Programming, 2009, pp. 352–366.
+///
+/// \[2\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
+/// solvers’, in Handbook of satisfiability, IOS press, 2021
+///
+/// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
+/// Intelligence, vol. 3, pp. 181–211, 2008.
 pub struct ConstraintSatisfactionSolver {
     state: CSPSolverState,
     sat_data_structures: SATEngineDataStructures,
@@ -93,19 +158,21 @@ impl Debug for ConstraintSatisfactionSolver {
     }
 }
 
+/// Options for the [`ConstraintSatisfactionSolver`], see `main.rs` for more information
+/// on these parameters.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
-    // see the main.rs parameters for more details
+    /// The options used by the [`RestartStrategy`]
     pub restart_options: RestartOptions,
+
+    /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
 
-    /// Certificate output file or None if certificate output is disabled.
+    /// Certificate output file or [`None`] if certificate output is disabled.
     pub certificate_file: Option<File>,
 }
 
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
-#[cfg(doc)]
-use crate::engine::RestartStrategy;
 /// Parameters related to the restarts as provided to [`RestartStrategy`].
 #[derive(Debug, Clone, Copy)]
 pub struct RestartOptions {
@@ -265,10 +332,6 @@ impl ConstraintSatisfactionSolver {
     /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
-    /// let variables = solver
-    ///     .get_propositional_assignments()
-    ///     .get_propositional_variables()
-    ///     .collect::<Vec<_>>();
     /// let mut brancher =
     ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
     /// solver.solve_under_assumptions(&assumptions, i64::MAX, &mut brancher);
@@ -426,6 +489,20 @@ impl ConstraintSatisfactionSolver {
         domain_id
     }
 
+    /// Returns an infinite iterator of positive literals of new variables.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+    /// # use pumpkin_lib::basic_types::Literal;
+    /// let mut solver = ConstraintSatisfactionSolver::default();
+    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
+    ///
+    /// // `literals` contains 5 positive literals of newly created propositional variables.
+    /// assert_eq!(literals.len(), 5);
+    /// ```
+    ///
+    /// Note that this method captures the lifetime of the immutable reference to `self`.
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
         std::iter::from_fn(|| Some(self.create_new_propositional_variable()))
             .map(|var| Literal::new(var, true))
@@ -567,7 +644,7 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    // returns true if the assumption was successfully enqueued, and false otherwise
+    /// Returns true if the assumption was successfully enqueued, and false otherwise
     fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
         // Case 1: the assumption is unassigned, assign it
         if self
@@ -625,10 +702,16 @@ impl ConstraintSatisfactionSolver {
         Ok(())
     }
 
-    // changes the state based on the conflict analysis result given as input
-    // i.e., adds the learned clause to the database, backtracks, enqueues the propagated literal,
-    // and updates internal data structures for simple moving averages note that no propagation
-    // is done, this is left to the solver
+    /// Changes the state based on the conflict analysis result (stored in
+    /// [`ConstraintSatisfactionSolver::analysis_result`]). It performs the following:
+    /// - Adds the learned clause to the database
+    /// - Performs backtracking
+    /// - Enqueues the propagated [`Literal`] of the learned clause
+    /// - Updates the internal data structures (e.g. for the restart strategy or the learned clause
+    ///   manager)
+    ///
+    /// # Note
+    /// This method performs no propagation, this is left up to the solver afterwards
     fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
@@ -957,6 +1040,11 @@ impl ConstraintSatisfactionSolver {
             || self.state.is_infeasible_under_assumptions()
     }
 
+    /// Creates a clause from `literals` and adds it to the current formula.
+    ///
+    /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
+    /// returned. Subsequent calls to this method will always return an error, and no
+    /// modification of the solver will take place.
     pub fn add_permanent_clause(
         &mut self,
         literals: Vec<Literal>,
@@ -1066,7 +1154,24 @@ impl ConstraintSatisfactionSolver {
 
 // methods for conflict analysis
 impl ConstraintSatisfactionSolver {
-    // computes the 1uip and stores it in 'analysis_result'
+    /// Compute the 1-UIP clause based on the current conflict. According to \[1\] a unit
+    /// implication point (UIP), "represents an alternative decision assignment at the current
+    /// decision level that results in the same conflict" (i.e. no matter what the variable at the
+    /// UIP is assigned, the current conflict will be found again given the current decisions). In
+    /// the context of implication graphs used in SAT-solving, a UIP is present at decision
+    /// level `d` when the number of literals in the learned clause assigned at decision level
+    /// `d` is 1.
+    ///
+    /// The learned clause which is created by
+    /// this method contains a single variable at the current decision level (stored at index 0
+    /// of [`ConstraintSatisfactionSolver::analysis_result`]); the variable with the second highest
+    /// decision level is stored at index 1 in [`ConstraintSatisfactionSolver::analysis_result`].
+    /// This [`ConstraintSatisfactionSolver::analysis_result`] is used when backtracking
+    /// ([`ConstraintSatisfactionSolver::backtrack`]).
+    ///
+    /// # Bibliography
+    /// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
+    /// solvers’, in Handbook of satisfiability, IOS press, 2021
     fn compute_1uip(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(self.debug_conflict_analysis_proconditions());
 
@@ -1496,20 +1601,21 @@ impl ConstraintSatisfactionSolver {
         true
     }
 
+    /// In [`ConstraintSatisfactionSolver::compute_1uip`], [`Literal`]s are examined in reverse
+    /// order on the trail. The examined [`Literal`]s are expected to be:
+    ///  1. From the same decision level; i.e. the current (last) decision level
+    ///  2. Propagated, unless the [`Literal`] is the decision [`Literal`] of the current decision
+    ///     level
+    ///  3. Not root assignments
+    /// Failing any of the conditions above means something went wrong with the conflict
+    /// analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
+    ///
+    /// Note that in the first iteration, the `next_literal` will be set to [`None`], so we can skip
+    /// this check
     fn debug_1uip_conflict_analysis_check_next_literal(
         next_literal: Option<Literal>,
         assignments_propositional: &AssignmentsPropositional,
     ) -> bool {
-        // in conflict analysis, literals are examined in reverse order on the trail
-        // the examined literals are expected to be:
-        //  1. from the same decision level - the current (last) decision level
-        //  2. propagated, unless the literal is the decision literal of the current decision level
-        //  3. not root assignments
-        // failing any of the conditions above means something went wrong with the conflict
-        // analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
-
-        // note that in the first iteration, the next_literal will be set to None, so we can skip
-        // this check
         match next_literal {
             None => true,
             Some(next_literal) => {
@@ -1604,6 +1710,8 @@ impl ConstraintSatisfactionSolver {
     }
 }
 
+/// Structure responsible for storing several statistics of the solving process of the
+/// [`ConstraintSatisfactionSolver`].
 #[derive(Default, Debug, Copy, Clone)]
 pub struct Counters {
     pub num_decisions: u64,
@@ -1656,8 +1764,12 @@ impl Counters {
 }
 
 #[derive(Clone, Default, Debug)]
+/// The outcome of clause learning.
 pub struct ConflictAnalysisResult {
+    /// The new learned clause with the propagating literal after backjumping at index 0 and the
+    /// literal with the next highest decision level at index 1.
     pub learned_literals: Vec<Literal>,
+    /// The decision level to backtrack to.
     pub backjump_level: usize,
 }
 

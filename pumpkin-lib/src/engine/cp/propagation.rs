@@ -474,13 +474,26 @@ pub enum EnqueueDecision {
     Skip,
 }
 
+#[cfg(doc)]
+use crate::engine::ConstraintSatisfactionSolver;
+#[cfg(doc)]
+use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
+#[cfg(doc)]
+use crate::pumpkin_asserts::*;
 pub trait ConstraintProgrammingPropagator {
-    // Propagate method that will be called during search
-    // 	extends the current partial assignments with inferred domain changes
-    //  in case no conflict has been detected, returns PropagationStatusCP::NoConflictDetected
-    //      otherwise returns the reason for failure in PropagationStatusCP::ConflictDetected {
-    // failure_reason }      note that the failure (explanation) is given as a conjunction of
-    // predicates that lead to the failure
+    /// Propagate method that will be called during search (e.g. in
+    /// [`ConstraintSatisfactionSolver::solve`]).
+    ///
+    /// This method extends the current partial
+    /// assignments with inferred domain changes found by the
+    /// [`ConstraintProgrammingPropagator`]. In case no conflict has been detected it should return
+    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Inconsistency`] which
+    /// contains the reason for the failure; either because a propagation caused an
+    /// an empty domain ([`Inconsistency::EmptyDomain`]) or because the logic of the propagator
+    /// found the current state to be inconsistent ([`Inconsistency::Other`]).
+    ///
+    /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
+    /// failure
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP;
 
     /// Called when an event happens to one of the variables the propagator is subscribed to. It
@@ -501,7 +514,8 @@ pub trait ConstraintProgrammingPropagator {
         EnqueueDecision::Enqueue
     }
 
-    /// Notifies the propagator when the domain of a literal has changed (i.e. it is assigned)
+    /// Notifies the propagator when the domain of a literal has changed (i.e. it is assigned). See
+    /// [`ConstraintProgrammingPropagator::notify`] for a more general explanation.
     fn notify_literal(
         &mut self,
         _context: &mut PropagationContextMut,
@@ -511,34 +525,39 @@ pub trait ConstraintProgrammingPropagator {
         EnqueueDecision::Enqueue
     }
 
-    // Called each time the solver backtracks
-    //  the propagator can then update its internal data structures given the new variable domains
+    /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
+    /// update its internal data structures given the new variable domains.
     fn synchronise(&mut self, context: &PropagationContext);
 
-    // Returns the priority of the propagator represented as a integer
-    // 	lower values mean higher priority
-    // 	the priority determines the order in which propagators will be asked to propagate
-    // 		i.e., after the clausal propagator, propagators with lower priority values are called before
-    // those with higher priority  it is custom for simpler propagators to have lower priority
-    // values
+    /// Returns the priority of the propagator represented as an integer. Lower values mean higher
+    /// priority and the priority determines the order in which propagators will be asked to
+    /// propagate.
+    ///
+    /// In other words, after the [`ClausalPropagatorBasic`] has propagated, propagators
+    /// with lower priority values are called before those with higher priority. It is custom
+    /// for simpler propagators to have lower priority values
     fn priority(&self) -> u32;
 
-    // Return the name of the propagator
-    //  this is a convenience method that is used for printing
+    /// Return the name of the propagator, this is a convenience method that is used for printing
     fn name(&self) -> &str;
 
-    // Initialises the propagator and does root propagation
-    // 	called only once by the solver when the propagator is added
-    // The return value is the same as for the 'propagate' method
+    /// Initialises the propagator and performs root propagation. This method is called only once by
+    /// the [`ConstraintSatisfactionSolver`] when the propagator is added using
+    /// [`ConstraintSatisfactionSolver::add_propagator`]. The return value is the same as for
+    /// the [`ConstraintProgrammingPropagator::propagate`] method.
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP;
 
-    // Another propagation method that is used to help debugging
-    // 	this method propagates without relying on internal data structures, hence immutable &self
-    // 	it is usually best to implement this propagation method in the simplest but correct way
-    //  when the assert level is set to advanced or extreme (see pumpkin_asserts.rs)
-    //      this method will be called to double check the reasons for failures and propagations
-    // that have been reported by this propagator  note that the propagator will not be asked to
-    // provide reasons for propagations done by this method
+    /// A propagation method that is used to help debugging.
+    ///
+    /// This method propagates without relying on internal data structures, hence the immutable
+    /// &self parameter. It is usually best to implement this propagation method in the simplest
+    /// but correct way. When the assert level is set to [`PUMPKIN_ASSERT_ADVANCED`] or
+    /// [`PUMPKIN_ASSERT_EXTREME`] (see [`crate::pumpkin_asserts`]) this method will be called
+    /// to double check the reasons for failures and propagations that have been reported by
+    /// this propagator.
+    ///
+    /// Note that the propagator will not be asked to provide reasons for propagations done by this
+    /// method
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
