@@ -11,6 +11,7 @@ log = "0.4.17"
 bitfield = "0.14.0"
 enumset = "1.1.2"
 fnv = "1.0.3"
+rand = { version = "0.8.5", features = [ "small_rng" ] }
 
 [dev-dependencies]
 env_logger = "0.10.0"

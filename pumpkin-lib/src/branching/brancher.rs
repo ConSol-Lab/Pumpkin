@@ -1,5 +1,9 @@
+use crate::basic_types::DomainId;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
+#[cfg(doc)]
+use crate::basic_types::Random;
+use crate::basic_types::Solution;
 #[cfg(doc)]
 use crate::branching;
 #[cfg(doc)]
@@ -29,10 +33,11 @@ pub trait Brancher {
     /// assigned).
     ///
     /// Note that this method **cannot** perform the assignment of the decision, it should return a
-    /// [`Literal`] (which can oftentimes be retrieved from the [SelectionContext],
+    /// [`Literal`] (which can oftentimes be retrieved from the [`SelectionContext`],
     /// for example using
-    /// [`SelectionContext::get_literal_for_predicate`]).
-    fn next_decision(&mut self, context: &SelectionContext) -> Option<Literal>;
+    /// [`SelectionContext::get_literal_for_predicate`]); the [`SelectionContext`] is only mutable
+    /// to account for the usage of random generators (e.g. see [`Random`]).
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Literal>;
 
     /// A function which is called after a conflict has been found and processed but (currently)
     /// does not provide any additional information
@@ -46,9 +51,21 @@ pub trait Brancher {
     /// (see [`ConstraintSatisfactionSolver::backtrack`]).
     fn on_unassign_literal(&mut self, _literal: Literal) {}
 
+    /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
+    /// it was fixed but is no longer), specifically, it provides `variable` which is the
+    /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
+    /// previously fixed. This method could thus be called multiple times in a single
+    /// backtracking operation by the solver
+    /// (see [`backtrack`][ConstraintSatisfactionSolver::backtrack]).
+    fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
+
     /// A function which is called when a [`Literal`] appears in a conflict during conflict analysis
     /// (see [`ConstraintSatisfactionSolver::compute_1uip`]).
     fn on_appearance_in_conflict_literal(&mut self, _literal: Literal) {}
+
+    /// A function which is called when an integer variable appears in a conflict during conflict
+    /// analysis (see [`compute_1uip`][ConstraintSatisfactionSolver::compute_1uip]).
+    fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
 
     /// A function which is called when new [`PropositionalVariable`]s are added to the solver when
     /// encoding the objective function; this method is currently only called during
@@ -59,5 +76,5 @@ pub trait Brancher {
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
-    fn on_solution(&mut self, _context: &SelectionContext) {}
+    fn on_solution(&mut self, _solution: &Solution) {}
 }

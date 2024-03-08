@@ -392,16 +392,29 @@ impl AssignmentsInteger {
         }
     }
 
-    pub fn synchronise(&mut self, new_decision_level: usize) {
+    /// Synchronises the internal structures of [`AssignmentsInteger`] based on the fact that
+    /// backtracking to `new_decision_level` is taking place. This method returns the list of
+    /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
+    /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
+    pub fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
+        let mut unfixed_variables = Vec::new();
         self.trail.synchronise(new_decision_level).for_each(|entry| {
             pumpkin_assert_moderate!(
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
             if let Some(domain_id) = entry.predicate.get_domain() {
+                let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
+                let value_before = self.domains[domain_id].lower_bound;
                 self.domains[domain_id].undo_trail_entry(&entry);
+                if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
+                    // Variable used to be fixed but is not after backtracking
+                    unfixed_variables.push((domain_id, value_before));
+                }
             }
-        })
+
+        });
+        unfixed_variables
     }
 }
 
@@ -793,7 +806,7 @@ mod tests {
             .remove_value_from_domain(d1, 5, None)
             .expect("non-empty domain");
 
-        assignment.synchronise(0);
+        let _ = assignment.synchronise(0);
 
         assert_eq!(5, assignment.get_upper_bound(d1));
     }

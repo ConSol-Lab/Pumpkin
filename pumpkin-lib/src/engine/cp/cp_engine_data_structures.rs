@@ -55,11 +55,15 @@ impl CPEngineDataStructures {
         self.assignments_integer.grow(lower_bound, upper_bound)
     }
 
+    /// Method which updates the internal structures of [`CPEngineDataStructures`] upon
+    /// backtracking.  This method returns the list of [`DomainId`]s and their values which were
+    /// fixed (i.e. domain of size one) before backtracking and are unfixed (i.e. domain of two
+    /// or more values) after synchronisation.
     pub fn backtrack(
         &mut self,
         backtrack_level: usize,
         assignment_propositional: &AssignmentsPropositional,
-    ) {
+    ) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(
             assignment_propositional.get_decision_level()
                 < self.assignments_integer.get_decision_level(),
@@ -69,9 +73,10 @@ impl CPEngineDataStructures {
             self.propositional_trail_index,
             assignment_propositional.num_trail_entries(),
         );
-        self.assignments_integer.synchronise(backtrack_level);
+        let unfixed_variables = self.assignments_integer.synchronise(backtrack_level);
         self.reason_store.synchronise(backtrack_level);
         self.propagator_queue.clear();
+        unfixed_variables
     }
 
     /// Returning `AssignmentsInteger` too is a workaround to allow its usage after a

@@ -6,7 +6,6 @@ use crate::basic_types::Function;
 use crate::basic_types::Solution;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
-use crate::branching::SelectionContext;
 use crate::encoders::PseudoBooleanConstraintEncoder;
 use crate::encoders::PseudoBooleanEncoding;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -97,11 +96,7 @@ impl LinearSearch {
                 };
             }
 
-            brancher.on_solution(&SelectionContext::new(
-                csp_solver.get_integer_assignments(),
-                csp_solver.get_propositional_assignments(),
-                &Default::default(),
-            ));
+            brancher.on_solution(&best_solution);
 
             let csp_execution_flag =
                 csp_solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher);

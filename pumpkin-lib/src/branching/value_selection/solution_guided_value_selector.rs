@@ -4,9 +4,9 @@ use super::ValueSelector;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Solution;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
-use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -16,6 +16,7 @@ use crate::pumpkin_assert_simple;
 /// whenever possible, if it is not possible then it will fall back on the provided
 /// [`SolutionGuidedValueSelector::backup_selector`].
 ///
+/// # Bibliography
 /// \[1\] E. Demirović, G. Chu, and P. J. Stuckey, ‘Solution-based phase saving for CP: A
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in Principles
 /// and Practice of Constraint Programming: 24th International Conference, CP 2018, Lille, France,
@@ -90,7 +91,7 @@ where
 {
     fn select_value(
         &mut self,
-        context: &SelectionContext,
+        context: &mut SelectionContext,
         decision_variable: PropositionalVariable,
     ) -> Literal {
         match self.saved_values[decision_variable] {
@@ -121,20 +122,9 @@ where
         }
     }
 
-    fn on_solution(&mut self, context: &SelectionContext) {
-        pumpkin_assert_advanced!(
-            context
-                .get_propositional_variables()
-                .all(|propositional_variable| context
-                    .is_propositional_variable_fixed(propositional_variable)),
-            "The solution passed to SolutionGuidedValueSelector is not completely assigned"
-        );
-
-        for propositional_variable in context.get_propositional_variables() {
-            self.update(
-                propositional_variable,
-                context.is_propositional_variable_true(propositional_variable),
-            )
+    fn on_solution(&mut self, solution: &Solution) {
+        for literal in solution.get_propositional_solution() {
+            self.update(literal.get_propositional_variable(), literal.is_positive())
         }
     }
 }
@@ -142,6 +132,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::SolutionGuidedValueSelector;
+    use crate::basic_types::tests::TestRandom;
     use crate::branching::value_selection::PhaseSaving;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
@@ -149,9 +140,14 @@ mod tests {
     #[test]
     fn saved_value_is_returned_prop() {
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(0, 1);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
 
         let mut solution_guided = SolutionGuidedValueSelector::new(
@@ -162,7 +158,7 @@ mod tests {
 
         solution_guided.update(propositional_variables[0], true);
 
-        let chosen = solution_guided.select_value(&context, propositional_variables[0]);
+        let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
         assert!(chosen.is_positive())
     }
@@ -170,9 +166,14 @@ mod tests {
     #[test]
     fn initial_value_is_returned_prop() {
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(0, 1);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
 
         let mut solution_guided = SolutionGuidedValueSelector::new(
@@ -181,7 +182,7 @@ mod tests {
             PhaseSaving::new(&propositional_variables),
         );
 
-        let chosen = solution_guided.select_value(&context, propositional_variables[0]);
+        let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
         assert!(chosen.is_positive())
     }
@@ -189,9 +190,14 @@ mod tests {
     #[test]
     fn backup_is_used_when_value_is_not_saved() {
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(0, 1);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
 
         let backup = PhaseSaving::with_initial_values(
@@ -203,7 +209,7 @@ mod tests {
         let mut solution_guided =
             SolutionGuidedValueSelector::new(&propositional_variables, Vec::new(), backup);
 
-        let chosen = solution_guided.select_value(&context, propositional_variables[0]);
+        let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
         assert!(chosen.is_positive())
     }

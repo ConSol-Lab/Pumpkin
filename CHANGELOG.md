@@ -63,6 +63,36 @@
 * Add support for variables with negative domain bounds.
 * Added eager explanations to CP, lazy is still possible by passing a closure.
 * Added KeyedVec structure which ensures that structures can only be indexed by one type of key
+* Added setup for search strategies over propositional variables:
+  * **Variable Selection**:
+    * VSIDS
+  * **Value Selection**:
+    * Phase-saving
+    * Solution-guided
+* Added setup for search strategies over integers:
+  * **Variable Selection**:
+    * Anti-first-fail
+    * First-fail
+    * Input order
+    * Largest
+    * Max Regret
+    * Most Constrained
+    * Occurrence
+    * Smallest
+  * **Value Selection**:
+    * In-domain Interval
+    * In-domain Max
+    * In-domain Median
+    * In-domain Middle
+    * In-domain Min (same as In-domain)
+    * In-domain Random
+    * In-domain Reverse-split
+    * In-domain Split
+    * In-domain Split-random
+    * Out-domain Max
+    * Out-domain Median
+    * Out-domain Min
+    * Out-domain Random
 * Added initial setup for programmable search
 * Add support for optimization functions MiniZinc
 

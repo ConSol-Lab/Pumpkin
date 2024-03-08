@@ -44,6 +44,18 @@ impl Solution {
         self.integer_values.len()
     }
 
+    /// Returns a list of the [`Literal`]s representing the [`Solution`] over
+    /// [`PropositionalVariable`]s, note that every [`PropositionalVariable`] is guaranteed to
+    /// only occur once in the returned iterator.
+    pub fn get_propositional_solution(&self) -> impl Iterator<Item = Literal> + '_ {
+        self.truth_values
+            .iter()
+            .enumerate()
+            .map(|(index, truth_value)| {
+                Literal::new(PropositionalVariable::new(index as u32), *truth_value)
+            })
+    }
+
     pub fn update(
         &mut self,
         assignments_propositional: &AssignmentsPropositional,

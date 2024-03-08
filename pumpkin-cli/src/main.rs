@@ -31,6 +31,8 @@ use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
 use pumpkin_lib::optimisation::OptimisationResult;
 use pumpkin_lib::optimisation::OptimisationSolver;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
@@ -124,8 +126,8 @@ struct Args {
     time_limit: Option<u64>,
 
     /// The random seed to use for the PRNG. This influences the initial order of the variables.
-    #[arg(long = "random-seed", default_value_t = -2)]
-    random_seed: i64,
+    #[arg(long = "random-seed", default_value_t = 42)]
+    random_seed: u64,
 
     /// Enables log message output from the solver
     #[arg(short = 'v', long = "verbose", default_value_t = false)]
@@ -246,6 +248,7 @@ fn run() -> PumpkinResult<()> {
         },
         certificate_file,
         learning_clause_minimisation: args.learning_clause_minimisation.inner,
+        random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
 
     let time_limit = args.time_limit.map(Duration::from_secs);

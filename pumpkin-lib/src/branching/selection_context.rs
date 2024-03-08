@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::basic_types::variables::IntVar;
 #[cfg(doc)]
 use crate::basic_types::DomainId;
@@ -6,6 +8,7 @@ use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalVariable;
 use crate::basic_types::PropositionalVariableGeneratorIterator;
+use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
 use crate::engine::AssignmentsInteger;
@@ -27,6 +30,7 @@ pub struct SelectionContext<'a> {
     sat_cp_mediator: &'a SATCPMediator,
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
+    random_generator: &'a mut dyn Random,
 }
 
 impl<'a> SelectionContext<'a> {
@@ -34,12 +38,27 @@ impl<'a> SelectionContext<'a> {
         assignments_integer: &'a AssignmentsInteger,
         assignments_propositional: &'a AssignmentsPropositional,
         sat_cp_mediator: &'a SATCPMediator,
+        rng: &'a mut dyn Random,
     ) -> Self {
         SelectionContext {
             sat_cp_mediator,
             assignments_integer,
             assignments_propositional,
+            random_generator: rng,
         }
+    }
+
+    /// Returns a random generator which can be used to generate random values (see [`Random`] for
+    /// more information).
+    pub fn random(&mut self) -> &mut dyn Random {
+        self.random_generator
+    }
+
+    /// Returns the difference between the upper-bound and the lower-bound of the provided
+    /// [`IntVar`]. Note that this is different from the number of values which are in the domain of
+    /// `var` since this calculation does not take into account holes in the domain.
+    pub fn get_size_of_domain<Var: IntVar>(&self, var: Var) -> i32 {
+        var.upper_bound(self.assignments_integer) - var.lower_bound(self.assignments_integer)
     }
 
     /// Returns the lower bound of the provided [`IntVar`]
@@ -60,7 +79,7 @@ impl<'a> SelectionContext<'a> {
     /// Returns the [`Literal`] representing the provided [`Predicate`]. This method should be used
     /// when making a decision; due to this fact, it should be the case that the predicate
     /// currently does not hold nor is the returned literal assigned.
-    pub fn get_literal_for_predicate<Var: IntVar>(&self, pred: Predicate) -> Literal {
+    pub fn get_literal_for_predicate(&self, pred: Predicate) -> Literal {
         pumpkin_assert_advanced!(!self.assignments_integer.does_predicate_hold(pred), "The provided predicate holds before the decision is made, this indicates a wrongly implemented variable/value selector");
         let literal = self
             .sat_cp_mediator
@@ -103,33 +122,71 @@ impl<'a> SelectionContext<'a> {
     pub fn create_for_testing(
         num_integer_variables: usize,
         num_propositional_variables: usize,
+        domains: Option<Vec<(i32, i32)>>,
     ) -> (AssignmentsInteger, AssignmentsPropositional, SATCPMediator) {
         use crate::engine::CPEngineDataStructures;
         use crate::engine::SATEngineDataStructures;
-        use crate::engine::WatchListPropositional;
         use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
+        use crate::pumpkin_assert_simple;
+
+        pumpkin_assert_simple!({
+            if let Some(domains) = domains.as_ref() {
+                num_integer_variables == domains.len()
+            } else {
+                true
+            }
+        });
 
         let mut mediator = SATCPMediator::default();
         let mut clausal_propagator = ClausalPropagatorBasic::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
-        let mut watch_list_propositional = WatchListPropositional::default();
 
-        for _ in 0..num_integer_variables {
-            let _ = mediator.create_new_domain(
-                0,
-                10,
-                &mut clausal_propagator,
-                &mut sat_data_structures,
-                &mut cp_data_structures,
-            );
+        let root_variable = mediator.create_new_propositional_variable(
+            &mut cp_data_structures.watch_list_propositional,
+            &mut clausal_propagator,
+            &mut sat_data_structures,
+        );
+        let true_literal = Literal::new(root_variable, true);
+
+        sat_data_structures.assignments_propositional.true_literal = true_literal;
+
+        sat_data_structures.assignments_propositional.false_literal = !true_literal;
+
+        mediator.true_literal = true_literal;
+        mediator.false_literal = !true_literal;
+
+        sat_data_structures
+            .assignments_propositional
+            .enqueue_decision_literal(true_literal);
+
+        if let Some(domains) = domains.as_ref() {
+            for (_, (lower_bound, upper_bound)) in (0..num_integer_variables).zip(domains) {
+                let _ = mediator.create_new_domain(
+                    *lower_bound,
+                    *upper_bound,
+                    &mut clausal_propagator,
+                    &mut sat_data_structures,
+                    &mut cp_data_structures,
+                );
+            }
+        } else {
+            for _ in 0..num_integer_variables {
+                let _ = mediator.create_new_domain(
+                    0,
+                    10,
+                    &mut clausal_propagator,
+                    &mut sat_data_structures,
+                    &mut cp_data_structures,
+                );
+            }
         }
 
         for _ in 0..(num_propositional_variables + 1) {
             // We create an additional variable to ensure that the generator returns the correct
             // variables
             let _ = mediator.create_new_propositional_variable(
-                &mut watch_list_propositional,
+                &mut cp_data_structures.watch_list_propositional,
                 &mut clausal_propagator,
                 &mut sat_data_structures,
             );

@@ -9,6 +9,8 @@ use std::time::Instant;
 
 use log::info;
 use log::warn;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -22,6 +24,7 @@ use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Random;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
 use crate::branching::Brancher;
@@ -170,6 +173,7 @@ pub struct SatisfactionSolverOptions {
 
     /// Certificate output file or [`None`] if certificate output is disabled.
     pub certificate_file: Option<File>,
+    pub random_generator: SmallRng,
 }
 
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
@@ -420,6 +424,10 @@ impl ConstraintSatisfactionSolver {
         &self.state
     }
 
+    pub fn get_random_generator(&mut self) -> &mut impl Random {
+        &mut self.internal_parameters.random_generator
+    }
+
     pub fn log_statistics(&self) {
         self.counters.log_statistics()
     }
@@ -626,10 +634,11 @@ impl ConstraintSatisfactionSolver {
             }
             Ok(())
         } else {
-            let decided_literal = brancher.next_decision(&SelectionContext::new(
+            let decided_literal = brancher.next_decision(&mut SelectionContext::new(
                 &self.cp_data_structures.assignments_integer,
                 &self.sat_data_structures.assignments_propositional,
                 &self.sat_cp_mediator,
+                &mut self.internal_parameters.random_generator,
             ));
             if let Some(literal) = decided_literal {
                 self.counters.num_decisions += 1;
@@ -824,10 +833,15 @@ impl ConstraintSatisfactionSolver {
                 .num_trail_entries(),
         );
 
-        self.cp_data_structures.backtrack(
-            backtrack_level,
-            &self.sat_data_structures.assignments_propositional,
-        );
+        self.cp_data_structures
+            .backtrack(
+                backtrack_level,
+                &self.sat_data_structures.assignments_propositional,
+            )
+            .iter()
+            .for_each(|(domain_id, previous_value)| {
+                brancher.on_unassign_integer(*domain_id, *previous_value)
+            });
         //  note that sat_cp_mediator sync should be called after the sat/cp data structures
         // backtrack
         self.sat_cp_mediator.synchronise(
@@ -1244,8 +1258,12 @@ impl ConstraintSatisfactionSolver {
                     // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
-                    // TODO: add case for integer variables
                     brancher.on_appearance_in_conflict_literal(reason_literal);
+                    if let Some(reason_domain) =
+                        self.sat_cp_mediator.get_domain_literal(reason_literal)
+                    {
+                        brancher.on_appearance_in_conflict_integer(reason_domain);
+                    }
 
                     let literal_decision_level = self
                         .sat_data_structures
@@ -1431,8 +1449,12 @@ impl ConstraintSatisfactionSolver {
                     // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
-                    // TODO: add case for integer variables
                     brancher.on_appearance_in_conflict_literal(reason_literal);
+                    if let Some(reason_domain) =
+                        self.sat_cp_mediator.get_domain_literal(reason_literal)
+                    {
+                        brancher.on_appearance_in_conflict_integer(reason_domain);
+                    }
 
                     num_propagated_literals_left_to_inspect +=
                         self.sat_data_structures
@@ -1910,6 +1932,7 @@ impl Default for SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
             certificate_file: None,
             learning_clause_minimisation: true,
+            random_generator: SmallRng::seed_from_u64(42),
         }
     }
 }

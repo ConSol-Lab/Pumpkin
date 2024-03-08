@@ -2,10 +2,12 @@ use std::marker::PhantomData;
 
 use super::value_selection::PhaseSaving;
 use super::value_selection::ValueSelector;
-use super::variable_selection::VariableSelector;
-use super::variable_selection::Vsids;
+use super::VariableSelector;
+use super::Vsids;
+use crate::basic_types::DomainId;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Solution;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -83,7 +85,7 @@ where
     ///  - If all variables under consideration are fixed (i.e. `select_variable` return None) then
     ///    we simply return None
     ///  - Otherwise we select a value and return the corresponding literal
-    fn next_decision(&mut self, context: &SelectionContext) -> Option<Literal> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Literal> {
         self.variable_selector
             .select_variable(context)
             .map(|selected_variable| {
@@ -101,9 +103,19 @@ where
         self.value_selector.on_unassign_literal(lit);
     }
 
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.variable_selector.on_unassign_integer(variable, value);
+        self.value_selector.on_unassign_integer(variable, value)
+    }
+
     fn on_appearance_in_conflict_literal(&mut self, lit: Literal) {
         self.variable_selector
             .on_appearance_in_conflict_literal(lit)
+    }
+
+    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+        self.variable_selector
+            .on_appearance_in_conflict_integer(variable)
     }
 
     fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
@@ -113,8 +125,7 @@ where
             .on_encoding_objective_function(all_variables);
     }
 
-    fn on_solution(&mut self, context: &SelectionContext) {
-        self.variable_selector.on_solution(context);
-        self.value_selector.on_solution(context);
+    fn on_solution(&mut self, solution: &Solution) {
+        self.value_selector.on_solution(solution);
     }
 }

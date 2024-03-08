@@ -16,6 +16,7 @@ use crate::pumpkin_assert_eq_simple;
 /// Intuitively, the more often a variable appears in conflicts, the more "important" it is during
 /// the search process.
 ///
+/// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
 /// efficient SAT solver’, in Proceedings of the 38th annual Design Automation Conference, 2001, pp.
 /// 530–535.
@@ -230,6 +231,7 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
 #[cfg(test)]
 mod tests {
     use super::Vsids;
+    use crate::basic_types::tests::TestRandom;
     use crate::basic_types::PropositionalVariable;
     use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
@@ -237,9 +239,14 @@ mod tests {
     #[test]
     fn vsids_bumped_var_is_max() {
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(2, 0);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(2, 0, None);
+        let mut test_rng = TestRandom::default();
+        let context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let domains = context.get_domains().collect::<Vec<_>>();
 
         let mut vsids = Vsids::new(&domains);
@@ -256,9 +263,14 @@ mod tests {
         let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&Vec::new());
 
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(0, 0);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(0, 0, None);
+        let mut test_rng = TestRandom::default();
+        let context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let chosen = vsids.select_variable(&context);
 
         assert!(chosen.is_none());

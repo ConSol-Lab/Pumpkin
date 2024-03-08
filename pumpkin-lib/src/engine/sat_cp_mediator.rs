@@ -182,6 +182,14 @@ impl SATCPMediator {
         Ok(())
     }
 
+    /// Returns the [`DomainId`] of the first [`Predicate`] which the provided `literal` is linked
+    /// to or [`None`] if no such [`DomainId`] exists.
+    pub fn get_domain_literal(&self, literal: Literal) -> Option<DomainId> {
+        self.mapping_literal_to_predicates[literal]
+            .first()
+            .map(|pred| pred.get_domain())?
+    }
+
     pub fn synchronise(
         &mut self,
         assignments_propositional: &AssignmentsPropositional,

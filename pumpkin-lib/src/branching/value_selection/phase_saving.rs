@@ -15,6 +15,7 @@ use crate::pumpkin_assert_moderate;
 /// Values can be frozen meaning that they will not be updated with the previously assigned value
 /// during the search process, provided initial values will always be frozen.
 ///
+/// # Bibliography
 /// \[1\] K. Pipatsrisawat and A. Darwiche, ‘A lightweight component caching scheme for
 /// satisfiability solvers’, in Theory and Applications of Satisfiability Testing--SAT 2007: 10th
 /// International Conference, Lisbon, Portugal, May 28-31, 2007. Proceedings 10, 2007, pp. 294–299.
@@ -43,6 +44,9 @@ impl PhaseSaving<PropositionalVariable, bool> {
     /// Creates a new instance of [`PhaseSaving`] over [`PropositionalVariable`]s with `false` as
     /// its default value.
     pub fn new(variables: &[PropositionalVariable]) -> Self {
+        if variables.is_empty() {
+            warn!("Empty set of variables provided to phase saving value selector, this could indicate an error")
+        }
         PhaseSaving::with_default_value(variables, false)
     }
 }
@@ -112,7 +116,7 @@ impl<Var: StorageKey + Copy + PartialEq, Value: Copy> PhaseSaving<Var, Value> {
 impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable, bool> {
     fn select_value(
         &mut self,
-        _: &SelectionContext,
+        _: &mut SelectionContext,
         decision_variable: PropositionalVariable,
     ) -> Literal {
         Literal::new(
@@ -145,22 +149,28 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
 #[cfg(test)]
 mod tests {
     use super::PhaseSaving;
+    use crate::basic_types::tests::TestRandom;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
 
     #[test]
     fn saved_value_is_returned_prop() {
         let (assignments_integer, assignments_propositional, mediator) =
-            SelectionContext::create_for_testing(0, 1);
-        let context =
-            SelectionContext::new(&assignments_integer, &assignments_propositional, &mediator);
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mediator,
+            &mut test_rng,
+        );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
 
         let mut phase_saving = PhaseSaving::new(&propositional_variables);
 
         phase_saving.update(propositional_variables[0], true);
 
-        let chosen = phase_saving.select_value(&context, propositional_variables[0]);
+        let chosen = phase_saving.select_value(&mut context, propositional_variables[0]);
 
         assert!(chosen.is_positive())
     }
