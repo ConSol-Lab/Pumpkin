@@ -592,11 +592,17 @@ impl ConstraintSatisfactionSolver {
             self.propagate_enqueued();
 
             if self.state.no_conflict() {
+                self.declare_new_decision_level();
+
+                // Restarts should only occur after a new decision level has been declared to
+                // account for the fact that all assumptions should be assigned when restarts take
+                // place. Since one assumption is posted per decision level, all assumptions are
+                // assigned when the decision level is strictly larger than the number of
+                // assumptions.
                 if self.restart_strategy.should_restart() {
                     self.restart_during_search(brancher);
+                    self.declare_new_decision_level();
                 }
-
-                self.declare_new_decision_level();
 
                 let branching_result = self.enqueue_next_decision(brancher);
                 if let Err(flag) = branching_result {
