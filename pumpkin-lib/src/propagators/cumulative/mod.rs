@@ -39,6 +39,7 @@
 //! // We can infer that Task 1 and Task 2 execute at the same time
 //! // while Task 3 will start after them
 //! use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+//! use pumpkin_lib::branching::IndependentVariableValueBrancher;
 //! use pumpkin_lib::constraints::ConstraintsExt;
 //! use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 //! use pumpkin_lib::propagators::ArgTask;
@@ -71,8 +72,10 @@
 //! let resource_capacity = 2;
 //!
 //! solver.cumulative(&tasks, resource_capacity);
+//! let mut brancher =
+//!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 //!
-//! let result = solver.solve(i64::MAX);
+//! let result = solver.solve(i64::MAX, &mut brancher);
 //!
 //! // We check whether the result was feasible
 //! assert_eq!(CSPSolverExecutionFlag::Feasible, result);
