@@ -28,8 +28,7 @@ pub(crate) fn int_lin_eq_reif(
     rhs: i32,
     reif: Literal,
 ) -> bool {
-    let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-    int_lin_le_reif(solver, terms, rhs, reif) && int_lin_le_reif(solver, negated, -rhs, !reif)
+    solver.int_lin_eq_reif(terms.clone(), rhs, reif) && solver.int_lin_ne_reif(terms, rhs, !reif)
 }
 
 pub(crate) fn int_le_reif(
