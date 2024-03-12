@@ -176,12 +176,12 @@ impl CompilationContext<'_> {
 
             flatzinc::Expr::ArrayOfBool(array) => array
                 .iter()
-                .map(|elem| {
-                    if let flatzinc::BoolExpr::VarParIdentifier(id) = elem {
+                .map(|elem| match elem {
+                    flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
-                    } else {
-                        Err(FlatZincError::UnexpectedExpr)
                     }
+                    flatzinc::BoolExpr::Bool(true) => Ok(self.constant_bool_true),
+                    flatzinc::BoolExpr::Bool(false) => Ok(self.constant_bool_false),
                 })
                 .collect(),
             _ => Err(FlatZincError::UnexpectedExpr),

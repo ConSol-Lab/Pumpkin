@@ -477,25 +477,20 @@ fn compile_array_var_bool_element(
     let mut success = true;
 
     for i in 0..array.len() {
-        // rhs <-> [index = i] /\ array[i]
+        // Note: minizinc arrays are 1-indexed.
+        let mzn_index = i as i32 + 1;
 
-        let value = i as i32;
-        let predicate_lit = context.solver.get_literal(predicate![index == value]);
+        // [index = mzn_index] -> (rhs <-> array[i])
 
-        // rhs <- [index = i] /\ array[i]
+        let predicate_lit = context.solver.get_literal(predicate![index == mzn_index]);
+
+        success &= context
+            .solver
+            .add_permanent_clause(vec![!predicate_lit, !rhs, array[i]])
+            .is_ok();
         success &= context
             .solver
             .add_permanent_clause(vec![!predicate_lit, !array[i], rhs])
-            .is_ok();
-
-        // rhs -> [index = i] /\ array[i]
-        success &= context
-            .solver
-            .add_permanent_clause(vec![!rhs, predicate_lit])
-            .is_ok();
-        success &= context
-            .solver
-            .add_permanent_clause(vec![!rhs, array[i]])
             .is_ok();
     }
 
