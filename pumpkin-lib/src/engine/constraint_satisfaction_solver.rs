@@ -46,14 +46,14 @@ use crate::engine::PropagatorId;
 use crate::engine::RestartStrategy;
 use crate::engine::SATCPMediator;
 use crate::engine::SatOptions;
-use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::propagators::clausal::BasicClausalPropagator;
+use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-pub type ClausalPropagator = ClausalPropagatorBasic;
+pub type ClausalPropagatorType = BasicClausalPropagator;
 pub type ClauseAllocator = ClauseAllocatorBasic;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
@@ -84,9 +84,10 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// propagators.
 /// ```
 /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-/// # use pumpkin_lib::propagators::NotEq;
+/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualArgs;
 /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+/// # use pumpkin_lib::basic_types::variables::IntVar;
 /// // We create a solver with default options (note that this is only possible in a testing environment)
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///
@@ -95,7 +96,8 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// let y = solver.create_new_integer_variable(0, 10);
 ///
 /// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
-/// let no_root_level_conflict = solver.add_propagator(NotEq {x, y});
+/// //  'x != y' is represented using the propagator for 'x - y != 0'
+/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualArgs::new([x.offset(0), y.scaled(-1)].into(), 0));
 /// assert!(no_root_level_conflict);
 ///
 /// // We create a branching strategy, in our case we will simply use the default one
@@ -122,7 +124,7 @@ pub struct ConstraintSatisfactionSolver {
     state: CSPSolverState,
     sat_data_structures: SATEngineDataStructures,
     cp_data_structures: CPEngineDataStructures,
-    clausal_propagator: ClausalPropagator,
+    clausal_propagator: ClausalPropagatorType,
     learned_clause_manager: LearnedClauseManager,
     learned_clause_minimiser: LearnedClauseMinimiser,
     restart_strategy: RestartStrategy,
@@ -238,7 +240,7 @@ impl ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             sat_data_structures: SATEngineDataStructures::default(),
             cp_data_structures: CPEngineDataStructures::default(),
-            clausal_propagator: ClausalPropagator::default(),
+            clausal_propagator: ClausalPropagatorType::default(),
             learned_clause_manager: LearnedClauseManager::new(sat_options),
             learned_clause_minimiser: LearnedClauseMinimiser::default(),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),

@@ -5,9 +5,9 @@ use crate::basic_types::ClauseReference;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Copy, Clone)]
@@ -58,7 +58,7 @@ impl LearnedClauseManager {
     pub fn add_learned_clause(
         &mut self,
         learned_clause_literals: Vec<Literal>,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         assignments: &mut AssignmentsPropositional,
         clause_allocator: &mut ClauseAllocator,
     ) {
@@ -84,7 +84,7 @@ impl LearnedClauseManager {
     pub fn shrink_learned_clause_database_if_needed(
         &mut self,
         sat_data_structures: &mut SATEngineDataStructures,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
     ) {
         // only consider clause removals once the threshold is reached
         if self.learned_clauses.high_lbd.len()
@@ -106,7 +106,7 @@ impl LearnedClauseManager {
     fn remove_high_lbd_clauses(
         &mut self,
         sat_data_structures: &mut SATEngineDataStructures,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
     ) {
         // roughly half of the learned clauses will be removed
 

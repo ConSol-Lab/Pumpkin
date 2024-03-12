@@ -126,7 +126,7 @@ impl<'a> SelectionContext<'a> {
     ) -> (AssignmentsInteger, AssignmentsPropositional, SATCPMediator) {
         use crate::engine::CPEngineDataStructures;
         use crate::engine::SATEngineDataStructures;
-        use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
+        use crate::propagators::clausal::BasicClausalPropagator;
         use crate::pumpkin_assert_simple;
 
         pumpkin_assert_simple!({
@@ -138,7 +138,7 @@ impl<'a> SelectionContext<'a> {
         });
 
         let mut mediator = SATCPMediator::default();
-        let mut clausal_propagator = ClausalPropagatorBasic::default();
+        let mut clausal_propagator = BasicClausalPropagator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
 

@@ -15,14 +15,14 @@ use crate::engine::ReadDomains;
 ///
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
-pub(crate) struct AbsoluteValue<VA, VB> {
+pub(crate) struct AbsoluteValueArgs<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,
     /// The absolute of `signed`.
     pub(crate) absolute: VB,
 }
 
-impl<VA: IntVar, VB: IntVar> CPPropagatorConstructor for AbsoluteValue<VA, VB> {
+impl<VA: IntVar, VB: IntVar> CPPropagatorConstructor for AbsoluteValueArgs<VA, VB> {
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -140,7 +140,7 @@ mod tests {
         let absolute = solver.new_variable(-2, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -154,7 +154,7 @@ mod tests {
         let absolute = solver.new_variable(0, 3);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -168,7 +168,7 @@ mod tests {
         let absolute = solver.new_variable(0, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -182,7 +182,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -196,7 +196,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -210,7 +210,7 @@ mod tests {
         let absolute = solver.new_variable(3, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValue { signed, absolute })
+            .new_propagator(AbsoluteValueArgs { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);

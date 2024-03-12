@@ -6,7 +6,7 @@ use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ExplanationClauseManager;
 
-pub trait ClausalPropagatorInterface {
+pub trait ClausalPropagator {
     fn grow(&mut self);
 
     fn get_literal_propagation_clause_reference(

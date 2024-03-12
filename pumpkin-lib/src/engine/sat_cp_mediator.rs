@@ -6,7 +6,7 @@ use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalVariable;
-use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
@@ -18,7 +18,7 @@ use crate::engine::ExplanationClauseManager;
 use crate::engine::SATEngineDataStructures;
 use crate::engine::WatchListPropositional;
 use crate::predicate;
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -72,7 +72,7 @@ impl SATCPMediator {
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         clause_allocator: &mut ClauseAllocator,
     ) -> Option<ConflictInfo> {
         // for each entry on the integer trail, we now add the equivalent propositional
@@ -212,7 +212,7 @@ impl SATCPMediator {
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
         predicate: Predicate,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
         let variable = self.create_new_propositional_variable(
@@ -227,7 +227,7 @@ impl SATCPMediator {
     pub fn create_new_propositional_variable(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
         let new_variable_index = sat_data_structures
@@ -254,7 +254,7 @@ impl SATCPMediator {
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> DomainId {
@@ -280,7 +280,7 @@ impl SATCPMediator {
     fn create_propositional_representation(
         &mut self,
         domain_id: DomainId,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) {
@@ -321,7 +321,7 @@ impl SATCPMediator {
         domain_id: DomainId,
         lower_bound_literals: &[Literal],
         cp_data_structures: &mut CPEngineDataStructures,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> Box<[Literal]> {
         assert!(
@@ -414,7 +414,7 @@ impl SATCPMediator {
         &mut self,
         cp_data_structures: &mut CPEngineDataStructures,
         domain_id: DomainId,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> Box<[Literal]> {
         let lower_bound = cp_data_structures
@@ -648,7 +648,7 @@ impl SATCPMediator {
     pub fn get_propagation_clause_reference(
         &mut self,
         propagated_literal: Literal,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> ClauseReference {
@@ -751,7 +751,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             0,
             10,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -774,7 +774,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             0,
             10,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -801,7 +801,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             lb,
             ub,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -913,7 +913,7 @@ mod tests {
         let mut mediator = SATCPMediator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
-        let mut clausal_propagator = ClausalPropagator::default();
+        let mut clausal_propagator = ClausalPropagatorType::default();
 
         let domain_id = mediator.create_new_domain(
             0,
@@ -990,7 +990,7 @@ mod tests {
         let mut mediator = SATCPMediator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
-        let mut clausal_propagator = ClausalPropagator::default();
+        let mut clausal_propagator = ClausalPropagatorType::default();
 
         let lower_bound = 0;
         let upper_bound = 10;

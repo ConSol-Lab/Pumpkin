@@ -35,22 +35,14 @@
 //! \[1\] C. Schulte and P. J. Stuckey, ‘Efficient constraint propagation engines’, ACM Transactions
 //! on Programming Languages and Systems (TOPLAS), vol. 31, no. 1, pp. 1–43, 2008.
 
-pub(crate) mod absolute_value;
-pub mod clausal_propagators;
+pub mod arithmetic;
+pub mod clausal;
 mod cumulative;
-mod diff_logic;
+mod difference_logic;
 pub(crate) mod element;
-mod int_times;
-mod linear_leq;
-mod linear_ne;
-pub mod maximum;
-mod not_eq_propagator;
 
+pub use arithmetic::*;
 pub use cumulative::*;
-pub use int_times::*;
-pub use linear_leq::*;
-pub use linear_ne::*;
-pub use not_eq_propagator::*;
 
 #[cfg(doc)]
 use crate::engine::CPPropagatorConstructor;

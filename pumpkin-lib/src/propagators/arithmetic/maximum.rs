@@ -15,12 +15,12 @@ use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`.
 #[derive(Debug)]
-pub struct Maximum<ElementVar, Rhs> {
+pub struct MaximumArgs<ElementVar, Rhs> {
     pub array: Box<[ElementVar]>,
     pub rhs: Rhs,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> CPPropagatorConstructor for Maximum<ElementVar, Rhs> {
+impl<ElementVar: IntVar, Rhs: IntVar> CPPropagatorConstructor for MaximumArgs<ElementVar, Rhs> {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -123,7 +123,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(Maximum {
+            .new_propagator(MaximumArgs {
                 array: [a, b, c].into(),
                 rhs,
             })
@@ -146,7 +146,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(Maximum {
+            .new_propagator(MaximumArgs {
                 array: [a, b, c].into(),
                 rhs,
             })
@@ -169,7 +169,7 @@ mod tests {
         let rhs = solver.new_variable(1, 3);
 
         let _ = solver
-            .new_propagator(Maximum {
+            .new_propagator(MaximumArgs {
                 array: array.clone(),
                 rhs,
             })

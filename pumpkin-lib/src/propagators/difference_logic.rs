@@ -27,12 +27,12 @@ type DiffLogicVariables<V> = (
 );
 
 /// Bounds consistent propagator for a set of constraints `x_i + \delta <= x_j`.
-pub(crate) struct DiffLogic<V> {
+pub(crate) struct DifferenceLogicArgs<V> {
     pub(crate) difference_constraints: Box<[(V, i32, V)]>,
 }
 
 #[derive(Default)]
-pub(crate) struct DiffLogicProp<V> {
+pub(crate) struct DifferenceLogicPropagator<V> {
     #[allow(clippy::type_complexity)]
     /// The elementary constraints of the form `(y_1 <= v) => (y_2 <= v + d)`.
     elementary_constraints: HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
@@ -46,12 +46,12 @@ pub(crate) struct DiffLogicProp<V> {
     worklist: VecDeque<PropagatorVariable<V>>,
 }
 
-impl<V> CPPropagatorConstructor for DiffLogic<V>
+impl<V> CPPropagatorConstructor for DifferenceLogicArgs<V>
 where
     V: IntVar + Hash + Eq + 'static,
     <V as IntVar>::AffineView: Hash + Eq,
 {
-    type Propagator = DiffLogicProp<<V as IntVar>::AffineView>;
+    type Propagator = DifferenceLogicPropagator<<V as IntVar>::AffineView>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
@@ -127,7 +127,7 @@ where
                     .push((delta, y_i_pos.clone()));
                 difference_vars.push((y_i_pos, y_i_neg, y_j_pos, y_j_neg));
             });
-        DiffLogicProp {
+        DifferenceLogicPropagator {
             elementary_constraints: elementary_constraints
                 .into_iter()
                 .map(|(k, v)| (k, v.into_boxed_slice()))
@@ -139,7 +139,7 @@ where
     }
 }
 
-impl<V> DiffLogicProp<V>
+impl<V> DifferenceLogicPropagator<V>
 where
     V: IntVar + Hash + Eq,
 {
@@ -161,7 +161,7 @@ where
     }
 }
 
-impl<V> ConstraintProgrammingPropagator for DiffLogicProp<V>
+impl<V> ConstraintProgrammingPropagator for DifferenceLogicPropagator<V>
 where
     V: IntVar + Hash + Eq,
 {
@@ -287,7 +287,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let mut propagator = solver
-            .new_propagator(DiffLogic {
+            .new_propagator(DifferenceLogicArgs {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -346,7 +346,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let _ = solver
-            .new_propagator(DiffLogic {
+            .new_propagator(DifferenceLogicArgs {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -375,7 +375,7 @@ mod tests {
         // f2   x_1 + 1 <= x_0
 
         let inconsistency = solver
-            .new_propagator(DiffLogic {
+            .new_propagator(DifferenceLogicArgs {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 1, x_0)].into_boxed_slice(),
             })
             .expect_err("cycle detected");

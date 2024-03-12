@@ -8,13 +8,13 @@ use crate::basic_types::variables::IntVar;
 use crate::basic_types::Literal;
 use crate::engine::CPPropagatorConstructor;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::propagators::absolute_value::AbsoluteValue;
-use crate::propagators::element::Element;
-use crate::propagators::maximum::Maximum;
+use crate::propagators::arithmetic::absolute_value::AbsoluteValueArgs;
+use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicationArgs;
+use crate::propagators::arithmetic::linear_less_or_equal::LinearLessOrEqualArgs;
+use crate::propagators::arithmetic::linear_not_equal::LinearNotEqualArgs;
+use crate::propagators::arithmetic::maximum::MaximumArgs;
+use crate::propagators::element::ElementArgs;
 use crate::propagators::ArgTask;
-use crate::propagators::IntTimes;
-use crate::propagators::LinearLeq;
-use crate::propagators::LinearNe;
 use crate::propagators::TimeTablePerPoint;
 
 /// Provides common constraint implementations. Methods return false if the problem becomes
@@ -33,7 +33,7 @@ pub trait ConstraintsExt {
         array: impl Into<Box<[ElementVar]>>,
         rhs: impl IntVar + 'static,
     ) -> bool {
-        self.post(Element {
+        self.post(ElementArgs {
             index,
             array: array.into(),
             rhs,
@@ -46,7 +46,7 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
     ) -> bool {
-        self.post(LinearNe::new(terms.into(), rhs))
+        self.post(LinearNotEqualArgs::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> \sum terms_i != rhs`.
@@ -56,7 +56,7 @@ pub trait ConstraintsExt {
         rhs: i32,
         reif: Literal,
     ) -> bool {
-        self.post(LinearNe::reified(terms.into(), rhs, reif))
+        self.post(LinearNotEqualArgs::reified(terms.into(), rhs, reif))
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
@@ -65,7 +65,7 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
     ) -> bool {
-        self.post(LinearLeq::new(terms.into(), rhs))
+        self.post(LinearLessOrEqualArgs::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
@@ -75,7 +75,7 @@ pub trait ConstraintsExt {
         rhs: i32,
         reif: Literal,
     ) -> bool {
-        self.post(LinearLeq::reified(terms.into(), rhs, reif))
+        self.post(LinearLessOrEqualArgs::reified(terms.into(), rhs, reif))
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
@@ -163,12 +163,12 @@ pub trait ConstraintsExt {
         b: impl IntVar + 'static,
         c: impl IntVar + 'static,
     ) -> bool {
-        self.post(IntTimes { a, b, c })
+        self.post(IntegerMultiplicationArgs { a, b, c })
     }
 
     /// Adds the constraint `|signed| = absolute`.
     fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) -> bool {
-        self.post(AbsoluteValue { signed, absolute })
+        self.post(AbsoluteValueArgs { signed, absolute })
     }
 
     /// Adds the constraint that all variables must be distinct.
@@ -204,7 +204,7 @@ pub trait ConstraintsExt {
         array: impl Into<Box<[Var]>>,
         rhs: impl IntVar + 'static,
     ) -> bool {
-        self.post(Maximum {
+        self.post(MaximumArgs {
             array: array.into(),
             rhs,
         })

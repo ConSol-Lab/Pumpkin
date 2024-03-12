@@ -1,6 +1,6 @@
 use log::warn;
 
-use super::ClausalPropagatorInterface;
+use super::ClausalPropagator;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
@@ -17,14 +17,14 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]
-pub struct ClausalPropagatorBasic {
+pub struct BinaryInlineClausalPropagator {
     pub watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
     pub next_position_on_trail_to_propagate: usize,
     pub permanent_clauses: Vec<ClauseReference>,
     is_in_infeasible_state: bool,
 }
 
-impl ClausalPropagatorInterface for ClausalPropagatorBasic {
+impl ClausalPropagator for BinaryInlineClausalPropagator {
     fn grow(&mut self) {
         // increase the watch list, once for each polarity
         self.watch_lists.push(vec![]);
@@ -35,8 +35,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         &self,
         propagated_literal: Literal,
         assignments: &AssignmentsPropositional,
-        _clause_allocator: &mut ClauseAllocator,
-        _explanation_clause_manager: &mut ExplanationClauseManager,
+        clause_allocator: &mut ClauseAllocator,
+        explanation_clause_manager: &mut ExplanationClauseManager,
     ) -> ClauseReference {
         pumpkin_assert_moderate!(assignments
             .get_literal_reason_constraint(propagated_literal)
@@ -45,9 +45,24 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         let clause_reference: ClauseReference = assignments
             .get_literal_reason_constraint(propagated_literal)
             .into();
-        pumpkin_assert_moderate!(clause_reference.is_allocated_clause());
 
-        clause_reference
+        if clause_reference.is_allocated_clause() {
+            // the clause already exists in the clause allocator, simply return the reference
+            clause_reference
+        } else {
+            pumpkin_assert_moderate!(clause_reference.is_virtual_binary_clause());
+            // create the explanation clause for the virtual binary clause
+            //  effectively temporarily creating the clause in memory during conflict analysis
+            //  allocating a fresh vector each time might be a performance bottleneck
+            //  todo better ways
+            explanation_clause_manager.add_explanation_clause_unchecked(
+                vec![
+                    propagated_literal, // important to have the propagated literal at position 0
+                    clause_reference.get_virtual_binary_clause_literal(),
+                ],
+                clause_allocator,
+            )
+        }
     }
 
     fn add_permanent_clause(
@@ -57,10 +72,7 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         clause_allocator: &mut ClauseAllocator,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(assignments.is_at_the_root_level());
-
-        if self.is_in_infeasible_state {
-            return Err(ConstraintOperationError::InfeasibleState);
-        }
+        pumpkin_assert_simple!(!self.is_in_infeasible_state);
 
         if literals.is_empty() {
             warn!("Adding empty clause, unusual!");
@@ -107,14 +119,25 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         clause_allocator: &mut ClauseAllocator,
     ) -> Option<ClauseReference> {
         let asserting_literal = literals[0];
-
-        let clause_reference = self
-            .add_clause_unchecked(literals, true, clause_allocator)
-            .expect("Add clause failed for some reason");
-
-        let _ = assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
-
-        Some(clause_reference)
+        // binary clause - these have special treatment and are stored directly in the watch lists
+        if literals.len() == 2 {
+            let second_literal = literals[1]; // need to store this in case the clause is binary
+            let _ = self.add_clause_unchecked(literals, true, clause_allocator);
+            let _ = assignments.enqueue_propagated_literal(
+                asserting_literal,
+                ClauseReference::create_virtual_binary_clause_reference(second_literal).into(),
+            );
+            None
+        }
+        // standard clause
+        else {
+            let clause_reference = self
+                .add_clause_unchecked(literals, true, clause_allocator)
+                .expect("Add clause failed for some reason");
+            let _ =
+                assignments.enqueue_propagated_literal(asserting_literal, clause_reference.into());
+            Some(clause_reference)
+        }
     }
 
     fn add_clause_unchecked(
@@ -126,22 +149,32 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         pumpkin_assert_moderate!(literals.len() >= 2);
         pumpkin_assert_simple!(!self.is_in_infeasible_state);
 
-        let clause_reference = clause_allocator.create_clause(literals, is_learned);
-        let clause = clause_allocator.get_clause(clause_reference);
+        // binary clauses have special treatment
+        //  they are not allocated in memory with other clauses but instead inlined in the watch
+        // list of the clausal propagator
+        if literals.len() == 2 {
+            self.start_watching_binary_clause_unchecked(literals[0], literals[1]);
+            None
+        }
+        // otherwise standard clause allocation takes place
+        else {
+            let clause_reference = clause_allocator.create_clause(literals, is_learned);
+            let clause = clause_allocator.get_clause(clause_reference);
 
-        self.permanent_clauses.push(clause_reference);
-        self.start_watching_clause_unchecked(clause.get_literal_slice(), clause_reference);
+            self.permanent_clauses.push(clause_reference);
+            self.start_watching_clause_unchecked(clause.get_literal_slice(), clause_reference);
 
-        Some(clause_reference)
+            Some(clause_reference)
+        }
     }
 
     fn add_permanent_implication_unchecked(
         &mut self,
         lhs: Literal,
         rhs: Literal,
-        clause_allocator: &mut ClauseAllocator,
+        _clause_allocator: &mut ClauseAllocator,
     ) {
-        let _ = self.add_clause_unchecked(vec![!lhs, rhs], false, clause_allocator);
+        self.start_watching_binary_clause_unchecked(!lhs, rhs);
     }
 
     fn add_permanent_ternary_clause_unchecked(
@@ -201,6 +234,49 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
 
                 let watched_clause_reference =
                     self.watch_lists[!true_literal][current_index].clause_reference;
+
+                // first check whether the watcher is a binary clause
+                //  binary clauses are handled in a special way
+                //  i.e., we inline binary clauses in the watch list instead of allocating a clause
+                if watched_clause_reference.is_virtual_binary_clause() {
+                    // the cached literal contains the other literal from the watched clause
+                    //  since the cached literal is not assigned true (see code above)
+                    //      we only need to check if the cached literal is unassigned (propagate) or
+                    // false (conflict)
+
+                    // propagate
+                    if assignments.is_literal_unassigned(cached_literal) {
+                        let _ = assignments.enqueue_propagated_literal(
+                            cached_literal,
+                            watched_clause_reference.into(),
+                        );
+                        // keep the watcher
+                        self.watch_lists[!true_literal][end_index] =
+                            self.watch_lists[!true_literal][current_index];
+                        current_index += 1;
+                        end_index += 1;
+                        // continue to the next watcher
+                        continue;
+                    // conflict
+                    } else {
+                        pumpkin_assert_moderate!(
+                            assignments.is_literal_assigned_false(cached_literal)
+                        );
+                        // stop any further propagation and report the conflict
+                        // readd this watcher and other remaining watchers to the watch list
+                        while current_index < self.watch_lists[!true_literal].len() {
+                            self.watch_lists[!true_literal][end_index] =
+                                self.watch_lists[!true_literal][current_index];
+                            current_index += 1;
+                            end_index += 1;
+                        }
+                        self.watch_lists[!true_literal].truncate(end_index);
+                        return Err(ConflictInfo::VirtualBinaryClause {
+                            lit1: cached_literal,
+                            lit2: true_literal,
+                        });
+                    }
+                }
 
                 let watched_clause = clause_manager.get_mutable_clause(watched_clause_reference);
 
@@ -331,6 +407,8 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
         assignments: &AssignmentsPropositional,
         clause_allocator: &ClauseAllocator,
     ) -> bool {
+        // the code below does not do many check with regard to virtual binary clauses
+
         assert!(
             self.watch_lists.len() as u32 == 2 * assignments.num_propositional_variables(),
             "Watch list length is not as expected given the number of propositional variables."
@@ -356,15 +434,13 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
                 == 0,
         );
 
-        assert!(self
-            .watch_lists
+        self.watch_lists
             .iter()
             .flatten()
-            .all(|x| { x.clause_reference.is_allocated_clause() }));
-
-        self.watch_lists.iter().flatten().for_each(|x| {
-            *clause_ids.entry(x.clause_reference).or_insert(0) += 1;
-        });
+            .filter(|x| x.clause_reference.is_allocated_clause())
+            .for_each(|x| {
+                *clause_ids.entry(x.clause_reference).or_insert(0) += 1;
+            });
         assert!(
             clause_ids.iter().all(|x| *x.1 == 2),
             "There is a clause in the watch list that does not appear exactly twice."
@@ -372,20 +448,24 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
 
         for literal_code in 0..self.watch_lists.len() {
             let literal = Literal::u32_to_literal(literal_code as u32);
-            assert!(self.watch_lists[literal].iter().all(|x| {
+            assert!(self.watch_lists[literal].iter().filter(|x| x.clause_reference.is_allocated_clause()).all(|x| {
                     let clause = clause_allocator.get_clause(x.clause_reference);
                     clause[0] == literal || clause[1] == literal
             }), "The watches are not correct, i.e., there is a clause in the watch list of a literal that is not a watcher of the clause");
         }
 
         assert!(
-            self.watch_lists.iter().flatten().all(|x| {
-                let clause = clause_allocator.get_clause(x.clause_reference);
-                clause
-                    .get_literal_slice()
-                    .iter()
-                    .any(|lit| *lit == x.cached_literal)
-            }),
+            self.watch_lists
+                .iter()
+                .flatten()
+                .filter(|x| x.clause_reference.is_allocated_clause())
+                .all(|x| {
+                    let clause = clause_allocator.get_clause(x.clause_reference);
+                    clause
+                        .get_literal_slice()
+                        .iter()
+                        .any(|lit| *lit == x.cached_literal)
+                }),
             "There is a watcher with a cached literal that is not present in the clause."
         );
 
@@ -469,11 +549,46 @@ impl ClausalPropagatorInterface for ClausalPropagatorBasic {
             }
         });
 
+        // collect binary clauses
+        let mut binary_clauses: Vec<[Literal; 2]> = vec![];
+        for literal_code in 0..self.watch_lists.len() {
+            let literal = Literal::u32_to_literal(literal_code as u32);
+            let mut m: Vec<[Literal; 2]> = self.watch_lists[literal]
+                .iter()
+                .filter_map(|x| {
+                    if x.clause_reference.is_virtual_binary_clause() {
+                        Some([x.cached_literal, literal])
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            binary_clauses.append(&mut m);
+        }
+
+        for [lit1, lit2] in binary_clauses {
+            let num_false_literals = assignments.is_literal_assigned_false(lit1) as usize
+                + assignments.is_literal_assigned_false(lit2) as usize;
+
+            let num_true_literals = assignments.is_literal_assigned_true(lit1) as usize
+                + assignments.is_literal_assigned_true(lit2) as usize;
+
+            assert!(
+                num_false_literals != 2,
+                "Debugging shows a missed falsifying binary clause."
+            );
+
+            assert!(
+                !(num_false_literals == 1 && num_true_literals == 0),
+                "Debugging shows a missed virtual binary clause propagation!"
+            );
+        }
+
         true
     }
 }
 
-impl ClausalPropagatorBasic {
+impl BinaryInlineClausalPropagator {
     fn start_watching_clause_unchecked(
         &mut self,
         clause: &[Literal],
@@ -489,6 +604,18 @@ impl ClausalPropagatorBasic {
         self.watch_lists[clause[1]].push(ClauseWatcher {
             cached_literal: clause[0],
             clause_reference,
+        });
+    }
+
+    fn start_watching_binary_clause_unchecked(&mut self, lit1: Literal, lit2: Literal) {
+        self.watch_lists[lit1].push(ClauseWatcher {
+            cached_literal: lit2,
+            clause_reference: ClauseReference::create_virtual_binary_clause_reference(lit1),
+        });
+
+        self.watch_lists[lit2].push(ClauseWatcher {
+            cached_literal: lit1,
+            clause_reference: ClauseReference::create_virtual_binary_clause_reference(lit2),
         });
     }
 }

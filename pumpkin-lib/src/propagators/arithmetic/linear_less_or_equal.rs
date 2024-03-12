@@ -14,19 +14,19 @@ use crate::engine::ReadDomains;
 use crate::predicate;
 
 #[derive(Debug)]
-pub struct LinearLeq<Var> {
+pub struct LinearLessOrEqualArgs<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
     pub reif: Option<Literal>,
 }
 
-impl<Var: IntVar + 'static> LinearLeq<Var> {
+impl<Var: IntVar + 'static> LinearLessOrEqualArgs<Var> {
     pub fn new(x: Box<[Var]>, c: i32) -> Self {
-        LinearLeq { x, c, reif: None }
+        LinearLessOrEqualArgs { x, c, reif: None }
     }
 
     pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
-        LinearLeq {
+        LinearLessOrEqualArgs {
             x,
             c,
             reif: Some(reif),
@@ -36,17 +36,17 @@ impl<Var: IntVar + 'static> LinearLeq<Var> {
 
 /// Propagator for the constraint `reif => \sum x_i <= c`.
 #[derive(Debug)]
-pub struct LinearLeqProp<Var> {
+pub struct LinearLessOrEqualPropagator<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
     pub reif: Option<PropagatorVariable<Literal>>,
 }
 
-impl<Var> CPPropagatorConstructor for LinearLeq<Var>
+impl<Var> CPPropagatorConstructor for LinearLessOrEqualArgs<Var>
 where
     Var: IntVar,
 {
-    type Propagator = LinearLeqProp<Var>;
+    type Propagator = LinearLessOrEqualPropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let x: Box<[_]> = self
@@ -68,11 +68,11 @@ where
                 LocalId::from(self.x.len() as u32),
             )
         });
-        LinearLeqProp::<Var> { x, c: self.c, reif }
+        LinearLessOrEqualPropagator::<Var> { x, c: self.c, reif }
     }
 }
 
-impl<Var> ConstraintProgrammingPropagator for LinearLeqProp<Var>
+impl<Var> ConstraintProgrammingPropagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntVar,
 {
@@ -183,7 +183,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLeq::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualArgs::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -199,7 +199,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLeq::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualArgs::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -217,7 +217,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator(LinearLeq::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 7, reif))
             .expect("No conflict");
 
         solver.set_literal(reif, false);
@@ -236,7 +236,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator(LinearLeq::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 7, reif))
             .expect("No conflict");
 
         solver.set_literal(reif, true);
@@ -255,7 +255,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let _ = solver
-            .new_propagator(LinearLeq::reified([x, y].into(), 1, reif))
+            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 1, reif))
             .expect("No conflict");
 
         assert!(solver.is_literal_false(reif));

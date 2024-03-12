@@ -477,7 +477,7 @@ pub enum EnqueueDecision {
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
-use crate::propagators::clausal_propagators::ClausalPropagatorBasic;
+use crate::propagators::clausal::BasicClausalPropagator;
 #[cfg(doc)]
 use crate::pumpkin_asserts::*;
 pub trait ConstraintProgrammingPropagator {

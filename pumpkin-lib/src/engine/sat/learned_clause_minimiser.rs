@@ -3,7 +3,7 @@ use crate::basic_types::HashSet;
 use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ConflictAnalysisResult;
 use crate::engine::sat::AssignmentsPropositional;
 use crate::engine::sat::SATEngineDataStructures;
@@ -34,7 +34,7 @@ impl LearnedClauseMinimiser {
     pub fn remove_dominated_literals(
         &mut self,
         analysis_result: &mut ConflictAnalysisResult,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
@@ -101,7 +101,7 @@ impl LearnedClauseMinimiser {
     fn compute_label(
         &mut self,
         input_literal: Literal,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,

@@ -18,7 +18,7 @@ use crate::engine::ReadDomains;
 use crate::predicate;
 
 #[derive(Debug)]
-pub struct LinearNe<Var> {
+pub struct LinearNotEqualArgs<Var> {
     /// The terms which sum to the left-hand side.
     terms: Box<[Var]>,
     /// The right-hand side.
@@ -27,9 +27,9 @@ pub struct LinearNe<Var> {
     reif: Option<Literal>,
 }
 
-impl<Var> LinearNe<Var> {
+impl<Var> LinearNotEqualArgs<Var> {
     pub fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNe {
+        LinearNotEqualArgs {
             terms,
             rhs,
             reif: None,
@@ -37,7 +37,7 @@ impl<Var> LinearNe<Var> {
     }
 
     pub fn reified(terms: Box<[Var]>, rhs: i32, reif: Literal) -> Self {
-        LinearNe {
+        LinearNotEqualArgs {
             terms,
             rhs,
             reif: Some(reif),
@@ -48,17 +48,17 @@ impl<Var> LinearNe<Var> {
 /// Domain consistent propagator for the constraint `reif => \sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
 #[derive(Debug)]
-pub struct LinearNeProp<Var> {
+pub struct LinearNotEqualPropagator<Var> {
     terms: Rc<[PropagatorVariable<Var>]>,
     rhs: i32,
     pub reif: Option<PropagatorVariable<Literal>>,
 }
 
-impl<Var> CPPropagatorConstructor for LinearNe<Var>
+impl<Var> CPPropagatorConstructor for LinearNotEqualArgs<Var>
 where
     Var: IntVar + 'static,
 {
-    type Propagator = LinearNeProp<Var>;
+    type Propagator = LinearNotEqualPropagator<Var>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let x: Rc<[_]> = self
@@ -69,7 +69,7 @@ where
                 context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32))
             })
             .collect();
-        LinearNeProp {
+        LinearNotEqualPropagator {
             terms: x,
             rhs: self.rhs,
             reif: self.reif.map(|literal| {
@@ -83,7 +83,7 @@ where
     }
 }
 
-impl<Var> ConstraintProgrammingPropagator for LinearNeProp<Var>
+impl<Var> ConstraintProgrammingPropagator for LinearNotEqualPropagator<Var>
 where
     Var: IntVar + 'static,
 {
@@ -215,7 +215,10 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator(LinearNe::new([x.scaled(1), y.scaled(-1)].into(), 0))
+            .new_propagator(LinearNotEqualArgs::new(
+                [x.scaled(1), y.scaled(-1)].into(),
+                0,
+            ))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -232,7 +235,10 @@ mod tests {
         let y = solver.new_variable(2, 2);
 
         let err = solver
-            .new_propagator(LinearNe::new([x.scaled(1), y.scaled(-1)].into(), 0))
+            .new_propagator(LinearNotEqualArgs::new(
+                [x.scaled(1), y.scaled(-1)].into(),
+                0,
+            ))
             .expect_err("empty domain");
 
         let expected: Inconsistency = conjunction!([x == 2] & [y == 2]).into();
@@ -246,7 +252,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
-            .new_propagator(LinearNe::new([x.clone(), y.clone()].into(), 0))
+            .new_propagator(LinearNotEqualArgs::new([x.clone(), y.clone()].into(), 0))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -263,7 +269,10 @@ mod tests {
         let y = solver.new_variable(0, 3);
 
         let mut propagator = solver
-            .new_propagator(LinearNe::new([x.scaled(1), y.scaled(-1)].into(), 0))
+            .new_propagator(LinearNotEqualArgs::new(
+                [x.scaled(1), y.scaled(-1)].into(),
+                0,
+            ))
             .expect("non-empty domain");
 
         solver.remove(x, 0).expect("non-empty domain");
@@ -285,7 +294,7 @@ mod tests {
         let reif = solver.new_literal();
 
         let _ = solver
-            .new_propagator(LinearNe::reified(
+            .new_propagator(LinearNotEqualArgs::reified(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
                 reif,
@@ -305,7 +314,7 @@ mod tests {
         solver.set_literal(reif, true);
 
         let err = solver
-            .new_propagator(LinearNe::reified(
+            .new_propagator(LinearNotEqualArgs::reified(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
                 reif,
@@ -330,7 +339,11 @@ mod tests {
         solver.set_literal(reif, true);
 
         let mut propagator = solver
-            .new_propagator(LinearNe::reified([x.clone(), y.clone()].into(), 0, reif))
+            .new_propagator(LinearNotEqualArgs::reified(
+                [x.clone(), y.clone()].into(),
+                0,
+                reif,
+            ))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -351,7 +364,11 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator(LinearNe::reified([x.clone(), y.clone()].into(), 0, reif))
+            .new_propagator(LinearNotEqualArgs::reified(
+                [x.clone(), y.clone()].into(),
+                0,
+                reif,
+            ))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");

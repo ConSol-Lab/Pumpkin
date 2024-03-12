@@ -8,7 +8,7 @@ use log::warn;
 use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
-use crate::engine::constraint_satisfaction_solver::ClausalPropagator;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::cp::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintProgrammingPropagator;
@@ -16,7 +16,7 @@ use crate::engine::PropagationContextMut;
 use crate::engine::PropagatorId;
 use crate::engine::SATCPMediator;
 use crate::engine::SATEngineDataStructures;
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
+use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_simple;
 
 #[derive(Copy, Clone)]
@@ -45,7 +45,7 @@ impl DebugHelper {
     // missed a propagation or failure  additionally checks whether the internal data structures
     // of the clausal propagator are okay and consistent with the assignments_propositional
     pub fn debug_fixed_point_propagation(
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         assignments_integer: &AssignmentsInteger,
         sat_data_structures: &SATEngineDataStructures,
         propagators_cp: &[Box<dyn ConstraintProgrammingPropagator>],
