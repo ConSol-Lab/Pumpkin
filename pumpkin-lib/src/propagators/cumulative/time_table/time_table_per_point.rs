@@ -79,8 +79,8 @@ impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
         context: &mut PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
     ) -> PropagationStatusCP {
-        // We first create a time-table per point in the horizon and return an error if there was
-        // one while building the time-table
+        // We first create a time-table per point and return an error if there was
+        // an overflow of the resource capacity while building the time-table
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context, parameters,
         )?;

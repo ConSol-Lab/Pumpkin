@@ -26,22 +26,27 @@ use crate::pumpkin_assert_simple;
 /// An event storing the start and end of mandatory parts used for creating the time-table
 #[derive(Debug)]
 pub struct Event<Var> {
-    /// The time-point at which the event took place
+    /// The time-point at which the [`Event`] took place
     time_stamp: i32,
     /// Change in resource usage at [time_stamp][Event::time_stamp], positive if it is the start of
     /// a mandatory part and negative otherwise
     change_in_resource_usage: i32,
-    /// The task which has caused the event to take place
+    /// The [`Task`] which has caused the event to take place
     task: Rc<Task<Var>>,
 }
 
-/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint
+/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a [ResourceProfile] over intervals rather than
-/// creating per time-point (hence the name).
+/// different time-points - This method creates a [`ResourceProfile`] over an interval rather than
+/// creating one per time-point (hence the name). Furthermore, the
+/// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
+/// used for modelling the start variables, this will be an implementation of [`IntVar`].
 ///
-/// See ["Improving Scheduling by Learning - Andreas Schutt (2011)"](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
-/// Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 for more information about time-table reasoning.
+/// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
+///  for more information about time-table reasoning.
+///
+/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
+/// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 pub struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
@@ -50,7 +55,10 @@ pub struct TimeTableOverIntervalPropagator<Var> {
     parameters: CumulativeParameters<Var>,
 }
 
-/// The type of the time-table used by propagators which use time-table reasoning over intervals
+/// The type of the time-table used by propagators which use time-table reasoning over intervals.
+///
+/// The [ResourceProfile]s are sorted based on start time and they are non-overlapping; each entry
+/// in the [`Vec`] represents the mandatory resource usage across an interval.
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
 impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalPropagator<Var>>
@@ -77,8 +85,8 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
         context: &mut PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
     ) -> PropagationStatusCP {
-        // We first create a time-table per point in the horizon and return an error if there was
-        // one while building the time-table
+        // We first create a time-table over interval and return an error if there was
+        // an overflow of the resource capacity while building the time-table
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
                 context, parameters,
@@ -135,9 +143,9 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
                 // that we report an error as soon as it can be found
                 std::cmp::Ordering::Equal => {
                     if a.change_in_resource_usage.signum() != b.change_in_resource_usage.signum() {
-                        // If a is the start (end) of a mandatory part and b is the end (start) of a
-                        // mandatory part then we need to ensure that we go through the end of the
-                        // mandatory part first
+                        // If `a` is the start (end) of a mandatory part and `b` is the end (start)
+                        // of a mandatory part then we need to ensure that
+                        // we go through the end of the mandatory part first
                         a.change_in_resource_usage.cmp(&b.change_in_resource_usage)
                     } else {
                         // If both events are starts or both events are ends then we sort on the
