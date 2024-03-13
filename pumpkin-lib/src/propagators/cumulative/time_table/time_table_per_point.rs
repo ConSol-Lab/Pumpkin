@@ -18,9 +18,10 @@ use crate::engine::PropagationContext;
 use crate::engine::PropagationContextMut;
 use crate::engine::PropagatorConstructorContext;
 use crate::engine::ReadDomains;
+use crate::propagators::reset_bounds_clear_updated;
+use crate::propagators::update_bounds_task;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
-use crate::propagators::util::initialise_at_root;
 use crate::propagators::CumulativeArgs;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
@@ -150,8 +151,13 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         propagate_based_on_timetable(context, time_table.values(), &self.parameters)
     }
 
-    fn synchronise(&mut self, _context: &PropagationContext) {
-        // No need to do anything at the moment, we recalculate the time-table from scratch anyways
+    fn synchronise(&mut self, context: &PropagationContext) {
+        reset_bounds_clear_updated(
+            context,
+            &mut self.parameters.updated,
+            &mut self.parameters.bounds,
+            &self.parameters.tasks,
+        );
     }
 
     fn notify(
@@ -166,13 +172,14 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         // meaning that `is_time_table_empty` will always return `false` when it is not
         // empty and it might return `false` even when the time-table is not empty *but* it
         // will never return `true` when the time-table is not empty.
-        should_enqueue(
+        let result = should_enqueue(
             &self.parameters,
             &updated_task,
             context,
             self.is_time_table_empty,
-        )
-        .decision
+        );
+        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        result.decision
     }
 
     fn priority(&self) -> u32 {
@@ -184,7 +191,14 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     }
 
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        initialise_at_root(true, &mut self.parameters, context);
+        // First we store the bounds in the parameters
+        for task in self.parameters.tasks.iter() {
+            self.parameters.bounds.push((
+                context.lower_bound(&task.start_variable),
+                context.upper_bound(&task.start_variable),
+            ))
+        }
+
         self.propagate(context)
     }
 
