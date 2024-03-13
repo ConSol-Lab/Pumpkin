@@ -6,13 +6,15 @@ use super::time_table_util::ResourceProfile;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::EnqueueDecision;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::ReadDomains;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::ReadDomains;
 use crate::propagators::create_inconsistency;
 use crate::propagators::create_tasks;
 use crate::propagators::reset_bounds_clear_updated;
@@ -61,7 +63,7 @@ pub struct TimeTableOverIntervalPropagator<Var> {
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
-impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalPropagator<Var>>
+impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
@@ -258,9 +260,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
-    for TimeTableOverIntervalPropagator<Var>
-{
+impl<Var: IntVar + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
@@ -285,8 +285,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
     fn notify(
         &mut self,
         context: &mut PropagationContextMut,
-        local_id: crate::engine::LocalId,
-        _event: crate::engine::OpaqueDomainEvent,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
@@ -340,8 +340,8 @@ mod tests {
     use crate::basic_types::Predicate;
     use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTableOverInterval;
 

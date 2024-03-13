@@ -2,7 +2,7 @@ use crate::basic_types::ConstraintReference;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalConjunction;
 #[cfg(doc)]
-use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::propagation::Propagator;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
@@ -31,6 +31,6 @@ pub enum ConflictInfo {
         /// clausal propagation).
         literal: Literal,
     },
-    /// The conflict is triggered by a [`ConstraintProgrammingPropagator`].
+    /// The conflict is triggered by a [`Propagator`].
     Explanation(PropositionalConjunction),
 }

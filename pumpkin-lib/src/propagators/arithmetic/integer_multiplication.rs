@@ -3,15 +3,15 @@ use log::warn;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::LocalId;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorVariable;
 
 /// A bounds-consistent propagator for maintaining the constraint `a * b = c`. The propagator
 /// assumes `a, b, c >= 0`.
@@ -23,7 +23,7 @@ pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
 }
 
 #[derive(Debug)]
-pub struct IntegerMultiplicationArgs<VA, VB, VC> {
+pub struct IntegerMultiplicationConstructor<VA, VB, VC> {
     pub a: VA,
     pub b: VB,
     pub c: VC,
@@ -33,7 +33,7 @@ const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
 const ID_C: LocalId = LocalId::from(2);
 
-impl<VA, VB, VC> CPPropagatorConstructor for IntegerMultiplicationArgs<VA, VB, VC>
+impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationConstructor<VA, VB, VC>
 where
     VA: IntVar,
     VB: IntVar,
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<VA, VB, VC> ConstraintProgrammingPropagator for IntegerMultiplicationPropagator<VA, VB, VC>
+impl<VA, VB, VC> Propagator for IntegerMultiplicationPropagator<VA, VB, VC>
 where
     VA: IntVar,
     VB: IntVar,
@@ -183,7 +183,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationArgs { a, b, c })
+            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -210,7 +210,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationArgs { a, b, c })
+            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -237,7 +237,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationArgs { a, b, c })
+            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");

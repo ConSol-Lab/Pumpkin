@@ -6,14 +6,14 @@
 
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::Literal;
-use crate::engine::CPPropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::ConstraintSatisfactionSolver;
-use crate::propagators::arithmetic::absolute_value::AbsoluteValueArgs;
-use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicationArgs;
-use crate::propagators::arithmetic::linear_less_or_equal::LinearLessOrEqualArgs;
-use crate::propagators::arithmetic::linear_not_equal::LinearNotEqualArgs;
-use crate::propagators::arithmetic::maximum::MaximumArgs;
-use crate::propagators::element::ElementArgs;
+use crate::propagators::arithmetic::absolute_value::AbsoluteValueConstructor;
+use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicationConstructor;
+use crate::propagators::arithmetic::linear_less_or_equal::LinearLessOrEqualConstructor;
+use crate::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
+use crate::propagators::arithmetic::maximum::MaximumConstructor;
+use crate::propagators::element::ElementConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTablePerPoint;
 
@@ -23,7 +23,7 @@ use crate::propagators::TimeTablePerPoint;
 pub trait ConstraintsExt {
     fn post<Constructor>(&mut self, constructor: Constructor) -> bool
     where
-        Constructor: CPPropagatorConstructor,
+        Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static;
 
     /// Adds the constraint `array[index] = rhs`.
@@ -33,7 +33,7 @@ pub trait ConstraintsExt {
         array: impl Into<Box<[ElementVar]>>,
         rhs: impl IntVar + 'static,
     ) -> bool {
-        self.post(ElementArgs {
+        self.post(ElementConstructor {
             index,
             array: array.into(),
             rhs,
@@ -46,7 +46,7 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
     ) -> bool {
-        self.post(LinearNotEqualArgs::new(terms.into(), rhs))
+        self.post(LinearNotEqualConstructor::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> \sum terms_i != rhs`.
@@ -56,7 +56,7 @@ pub trait ConstraintsExt {
         rhs: i32,
         reif: Literal,
     ) -> bool {
-        self.post(LinearNotEqualArgs::reified(terms.into(), rhs, reif))
+        self.post(LinearNotEqualConstructor::reified(terms.into(), rhs, reif))
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
@@ -65,7 +65,7 @@ pub trait ConstraintsExt {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
     ) -> bool {
-        self.post(LinearLessOrEqualArgs::new(terms.into(), rhs))
+        self.post(LinearLessOrEqualConstructor::new(terms.into(), rhs))
     }
 
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
@@ -75,7 +75,11 @@ pub trait ConstraintsExt {
         rhs: i32,
         reif: Literal,
     ) -> bool {
-        self.post(LinearLessOrEqualArgs::reified(terms.into(), rhs, reif))
+        self.post(LinearLessOrEqualConstructor::reified(
+            terms.into(),
+            rhs,
+            reif,
+        ))
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
@@ -163,12 +167,12 @@ pub trait ConstraintsExt {
         b: impl IntVar + 'static,
         c: impl IntVar + 'static,
     ) -> bool {
-        self.post(IntegerMultiplicationArgs { a, b, c })
+        self.post(IntegerMultiplicationConstructor { a, b, c })
     }
 
     /// Adds the constraint `|signed| = absolute`.
     fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) -> bool {
-        self.post(AbsoluteValueArgs { signed, absolute })
+        self.post(AbsoluteValueConstructor { signed, absolute })
     }
 
     /// Adds the constraint that all variables must be distinct.
@@ -204,7 +208,7 @@ pub trait ConstraintsExt {
         array: impl Into<Box<[Var]>>,
         rhs: impl IntVar + 'static,
     ) -> bool {
-        self.post(MaximumArgs {
+        self.post(MaximumConstructor {
             array: array.into(),
             rhs,
         })
@@ -227,7 +231,7 @@ pub trait ConstraintsExt {
 impl ConstraintsExt for ConstraintSatisfactionSolver {
     fn post<Constructor>(&mut self, constructor: Constructor) -> bool
     where
-        Constructor: CPPropagatorConstructor,
+        Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
         self.add_propagator(constructor)

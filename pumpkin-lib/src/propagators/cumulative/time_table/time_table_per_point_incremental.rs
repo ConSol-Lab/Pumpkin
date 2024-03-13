@@ -4,13 +4,15 @@ use std::rc::Rc;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::EnqueueDecision;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::propagation_context::ReadDomains;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
 use crate::propagators::check_bounds_equal_at_propagation;
 use crate::propagators::create_inconsistency;
 use crate::propagators::create_tasks;
@@ -67,8 +69,7 @@ pub struct TimeTablePerPointIncrementalPropagator<Var> {
     time_table_outdated: bool,
 }
 
-impl<Var> CPPropagatorConstructor
-    for CumulativeArgs<Var, TimeTablePerPointIncrementalPropagator<Var>>
+impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointIncrementalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
@@ -92,9 +93,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointIncrementalPropagator<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
-    for TimeTablePerPointIncrementalPropagator<Var>
-{
+impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
@@ -182,8 +181,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
     fn notify(
         &mut self,
         context: &mut PropagationContextMut,
-        local_id: crate::engine::LocalId,
-        _event: crate::engine::OpaqueDomainEvent,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that we do not take into account the fact that the time-table could be outdated
@@ -252,8 +251,8 @@ mod tests {
     use crate::basic_types::Predicate;
     use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPointIncremental;
 
