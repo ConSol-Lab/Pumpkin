@@ -1,4 +1,3 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::DomainId;
 use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
@@ -52,38 +51,4 @@ pub trait VariableSelector<Var> {
     /// Note that this method provides **all** [`PropositionalVariable`]s and it is up to the
     /// [`VariableSelector`] to determine how to handle it.
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
-}
-
-/// Determines whether to find the [`Direction::Maximum`] or the [`Direction::Minimum`] for the
-/// [`find_extremum`] function.
-pub(crate) enum Direction {
-    Maximum,
-    Minimum,
-}
-
-/// Finds the variable with the corresponding extremum value (where the extremum is determined
-/// according to the provided [`Direction`]). The value for a variable is found using the
-/// `value_function` which takes as input a variable and returns a value.
-pub(crate) fn find_extremum<Var: IntVar + Copy, Value: Ord>(
-    variables: &[Var],
-    value_function: impl Fn(Var) -> Value,
-    context: &SelectionContext,
-    direction: Direction,
-) -> Option<Var> {
-    let filtered = variables
-        .iter()
-        .filter(|variable| !context.is_integer_fixed(**variable));
-    match direction {
-        Direction::Maximum => filtered.max_by(|x, y| {
-            let value_x = (value_function)(**x);
-            let value_y = (value_function)(**y);
-            value_x.cmp(&value_y)
-        }),
-        Direction::Minimum => filtered.min_by(|x, y| {
-            let value_x = (value_function)(**x);
-            let value_y = (value_function)(**y);
-            value_x.cmp(&value_y)
-        }),
-    }
-    .cloned()
 }
