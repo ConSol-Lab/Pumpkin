@@ -1,10 +1,11 @@
 use std::fs;
 
+use crate::basic_types::FileFormat;
+use crate::basic_types::Literal;
 use crate::basic_types::PropositionalVariable;
+use crate::basic_types::Solution;
 
-use super::{FileFormat, Literal, Solution};
-
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Instance {
     pub hard_clauses: Vec<Vec<Literal>>,
     pub soft_clauses: Vec<SoftClause>,
@@ -57,16 +58,16 @@ impl Instance {
     }
 
     fn read_cnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
-        //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
-        //  but for now it will do
+        // this is a slow method of reading, especially for large files (GBs) from the MaxSAT
+        // competition  but for now it will do
 
         let file_contents = fs::read_to_string(file_location)?;
 
-        //skip comments
+        // skip comments
         //  comments are lines that star with 'c'
         let mut lines = file_contents.lines().filter(|line| !line.starts_with('c'));
 
-        //read the header line
+        // read the header line
         //  the format is 'p cnf [num variables] [num clauses]
         let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
@@ -77,7 +78,7 @@ impl Instance {
         let num_clauses = header.next().unwrap().parse::<u64>().unwrap();
 
         let mut num_clauses_read = 0;
-        //read clauses one by one
+        // read clauses one by one
         for line in lines {
             let literals: Vec<Literal> = line
                 .split_whitespace()
@@ -107,17 +108,30 @@ impl Instance {
         Ok(())
     }
 
+    fn literal_from_raw_integer(raw_integer: i64) -> Literal {
+        Literal::new(
+            PropositionalVariable::new(raw_integer.unsigned_abs() as u32),
+            match raw_integer.cmp(&0) {
+                std::cmp::Ordering::Greater => true,
+                std::cmp::Ordering::Less => false,
+                std::cmp::Ordering::Equal => {
+                    panic!("Zero values are unexpected at this point")
+                }
+            },
+        )
+    }
+
     fn read_wcnf_p_line(&mut self, file_location: &str) -> std::io::Result<()> {
-        //this is a slow method of reading, especially for large files (GBs) from the MaxSAT competition
-        //  but for now it will do
+        // this is a slow method of reading, especially for large files (GBs) from the MaxSAT
+        // competition  but for now it will do
 
         let file_contents = fs::read_to_string(file_location)?;
 
-        //skip comments
+        // skip comments
         //  comments are lines that star with 'c'
         let mut lines = file_contents.lines().filter(|line| !line.starts_with('c'));
 
-        //read the header line
+        // read the header line
         //  the format is 'p wcnf [num variables] [num clauses] [top weight]
         let mut header = lines.next().unwrap().split_whitespace();
         let mut temp = header.next();
@@ -129,7 +143,7 @@ impl Instance {
         let top_weight = header.next().unwrap().parse::<u64>().unwrap();
 
         let mut num_clauses_read = 0;
-        //read clauses one by one
+        // read clauses one by one
         for line in lines {
             let mut raw_integers = line
                 .split_whitespace()
@@ -148,41 +162,19 @@ impl Instance {
                 .peekable();
 
             if raw_integers.peek() == Some(&(top_weight as i64)) {
-                //hard clauses start with the top weight value
-                raw_integers.next(); //remove the first value from consideration
-                let literals: Vec<Literal> = raw_integers
-                    .map(|v| match v.cmp(&0) {
-                        std::cmp::Ordering::Greater => {
-                            Literal::new(PropositionalVariable::new(v.unsigned_abs() as u32), true)
-                        }
-                        std::cmp::Ordering::Less => {
-                            Literal::new(PropositionalVariable::new(v.unsigned_abs() as u32), false)
-                        }
-                        std::cmp::Ordering::Equal => {
-                            panic!("Zero values are unexpected at this point")
-                        }
-                    })
-                    .collect();
+                // hard clauses start with the top weight value
+                let _ = raw_integers.next(); // remove the first value from consideration
+                let literals: Vec<Literal> =
+                    raw_integers.map(Self::literal_from_raw_integer).collect();
 
                 self.hard_clauses.push(literals);
             } else {
-                //soft clause
+                // soft clause
 
                 let weight = raw_integers.next().unwrap() as u64;
 
-                let literals: Vec<Literal> = raw_integers
-                    .map(|v| match v.cmp(&0) {
-                        std::cmp::Ordering::Greater => {
-                            Literal::new(PropositionalVariable::new(v.unsigned_abs() as u32), true)
-                        }
-                        std::cmp::Ordering::Less => {
-                            Literal::new(PropositionalVariable::new(v.unsigned_abs() as u32), false)
-                        }
-                        std::cmp::Ordering::Equal => {
-                            panic!("Zero values are unexpected at this point")
-                        }
-                    })
-                    .collect();
+                let literals: Vec<Literal> =
+                    raw_integers.map(Self::literal_from_raw_integer).collect();
 
                 self.soft_clauses.push(SoftClause { literals, weight });
             }
@@ -197,6 +189,7 @@ impl Instance {
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub struct SoftClause {
     pub literals: Vec<Literal>,
     pub weight: u64,

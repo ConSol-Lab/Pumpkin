@@ -1,4 +1,6 @@
-#[derive(Copy, Clone, Eq, PartialEq)]
+use super::StorageKey;
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct PropositionalVariable {
     index: u32,
 }
@@ -6,10 +8,6 @@ pub struct PropositionalVariable {
 impl PropositionalVariable {
     pub fn new(index: u32) -> PropositionalVariable {
         PropositionalVariable { index }
-    }
-
-    pub fn index(&self) -> u32 {
-        self.index
     }
 }
 
@@ -19,19 +17,17 @@ impl std::fmt::Display for PropositionalVariable {
     }
 }
 
-impl<T> std::ops::Index<PropositionalVariable> for Vec<T> {
-    type Output = T;
-    fn index(&self, variable: PropositionalVariable) -> &T {
-        self.index(variable.index() as usize)
+impl StorageKey for PropositionalVariable {
+    fn index(&self) -> usize {
+        self.index as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        PropositionalVariable::new(index as u32)
     }
 }
 
-impl<T> std::ops::IndexMut<PropositionalVariable> for Vec<T> {
-    fn index_mut(&mut self, variable: PropositionalVariable) -> &mut T {
-        self.index_mut(variable.index() as usize)
-    }
-}
-
+#[derive(Debug, Copy, Clone)]
 pub struct PropositionalVariableGeneratorIterator {
     current_index: u32,
     end_index: u32,

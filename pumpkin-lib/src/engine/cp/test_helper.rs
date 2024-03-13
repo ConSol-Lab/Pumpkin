@@ -1,23 +1,37 @@
 #![cfg(test)]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
-use crate::basic_types::{
-    DomainId, Inconsistency, Literal, Predicate, PropagationStatusCP, PropositionalConjunction,
-    PropositionalVariable,
-};
-use crate::engine::reason::ReasonStore;
-use crate::engine::{
-    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
-    ConstraintProgrammingPropagator, EmptyDomain, EnqueueDecision, IntDomainEvent, LocalId,
-    OpaqueDomainEvent, PropagationContext, PropagationContextMut, PropagatorConstructorContext,
-    PropagatorId, WatchListCP,
-};
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
-use super::{DomainEvents, WatchListPropositional};
+use super::DomainEvents;
+use super::WatchListPropositional;
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::DomainId;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::PropositionalVariable;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::EmptyDomain;
+use crate::engine::EnqueueDecision;
+use crate::engine::IntDomainEvent;
+use crate::engine::LocalId;
+use crate::engine::OpaqueDomainEvent;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorId;
+use crate::engine::WatchListCP;
 
 /// A container for CP variables, which can be used to test propagators.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TestSolver {
     assignments_integer: AssignmentsInteger,
     reason_store: ReasonStore,
@@ -79,8 +93,8 @@ impl TestSolver {
         ))
     }
 
-    pub fn contains(&self, var: DomainId, value: i32) -> bool {
-        self.assignments_integer.is_value_in_domain(var, value)
+    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+        var.contains(&self.assignments_integer, value)
     }
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {
@@ -202,7 +216,7 @@ impl TestSolver {
         );
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                propagator.notify(&mut context, propagator_var.variable, event.into());
+                let _ = propagator.notify(&mut context, propagator_var.variable, event.into());
             }
         }
     }
@@ -238,7 +252,7 @@ impl TestSolver {
                 PropagatorId(0),
                 "We assume a single propagator per TestSolver in notify_changed"
             );
-            let _ = self.notify(propagator, opaque_event.clone(), pvi.variable);
+            let _ = self.notify(propagator, opaque_event, pvi.variable);
         }
     }
 
@@ -270,6 +284,9 @@ impl TestSolver {
         let actual_lb = self.lower_bound(var);
         let actual_ub = self.upper_bound(var);
 
-        assert_eq!((lb, ub), (actual_lb, actual_ub), "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]");
+        assert_eq!(
+            (lb, ub), (actual_lb, actual_ub),
+            "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
+        );
     }
 }

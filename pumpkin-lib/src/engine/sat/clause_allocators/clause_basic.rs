@@ -1,10 +1,11 @@
-use crate::{
-    basic_types::Literal, pumpkin_assert_advanced, pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
 use super::ClauseInterface;
+use crate::basic_types::Literal;
+use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[allow(clippy::len_without_is_empty)] // The clause will always have at least two literals.
+#[derive(Debug)]
 pub struct ClauseBasic {
     literals: Vec<Literal>,
     is_learned: bool,
@@ -24,7 +25,7 @@ impl ClauseBasic {
             is_learned,
             is_deleted: false,
             is_protected_aganst_deletion: false,
-            lbd: num_literals, //pessimistic lbd
+            lbd: num_literals, // pessimistic lbd
             activity: 0.0,
         }
     }
@@ -60,7 +61,7 @@ impl ClauseInterface for ClauseBasic {
         self.activity
     }
 
-    //note that this does _not_ delete the clause, it simply marks it as if it was deleted
+    // note that this does _not_ delete the clause, it simply marks it as if it was deleted
     //  to delete a clause, use the ClauseManager
     //  could restrict access of this method in the future
     fn mark_deleted(&mut self) {
@@ -109,12 +110,12 @@ impl std::fmt::Display for ClauseBasic {
         let clause_string = &self
             .literals
             .iter()
-            .fold(String::new(), |acc, lit| acc + &lit.to_string() + ",");
+            .fold(String::new(), |acc, lit| format!("{acc}{lit},"));
 
         write!(
             f,
-            "({})[learned:{}, deleted:{}]",
-            clause_string, self.is_learned, self.is_deleted
+            "({clause_string})[learned:{}, deleted:{}]",
+            self.is_learned, self.is_deleted
         )
     }
 }

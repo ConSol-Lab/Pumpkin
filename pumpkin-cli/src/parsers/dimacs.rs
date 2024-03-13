@@ -5,31 +5,30 @@
 //! To invoke the parser, there are two options:
 //!  - For a CNF file, the [`parse_cnf`] function can be called,
 //!  - For a WCNF file, the ['parse_wcnf`] function can be called.
-//!  
+//!
 //! Both these functions operate on a type that implements the [`DimacsSink`] trait, which is
 //! serves as an interface between the consumer of the parsed contents of the file.
 //!
 //! It should be noted that the parsers should not be used as DIMACS validators. Even though they
 //! should only accept valid DIMACS files, the errors are not extremely detailed. Perhaps this
 //! could change over time, however.
-use std::{
-    io::{BufRead, BufReader, Read},
-    num::NonZeroI32,
-    str::FromStr,
-};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
+use std::num::NonZeroI32;
+use std::str::FromStr;
 
-use pumpkin_lib::{
-    basic_types::{Function, Literal, PropositionalVariable},
-    engine::{
-        ConstraintSatisfactionSolver, SATEngineDataStructures, SatOptions,
-        SatisfactionSolverOptions,
-    },
-};
-
+use pumpkin_lib::basic_types::Function;
+use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::basic_types::PropositionalVariable;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::engine::Preprocessor;
+use pumpkin_lib::engine::SatOptions;
+use pumpkin_lib::engine::SatisfactionSolverOptions;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
-pub trait DimacsSink {
+pub(crate) trait DimacsSink {
     /// The arguments to the dimacs sink.
     type ConstructorArgs;
 
@@ -52,7 +51,7 @@ pub trait DimacsSink {
     fn into_formula(self) -> Self::Formula;
 }
 
-pub enum SoftClauseAddition {
+pub(crate) enum SoftClauseAddition {
     /// The soft clause is violated at the root. In this case, there is a constant term that is
     /// added to the objective function.
     RootViolated,
@@ -66,7 +65,7 @@ pub enum SoftClauseAddition {
 }
 
 #[derive(Debug, Error)]
-pub enum DimacsParseError {
+pub(crate) enum DimacsParseError {
     #[error("failed to read file")]
     Io(#[from] std::io::Error),
 
@@ -92,7 +91,7 @@ pub enum DimacsParseError {
     IncorrectClauseCount { expected: usize, parsed: usize },
 }
 
-pub fn parse_cnf<Sink: DimacsSink>(
+pub(crate) fn parse_cnf<Sink: DimacsSink>(
     source: impl Read,
     sink_constructor_args: Sink::ConstructorArgs,
 ) -> Result<Sink::Formula, DimacsParseError> {
@@ -118,13 +117,13 @@ pub fn parse_cnf<Sink: DimacsSink>(
     }
 }
 
-pub struct WcnfInstance<Formula> {
-    pub formula: Formula,
-    pub last_instance_variable: usize,
-    pub objective: Function,
+pub(crate) struct WcnfInstance<Formula> {
+    pub(crate) formula: Formula,
+    pub(crate) last_instance_variable: usize,
+    pub(crate) objective: Function,
 }
 
-pub fn parse_wcnf<Sink: DimacsSink>(
+pub(crate) fn parse_wcnf<Sink: DimacsSink>(
     source: impl Read,
     sink_constructor_args: Sink::ConstructorArgs,
 ) -> Result<WcnfInstance<Sink::Formula>, DimacsParseError> {
@@ -241,7 +240,7 @@ where
                         self.start_literal(b, true);
                     }
 
-                    //covers the exotic case of having an empty clause in the dimacs file
+                    // covers the exotic case of having an empty clause in the dimacs file
                     b'0' => self.finish_clause()?,
 
                     b'-' => self.start_literal(&b'-', false),
@@ -400,7 +399,7 @@ impl FromStr for WCNFHeader {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if !s.starts_with("p wcnf ") {
-            return Err(DimacsParseError::InvalidHeader(s.to_string()));
+            return Err(DimacsParseError::InvalidHeader(s.to_owned()));
         }
 
         let mut components = s.trim().split(' ').skip(2);
@@ -410,7 +409,7 @@ impl FromStr for WCNFHeader {
         let top_weight = next_header_component::<u64>(&mut components, s)?;
 
         if components.next().is_some() {
-            return Err(DimacsParseError::InvalidHeader(s.to_string()));
+            return Err(DimacsParseError::InvalidHeader(s.to_owned()));
         }
 
         Ok(Self {
@@ -426,7 +425,7 @@ impl FromStr for CNFHeader {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if !s.starts_with("p cnf ") {
-            return Err(DimacsParseError::InvalidHeader(s.to_string()));
+            return Err(DimacsParseError::InvalidHeader(s.to_owned()));
         }
 
         let mut components = s.trim().split(' ').skip(2);
@@ -435,7 +434,7 @@ impl FromStr for CNFHeader {
         let num_clauses = next_header_component::<usize>(&mut components, s)?;
 
         if components.next().is_some() {
-            return Err(DimacsParseError::InvalidHeader(s.to_string()));
+            return Err(DimacsParseError::InvalidHeader(s.to_owned()));
         }
 
         Ok(Self {
@@ -471,26 +470,26 @@ fn next_header_component<'a, Num: FromStr>(
 ) -> Result<Num, DimacsParseError> {
     components
         .next()
-        .ok_or_else(|| DimacsParseError::InvalidHeader(header.to_string()))?
+        .ok_or_else(|| DimacsParseError::InvalidHeader(header.to_owned()))?
         .parse::<Num>()
-        .map_err(|_| DimacsParseError::InvalidHeader(header.to_string()))
+        .map_err(|_| DimacsParseError::InvalidHeader(header.to_owned()))
 }
 
 /// A dimacs sink that creates a fresh [`ConstraintSatisfactionSolver`] when reading DIMACS files.
-pub struct SolverDimacsSink {
+pub(crate) struct SolverDimacsSink {
     solver: ConstraintSatisfactionSolver,
     variables: Vec<PropositionalVariable>,
 }
 
 /// The arguments to construct a [`ConstraintSatisfactionSolver`]. Forwarded to
 /// [`ConstraintSatisfactionSolver::new()`].
-pub struct CSPSolverArgs {
+pub(crate) struct CSPSolverArgs {
     solver_options: SatisfactionSolverOptions,
     sat_options: SatOptions,
 }
 
 impl CSPSolverArgs {
-    pub fn new(
+    pub(crate) fn new(
         sat_options: SatOptions,
         solver_options: SatisfactionSolverOptions,
     ) -> CSPSolverArgs {
@@ -498,6 +497,18 @@ impl CSPSolverArgs {
             solver_options,
             sat_options,
         }
+    }
+}
+
+impl SolverDimacsSink {
+    fn mapped_clause(&self, clause: &[NonZeroI32]) -> Vec<Literal> {
+        clause
+            .iter()
+            .map(|dimacs_code| {
+                let variable = self.variables[dimacs_code.unsigned_abs().get() as usize - 1];
+                Literal::new(variable, dimacs_code.get().is_positive())
+            })
+            .collect()
     }
 }
 
@@ -522,30 +533,15 @@ impl DimacsSink for SolverDimacsSink {
     }
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
-        let mapped = clause
-            .iter()
-            .map(|dimacs_code| {
-                let variable = self.variables[dimacs_code.unsigned_abs().get() as usize - 1];
-                Literal::new(variable, dimacs_code.get().is_positive())
-            })
-            .collect();
-
+        let mapped = self.mapped_clause(clause);
         let _ = self.solver.add_permanent_clause(mapped);
     }
 
     fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
-        let mapped = clause
-            .iter()
-            .map(|dimacs_code| {
-                let variable = self.variables[dimacs_code.unsigned_abs().get() as usize - 1];
-                Literal::new(variable, dimacs_code.get().is_positive())
-            })
-            .collect();
+        let mapped = self.mapped_clause(clause);
 
-        let mut clause = SATEngineDataStructures::preprocess_clause(
-            mapped,
-            self.solver.get_propositional_assignments(),
-        );
+        let mut clause =
+            Preprocessor::preprocess_clause(mapped, self.solver.get_propositional_assignments());
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
@@ -558,12 +554,12 @@ impl DimacsSink for SolverDimacsSink {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
-            // The soft clause is a unit clause, we can use the literal in the objective directly without needing an additional selector variable.
+            // The soft clause is a unit clause, we can use the literal in the objective directly
+            // without needing an additional selector variable.
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
             let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
-
             clause.push(soft_literal);
             let _ = self.solver.add_permanent_clause(clause);
 

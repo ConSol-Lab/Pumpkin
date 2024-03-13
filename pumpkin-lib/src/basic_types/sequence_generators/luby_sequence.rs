@@ -1,10 +1,11 @@
-use super::SequenceGeneratorInterface;
+use super::SequenceGenerator;
 
-//The Luby sequence is a recursive sequence of the form:
-//1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
+// The Luby sequence is a recursive sequence of the form:
+// 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
 //  The above sequence is multiplied with a given constant 'base_value'
-//Generating the next element is computed in constant time using Knuth's 'reluctant doubling' formula
-//Note that overflows are not taken into account
+// Generating the next element is computed in constant time using Knuth's 'reluctant doubling'
+// formula Note that overflows are not taken into account
+#[derive(Debug, Copy, Clone)]
 pub struct LubySequence {
     u: i64,
     v: i64,
@@ -21,9 +22,9 @@ impl LubySequence {
     }
 }
 
-impl SequenceGeneratorInterface for LubySequence {
+impl SequenceGenerator for LubySequence {
     fn next(&mut self) -> i64 {
-        //The implementation follows Donald Knuth's 'reluctant doubling' formula
+        // The implementation follows Donald Knuth's 'reluctant doubling' formula
         let next_value = self.v;
         if (self.u & (-self.u)) == self.v {
             self.u += 1;
@@ -37,13 +38,12 @@ impl SequenceGeneratorInterface for LubySequence {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
-
     use super::LubySequence;
+    use crate::basic_types::sequence_generators::SequenceGenerator;
 
     #[test]
     fn test_base_1() {
-        //1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
+        // 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
         let mut luby_sequence = LubySequence::new(1);
         assert!(luby_sequence.next() == 1);
         assert!(luby_sequence.next() == 1);
@@ -67,7 +67,8 @@ mod tests {
 
     #[test]
     fn test_base_100() {
-        //100, 100, 200, 100, 100, 200, 400, 100, 100, 200, 100, 100, 200, 400, 800, 100, 100, 200....
+        // 100, 100, 200, 100, 100, 200, 400, 100, 100, 200, 100, 100, 200, 400, 800, 100, 100,
+        // 200....
         let mut luby_sequence = LubySequence::new(100);
         assert!(luby_sequence.next() == 100);
         assert!(luby_sequence.next() == 100);

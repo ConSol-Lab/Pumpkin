@@ -1,12 +1,10 @@
-use crate::{
-    basic_types::{ClauseReference, Literal},
-    engine::constraint_satisfaction_solver::ClauseAllocator,
-    pumpkin_assert_moderate,
-};
-
 use super::clause_allocators::ClauseAllocatorInterface;
+use crate::basic_types::ClauseReference;
+use crate::basic_types::Literal;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::pumpkin_assert_moderate;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExplanationClauseManager {
     explanation_clauses: Vec<ClauseReference>,
 }
@@ -30,8 +28,9 @@ impl ExplanationClauseManager {
     }
 
     pub fn clean_up_explanation_clauses(&mut self, clause_allocator: &mut ClauseAllocator) {
-        //the idea is to delete clauses in reverse order
-        //  so that in the future, when we implement manual memory management, we can simply skip large blocks of memory without inspection
+        // the idea is to delete clauses in reverse order
+        //  so that in the future, when we implement manual memory management, we can simply skip
+        // large blocks of memory without inspection
         for clause_reference in self.explanation_clauses.iter().rev() {
             clause_allocator.delete_clause(*clause_reference);
         }

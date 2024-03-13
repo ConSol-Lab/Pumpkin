@@ -1,12 +1,13 @@
 //! A simple model for disjunctive scheduling using reified constraints
-//! Given a set of tasks and their processing times, it finds a schedule such that none of the jobs overlap
-//! It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e. either job i starts after j or job j starts after i)
+//! Given a set of tasks and their processing times, it finds a schedule such that none of the jobs
+//! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
+//! either job i starts after j or job j starts after i)
 
-use pumpkin_lib::{
-    basic_types::{variables::IntVar, Literal},
-    constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::variables::IntVar;
+use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {
     let mut args = std::env::args();
@@ -35,7 +36,8 @@ fn main() {
         .map(|i| solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32))
         .collect::<Vec<_>>();
 
-    //Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x which is equal to s_y - s_x <= -p_y)
+    // Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x
+    // which is equal to s_y - s_x <= -p_y)
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
@@ -51,19 +53,24 @@ fn main() {
             }
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
-            //literal => s_y - s_x <= -p_y)
-            solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
+            // literal => s_y - s_x <= -p_y)
+            let _ =
+                solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
+            let _ = solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
 
-            //Either x starts before y or y start before x
+            // Either x starts before y or y start before x
             let _ = solver.add_permanent_clause(vec![literal, precedence_literals[y][x]]);
         }
     }
 
-    if solver.solve(i64::MAX) == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    if solver.solve(i64::MAX, &mut brancher)
+        == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible
+    {
         panic!("Infeasibility Detected")
     }
 

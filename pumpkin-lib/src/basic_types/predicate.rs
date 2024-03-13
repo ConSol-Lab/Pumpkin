@@ -1,6 +1,6 @@
 use super::DomainId;
 
-#[derive(Clone, PartialEq, Eq, Copy)]
+#[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Predicate {
     LowerBound {
         domain_id: DomainId,
@@ -18,6 +18,8 @@ pub enum Predicate {
         domain_id: DomainId,
         equality_constant: i32,
     },
+    False,
+    True,
 }
 
 impl Predicate {
@@ -51,82 +53,26 @@ impl Predicate {
         )
     }
 
-    pub fn get_right_hand_side(&self) -> i32 {
-        match *self {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => lower_bound,
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => upper_bound,
-            Predicate::NotEqual {
-                domain_id: _,
-                not_equal_constant,
-            } => not_equal_constant,
-            Predicate::Equal {
-                domain_id: _,
-                equality_constant,
-            } => equality_constant,
-        }
-    }
-
-    pub fn get_domain(&self) -> DomainId {
+    pub fn get_domain(&self) -> Option<DomainId> {
         match *self {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound: _,
-            } => domain_id,
+            } => Some(domain_id),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound: _,
-            } => domain_id,
+            } => Some(domain_id),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant: _,
-            } => domain_id,
+            } => Some(domain_id),
             Predicate::Equal {
                 domain_id,
                 equality_constant: _,
-            } => domain_id,
-        }
-    }
+            } => Some(domain_id),
 
-    pub fn map(&mut self, mut f: impl FnMut(i32) -> i32) {
-        match self {
-            Predicate::LowerBound { lower_bound, .. } => *lower_bound = f(*lower_bound),
-            Predicate::UpperBound { upper_bound, .. } => *upper_bound = f(*upper_bound),
-            Predicate::NotEqual {
-                not_equal_constant, ..
-            } => *not_equal_constant = f(*not_equal_constant),
-            Predicate::Equal {
-                equality_constant, ..
-            } => *equality_constant = f(*equality_constant),
-        }
-    }
-
-    pub fn flip_bound(&mut self) {
-        match *self {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => {
-                *self = Predicate::UpperBound {
-                    domain_id,
-                    upper_bound: lower_bound,
-                }
-            }
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => {
-                *self = Predicate::LowerBound {
-                    domain_id,
-                    lower_bound: upper_bound,
-                }
-            }
-            _ => {}
+            Predicate::True | Predicate::False => None,
         }
     }
 
@@ -171,6 +117,8 @@ impl std::ops::Not for Predicate {
                 domain_id,
                 not_equal_constant: equality_constant,
             },
+            Predicate::False => Predicate::True,
+            Predicate::True => Predicate::False,
         }
     }
 }
@@ -194,6 +142,8 @@ impl std::fmt::Display for Predicate {
                 domain_id,
                 equality_constant,
             } => write!(f, "[{} == {}]", domain_id, equality_constant),
+            Predicate::False => write!(f, "false"),
+            Predicate::True => write!(f, "true"),
         }
     }
 }

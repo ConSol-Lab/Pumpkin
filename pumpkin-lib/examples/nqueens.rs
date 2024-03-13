@@ -1,8 +1,8 @@
-use pumpkin_lib::{
-    basic_types::{variables::IntVar, CSPSolverExecutionFlag},
-    constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::variables::IntVar;
+use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {
     let n = std::env::args()
@@ -21,7 +21,7 @@ fn main() {
         .map(|_| solver.create_new_integer_variable(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
-    solver.all_different(variables.clone());
+    let _ = solver.all_different(variables.clone());
 
     let diag1 = variables
         .iter()
@@ -36,10 +36,12 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    solver.all_different(diag1);
-    solver.all_different(diag2);
+    let _ = solver.all_different(diag1);
+    let _ = solver.all_different(diag2);
 
-    match solver.solve(i64::MAX) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    match solver.solve(i64::MAX, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
 

@@ -1,9 +1,10 @@
-use crate::pumpkin_assert_simple;
 use std::iter::Rev;
 use std::ops::Deref;
 use std::vec::Drain;
 
-#[derive(Clone)]
+use crate::pumpkin_assert_simple;
+
+#[derive(Clone, Debug)]
 pub struct Trail<T> {
     current_decision_level: usize,
     /// At index i is the position where the i-th decision level ends (exclusive) on the trail

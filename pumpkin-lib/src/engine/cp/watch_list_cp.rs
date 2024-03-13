@@ -1,13 +1,19 @@
-use crate::basic_types::DomainId;
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
+use enumset::EnumSetType;
 
 use super::PropagatorVarId;
+use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WatchListCP {
-    watchers: Vec<WatcherCP>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<DomainId, WatcherCP>, /* contains propagator ids of propagators that
+                                              * watch domain changes of the i-th integer
+                                              * variable */
+    is_watching_anything: bool,
 }
 
+#[derive(Debug)]
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
     watch_list: &'a mut WatchListCP,
@@ -28,10 +34,14 @@ pub enum IntDomainEvent {
     Removal,
 }
 
-//public functions
+// public functions
 impl WatchListCP {
     pub fn grow(&mut self) {
         self.watchers.push(WatcherCP::default());
+    }
+
+    pub fn is_watching_anything(&self) -> bool {
+        self.is_watching_anything
     }
 
     pub fn num_domains(&self) -> u32 {
@@ -78,6 +88,7 @@ impl<'a> Watchers<'a> {
     }
 
     pub fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
+        self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {
@@ -95,11 +106,11 @@ impl<'a> Watchers<'a> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WatcherCP {
     // FIXME measure performance of these vectors, they are treated as sets
-    pub lower_bound_watchers: Vec<PropagatorVarId>,
-    pub upper_bound_watchers: Vec<PropagatorVarId>,
-    pub assign_watchers: Vec<PropagatorVarId>,
-    pub removal_watchers: Vec<PropagatorVarId>,
+    lower_bound_watchers: Vec<PropagatorVarId>,
+    upper_bound_watchers: Vec<PropagatorVarId>,
+    assign_watchers: Vec<PropagatorVarId>,
+    removal_watchers: Vec<PropagatorVarId>,
 }

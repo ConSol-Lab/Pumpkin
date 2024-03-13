@@ -1,13 +1,15 @@
+use crate::basic_types::KeyedVec;
 use crate::basic_types::PropositionalVariable;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PropositionalValueSelector {
-    truth_values: Vec<CandidateTruthAssignment>,
+    truth_values: KeyedVec<PropositionalVariable, CandidateTruthAssignment>,
 }
 
+#[derive(Debug)]
 struct CandidateTruthAssignment {
-    pub value: bool,
-    pub frozen: bool,
+    value: bool,
+    frozen: bool,
 }
 
 impl PropositionalValueSelector {
@@ -23,7 +25,7 @@ impl PropositionalValueSelector {
     }
 
     pub fn update_if_not_frozen(&mut self, variable: PropositionalVariable, new_truth_value: bool) {
-        //probably better to avoid the explicit 'if' statement
+        // probably better to avoid the explicit 'if' statement
         if !self.truth_values[variable].frozen {
             self.truth_values[variable].value = new_truth_value;
         }

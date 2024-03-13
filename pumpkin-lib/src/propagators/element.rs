@@ -1,25 +1,33 @@
 use std::cell::OnceCell;
-use std::cmp::{max, min};
+use std::cmp::max;
+use std::cmp::min;
 use std::rc::Rc;
 
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::{
-    CPPropagatorConstructor, ConstraintProgrammingPropagator, DomainEvents, LocalId,
-    PropagationContext, PropagationContextMut, PropagatorConstructorContext, PropagatorVariable,
-    ReadDomains,
-};
-use crate::{conjunction, predicate};
+use crate::conjunction;
+use crate::engine::CPPropagatorConstructor;
+use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::DomainEvents;
+use crate::engine::LocalId;
+use crate::engine::PropagationContext;
+use crate::engine::PropagationContextMut;
+use crate::engine::PropagatorConstructorContext;
+use crate::engine::PropagatorVariable;
+use crate::engine::ReadDomains;
+use crate::predicate;
 
-pub struct Element<VX, VI, VE> {
-    pub array: Box<[VX]>,
-    pub index: VI,
-    pub rhs: VE,
+pub(crate) struct ElementArgs<VX, VI, VE> {
+    pub(crate) array: Box<[VX]>,
+    pub(crate) index: VI,
+    pub(crate) rhs: VE,
 }
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
-pub struct ElementProp<VX, VI, VE> {
+///
+/// Note that this propagator is 0-indexed
+pub(crate) struct ElementPropagator<VX, VI, VE> {
     array: Rc<[PropagatorVariable<VX>]>,
     index: PropagatorVariable<VI>,
     rhs: PropagatorVariable<VE>,
@@ -50,8 +58,10 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor for Element<VX, VI, VE> {
-    type Propagator = ElementProp<VX, VI, VE>;
+impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor
+    for ElementArgs<VX, VI, VE>
+{
+    type Propagator = ElementPropagator<VX, VI, VE>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         // local ids of array vars are shifted by ID_X_OFFSET
@@ -67,7 +77,7 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor for E
                 )
             })
             .collect();
-        ElementProp {
+        ElementPropagator {
             array,
             index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX),
             rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS),
@@ -76,7 +86,7 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor for E
 }
 
 impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
-    for ElementProp<VX, VI, VE>
+    for ElementPropagator<VX, VI, VE>
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         // For incremental solving: use the doubly linked list data-structure
@@ -239,10 +249,9 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagat
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
-
-    use super::*;
 
     #[test]
     fn cocp_m4co_example() {
@@ -257,7 +266,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(Element { array, index, rhs })
+            .new_propagator(ElementArgs { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -282,7 +291,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(Element { array, index, rhs })
+            .new_propagator(ElementArgs { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -318,7 +327,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(Element { array, index, rhs })
+            .new_propagator(ElementArgs { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
