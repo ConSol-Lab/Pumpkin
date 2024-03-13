@@ -11,10 +11,10 @@ use crate::basic_types::PropositionalVariableGeneratorIterator;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
+#[cfg(doc)]
+use crate::engine::propagation::PropagationContext;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-#[cfg(doc)]
-use crate::engine::PropagationContext;
 use crate::engine::SATCPMediator;
 use crate::pumpkin_assert_advanced;
 

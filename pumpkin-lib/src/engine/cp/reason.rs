@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 use crate::engine::debug_helper::DebugDyn;
-use crate::engine::PropagationContext;
+use crate::engine::propagation::PropagationContext;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]

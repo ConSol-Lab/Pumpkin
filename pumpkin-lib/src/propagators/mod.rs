@@ -22,8 +22,8 @@
 //!
 //! # Practical
 //!
-//! For every propagator, it is expected that it implements both [`CPPropagatorConstructor`] which
-//! is used for creating the propagator and [`ConstraintProgrammingPropagator`] which defines the
+//! For every propagator, it is expected that it implements both [`PropagatorConstructor`] which
+//! is used for creating the propagator and [`Propagator`] which defines the
 //! methods for interaction between the solver and the propagator.
 //!
 //! We do not require *any* propagator to be idempotent (see the previous section for a definition)
@@ -45,6 +45,6 @@ pub use arithmetic::*;
 pub use cumulative::*;
 
 #[cfg(doc)]
-use crate::engine::CPPropagatorConstructor;
+use crate::engine::propagation::Propagator;
 #[cfg(doc)]
-use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::propagation::PropagatorConstructor;

@@ -1,28 +1,28 @@
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::LocalId;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorVariable;
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
-pub(crate) struct AbsoluteValueArgs<VA, VB> {
+pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,
     /// The absolute of `signed`.
     pub(crate) absolute: VB,
 }
 
-impl<VA: IntVar, VB: IntVar> CPPropagatorConstructor for AbsoluteValueArgs<VA, VB> {
+impl<VA: IntVar, VB: IntVar> PropagatorConstructor for AbsoluteValueConstructor<VA, VB> {
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -38,7 +38,7 @@ pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     absolute: PropagatorVariable<VB>,
 }
 
-impl<VA: IntVar, VB: IntVar> ConstraintProgrammingPropagator for AbsoluteValuePropagator<VA, VB> {
+impl<VA: IntVar, VB: IntVar> Propagator for AbsoluteValuePropagator<VA, VB> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
@@ -140,7 +140,7 @@ mod tests {
         let absolute = solver.new_variable(-2, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -154,7 +154,7 @@ mod tests {
         let absolute = solver.new_variable(0, 3);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -168,7 +168,7 @@ mod tests {
         let absolute = solver.new_variable(0, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -182,7 +182,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -196,7 +196,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -210,7 +210,7 @@ mod tests {
         let absolute = solver.new_variable(3, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueArgs { signed, absolute })
+            .new_propagator(AbsoluteValueConstructor { signed, absolute })
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);

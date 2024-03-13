@@ -6,17 +6,17 @@ use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::EnqueueDecision;
-use crate::engine::LocalId;
-use crate::engine::OpaqueDomainEvent;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::local_id::LocalId;
+use crate::engine::propagation::propagation_context::PropagationContext;
+use crate::engine::propagation::propagation_context::PropagationContextMut;
+use crate::engine::propagation::propagator::EnqueueDecision;
+use crate::engine::propagation::propagator::Propagator;
+use crate::engine::propagation::propagator_constructor::PropagatorConstructor;
+use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
+use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::predicate;
 
 type DiffLogicVariables<V> = (
@@ -27,7 +27,7 @@ type DiffLogicVariables<V> = (
 );
 
 /// Bounds consistent propagator for a set of constraints `x_i + \delta <= x_j`.
-pub(crate) struct DifferenceLogicArgs<V> {
+pub(crate) struct DifferenceLogicConstructor<V> {
     pub(crate) difference_constraints: Box<[(V, i32, V)]>,
 }
 
@@ -46,7 +46,7 @@ pub(crate) struct DifferenceLogicPropagator<V> {
     worklist: VecDeque<PropagatorVariable<V>>,
 }
 
-impl<V> CPPropagatorConstructor for DifferenceLogicArgs<V>
+impl<V> PropagatorConstructor for DifferenceLogicConstructor<V>
 where
     V: IntVar + Hash + Eq + 'static,
     <V as IntVar>::AffineView: Hash + Eq,
@@ -145,7 +145,7 @@ where
 {
     fn local_id_to_var(&self, id: LocalId) -> &PropagatorVariable<V> {
         // This mirrors the local ids computed in `register_vars` in
-        //  `<DiffLogic as CPPropagatorConstructor>::create`.
+        //  `<DiffLogic as PropagatorConstructor>::create`.
         // Note that the caching does not break the mapping of `LocalId`s to difference_vars.
         //  Whenever cached `PropagatorVariable`s were used in the tuple, their `LocalId`s simply
         //  map to an earlier offset in the `difference_vars` array.
@@ -161,7 +161,7 @@ where
     }
 }
 
-impl<V> ConstraintProgrammingPropagator for DifferenceLogicPropagator<V>
+impl<V> Propagator for DifferenceLogicPropagator<V>
 where
     V: IntVar + Hash + Eq,
 {
@@ -287,7 +287,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let mut propagator = solver
-            .new_propagator(DifferenceLogicArgs {
+            .new_propagator(DifferenceLogicConstructor {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -346,7 +346,7 @@ mod tests {
         // f2   x_1 + 2 <= x_2
 
         let _ = solver
-            .new_propagator(DifferenceLogicArgs {
+            .new_propagator(DifferenceLogicConstructor {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 2, x_2)].into_boxed_slice(),
             })
             .expect("no empty domains");
@@ -375,7 +375,7 @@ mod tests {
         // f2   x_1 + 1 <= x_0
 
         let inconsistency = solver
-            .new_propagator(DifferenceLogicArgs {
+            .new_propagator(DifferenceLogicConstructor {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 1, x_0)].into_boxed_slice(),
             })
             .expect_err("cycle detected");

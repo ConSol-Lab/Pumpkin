@@ -6,18 +6,18 @@ use std::rc::Rc;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::LocalId;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorVariable;
 use crate::predicate;
 
-pub(crate) struct ElementArgs<VX, VI, VE> {
+pub(crate) struct ElementConstructor<VX, VI, VE> {
     pub(crate) array: Box<[VX]>,
     pub(crate) index: VI,
     pub(crate) rhs: VE,
@@ -58,8 +58,8 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor
-    for ElementArgs<VX, VI, VE>
+impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> PropagatorConstructor
+    for ElementConstructor<VX, VI, VE>
 {
     type Propagator = ElementPropagator<VX, VI, VE>;
 
@@ -85,9 +85,7 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> CPPropagatorConstructor
     }
 }
 
-impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> ConstraintProgrammingPropagator
-    for ElementPropagator<VX, VI, VE>
-{
+impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> Propagator for ElementPropagator<VX, VI, VE> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
@@ -266,7 +264,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementArgs { array, index, rhs })
+            .new_propagator(ElementConstructor { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -291,7 +289,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementArgs { array, index, rhs })
+            .new_propagator(ElementConstructor { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -327,7 +325,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementArgs { array, index, rhs })
+            .new_propagator(ElementConstructor { array, index, rhs })
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");

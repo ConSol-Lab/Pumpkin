@@ -9,11 +9,11 @@ use enumset::EnumSet;
 use crate::basic_types::DomainId;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
-use crate::engine::OpaqueDomainEvent;
 use crate::engine::Watchers;
 
 pub trait IntVar: Clone + PredicateConstructor<Value = i32> {

@@ -1,4 +1,4 @@
-//! Defines common methods for [`ConstraintProgrammingPropagator`]s which make use of time-table
+//! Defines common methods for [`Propagator`]s which make use of time-table
 //! reasoning (see [`crate::propagators::cumulative::time_table`] for more information) such as
 //! [`should_enqueue`] or [`propagate_based_on_timetable`].
 
@@ -9,12 +9,12 @@ use crate::basic_types::variables::IntVar;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::PropagationContextMut;
 #[cfg(doc)]
-use crate::engine::ConstraintProgrammingPropagator;
+use crate::engine::propagation::Propagator;
 use crate::engine::EmptyDomain;
-use crate::engine::EnqueueDecision;
-use crate::engine::PropagationContextMut;
-use crate::engine::ReadDomains;
 use crate::propagators::util::propagate_and_explain;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::ChangeWithExplanationBound;

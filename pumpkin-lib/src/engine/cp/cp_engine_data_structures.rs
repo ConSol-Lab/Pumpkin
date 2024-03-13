@@ -3,16 +3,16 @@ use std::cmp::min;
 use crate::basic_types::DomainId;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::BooleanDomainEvent;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::EnqueueDecision;
 use crate::engine::IntDomainEvent;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
 use crate::engine::PropagatorQueue;
 use crate::engine::WatchListCP;
 use crate::engine::WatchListPropositional;
@@ -104,7 +104,7 @@ impl CPEngineDataStructures {
     /// true is returned.
     pub fn process_domain_events(
         &mut self,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        cp_propagators: &mut [Box<dyn Propagator>],
         assignments_propositional: &mut AssignmentsPropositional,
     ) -> bool {
         // If there are no variables being watched then there is no reason to perform these

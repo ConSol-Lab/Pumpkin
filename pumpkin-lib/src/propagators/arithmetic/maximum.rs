@@ -2,25 +2,27 @@ use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::LocalId;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorVariable;
 use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`.
 #[derive(Debug)]
-pub struct MaximumArgs<ElementVar, Rhs> {
+pub struct MaximumConstructor<ElementVar, Rhs> {
     pub array: Box<[ElementVar]>,
     pub rhs: Rhs,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> CPPropagatorConstructor for MaximumArgs<ElementVar, Rhs> {
+impl<ElementVar: IntVar, Rhs: IntVar> PropagatorConstructor
+    for MaximumConstructor<ElementVar, Rhs>
+{
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -52,9 +54,7 @@ pub struct MaximumPropagator<ElementVar, Rhs> {
     rhs: PropagatorVariable<Rhs>,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> ConstraintProgrammingPropagator
-    for MaximumPropagator<ElementVar, Rhs>
-{
+impl<ElementVar: IntVar, Rhs: IntVar> Propagator for MaximumPropagator<ElementVar, Rhs> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
@@ -123,7 +123,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumArgs {
+            .new_propagator(MaximumConstructor {
                 array: [a, b, c].into(),
                 rhs,
             })
@@ -146,7 +146,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumArgs {
+            .new_propagator(MaximumConstructor {
                 array: [a, b, c].into(),
                 rhs,
             })
@@ -169,7 +169,7 @@ mod tests {
         let rhs = solver.new_variable(1, 3);
 
         let _ = solver
-            .new_propagator(MaximumArgs {
+            .new_propagator(MaximumConstructor {
                 array: array.clone(),
                 rhs,
             })

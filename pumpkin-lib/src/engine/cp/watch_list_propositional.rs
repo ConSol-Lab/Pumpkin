@@ -1,9 +1,9 @@
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
-use super::PropagatorVarId;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
+use crate::engine::propagation::propagator_var_id::PropagatorVarId;
 
 #[derive(Debug)]
 pub struct WatchListPropositional {

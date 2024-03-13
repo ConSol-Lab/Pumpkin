@@ -10,10 +10,10 @@ use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::cp::AssignmentsInteger;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorId;
 use crate::engine::SATCPMediator;
 use crate::engine::SATEngineDataStructures;
 use crate::propagators::clausal::ClausalPropagator;
@@ -48,7 +48,7 @@ impl DebugHelper {
         clausal_propagator: &ClausalPropagatorType,
         assignments_integer: &AssignmentsInteger,
         sat_data_structures: &SATEngineDataStructures,
-        propagators_cp: &[Box<dyn ConstraintProgrammingPropagator>],
+        propagators_cp: &[Box<dyn Propagator>],
     ) -> bool {
         let mut assignments_integer_clone = assignments_integer.clone();
         let mut assignments_propostional_clone =
@@ -125,7 +125,7 @@ impl DebugHelper {
         assignments_propositional: &AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
         failure_reason: &PropositionalConjunction,
-        propagator: &dyn ConstraintProgrammingPropagator,
+        propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
@@ -154,7 +154,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
-        propagator: &dyn ConstraintProgrammingPropagator,
+        propagator: &dyn Propagator,
         propagator_id: u32,
     ) -> bool {
         let reason: PropositionalConjunction = reason
@@ -325,7 +325,7 @@ impl DebugHelper {
         assignments_propositional: &AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
         failure_reason: &PropositionalConjunction,
-        propagator: &dyn ConstraintProgrammingPropagator,
+        propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) {
         let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
@@ -380,7 +380,7 @@ impl DebugHelper {
         assignments_propositional: &AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
         failure_reason: &PropositionalConjunction,
-        propagator: &dyn ConstraintProgrammingPropagator,
+        propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) {
         // let the failure be: (p1 && p2 && p3) -> failure
