@@ -5,8 +5,8 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::basic_types::variables::IntVar;
-use crate::engine::LocalId;
-use crate::engine::PropagatorVariable;
+use crate::engine::propagation::local_id::LocalId;
+use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
 use crate::propagators::TimeTablePerPointPropagator;
 

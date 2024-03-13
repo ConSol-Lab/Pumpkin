@@ -8,11 +8,11 @@ use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalVariable;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::CPEngineDataStructures;
-use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::EmptyDomain;
 use crate::engine::ExplanationClauseManager;
 use crate::engine::SATEngineDataStructures;
@@ -122,7 +122,7 @@ impl SATCPMediator {
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        cp_propagators: &mut [Box<dyn Propagator>],
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(
             self.cp_trail_synced_position

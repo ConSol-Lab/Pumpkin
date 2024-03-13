@@ -33,16 +33,16 @@ use crate::engine::clause_allocators::ClauseAllocatorBasic;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::cp::CPEngineDataStructures;
 use crate::engine::debug_helper::DebugDyn;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::sat::SATEngineDataStructures;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::DebugHelper;
 use crate::engine::LearnedClauseManager;
 use crate::engine::LearnedClauseMinimiser;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorId;
 use crate::engine::RestartStrategy;
 use crate::engine::SATCPMediator;
 use crate::engine::SatOptions;
@@ -84,7 +84,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// propagators.
 /// ```
 /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualArgs;
+/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
 /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 /// # use pumpkin_lib::basic_types::variables::IntVar;
@@ -97,7 +97,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 ///
 /// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
 /// //  'x != y' is represented using the propagator for 'x - y != 0'
-/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualArgs::new([x.offset(0), y.scaled(-1)].into(), 0));
+/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualConstructor::new([x.into(), y.scaled(-1)].into(), 0));
 /// assert!(no_root_level_conflict);
 ///
 /// // We create a branching strategy, in our case we will simply use the default one
@@ -128,7 +128,7 @@ pub struct ConstraintSatisfactionSolver {
     learned_clause_manager: LearnedClauseManager,
     learned_clause_minimiser: LearnedClauseMinimiser,
     restart_strategy: RestartStrategy,
-    cp_propagators: Vec<Box<dyn ConstraintProgrammingPropagator>>,
+    cp_propagators: Vec<Box<dyn Propagator>>,
     sat_cp_mediator: SATCPMediator,
     seen: KeyedVec<PropositionalVariable, bool>,
     counters: Counters,
@@ -142,7 +142,7 @@ impl Debug for ConstraintSatisfactionSolver {
         let cp_propagators: Vec<_> = self
             .cp_propagators
             .iter()
-            .map(|_| DebugDyn::from("ConstraintProgrammingPropagator"))
+            .map(|_| DebugDyn::from("Propagator"))
             .collect();
         f.debug_struct("ConstraintSatisfactionSolver")
             .field("state", &self.state)
@@ -1016,7 +1016,7 @@ impl ConstraintSatisfactionSolver {
     /// `false` will be returned again.
     pub fn add_propagator<Constructor>(&mut self, constructor: Constructor) -> bool
     where
-        Constructor: CPPropagatorConstructor,
+        Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
         if self.is_in_infeasible_state() {

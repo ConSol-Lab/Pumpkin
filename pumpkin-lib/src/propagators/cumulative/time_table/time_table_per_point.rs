@@ -1,4 +1,4 @@
-//! [`ConstraintProgrammingPropagator`] for the Cumulative constraint; it
+//! [`Propagator`] for the Cumulative constraint; it
 //! reasons over individual time-points instead of intervals. See [`TimeTablePerPointPropagator`]
 //! for more information.
 
@@ -11,13 +11,15 @@ use super::time_table_util::ResourceProfile;
 use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::EnqueueDecision;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
 use crate::propagators::reset_bounds_clear_updated;
 use crate::propagators::update_bounds_task;
 use crate::propagators::util::create_inconsistency;
@@ -26,7 +28,7 @@ use crate::propagators::CumulativeArgs;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
 
-/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
 /// different time-points - This method creates a [`ResourceProfile`] per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
@@ -55,7 +57,7 @@ pub struct TimeTablePerPointPropagator<Var> {
 /// start time and they are non-overlapping
 pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
 
-impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointPropagator<Var>>
+impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
@@ -139,7 +141,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPointPropagator<Var> {
+impl<Var: IntVar + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context,
@@ -163,8 +165,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
     fn notify(
         &mut self,
         context: &mut PropagationContextMut,
-        local_id: crate::engine::LocalId,
-        _event: crate::engine::OpaqueDomainEvent,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
@@ -220,8 +222,8 @@ mod tests {
     use crate::basic_types::Predicate;
     use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
-    use crate::engine::EnqueueDecision;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPoint;
 

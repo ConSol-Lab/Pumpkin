@@ -2,31 +2,31 @@ use crate::basic_types::variables::IntVar;
 use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
-use crate::engine::CPPropagatorConstructor;
-use crate::engine::ConstraintProgrammingPropagator;
-use crate::engine::DomainEvents;
-use crate::engine::LocalId;
-use crate::engine::PropagationContext;
-use crate::engine::PropagationContextMut;
-use crate::engine::PropagatorConstructorContext;
-use crate::engine::PropagatorVariable;
-use crate::engine::ReadDomains;
+use crate::engine::cp::propagation::ReadDomains;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorVariable;
 use crate::predicate;
 
 #[derive(Debug)]
-pub struct LinearLessOrEqualArgs<Var> {
+pub struct LinearLessOrEqualConstructor<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
     pub reif: Option<Literal>,
 }
 
-impl<Var: IntVar + 'static> LinearLessOrEqualArgs<Var> {
+impl<Var: IntVar + 'static> LinearLessOrEqualConstructor<Var> {
     pub fn new(x: Box<[Var]>, c: i32) -> Self {
-        LinearLessOrEqualArgs { x, c, reif: None }
+        LinearLessOrEqualConstructor { x, c, reif: None }
     }
 
     pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
-        LinearLessOrEqualArgs {
+        LinearLessOrEqualConstructor {
             x,
             c,
             reif: Some(reif),
@@ -42,7 +42,7 @@ pub struct LinearLessOrEqualPropagator<Var> {
     pub reif: Option<PropagatorVariable<Literal>>,
 }
 
-impl<Var> CPPropagatorConstructor for LinearLessOrEqualArgs<Var>
+impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
 where
     Var: IntVar,
 {
@@ -72,7 +72,7 @@ where
     }
 }
 
-impl<Var> ConstraintProgrammingPropagator for LinearLessOrEqualPropagator<Var>
+impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntVar,
 {
@@ -183,7 +183,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualArgs::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -199,7 +199,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualArgs::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -217,7 +217,11 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLessOrEqualConstructor::reified(
+                [x, y].into(),
+                7,
+                reif,
+            ))
             .expect("No conflict");
 
         solver.set_literal(reif, false);
@@ -236,7 +240,11 @@ mod tests {
         let reif = solver.new_literal();
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 7, reif))
+            .new_propagator(LinearLessOrEqualConstructor::reified(
+                [x, y].into(),
+                7,
+                reif,
+            ))
             .expect("No conflict");
 
         solver.set_literal(reif, true);
@@ -255,7 +263,11 @@ mod tests {
         let reif = solver.new_literal();
 
         let _ = solver
-            .new_propagator(LinearLessOrEqualArgs::reified([x, y].into(), 1, reif))
+            .new_propagator(LinearLessOrEqualConstructor::reified(
+                [x, y].into(),
+                1,
+                reif,
+            ))
             .expect("No conflict");
 
         assert!(solver.is_literal_false(reif));
