@@ -1,137 +1,136 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    ops::{Deref, RangeInclusive},
-    rc::Rc,
-};
+use std::fmt::Display;
+use std::fmt::Write;
+use std::rc::Rc;
 
 use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::basic_types::Literal;
 
-#[derive(Default)]
-pub struct FlatZincInstance {
-    integer_array_parameters: HashMap<Rc<str>, Box<[i32]>>,
-    integer_parameters: HashMap<Rc<str>, i32>,
-
-    integer_variables: HashMap<Rc<str>, RangeInclusive<i32>>,
-    array_of_integer_variables: HashMap<Rc<str>, Box<[Rc<str>]>>,
-
-    output_variables: Vec<OutputVariable>,
-
-    constraints: Vec<flatzinc::ConstraintItem>,
+/// The objective function of a FlatZinc model,
+/// consisting of the direction (e.g. maximization or minimization) and the integer variable which
+/// is being optimised
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FlatzincObjective {
+    Maximize(DomainId),
+    Minimize(DomainId),
 }
 
-#[derive(Clone)]
-pub enum OutputVariable {
-    Variable(Rc<str>),
-    VariableArray(Rc<str>),
+impl FlatzincObjective {
+    /// Returns the [DomainId] of the objective function
+    pub(crate) fn get_domain(&self) -> &DomainId {
+        match self {
+            FlatzincObjective::Maximize(domain) => domain,
+            FlatzincObjective::Minimize(domain) => domain,
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct FlatZincInstance {
+    pub(super) outputs: Vec<Output>,
+    pub(super) objective_function: Option<FlatzincObjective>,
 }
 
 impl FlatZincInstance {
-    pub fn builder() -> FlatZincInstanceBuilder {
-        FlatZincInstanceBuilder {
-            instance: Default::default(),
-        }
-    }
-
-    pub fn iter_variables(&self) -> impl Iterator<Item = (Rc<str>, RangeInclusive<i32>)> + '_ {
-        self.integer_variables
-            .iter()
-            .map(|(id, bounds)| (Rc::clone(id), bounds.clone()))
-    }
-
-    pub fn iter_constraints(&self) -> impl Iterator<Item = &flatzinc::ConstraintItem> + '_ {
-        self.constraints.iter()
-    }
-
-    pub fn resolve_array_integer_constants(&self, id: &str) -> Option<Box<[i32]>> {
-        self.integer_array_parameters.get(id).cloned()
-    }
-
-    pub fn resolve_integer_constant(&self, id: &str) -> Option<i32> {
-        self.integer_parameters.get(id).copied()
-    }
-
-    pub fn resolve_variable_array(&self, id: &str) -> Option<&[Rc<str>]> {
-        self.array_of_integer_variables
-            .get(id)
-            .map(|array| array.deref())
-    }
-
-    pub fn iter_output_variables(&self) -> impl Iterator<Item = OutputVariable> + '_ {
-        self.output_variables.iter().cloned()
+    pub(crate) fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
+        self.outputs.iter()
     }
 }
 
-pub struct FlatZincInstanceBuilder {
-    instance: FlatZincInstance,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Output {
+    Bool(VariableOutput<Literal>),
+    Int(VariableOutput<DomainId>),
+    ArrayOfBool(ArrayOutput<Literal>),
+    ArrayOfInt(ArrayOutput<DomainId>),
 }
 
-impl FlatZincInstanceBuilder {
-    pub fn add_integer_array_parameter(&mut self, id: Rc<str>, values: Box<[i32]>) {
-        self.instance.integer_array_parameters.insert(id, values);
+impl Output {
+    pub(crate) fn bool(id: Rc<str>, literal: Literal) -> Output {
+        Output::Bool(VariableOutput {
+            id,
+            variable: literal,
+        })
     }
 
-    pub fn add_integer_variable(
-        &mut self,
+    pub(crate) fn array_of_bool(
         id: Rc<str>,
-        lb: i32,
-        ub: i32,
-        is_output_variable: bool,
-    ) {
-        self.instance
-            .integer_variables
-            .insert(Rc::clone(&id), lb..=ub);
-
-        if is_output_variable {
-            self.instance
-                .output_variables
-                .push(OutputVariable::Variable(id));
-        }
+        shape: Box<[(i32, i32)]>,
+        contents: Rc<[Literal]>,
+    ) -> Output {
+        Output::ArrayOfBool(ArrayOutput {
+            id,
+            shape,
+            contents,
+        })
     }
 
-    pub fn build(self) -> FlatZincInstance {
-        self.instance
+    pub(crate) fn int(id: Rc<str>, domain_id: DomainId) -> Output {
+        Output::Int(VariableOutput {
+            id,
+            variable: domain_id,
+        })
     }
 
-    pub fn add_integer_variable_array(
-        &mut self,
+    pub(crate) fn array_of_int(
         id: Rc<str>,
-        array: Box<[Rc<str>]>,
-        is_output_variable: bool,
-    ) {
-        self.instance
-            .array_of_integer_variables
-            .insert(Rc::clone(&id), array);
+        shape: Box<[(i32, i32)]>,
+        contents: Rc<[DomainId]>,
+    ) -> Output {
+        Output::ArrayOfInt(ArrayOutput {
+            id,
+            shape,
+            contents,
+        })
+    }
+}
 
-        if is_output_variable {
-            self.instance
-                .output_variables
-                .push(OutputVariable::VariableArray(id));
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct VariableOutput<T> {
+    id: Rc<str>,
+    variable: T,
+}
+
+impl<T> VariableOutput<T> {
+    pub(crate) fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
+        println!("{} = {};", self.id, value(&self.variable));
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ArrayOutput<T> {
+    id: Rc<str>,
+    /// The shape of the array is a sequence of index sets. The number of elements in this sequence
+    /// corresponds to the dimensionality of the array, and the element in the sequence at index i
+    /// denotes the index set used in dimension i.
+    /// Example: [(1, 5), (2, 4)] describes a 2d array, where the first dimension in indexed with
+    /// an element of 1..5, and the second dimension is indexed with an element from 2..4.
+    shape: Box<[(i32, i32)]>,
+    contents: Rc<[T]>,
+}
+
+impl<T> ArrayOutput<T> {
+    pub(crate) fn print_value<V: Display>(&self, value: impl Fn(&T) -> V) {
+        let mut array_buf = String::new();
+
+        for element in self.contents.iter() {
+            let value = value(element);
+            write!(array_buf, "{value}, ").unwrap();
         }
-    }
 
-    pub fn add_constraint_item(&mut self, constraint_decl: flatzinc::ConstraintItem) {
-        self.instance.constraints.push(constraint_decl);
-    }
-}
+        let mut shape_buf = String::new();
+        for (min, max) in self.shape.iter() {
+            write!(shape_buf, "{min}..{max}, ").unwrap();
+        }
 
-#[derive(Default)]
-pub struct VariableMap {
-    integer_variables: BTreeMap<Rc<str>, DomainId>,
-}
+        if !array_buf.is_empty() {
+            // Remove trailing comma and space.
+            array_buf.truncate(array_buf.len() - 2);
+        }
 
-pub enum Variable {
-    Integer(DomainId),
-}
-
-impl VariableMap {
-    pub fn register_integer_variable(&mut self, id: Rc<str>, domain: DomainId) {
-        self.integer_variables.insert(id, domain);
-    }
-
-    pub fn resolve(&self, id: &str) -> Option<Variable> {
-        self.integer_variables
-            .get(id)
-            .copied()
-            .map(Variable::Integer)
+        let num_dimensions = self.shape.len();
+        println!(
+            "{} = array{num_dimensions}d({shape_buf}[{array_buf}]);",
+            self.id
+        );
     }
 }

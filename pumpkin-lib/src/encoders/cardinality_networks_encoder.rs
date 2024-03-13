@@ -1,14 +1,12 @@
 use std::time::Instant;
 
-use crate::{
-    basic_types::Literal,
-    encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrenthen,
-    engine::ConstraintSatisfactionSolver, pumpkin_assert_eq_simple, pumpkin_assert_simple,
-};
-
-use super::{
-    pseudo_boolean_constraint_encoder::EncodingError, PseudoBooleanConstraintEncoderInterface,
-};
+use super::pseudo_boolean_constraint_encoder::EncodingError;
+use super::PseudoBooleanConstraintEncoderInterface;
+use crate::basic_types::Literal;
+use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrengthen;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_eq_simple;
+use crate::pumpkin_assert_simple;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental
@@ -17,6 +15,7 @@ use super::{
 /// Reference:
 /// Asín, Roberto, et al. Cardinality networks: a theoretical and empirical study.
 /// Constraints, 2011, 16: 195-221.
+#[derive(Debug)]
 pub struct CardinalityNetworkEncoder {
     literals: Vec<Literal>,
     output: Vec<Literal>,
@@ -83,7 +82,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
             .add_unit_clause(!self.output[k as usize])
             .is_err()
         {
-            Err(CannotStrenthen)
+            Err(CannotStrengthen)
         } else {
             Ok(())
         }
@@ -304,7 +303,7 @@ impl CardinalityNetworkEncoder {
         let d_prime = self.card(&a[k as usize..], k, csp_solver)?;
 
         let mut c = self.s_merge(&d, &d_prime, csp_solver)?;
-        c.remove(c.len() - 1);
+        let _ = c.remove(c.len() - 1);
 
         Some(c)
     }

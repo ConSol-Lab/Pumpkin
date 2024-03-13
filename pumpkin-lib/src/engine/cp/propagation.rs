@@ -1,17 +1,27 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::{
-    ConstraintReference, Inconsistency, Literal, Predicate, PredicateConstructor,
-    PropagationStatusCP,
-};
-use crate::engine::reason::{Reason, ReasonStore};
-use crate::engine::AssignmentsPropositional;
-use enumset::{enum_set, EnumSet};
-use std::ops::{Index, IndexMut};
+use std::ops::Index;
+use std::ops::IndexMut;
 
-use super::{
-    AssignmentsInteger, BooleanDomainEvent, EmptyDomain, IntDomainEvent, WatchListCP,
-    WatchListPropositional, Watchers, WatchersPropositional,
-};
+use enumset::enum_set;
+use enumset::EnumSet;
+
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PredicateConstructor;
+use crate::basic_types::PropagationStatusCP;
+use crate::engine::cp::AssignmentsInteger;
+use crate::engine::cp::BooleanDomainEvent;
+use crate::engine::cp::EmptyDomain;
+use crate::engine::cp::IntDomainEvent;
+use crate::engine::cp::WatchListCP;
+use crate::engine::cp::WatchListPropositional;
+use crate::engine::cp::Watchers;
+use crate::engine::cp::WatchersPropositional;
+use crate::engine::reason::Reason;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsPropositional;
 
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
@@ -67,6 +77,13 @@ pub struct PropagatorVariable<Var> {
     inner: Var,
 }
 
+impl<Var> PropagatorVariable<Var> {
+    #[cfg(test)]
+    pub fn new(variable: Var) -> Self {
+        Self { inner: variable }
+    }
+}
+
 impl PropagatorVariable<Literal> {
     pub fn get_literal(&self) -> Literal {
         self.inner
@@ -108,7 +125,7 @@ pub struct PropagatorVarId {
 
 /// A wrapper for a domain event, which forces the propagator implementation to map the event
 /// through the variable view.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct OpaqueDomainEvent(IntDomainEvent);
 
 impl From<IntDomainEvent> for OpaqueDomainEvent {
@@ -123,6 +140,7 @@ impl OpaqueDomainEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagationContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
@@ -140,6 +158,7 @@ impl<'a> PropagationContext<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagationContextMut<'a> {
     assignments_integer: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
@@ -236,9 +255,13 @@ impl PropagationContextMut<'_> {
         value: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-        var.inner
-            .remove(self.assignments_integer, value, Some(reason))
+        if var.inner.contains(self.assignments_integer, value) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .remove(self.assignments_integer, value, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn set_upper_bound<Var: IntVar, R: Into<Reason>>(
@@ -247,9 +270,13 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-        var.inner
-            .set_upper_bound(self.assignments_integer, bound, Some(reason))
+        if bound < var.inner.upper_bound(self.assignments_integer) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .set_upper_bound(self.assignments_integer, bound, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn set_lower_bound<Var: IntVar, R: Into<Reason>>(
@@ -258,9 +285,13 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let reason = self.reason_store.push(reason.into());
-        var.inner
-            .set_lower_bound(self.assignments_integer, bound, Some(reason))
+        if bound > var.inner.lower_bound(self.assignments_integer) {
+            let reason = self.reason_store.push(reason.into());
+            return var
+                .inner
+                .set_lower_bound(self.assignments_integer, bound, Some(reason));
+        }
+        Ok(())
     }
 
     pub fn assign_literal<R: Into<Reason>>(
@@ -269,14 +300,20 @@ impl PropagationContextMut<'_> {
         bound: bool,
         reason: R,
     ) -> Result<(), Inconsistency> {
-        let reason = self.reason_store.push(reason.into());
-        let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
-            if bound { var.inner } else { !var.inner },
-            ConstraintReference::create_reason_reference(reason),
-        );
-        if let Some(conflict_info) = enqueue_result {
-            return Err(Inconsistency::Other(conflict_info));
+        if !self
+            .assignments_propositional
+            .is_literal_assigned(var.inner)
+        {
+            let reason = self.reason_store.push(reason.into());
+            let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
+                if bound { var.inner } else { !var.inner },
+                ConstraintReference::create_reason_reference(reason),
+            );
+            if let Some(conflict_info) = enqueue_result {
+                return Err(Inconsistency::Other(conflict_info));
+            }
         }
+
         Ok(())
     }
 }
@@ -303,6 +340,7 @@ pub trait CPPropagatorConstructor {
     }
 }
 
+#[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
     watch_list_propositional: &'a mut WatchListPropositional,
@@ -359,13 +397,13 @@ impl PropagatorConstructorContext<'_> {
 }
 
 impl DomainEvents {
-    ///DomainEvents for assigning true to literal
+    /// DomainEvents for assigning true to literal
     pub const ASSIGNED_TRUE: DomainEvents =
         DomainEvents::create_with_bool_events(enum_set!(BooleanDomainEvent::AssignedTrue));
-    ///DomainEvents for assigning false to literal
+    /// DomainEvents for assigning false to literal
     pub const ASSIGNED_FALSE: DomainEvents =
         DomainEvents::create_with_bool_events(enum_set!(BooleanDomainEvent::AssignedFalse));
-    ///DomainEvents for assigning true and false to literal
+    /// DomainEvents for assigning true and false to literal
     pub const ANY_BOOL: DomainEvents = DomainEvents::create_with_bool_events(enum_set!(
         BooleanDomainEvent::AssignedTrue | BooleanDomainEvent::AssignedFalse
     ));
@@ -393,6 +431,7 @@ impl DomainEvents {
         DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::Assign));
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct DomainEvents {
     int_events: Option<EnumSet<IntDomainEvent>>,
     boolean_events: Option<EnumSet<BooleanDomainEvent>>,
@@ -435,12 +474,26 @@ pub enum EnqueueDecision {
     Skip,
 }
 
+#[cfg(doc)]
+use crate::engine::ConstraintSatisfactionSolver;
+#[cfg(doc)]
+use crate::propagators::clausal::BasicClausalPropagator;
+#[cfg(doc)]
+use crate::pumpkin_asserts::*;
 pub trait ConstraintProgrammingPropagator {
-    //Propagate method that will be called during search
-    //	extends the current partial assignments with inferred domain changes
-    //  in case no conflict has been detected, returns PropagationStatusCP::NoConflictDetected
-    //      otherwise returns the reason for failure in PropagationStatusCP::ConflictDetected { failure_reason }
-    //      note that the failure (explanation) is given as a conjunction of predicates that lead to the failure
+    /// Propagate method that will be called during search (e.g. in
+    /// [`ConstraintSatisfactionSolver::solve`]).
+    ///
+    /// This method extends the current partial
+    /// assignments with inferred domain changes found by the
+    /// [`ConstraintProgrammingPropagator`]. In case no conflict has been detected it should return
+    /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Inconsistency`] which
+    /// contains the reason for the failure; either because a propagation caused an
+    /// an empty domain ([`Inconsistency::EmptyDomain`]) or because the logic of the propagator
+    /// found the current state to be inconsistent ([`Inconsistency::Other`]).
+    ///
+    /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
+    /// failure
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP;
 
     /// Called when an event happens to one of the variables the propagator is subscribed to. It
@@ -461,7 +514,8 @@ pub trait ConstraintProgrammingPropagator {
         EnqueueDecision::Enqueue
     }
 
-    ///Notifies the propagator when the domain of a literal has changed (i.e. it is assigned)
+    /// Notifies the propagator when the domain of a literal has changed (i.e. it is assigned). See
+    /// [`ConstraintProgrammingPropagator::notify`] for a more general explanation.
     fn notify_literal(
         &mut self,
         _context: &mut PropagationContextMut,
@@ -471,34 +525,148 @@ pub trait ConstraintProgrammingPropagator {
         EnqueueDecision::Enqueue
     }
 
-    //Called each time the solver backtracks
-    //  the propagator can then update its internal data structures given the new variable domains
+    /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
+    /// update its internal data structures given the new variable domains.
     fn synchronise(&mut self, context: &PropagationContext);
 
-    //Returns the priority of the propagator represented as a integer
-    //	lower values mean higher priority
-    //	the priority determines the order in which propagators will be asked to propagate
-    //		i.e., after the clausal propagator, propagators with lower priority values are called before those with higher priority
-    //  it is custom for simpler propagators to have lower priority values
+    /// Returns the priority of the propagator represented as an integer. Lower values mean higher
+    /// priority and the priority determines the order in which propagators will be asked to
+    /// propagate.
+    ///
+    /// In other words, after the [`ClausalPropagatorBasic`] has propagated, propagators
+    /// with lower priority values are called before those with higher priority. It is custom
+    /// for simpler propagators to have lower priority values
     fn priority(&self) -> u32;
 
-    //Return the name of the propagator
-    //  this is a convenience method that is used for printing
+    /// Return the name of the propagator, this is a convenience method that is used for printing
     fn name(&self) -> &str;
 
-    //Initialises the propagator and does root propagation
-    //	called only once by the solver when the propagator is added
-    //The return value is the same as for the 'propagate' method
+    /// Initialises the propagator and performs root propagation. This method is called only once by
+    /// the [`ConstraintSatisfactionSolver`] when the propagator is added using
+    /// [`ConstraintSatisfactionSolver::add_propagator`]. The return value is the same as for
+    /// the [`ConstraintProgrammingPropagator::propagate`] method.
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP;
 
-    //Another propagation method that is used to help debugging
-    //	this method propagates without relying on internal data structures, hence immutable &self
-    //	it is usually best to implement this propagation method in the simplest but correct way
-    //  when the assert level is set to advanced or extreme (see pumpkin_asserts.rs)
-    //      this method will be called to double check the reasons for failures and propagations that have been reported by this propagator
-    //  note that the propagator will not be asked to provide reasons for propagations done by this method
+    /// A propagation method that is used to help debugging.
+    ///
+    /// This method propagates without relying on internal data structures, hence the immutable
+    /// &self parameter. It is usually best to implement this propagation method in the simplest
+    /// but correct way. When the assert level is set to [`PUMPKIN_ASSERT_ADVANCED`] or
+    /// [`PUMPKIN_ASSERT_EXTREME`] (see [`crate::pumpkin_asserts`]) this method will be called
+    /// to double check the reasons for failures and propagations that have been reported by
+    /// this propagator.
+    ///
+    /// Note that the propagator will not be asked to provide reasons for propagations done by this
+    /// method
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP;
+}
+
+#[cfg(test)]
+mod tests {
+    use assignments_integer::AssignmentsInteger;
+
+    use super::PropagationContextMut;
+    use crate::basic_types::Literal;
+    use crate::basic_types::PropositionalVariable;
+    use crate::conjunction;
+    use crate::engine::cp::assignments_integer;
+    use crate::engine::reason::ReasonStore;
+    use crate::engine::AssignmentsPropositional;
+    use crate::engine::PropagatorVariable;
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_lower_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.set_lower_bound(&PropagatorVariable::new(domain), 2, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_upper_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.set_upper_bound(&PropagatorVariable::new(domain), 15, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_no_update_remove() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let domain = assignments_integer.grow(5, 10);
+
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result = context.remove(&PropagatorVariable::new(domain), 15, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
+
+    #[test]
+    fn test_no_update_reason_store_if_fixed_literal() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let mut reason_store = ReasonStore::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+        assignments_propositional.grow();
+        let literal = Literal::new(PropositionalVariable::new(0), true);
+        assignments_propositional.enqueue_decision_literal(literal);
+
+        assert!(assignments_propositional.is_literal_assigned_true(literal));
+        assert_eq!(reason_store.len(), 0);
+        {
+            let mut context = PropagationContextMut::new(
+                &mut assignments_integer,
+                &mut reason_store,
+                &mut assignments_propositional,
+            );
+
+            let result =
+                context.assign_literal(&PropagatorVariable::new(literal), false, conjunction!());
+            assert!(result.is_ok());
+        }
+        assert_eq!(reason_store.len(), 0);
+    }
 }

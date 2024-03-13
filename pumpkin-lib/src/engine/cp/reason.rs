@@ -1,8 +1,13 @@
-use crate::basic_types::{PropositionalConjunction, Trail};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
+use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::Trail;
+use crate::engine::debug_helper::DebugDyn;
 use crate::engine::PropagationContext;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 ///   This trail makes is easy to garbage collect reasons by simply synchronising whenever
 ///   the `AssignmentsInteger` and `AssignmentsPropositional` are synchronised.
@@ -39,6 +44,12 @@ impl ReasonStore {
     pub fn synchronise(&mut self, level: usize) {
         let _ = self.trail.synchronise(level);
     }
+
+    #[cfg(test)]
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.trail.len()
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -54,6 +65,18 @@ pub enum Reason {
     /// Lazy reasons are typically computed only once, then replaced by an Eager version with the
     ///   result.
     Lazy(Box<dyn LazyReason>),
+}
+
+impl Debug for Reason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Reason::Eager(prop_conj) => f.debug_tuple("Eager").field(prop_conj).finish(),
+            Reason::Lazy(_) => f
+                .debug_tuple("Lazy")
+                .field(&DebugDyn::from("Reason"))
+                .finish(),
+        }
+    }
 }
 
 /// A lazy reason, which contains a closure that computes the reason later.
@@ -109,13 +132,11 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::DomainId,
-        conjunction,
-        engine::{AssignmentsInteger, AssignmentsPropositional},
-    };
-
     use super::*;
+    use crate::basic_types::DomainId;
+    use crate::conjunction;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {

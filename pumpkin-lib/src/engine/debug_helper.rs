@@ -1,27 +1,51 @@
-use log::{debug, warn};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::iter::once;
 
+use log::debug;
+use log::warn;
+
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
+use crate::engine::cp::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::ConstraintProgrammingPropagator;
 use crate::engine::PropagationContextMut;
-use crate::{
-    basic_types::{Predicate, PropositionalConjunction},
-    propagators::clausal_propagators::ClausalPropagatorInterface,
-    pumpkin_assert_simple,
-};
+use crate::engine::PropagatorId;
+use crate::engine::SATCPMediator;
+use crate::engine::SATEngineDataStructures;
+use crate::propagators::clausal::ClausalPropagator;
+use crate::pumpkin_assert_simple;
 
-use super::{
-    constraint_satisfaction_solver::ClausalPropagator, cp::AssignmentsInteger,
-    AssignmentsPropositional, ConstraintProgrammingPropagator, PropagatorId, SATCPMediator,
-    SATEngineDataStructures,
-};
+#[derive(Copy, Clone)]
+pub struct DebugDyn<'a> {
+    trait_name: &'a str,
+}
 
+impl<'a> DebugDyn<'a> {
+    pub fn from(trait_name: &'a str) -> Self {
+        DebugDyn { trait_name }
+    }
+}
+
+impl<'a> Debug for DebugDyn<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<dyn {}>", self.trait_name)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct DebugHelper {}
 
 impl DebugHelper {
-    //this method is only to be called after the solver completed propagation until a fixed point and no conflict were detected
-    //  the point is to check whether there is a propagation that missed a propagation or failure
-    //  additionally checks whether the internal data structures of the clausal propagator are okay and consistent with the assignments_propositional
+    // this method is only to be called after the solver completed propagation until a fixed point
+    // and no conflict were detected  the point is to check whether there is a propagation that
+    // missed a propagation or failure  additionally checks whether the internal data structures
+    // of the clausal propagator are okay and consistent with the assignments_propositional
     pub fn debug_fixed_point_propagation(
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         assignments_integer: &AssignmentsInteger,
         sat_data_structures: &SATEngineDataStructures,
         propagators_cp: &[Box<dyn ConstraintProgrammingPropagator>],
@@ -29,13 +53,13 @@ impl DebugHelper {
         let mut assignments_integer_clone = assignments_integer.clone();
         let mut assignments_propostional_clone =
             sat_data_structures.assignments_propositional.clone();
-        //check whether constraint programming propagators missed anything
-        //  ask each propagator to propagate from scratch, and check whether any new propagations took place
-        //  if a new propagation took place, then the main propagation loop missed at least one propagation, indicating buggy behaviour
-        //  two notes:
+        // check whether constraint programming propagators missed anything
+        //  ask each propagator to propagate from scratch, and check whether any new propagations
+        // took place  if a new propagation took place, then the main propagation loop
+        // missed at least one propagation, indicating buggy behaviour  two notes:
         //      1. it could still be that the main propagation loop propagates more than it should
-        //          however this will not be detected with this debug check
-        //          instead such behaviour may be detected when debug-checking the reason for propagation
+        //         however this will not be detected with this debug check instead such behaviour
+        //         may be detected when debug-checking the reason for propagation
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
         for (propagator_id, propagator) in propagators_cp.iter().enumerate() {
@@ -53,7 +77,11 @@ impl DebugHelper {
             let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
-                warn!("Propagator '{}' with id '{}' seems to have missed a conflict in its regular propagation algorithms! Aborting!\nExpected reason: {:?}", propagator.name(), propagator_id, failure_reason);
+                warn!(
+                    "Propagator '{}' with id '{propagator_id}' seems to have missed a conflict in its regular propagation algorithms!
+                     Aborting!\n
+                     Expected reason: {failure_reason:?}", propagator.name()
+                );
                 panic!();
             }
 
@@ -66,9 +94,8 @@ impl DebugHelper {
 
             if num_missed_propagations > 0 {
                 eprintln!(
-                    "Propagator '{}' with id '{}' missed predicates:",
+                    "Propagator '{}' with id '{propagator_id}' missed predicates:",
                     propagator.name(),
-                    propagator_id
                 );
 
                 for idx in num_entries_on_trail_before_propagation
@@ -85,7 +112,7 @@ impl DebugHelper {
                 panic!("Missed propositional propagations");
             }
         }
-        //then check the clausal propagator
+        // then check the clausal propagator
         pumpkin_assert_simple!(clausal_propagator.debug_check_state(
             &sat_data_structures.assignments_propositional,
             &sat_data_structures.clause_allocator
@@ -130,19 +157,41 @@ impl DebugHelper {
         propagator: &dyn ConstraintProgrammingPropagator,
         propagator_id: u32,
     ) -> bool {
+        let reason: PropositionalConjunction = reason
+            .iter()
+            .cloned()
+            .filter(|&predicate| predicate != Predicate::True)
+            .collect();
+
+        if reason
+            .iter()
+            .any(|&predicate| predicate == Predicate::False)
+        {
+            panic!(
+                "The reason for propagation should not contain the trivially false predicate.
+                 Propagator: {},
+                 id: {propagator_id},
+                 The reported propagation reason: {reason},
+                 Propagated predicate: {propagated_predicate}",
+                propagator.name(),
+            );
+        }
+
         if reason
             .iter()
             .map(|p| p.get_domain())
             .any(|domain| domain == propagated_predicate.get_domain())
         {
-            panic!("{}", format!("The reason for propagation should not contain the integer variable that was propagated.
-            Propagator: {},    
-            id: {},
-            The reported propagation reason: {},
-            Propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
+            panic!("The reason for propagation should not contain the integer variable that was propagated.
+             Propagator: {propagator_id},
+             id: {reason},
+             The reported propagation reason: {propagated_predicate},
+             Propagated predicate: {}",
+             propagator.name()
+            );
         }
 
-        //two checks are done
+        // two checks are done
         //  Check #1. Does setting the predicates from the reason indeed lead to the propagation?
         {
             let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
@@ -162,6 +211,7 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &reason_predicates,
+                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -177,25 +227,40 @@ impl DebugHelper {
 
                 assert!(
                     debug_propagation_status_cp.is_ok(),
-                    "{}",
-                    format!("Debug propagation detected a conflict when consider a reason for propagation by the propagator '{}' with id '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate));
+                    "Debug propagation detected a conflict when consider a reason for propagation
+                     by the propagator '{}' with id '{propagator_id}'.\n
+                     The reported reason: {reason}\n
+                     Reported propagated predicate: {propagated_predicate}",
+                    propagator.name()
+                );
 
-                //The predicate was either a propagation for the assignments_integer or assignments_propositional
+                // The predicate was either a propagation for the assignments_integer or
+                // assignments_propositional
                 assert!(
-                    assignments_integer_clone.does_predicate_hold(&propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
-                    "{}",
-                    format!("Debug propagation could not obtain the propagated predicate given the provided reason.\nPropagator: '{}'\nPropagator id: {}\nReported reason: {}\nReported propagation: {}", propagator.name(), propagator_id, reason, propagated_predicate)
+                    assignments_integer_clone.does_predicate_hold(propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
+                    "Debug propagation could not obtain the propagated predicate given the provided reason.\n
+                     Propagator: '{}'\n
+                     Propagator id: {propagator_id}\n
+                     Reported reason: {reason}\n
+                     Reported propagation: {propagated_predicate}",
+                    propagator.name()
                 );
             } else {
-                //if even adding the predicates failed, the method adding the predicates would have printed debug info already
-                //  so we just need to add more information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a reason was given by the propagator.", propagator.name(), propagator_id));
+                // if even adding the predicates failed, the method adding the predicates would have
+                // printed debug info already  so we just need to add more
+                // information to indicate where the failure happened
+                panic!(
+                    "Bug detected for '{}' propagator with id '{propagator_id}'
+                     after a reason was given by the propagator.",
+                    propagator.name()
+                );
             }
         }
 
-        //  Check #2. Does setting the predicates from reason while having the negated propagated predicate lead to failure?
-        //      this idea is by Graeme Gange in the context of debugging lazy explanations
-        //          and is closely related to reverse unit propagation
+        //  Check #2. Does setting the predicates from reason while having the negated propagated
+        // predicate lead to failure?      this idea is by Graeme Gange in the context of
+        // debugging lazy explanations          and is closely related to reverse unit
+        // propagation
         {
             let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
 
@@ -218,6 +283,7 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &failing_predicates,
+                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -233,13 +299,22 @@ impl DebugHelper {
 
                 assert!(
                     debug_propagation_status_cp.is_err(),
-                    "{}",
-                    format!("Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\nPropagator: '{}'\nPropagator id: '{}'.\nThe reported reason: {}\nReported propagated predicate: {}", propagator.name(), propagator_id, reason, propagated_predicate)
+                    "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
+                     Propagator: '{}'\n
+                     Propagator id: '{propagator_id}'.\n
+                     The reported reason: {reason}\n
+                     Reported propagated predicate: {propagated_predicate}",
+                    propagator.name()
                 );
             } else {
-                //if even adding the predicates failed, the method adding the predicates would have printed debug info already
-                //  so we just need to add more information to indicate where the failure happened
-                panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after trying to negate the reason for propagator.", propagator.name(), propagator_id));
+                // if even adding the predicates failed, the method adding the predicates would have
+                // printed debug info already  so we just need to add more
+                // information to indicate where the failure happened
+                panic!(
+                    "Bug detected for '{}' propagator with id '{propagator_id}'
+                     after trying to negate the reason for propagator.",
+                    propagator.name(),
+                );
             }
         }
         true
@@ -269,6 +344,7 @@ impl DebugHelper {
                 &mut assignments_propositional_clone,
                 sat_cp_mediator,
                 &reason_predicates,
+                &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
             );
 
         if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -280,11 +356,22 @@ impl DebugHelper {
                 &mut assignments_propositional_clone,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
-            assert!(debug_propagation_status_cp.is_err(), "{}", format!("Debug propagation could not reproduce the conflict reported by the propagator '{}' with id '{}'.\nThe reported failure: {}", propagator.name(), propagator_id, failure_reason));
+            assert!(
+                debug_propagation_status_cp.is_err(),
+                "Debug propagation could not reproduce the conflict reported
+                 by the propagator '{}' with id '{propagator_id}'.\n
+                 The reported failure: {failure_reason}",
+                propagator.name()
+            );
         } else {
-            //if even adding the predicates failed, the method adding the predicates would have printed debug info already
-            //  so we just need to add more information to indicate where the failure happened
-            panic!("{}", format!("Bug detected for '{}' propagator with id '{}' after a failure reason was given by the propagator.", propagator.name(), propagator_id));
+            // if even adding the predicates failed, the method adding the predicates would have
+            // printed debug info already  so we just need to add more information to
+            // indicate where the failure happened
+            panic!(
+                "Bug detected for '{}' propagator with id '{propagator_id}' after a failure reason
+                 was given by the propagator.",
+                propagator.name()
+            );
         }
     }
 
@@ -296,10 +383,10 @@ impl DebugHelper {
         propagator: &dyn ConstraintProgrammingPropagator,
         propagator_id: PropagatorId,
     ) {
-        //let the failure be: (p1 && p2 && p3) -> failure
+        // let the failure be: (p1 && p2 && p3) -> failure
         //  then (!p1 || !p2 || !p3) should not lead to immediate failure
 
-        //empty reasons are by definition satisifed after negation
+        // empty reasons are by definition satisifed after negation
         if failure_reason.num_predicates() == 0 {
             return;
         }
@@ -312,7 +399,7 @@ impl DebugHelper {
                 assignments_propositional.debug_create_empty_clone();
 
             let negated_predicate = !*predicate;
-            let outcome = assignments_integer_clone.apply_predicate(&negated_predicate, None);
+            let outcome = assignments_integer_clone.apply_predicate(negated_predicate, None);
 
             let adding_propositional_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
@@ -320,6 +407,7 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     sat_cp_mediator,
                     &reason_predicates,
+                    &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if outcome.is_ok() && adding_propositional_predicates_was_successful {
@@ -340,36 +428,34 @@ impl DebugHelper {
         }
         if !found_nonconflicting_state_at_root {
             panic!(
-                "Negating the reason for failure was still leading to failure for propagator '{}' with id '{}'.\n
-                        The reported failure: {}\n",
-                        propagator.name(),
-                        propagator_id,
-                        failure_reason
+                "Negating the reason for failure was still leading to failure
+                 for propagator '{}' with id '{propagator_id}'.\n
+                 The reported failure: {failure_reason}\n",
+                propagator.name(),
             );
         }
     }
 }
 
-//methods that serve as small utility functions
+// methods that serve as small utility functions
 impl DebugHelper {
     fn debug_add_predicates_to_assignment_integers(
         assignments_integer: &mut AssignmentsInteger,
         predicates: &[Predicate],
     ) -> bool {
         for predicate in predicates {
-            let outcome = assignments_integer.apply_predicate(predicate, None);
+            let outcome = assignments_integer.apply_predicate(*predicate, None);
             match outcome {
                 Ok(()) => {
-                    //do nothing, everything is okay
+                    // do nothing, everything is okay
                 }
                 Err(_) => {
-                    //trivial failure, this is unexpected
+                    // trivial failure, this is unexpected
                     //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
                     debug!(
                         "Trivial failure detected in the given reason.\n
-                                The reported failure: {}\n
-                                Failure detected after trying to apply '{}'.",
-                        predicate, predicate
+                         The reported failure: {predicate}\n
+                         Failure detected after trying to apply '{predicate}'.",
                     );
                     return false;
                 }
@@ -383,19 +469,29 @@ impl DebugHelper {
         assignments_propositional: &mut AssignmentsPropositional,
         sat_cp_mediator: &SATCPMediator,
         predicates: &[Predicate],
+        literals: &[Literal],
     ) -> bool {
         for predicate in predicates {
             let literal = sat_cp_mediator.get_predicate_literal(*predicate, assignments_integer);
             if assignments_propositional.is_literal_assigned_false(literal) {
                 debug!(
                     "Trivial failure detected in the given reason.\n
-                            The reported failure: {}\n
-                            Failure detected after trying to apply '{}'.",
-                    predicate, predicate
+                     The reported failure: {predicate}\n
+                     Failure detected after trying to apply '{predicate}'.",
                 );
                 return false;
             }
-            assignments_propositional.enqueue_decision_literal(literal);
+            if !assignments_propositional.is_literal_assigned(literal) {
+                // It could be the case that the explanation of a failure/propagation contains a
+                // predicate which is always true For example, if we have a variable
+                // x \in [0..10] and the explanation contains [x >= -1] then this will always
+                // evaluate to the true literal However, the true literal is always
+                // assigned leading to checks related to this enqueuing failing
+                assignments_propositional.enqueue_decision_literal(literal);
+            }
+        }
+        for literal in literals {
+            assignments_propositional.enqueue_decision_literal(*literal);
         }
         true
     }

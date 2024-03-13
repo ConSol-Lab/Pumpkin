@@ -1,10 +1,11 @@
-use super::SequenceGeneratorInterface;
+use super::SequenceGenerator;
 
-//Given constants 'a' and 'm', the i-th element f(i) in a geometric sequence is computed as:
+// Given constants 'a' and 'm', the i-th element f(i) in a geometric sequence is computed as:
 //  f(i) = f(i-1) * m
 //  f(0) = a
-//When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since intermediate values will be rounded down
-//Note that overflows are not taken into account
+// When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since
+// intermediate values will be rounded down Note that overflows are not taken into account
+#[derive(Debug, Copy, Clone)]
 pub struct GeometricSequence {
     current_value: i64,
     multiplication_factor: f64,
@@ -19,7 +20,7 @@ impl GeometricSequence {
     }
 }
 
-impl SequenceGeneratorInterface for GeometricSequence {
+impl SequenceGenerator for GeometricSequence {
     fn next(&mut self) -> i64 {
         let next_value = self.current_value;
         self.current_value = (self.current_value as f64 * self.multiplication_factor) as i64;
@@ -29,9 +30,8 @@ impl SequenceGeneratorInterface for GeometricSequence {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::sequence_generators::SequenceGeneratorInterface;
-
     use super::GeometricSequence;
+    use crate::basic_types::sequence_generators::SequenceGenerator;
 
     #[test]
     fn test_2_pow_n() {

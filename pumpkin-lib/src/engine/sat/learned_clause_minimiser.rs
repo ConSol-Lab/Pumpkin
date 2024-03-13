@@ -1,23 +1,21 @@
-use std::collections::{HashMap, HashSet};
+use crate::basic_types::HashMap;
+use crate::basic_types::HashSet;
+use crate::basic_types::Literal;
+use crate::engine::clause_allocators::ClauseAllocatorInterface;
+use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
+use crate::engine::constraint_satisfaction_solver::ConflictAnalysisResult;
+use crate::engine::sat::AssignmentsPropositional;
+use crate::engine::sat::SATEngineDataStructures;
+use crate::engine::sat_cp_mediator::SATCPMediator;
+use crate::engine::CPEngineDataStructures;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
-use sat_cp_mediator::SATCPMediator;
-
-use crate::{
-    basic_types::Literal,
-    engine::{
-        clause_allocators::{ClauseAllocatorInterface, ClauseInterface},
-        constraint_satisfaction_solver::{ClausalPropagator, ConflictAnalysisResult},
-        sat_cp_mediator, CPEngineDataStructures,
-    },
-    pumpkin_assert_moderate, pumpkin_assert_simple,
-};
-
-use super::{AssignmentsPropositional, SATEngineDataStructures};
-
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct LearnedClauseMinimiser {
     current_depth: usize,
-    allowed_decision_levels: HashSet<usize>, //could consider direct hashing here
+    allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Literal, Option<Label>>,
     num_minimisation_calls: usize,
     num_literals_removed_total: usize,
@@ -25,17 +23,18 @@ pub struct LearnedClauseMinimiser {
 }
 
 impl LearnedClauseMinimiser {
-    //assumes the first literal is the asserting literal
-    //removes literals that are dominated in the implication graph from the learned clause
-    //  A literal is dominated if a subset of the other literals in the learned clause imply that literal, making the dominated literal redundant
-    //note that the asserting literal cannot be removed
-    //the implementation is based on the algorithm from the papers:
-    //  "Improved conflict-clause minimization leads to improved propositional proof traces.", Allen Van Gelder. SAT'09
-    //  "Minimizing learned clauses", Niklas Sörensson and Armin Biere, SAT'09
+    // assumes the first literal is the asserting literal
+    // removes literals that are dominated in the implication graph from the learned clause
+    //  A literal is dominated if a subset of the other literals in the learned clause imply that
+    // literal, making the dominated literal redundant note that the asserting literal cannot be
+    // removed the implementation is based on the algorithm from the papers:
+    //  "Improved conflict-clause minimization leads to improved propositional proof traces.", Allen
+    // Van Gelder. SAT'09  "Minimizing learned clauses", Niklas Sörensson and Armin Biere,
+    // SAT'09
     pub fn remove_dominated_literals(
         &mut self,
         analysis_result: &mut ConflictAnalysisResult,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
@@ -49,7 +48,7 @@ impl LearnedClauseMinimiser {
             &sat_data_structures.assignments_propositional,
         );
 
-        //iterate over each literal and check whether it is a dominated literal
+        // iterate over each literal and check whether it is a dominated literal
         let mut end_position: usize = 1; // the propagated literals must stay, so we skip it
         for i in 1..analysis_result.learned_literals.len() {
             let learned_literal = analysis_result.learned_literals[i];
@@ -63,12 +62,13 @@ impl LearnedClauseMinimiser {
             );
 
             let label = self.get_literal_label(!learned_literal);
-            //keep the literal in case it was not deemed deemed redundant
-            //  note that in other cases, since 'end_position' is not incremented, the literal is effectively removed
+            // keep the literal in case it was not deemed deemed redundant
+            //  note that in other cases, since 'end_position' is not incremented, the literal is
+            // effectively removed
             if label == Label::Poison || label == Label::Keep {
                 analysis_result.learned_literals[end_position] = learned_literal;
                 end_position += 1;
-                //ensure that the literal at position 1 is at the highest level
+                // ensure that the literal at position 1 is at the highest level
                 //  this is an important invariant for the conflict analysis result
                 let literal_at_index_1 = analysis_result.learned_literals[1];
                 if sat_data_structures
@@ -78,7 +78,8 @@ impl LearnedClauseMinimiser {
                         .assignments_propositional
                         .get_literal_assignment_level(learned_literal)
                 {
-                    analysis_result.learned_literals.swap(1, end_position - 1); //notice the minus one, since we already incremented end_position above
+                    // Notice the minus one, since we already incremented `end_position` above
+                    analysis_result.learned_literals.swap(1, end_position - 1);
                 }
             }
         }
@@ -100,7 +101,7 @@ impl LearnedClauseMinimiser {
     fn compute_label(
         &mut self,
         input_literal: Literal,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
         sat_cp_mediator: &mut SATCPMediator,
@@ -116,16 +117,17 @@ impl LearnedClauseMinimiser {
             return;
         }
 
-        //for performance reasons we stop the analysis if we need to many recursive calls
+        // for performance reasons we stop the analysis if we need to many recursive calls
         if self.is_at_max_allowed_depth() {
             self.assign_literal_label(input_literal, Label::Poison);
             self.current_depth -= 1;
             return;
         }
 
-        //at this point the literal is either SEEN ('present') or unlabelled
-        //if the literal is a decision literal, it cannot be a literal from the original learned clause since those are labelled as part of initialisation
-        //therefore the decision literal is labelled as poison and then return
+        // at this point the literal is either SEEN ('present') or unlabelled
+        // if the literal is a decision literal, it cannot be a literal from the original learned
+        // clause since those are labelled as part of initialisation therefore the decision
+        // literal is labelled as poison and then return
         if sat_data_structures
             .assignments_propositional
             .is_literal_decision(input_literal)
@@ -135,7 +137,8 @@ impl LearnedClauseMinimiser {
             return;
         }
 
-        //a literal that is not part of the allowed decision levels (levels from the original learned clause) cannot be removed
+        // a literal that is not part of the allowed decision levels (levels from the original
+        // learned clause) cannot be removed
         if !self.is_decision_level_allowed(
             sat_data_structures
                 .assignments_propositional
@@ -162,7 +165,7 @@ impl LearnedClauseMinimiser {
                 .clause_allocator
                 .get_clause(reason_reference)[i];
 
-            //root assignments can be safely ignored
+            // root assignments can be safely ignored
             if sat_data_structures
                 .assignments_propositional
                 .is_literal_root_assignment(antecedent_literal)
@@ -170,7 +173,7 @@ impl LearnedClauseMinimiser {
                 continue;
             }
 
-            //compute the label of the antecedent literal
+            // compute the label of the antecedent literal
             self.compute_label(
                 antecedent_literal,
                 clausal_propagator,
@@ -179,17 +182,18 @@ impl LearnedClauseMinimiser {
                 sat_cp_mediator,
             );
 
-            //in case one of the antecedents is Poison, the input literal is not deemed redundant
+            // in case one of the antecedents is Poison, the input literal is not deemed redundant
             if self.get_literal_label(antecedent_literal) == Label::Poison {
-                //now it needs to be determined whether the input literal will be labelled as Keep or Poison
+                // now it needs to be determined whether the input literal will be labelled as Keep
+                // or Poison
 
-                //if the input literal is part of the original learned clause, the literal is Keep
+                // if the input literal is part of the original learned clause, the literal is Keep
                 if self.is_literal_assigned_seen(input_literal) {
                     self.assign_literal_label(input_literal, Label::Keep);
                     self.current_depth -= 1;
                     return;
                 }
-                //otherwise, the input literal is not part of the original learned clause
+                // otherwise, the input literal is not part of the original learned clause
                 //  so it cannot be Keep but is labelled Poison instead
                 else {
                     self.assign_literal_label(input_literal, Label::Poison);
@@ -198,8 +202,9 @@ impl LearnedClauseMinimiser {
                 }
             }
         }
-        //if the code reaches this part, i.e., it did not get into one of the previous 'return' statements
-        //  all antecedents of the literal are either KEEP or REMOVABLE, meaning this literal is REMOVABLE
+        // if the code reaches this part, i.e., it did not get into one of the previous 'return'
+        // statements  all antecedents of the literal are either KEEP or REMOVABLE, meaning
+        // this literal is REMOVABLE
         self.assign_literal_label(input_literal, Label::Removable);
         self.current_depth -= 1;
     }
@@ -209,7 +214,7 @@ impl LearnedClauseMinimiser {
     }
 
     fn mark_decision_level_as_allowed(&mut self, decision_level: usize) {
-        self.allowed_decision_levels.insert(decision_level);
+        let _ = self.allowed_decision_levels.insert(decision_level);
     }
 
     fn is_literal_assigned_seen(&self, literal: Literal) -> bool {
@@ -234,7 +239,7 @@ impl LearnedClauseMinimiser {
                 || self.is_literal_assigned_seen(literal),
             "Cannot assign the label of an already labelled literal"
         );
-        self.label_assignments.insert(literal, Some(label));
+        let _ = self.label_assignments.insert(literal, Some(label));
     }
 
     fn is_literal_label_already_computed(&self, literal: Literal) -> bool {
@@ -253,14 +258,15 @@ impl LearnedClauseMinimiser {
     ) {
         pumpkin_assert_simple!(self.current_depth == 0);
 
-        //mark literals from the initial learned clause
+        // mark literals from the initial learned clause
         //   the asserting literal is always kept
-        self.label_assignments
+        let _ = self
+            .label_assignments
             .insert(analysis_result.learned_literals[0], Some(Label::Keep));
         //  go through the other literals
         for i in 1..analysis_result.learned_literals.len() {
             let literal = !analysis_result.learned_literals[i];
-            //decision literals must be kept
+            // decision literals must be kept
             if assignments.is_literal_decision(literal) {
                 self.assign_literal_label(literal, Label::Keep);
             } else {
@@ -298,7 +304,7 @@ impl LearnedClauseMinimiser {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum Label {
     Seen, //'Present'
     Poison,

@@ -3,22 +3,38 @@ mod flatzinc;
 mod parsers;
 mod result;
 
-use clap::Parser;
-use log::{error, info, warn, LevelFilter};
-use parsers::dimacs::{parse_cnf, parse_wcnf, CSPSolverArgs, SolverDimacsSink, WcnfInstance};
-use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
-use pumpkin_lib::encoders::PseudoBooleanEncoding;
-use pumpkin_lib::optimisation::{LinearSearch, OptimisationResult, OptimisationSolver};
 use std::fmt::Debug;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
-use std::{io::Write, path::PathBuf};
 
+use clap::Parser;
+use log::error;
+use log::info;
+use log::warn;
+use log::Level;
+use log::LevelFilter;
+use parsers::dimacs::parse_cnf;
+use parsers::dimacs::parse_wcnf;
+use parsers::dimacs::CSPSolverArgs;
+use parsers::dimacs::SolverDimacsSink;
+use parsers::dimacs::WcnfInstance;
+use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::basic_types::*;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::constraint_satisfaction_solver::RestartOptions;
 use pumpkin_lib::engine::*;
-
-use result::{PumpkinError, PumpkinResult};
+use pumpkin_lib::optimisation::LinearSearch;
+use pumpkin_lib::optimisation::OptimisationResult;
+use pumpkin_lib::optimisation::OptimisationSolver;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
+use result::PumpkinError;
+use result::PumpkinResult;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -44,21 +60,35 @@ struct Args {
     learning_lbd_threshold: u32,
 
     /// Decides which clauses will be removed when cleaning up the learned clauses.
-    #[arg(short = 'l', long = "learning-sorting-strategy", value_parser = learned_clause_sorting_strategy_parser, default_value_t = LearnedClauseSortingStrategy::Activity.into())]
+    #[arg(
+        short = 'l',
+        long = "learning-sorting-strategy",
+        value_parser = learned_clause_sorting_strategy_parser,
+        default_value_t = LearnedClauseSortingStrategy::Activity.into()
+    )]
     learning_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
 
-    /// Decides whether learned clauses are minimised as a post-processing step after computing the 1uip
-    /// Minimisation is done according to the idea proposed by Van Gelder
-    #[arg(long = "learning-minimise", value_parser = learned_clause_minimisation_parser, default_value_t = true.into())]
+    /// Decides whether learned clauses are minimised as a post-processing step after computing the
+    /// 1uip Minimisation is done according to the idea proposed by Van Gelder
+    #[arg(
+        long = "learning-minimise",
+        value_parser = learned_clause_minimisation_parser,
+        default_value_t = true.into()
+    )]
     learning_clause_minimisation: CliArg<bool>,
 
     /// Decides the sequence based on which the restarts are performed.
     /// To be used in combination with "restarts-base-interval"
-    #[arg(long = "restart-sequence", value_parser = sequence_generator_parser, default_value_t = SequenceGeneratorType::Constant.into())]
+    #[arg(
+        long = "restart-sequence",
+        value_parser = sequence_generator_parser,
+        default_value_t = SequenceGeneratorType::Constant.into()
+    )]
     restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
 
     /// The base interval length is used as a multiplier to the restart sequence.
-    /// For example, constant restarts with base interval 100 means a retart is triggered every 100 conflicts.
+    /// For example, constant restarts with base interval 100 means a retart is triggered every 100
+    /// conflicts.
     #[arg(long = "restart-base-interval", default_value_t = 50)]
     restart_base_interval: u64,
 
@@ -73,18 +103,21 @@ struct Args {
 
     /// Used to determine if a restart should be blocked (part of Glucose restarts).
     /// To be used in combination with "restarts-num-assigned-window".
-    /// A restart is blocked if the number of assigned propositional variables is must greater than the average number of assigned variables in the recent past
-    /// A greater/lower value for num-assigned-coef means fewer/more blocked restarts
+    /// A restart is blocked if the number of assigned propositional variables is must greater than
+    /// the average number of assigned variables in the recent past A greater/lower value for
+    /// num-assigned-coef means fewer/more blocked restarts
     #[arg(long = "restart-num-assigned-coef", default_value_t = 1.4)]
     restart_num_assigned_coef: f64,
 
-    /// Used to determine the length of the recent past that should be considered when deciding on blocking restarts (part of Glucose restarts).
-    /// The solver considers the last num-assigned-window conflicts as the reference point for the number of assigned variables
+    /// Used to determine the length of the recent past that should be considered when deciding on
+    /// blocking restarts (part of Glucose restarts). The solver considers the last
+    /// num-assigned-window conflicts as the reference point for the number of assigned variables
     #[arg(long = "restart-num-assigned-window", default_value_t = 5000)]
     restart_num_assigned_window: u64,
 
-    /// The coefficient in the geometric sequence x_i = x_{i-1} * geometric-coef, x_1 = "restarts-base-interval"
-    /// Used only if "restarts-sequence-generator" is assigned to "geometric".
+    /// The coefficient in the geometric sequence x_i = x_{i-1} * geometric-coef, x_1 =
+    /// "restarts-base-interval" Used only if "restarts-sequence-generator" is assigned to
+    /// "geometric".
     #[arg(long = "restart-geometric-coef")]
     restart_geometric_coef: Option<f64>,
 
@@ -93,8 +126,8 @@ struct Args {
     time_limit: Option<u64>,
 
     /// The random seed to use for the PRNG. This influences the initial order of the variables.
-    #[arg(long = "random-seed", default_value_t = -2)]
-    random_seed: i64,
+    #[arg(long = "random-seed", default_value_t = 42)]
+    random_seed: u64,
 
     /// Enables log message output from the solver
     #[arg(short = 'v', long = "verbose", default_value_t = false)]
@@ -110,7 +143,11 @@ struct Args {
     omit_call_site: bool,
 
     /// The encoding to use for the upper bound constraint in an optimisation problem.
-    #[arg(long = "upper-bound-encoding", value_parser = upper_bound_encoding_parser, default_value_t = PseudoBooleanEncoding::GTE.into())]
+    #[arg(
+        long = "upper-bound-encoding",
+        value_parser = upper_bound_encoding_parser,
+        default_value_t = PseudoBooleanEncoding::GTE.into()
+    )]
     upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
@@ -133,11 +170,11 @@ fn configure_logging(
     env_logger::Builder::new()
         .format(move |buf, record| {
             write!(buf, "c ")?;
-            if !omit_timestamp {
+            if record.level() != Level::Info && !omit_timestamp {
                 write!(buf, "{} ", buf.timestamp())?;
             }
             write!(buf, "{} ", record.level())?;
-            if !omit_call_site {
+            if record.level() != Level::Info && !omit_call_site {
                 write!(
                     buf,
                     "[{}:{}] ",
@@ -199,16 +236,19 @@ fn run() -> PumpkinResult<()> {
     };
 
     let solver_options = SatisfactionSolverOptions {
-        restart_sequence_generator_type: args.restart_sequence_generator_type.inner,
-        restart_base_interval: args.restart_base_interval,
-        restart_min_num_conflicts_before_first_restart: args
-            .restarts_min_num_conflicts_before_first_restart,
-        restart_lbd_coef: args.restart_lbd_coef,
-        restart_num_assigned_coef: args.restart_num_assigned_coef,
-        restart_num_assigned_window: args.restart_num_assigned_window,
-        restart_geometric_coef: args.restart_geometric_coef,
+        restart_options: RestartOptions {
+            sequence_generator_type: args.restart_sequence_generator_type.inner,
+            base_interval: args.restart_base_interval,
+            min_num_conflicts_before_first_restart: args
+                .restarts_min_num_conflicts_before_first_restart,
+            lbd_coef: args.restart_lbd_coef,
+            num_assigned_coef: args.restart_num_assigned_coef,
+            num_assigned_window: args.restart_num_assigned_window,
+            geometric_coef: args.restart_geometric_coef,
+        },
         certificate_file,
         learning_clause_minimisation: args.learning_clause_minimisation.inner,
+        random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
 
     let time_limit = args.time_limit.map(Duration::from_secs);
@@ -262,13 +302,16 @@ fn wcnf_problem(
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
 
+    let brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
+
     let mut solver = OptimisationSolver::new(
         csp_solver,
         objective_function,
         LinearSearch::new(upper_bound_encoding),
     );
 
-    let result = match solver.solve(time_limit) {
+    let result = match solver.solve(time_limit, brancher) {
         OptimisationResult::Optimal {
             solution,
             objective_value,
@@ -323,7 +366,9 @@ fn cnf_problem(
         CSPSolverArgs::new(sat_options, solver_options),
     )?;
 
-    let solution = match csp_solver.solve(time_limit_in_secs(time_limit)) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
+    let solution = match csp_solver.solve(time_limit_in_secs(time_limit), &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let solution = Solution::new(
                 csp_solver.get_propositional_assignments(),
@@ -378,9 +423,9 @@ fn stringify_solution(
             }
         })
         .chain(if terminate_with_zero {
-            std::iter::once("0".to_string())
+            std::iter::once(String::from("0"))
         } else {
-            std::iter::once("".to_string())
+            std::iter::once(String::new())
         })
         .collect::<String>()
 }

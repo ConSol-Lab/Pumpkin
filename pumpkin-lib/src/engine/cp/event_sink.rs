@@ -1,22 +1,34 @@
-use crate::basic_types::DomainId;
 use enumset::EnumSet;
 
-use super::IntDomainEvent;
+use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
+use crate::engine::cp::IntDomainEvent;
+#[cfg(doc)]
+use crate::engine::DomainEvents;
+#[cfg(doc)]
+use crate::propagators;
 
-/// While a propagator runs, the propagations it performs are captured as events in the event sink.
-/// When the propagator finishes, the event sink is drained to notify all the propagators that
-/// subscribe to those events.
+/// While a propagator runs (see [`propagators`]), the propagations it performs
+/// are captured as events in the event sink. When the propagator finishes, the event sink is
+/// drained to notify all the propagators that subscribe to those [`IntDomainEvent`].
 ///
-/// Triggering any [`DomainEvent`] will also trigger the event [`DomainEvent::Any`].
+/// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct EventSink {
-    present: Vec<EnumSet<IntDomainEvent>>,
+    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
     events: Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl EventSink {
+    pub fn new(num_domains: usize) -> Self {
+        let mut event_sink: EventSink = Default::default();
+        for _ in 0..num_domains {
+            event_sink.grow();
+        }
+        event_sink
+    }
     pub fn grow(&mut self) {
         self.present.push(EnumSet::new());
     }
@@ -24,18 +36,14 @@ impl EventSink {
     pub fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
-        if elem.contains(event) {
-            // The event was already triggered.
-            return;
+        if elem.insert(event) {
+            self.events.push((event, domain));
         }
-
-        elem.insert(event);
-        self.events.push((event, domain));
     }
 
     pub fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain(..).inspect(|&(event, domain)| {
-            self.present[domain].remove(event);
+            let _ = self.present[domain].remove(event);
         })
     }
 }

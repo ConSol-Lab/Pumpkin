@@ -1,16 +1,20 @@
+use crate::basic_types::DomainId;
+use crate::basic_types::IntegerVariableGeneratorIterator;
+use crate::basic_types::KeyedVec;
+use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
+use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
-use crate::{
-    basic_types::{DomainId, IntegerVariableGeneratorIterator, Predicate},
-    predicate, pumpkin_assert_moderate, pumpkin_assert_simple,
-};
+use crate::engine::cp::IntDomainEvent;
+use crate::predicate;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
-use super::{event_sink::EventSink, IntDomainEvent};
-
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
-    domains: Vec<IntegerDomainExplicit>, //[domain_id.id][j] indicates if value j is in the domain of the integer variable
+    domains: KeyedVec<DomainId, IntegerDomainExplicit>, /* indicates if value j is in the domain
+                                                         * of the integer variable */
 
     events: EventSink,
 }
@@ -63,9 +67,10 @@ impl AssignmentsInteger {
         &self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
     }
 
-    //registers the domain of a new integer variable
-    //note that this is an internal method that does _not_ allocate additional information necessary for the solver apart from the domain
-    //when creating a new integer variable, use create_new_domain_id in the ConstraintSatisfactionSolver
+    // registers the domain of a new integer variable
+    // note that this is an internal method that does _not_ allocate additional information
+    // necessary for the solver apart from the domain when creating a new integer variable, use
+    // create_new_domain_id in the ConstraintSatisfactionSolver
     pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         let id = DomainId {
             id: self.num_domains(),
@@ -85,18 +90,21 @@ impl AssignmentsInteger {
 
     pub fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
+        let event_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
-            let domain_id = entry.predicate.get_domain();
-            domains[domain_id].undo_trail_entry(entry);
+            if let Some(domain_id) = entry.predicate.get_domain() {
+                domains[domain_id].undo_trail_entry(entry);
+            }
         });
         AssignmentsInteger {
+            trail: Default::default(),
             domains,
-            ..Default::default()
+            events: event_sink,
         }
     }
 }
 
-//methods for getting info about the domains
+// methods for getting info about the domains
 impl AssignmentsInteger {
     pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].lower_bound
@@ -200,7 +208,7 @@ impl AssignmentsInteger {
     }
 }
 
-//methods to change the domains
+// methods to change the domains
 impl AssignmentsInteger {
     pub fn tighten_lower_bound(
         &mut self,
@@ -272,12 +280,12 @@ impl AssignmentsInteger {
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
 
-        //only tighten the lower bound if needed
+        // only tighten the lower bound if needed
         if self.get_lower_bound(domain_id) < assigned_value {
             self.tighten_lower_bound(domain_id, assigned_value, reason)?;
         }
 
-        //only tighten the uper bound if needed
+        // only tighten the uper bound if needed
         if self.get_upper_bound(domain_id) > assigned_value {
             self.tighten_upper_bound(domain_id, assigned_value, reason)?;
         }
@@ -316,20 +324,28 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
-    //changes the domains according to the predicate
-    //  in case the predicate is already true, no changes happen
-    //  however in case the predicate would lead to inconsistent domains, e.g., decreasing the upper bound past the lower bound
-    //      pumpkin asserts will make the program crash
+    /// Apply the given predicate to the integer domains.
+    ///
+    /// In case where the predicate is already true, this does nothing. If instead applying the
+    /// predicate leads to an inconsistent domain, the error variant is returned. One special case
+    /// is when `predicate` is `Predicate::False`, which will always trigger the error variant.
+    /// However, since this should never happen in normal operation of the solver, it will cause a
+    /// panic.
     pub fn apply_predicate(
         &mut self,
-        predicate: &Predicate,
+        predicate: Predicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_simple!(
+            predicate != Predicate::False && predicate != Predicate::True,
+            "Trivially false and true predicates should not be applied, but handled elsewhere.",
+        );
+
         if self.does_predicate_hold(predicate) {
             return Ok(());
         }
 
-        match *predicate {
+        match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
@@ -346,11 +362,14 @@ impl AssignmentsInteger {
                 domain_id,
                 equality_constant,
             } => self.make_assignment(domain_id, equality_constant, reason),
+
+            Predicate::False => Err(EmptyDomain),
+            Predicate::True => Ok(()),
         }
     }
 
-    pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {
-        match *predicate {
+    pub fn does_predicate_hold(&self, predicate: Predicate) -> bool {
+        match predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
@@ -367,18 +386,35 @@ impl AssignmentsInteger {
                 domain_id,
                 equality_constant,
             } => self.is_domain_assigned_to_value(domain_id, equality_constant),
+
+            Predicate::True => true,
+            Predicate::False => false,
         }
     }
 
-    pub fn synchronise(&mut self, new_decision_level: usize) {
+    /// Synchronises the internal structures of [`AssignmentsInteger`] based on the fact that
+    /// backtracking to `new_decision_level` is taking place. This method returns the list of
+    /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
+    /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
+    pub fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
+        let mut unfixed_variables = Vec::new();
         self.trail.synchronise(new_decision_level).for_each(|entry| {
             pumpkin_assert_moderate!(
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
-            let domain_id = entry.predicate.get_domain();
-            self.domains[domain_id].undo_trail_entry(&entry);
-        })
+            if let Some(domain_id) = entry.predicate.get_domain() {
+                let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
+                let value_before = self.domains[domain_id].lower_bound;
+                self.domains[domain_id].undo_trail_entry(&entry);
+                if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
+                    // Variable used to be fixed but is not after backtracking
+                    unfixed_variables.push((domain_id, value_before));
+                }
+            }
+
+        });
+        unfixed_variables
     }
 }
 
@@ -398,16 +434,16 @@ impl AssignmentsInteger {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ConstraintProgrammingTrailEntry {
     pub predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
     ///  to update the bounds when backtracking.
     pub old_lower_bound: i32,
     pub old_upper_bound: i32,
-    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a propagation
-    ///  took place, e.g., does _not_ make sense in the case of a decision or if the update was due
-    ///  to synchronisation from the propositional trail.
+    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
+    /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
+    /// the update was due  to synchronisation from the propositional trail.
     pub reason: Option<ReasonRef>,
 }
 
@@ -418,7 +454,7 @@ pub struct ConstraintProgrammingTrailEntry {
 ///
 /// When the domain is in an empty state, `lower_bound > upper_bound` and the state of the
 /// `is_value_in_domain` field is undefined.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct IntegerDomainExplicit {
     id: DomainId,
 
@@ -433,7 +469,7 @@ struct IntegerDomainExplicit {
 }
 
 impl IntegerDomainExplicit {
-    pub fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
+    fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Cannot create an empty domain.");
 
         let size = upper_bound - lower_bound + 1;
@@ -770,7 +806,7 @@ mod tests {
             .remove_value_from_domain(d1, 5, None)
             .expect("non-empty domain");
 
-        assignment.synchronise(0);
+        let _ = assignment.synchronise(0);
 
         assert_eq!(5, assignment.get_upper_bound(d1));
     }

@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+#[derive(Debug, Copy, Clone)]
 pub struct Stopwatch {
     time_limit_in_seconds: i64,
     time_start: Instant,
@@ -20,6 +21,10 @@ impl Stopwatch {
 
     pub fn get_elapsed_time(&self) -> u64 {
         self.time_start.elapsed().as_secs()
+    }
+
+    pub fn get_elapsed_time_millis(&self) -> u128 {
+        self.time_start.elapsed().as_millis()
     }
 
     pub fn get_remaining_time_budget(&self) -> i64 {

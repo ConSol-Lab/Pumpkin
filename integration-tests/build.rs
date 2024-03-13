@@ -1,4 +1,7 @@
-use std::{error::Error, ffi::OsStr, path::Path, process::Command};
+use std::error::Error;
+use std::ffi::OsStr;
+use std::path::Path;
+use std::process::Command;
 
 fn main() {
     if let Err(e) = run() {
@@ -24,13 +27,14 @@ fn compile_c_binary<Source: AsRef<Path>>(
     output_stem: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut build = cc::Build::new();
-    build.opt_level(2);
+    let _ = build.opt_level(2);
 
     if sources
         .iter()
         .any(|source| source.as_ref().extension() == Some(OsStr::new("cc")))
     {
-        build.cpp(true);
+        let _ = build.cpp(true);
+        let _ = build.std("c++17");
     }
 
     let compiler = build.try_get_compiler()?;
@@ -42,7 +46,7 @@ fn compile_c_binary<Source: AsRef<Path>>(
     add_output_file(&mut cmd, compiler.is_like_msvc(), output_dir, output_stem);
 
     for source in sources {
-        cmd.arg(source.as_ref());
+        let _ = cmd.arg(source.as_ref());
     }
 
     let status_code = cmd.status()?;
@@ -65,15 +69,15 @@ fn add_output_file<P: AsRef<Path>>(
         let exe_name = format!("{output_stem}.exe");
 
         // The path to the object file.
-        cmd.arg(format!("/Fo:{}/", output_dir.to_string_lossy()));
+        let _ = cmd.arg(format!("/Fo:{}/", output_dir.to_string_lossy()));
 
         // The path to the executable.
-        cmd.arg(format!("/Fe:{}/{exe_name}", output_dir.to_string_lossy()));
+        let _ = cmd.arg(format!("/Fe:{}/{exe_name}", output_dir.to_string_lossy()));
 
-        cmd.arg("/std:c++17");
+        let _ = cmd.arg("/std:c++17");
     } else {
         let output_file = output_dir.join(output_stem);
-        cmd.arg("-o").arg(output_file);
+        let _ = cmd.arg("-o").arg(output_file);
     }
 }
 

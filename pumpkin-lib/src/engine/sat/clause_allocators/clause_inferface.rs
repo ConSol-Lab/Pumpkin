@@ -1,6 +1,7 @@
 use crate::basic_types::Literal;
 
-#[allow(clippy::len_without_is_empty)] //does not make sense to have a is_empty() function since clauses are never empty
+// Does not make sense to have an is_empty() function since clauses are never empty
+#[allow(clippy::len_without_is_empty)]
 pub trait ClauseInterface:
     std::ops::Index<u32, Output = Literal> + std::ops::IndexMut<u32, Output = Literal>
 {
@@ -13,7 +14,7 @@ pub trait ClauseInterface:
     fn lbd(&self) -> u32;
     fn get_activity(&self) -> f32;
 
-    //note that this does _not_ delete the clause, it simply marks it as if it was deleted
+    // note that this does _not_ delete the clause, it simply marks it as if it was deleted
     //  to delete a clause, use the ClauseManager
     //  could restrict access of this method in the future
     fn mark_deleted(&mut self);

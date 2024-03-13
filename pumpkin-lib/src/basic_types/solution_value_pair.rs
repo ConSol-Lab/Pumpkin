@@ -1,5 +1,6 @@
 use super::Solution;
 
+#[derive(Debug)]
 pub struct SolutionValuePair {
     pub solution: Solution,
     pub objective_value: u64,

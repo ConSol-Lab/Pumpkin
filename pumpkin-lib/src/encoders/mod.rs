@@ -1,9 +1,11 @@
 mod cardinality_networks_encoder;
 mod generalised_totaliser_encoder;
 mod pseudo_boolean_constraint_encoder;
+mod single_integer_encoder;
 
 pub use cardinality_networks_encoder::CardinalityNetworkEncoder;
 pub use generalised_totaliser_encoder::GeneralisedTotaliserEncoder;
 pub use pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoder;
 pub use pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
 pub use pseudo_boolean_constraint_encoder::PseudoBooleanEncoding;
+pub use single_integer_encoder::*;

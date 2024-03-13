@@ -1,8 +1,13 @@
-use std::process::{Command, Output};
+#![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+use std::process::Command;
+use std::process::Output;
 
-use integration_tests::{
-    ensure_release_binary_built, run_solution_checker, run_solver, Checker, CheckerOutput, Files,
-};
+use integration_tests::ensure_release_binary_built;
+use integration_tests::run_solution_checker;
+use integration_tests::run_solver;
+use integration_tests::Checker;
+use integration_tests::CheckerOutput;
+use integration_tests::Files;
 
 macro_rules! test_wcnf_instance {
     ($name:ident) => {
@@ -31,8 +36,8 @@ impl Checker for MaxSATChecker {
     }
 
     fn prepare_command(cmd: &mut Command, files: &Files) {
-        cmd.arg(&files.instance_file);
-        cmd.arg(&files.log_file);
+        let _ = cmd.arg(&files.instance_file);
+        let _ = cmd.arg(&files.log_file);
     }
 
     fn parse_checker_output(output: &Output) -> CheckerOutput {

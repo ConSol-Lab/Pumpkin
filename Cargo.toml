@@ -5,3 +5,53 @@ resolver = "2"
 [profile.rel-with-debug]
 inherits = "release"
 debug = true
+
+[workspace.lints.rust]
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+# missing_docs = "warn" # temporarily off until all warnings are fixed
+non_ascii_idents = "deny"
+pointer_structural_match = "deny"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+# unnameable_types = "warn" # https://github.com/rust-lang/rust/issues/48054
+unreachable_pub = "warn"
+# unsafe_code = "forbid" # for now we'll play with unsafe
+# unused_crate_dependencies = "deny" # https://github.com/rust-lang/rust/issues/57274#issuecomment-1430331803
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
+unused_results = "warn"
+variant_size_differences = "warn"
+
+[workspace.lints.clippy]
+# allow_attributes_without_reason = "deny" # Lint reasons are experimental :(
+# cargo_common_metadata = "warn" # Temporarily off while crate is not published yet
+clone_on_ref_ptr = "warn"
+default_union_representation = "deny"
+# missing_docs_in_private_items = "warn" # Temporarily off until all warnings are fixed
+missing_enforced_import_renames = "warn"
+mixed_read_write_in_expression = "deny"
+multiple_crate_versions = "warn"
+negative_feature_names = "deny"
+rc_mutex = "warn"
+redundant_feature_names = "warn"
+redundant_type_annotations = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_name_method = "warn"
+self_named_module_files = "deny"
+str_to_string = "warn"
+string_add = "warn"
+string_add_assign = "warn"
+string_lit_chars_any = "warn"
+string_to_string = "warn"
+tests_outside_test_module = "warn"
+try_err = "warn"
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unseparated_literal_suffix = "warn"
+unnecessary_safety_doc = "warn"
+wildcard_dependencies = "warn"
+wrong_self_convention = "warn"
