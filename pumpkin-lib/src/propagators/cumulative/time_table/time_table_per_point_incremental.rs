@@ -18,9 +18,12 @@ use crate::propagators::cumulative::time_table::time_table_util::generate_update
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::reset_bounds_clear_updated;
+use crate::propagators::update_bounds_task;
 use crate::propagators::CumulativeArgs;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
+#[cfg(doc)]
+use crate::propagators::Task;
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
@@ -190,12 +193,17 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator
         //
         // However, this could mean that we potentially enqueue even though the time-table is empty
         // after backtracking but has not been recalculated yet.
-        should_enqueue(
-            &mut self.parameters,
-            updated_task,
+        let result = should_enqueue(
+            &self.parameters,
+            &updated_task,
             context,
             self.time_table.is_empty(),
-        )
+        );
+        if let Some(update) = result.update {
+            self.parameters.updated.push(update)
+        }
+        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        result.decision
     }
 
     fn priority(&self) -> u32 {

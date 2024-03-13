@@ -17,7 +17,6 @@ use crate::engine::EnqueueDecision;
 use crate::engine::PropagationContextMut;
 use crate::engine::ReadDomains;
 use crate::propagators::util::propagate_and_explain;
-use crate::propagators::util::update_bounds_task;
 use crate::propagators::ChangeWithExplanationBound;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
@@ -54,39 +53,55 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
     }
 }
 
+/// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
+/// currently be enqueued and potentially the updated [`Task`] (in the form of a
+/// [`UpdatedTaskInfo`]) if the mandatory part of this [`Task`] has changed.
+pub(crate) struct ShouldEnqueueResult<Var> {
+    /// Whether the propagator which called this method should be enqueued
+    pub(crate) decision: EnqueueDecision,
+    /// If the mandatory part of the task passed to [`should_enqueue`] has changed then this field
+    /// will contain the corresponding [`UpdatedTaskInfo`] otherwise it will be [`None`].
+    pub(crate) update: Option<UpdatedTaskInfo<Var>>,
+}
+
 /// Determines whether a time-table propagator should enqueue and updates the appropriate structures
-/// for processing during propagation
+/// for processing during propagation. This method should be called in the
+/// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntVar + 'static>(
-    parameters: &mut CumulativeParameters<Var>,
-    updated_task: Rc<Task<Var>>,
+    parameters: &CumulativeParameters<Var>,
+    updated_task: &Rc<Task<Var>>,
     context: &PropagationContextMut,
     empty_time_table: bool,
-) -> EnqueueDecision {
-    let task = &parameters.tasks[updated_task.id.unpack() as usize];
+) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
-        context.lower_bound(&task.start_variable) > parameters.bounds[task.id.unpack() as usize].0
-            || parameters.bounds[task.id.unpack() as usize].1
-                >= context.upper_bound(&task.start_variable)
+        context.lower_bound(&updated_task.start_variable) > parameters.bounds[updated_task.id.unpack() as usize].0
+            || parameters.bounds[updated_task.id.unpack() as usize].1
+                >= context.upper_bound(&updated_task.start_variable)
         , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound,
            this either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates
            or the stored bounds were not managed properly"
     );
-    let old_lower_bound = parameters.bounds[task.id.unpack() as usize].0;
-    let old_upper_bound = parameters.bounds[task.id.unpack() as usize].1;
+
+    let mut result = ShouldEnqueueResult {
+        decision: EnqueueDecision::Skip,
+        update: None,
+    };
+
+    let old_lower_bound = parameters.bounds[updated_task.id.unpack() as usize].0;
+    let old_upper_bound = parameters.bounds[updated_task.id.unpack() as usize].1;
 
     // We check whether a mandatory part was extended/introduced
-    if context.upper_bound(&task.start_variable)
-        < context.lower_bound(&task.start_variable) + task.processing_time
+    if context.upper_bound(&updated_task.start_variable)
+        < context.lower_bound(&updated_task.start_variable) + updated_task.processing_time
     {
-        parameters.updated.push(UpdatedTaskInfo {
-            task: Rc::clone(task),
+        result.update = Some(UpdatedTaskInfo {
+            task: Rc::clone(updated_task),
             old_lower_bound,
             old_upper_bound,
-            new_lower_bound: context.lower_bound(&task.start_variable),
-            new_upper_bound: context.upper_bound(&task.start_variable),
+            new_lower_bound: context.lower_bound(&updated_task.start_variable),
+            new_upper_bound: context.upper_bound(&updated_task.start_variable),
         });
     }
-    update_bounds_task(context, &mut parameters.bounds, task);
 
     // If the time-table is empty and we have not received any updates (e.g. no mandatory parts have
     // been introduced since the last propagation) then we can determine that no propagation will
@@ -94,11 +109,10 @@ pub(crate) fn should_enqueue<Var: IntVar + 'static>(
     // could be the case that a task which has been updated can now propagate due to an existing
     // profile (this is due to the fact that we only propagate bounds and (currently) do not create
     // holes in the domain!).
-    if !empty_time_table || !parameters.updated.is_empty() {
-        EnqueueDecision::Enqueue
-    } else {
-        EnqueueDecision::Skip
+    if !empty_time_table || !parameters.updated.is_empty() || result.update.is_some() {
+        result.decision = EnqueueDecision::Enqueue;
     }
+    result
 }
 
 /// An enum which specifies whether a current mandatory part was extended or whether a fully new

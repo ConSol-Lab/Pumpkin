@@ -21,7 +21,6 @@ use crate::engine::ReadDomains;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::initialise_at_root;
-use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::CumulativeArgs;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
@@ -151,13 +150,8 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         propagate_based_on_timetable(context, time_table.values(), &self.parameters)
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(
-            context,
-            &mut self.parameters.updated,
-            &mut self.parameters.bounds,
-            &self.parameters.tasks,
-        );
+    fn synchronise(&mut self, _context: &PropagationContext) {
+        // No need to do anything at the moment, we recalculate the time-table from scratch anyways
     }
 
     fn notify(
@@ -173,11 +167,12 @@ impl<Var: IntVar + 'static> ConstraintProgrammingPropagator for TimeTablePerPoin
         // empty and it might return `false` even when the time-table is not empty *but* it
         // will never return `true` when the time-table is not empty.
         should_enqueue(
-            &mut self.parameters,
-            updated_task,
+            &self.parameters,
+            &updated_task,
             context,
             self.is_time_table_empty,
         )
+        .decision
     }
 
     fn priority(&self) -> u32 {
