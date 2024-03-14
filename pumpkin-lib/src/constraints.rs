@@ -193,7 +193,7 @@ pub trait ConstraintsExt {
 
     /// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
     /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
-    /// exceeds `bound`. See [`crate::propagators::cumulative`] for more information.
+    /// exceeds `bound`. See [`crate::propagators`] for more information.
     ///
     /// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
     /// this is not the case then this method will panic.

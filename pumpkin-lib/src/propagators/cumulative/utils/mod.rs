@@ -6,7 +6,7 @@ mod cumulative_structs;
 pub use cumulative_structs::*;
 
 pub mod util;
-pub use util::*;
+pub(crate) use util::*;
 
 mod sparse_set;
-pub use sparse_set::*;
+pub(crate) use sparse_set::*;

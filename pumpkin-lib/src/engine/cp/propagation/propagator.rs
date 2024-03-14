@@ -1,9 +1,19 @@
+#[cfg(doc)]
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::BooleanDomainEvent;
+#[cfg(doc)]
+use crate::engine::ConstraintSatisfactionSolver;
+#[cfg(doc)]
+use crate::propagators::clausal::BasicClausalPropagator;
+#[cfg(doc)]
+use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
+#[cfg(doc)]
+use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 
 /// All propagators implement the [`Propagator`] trait, with the exception of the
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
@@ -63,7 +73,7 @@ pub trait Propagator {
     /// priority and the priority determines the order in which propagators will be asked to
     /// propagate.
     ///
-    /// In other words, after the [`ClausalPropagatorBasic`] has propagated, propagators
+    /// In other words, after the [`BasicClausalPropagator`] has propagated, propagators
     /// with lower priority values are called before those with higher priority. It is custom
     /// for simpler propagators to have lower priority values
     fn priority(&self) -> u32;

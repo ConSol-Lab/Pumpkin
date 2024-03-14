@@ -24,13 +24,13 @@ use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::initialise_at_root;
 use crate::propagators::util::reset_bounds_clear_updated;
-use crate::propagators::CumulativeArgs;
+use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a [`ResourceProfile`] per time point rather than
+/// different time-points - This method creates a resource profile per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
 /// has a generic argument which represents the type of variable used for modelling the start
 /// variables, this will be an implementation of [`IntVar`].
@@ -57,20 +57,20 @@ pub struct TimeTablePerPointPropagator<Var> {
 /// start time and they are non-overlapping
 pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
 
-impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointPropagator<Var>>
+impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
     type Propagator = TimeTablePerPointPropagator<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let (tasks, horizon) = create_tasks(&self.tasks, context);
-        TimeTablePerPointPropagator::new(CumulativeParameters::new(tasks, self.capacity, horizon))
+        let tasks = create_tasks(&self.tasks, context);
+        TimeTablePerPointPropagator::new(CumulativeParameters::new(tasks, self.capacity))
     }
 }
 
 impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
-    pub fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
+    pub(crate) fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
             parameters,

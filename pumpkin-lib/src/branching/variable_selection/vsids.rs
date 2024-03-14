@@ -43,8 +43,8 @@ const DEFAULT_VSIDS_VALUE: f64 = 0.0;
 
 impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
     /// Creates a new instance of the [`Vsids`] [`VariableSelector`] with certain default values for
-    /// the parameters (see [`DEFAULT_VSIDS_INCREMENT`], [`DEFAULT_VSIDS_MAX_THRESHOLD`],
-    /// [`DEFAULT_VSIDS_DECAY_FACTOR`] and [`DEFAULT_VSIDS_VALUE`]).
+    /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
+    /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     pub fn new(variables: &[Var]) -> Self {
         if variables.is_empty() {
             warn!("The VSIDS variable selector was not provided with any variables");
@@ -76,8 +76,8 @@ impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
     }
 
     /// Creates a new instance of the [`Vsids`] [`VariableSelector`] with certain default values for
-    /// the parameters (see [`DEFAULT_VSIDS_INCREMENT`], [`DEFAULT_VSIDS_MAX_THRESHOLD`] and
-    /// [`DEFAULT_VSIDS_DECAY_FACTOR`]). It initialises the internal max-heap structure used for
+    /// the parameters (`1.0` for the increment, `1e100` for the max threshold and
+    /// `0.95` for the decay factor). It initialises the internal max-heap structure used for
     /// finding the maximum `Var` with the provided `initial_values`; this parameter can thus be
     /// used to guide the early search process of the selector.
     ///
