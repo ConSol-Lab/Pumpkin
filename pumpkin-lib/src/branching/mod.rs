@@ -62,12 +62,14 @@
 mod brancher;
 mod independent_variable_value_brancher;
 mod selection_context;
+pub mod tie_breaking;
 pub mod value_selection;
 pub mod variable_selection;
 
 pub use brancher::Brancher;
 pub use independent_variable_value_brancher::IndependentVariableValueBrancher;
 pub use selection_context::SelectionContext;
+pub use tie_breaking::*;
 pub use value_selection::*;
 pub use variable_selection::*;
 

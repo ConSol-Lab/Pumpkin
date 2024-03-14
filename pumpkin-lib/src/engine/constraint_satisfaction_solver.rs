@@ -175,6 +175,9 @@ pub struct SatisfactionSolverOptions {
 
     /// Certificate output file or [`None`] if certificate output is disabled.
     pub certificate_file: Option<File>,
+
+    /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
+    /// argument allows seeding based on CLI input.
     pub random_generator: SmallRng,
 }
 
