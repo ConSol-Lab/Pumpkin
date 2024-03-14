@@ -1,23 +1,37 @@
 #![cfg(test)]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
-use crate::basic_types::{
-    DomainId, Inconsistency, Literal, Predicate, PropagationStatusCP, PropositionalConjunction,
-    PropositionalVariable,
-};
-use crate::engine::reason::ReasonStore;
-use crate::engine::{
-    AssignmentsInteger, AssignmentsPropositional, CPPropagatorConstructor,
-    ConstraintProgrammingPropagator, EmptyDomain, EnqueueDecision, IntDomainEvent, LocalId,
-    OpaqueDomainEvent, PropagationContext, PropagationContextMut, PropagatorConstructorContext,
-    PropagatorId, WatchListCP,
-};
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
-use super::{DomainEvents, WatchListPropositional};
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::DomainId;
+use crate::basic_types::Inconsistency;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::PropositionalVariable;
+use crate::engine::domain_events::DomainEvents;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorId;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::EmptyDomain;
+use crate::engine::IntDomainEvent;
+use crate::engine::WatchListCP;
+use crate::engine::WatchListPropositional;
 
 /// A container for CP variables, which can be used to test propagators.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TestSolver {
     assignments_integer: AssignmentsInteger,
     reason_store: ReasonStore,
@@ -27,9 +41,9 @@ pub struct TestSolver {
     next_id: u32,
 }
 
-type Propagator = Box<dyn ConstraintProgrammingPropagator>;
+type BoxedPropagator = Box<dyn Propagator>;
 
-impl Debug for Propagator {
+impl Debug for BoxedPropagator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "test_helper::Propagator(<boxed value>)")
     }
@@ -52,9 +66,9 @@ impl TestSolver {
     pub fn new_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
-    ) -> Result<Propagator, Inconsistency>
+    ) -> Result<BoxedPropagator, Inconsistency>
     where
-        Constructor: CPPropagatorConstructor,
+        Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
         let id = PropagatorId(self.next_id);
@@ -71,7 +85,7 @@ impl TestSolver {
         Ok(propagator)
     }
 
-    pub fn initialise_at_root(&mut self, propagator: &mut Propagator) -> PropagationStatusCP {
+    pub fn initialise_at_root(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
         propagator.initialise_at_root(&mut PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
@@ -79,8 +93,8 @@ impl TestSolver {
         ))
     }
 
-    pub fn contains(&self, var: DomainId, value: i32) -> bool {
-        self.assignments_integer.is_value_in_domain(var, value)
+    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+        var.contains(&self.assignments_integer, value)
     }
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {
@@ -89,7 +103,7 @@ impl TestSolver {
 
     pub fn increase_lower_bound_and_notify(
         &mut self,
-        propagator: &mut Propagator,
+        propagator: &mut BoxedPropagator,
         id: i32,
         var: DomainId,
         value: i32,
@@ -106,7 +120,7 @@ impl TestSolver {
         propagator.notify(
             &mut context,
             LocalId::from(id as u32),
-            crate::engine::OpaqueDomainEvent::from(
+            OpaqueDomainEvent::from(
                 DomainEvents::LOWER_BOUND
                     .get_int_events()
                     .iter()
@@ -149,7 +163,7 @@ impl TestSolver {
             .remove_value_from_domain(var, value, None)
     }
 
-    pub fn propagate(&mut self, propagator: &mut Propagator) -> PropagationStatusCP {
+    pub fn propagate(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
         let mut context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
@@ -160,7 +174,7 @@ impl TestSolver {
 
     pub fn propagate_until_fixed_point(
         &mut self,
-        propagator: &mut Propagator,
+        propagator: &mut BoxedPropagator,
     ) -> PropagationStatusCP {
         let mut num_trail_entries = self.assignments_integer.num_trail_entries()
             + self.assignments_propositional.num_trail_entries();
@@ -188,7 +202,7 @@ impl TestSolver {
         Ok(())
     }
 
-    fn notify_propagator(&mut self, propagator: &mut Propagator) {
+    fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
         #[allow(clippy::useless_conversion)]
         let events = self
             .assignments_integer
@@ -202,14 +216,14 @@ impl TestSolver {
         );
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                propagator.notify(&mut context, propagator_var.variable, event.into());
+                let _ = propagator.notify(&mut context, propagator_var.variable, event.into());
             }
         }
     }
 
     pub fn notify(
         &mut self,
-        propagator: &mut Propagator,
+        propagator: &mut BoxedPropagator,
         event: OpaqueDomainEvent,
         local_id: LocalId,
     ) -> EnqueueDecision {
@@ -226,7 +240,7 @@ impl TestSolver {
 
     pub fn notify_changed(
         &mut self,
-        propagator: &mut Propagator,
+        propagator: &mut BoxedPropagator,
         id: DomainId,
         event: IntDomainEvent,
     ) {
@@ -238,7 +252,7 @@ impl TestSolver {
                 PropagatorId(0),
                 "We assume a single propagator per TestSolver in notify_changed"
             );
-            let _ = self.notify(propagator, opaque_event.clone(), pvi.variable);
+            let _ = self.notify(propagator, opaque_event, pvi.variable);
         }
     }
 
@@ -270,6 +284,9 @@ impl TestSolver {
         let actual_lb = self.lower_bound(var);
         let actual_ub = self.upper_bound(var);
 
-        assert_eq!((lb, ub), (actual_lb, actual_ub), "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]");
+        assert_eq!(
+            (lb, ub), (actual_lb, actual_ub),
+            "The expected bounds [{lb}..{ub}] did not match the actual bounds [{actual_lb}..{actual_ub}]"
+        );
     }
 }

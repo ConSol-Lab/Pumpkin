@@ -4,11 +4,17 @@
 
 use std::cmp::Ordering;
 
-use crate::engine::reason::ReasonRef;
-use crate::engine::{AssignmentsInteger, EmptyDomain, IntDomainEvent, OpaqueDomainEvent, Watchers};
 use enumset::EnumSet;
 
-use super::{DomainId, Predicate, PredicateConstructor};
+use crate::basic_types::DomainId;
+use crate::basic_types::Predicate;
+use crate::basic_types::PredicateConstructor;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::reason::ReasonRef;
+use crate::engine::AssignmentsInteger;
+use crate::engine::EmptyDomain;
+use crate::engine::IntDomainEvent;
+use crate::engine::Watchers;
 
 pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     type AffineView: IntVar;
@@ -24,6 +30,10 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
 
     /// Get a predicate description (bounds + holes) of the domain of this variable.
     /// N.B. can be very expensive with large domains, and very large with holey domains
+    ///
+    /// This should not be used to explicitly check for holes in the domain, but only to build
+    /// explanations. If views change the observed domain, they will not change this description,
+    /// because it should be a description of the domain in the solver.
     fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate>;
 
     /// Remove a value from the domain of this variable.
@@ -66,7 +76,8 @@ pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
     fn offset(&self, offset: i32) -> Self::AffineView;
 }
 
-/// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the domain of `x`.
+/// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
+/// domain of `x`.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
     inner: Inner,
@@ -143,6 +154,11 @@ impl From<DomainId> for AffineView<DomainId> {
     }
 }
 
+enum Rounding {
+    Up,
+    Down,
+}
+
 impl<Inner> AffineView<Inner> {
     pub fn new(inner: Inner, scale: i32, offset: i32) -> Self {
         AffineView {
@@ -154,13 +170,35 @@ impl<Inner> AffineView<Inner> {
 
     /// Apply the inverse transformation of this view on a value, to go from the value in the domain
     /// of `self` to a value in the domain of `self.inner`.
-    fn invert(&self, value: i32) -> Option<i32> {
+    fn invert(&self, value: i32, rounding: Rounding) -> i32 {
         let inverted_translation = value - self.offset;
 
-        if inverted_translation % self.scale == 0 {
-            Some(inverted_translation / self.scale)
-        } else {
-            None
+        // TODO: The source is taken from the standard library nightly implementation of these
+        // methods. Once they are stabilized, these definitions can be removed.
+        // Tracking issue: https://github.com/rust-lang/rust/issues/88581
+        fn div_ceil(lhs: i32, rhs: i32) -> i32 {
+            let d = lhs / rhs;
+            let r = lhs % rhs;
+            if (r > 0 && rhs > 0) || (r < 0 && rhs < 0) {
+                d + 1
+            } else {
+                d
+            }
+        }
+
+        fn div_floor(lhs: i32, rhs: i32) -> i32 {
+            let d = lhs / rhs;
+            let r = lhs % rhs;
+            if (r > 0 && rhs < 0) || (r < 0 && rhs > 0) {
+                d - 1
+            } else {
+                d
+            }
+        }
+
+        match rounding {
+            Rounding::Up => div_ceil(inverted_translation, self.scale),
+            Rounding::Down => div_floor(inverted_translation, self.scale),
         }
     }
 
@@ -192,22 +230,18 @@ where
     }
 
     fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
-        self.invert(value)
-            .map(|v| self.inner.contains(assignment, v))
-            .unwrap_or(false)
+        if (value - self.offset) % self.scale == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.inner.contains(assignment, inverted)
+        } else {
+            false
+        }
     }
 
     fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
-        let mut result = self.inner.describe_domain(assignment);
-        if self.scale < 0 {
-            result.iter_mut().for_each(|p| {
-                p.map(|v| self.map(v));
-                p.flip_bound()
-            })
-        } else {
-            result.iter_mut().for_each(|p| p.map(|v| self.map(v)))
-        }
-        result
+        // The description should not actually change. It is a description of the domain as seen by
+        // the solver, not as seen by the user of this view.
+        self.inner.describe_domain(assignment)
     }
 
     fn remove(
@@ -216,8 +250,9 @@ where
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        if let Some(v) = self.invert(value) {
-            self.inner.remove(assignment, v, reason)
+        if (value - self.offset) % self.scale == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.inner.remove(assignment, inverted, reason)
         } else {
             Ok(())
         }
@@ -229,9 +264,7 @@ where
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        let inverted = self
-            .invert(value)
-            .expect("handle case where the unscaled value is not integer");
+        let inverted = self.invert(value, Rounding::Up);
 
         if self.scale >= 0 {
             self.inner.set_lower_bound(assignment, inverted, reason)
@@ -246,9 +279,7 @@ where
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        let inverted = self
-            .invert(value)
-            .expect("handle case where the unscaled value is not integer");
+        let inverted = self.invert(value, Rounding::Down);
 
         if self.scale >= 0 {
             self.inner.set_upper_bound(assignment, inverted, reason)
@@ -316,9 +347,7 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
     type Value = Var::Value;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self
-            .invert(bound)
-            .expect("Handle case where invert() returns None.");
+        let inverted_bound = self.invert(bound, Rounding::Up);
 
         if self.scale < 0 {
             self.inner.upper_bound_predicate(inverted_bound)
@@ -328,9 +357,7 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self
-            .invert(bound)
-            .expect("Handle case where invert() returns None.");
+        let inverted_bound = self.invert(bound, Rounding::Down);
 
         if self.scale < 0 {
             self.inner.lower_bound_predicate(inverted_bound)
@@ -340,17 +367,21 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self
-            .invert(bound)
-            .expect("Handle case where invert() returns None.");
-        self.inner.equality_predicate(inverted_bound)
+        if (bound - self.offset) % self.scale == 0 {
+            let inverted_bound = self.invert(bound, Rounding::Up);
+            self.inner.equality_predicate(inverted_bound)
+        } else {
+            Predicate::False
+        }
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self
-            .invert(bound)
-            .expect("Handle case where invert() returns None.");
-        self.inner.disequality_predicate(inverted_bound)
+        if (bound - self.offset) % self.scale == 0 {
+            let inverted_bound = self.invert(bound, Rounding::Up);
+            self.inner.disequality_predicate(inverted_bound)
+        } else {
+            Predicate::True
+        }
     }
 }
 
@@ -376,5 +407,31 @@ mod tests {
         let scaled_view = view.offset(6);
         assert_eq!(3, scaled_view.scale);
         assert_eq!(10, scaled_view.offset);
+    }
+
+    #[test]
+    fn affine_view_obtaining_a_bound_should_round_optimistically_in_inner_domain() {
+        let domain = DomainId::new(0);
+        let view = AffineView::new(domain, 2, 0);
+
+        assert_eq!(
+            domain.lower_bound_predicate(1),
+            view.lower_bound_predicate(1)
+        );
+
+        assert_eq!(
+            domain.lower_bound_predicate(-1),
+            view.lower_bound_predicate(-3)
+        );
+
+        assert_eq!(
+            domain.upper_bound_predicate(0),
+            view.upper_bound_predicate(1)
+        );
+
+        assert_eq!(
+            domain.upper_bound_predicate(-3),
+            view.upper_bound_predicate(-5)
+        );
     }
 }

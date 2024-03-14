@@ -1,5 +1,6 @@
 use super::ConflictInfo;
 
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub enum PropagationStatusOneStepCP {
     ConflictDetected { conflict_info: ConflictInfo },
     PropagationHappened,
@@ -15,7 +16,7 @@ impl PropagationStatusOneStepCP {
         )
     }
 
-    /*pub fn conflict_detected(&self) -> bool {
-        !self.no_conflict()
-    }*/
+    // pub fn conflict_detected(&self) -> bool {
+    // !self.no_conflict()
+    // }
 }

@@ -1,30 +1,36 @@
-use std::{
-    fmt::Write,
-    io::{BufRead, BufReader, Read},
-};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Read;
 
-use flatzinc::{convert_error, VerboseError};
-use log::warn;
+use flatzinc::convert_error;
+use flatzinc::VerboseError;
 
-use super::{
-    instance::{FlatZincInstance, FlatZincInstanceBuilder},
-    FlatZincError,
-};
+use super::ast::FlatZincAst;
+use super::ast::FlatZincAstBuilder;
+use super::ast::SingleVarDecl;
+use super::ast::VarArrayDecl;
+use super::FlatZincError;
 
-pub fn parse(source: impl Read) -> Result<FlatZincInstance, FlatZincError> {
+pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
     let reader = BufReader::new(source);
-    let mut buf = String::new();
 
-    let mut instance_builder = FlatZincInstance::builder();
+    let mut ast_builder = FlatZincAst::builder();
 
     for line in reader.lines() {
         let line = line?;
-        write!(buf, "{}", line).unwrap();
 
         match flatzinc::statement::<VerboseError<&str>>(&line) {
-            Ok((_, stmt)) => parse_statement(stmt, &mut instance_builder)?,
+            Ok((_, stmt)) => match stmt {
+                // Ignore.
+                flatzinc::Stmt::Comment(_) | flatzinc::Stmt::Predicate(_) => {}
+
+                flatzinc::Stmt::Parameter(decl) => ast_builder.add_parameter_decl(decl),
+                flatzinc::Stmt::Variable(decl) => parse_var_decl(&mut ast_builder, decl)?,
+                flatzinc::Stmt::Constraint(constraint) => ast_builder.add_constraint(constraint),
+                flatzinc::Stmt::SolveItem(solve_item) => ast_builder.set_solve_item(solve_item),
+            },
             Err(flatzinc::Err::Error(e)) | Err(flatzinc::Err::Failure(e)) => {
-                let error_msg = convert_error(buf.as_str(), e);
+                let error_msg = convert_error(line.as_str(), e);
                 return Err(FlatZincError::SyntaxError(error_msg.into()));
             }
             Err(_) => {
@@ -33,42 +39,19 @@ pub fn parse(source: impl Read) -> Result<FlatZincInstance, FlatZincError> {
         }
     }
 
-    Ok(instance_builder.build())
-}
-
-fn parse_statement(
-    stmt: flatzinc::Stmt,
-    instance_builder: &mut FlatZincInstanceBuilder,
-) -> Result<(), FlatZincError> {
-    match stmt {
-        flatzinc::Stmt::Predicate(_) => todo!("implement predicate parsing"),
-        flatzinc::Stmt::Comment(_) => Ok(()),
-        flatzinc::Stmt::Parameter(par_decl) => parse_par_decl(par_decl, instance_builder),
-        flatzinc::Stmt::Variable(var_decl) => parse_var_decl(var_decl, instance_builder),
-        flatzinc::Stmt::Constraint(constraint_decl) => {
-            instance_builder.add_constraint_item(constraint_decl);
-            Ok(())
-        }
-        flatzinc::Stmt::SolveItem(flatzinc::SolveItem {
-            goal: flatzinc::Goal::Satisfy,
-            ..
-        }) => Ok(()),
-        unknown @ flatzinc::Stmt::SolveItem(flatzinc::SolveItem {
-            goal:
-                flatzinc::Goal::OptimizeInt(_, _)
-                | flatzinc::Goal::OptimizeBool(_, _)
-                | flatzinc::Goal::OptimizeFloat(_, _)
-                | flatzinc::Goal::OptimizeSet(_, _),
-            ..
-        }) => todo!("implement parse_statement for {unknown:#?}"),
-    }
+    ast_builder.build()
 }
 
 fn parse_var_decl(
-    var_decl: flatzinc::VarDeclItem,
-    instance_builder: &mut FlatZincInstanceBuilder,
+    ast: &mut FlatZincAstBuilder,
+    decl: flatzinc::VarDeclItem,
 ) -> Result<(), FlatZincError> {
-    match var_decl {
+    match decl {
+        flatzinc::VarDeclItem::Bool { id, expr, annos } => {
+            ast.add_variable_decl(SingleVarDecl::Bool { id, expr, annos });
+            Ok(())
+        }
+
         flatzinc::VarDeclItem::IntInRange {
             id,
             lb,
@@ -76,123 +59,111 @@ fn parse_var_decl(
             expr,
             annos,
         } => {
-            if expr.is_some() {
-                warn!("ignoring var decl expression");
-            }
+            ast.add_variable_decl(SingleVarDecl::IntInRange {
+                id,
+                lb,
+                ub,
+                expr,
+                annos,
+            });
+            Ok(())
+        }
 
-            let is_output_variable = annos.iter().any(|ann| ann.id == "output_var");
+        flatzinc::VarDeclItem::IntInSet {
+            id,
+            set,
+            expr,
+            annos,
+        } => {
+            ast.add_variable_decl(SingleVarDecl::IntInSet {
+                id,
+                set,
+                expr,
+                annos,
+            });
+            Ok(())
+        }
 
-            let lb = lb.try_into()?;
-            let ub = ub.try_into()?;
+        flatzinc::VarDeclItem::ArrayOfBool {
+            ix,
+            id,
+            annos,
+            array_expr,
+        } => {
+            ast.add_variable_array(VarArrayDecl::Bool {
+                ix,
+                id,
+                annos,
+                array_expr,
+            });
 
-            instance_builder.add_integer_variable(id.into(), lb, ub, is_output_variable);
+            Ok(())
         }
 
         flatzinc::VarDeclItem::ArrayOfInt {
+            ix,
+            id,
+            annos,
+            array_expr,
+        } => {
+            ast.add_variable_array(VarArrayDecl::Int {
+                ix,
+                id,
+                annos,
+                array_expr,
+            });
+            Ok(())
+        }
+        flatzinc::VarDeclItem::ArrayOfIntInRange {
+            ix,
             id,
             annos,
             array_expr,
             ..
         } => {
-            let Some(array_expr) = array_expr else {
-                // The FlatZinc grammar specifies all variables arrays must come with an
-                // expression.
-                unreachable!("array of variable without expression")
-            };
-
-            let flatzinc::ArrayOfIntExpr::Array(array) = array_expr else {
-                // The FlatZinc grammar specifies variable arrays cannot shadow other declarations.
-                unreachable!("array of variable that shadows another declaration")
-            };
-
-            let array = array
-                .into_iter()
-                .map(|int_expr| match int_expr {
-                    flatzinc::IntExpr::Int(_) => {
-                        todo!("constant in variable array declaration")
-                    }
-                    flatzinc::IntExpr::VarParIdentifier(id) => id.into(),
-                })
-                .collect::<Box<_>>();
-
-            let possible_output_annotation = annos.iter().find(|ann| ann.id == "output_array");
-            let is_output_variable = if let Some(ann) = possible_output_annotation {
-                assert_eq!(1, ann.expressions.len());
-                let expr = &ann.expressions[0];
-
-                let flatzinc::AnnExpr::Expr(flatzinc::Expr::ArrayOfSet(sets)) = expr else {
-                    todo!("unsupported output_array annotation {ann:#?}")
-                };
-
-                // Note: To support proper formatting of the output we will need this in the
-                // future. For now, we ignore and will not format exactly to specification for
-                // all models.
-                assert_eq!(1, sets.len(), "only 1d arrays are currently supported");
-                let _num_elements = parse_index_set(&sets[0]);
-
-                true
-            } else {
-                false
-            };
-
-            instance_builder.add_integer_variable_array(id.into(), array, is_output_variable);
+            ast.add_variable_array(VarArrayDecl::Int {
+                ix,
+                id,
+                annos,
+                array_expr,
+            });
+            Ok(())
         }
 
-        unknown => todo!("implement parse_var_decl for {unknown:#?}"),
-    }
+        flatzinc::VarDeclItem::ArrayOfIntInSet {
+            ix,
+            id,
+            annos,
+            array_expr,
+            set: _,
+        } => {
+            ast.add_variable_array(VarArrayDecl::Int {
+                ix,
+                id,
+                annos,
+                array_expr,
+            });
+            Ok(())
+        }
 
-    Ok(())
-}
+        flatzinc::VarDeclItem::Int { .. } => {
+            Err(FlatZincError::UnsupportedVariable("unbounded int".into()))
+        }
 
-fn parse_index_set(expr: &flatzinc::SetExpr) -> usize {
-    let flatzinc::SetExpr::Set(flatzinc::SetLiteralExpr::IntInRange(
-        flatzinc::IntExpr::Int(1),
-        flatzinc::IntExpr::Int(num_elements),
-    )) = expr
-    else {
-        unreachable!("index sets must be in the form 1..<int-literal>");
-    };
+        flatzinc::VarDeclItem::Float { .. }
+        | flatzinc::VarDeclItem::BoundedFloat { .. }
+        | flatzinc::VarDeclItem::ArrayOfFloat { .. }
+        | flatzinc::VarDeclItem::ArrayOfBoundedFloat { .. } => {
+            Err(FlatZincError::UnsupportedVariable("float".into()))
+        }
 
-    (*num_elements)
-        .try_into()
-        .expect("the bound is not a valid usize")
-}
-
-fn parse_par_decl(
-    par_decl: flatzinc::ParDeclItem,
-    instance_builder: &mut FlatZincInstanceBuilder,
-) -> Result<(), FlatZincError> {
-    match par_decl {
-        flatzinc::ParDeclItem::Int { .. } => {
-            todo!("implement parse_par_decl for integer parameters")
-        }
-        flatzinc::ParDeclItem::ArrayOfInt { id, v, .. } => {
-            let values = v
-                .into_iter()
-                .map(|num| num.try_into())
-                .collect::<Result<Box<[i32]>, _>>()?;
-
-            instance_builder.add_integer_array_parameter(id.into(), values);
-        }
-        flatzinc::ParDeclItem::Bool { .. } => {
-            todo!("implement parse_par_decl for boolean parameters")
-        }
-        flatzinc::ParDeclItem::ArrayOfBool { .. } => {
-            todo!("implement parse_par_decl for array of boolean parameters")
-        }
-        flatzinc::ParDeclItem::Float { .. } => {
-            todo!("implement parse_par_decl for float parameters")
-        }
-        flatzinc::ParDeclItem::ArrayOfFloat { .. } => {
-            todo!("implement parse_par_decl for array of float parameters")
-        }
-        flatzinc::ParDeclItem::SetOfInt { .. } => {
-            todo!("implement parse_par_decl for set of int parameters")
-        }
-        flatzinc::ParDeclItem::ArrayOfSet { .. } => {
-            todo!("implement parse_par_decl for array of array of set parameters")
+        flatzinc::VarDeclItem::SetOfInt { .. }
+        | flatzinc::VarDeclItem::SubSetOfIntSet { .. }
+        | flatzinc::VarDeclItem::SubSetOfIntRange { .. }
+        | flatzinc::VarDeclItem::ArrayOfSet { .. }
+        | flatzinc::VarDeclItem::ArrayOfSubSetOfIntRange { .. }
+        | flatzinc::VarDeclItem::ArrayOfSubSetOfIntSet { .. } => {
+            Err(FlatZincError::UnsupportedVariable("set".into()))
         }
     }
-
-    Ok(())
 }

@@ -1,0 +1,15 @@
+# imports are single line only to better work with line-based diffs like git
+imports_granularity = "Item"
+# imports are sorted to better work with line-based diffs like git
+group_imports = "StdExternalCrate"
+
+# wraps comments if they exceed `comment_width`
+wrap_comments = true
+# maximum length of comments
+comment_width = 120
+# also format the code in doc comments
+format_code_in_doc_comments = true
+# normalizes /* */ comments to // where possible
+normalize_comments = true
+# errors if the formatter is unable to get comments or string literals in the required width
+error_on_unformatted = true

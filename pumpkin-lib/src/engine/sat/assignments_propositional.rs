@@ -1,14 +1,18 @@
-use crate::basic_types::{
-    ConflictInfo, ConstraintReference, Literal, PropositionalVariable,
-    PropositionalVariableGeneratorIterator, Trail,
-};
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::KeyedVec;
+use crate::basic_types::Literal;
+use crate::basic_types::PropositionalVariable;
+use crate::basic_types::PropositionalVariableGeneratorIterator;
+use crate::basic_types::Trail;
 #[cfg(test)]
 use crate::engine::reason::ReasonRef;
-use crate::{pumpkin_assert_moderate, pumpkin_assert_simple};
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AssignmentsPropositional {
-    assignment_info: Vec<PropositionalAssignmentInfo>,
+    assignment_info: KeyedVec<PropositionalVariable, PropositionalAssignmentInfo>,
     trail: Trail<Literal>,
     pub true_literal: Literal,
     pub false_literal: Literal,
@@ -53,7 +57,8 @@ impl AssignmentsPropositional {
     }
 
     pub fn get_propositional_variables(&self) -> PropositionalVariableGeneratorIterator {
-        //we start from 1 to ignore the special variable with index zero, which is always assigned at the root to true
+        // we start from 1 to ignore the special variable with index zero, which is always assigned
+        // at the root to true
         PropositionalVariableGeneratorIterator::new(1, self.num_propositional_variables())
     }
 
@@ -219,7 +224,7 @@ impl AssignmentsPropositional {
     pub fn enqueue_decision_literal(&mut self, decision_literal: Literal) {
         pumpkin_assert_simple!(!self.is_literal_assigned(decision_literal));
 
-        self.make_assignment(decision_literal, ConstraintReference::NULL);
+        let _ = self.make_assignment(decision_literal, ConstraintReference::NULL);
     }
 
     pub fn enqueue_propagated_literal(
@@ -246,7 +251,7 @@ impl AssignmentsPropositional {
 
     pub fn debug_create_empty_clone(&self) -> Self {
         AssignmentsPropositional {
-            assignment_info: vec![Default::default(); self.assignment_info.len()],
+            assignment_info: KeyedVec::new(vec![Default::default(); self.assignment_info.len()]),
             trail: Default::default(),
             true_literal: self.true_literal,
             false_literal: self.false_literal,
@@ -274,7 +279,7 @@ impl AssignmentsPropositional {
     }
 }
 
-#[derive(PartialEq, Clone, Default)]
+#[derive(PartialEq, Clone, Default, Debug)]
 enum PropositionalAssignmentInfo {
     Assigned {
         truth_value: bool,
@@ -290,7 +295,7 @@ mod tests {
     use super::*;
 
     #[test]
-    pub fn already_assigned_literal_does_not_override_assignment_info() {
+    fn already_assigned_literal_does_not_override_assignment_info() {
         let mut assignments_propositional = AssignmentsPropositional::default();
         let literal = Literal::new(
             PropositionalVariable::new(assignments_propositional.num_propositional_variables()),
@@ -304,13 +309,14 @@ mod tests {
         );
         assert!(result.is_none());
         assert_eq!(assignments_propositional.trail.len(), 1);
-        //Re-assigning a literal which is already true does not result in the info being overwritten
+        // Re-assigning a literal which is already true does not result in the info being
+        // overwritten
         let result_reassignment = assignments_propositional.make_assignment(
             literal,
             ConstraintReference::create_reason_reference(ReasonRef(1)),
         );
         assert!(result_reassignment.is_none());
-        //Nor does it result in anything being added to the trail
+        // Nor does it result in anything being added to the trail
         assert_eq!(assignments_propositional.trail.len(), 1);
         assert!({
             if let PropositionalAssignmentInfo::Assigned {

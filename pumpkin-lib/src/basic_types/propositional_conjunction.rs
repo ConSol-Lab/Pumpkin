@@ -1,4 +1,5 @@
-use super::{Literal, Predicate};
+use super::Literal;
+use super::Predicate;
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
@@ -130,9 +131,9 @@ macro_rules! conjunction {
 
 #[cfg(test)]
 mod tests {
-    use crate::{basic_types::DomainId, predicate};
-
     use super::*;
+    use crate::basic_types::DomainId;
+    use crate::predicate;
 
     #[test]
     fn order_is_ignored_for_equality() {

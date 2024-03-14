@@ -1,27 +1,28 @@
-use crate::propagators::{
-    TimeTableOverIntervalIncrementalProp, TimeTableOverIntervalProp,
-    TimeTablePerPointIncrementalProp,
-};
-use crate::{
-    basic_types::{variables::IntVar, PropositionalConjunction},
-    engine::{LocalId, PropagatorVariable},
-    propagators::TimeTablePerPointProp,
-};
+//! Stores structures related for the Cumulative constraint such as the [`Task`]s or the
+//! [`CumulativeParameters`].
+use std::hash::Hash;
+use std::marker::PhantomData;
 use std::rc::Rc;
-use std::{hash::Hash, marker::PhantomData};
 
-use super::ChangeWithBound;
+use crate::basic_types::variables::IntVar;
+use crate::engine::propagation::local_id::LocalId;
+use crate::engine::propagation::propagator_variable::PropagatorVariable;
+use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
+use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::propagators::TimeTablePerPointIncrementalPropagator;
+use crate::propagators::TimeTablePerPointPropagator;
 
+/// Structure which stores the variables related to a task; for now, only the start times are
+/// assumed to be variable
 #[derive(Debug)]
-/// Structure which stores the variables related to a task; for now, only the start times are assumed to be variable
 pub struct Task<Var> {
-    /// The [PropagatorVariable] representing the start time of a task
+    /// The [`PropagatorVariable`] representing the start time of a task
     pub start_variable: PropagatorVariable<Var>,
     /// The processing time of the `start_variable` (also referred to as duration of a task)
     pub processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
-    /// The [LocalId] of the task, this corresponds with its index into [tasks][Cumulative::tasks]
+    /// The [`LocalId`] of the task
     pub id: LocalId,
 }
 
@@ -45,25 +46,28 @@ impl<Var: IntVar + 'static> PartialEq for Task<Var> {
 
 impl<Var: IntVar + 'static> Eq for Task<Var> {}
 
-#[derive(Clone, Debug)]
 /// The task which is passed as argument
+#[derive(Clone, Debug)]
 pub struct ArgTask<Var> {
-    /// The [IntVar] representing the start time of a task
+    /// The [`IntVar`] representing the start time of a task
     pub start_time: Var,
-    /// The processing time of the `start_variable` (also referred to as duration of a task)
+    /// The processing time of the [`start_time`][ArgTask::start_time] (also referred to as
+    /// duration of a task)
     pub processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
     pub resource_usage: i32,
 }
-#[derive(Clone)]
+
 /// The arguments which are required to create the constraint/propagators
+#[derive(Debug, Clone)]
 pub struct CumulativeArgs<Var, T> {
-    /// A box containing all of the ArgTasks
+    /// A box containing all of the [`ArgTask`]s
     pub tasks: Box<[ArgTask<Var>]>,
     /// The capacity of the resource
     pub capacity: i32,
-    /// We use [PhantomData] to differentiate between the different types of propagators;
-    /// without this field we would need to create a new argument struct for each cumulative propagator
+    /// We use [`PhantomData`] to differentiate between the different types of propagators;
+    /// without this field we would need to create a new argument struct for each cumulative
+    /// propagator
     propagator_type: PhantomData<T>,
 }
 
@@ -77,45 +81,72 @@ impl<Var, T> CumulativeArgs<Var, T> {
     }
 }
 
-/// An alias used for calling the [CumulativeArgs::new] method with the concrete propagator type of [TimeTablePerPointProp];
-/// this is used to prevent creating a different `new` method for each type `T`
-pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointProp<Var>>;
-pub type TimeTablePerPointIncremental<Var> =
-    CumulativeArgs<Var, TimeTablePerPointIncrementalProp<Var>>;
-pub type TimeTableOverInterval<Var> = CumulativeArgs<Var, TimeTableOverIntervalProp<Var>>;
-pub type TimeTableOverIntervalIncremental<Var> =
-    CumulativeArgs<Var, TimeTableOverIntervalIncrementalProp<Var>>;
+/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
+/// of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new` method
+/// for each type `T`
+pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointPropagator<Var>>;
 
+/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
+/// of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
+/// `new` method for each type `T`
+pub type TimeTablePerPointIncremental<Var> =
+    CumulativeArgs<Var, TimeTablePerPointIncrementalPropagator<Var>>;
+
+/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
+/// of [`TimeTableOverIntervalPropagator`]; this is used to prevent creating a different
+/// `new` method for each type `T`
+pub type TimeTableOverInterval<Var> = CumulativeArgs<Var, TimeTableOverIntervalPropagator<Var>>;
+
+/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
+/// of [`TimeTableOverIntervalIncrementalPropagator`]; this is used to prevent creating a different
+/// `new` method for each type `T`
+pub type TimeTableOverIntervalIncremental<Var> =
+    CumulativeArgs<Var, TimeTableOverIntervalIncrementalPropagator<Var>>;
+
+/// Stores the information of an updated task; for example in the context of
+/// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
 #[derive(Debug)]
-/// Stores the information of an updated task
-pub struct Updated<Var> {
+pub struct UpdatedTaskInfo<Var> {
+    /// The task which has been updated (where "updated" is according to some context-dependent
+    /// definition)
     pub task: Rc<Task<Var>>,
+    /// The lower-bound of the [`Task`] before the update
     pub old_lower_bound: i32,
+    /// The upper-bound of the [`Task`] before the update
     pub old_upper_bound: i32,
+    /// The lower-bound of the [`Task`] after the update
     pub new_lower_bound: i32,
+    /// The upper-bound of the [`Task`] after the update
     pub new_upper_bound: i32,
 }
 
-/// Holds the data for the cumulative constraint;
-/// the tasks, the capacity, the known bounds, the values which have been updated since the previous proapgation and the horizon
+/// Holds the data for the cumulative constraint; more specifically it holds:
+/// - The tasks
+/// - The capacity of the resource
+/// - The known bounds
+/// - The values which have been updated since the previous propagation
+/// - The horizon
+#[derive(Debug)]
 pub struct CumulativeParameters<Var> {
-    /// The Set of Tasks; for each task, the [LocalId] is assumed to correspond to its index in this [Vec];
-    /// this is stored as a Box of Rc's to accomodate the sharing of the tasks
+    /// The Set of [`Task`]s; for each [`Task`], the [`LocalId`] is assumed to correspond to its
+    /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
+    /// sharing of the tasks
     pub tasks: Box<[Rc<Task<Var>>]>,
-    /// The capacity of the resource (i.e. how much resource consumption can be maximally accomodated at each time point)
+    /// The capacity of the resource (i.e. how much resource consumption can be maximally
+    /// accomodated at each time point)
     pub capacity: i32,
-    /// The current known bounds of the different tasks; stored as (lower bound, upper bound)
+    /// The current known bounds of the different [tasks][CumulativeParameters::tasks]; stored as
+    /// (lower bound, upper bound)
     ///
-    /// [i] represents the currently known bounds of task i
+    /// `bounds[i]` represents the currently known bounds of task i
     pub bounds: Vec<(i32, i32)>,
-    /// The variables which have been updated since the last round of propagation, this structure is updated by the (incremental) propagator
-    pub updated: Vec<Updated<Var>>,
-    /// The largest possible makespan, in this case it is assumed to be the sum of all processing times
-    pub horizon: i32,
+    /// The [`Task`]s which have been updated since the last round of propagation, this structure
+    /// is updated by the (incremental) propagator
+    pub updated: Vec<UpdatedTaskInfo<Var>>,
 }
 
 impl<Var: IntVar + 'static> CumulativeParameters<Var> {
-    pub fn new(tasks: Vec<Task<Var>>, capacity: i32, horizon: i32) -> CumulativeParameters<Var> {
+    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -125,31 +156,6 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
-            horizon,
-        }
-    }
-}
-
-/// Stores the explanations
-pub struct Explanation<Var> {
-    /// The domain change related to the event; contains the type of domain change and the value
-    pub change: ChangeWithBound,
-    /// The updated task
-    pub task: Rc<Task<Var>>,
-    /// The actual explanation consisting of a PropositionalConjunction
-    pub explanation: PropositionalConjunction,
-}
-
-impl<Var: IntVar + 'static> Explanation<Var> {
-    pub fn new(
-        change: ChangeWithBound,
-        task: Rc<Task<Var>>,
-        explanation: PropositionalConjunction,
-    ) -> Explanation<Var> {
-        Explanation {
-            change,
-            task,
-            explanation,
         }
     }
 }

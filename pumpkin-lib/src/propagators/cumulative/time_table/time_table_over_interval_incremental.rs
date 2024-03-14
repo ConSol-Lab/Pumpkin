@@ -1,81 +1,110 @@
-use std::{
-    cmp::{max, min},
-    collections::HashSet,
-    ops::Range,
-    rc::Rc,
-};
+use std::cmp::max;
+use std::cmp::min;
+use std::ops::Range;
+use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
-use crate::engine::PropagationContextMut;
-use crate::{
-    basic_types::{variables::IntVar, PropagationStatusCP},
-    engine::{
-        CPPropagatorConstructor, ConstraintProgrammingPropagator, EnqueueDecision,
-        PropagationContext, PropagatorConstructorContext,
-    },
-    propagators::{
-        cumulative::time_table::time_table_propagator::{check_for_updates, generate_update_range},
-        CumulativeArgs, CumulativeParameters, Updated, Util,
-    },
-};
-use crate::{propagators::OverIntervalTimeTableType, pumpkin_assert_extreme};
-use crate::{pumpkin_assert_advanced, pumpkin_assert_moderate};
+use super::time_table_util::has_overlap_with_interval;
+use super::time_table_util::should_enqueue;
+use super::time_table_util::ResourceProfile;
+use crate::basic_types::variables::IntVar;
+use crate::basic_types::HashSet;
+use crate::basic_types::PropagationStatusCP;
+use crate::engine::cp::propagation::propagation_context::ReadDomains;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::PropagatorConstructorContext;
+use crate::propagators::check_bounds_equal_at_propagation;
+use crate::propagators::create_inconsistency;
+use crate::propagators::create_tasks;
+use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
+use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
+use crate::propagators::reset_bounds_clear_updated;
+use crate::propagators::update_bounds_task;
+use crate::propagators::CumulativeArgs;
+use crate::propagators::CumulativeParameters;
+use crate::propagators::OverIntervalTimeTableType;
+use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::propagators::UpdatedTaskInfo;
+use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_moderate;
 
-use super::{
-    time_table_propagator::{
-        has_overlap_with_interval, should_enqueue, ResourceProfile, TimeTablePropagator,
-    },
-    OverIntervalIteratorType, TimeTableOverIntervalProp,
-};
-
-/// Propagator responsible for using time-table reasoning to propagate the [Cumulative] constraint
-/// where a time-table is a structure which stores the mandatory resource usage of the tasks at different time-points -
-/// This method creates a [ResourceProfile] over intervals rather than creating per time-point (hence the name).
+/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// where a time-table is a structure which stores the mandatory resource usage of the tasks at
+/// different time-points - This method creates a [`ResourceProfile`] over an interval rather than
+/// creating one per time-point (hence the name). Furthermore, the
+/// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
+/// used for modelling the start variables, this will be an implementation of [`IntVar`].
 ///
-/// See ["Improving Scheduling by Learning - Andreas Schutt (2011)"](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
-/// Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 for more information about time-table reasoning.
-pub struct TimeTableOverIntervalIncrementalProp<Var> {
-    /// Each elements holds the mandatory resource consumption of 1 or more tasks over an interval (stored in a [ResourceProfile]);
-    /// the [ResourceProfile]s are sorted based on start time and they are assumed to be non-overlapping
+/// The difference between the [`TimeTableOverIntervalIncrementalPropagator`] and
+/// [`TimeTableOverIntervalPropagator`] is that the [`TimeTableOverIntervalIncrementalPropagator`]
+/// does not recalculate the time-table from scratch whenever the
+/// [`ConstraintProgrammingPropagator::propagate`] method is called but it utilises the
+/// [`ConstraintProgrammingPropagator::notify`] method to determine when a mandatory part is added
+/// and only updates the structure based on these updated mandatory parts.
+///
+/// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
+///  for more information about time-table reasoning.
+///
+/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
+/// Computer Science and Software Engineering, 2011.
+#[derive(Debug)]
+pub struct TimeTableOverIntervalIncrementalPropagator<Var> {
+    /// The key `t` (representing a time-point) holds the mandatory resource consumption of
+    /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
+    /// sorted based on start time and they are assumed to be non-overlapping
     time_table: OverIntervalTimeTableType<Var>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
-    /// Keeps track of whether the current state of the time-table is outdated (i.e. whether it needs to be recalculated from scratch)
+    /// Keeps track of whether the current state of the
+    /// [`TimeTableOverIntervalIncrementalPropagator::time_table`] is outdated (i.e. whether it
+    /// needs to be recalculated from scratch). This can occur due to backtracking.
     ///
-    /// Imagine the situation where a synchronisation takes place and the propagator eagerly recalculates the time-table
-    /// but then another propagator finds a conflict and the time-table calculation was superfluous;
-    /// this flag ensures that the recalculation is done lazily, only when required
+    /// Imagine the situation where a synchronisation takes place and the propagator eagerly
+    /// recalculates the time-table but then another propagator finds a conflict and the
+    /// time-table calculation was superfluous; this flag ensures that the recalculation is
+    /// done lazily, only when required.
     time_table_outdated: bool,
 }
 
-impl<Var> CPPropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalIncrementalProp<Var>>
+impl<Var> PropagatorConstructor
+    for CumulativeArgs<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
-    type Propagator = TimeTableOverIntervalIncrementalProp<Var>;
+    type Propagator = TimeTableOverIntervalIncrementalPropagator<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let (tasks, horizon) = Util::create_tasks(&self.tasks, context);
-        TimeTableOverIntervalIncrementalProp::new(CumulativeParameters::new(
+        let tasks = create_tasks(&self.tasks, context);
+        TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
             self.capacity,
-            horizon,
         ))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
-    pub fn new(parameters: CumulativeParameters<Var>) -> TimeTableOverIntervalIncrementalProp<Var> {
-        TimeTableOverIntervalIncrementalProp {
+impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
+    pub fn new(
+        parameters: CumulativeParameters<Var>,
+    ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
+        TimeTableOverIntervalIncrementalPropagator {
             time_table: Default::default(),
             parameters,
             time_table_outdated: false,
         }
     }
 
-    /// Performs a binary search on the [time-table][TimeTableOverIntervalIncrementalProp::time_table] to find *an* element which overlaps with the `update_range`.
-    /// If such an element can be found then it returns [Ok] containing the index of the overlapping profile.
-    /// If no such element could be found, it returns [Err] containing the index at which the element should be inserted to preserve the ordering
+    /// Performs a binary search on the
+    /// [time-table][TimeTableOverIntervalIncrementalPropagator::time_table] to find *an* element
+    /// which overlaps with the `update_range`. If such an element can be found then it returns
+    /// [Ok] containing the index of the overlapping profile. If no such element could be found,
+    /// it returns [Err] containing the index at which the element should be inserted to
+    /// preserve the ordering
     fn find_overlapping_profile(
         time_table: &OverIntervalTimeTableType<Var>,
         update_range: &Range<i32>,
@@ -95,27 +124,34 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
         })
     }
 
-    /// Determines which profiles are required to be updated given a range of times which now include a mandatory part (i.e. determine the profiles which overlap with the update_range).
-    /// It returns two indices into [time_table][TimeTableOverIntervalIncrementalProp::time_table] representing the index of the first profile which overlaps with the update_range (inclusive)
-    /// and the index of the last profile which overlaps with the update_range (inclusive) or [None] if there are no overlapping profiles
+    /// Determines which profiles are required to be updated given a range of times which now
+    /// include a mandatory part (i.e. determine the profiles which overlap with the update_range).
+    /// It returns two indices into
+    /// [time_table][TimeTableOverIntervalIncrementalPropagator::time_table] representing the
+    /// index of the first profile which overlaps with the update_range (inclusive)
+    /// and the index of the last profile which overlaps with the update_range (inclusive) or [None]
+    /// if there are no overlapping profiles
     ///
     /// Note that the lower-bound of the range is inclusive and the upper-bound is exclusive
     fn determine_profiles_to_update(
         time_table: &OverIntervalTimeTableType<Var>,
         update_range: &Range<i32>,
     ) -> Result<(usize, usize), usize> {
-        let overlapping_profile = TimeTableOverIntervalIncrementalProp::find_overlapping_profile(
-            time_table,
-            update_range,
-        );
+        let overlapping_profile =
+            TimeTableOverIntervalIncrementalPropagator::find_overlapping_profile(
+                time_table,
+                update_range,
+            );
 
         if overlapping_profile.is_err() {
             // We have not found any profile which overlaps with the update range
             return Err(overlapping_profile.expect_err("Overlapping profile could not be found"));
         }
 
-        // Now we need to find all of the profiles which are adjacent to `overlapping_profile` which also overlap with `update_range`
-        // Our starting index is thus the index of `overlapping_profile` and we need to search to the left and the right of the profile to find the other overlapping profiles
+        // Now we need to find all of the profiles which are adjacent to `overlapping_profile` which
+        // also overlap with `update_range` Our starting index is thus the index of
+        // `overlapping_profile` and we need to search to the left and the right of the profile to
+        // find the other overlapping profiles
         let mut left_most_overlapping_index = overlapping_profile.unwrap();
         let mut right_most_overlapping_index = left_most_overlapping_index;
         if left_most_overlapping_index > 0 {
@@ -128,10 +164,12 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
                     profile.start,
                     profile.end,
                 ) {
-                    // We now know that the left most overlapping index is either `left_profile_index` or before it
+                    // We now know that the left most overlapping index is either
+                    // `left_profile_index` or before it
                     left_most_overlapping_index = left_profile_index;
                 } else {
-                    // We know that no profile on the left of this one will be overlapping with `update_range`
+                    // We know that no profile on the left of this one will be overlapping with
+                    // `update_range`
                     break;
                 }
             }
@@ -150,18 +188,21 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
                 profile.start,
                 profile.end,
             ) {
-                // We now know that the right most overlapping index is either `right_profile_index` or after it
+                // We now know that the right most overlapping index is either `right_profile_index`
+                // or after it
                 right_most_overlapping_index = right_profile_index;
             } else {
-                // We know that no profile on the right of this one will be overlapping with `update_range`
+                // We know that no profile on the right of this one will be overlapping with
+                // `update_range`
                 break;
             }
         }
         Ok((left_most_overlapping_index, right_most_overlapping_index))
     }
 
-    /// Determines whether 2 profiles are mergeable (i.e. they are next to each other, consist of the same tasks and have the same height);
-    /// this method is used when propagating incrementally and maintaining maximal profiles.
+    /// Determines whether 2 profiles are mergeable (i.e. they are next to each other, consist of
+    /// the same tasks and have the same height); this method is used when propagating
+    /// incrementally and maintaining maximal profiles.
     ///
     /// It is assumed that the profile tasks of both profiles do not contain duplicates
     fn are_mergeable(
@@ -186,12 +227,15 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
                 == second_profile.profile_tasks.len(),
             "The second provided profile had duplicate profile tasks"
         );
-        // First we perform the simple checks, determining whether the two profiles are the same height, whether they are next to one another and whether they contain the same number of tasks
+        // First we perform the simple checks, determining whether the two profiles are the same
+        // height, whether they are next to one another and whether they contain the same number of
+        // tasks
         let mergeable = first_profile.height == second_profile.height
             && first_profile.end == second_profile.start - 1
             && first_profile.profile_tasks.len() == second_profile.profile_tasks.len();
         if !mergeable {
-            // The tasks have already been found to be not mergeable so we can avoid checking equality of the profile tasks
+            // The tasks have already been found to be not mergeable so we can avoid checking
+            // equality of the profile tasks
             mergeable
         } else {
             // We check whether the profile tasks of both profiles are the same
@@ -216,12 +260,13 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
         while current_index < end {
             let first = current_index;
             while current_index < end
-                && TimeTableOverIntervalIncrementalProp::are_mergeable(
+                && TimeTableOverIntervalIncrementalPropagator::are_mergeable(
                     &time_table[current_index as usize],
                     &time_table[(current_index + 1) as usize],
                 )
             {
-                // We go over all pairs of profiles until we find a profile which cannot be merged with the current profile
+                // We go over all pairs of profiles until we find a profile which cannot be merged
+                // with the current profile
                 current_index += 1;
             }
 
@@ -238,12 +283,15 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
                     height: start_profile.height,
                 };
                 // We replace the previously separate profile with the new profile
-                time_table.splice(first as usize..(current_index + 1) as usize, [new_profile]);
+                let _ =
+                    time_table.splice(first as usize..(current_index + 1) as usize, [new_profile]);
 
-                // We have removed profiles from the time-table and we thus need to adjust our end-index under consideration by the number of profiles which were removed
+                // We have removed profiles from the time-table and we thus need to adjust our
+                // end-index under consideration by the number of profiles which were removed
                 end -= current_index - first;
 
-                // We reset the current index to the index of the new profile and move onto the next profile
+                // We reset the current index to the index of the new profile and move onto the next
+                // profile
                 current_index = first;
             }
             current_index += 1;
@@ -251,12 +299,12 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalProp<Var> {
     }
 }
 
-impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
-    for TimeTableOverIntervalIncrementalProp<Var>
+impl<Var: IntVar + 'static + std::fmt::Debug> Propagator
+    for TimeTableOverIntervalIncrementalPropagator<Var>
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
-            Util::check_bounds_equal_at_propagation(
+            check_bounds_equal_at_propagation(
                 context,
                 &self.parameters.tasks,
                 &self.parameters.bounds,
@@ -264,13 +312,18 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
             "Bound were not equal when propagating"
         );
         if self.time_table_outdated {
-            // The time-table needs to be recalculated from scratch anyways so we perform the calculation now
-            TimeTablePropagator::reset_structures(self, context)?;
+            // The time-table needs to be recalculated from scratch anyways so we perform the
+            // calculation now
+            self.time_table =
+                TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
+                    context,
+                    &self.parameters,
+                )?;
             self.time_table_outdated = false;
         } else {
             // We keep track of the lowest index which can be merged
             let mut lowest_index = u32::MAX;
-            for Updated {
+            for UpdatedTaskInfo {
                 task,
                 old_lower_bound,
                 old_upper_bound,
@@ -278,7 +331,7 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                 new_upper_bound,
             } in self.parameters.updated.iter()
             {
-                let (lower_update_range, upper_update_range) = generate_update_range(
+                let added_mandatory_consumption = generate_update_range(
                     task,
                     *old_lower_bound,
                     *old_upper_bound,
@@ -286,20 +339,14 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                     *new_upper_bound,
                 );
                 // We consider both of the possible update ranges
-                // Note that the upper update range is first considered to avoid any issues with the indices when processing the other update range
-                for update_range in
-                    std::iter::once(upper_update_range).chain(std::iter::once(lower_update_range))
-                {
-                    if update_range.is_empty() {
-                        // This case only occurs if a fully new mandatory part is added
-                        continue;
-                    }
-
+                // Note that the upper update range is first considered to avoid any issues with the
+                // indices when processing the other update range
+                for update_range in added_mandatory_consumption.get_reverse_update_ranges() {
                     // Keep track of the profiles which need to be added
                     let mut to_add: Vec<ResourceProfile<Var>> = Vec::new();
 
                     // First we attempt to find overlapping profiles
-                    match TimeTableOverIntervalIncrementalProp::determine_profiles_to_update(
+                    match TimeTableOverIntervalIncrementalPropagator::determine_profiles_to_update(
                         &self.time_table,
                         &update_range,
                     ) {
@@ -314,15 +361,18 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 },
                             );
 
-                            // Go over all indices of the profiles which overlap with the updated one and determine which one need to be updated
+                            // Go over all indices of the profiles which overlap with the updated
+                            // one and determine which one need to be updated
                             for current_index in start_index..=end_index {
                                 let profile = &self.time_table[current_index];
 
                                 if current_index == start_index
                                     && update_range.start < profile.start
                                 {
-                                    // We are considering the first overlapping profile and there is a part before the start of this profile
-                                    // This means we need to add a new mandatory part before the first element
+                                    // We are considering the first overlapping profile and there is
+                                    // a part before the start of this profile
+                                    // This means we need to add a new mandatory part before the
+                                    // first element
                                     to_add.push(ResourceProfile {
                                         start: update_range.start,
                                         end: profile.start - 1, // Note that this profile needs to end before the start of the current profile, hence the -1
@@ -331,14 +381,24 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                     })
                                 }
                                 if current_index != start_index && current_index != 0 {
-                                    // We are not considering the first profile and there could be a new profile between the current profile and the previous one caused by the updated task
+                                    // We are not considering the first profile and there could be a
+                                    // new profile between the current profile and the previous one
+                                    // caused by the updated task
                                     let previous_profile = &self.time_table[current_index - 1];
-                                    if previous_profile.end < profile.start - 1 // There is empty space between the current profile and the previous profile
-                                    && update_range.start <= previous_profile.end + 1 // The update range starts before the end of the previous profile
-                                    && update_range.end > profile.start - 1
-                                    // The update range ends after the start of the current profile
+
+                                    // The following three points are checked:
+                                    // - There is empty space between the current profile and the
+                                    //   previous profile
+                                    // - The update range starts before the end of the previous
+                                    //   profile
+                                    // - The update range ends after the start of the current
+                                    //   profile
+                                    if previous_profile.end < profile.start - 1
+                                        && update_range.start <= previous_profile.end + 1
+                                        && update_range.end > profile.start - 1
                                     {
-                                        // There is empty space between the current profile and the previous one, we should insert a new profile
+                                        // There is empty space between the current profile and the
+                                        // previous one, we should insert a new profile
                                         to_add.push(ResourceProfile {
                                             start: previous_profile.end + 1,
                                             end: profile.start - 1,
@@ -351,7 +411,9 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 if update_range.start > profile.start {
                                     // We are splitting the current profile into one or more parts
                                     // The update range starts after the profile starts;
-                                    // This if-statement takes care of creating a new (smaller) profile which represents the previous profile up and until it is split by the update range
+                                    // This if-statement takes care of creating a new (smaller)
+                                    // profile which represents the previous profile up and until it
+                                    // is split by the update range
                                     to_add.push(ResourceProfile {
                                         start: profile.start,
                                         end: min(update_range.start - 1, profile.end), // It could be that the update range extends past the profile in which case we should create a profile until the end of the profile
@@ -360,33 +422,44 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                     })
                                 }
 
-                                // Now we create a new profile which consists of the part of the profile covered by the update range
-                                // This means that we are adding the contribution of the updated task to the profile and adjusting the bounds appropriately
+                                // Now we create a new profile which consists of the part of the
+                                // profile covered by the update range
+                                // This means that we are adding the contribution of the updated
+                                // task to the profile and adjusting the bounds appropriately
 
-                                // Either the new profile starts at the start of the profile (in case the update range starts before the profile start)
-                                // or the new profile starts at the start of the update range (since we are only looking at the part where there is overlap between the current profile and the update range)
+                                // Either the new profile starts at the start of the profile (in
+                                // case the update range starts before the profile start)
+                                // or the new profile starts at the start of the update range (since
+                                // we are only looking at the part where there is overlap between
+                                // the current profile and the update range)
                                 let new_profile_lower_bound =
                                     max(profile.start, update_range.start);
 
-                                // Either the new profile ends at the end of the profile (in case the update range ends after the profile end)
-                                // or the new profile ends at the end of the update range (since we are only looking at the part where there is overlap between the current profile and the update range)
+                                // Either the new profile ends at the end of the profile (in case
+                                // the update range ends after the profile end)
+                                // or the new profile ends at the end of the update range (since we
+                                // are only looking at the part where there is overlap between the
+                                // current profile and the update range)
                                 let new_profile_upper_bound =
                                     min(profile.end, update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
                                 let mut new_profile_tasks = profile.profile_tasks.clone();
                                 new_profile_tasks.push(Rc::clone(task));
                                 if new_profile_upper_bound >= new_profile_lower_bound {
-                                    // A sanity check, there is a new profile to create consisting of a combination of the previous profile and the updated task
+                                    // A sanity check, there is a new profile to create consisting
+                                    // of a combination of the previous profile and the updated task
                                     if profile.height + task.resource_usage
                                         > self.parameters.capacity
                                     {
-                                        // The addition of the new mandatory part to the profile caused an overflow of the resource
-                                        return Util::create_error_clause(
+                                        // The addition of the new mandatory part to the profile
+                                        // caused an overflow of the resource
+                                        return Err(create_inconsistency(
                                             context,
                                             &new_profile_tasks,
-                                        );
+                                        ));
                                     }
 
-                                    // We thus create a new profile consisting of the combination of the previous profile and the updated task under consideration
+                                    // We thus create a new profile consisting of the combination of
+                                    // the previous profile and the updated task under consideration
                                     to_add.push(ResourceProfile {
                                         start: new_profile_lower_bound,
                                         end: new_profile_upper_bound,
@@ -398,7 +471,9 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 if profile.end >= update_range.end {
                                     // We are splitting the current profile into one or more parts
                                     // The update range ends before the end of the profile;
-                                    // This if-statement takes care of creating a new (smaller) profile which represents the previous profile after it is split by the update range
+                                    // This if-statement takes care of creating a new (smaller)
+                                    // profile which represents the previous profile after it is
+                                    // split by the update range
                                     to_add.push(ResourceProfile {
                                         start: max(update_range.end, profile.start),
                                         end: profile.end,
@@ -408,8 +483,10 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 }
                                 if current_index == end_index && update_range.end > profile.end + 1
                                 {
-                                    // We are considering the last overlapping profile and there is a part after the end of this profile
-                                    // This means we need to add a new mandatory part after the last element
+                                    // We are considering the last overlapping profile and there is
+                                    // a part after the end of this profile
+                                    // This means we need to add a new mandatory part after the last
+                                    // element
                                     to_add.push(ResourceProfile {
                                         start: profile.end + 1,
                                         end: update_range.end - 1,
@@ -418,11 +495,13 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                     })
                                 }
                             }
-                            // We now update the time-table to insert the newly created profiles at the right place to ensure the ordering invariant
-                            self.time_table.splice(start_index..end_index + 1, to_add);
+                            // We now update the time-table to insert the newly created profiles at
+                            // the right place to ensure the ordering invariant
+                            let _ = self.time_table.splice(start_index..end_index + 1, to_add);
                         }
                         Err(index_to_insert) => {
-                            //Update the lowest index which we have found so far which has been updated
+                            // Update the lowest index which we have found so far which has been
+                            // updated
                             lowest_index = min(
                                 lowest_index,
                                 if index_to_insert == 0 {
@@ -440,7 +519,7 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                                 "The index to insert at is incorrect"
                             );
 
-                            //Insert the new profile at its index
+                            // Insert the new profile at its index
                             self.time_table.insert(
                                 index_to_insert,
                                 ResourceProfile {
@@ -455,10 +534,11 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                 }
             }
             if lowest_index != u32::MAX {
-                // We have updated at least 1 of the profiles, we can now merge the profiles which are adjacent to one another
-                // We start at the lowest index which we have found and continue from there
+                // We have updated at least 1 of the profiles, we can now merge the profiles which
+                // are adjacent to one another We start at the lowest index which we
+                // have found and continue from there
                 let time_table_len = self.time_table.len();
-                TimeTableOverIntervalIncrementalProp::merge_profiles(
+                TimeTableOverIntervalIncrementalPropagator::merge_profiles(
                     &mut self.time_table,
                     lowest_index as i32,
                     (time_table_len - 1) as i32,
@@ -467,9 +547,9 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
         }
 
         pumpkin_assert_extreme!({
-            let time_table_scratch = TimeTableOverIntervalIncrementalProp::create_time_table(
+            let time_table_scratch = TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
                 context,
-                self.get_parameters(),
+                &self.parameters,
             )
             .expect("Expected no error");
             self.time_table.len() == time_table_scratch.len()
@@ -489,35 +569,53 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
                     })
         }, "The profiles were not the same between the incremental and the non-incremental version");
 
-        self.parameters.updated.clear(); //We have processed all of the updates, we can clear the structure
-                                         //We pass the entirety of the table to check due to the fact that the propagation of the current profile could lead to the propagation across multiple profiles
-                                         //For example, if we have updated 1 resource profile which caused a propagation then this could cause another propagation by a profile which has not been updated
-        check_for_updates(context, self.get_time_table(), self.get_parameters())
+        // We have processed all of the updates, we can clear the structure
+        self.parameters.updated.clear();
+        // We pass the entirety of the table to check due to the fact that the propagation of the
+        // current profile could lead to the propagation across multiple profiles
+        // For example, if we have updated 1 resource profile which caused a propagation then this
+        // could cause another propagation by a profile which has not been updated
+        propagate_based_on_timetable(context, self.time_table.iter(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        Util::reset_bounds_clear_updated(
+        reset_bounds_clear_updated(
             context,
             &mut self.parameters.updated,
             &mut self.parameters.bounds,
             &self.parameters.tasks,
         );
-        self.time_table_outdated = true;
+        // If the time-table is already empty then backtracking will not cause it to become outdated
+        if !self.time_table.is_empty() {
+            self.time_table_outdated = true;
+        }
     }
 
     fn notify(
         &mut self,
         context: &mut PropagationContextMut,
-        local_id: crate::engine::LocalId,
-        _event: crate::engine::OpaqueDomainEvent,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
-        should_enqueue(
-            &mut self.parameters,
-            updated_task,
+        // Note that we do not take into account the fact that the time-table could be outdated
+        // here; the time-table can only become outdated due to backtracking which means that if the
+        // time-table is empty before backtracking then it will necessarily be so after
+        // backtracking.
+        //
+        // However, this could mean that we potentially enqueue even though the time-table is empty
+        // after backtracking but has not been recalculated yet.
+        let result = should_enqueue(
+            &self.parameters,
+            &updated_task,
             context,
-            self.time_table.is_empty(), // Time table could be out-of-date but if it is empty then backtracking will not make it more empty
-        )
+            self.time_table.is_empty(),
+        );
+        if let Some(update) = result.update {
+            self.parameters.updated.push(update)
+        }
+        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        result.decision
     }
 
     fn priority(&self) -> u32 {
@@ -529,63 +627,48 @@ impl<Var: IntVar + 'static + std::fmt::Debug> ConstraintProgrammingPropagator
     }
 
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        Util::initialise_at_root(true, &mut self.parameters, context);
-        TimeTablePropagator::propagate_from_scratch(self, context)
+        // First we store the bounds in the parameters
+        for task in self.parameters.tasks.iter() {
+            self.parameters.bounds.push((
+                context.lower_bound(&task.start_variable),
+                context.upper_bound(&task.start_variable),
+            ))
+        }
+        self.parameters.updated.clear();
+
+        // Then we do normal propagation
+        self.time_table =
+            TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
+                context,
+                &self.parameters,
+            )?;
+        self.time_table_outdated = false;
+        propagate_based_on_timetable(context, self.time_table.iter(), &self.parameters)
     }
 
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
-        //Use the same debug propagator from `TimeTablePerPoint`
-        TimeTableOverIntervalProp::debug_propagate_from_scratch_time_table_interval(
+        // Use the same debug propagator from `TimeTableOverInterval`
+        TimeTableOverIntervalPropagator::debug_propagate_from_scratch_time_table_interval(
             context,
-            self.get_parameters(),
+            &self.parameters,
         )
-    }
-}
-
-impl<Var: IntVar + 'static> TimeTablePropagator<Var> for TimeTableOverIntervalIncrementalProp<Var> {
-    type TimeTableType = OverIntervalTimeTableType<Var>;
-    type TimeTableIteratorType<'a> = OverIntervalIteratorType<'a, Var>;
-
-    fn create_time_table_and_assign(
-        &mut self,
-        context: &PropagationContextMut,
-    ) -> PropagationStatusCP {
-        let time_table = <TimeTableOverIntervalIncrementalProp<Var> as TimeTablePropagator<Var>>::create_time_table(
-            context,
-            self.get_parameters(),
-        )?;
-        self.time_table = time_table;
-        Ok(())
-    }
-
-    fn create_time_table(
-        context: &PropagationContextMut,
-        parameters: &CumulativeParameters<Var>,
-    ) -> Result<Self::TimeTableType, Inconsistency> {
-        TimeTableOverIntervalProp::create_time_table_over_interval_from_scratch(context, parameters)
-    }
-
-    fn get_parameters(&self) -> &CumulativeParameters<Var> {
-        &self.parameters
-    }
-
-    fn get_time_table(&self) -> Self::TimeTableIteratorType<'_> {
-        self.time_table.iter()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        basic_types::{
-            ConflictInfo, Inconsistency, Predicate, PredicateConstructor, PropositionalConjunction,
-        },
-        engine::{test_helper::TestSolver, EnqueueDecision},
-        propagators::{ArgTask, TimeTableOverIntervalIncremental},
-    };
+    use crate::basic_types::ConflictInfo;
+    use crate::basic_types::Inconsistency;
+    use crate::basic_types::Predicate;
+    use crate::basic_types::PredicateConstructor;
+    use crate::basic_types::PropositionalConjunction;
+    use crate::engine::propagation::EnqueueDecision;
+    use crate::engine::test_helper::TestSolver;
+    use crate::propagators::ArgTask;
+    use crate::propagators::TimeTableOverIntervalIncremental;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -593,7 +676,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {
@@ -664,7 +747,7 @@ mod tests {
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(0, 6);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {
@@ -699,7 +782,7 @@ mod tests {
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {
@@ -790,7 +873,7 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {
@@ -979,7 +1062,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 8);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {
@@ -1021,7 +1104,7 @@ mod tests {
         let s2 = solver.new_variable(5, 5);
         let s3 = solver.new_variable(1, 15);
 
-        solver
+        let _ = solver
             .new_propagator(TimeTableOverIntervalIncremental::new(
                 [
                     ArgTask {

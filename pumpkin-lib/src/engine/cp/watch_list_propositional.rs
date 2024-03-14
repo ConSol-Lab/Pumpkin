@@ -1,20 +1,28 @@
+use enumset::EnumSet;
+use enumset::EnumSetType;
+
+use crate::basic_types::KeyedVec;
 use crate::basic_types::Literal;
-use enumset::{EnumSet, EnumSetType};
+use crate::engine::propagation::propagator_var_id::PropagatorVarId;
 
-use super::PropagatorVarId;
-
+#[derive(Debug)]
 pub struct WatchListPropositional {
-    watchers: Vec<WatcherPropositional>, //[i] contains propagator ids of propagators that watch domain changes of the i-th integer variable
+    watchers: KeyedVec<Literal, WatcherPropositional>, /* contains propagator ids of propagators
+                                                        * that watch domain changes of the i-th
+                                                        * integer variable */
+    is_watching_anything: bool,
 }
 
 impl Default for WatchListPropositional {
     fn default() -> Self {
         Self {
-            watchers: vec![WatcherPropositional::default()],
+            watchers: KeyedVec::new(vec![WatcherPropositional::default()]),
+            is_watching_anything: false,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct WatchersPropositional<'a> {
     propagator_var: PropagatorVarId,
     watch_list: &'a mut WatchListPropositional,
@@ -36,7 +44,7 @@ impl BooleanDomainEvent {
     }
 }
 
-//public functions
+// public functions
 impl WatchListPropositional {
     pub fn grow(&mut self) {
         self.watchers.push(WatcherPropositional::default());
@@ -45,6 +53,10 @@ impl WatchListPropositional {
 
     pub fn num_domains(&self) -> u32 {
         self.watchers.len() as u32
+    }
+
+    pub fn is_watching_anything(&self) -> bool {
+        self.is_watching_anything
     }
 
     pub fn get_affected_propagators(
@@ -73,6 +85,7 @@ impl<'a> WatchersPropositional<'a> {
     }
 
     pub fn watch_all(&mut self, domain: Literal, events: EnumSet<BooleanDomainEvent>) {
+        self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
         for event in events {
@@ -88,8 +101,8 @@ impl<'a> WatchersPropositional<'a> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WatcherPropositional {
-    pub assigned_true_watchers: Vec<PropagatorVarId>,
-    pub assigned_false_watchers: Vec<PropagatorVarId>,
+    assigned_true_watchers: Vec<PropagatorVarId>,
+    assigned_false_watchers: Vec<PropagatorVarId>,
 }

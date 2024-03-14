@@ -1,13 +1,14 @@
-use std::collections::HashMap;
+use crate::basic_types::DomainId;
+use crate::basic_types::HashMap;
+use crate::basic_types::Literal;
+use crate::basic_types::Solution;
+use crate::basic_types::WeightedLiteral;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::pumpkin_assert_moderate;
 
-use crate::{
-    engine::{AssignmentsInteger, AssignmentsPropositional, ConstraintSatisfactionSolver},
-    pumpkin_assert_moderate,
-};
-
-use super::{DomainId, Literal, Solution, WeightedLiteral};
-
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Function {
     weighted_literals: HashMap<Literal, u64>,
     weighted_integers: HashMap<DomainId, u64>,
@@ -16,8 +17,9 @@ pub struct Function {
 
 impl Function {
     pub fn add_weighted_literal(&mut self, literal: Literal, weight: u64) {
-        //we want to avoid the situation where both polarities of a variable have a weight
-        //  in case that happens, we keep a weight for one of the two polarity, and factor in the obligatory cost in the constant term
+        // we want to avoid the situation where both polarities of a variable have a weight
+        //  in case that happens, we keep a weight for one of the two polarity, and factor in the
+        // obligatory cost in the constant term
 
         let negative_literal = !literal;
         if let Some(opposite_weight) = self.weighted_literals.get_mut(&negative_literal) {
@@ -28,14 +30,14 @@ impl Function {
                     self.constant_term += weight;
                 }
                 std::cmp::Ordering::Equal => {
-                    self.weighted_literals.remove(&negative_literal);
+                    let _ = self.weighted_literals.remove(&negative_literal);
                     self.constant_term += weight;
                 }
                 std::cmp::Ordering::Greater => {
                     let diff = weight - *opposite_weight;
                     self.constant_term += *opposite_weight;
-                    self.weighted_literals.remove(&negative_literal);
-                    self.weighted_literals.insert(literal, diff);
+                    let _ = self.weighted_literals.remove(&negative_literal);
+                    let _ = self.weighted_literals.insert(literal, diff);
                 }
             }
         } else {
@@ -71,13 +73,13 @@ impl Function {
 
     pub fn evaluate_solution(&self, solution: &Solution) -> u64 {
         let mut value: u64 = self.constant_term;
-        //add the contribution of the propositional part
+        // add the contribution of the propositional part
         for term in self.get_weighted_literals() {
             let literal = *term.0;
             let weight = *term.1;
             value += weight * (solution.get_literal_value(literal) as u64);
         }
-        //add the contribution of the integer part
+        // add the contribution of the integer part
         for term in self.get_weighted_integers() {
             let domain_id = *term.0;
             let weight = *term.1;
@@ -92,14 +94,14 @@ impl Function {
         assignments_integer: &AssignmentsInteger,
     ) -> u64 {
         let mut value: u64 = self.constant_term;
-        //add the contribution of the propositional part
+        // add the contribution of the propositional part
         for term in self.get_weighted_literals() {
             let literal = *term.0;
             let weight = *term.1;
             pumpkin_assert_moderate!(assignments_propositional.is_literal_assigned(literal));
             value += weight * (assignments_propositional.is_literal_assigned_true(literal) as u64);
         }
-        //add the contribution of the integer part
+        // add the contribution of the integer part
         for term in self.get_weighted_integers() {
             let domain_id = *term.0;
             let weight = *term.1;
@@ -118,6 +120,7 @@ impl Function {
             .map(|p| WeightedLiteral {
                 literal: *p.0,
                 weight: *p.1,
+                bound: None,
             })
             .collect();
 
@@ -132,26 +135,28 @@ impl Function {
                 .get_integer_assignments()
                 .get_upper_bound(domain_id);
 
-            //note that we only needs lower bound literals starting from lower_bound+1
-            //  the literals before those contribute to the objective function but not in a way that can be changed
+            // note that we only needs lower bound literals starting from lower_bound+1
+            //  the literals before those contribute to the objective function but not in a way that
+            // can be changed
             for i in (lower_bound + 1)..=upper_bound {
                 let literal = csp_solver.get_lower_bound_literal(domain_id, i);
-                weighted_literals.push(WeightedLiteral { literal, weight });
+                weighted_literals.push(WeightedLiteral {
+                    literal,
+                    weight,
+                    bound: Some(i),
+                });
             }
         }
 
-        //this was introduced to eliminate the randomness caused by the hashmap that is internally used in 'Function'
-        //  hashmaps internally use randomisation when sorting keys, which influences the order in which elements are tranversed when going through all elements in the hashmap
-        //  this can in turn have an impact on the solver since the order in which literals are stored influences the encoding
-        //  todo this can be seen as a temporary solution, need to rethink if there is a better way and whether other hashmaps in the solver can cause similar problems
+        // this was introduced to eliminate the randomness caused by the hashmap that is internally
+        // used in 'Function'  hashmaps internally use randomisation when sorting keys,
+        // which influences the order in which elements are tranversed when going through all
+        // elements in the hashmap  this can in turn have an impact on the solver since the
+        // order in which literals are stored influences the encoding  todo this can be seen
+        // as a temporary solution, need to rethink if there is a better way and whether other
+        // hashmaps in the solver can cause similar problems
         weighted_literals.sort_by_key(|wl| wl.literal.to_u32());
 
         weighted_literals
     }
-}
-
-#[derive(Clone)]
-pub struct WeightedInteger {
-    pub domain_id: DomainId,
-    pub weight: u64,
 }

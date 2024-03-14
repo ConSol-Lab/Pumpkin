@@ -1,12 +1,12 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 
+use crate::basic_types::HashSet;
+use crate::engine::cp::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
-use super::PropagatorId;
-
+#[derive(Debug)]
 pub struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,
     present_propagators: HashSet<PropagatorId>,
@@ -17,7 +17,7 @@ impl PropagatorQueue {
     pub fn new(num_priority_levels: u32) -> PropagatorQueue {
         PropagatorQueue {
             queues: vec![VecDeque::new(); num_priority_levels as usize],
-            present_propagators: HashSet::new(),
+            present_propagators: HashSet::default(),
             present_priorities: BinaryHeap::new(),
         }
     }
@@ -34,7 +34,7 @@ impl PropagatorQueue {
                 self.present_priorities.push(Reverse(priority));
             }
             self.queues[priority as usize].push_back(propagator_id);
-            self.present_propagators.insert(propagator_id);
+            let _ = self.present_propagators.insert(propagator_id);
         }
     }
 
@@ -46,10 +46,10 @@ impl PropagatorQueue {
 
         let next_propagator_id = self.queues[top_priority].pop_front().unwrap();
 
-        self.present_propagators.remove(&next_propagator_id);
+        let _ = self.present_propagators.remove(&next_propagator_id);
 
         if self.queues[top_priority].is_empty() {
-            self.present_priorities.pop();
+            let _ = self.present_priorities.pop();
         }
 
         next_propagator_id

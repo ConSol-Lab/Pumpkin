@@ -1,13 +1,24 @@
-use crate::basic_types::{DomainId, Predicate, PropositionalConjunction};
-use crate::engine::reason::{ReasonRef, ReasonStore};
-use crate::engine::{
-    AssignmentsInteger, AssignmentsPropositional, BooleanDomainEvent,
-    ConstraintProgrammingPropagator, EnqueueDecision, IntDomainEvent, PropagationContext,
-    PropagationContextMut, PropagatorQueue, WatchListCP, WatchListPropositional,
-};
-use crate::pumpkin_assert_simple;
 use std::cmp::min;
 
+use crate::basic_types::DomainId;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalConjunction;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
+use crate::engine::propagation::Propagator;
+use crate::engine::reason::ReasonRef;
+use crate::engine::reason::ReasonStore;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::BooleanDomainEvent;
+use crate::engine::IntDomainEvent;
+use crate::engine::PropagatorQueue;
+use crate::engine::WatchListCP;
+use crate::engine::WatchListPropositional;
+use crate::pumpkin_assert_simple;
+
+#[derive(Debug)]
 pub struct CPEngineDataStructures {
     pub assignments_integer: AssignmentsInteger,
     pub watch_list_cp: WatchListCP,
@@ -44,11 +55,15 @@ impl CPEngineDataStructures {
         self.assignments_integer.grow(lower_bound, upper_bound)
     }
 
+    /// Method which updates the internal structures of [`CPEngineDataStructures`] upon
+    /// backtracking.  This method returns the list of [`DomainId`]s and their values which were
+    /// fixed (i.e. domain of size one) before backtracking and are unfixed (i.e. domain of two
+    /// or more values) after synchronisation.
     pub fn backtrack(
         &mut self,
         backtrack_level: usize,
         assignment_propositional: &AssignmentsPropositional,
-    ) {
+    ) -> Vec<(DomainId, i32)> {
         pumpkin_assert_simple!(
             assignment_propositional.get_decision_level()
                 < self.assignments_integer.get_decision_level(),
@@ -58,9 +73,10 @@ impl CPEngineDataStructures {
             self.propositional_trail_index,
             assignment_propositional.num_trail_entries(),
         );
-        self.assignments_integer.synchronise(backtrack_level);
+        let unfixed_variables = self.assignments_integer.synchronise(backtrack_level);
         self.reason_store.synchronise(backtrack_level);
         self.propagator_queue.clear();
+        unfixed_variables
     }
 
     /// Returning `AssignmentsInteger` too is a workaround to allow its usage after a
@@ -80,51 +96,31 @@ impl CPEngineDataStructures {
     }
 }
 
-//methods for modifying the domains of variables
-//  note that modifying the domain will inform propagators about the changes through the notify functions
+// methods for modifying the domains of variables
+//  note that modifying the domain will inform propagators about the changes through the notify
+// functions
 impl CPEngineDataStructures {
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
     /// true is returned.
     pub fn process_domain_events(
         &mut self,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        cp_propagators: &mut [Box<dyn Propagator>],
         assignments_propositional: &mut AssignmentsPropositional,
     ) -> bool {
-        self.event_drain
-            .extend(self.assignments_integer.drain_domain_events());
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_anything() {
+            self.event_drain
+                .extend(self.assignments_integer.drain_domain_events());
 
-        if self.event_drain.is_empty()
-            && self.propositional_trail_index == assignments_propositional.num_trail_entries()
-        {
-            return false;
-        }
-
-        for (event, domain) in self.event_drain.drain(..) {
-            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
-                let mut context = PropagationContextMut::new(
-                    &mut self.assignments_integer,
-                    &mut self.reason_store,
-                    assignments_propositional,
-                );
-
-                let enqueue_decision =
-                    propagator.notify(&mut context, propagator_var.variable, event.into());
-
-                if enqueue_decision == EnqueueDecision::Enqueue {
-                    self.propagator_queue
-                        .enqueue_propagator(propagator_var.propagator, propagator.priority());
-                }
+            if self.event_drain.is_empty()
+                && self.propositional_trail_index == assignments_propositional.num_trail_entries()
+            {
+                return false;
             }
-        }
 
-        for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
-            let literal = assignments_propositional.get_trail_entry(i);
-            for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
-                for propagator_var in self
-                    .watch_list_propositional
-                    .get_affected_propagators(event, affected_literal)
-                {
+            for (event, domain) in self.event_drain.drain(..) {
+                for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
                     let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
                     let mut context = PropagationContextMut::new(
                         &mut self.assignments_integer,
@@ -133,7 +129,7 @@ impl CPEngineDataStructures {
                     );
 
                     let enqueue_decision =
-                        propagator.notify_literal(&mut context, propagator_var.variable, event);
+                        propagator.notify(&mut context, propagator_var.variable, event.into());
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         self.propagator_queue
@@ -142,7 +138,38 @@ impl CPEngineDataStructures {
                 }
             }
         }
-        self.propositional_trail_index = assignments_propositional.num_trail_entries();
+
+        // If there are no literals being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_propositional.is_watching_anything() {
+            for i in self.propositional_trail_index..assignments_propositional.num_trail_entries() {
+                let literal = assignments_propositional.get_trail_entry(i);
+                for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
+                    for propagator_var in self
+                        .watch_list_propositional
+                        .get_affected_propagators(event, affected_literal)
+                    {
+                        let propagator = &mut cp_propagators[propagator_var.propagator.0 as usize];
+                        let mut context = PropagationContextMut::new(
+                            &mut self.assignments_integer,
+                            &mut self.reason_store,
+                            assignments_propositional,
+                        );
+
+                        let enqueue_decision =
+                            propagator.notify_literal(&mut context, propagator_var.variable, event);
+
+                        if enqueue_decision == EnqueueDecision::Enqueue {
+                            self.propagator_queue.enqueue_propagator(
+                                propagator_var.propagator,
+                                propagator.priority(),
+                            );
+                        }
+                    }
+                }
+            }
+            self.propositional_trail_index = assignments_propositional.num_trail_entries();
+        }
 
         true
     }
@@ -165,7 +192,7 @@ impl CPEngineDataStructures {
         PropagationContext::new(&self.assignments_integer, assignments_propositional)
     }
 
-    pub fn does_predicate_hold(&self, predicate: &Predicate) -> bool {
+    pub fn does_predicate_hold(&self, predicate: Predicate) -> bool {
         self.assignments_integer.does_predicate_hold(predicate)
     }
 }

@@ -1,25 +1,41 @@
-use crate::basic_types::{
-    ClauseReference, ConflictInfo, ConstraintReference, DomainId, Literal, Predicate,
-    PropositionalVariable,
-};
-
+use crate::basic_types::ClauseReference;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintReference;
+use crate::basic_types::DomainId;
+use crate::basic_types::KeyedVec;
+use crate::basic_types::Literal;
+use crate::basic_types::Predicate;
+use crate::basic_types::PropositionalVariable;
+use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
-use crate::engine::{
-    ConstraintProgrammingPropagator, EmptyDomain, ExplanationClauseManager,
-    SATEngineDataStructures, WatchListPropositional,
-};
-use crate::propagators::clausal_propagators::ClausalPropagatorInterface;
-use crate::{predicate, pumpkin_assert_eq_simple, pumpkin_assert_moderate, pumpkin_assert_simple};
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
+use crate::engine::CPEngineDataStructures;
+use crate::engine::EmptyDomain;
+use crate::engine::ExplanationClauseManager;
+use crate::engine::SATEngineDataStructures;
+use crate::engine::WatchListPropositional;
+use crate::predicate;
+use crate::propagators::clausal::ClausalPropagator;
+use crate::pumpkin_assert_eq_simple;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
-use super::constraint_satisfaction_solver::{ClausalPropagator, ClauseAllocator};
-use super::{AssignmentsInteger, AssignmentsPropositional, CPEngineDataStructures};
-
+#[derive(Debug)]
 pub struct SATCPMediator {
-    mapping_domain_to_equality_literals: Vec<Box<[Literal]>>,
-    mapping_domain_to_lower_bound_literals: Vec<Box<[Literal]>>,
-    mapping_literal_to_predicates: Vec<Vec<Predicate>>,
-    cp_trail_synced_position: usize, // assignments_integer.trail[cp_trail_synced_position] is the next entry that needs to be synchronised with the propositional assignment trail
-    sat_trail_synced_position: usize, // this is the sat equivalent of the above, i.e., assignments_propositional.trail[sat_trail_synced_position] is the next literal on the trail that needs to be synchronised with the integer trail
+    mapping_domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    mapping_domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    mapping_literal_to_predicates: KeyedVec<Literal, Vec<Predicate>>,
+    /// [`AssignmentsInteger::trail`]
+    /// [[`SATCPMediator::cp_trail_synced_position`]] is the next entry
+    /// that needs to be synchronised with [`AssignmentsPropositional::trail`].
+    cp_trail_synced_position: usize,
+    /// This is the SAT equivalent of the above, i.e., [`AssignmentsPropositional::trail`]
+    /// [[`SATCPMediator::sat_trail_synced_position`]] is the next
+    /// [`Literal`] on the trail that needs to be synchronised with [`AssignmentsInteger::trail`].
+    sat_trail_synced_position: usize,
     pub explanation_clause_manager: ExplanationClauseManager,
     pub true_literal: Literal,
     pub false_literal: Literal,
@@ -28,14 +44,19 @@ pub struct SATCPMediator {
 impl Default for SATCPMediator {
     fn default() -> SATCPMediator {
         // When the mediator is created for use in the ConstraintSatisfactionSolver, the true and
-        // false literals will be updated to match the solver's true and false literals. However,
-        // we set this up here to facilitate testing the mediator.
+        // how are you doing this is gibberish false literals will be updated to match the
+        // solver's true and false literals. However, we set this up here to facilitate
+        // testing the mediator.
         let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
 
         SATCPMediator {
-            mapping_literal_to_predicates: vec![], //[literal] is the vector of predicates associated with the literal. Usually there is only one or two predicates associated with a literal, but due to preprocessing, it could be that one literal is associated with two or more predicates
-            mapping_domain_to_equality_literals: vec![],
-            mapping_domain_to_lower_bound_literals: vec![],
+            // `mapping_literal_to_predicates[literal]` is the vector of predicates associated with
+            // the literal. Usually there is only one or two predicates associated with a literal,
+            // but due to preprocessing, it could be that one literal is associated with two or more
+            // predicates
+            mapping_literal_to_predicates: KeyedVec::default(),
+            mapping_domain_to_equality_literals: KeyedVec::default(),
+            mapping_domain_to_lower_bound_literals: KeyedVec::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
             explanation_clause_manager: ExplanationClauseManager::default(),
@@ -45,43 +66,52 @@ impl Default for SATCPMediator {
     }
 }
 
-//methods for synchronising trails
+// methods for synchronising trails
 impl SATCPMediator {
     pub fn synchronise_propositional_trail_based_on_integer_trail(
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         clause_allocator: &mut ClauseAllocator,
     ) -> Option<ConflictInfo> {
-        //for each entry on the integer trail, we now add the equivalent propositional representation on the propositional trail
-        //  note that only one literal per predicate will be stored
-        //      since the clausal propagator will propagate other literals to ensure that the meaning of the literal is respected
-        //          e.g., placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1] to true
+        // for each entry on the integer trail, we now add the equivalent propositional
+        // representation on the propositional trail  note that only one literal per
+        // predicate will be stored      since the clausal propagator will propagate other
+        // literals to ensure that the meaning of the literal is respected          e.g.,
+        // placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1]
+        // to true
         for cp_trail_pos in self.cp_trail_synced_position..assignments_integer.num_trail_entries() {
             let entry = assignments_integer.get_trail_entry(cp_trail_pos);
 
-            let reason_ref = entry.reason.expect("CP trail entry should have a reason.");
+            // It could be the case that the reason is `None`
+            // due to a SAT propagation being put on the trail during
+            // `synchronise_integer_trail_based_on_propositional_trail` In that case we
+            // do not synchronise since we assume that the SAT trail is already aware of the
+            // information
+            if let Some(reason_ref) = entry.reason {
+                let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
 
-            let literal = self.get_predicate_literal(entry.predicate, assignments_integer);
+                let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
 
-            let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
+                let conflict_info = assignments_propositional
+                    .enqueue_propagated_literal(literal, constraint_reference);
 
-            let conflict_info =
-                assignments_propositional.enqueue_propagated_literal(literal, constraint_reference);
+                if conflict_info.is_some() {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return conflict_info;
+                }
 
-            if conflict_info.is_some() {
-                self.cp_trail_synced_position = cp_trail_pos + 1;
-                return conflict_info;
-            }
-
-            //It could occur that one of these propagations caused a conflict in which case the SAT-view and the CP-view are unsynchronised
-            //We need to ensure that the views are synchronised up to the CP trail entry which caused the conflict
-            if let Err(e) =
-                clausal_propagator.propagate(assignments_propositional, clause_allocator)
-            {
-                self.cp_trail_synced_position = cp_trail_pos + 1;
-                return Some(e);
+                // It could occur that one of these propagations caused a conflict in which case the
+                // SAT-view and the CP-view are unsynchronised We need to ensure
+                // that the views are synchronised up to the CP trail entry which caused the
+                // conflict
+                if let Err(e) =
+                    clausal_propagator.propagate(assignments_propositional, clause_allocator)
+                {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return Some(e);
+                }
             }
         }
         self.cp_trail_synced_position = assignments_integer.num_trail_entries();
@@ -92,19 +122,23 @@ impl SATCPMediator {
         &mut self,
         assignments_propositional: &mut AssignmentsPropositional,
         cp_data_structures: &mut CPEngineDataStructures,
-        cp_propagators: &mut [Box<dyn ConstraintProgrammingPropagator>],
+        cp_propagators: &mut [Box<dyn Propagator>],
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(
-            self.cp_trail_synced_position == cp_data_structures.assignments_integer.num_trail_entries(),
-            "We can only sychronise the propositional trail if the integer trail is already sychronised."
+            self.cp_trail_synced_position
+                == cp_data_structures.assignments_integer.num_trail_entries(),
+            "We can only sychronise the propositional trail if the integer trail is already
+             sychronised."
         );
 
-        //this could possibly be improved if it shows up as a performance hotspot
-        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the literals to the propositional stack
-        //  and update the next_domain_trail_position pointer to go pass the entries that surely are not going to lead to any changes
-        //  this would only work if the next_domain_trail pointer is already at the end of the stack, think about this, could be useful for propagators
-        //      and might be useful for a custom domain propagator
-        //  this would also simplify the code below, no additional checks would be needed? Not sure.
+        // this could possibly be improved if it shows up as a performance hotspot
+        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the
+        // literals to the propositional stack  and update the next_domain_trail_position
+        // pointer to go pass the entries that surely are not going to lead to any changes
+        //  this would only work if the next_domain_trail pointer is already at the end of the
+        // stack, think about this, could be useful for propagators      and might be useful
+        // for a custom domain propagator  this would also simplify the code below, no
+        // additional checks would be needed? Not sure.
 
         if cp_data_structures.assignments_integer.num_domains() == 0 || cp_propagators.is_empty() {
             self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
@@ -118,12 +152,13 @@ impl SATCPMediator {
             self.synchronise_literal(literal, cp_data_structures)?;
         }
         self.sat_trail_synced_position = assignments_propositional.num_trail_entries();
-        //the newly added entries to the trail do not need to be synchronise with the propositional trail
-        //  this is because the integer trail was already synchronise when this method was called
-        //  and the newly added entries are already present on the propositional trail
+        // the newly added entries to the trail do not need to be synchronise with the propositional
+        // trail  this is because the integer trail was already synchronise when this method
+        // was called  and the newly added entries are already present on the propositional
+        // trail
         self.cp_trail_synced_position = cp_data_structures.assignments_integer.num_trail_entries();
 
-        cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
+        let _ = cp_data_structures.process_domain_events(cp_propagators, assignments_propositional);
 
         Ok(())
     }
@@ -133,7 +168,7 @@ impl SATCPMediator {
         literal: Literal,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> Result<(), EmptyDomain> {
-        //recall that a literal may be linked to multiple predicates
+        // recall that a literal may be linked to multiple predicates
         //  e.g., this may happen when in preprocessing two literals are detected to be equal
         //  so now we loop for each predicate and make necessary updates
         //  (although currently we do not have any serious preprocessing!)
@@ -141,10 +176,18 @@ impl SATCPMediator {
             let predicate = self.mapping_literal_to_predicates[literal][j];
             cp_data_structures
                 .assignments_integer
-                .apply_predicate(&predicate, None)?;
+                .apply_predicate(predicate, None)?;
         }
 
         Ok(())
+    }
+
+    /// Returns the [`DomainId`] of the first [`Predicate`] which the provided `literal` is linked
+    /// to or [`None`] if no such [`DomainId`] exists.
+    pub fn get_domain_literal(&self, literal: Literal) -> Option<DomainId> {
+        self.mapping_literal_to_predicates[literal]
+            .first()
+            .map(|pred| pred.get_domain())?
     }
 
     pub fn synchronise(
@@ -163,13 +206,13 @@ impl SATCPMediator {
     }
 }
 
-//methods for creating new variables
+// methods for creating new variables
 impl SATCPMediator {
     pub fn create_new_propositional_variable_with_predicate(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
         predicate: Predicate,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
         let variable = self.create_new_propositional_variable(
@@ -184,7 +227,7 @@ impl SATCPMediator {
     pub fn create_new_propositional_variable(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> PropositionalVariable {
         let new_variable_index = sat_data_structures
@@ -196,10 +239,8 @@ impl SATCPMediator {
         watch_list_propositional.grow();
 
         sat_data_structures.assignments_propositional.grow();
-        sat_data_structures.propositional_variable_selector.grow();
-        sat_data_structures.propositional_value_selector.grow();
 
-        //add an empty predicate vector for both polarities of the variable
+        // add an empty predicate vector for both polarities of the variable
         self.mapping_literal_to_predicates.push(vec![]);
         self.mapping_literal_to_predicates.push(vec![]);
 
@@ -213,7 +254,7 @@ impl SATCPMediator {
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> DomainId {
@@ -234,11 +275,12 @@ impl SATCPMediator {
         domain_id
     }
 
-    /// Eagerly create the propositional representation of the integer variable. This is done using a unary representation.
+    /// Eagerly create the propositional representation of the integer variable. This is done using
+    /// a unary representation.
     fn create_propositional_representation(
         &mut self,
         domain_id: DomainId,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) {
@@ -279,7 +321,7 @@ impl SATCPMediator {
         domain_id: DomainId,
         lower_bound_literals: &[Literal],
         cp_data_structures: &mut CPEngineDataStructures,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> Box<[Literal]> {
         assert!(
@@ -372,7 +414,7 @@ impl SATCPMediator {
         &mut self,
         cp_data_structures: &mut CPEngineDataStructures,
         domain_id: DomainId,
-        clausal_propagator: &mut ClausalPropagator,
+        clausal_propagator: &mut ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
     ) -> Box<[Literal]> {
         let lower_bound = cp_data_structures
@@ -391,7 +433,7 @@ impl SATCPMediator {
         for value in (lower_bound + 1)..=upper_bound {
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
                 &mut cp_data_structures.watch_list_propositional,
-                predicate![domain_id <= value],
+                predicate![domain_id >= value],
                 clausal_propagator,
                 sat_data_structures,
             );
@@ -435,25 +477,26 @@ impl SATCPMediator {
             "The predicate is already attached to the _negative_ literal, cannot do this twice."
         );
 
-        //create a closure for convenience that adds predicates to literals
-        let closure_add_predicate_to_literal = |literal: Literal,
-                                                predicate: Predicate,
-                                                mapping_literal_to_predicates: &mut Vec<
-            Vec<Predicate>,
-        >| {
-            pumpkin_assert_simple!(
-                !mapping_literal_to_predicates[literal].contains(&predicate),
-                "The predicate is already attached to the literal, cannot do this twice."
-            );
-            //resize the mapping vector if necessary
-            if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
-                mapping_literal_to_predicates.resize((literal.to_u32() + 1) as usize, Vec::new());
-            }
-            //append the predicate - note that the assert makes sure the same predicate is never added twice
-            mapping_literal_to_predicates[literal].push(predicate);
-        };
+        // create a closure for convenience that adds predicates to literals
+        let closure_add_predicate_to_literal =
+            |literal: Literal,
+             predicate: Predicate,
+             mapping_literal_to_predicates: &mut KeyedVec<Literal, Vec<Predicate>>| {
+                pumpkin_assert_simple!(
+                    !mapping_literal_to_predicates[literal].contains(&predicate),
+                    "The predicate is already attached to the literal, cannot do this twice."
+                );
+                // resize the mapping vector if necessary
+                if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
+                    mapping_literal_to_predicates
+                        .resize((literal.to_u32() + 1) as usize, Vec::new());
+                }
+                // append the predicate - note that the assert makes sure the same predicate is
+                // never added twice
+                mapping_literal_to_predicates[literal].push(predicate);
+            };
 
-        //now use the closure to add the predicate to both the positive and negative literals
+        // now use the closure to add the predicate to both the positive and negative literals
 
         let positive_literal = Literal::new(variable, true);
         closure_add_predicate_to_literal(
@@ -471,7 +514,7 @@ impl SATCPMediator {
     }
 }
 
-//methods for getting simple information on the interface of SAT and CP
+// methods for getting simple information on the interface of SAT and CP
 impl SATCPMediator {
     pub fn get_lower_bound_literal(
         &self,
@@ -551,6 +594,8 @@ impl SATCPMediator {
                 domain_id,
                 equality_constant,
             } => self.get_equality_literal(domain_id, equality_constant, assignments_integer),
+            Predicate::False => self.false_literal,
+            Predicate::True => self.true_literal,
         }
     }
 
@@ -580,7 +625,7 @@ impl SATCPMediator {
                 }
             }
             ConflictInfo::Explanation(propositional_conjunction) => {
-                //create the explanation clause
+                // create the explanation clause
                 //  allocate a fresh vector each time might be a performance bottleneck
                 //  todo better ways
                 let explanation_literals = propositional_conjunction
@@ -603,7 +648,7 @@ impl SATCPMediator {
     pub fn get_propagation_clause_reference(
         &mut self,
         propagated_literal: Literal,
-        clausal_propagator: &ClausalPropagator,
+        clausal_propagator: &ClausalPropagatorType,
         sat_data_structures: &mut SATEngineDataStructures,
         cp_data_structures: &mut CPEngineDataStructures,
     ) -> ClauseReference {
@@ -625,7 +670,7 @@ impl SATCPMediator {
             .assignments_propositional
             .get_variable_reason_constraint(propagated_literal.get_propositional_variable());
 
-        //Case 1: the literal was propagated by the clausal propagator
+        // Case 1: the literal was propagated by the clausal propagator
         if constraint_reference.is_clause() {
             clausal_propagator.get_literal_propagation_clause_reference(
                 propagated_literal,
@@ -634,7 +679,8 @@ impl SATCPMediator {
                 &mut self.explanation_clause_manager,
             )
         }
-        //Case 2: the literal was placed on the propositional trail while synchronising the CP trail with the propositional trail
+        // Case 2: the literal was placed on the propositional trail while synchronising the CP
+        // trail with the propositional trail
         else {
             self.create_clause_from_propagation_reason(
                 propagated_literal,
@@ -655,10 +701,10 @@ impl SATCPMediator {
         let (reason, assignments_integer) = cp_data_structures
             .compute_reason(reason_ref, &sat_data_structures.assignments_propositional);
 
-        //create the explanation clause
+        // create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
-        //important to keep propagated literal at the zero-th position
+        // important to keep propagated literal at the zero-th position
         let explanation_literals = std::iter::once(propagated_literal)
             .chain(
                 reason
@@ -694,9 +740,8 @@ impl SATCPMediator {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::PredicateConstructor;
-
     use super::*;
+    use crate::basic_types::PredicateConstructor;
 
     #[test]
     fn negative_upper_bound() {
@@ -706,7 +751,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             0,
             10,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -729,7 +774,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             0,
             10,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -756,7 +801,7 @@ mod tests {
         let domain_id = mediator.create_new_domain(
             lb,
             ub,
-            &mut ClausalPropagator::default(),
+            &mut ClausalPropagatorType::default(),
             &mut sat_data_structures,
             &mut cp_data_structures,
         );
@@ -868,7 +913,7 @@ mod tests {
         let mut mediator = SATCPMediator::default();
         let mut sat_data_structures = SATEngineDataStructures::default();
         let mut cp_data_structures = CPEngineDataStructures::default();
-        let mut clausal_propagator = ClausalPropagator::default();
+        let mut clausal_propagator = ClausalPropagatorType::default();
 
         let domain_id = mediator.create_new_domain(
             0,
@@ -919,7 +964,7 @@ mod tests {
             12
         );
 
-        mediator.synchronise_propositional_trail_based_on_integer_trail(
+        let _ = mediator.synchronise_propositional_trail_based_on_integer_trail(
             &mut sat_data_structures.assignments_propositional,
             &cp_data_structures.assignments_integer,
             &mut clausal_propagator,
@@ -937,6 +982,34 @@ mod tests {
                     .is_literal_assigned_true(literal),
                 "Literal for lower-bound {lower_bound} is not assigned"
             );
+        }
+    }
+
+    #[test]
+    fn check_correspondence_predicates_creating_new_int_domain() {
+        let mut mediator = SATCPMediator::default();
+        let mut sat_data_structures = SATEngineDataStructures::default();
+        let mut cp_data_structures = CPEngineDataStructures::default();
+        let mut clausal_propagator = ClausalPropagatorType::default();
+
+        let lower_bound = 0;
+        let upper_bound = 10;
+        let domain_id = mediator.create_new_domain(
+            lower_bound,
+            upper_bound,
+            &mut clausal_propagator,
+            &mut sat_data_structures,
+            &mut cp_data_structures,
+        );
+
+        for bound in lower_bound + 1..upper_bound {
+            let lower_bound_predicate = predicate![domain_id >= bound];
+            let equality_predicate = predicate![domain_id == bound];
+            for predicate in [lower_bound_predicate, equality_predicate] {
+                let literal = mediator
+                    .get_predicate_literal(predicate, &cp_data_structures.assignments_integer);
+                assert!(mediator.mapping_literal_to_predicates[literal].contains(&predicate))
+            }
         }
     }
 }

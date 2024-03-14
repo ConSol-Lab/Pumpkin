@@ -1,21 +1,22 @@
 //! A model for the balanced incomplete block design problem. For a formal definition of the
 //! problem, see:
-//! - https://en.wikipedia.org/wiki/Block_design#Pairwise_balanced_uniform_designs_(2-designs_or_BIBDs)
+//! - https://w.wiki/9F4h
 //! - https://mathworld.wolfram.com/BlockDesign.html
 //!
-//! Informally, the `BIBD(v, b, r, k, l)` problem looks for a binary `v * b` matrix such that all rows sum to
-//! `r`, all columns sum to `k`, and the dot product between any two distinct rows is at most `l` (any
-//! two pairs of rows have at most `l` overlapping 1s in their columns).
+//! Informally, the `BIBD(v, b, r, k, l)` problem looks for a binary `v * b` matrix such that all
+//! rows sum to `r`, all columns sum to `k`, and the dot product between any two distinct rows is at
+//! most `l` (any two pairs of rows have at most `l` overlapping 1s in their columns).
 //!
 //! The parameters are not independent, but satisfy the following conditions:
 //! - `bk = vr`
 //! - `l(v - 1) = r(k - 1)`
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_lib::{
-    basic_types::CSPSolverExecutionFlag, constraints::ConstraintsExt,
-    engine::ConstraintSatisfactionSolver,
-};
+use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::basic_types::DomainId;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {
@@ -60,6 +61,16 @@ impl BIBD {
     }
 }
 
+fn create_matrix(solver: &mut ConstraintSatisfactionSolver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
+    (0..bibd.rows)
+        .map(|_| {
+            (0..bibd.columns)
+                .map(|_| solver.create_new_integer_variable(0, 1))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+}
+
 fn main() {
     env_logger::init();
 
@@ -76,56 +87,44 @@ fn main() {
     let mut solver = ConstraintSatisfactionSolver::default();
 
     // Create 0-1 integer variables that make up the matrix.
-    let matrix = (0..bibd.rows)
-        .map(|_| {
-            (0..bibd.columns)
-                .map(|_| solver.create_new_integer_variable(0, 1))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+    let matrix = create_matrix(&mut solver, &bibd);
 
     // Enforce the row sum.
     for row in matrix.iter() {
-        solver.int_lin_eq(row.clone(), bibd.row_sum as i32);
+        let _ = solver.int_lin_eq(row.clone(), bibd.row_sum as i32);
     }
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
-        solver.int_lin_eq(row, bibd.column_sum as i32);
+        let _ = solver.int_lin_eq(row, bibd.column_sum as i32);
     }
 
     // Enforce the dot product constraint.
     // pairwise_product[r1][r2][col] = matrix[r1][col] * matrix[r2][col]
     let pairwise_product = (0..bibd.rows)
-        .map(|_| {
-            (0..bibd.rows)
-                .map(|_| {
-                    (0..bibd.columns)
-                        .map(|_| solver.create_new_integer_variable(0, 1))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
+        .map(|_| create_matrix(&mut solver, &bibd))
         .collect::<Vec<_>>();
 
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                solver.int_times(
+                let _ = solver.int_times(
                     matrix[r1][col],
                     matrix[r2][col],
                     pairwise_product[r1][r2][col],
                 );
             }
 
-            solver.int_lin_le(
+            let _ = solver.int_lin_le(
                 pairwise_product[r1][r2].clone(),
                 bibd.max_dot_product as i32,
             );
         }
     }
 
-    match solver.solve(i64::MAX) {
+    let mut brancher =
+        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    match solver.solve(i64::MAX, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 
@@ -134,9 +133,9 @@ fn main() {
                     .iter()
                     .map(|&var| {
                         if solver.get_integer_assignments().get_assigned_value(var) == 1 {
-                            "| * ".to_string()
+                            String::from("| * ")
                         } else {
-                            "|   ".to_string()
+                            String::from("|   ")
                         }
                     })
                     .collect::<String>();
