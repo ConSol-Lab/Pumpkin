@@ -1,37 +1,76 @@
 use log::warn;
 
-use super::variable_selector::find_extremum;
-use super::variable_selector::Direction;
 use crate::basic_types::DomainId;
+use crate::branching::Direction;
+use crate::branching::InOrderTieBreaker;
 use crate::branching::SelectionContext;
+use crate::branching::TieBreaker;
 use crate::branching::VariableSelector;
+use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the largest domain (based on the
 /// lower-bound and upper-bound, disregarding holes).
-#[derive(Debug)]
-pub struct AntiFirstFail<Var> {
+///
+/// Uses a [`TieBreaker`] to break ties, the default is the [`InOrderTieBreaker`] but it is
+/// possible to construct the variable selector with a custom [`TieBreaker`] by
+/// using the method [`AntiFirstFail::with_tie_breaker`].
+pub struct AntiFirstFail<Var, TieBreaking> {
     variables: Vec<Var>,
+    tie_breaker: TieBreaking,
 }
 
-impl<Var: Clone> AntiFirstFail<Var> {
+impl<Var, TieBreaking> std::fmt::Debug for AntiFirstFail<Var, TieBreaking> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AntiFirstFail").finish()
+    }
+}
+
+impl<Var: Clone + 'static> AntiFirstFail<Var, InOrderTieBreaker<Var, i32>> {
     pub fn new(variables: &[Var]) -> Self {
         if variables.is_empty() {
             warn!("The AntiFirstFail variable selector was not provided with any variables");
         }
-        AntiFirstFail {
+        Self {
             variables: variables.to_vec(),
+            tie_breaker: InOrderTieBreaker::new(Direction::Maximum),
         }
     }
 }
 
-impl VariableSelector<DomainId> for AntiFirstFail<DomainId> {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
-        find_extremum(
-            &self.variables,
-            |variable| context.get_size_of_domain(variable),
-            context,
+impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> AntiFirstFail<Var, TieBreaking> {
+    pub fn with_tie_breaker(variables: &[Var], tie_breaker: TieBreaking) -> Self {
+        pumpkin_assert_eq_simple!(
+            tie_breaker.get_direction(),
             Direction::Maximum,
-        )
+            "The provided tie-breaker to AntiFirstFail attempts to find the Minimum value
+             instead of the Maximum value, please ensure that you have passed the correct tie-breaker");
+        if variables.is_empty() {
+            warn!("The AntiFirstFail variable selector was not provided with any variables");
+            return AntiFirstFail {
+                variables: vec![],
+                tie_breaker,
+            };
+        }
+
+        Self {
+            variables: variables.to_vec(),
+            tie_breaker,
+        }
+    }
+}
+
+impl<TieBreaking: TieBreaker<DomainId, i32>> VariableSelector<DomainId>
+    for AntiFirstFail<DomainId, TieBreaking>
+{
+    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+        self.variables
+            .iter()
+            .filter(|variable| !context.is_integer_fixed(**variable))
+            .for_each(|variable| {
+                self.tie_breaker
+                    .consider(*variable, context.get_size_of_domain(*variable));
+            });
+        self.tie_breaker.select()
     }
 }
 

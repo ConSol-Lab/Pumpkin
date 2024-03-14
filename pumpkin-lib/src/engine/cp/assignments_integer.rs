@@ -412,7 +412,6 @@ impl AssignmentsInteger {
                     unfixed_variables.push((domain_id, value_before));
                 }
             }
-
         });
         unfixed_variables
     }

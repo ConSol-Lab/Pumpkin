@@ -1,36 +1,76 @@
 use log::warn;
 
-use super::variable_selector::find_extremum;
-use super::variable_selector::Direction;
 use super::VariableSelector;
 use crate::basic_types::DomainId;
+use crate::branching::Direction;
+use crate::branching::InOrderTieBreaker;
 use crate::branching::SelectionContext;
+use crate::branching::TieBreaker;
+use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest value in its domain.
-#[derive(Debug)]
-pub struct Smallest<Var> {
+///
+/// Uses a [`TieBreaker`] to break ties, the default is the [`InOrderTieBreaker`] but it is
+/// possible to construct the variable selector with a custom [`TieBreaker`] by using
+/// the method [`Smallest::with_tie_breaker`].
+pub struct Smallest<Var, TieBreaking> {
     variables: Vec<Var>,
+    tie_breaker: TieBreaking,
 }
 
-impl<Var: Clone> Smallest<Var> {
+impl<Var, TieBreaking> std::fmt::Debug for Smallest<Var, TieBreaking> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Smallest").finish()
+    }
+}
+
+impl<Var: Clone> Smallest<Var, InOrderTieBreaker<Var, i32>> {
     pub fn new(variables: &[Var]) -> Self {
         if variables.is_empty() {
             warn!("The Smallest variable selector was not provided with any variables");
         }
         Smallest {
             variables: variables.to_vec(),
+            tie_breaker: InOrderTieBreaker::new(Direction::Minimum),
         }
     }
 }
 
-impl VariableSelector<DomainId> for Smallest<DomainId> {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
-        find_extremum(
-            &self.variables,
-            |variable| context.lower_bound(variable),
-            context,
+impl<Var: Clone + 'static, TieBreaking: TieBreaker<Var, i32>> Smallest<Var, TieBreaking> {
+    pub fn with_tie_breaker(variables: &[Var], tie_breaker: TieBreaking) -> Self {
+        pumpkin_assert_eq_simple!(
+            tie_breaker.get_direction(),
             Direction::Minimum,
-        )
+            "The provided tie-breaker to Smallest attempts to find the Maximum value
+             instead of the Minimum value, please ensure that you have passed the correct tie-breaker");
+        if variables.is_empty() {
+            warn!("The Smallest variable selector was not provided with any variables");
+            return Smallest {
+                variables: vec![],
+                tie_breaker,
+            };
+        }
+
+        Self {
+            variables: variables.to_vec(),
+            tie_breaker,
+        }
+    }
+}
+
+impl<TieBreaking> VariableSelector<DomainId> for Smallest<DomainId, TieBreaking>
+where
+    TieBreaking: TieBreaker<DomainId, i32>,
+{
+    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+        self.variables
+            .iter()
+            .filter(|variable| !context.is_integer_fixed(**variable))
+            .for_each(|variable| {
+                self.tie_breaker
+                    .consider(*variable, context.lower_bound(*variable));
+            });
+        self.tie_breaker.select()
     }
 }
 
