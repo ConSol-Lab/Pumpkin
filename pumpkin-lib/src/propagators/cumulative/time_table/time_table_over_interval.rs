@@ -19,7 +19,7 @@ use crate::propagators::create_inconsistency;
 use crate::propagators::create_tasks;
 use crate::propagators::reset_bounds_clear_updated;
 use crate::propagators::update_bounds_task;
-use crate::propagators::CumulativeArgs;
+use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
 use crate::pumpkin_assert_extreme;
@@ -37,9 +37,9 @@ pub struct Event<Var> {
     task: Rc<Task<Var>>,
 }
 
-/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a [`ResourceProfile`] over an interval rather than
+/// different time-points - This method creates a resource profile over an interval rather than
 /// creating one per time-point (hence the name). Furthermore, the
 /// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
 /// used for modelling the start variables, this will be an implementation of [`IntVar`].
@@ -63,7 +63,7 @@ pub struct TimeTableOverIntervalPropagator<Var> {
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
-impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTableOverIntervalPropagator<Var>>
+impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
