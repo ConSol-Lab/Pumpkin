@@ -97,6 +97,7 @@
     * Out-domain Random
 * Added initial setup for programmable search
 * Add support for optimization functions MiniZinc
+* Add MiniZinc statistic logging
 
 ## Bugfixes
 

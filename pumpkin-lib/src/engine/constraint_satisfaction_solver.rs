@@ -7,13 +7,13 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use log::info;
 use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
@@ -1757,42 +1757,25 @@ pub struct Counters {
     average_backtrack_amount: CumulativeMovingAverage,
 }
 
-const STATISTIC_PREFIX: &str = "x";
-
 impl Counters {
     fn log_statistics(&self) {
-        info!(
-            "{STATISTIC_PREFIX} Number of Decisions: {}",
-            self.num_decisions
+        log_statistic("numberOfDecisions", self.num_decisions);
+        log_statistic("numberOfConflicts", self.num_conflicts);
+        log_statistic(
+            "averageSizeOfConflictExplanation",
+            self.average_conflict_size.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Number of Conflicts: {}",
-            self.num_conflicts
+        log_statistic("numberOfPropagations", self.num_propagations);
+        log_statistic("numberOfLearnedUnitClauses", self.num_unit_clauses_learned);
+        log_statistic(
+            "averageLearnedClauseLength",
+            self.average_learned_clause_length.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Average Size of Conflict Explanation: {}",
-            self.average_conflict_size.value()
+        log_statistic("TimeSpentInSolverInMilliseconds", self.time_spent_in_solver);
+        log_statistic(
+            "averageBacktrackAmount",
+            self.average_backtrack_amount.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Number of Propagations: {}",
-            self.num_propagations
-        );
-        info!(
-            "{STATISTIC_PREFIX} Number of Learned Unit Clauses: {}",
-            self.num_unit_clauses_learned
-        );
-        info!(
-            "{STATISTIC_PREFIX} Average Learned Clause Length: {}",
-            self.average_learned_clause_length.value()
-        );
-        info!(
-            "{STATISTIC_PREFIX} Time Spent in Solver in ms: {}",
-            self.time_spent_in_solver
-        );
-        info!(
-            "{STATISTIC_PREFIX} Average Backtrack Amount: {}",
-            self.average_backtrack_amount.value()
-        )
     }
 }
 

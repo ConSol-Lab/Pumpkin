@@ -8,6 +8,7 @@ use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::optimisation::OptimisationResult;
 use pumpkin_lib::pumpkin_assert_simple;
 
@@ -16,14 +17,14 @@ use super::instance::FlatzincObjective;
 use super::print_solution_from_solver;
 
 pub(crate) struct MinizincOptimiser<'a> {
-    csp_solver: ConstraintSatisfactionSolver,
+    csp_solver: &'a mut ConstraintSatisfactionSolver,
     objective_function: FlatzincObjective,
     instance: &'a FlatZincInstance,
 }
 
 impl<'a> MinizincOptimiser<'a> {
     pub(crate) fn new(
-        csp_solver: ConstraintSatisfactionSolver,
+        csp_solver: &'a mut ConstraintSatisfactionSolver,
         objective_function: FlatzincObjective,
         instance: &'a FlatZincInstance,
     ) -> Self {
@@ -49,11 +50,20 @@ impl<'a> MinizincOptimiser<'a> {
             .csp_solver
             .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
         match initial_solve {
-            CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
-                self.get_integer_assignments(),
-                self.get_propositional_assignments(),
-                self.instance,
-            ),
+            CSPSolverExecutionFlag::Feasible => {
+                log_statistics_with_objective(
+                    self.csp_solver,
+                    self.csp_solver
+                        .get_integer_assignments()
+                        .get_assigned_value(*self.objective_function.get_domain())
+                        as i64,
+                );
+                print_solution_from_solver(
+                    self.get_integer_assignments(),
+                    self.get_propositional_assignments(),
+                    self.instance,
+                )
+            }
             CSPSolverExecutionFlag::Infeasible => return OptimisationResult::Infeasible,
             CSPSolverExecutionFlag::Timeout => return OptimisationResult::Unknown,
         }
@@ -93,11 +103,18 @@ impl<'a> MinizincOptimiser<'a> {
                         self.csp_solver.get_propositional_assignments(),
                         self.csp_solver.get_integer_assignments(),
                     );
+                    log_statistics_with_objective(
+                        self.csp_solver,
+                        self.csp_solver
+                            .get_integer_assignments()
+                            .get_assigned_value(*self.objective_function.get_domain())
+                            as i64,
+                    );
                     print_solution_from_solver(
                         self.get_integer_assignments(),
                         self.get_propositional_assignments(),
                         self.instance,
-                    )
+                    );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return OptimisationResult::Optimal {

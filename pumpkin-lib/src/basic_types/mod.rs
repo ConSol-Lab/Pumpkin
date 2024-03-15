@@ -23,6 +23,7 @@ mod random;
 pub mod sequence_generators;
 mod solution;
 mod solution_value_pair;
+pub mod statistic_logging;
 mod stopwatch;
 mod trail;
 pub mod variables;

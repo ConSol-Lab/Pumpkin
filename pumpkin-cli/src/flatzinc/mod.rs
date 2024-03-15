@@ -14,6 +14,8 @@ use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::optimisation::log_statistics;
+use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::optimisation::OptimisationResult;
 
 use self::minizinc_optimiser::MinizincOptimiser;
@@ -36,22 +38,29 @@ pub(crate) fn solve(
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 
-    if let Some(objective_function) = &instance.objective_function {
+    let value = if let Some(objective_function) = &instance.objective_function {
         let mut optimisation_solver =
-            MinizincOptimiser::new(solver, *objective_function, &instance);
+            MinizincOptimiser::new(&mut solver, *objective_function, &instance);
         match optimisation_solver.solve(None, brancher) {
             OptimisationResult::Optimal {
                 solution: _,
-                objective_value: _,
+                objective_value,
             } => {
                 println!("==========");
+                Some(objective_value)
             }
             OptimisationResult::Satisfiable {
                 best_solution: _,
-                objective_value: _,
-            } => {}
-            OptimisationResult::Infeasible => println!("{MSG_UNSATISFIABLE}"),
-            OptimisationResult::Unknown => println!("{MSG_UNKNOWN}"),
+                objective_value,
+            } => Some(objective_value),
+            OptimisationResult::Infeasible => {
+                println!("{MSG_UNSATISFIABLE}");
+                None
+            }
+            OptimisationResult::Unknown => {
+                println!("{MSG_UNKNOWN}");
+                None
+            }
         }
     } else {
         match solver.solve(i64::MAX, &mut brancher) {
@@ -63,6 +72,12 @@ pub(crate) fn solve(
             CSPSolverExecutionFlag::Infeasible => println!("{MSG_UNSATISFIABLE}"),
             CSPSolverExecutionFlag::Timeout => println!("{MSG_UNKNOWN}"),
         }
+        None
+    };
+    if let Some(value) = value {
+        log_statistics_with_objective(&solver, value)
+    } else {
+        log_statistics(&solver)
     }
 
     Ok(())

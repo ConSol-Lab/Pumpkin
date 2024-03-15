@@ -4,6 +4,7 @@
     "version": "0.1",
     "executable": "../../target/release/pumpkin-cli",
     "mznlib": "./lib",
+    "stdFlags": ["-v"],
 
     "tags": ["cp", "lcg", "int"]
 }

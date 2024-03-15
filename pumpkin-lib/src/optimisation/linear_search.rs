@@ -9,6 +9,7 @@ use crate::branching::Brancher;
 use crate::encoders::PseudoBooleanConstraintEncoder;
 use crate::encoders::PseudoBooleanEncoding;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::optimisation::log_statistics_with_objective;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -63,7 +64,7 @@ impl LinearSearch {
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
-                csp_solver.log_statistics();
+                log_statistics_with_objective(csp_solver, best_objective_value as i64);
                 return OptimisationResult::Optimal {
                     solution: best_solution.clone(),
                     objective_value: best_objective_value as i64,
@@ -89,7 +90,7 @@ impl LinearSearch {
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
-                csp_solver.log_statistics();
+                log_statistics_with_objective(csp_solver, best_objective_value as i64);
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value as i64,
@@ -132,14 +133,15 @@ impl LinearSearch {
                     );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
-                    csp_solver.log_statistics();
+                    log_statistics_with_objective(csp_solver, best_objective_value as i64);
+
                     return OptimisationResult::Optimal {
                         solution: best_solution,
                         objective_value: best_objective_value as i64,
                     };
                 }
                 CSPSolverExecutionFlag::Timeout => {
-                    csp_solver.log_statistics();
+                    log_statistics_with_objective(csp_solver, best_objective_value as i64);
                     return OptimisationResult::Satisfiable {
                         best_solution,
                         objective_value: best_objective_value as i64,

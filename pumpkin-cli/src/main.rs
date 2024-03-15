@@ -23,6 +23,7 @@ use parsers::dimacs::CSPSolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::WcnfInstance;
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
+use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
@@ -157,10 +158,46 @@ struct Args {
 }
 
 fn configure_logging(
+    file_format: FileFormat,
     verbose: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
+    match file_format {
+        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine | FileFormat::MaxSAT2022 => {
+            configure_logging_sat(verbose, omit_timestamp, omit_call_site)
+        }
+        FileFormat::FlatZinc => configure_logging_minizinc(verbose),
+    }
+}
+
+fn configure_logging_minizinc(verbose: bool) -> std::io::Result<()> {
+    statistic_logger::configure("%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    let level_filter = if verbose {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Warn
+    };
+
+    env_logger::Builder::new()
+        .format(move |buf, record| {
+            write!(buf, "% ")?;
+
+            writeln!(buf, "{}", record.args())
+        })
+        .filter_level(level_filter)
+        .target(env_logger::Target::Stdout)
+        .init();
+    info!("Logging successfully configured");
+    Ok(())
+}
+
+fn configure_logging_sat(
+    verbose: bool,
+    omit_timestamp: bool,
+    omit_call_site: bool,
+) -> std::io::Result<()> {
+    statistic_logger::configure("c STAT", None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -185,6 +222,7 @@ fn configure_logging(
             writeln!(buf, "{}", record.args())
         })
         .filter_level(level_filter)
+        .target(env_logger::Target::Stdout)
         .init();
     info!("Logging successfully configured");
     Ok(())
@@ -205,8 +243,6 @@ fn run() -> PumpkinResult<()> {
 
     let args = Args::parse();
 
-    configure_logging(args.verbose, args.omit_timestamp, args.omit_call_site)?;
-
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
         Some("wcnf") => FileFormat::WcnfDimacsPLine,
@@ -215,6 +251,13 @@ fn run() -> PumpkinResult<()> {
             return Err(PumpkinError::invalid_instance(args.instance_path.display()));
         }
     };
+
+    configure_logging(
+        file_format,
+        args.verbose,
+        args.omit_timestamp,
+        args.omit_call_site,
+    )?;
 
     let sat_options = SatOptions {
         num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,

@@ -7,6 +7,8 @@ pub use linear_search::*;
 use log::debug;
 pub use optimiser::*;
 
+use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
+use crate::basic_types::statistic_logging::statistic_logger::log_statistic_postfix;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::Function;
 use crate::basic_types::Stopwatch;
@@ -36,6 +38,20 @@ impl OptimisationSolver {
     }
 }
 
+pub fn log_statistics_with_objective(
+    csp_solver: &ConstraintSatisfactionSolver,
+    best_objective_value: i64,
+) {
+    log_statistic("objective", best_objective_value);
+    csp_solver.log_statistics();
+    log_statistic_postfix();
+}
+
+pub fn log_statistics(csp_solver: &ConstraintSatisfactionSolver) {
+    csp_solver.log_statistics();
+    log_statistic_postfix();
+}
+
 impl OptimisationSolver {
     pub fn solve(
         &mut self,
@@ -55,11 +71,11 @@ impl OptimisationSolver {
 
         match initial_solve_result {
             CSPSolverExecutionFlag::Infeasible => {
-                self.csp_solver.log_statistics();
+                log_statistics(&self.csp_solver);
                 OptimisationResult::Infeasible
             }
             CSPSolverExecutionFlag::Timeout => {
-                self.csp_solver.log_statistics();
+                log_statistics(&self.csp_solver);
                 OptimisationResult::Unknown
             }
             _ => {
