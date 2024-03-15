@@ -41,6 +41,7 @@ pipelines:
             - echo "Check HashMap/Set usage"          ; ./scripts/hash.sh --ci
             - echo "Run Clippy"                       ; ./scripts/clippy.sh --ci
             - echo "Run cargo-deny"                   ; ./scripts/deny.sh --ci
+            - echo "Check documentation"              ; ./scripts/documentation.sh --ci
             - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
             - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
             - echo "Run doc tests"                    ; cargo test --doc --release -v --no-fail-fast
@@ -61,6 +62,7 @@ pipelines:
             - echo "Check HashMap/Set usage"          ; ./scripts/hash.sh --ci
             - echo "Run Clippy"                       ; ./scripts/clippy.sh --ci
             - echo "Run cargo-deny"                   ; ./scripts/deny.sh --ci
+            - echo "Check documentation"              ; ./scripts/documentation.sh --ci
             - echo "Run unit tests"                   ; cargo test --lib --release -v --no-fail-fast
             - echo "Run integration tests"            ; cargo test --test '*' --release -v --no-fail-fast
             - echo "Run doc tests"                    ; cargo test --doc --release -v --no-fail-fast

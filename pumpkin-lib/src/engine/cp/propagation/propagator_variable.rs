@@ -1,3 +1,7 @@
+#[cfg(doc)]
+use super::LocalId;
+#[cfg(doc)]
+use super::PropagatorConstructorContext;
 use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;

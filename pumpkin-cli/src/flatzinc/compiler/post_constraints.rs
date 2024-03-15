@@ -170,6 +170,9 @@ pub(crate) fn run(
 
             "par_set_in_reif" => compile_set_in_reif(context, exprs)?,
 
+            "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
+            "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
+
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -191,6 +194,25 @@ macro_rules! check_parameters {
             });
         }
     };
+}
+
+fn compile_cumulative(
+    context: &mut CompilationContext<'_>,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 4, "pumpkin_cumulative");
+
+    let start_times = context.resolve_integer_variable_array(&exprs[0])?;
+    let durations = context.resolve_array_integer_constants(&exprs[1])?;
+    let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
+    let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
+
+    Ok(context.solver.cumulative(
+        &start_times,
+        &durations,
+        &resource_requirements,
+        resource_capacity,
+    ))
 }
 
 fn compile_array_int_maximum(

@@ -17,8 +17,8 @@
 //! # Practical
 //! Our implementation follows [\[1\]](https://hal.science/hal-01339250/document). The [`SparseSet`]
 //! structure keeps track of a number of variables; the main practical consideration is that a
-//! function [`SparseSet::mapping`] should be provided which maps every
-//! value in [`SparseSet::domain`] to an index in \[0..|domain|\) in a bijective manner.
+//! function `mapping` should be provided which maps every
+//! value in the domain to an index in \[0..|domain|\) in a bijective manner.
 //!
 //! # Bibliography
 //! \[1\] V. le C. de Saint-Marcq, P. Schaus, C. Solnon, and C. Lecoutre, ‘Sparse-sets for domain
@@ -26,12 +26,12 @@
 //! (TRICS), 2013, pp. 1–10.
 
 /// A set for keeping track of which values are still part of the original domain based on [\[1\]](https://hal.science/hal-01339250/document).
-/// See [`crate::propagators::cumulative::utils::sparse_set`] for more information.
+/// See the module level documentation for more information.
 ///
 /// It provides O(1) removals of values from the domain and O(|D|) traversal of the domain (where D
 /// are the values which are currently in the domain).
 ///
-/// Note that it is required that each element contained in [`domain`][`SparseSet::domain`] can be
+/// Note that it is required that each element contained in the domain can be
 /// uniquely mapped to an index in the range [0, |D|) (i.e. the mapping function is bijective)
 ///
 /// # Bibliography
@@ -39,7 +39,7 @@
 /// implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 /// (TRICS), 2013, pp. 1–10.
 #[derive(Debug)]
-pub struct SparseSet<T> {
+pub(crate) struct SparseSet<T> {
     /// The number of elements which are currently in the domain
     size: usize,
     /// The current state of the domain, this structure guarantees that the first
@@ -55,10 +55,10 @@ pub struct SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
-    /// Assumption: It is assumed that [`mapping`][SparseSet::mapping] is a bijective function which
+    /// Assumption: It is assumed that `mapping` is a bijective function which
     /// will return an index which is in the range [0, |D_{original}|) (where D_{original} is
     /// the initial domain before any operations have been performed).
-    pub fn new(input: Vec<T>, mapping: fn(&T) -> usize) -> Self {
+    pub(crate) fn new(input: Vec<T>, mapping: fn(&T) -> usize) -> Self {
         let input_len = input.len();
         SparseSet {
             size: input_len,
@@ -69,18 +69,18 @@ impl<T> SparseSet<T> {
     }
 
     /// Determines whether the domain represented by the [`SparseSet`] is empty
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.size == 0
     }
 
     /// Returns how many elements are part of the domain
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.size
     }
 
-    /// Returns the element in [`domain`][SparseSet::domain] which is stored at the location of the
-    /// `index`
-    pub fn get(&self, index: usize) -> &T {
+    /// Returns the `index`th element in the domain; if `index` is larger than or equal to
+    /// [`SparseSet::len`] then this method will panic.
+    pub(crate) fn get(&self, index: usize) -> &T {
         &self.domain[index]
     }
 
@@ -92,8 +92,9 @@ impl<T> SparseSet<T> {
         self.indices[(self.mapping)(&self.domain[j])] = j;
     }
 
-    /// Remove the value of `to_remove` from the [`domain`][SparseSet::domain]
-    pub fn remove(&mut self, to_remove: &T) {
+    /// Remove the value of `to_remove` from the domain; if the value is not in the domain then this
+    /// method does not perform any operations.
+    pub(crate) fn remove(&mut self, to_remove: &T) {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;

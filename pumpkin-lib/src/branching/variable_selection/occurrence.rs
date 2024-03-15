@@ -1,20 +1,29 @@
 use log::warn;
 
 use crate::basic_types::DomainId;
+use crate::branching::Direction;
+use crate::branching::InOrderTieBreaker;
 use crate::branching::SelectionContext;
+use crate::branching::TieBreaker;
 use crate::branching::VariableSelector;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the largest number of attached
-/// constraints (where [`num_occurrences`][Occurrence::num_occurrences] stores the number of
+/// constraints (where the provided `num_occurrences` stores the number of
 /// attached constraints per variable).
-#[derive(Debug)]
-pub struct Occurrence<Var> {
+pub struct Occurrence<Var, TieBreaking> {
     variables: Vec<Var>,
+    tie_breaker: TieBreaking,
     num_occurrences: Vec<u32>,
 }
 
-impl<Var: Copy> Occurrence<Var> {
+impl<Var, TieBreaking> std::fmt::Debug for Occurrence<Var, TieBreaking> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Occurrence").finish()
+    }
+}
+
+impl<Var: Copy> Occurrence<Var, InOrderTieBreaker<Var, u32>> {
     pub fn new(variables: &[Var], num_occurrences: &[u32]) -> Self {
         pumpkin_assert_eq_simple!(
             variables.len(), num_occurrences.len(),
@@ -25,22 +34,26 @@ impl<Var: Copy> Occurrence<Var> {
         }
         Occurrence {
             variables: variables.to_vec(),
+            tie_breaker: InOrderTieBreaker::new(Direction::Maximum),
             num_occurrences: num_occurrences.to_vec(),
         }
     }
 }
 
-impl VariableSelector<DomainId> for Occurrence<DomainId> {
+impl<TieBreaking> VariableSelector<DomainId> for Occurrence<DomainId, TieBreaking>
+where
+    TieBreaking: TieBreaker<DomainId, u32>,
+{
     fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
         self.variables
             .iter()
             .enumerate()
             .filter(|(_, variable)| !context.is_integer_fixed(**variable))
-            .max_by(|(x_index, _), (y_index, _)| {
-                self.num_occurrences[*x_index].cmp(&self.num_occurrences[*y_index])
-            })
-            .map(|(_, variable)| variable)
-            .cloned()
+            .for_each(|(index, variable)| {
+                self.tie_breaker
+                    .consider(*variable, self.num_occurrences[index])
+            });
+        self.tie_breaker.select()
     }
 }
 

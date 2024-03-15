@@ -21,7 +21,7 @@ use crate::propagators::cumulative::time_table::time_table_util::propagate_based
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::reset_bounds_clear_updated;
 use crate::propagators::update_bounds_task;
-use crate::propagators::CumulativeArgs;
+use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 #[cfg(doc)]
@@ -31,9 +31,9 @@ use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
-/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a [`ResourceProfile`] per time point rather than
+/// different time-points - This method creates a resource profile per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
 /// has a generic argument which represents the type of variable used for modelling the start
 /// variables, this will be an implementation of [`IntVar`].
@@ -41,8 +41,8 @@ use crate::pumpkin_assert_extreme;
 /// The difference between the [`TimeTablePerPointIncrementalPropagator`] and
 /// [`TimeTablePerPointPropagator`] is that the [`TimeTablePerPointIncrementalPropagator`] does not
 /// recalculate the time-table from scratch whenever the
-/// [`ConstraintProgrammingPropagator::propagate`] method is called but it utilises the
-/// [`ConstraintProgrammingPropagator::notify`] method to determine when a mandatory part is added
+/// [`Propagator::propagate`] method is called but it utilises the
+/// [`Propagator::notify`] method to determine when a mandatory part is added
 /// and only updates the structure based on these updated mandatory parts.
 ///
 /// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
@@ -69,7 +69,8 @@ pub struct TimeTablePerPointIncrementalPropagator<Var> {
     time_table_outdated: bool,
 }
 
-impl<Var> PropagatorConstructor for CumulativeArgs<Var, TimeTablePerPointIncrementalPropagator<Var>>
+impl<Var> PropagatorConstructor
+    for CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
