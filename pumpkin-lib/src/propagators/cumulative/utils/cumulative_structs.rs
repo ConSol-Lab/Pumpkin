@@ -98,11 +98,11 @@ pub type TimeTablePerPointIncremental<Var> =
 pub type TimeTableOverInterval<Var> =
     CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>;
 
-/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
-/// of [`TimeTableOverIntervalIncrementalPropagator`]; this is used to prevent creating a different
-/// `new` method for each type `T`
+/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
+/// type of [`TimeTableOverIntervalIncrementalPropagator`]; this is used to prevent creating a
+/// different `new` method for each type `T`
 pub type TimeTableOverIntervalIncremental<Var> =
-    CumulativeArgs<Var, TimeTableOverIntervalIncrementalPropagator<Var>>;
+    CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>;
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.

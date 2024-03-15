@@ -25,7 +25,7 @@ use crate::propagators::cumulative::time_table::time_table_util::generate_update
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::reset_bounds_clear_updated;
 use crate::propagators::update_bounds_task;
-use crate::propagators::CumulativeArgs;
+use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::TimeTableOverIntervalPropagator;
@@ -34,9 +34,9 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 
-/// [`ConstraintProgrammingPropagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
+/// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a [`ResourceProfile`] over an interval rather than
+/// different time-points - This method creates a resource profile over an interval rather than
 /// creating one per time-point (hence the name). Furthermore, the
 /// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
 /// used for modelling the start variables, this will be an implementation of [`IntVar`].
@@ -44,8 +44,8 @@ use crate::pumpkin_assert_moderate;
 /// The difference between the [`TimeTableOverIntervalIncrementalPropagator`] and
 /// [`TimeTableOverIntervalPropagator`] is that the [`TimeTableOverIntervalIncrementalPropagator`]
 /// does not recalculate the time-table from scratch whenever the
-/// [`ConstraintProgrammingPropagator::propagate`] method is called but it utilises the
-/// [`ConstraintProgrammingPropagator::notify`] method to determine when a mandatory part is added
+/// [`Propagator::propagate`] method is called but it utilises the
+/// [`Propagator::notify`] method to determine when a mandatory part is added
 /// and only updates the structure based on these updated mandatory parts.
 ///
 /// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
@@ -73,7 +73,7 @@ pub struct TimeTableOverIntervalIncrementalPropagator<Var> {
 }
 
 impl<Var> PropagatorConstructor
-    for CumulativeArgs<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
+    for CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
 where
     Var: IntVar + 'static + std::fmt::Debug,
 {
