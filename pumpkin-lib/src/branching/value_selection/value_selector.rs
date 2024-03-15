@@ -23,7 +23,7 @@ pub trait ValueSelector<Var> {
     /// it was fixed but is no longer), specifically, it provides `literal` which is the
     /// [`Literal`] which has been reset. This method could thus be called multiple times in a
     /// single backtracking operation by the solver
-    /// (see [`ConstraintSatisfactionSolver::backtrack`]).
+    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
     fn on_unassign_literal(&mut self, _literal: Literal) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
@@ -31,7 +31,7 @@ pub trait ValueSelector<Var> {
     /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
     /// previously fixed. This method could thus be called multiple times in a single
     /// backtracking operation by the solver
-    /// (see [`backtrack`][ConstraintSatisfactionSolver::backtrack]).
+    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// A function which is called when new [`PropositionalVariable`]s are added to the solver when

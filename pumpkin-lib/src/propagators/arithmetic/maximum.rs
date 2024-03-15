@@ -47,7 +47,7 @@ impl<ElementVar: IntVar, Rhs: IntVar> PropagatorConstructor
 }
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
-/// [`Maximum`].
+/// [`MaximumConstructor`].
 #[derive(Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[PropagatorVariable<ElementVar>]>,

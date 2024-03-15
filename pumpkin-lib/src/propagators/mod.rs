@@ -7,7 +7,7 @@
 //! for all variables (i.e. the domain of a variable either remains the same after applying the
 //! propagator or it becomes a subset of the domain before applying the propagator).
 //!
-//! An example of a propagator can be the simple [not equal][NotEq] (`!=`) propagator, suppose that
+//! An example of a propagator can be the simple not equal (`!=`) propagator, suppose that
 //! we have two variables `x ∈ {0}` and `y ∈ {0, 1}` and the constraint `x != y`. The not equal
 //! propagator will then take as input the variables `x` and `y` and their respective domains
 //! `D = {D_x = {0}, D_y = {0, 1}` and produce a new domain `D' = {D'_x = {0}, D'_y = {1}}` for

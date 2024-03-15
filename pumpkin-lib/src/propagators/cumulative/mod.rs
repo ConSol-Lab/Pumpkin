@@ -33,11 +33,11 @@
 //!
 //! ```rust
 //! // We construct three tasks for a resource with capacity 2:
-//! // - Task 1: Start times: [0, 5], Processing time: 4, Resource usage: 1
-//! // - Task 2: Start times: [0, 5], Processing time: 2, Resource usage: 1
-//! // - Task 3: Start times: [0, 5], Processing time: 4, Resource usage: 2
-//! // We can infer that Task 1 and Task 2 execute at the same time
-//! // while Task 3 will start after them
+//! // - Task 0: Start times: [0, 5], Processing time: 4, Resource usage: 1
+//! // - Task 1: Start times: [0, 5], Processing time: 2, Resource usage: 1
+//! // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
+//! // We can infer that Task 0 and Task 1 execute at the same time
+//! // while Task 2 will start after them
 //! use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! use pumpkin_lib::branching::IndependentVariableValueBrancher;
 //! use pumpkin_lib::constraints::ConstraintsExt;
@@ -47,31 +47,22 @@
 //! let solver = ConstraintSatisfactionSolver::default();
 //!
 //! let mut solver = ConstraintSatisfactionSolver::default();
+//!
+//! let start_0 = solver.create_new_integer_variable(0, 4);
 //! let start_1 = solver.create_new_integer_variable(0, 4);
-//! let task_1 = ArgTask {
-//!     start_time: start_1,
-//!     processing_time: 5,
-//!     resource_usage: 1,
-//! };
+//! let start_2 = solver.create_new_integer_variable(0, 5);
 //!
-//! let start_2 = solver.create_new_integer_variable(0, 4);
-//! let task_2 = ArgTask {
-//!     start_time: start_2,
-//!     processing_time: 2,
-//!     resource_usage: 1,
-//! };
-//!
-//! let start_3 = solver.create_new_integer_variable(0, 5);
-//! let task_3 = ArgTask {
-//!     start_time: start_3,
-//!     processing_time: 5,
-//!     resource_usage: 2,
-//! };
-//!
-//! let tasks = [task_1.clone(), task_2.clone(), task_3.clone()];
+//! let start_times = [start_0, start_1, start_2];
+//! let durations = [5, 2, 5];
+//! let resource_requirements = [1, 1, 2];
 //! let resource_capacity = 2;
 //!
-//! solver.cumulative(&tasks, resource_capacity);
+//! solver.cumulative(
+//!     &start_times,
+//!     &durations,
+//!     &resource_requirements,
+//!     resource_capacity,
+//! );
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 //!
@@ -80,8 +71,8 @@
 //! // We check whether the result was feasible
 //! assert_eq!(CSPSolverExecutionFlag::Feasible, result);
 //!
-//! let horizon = tasks.iter().map(|task| task.processing_time).sum::<i32>();
-//! let start_times = [start_1, start_2, start_3];
+//! let horizon = durations.iter().sum::<i32>();
+//! let start_times = [start_0, start_1, start_2];
 //! let assignments = solver.get_integer_assignments();
 //!
 //! // Now we check whether the resource constraint is satisfied at each time-point t
@@ -92,11 +83,9 @@
 //!         .enumerate()
 //!         .filter_map(|(task_index, start_time)| {
 //!             if assignments.get_assigned_value(*start_time) <= t
-//!                 && assignments.get_assigned_value(*start_time)
-//!                     + tasks[task_index].processing_time
-//!                     > t
+//!                 && assignments.get_assigned_value(*start_time) + durations[task_index] > t
 //!             {
-//!                 Some(tasks[task_index].resource_usage)
+//!                 Some(resource_requirements[task_index])
 //!             } else {
 //!                 None
 //!             }
@@ -107,19 +96,19 @@
 //!     resource_usage_at_t <= resource_capacity
 //! }));
 //!
-//! // Finally we check whether Task 3 starts after Task 1 and Task 2 and that Task 1 and Task 2
+//! // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and Task 1
 //! // overlap
 //! assert!(
-//!     assignments.get_assigned_value(start_3)
-//!         >= assignments.get_assigned_value(start_1) + task_1.processing_time
-//!         && assignments.get_assigned_value(start_3)
-//!             >= assignments.get_assigned_value(start_2) + task_2.processing_time
+//!     assignments.get_assigned_value(start_2)
+//!         >= assignments.get_assigned_value(start_0) + durations[0]
+//!         && assignments.get_assigned_value(start_2)
+//!             >= assignments.get_assigned_value(start_1) + durations[1]
 //! );
 //! assert!(
-//!     assignments.get_assigned_value(start_1)
-//!         < assignments.get_assigned_value(start_2) + task_2.processing_time
-//!         && assignments.get_assigned_value(start_2)
-//!             < assignments.get_assigned_value(start_1) + task_1.processing_time
+//!     assignments.get_assigned_value(start_0)
+//!         < assignments.get_assigned_value(start_1) + durations[1]
+//!         && assignments.get_assigned_value(start_1)
+//!             < assignments.get_assigned_value(start_0) + durations[0]
 //! );
 //! ```
 mod time_table;
