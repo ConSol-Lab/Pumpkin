@@ -13,19 +13,19 @@ use crate::propagators::TimeTablePerPointPropagator;
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
 #[derive(Debug)]
-pub struct Task<Var> {
-    /// The [`PropagatorVariable`] representing the start time of a task
-    pub start_variable: PropagatorVariable<Var>,
+pub(crate) struct Task<Var> {
+    /// The variable representing the start time of a task
+    pub(crate) start_variable: PropagatorVariable<Var>,
     /// The processing time of the `start_variable` (also referred to as duration of a task)
-    pub processing_time: i32,
+    pub(crate) processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
-    pub resource_usage: i32,
+    pub(crate) resource_usage: i32,
     /// The [`LocalId`] of the task
-    pub id: LocalId,
+    pub(crate) id: LocalId,
 }
 
 impl<Var: IntVar + 'static> Task<Var> {
-    pub fn get_id(task: &Rc<Task<Var>>) -> usize {
+    pub(crate) fn get_id(task: &Rc<Task<Var>>) -> usize {
         task.id.unpack() as usize
     }
 }
@@ -58,7 +58,7 @@ pub struct ArgTask<Var> {
 
 /// The arguments which are required to create the constraint/propagators
 #[derive(Debug, Clone)]
-pub struct CumulativeArgs<Var, T> {
+pub struct CumulativeConstructor<Var, T> {
     /// A box containing all of the [`ArgTask`]s
     pub tasks: Box<[ArgTask<Var>]>,
     /// The capacity of the resource
@@ -69,9 +69,9 @@ pub struct CumulativeArgs<Var, T> {
     propagator_type: PhantomData<T>,
 }
 
-impl<Var, T> CumulativeArgs<Var, T> {
+impl<Var, T> CumulativeConstructor<Var, T> {
     pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
-        CumulativeArgs {
+        CumulativeConstructor {
             tasks,
             capacity,
             propagator_type: PhantomData,
@@ -79,32 +79,33 @@ impl<Var, T> CumulativeArgs<Var, T> {
     }
 }
 
-/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
-/// of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new` method
-/// for each type `T`
-pub type TimeTablePerPoint<Var> = CumulativeArgs<Var, TimeTablePerPointPropagator<Var>>;
+/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
+/// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
+/// method for each type `T`
+pub type TimeTablePerPoint<Var> = CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
-/// An alias used for calling the [`CumulativeArgs::new`] method with the concrete propagator type
-/// of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
+/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
+/// type of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
 /// `new` method for each type `T`
 pub type TimeTablePerPointIncremental<Var> =
-    CumulativeArgs<Var, TimeTablePerPointIncrementalPropagator<Var>>;
+    CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>;
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
 #[derive(Debug)]
-pub struct UpdatedTaskInfo<Var> {
+#[allow(dead_code)] // Temporary until the structure is used
+pub(crate) struct UpdatedTaskInfo<Var> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
-    pub task: Rc<Task<Var>>,
+    pub(crate) task: Rc<Task<Var>>,
     /// The lower-bound of the [`Task`] before the update
-    pub old_lower_bound: i32,
+    pub(crate) old_lower_bound: i32,
     /// The upper-bound of the [`Task`] before the update
-    pub old_upper_bound: i32,
+    pub(crate) old_upper_bound: i32,
     /// The lower-bound of the [`Task`] after the update
-    pub new_lower_bound: i32,
+    pub(crate) new_lower_bound: i32,
     /// The upper-bound of the [`Task`] after the update
-    pub new_upper_bound: i32,
+    pub(crate) new_upper_bound: i32,
 }
 
 /// Holds the data for the cumulative constraint; more specifically it holds:
@@ -112,28 +113,27 @@ pub struct UpdatedTaskInfo<Var> {
 /// - The capacity of the resource
 /// - The known bounds
 /// - The values which have been updated since the previous propagation
-/// - The horizon
 #[derive(Debug)]
 pub struct CumulativeParameters<Var> {
-    /// The Set of [`Task`]s; for each [`Task`], the [`LocalId`] is assumed to correspond to its
+    /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
     /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
     /// sharing of the tasks
-    pub tasks: Box<[Rc<Task<Var>>]>,
+    pub(crate) tasks: Box<[Rc<Task<Var>>]>,
     /// The capacity of the resource (i.e. how much resource consumption can be maximally
     /// accomodated at each time point)
-    pub capacity: i32,
+    pub(crate) capacity: i32,
     /// The current known bounds of the different [tasks][CumulativeParameters::tasks]; stored as
     /// (lower bound, upper bound)
     ///
     /// `bounds[i]` represents the currently known bounds of task i
-    pub bounds: Vec<(i32, i32)>,
+    pub(crate) bounds: Vec<(i32, i32)>,
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
-    pub updated: Vec<UpdatedTaskInfo<Var>>,
+    pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
 }
 
 impl<Var: IntVar + 'static> CumulativeParameters<Var> {
-    pub fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+    pub(crate) fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()

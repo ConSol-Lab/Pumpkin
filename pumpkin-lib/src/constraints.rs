@@ -16,6 +16,7 @@ use crate::propagators::arithmetic::maximum::MaximumConstructor;
 use crate::propagators::element::ElementConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTablePerPoint;
+use crate::pumpkin_assert_simple;
 
 /// Provides common constraint implementations. Methods return false if the problem becomes
 /// trivially unsatisfiable after adding the constraint, or when the solver was already in an
@@ -190,16 +191,38 @@ pub trait ConstraintsExt {
         true
     }
 
-    fn cumulative<Var: IntVar + 'static + std::fmt::Debug>(
+    /// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
+    /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
+    /// exceeds `bound`. See [`crate::propagators`] for more information.
+    ///
+    /// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
+    /// this is not the case then this method will panic.
+    ///
+    /// For now we assume that the durations, resource requirements and bound are constant.
+    fn cumulative<Var: IntVar + 'static + std::fmt::Debug + Copy>(
         &mut self,
-        tasks: &[ArgTask<Var>],
-        capacity: i32,
-    ) {
-        // TODO: how to differentiate between different strategies
-        let _ = self.post(TimeTablePerPoint::new(
-            tasks.iter().cloned().collect(),
-            capacity,
-        ));
+        start_times: &[Var],
+        durations: &[i32],
+        resource_requirements: &[i32],
+        resource_capacity: i32,
+    ) -> bool {
+        pumpkin_assert_simple!(
+            start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
+            "The number of start variables, durations and resource requirements should be the same!car"
+        );
+        self.post(TimeTablePerPoint::new(
+            start_times
+                .iter()
+                .zip(durations)
+                .zip(resource_requirements)
+                .map(|((start_time, duration), resource_requirement)| ArgTask {
+                    start_time: *start_time,
+                    processing_time: *duration,
+                    resource_usage: *resource_requirement,
+                })
+                .collect(),
+            resource_capacity,
+        ))
     }
 
     /// Posts the constraint `max(array) = m`.
