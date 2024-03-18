@@ -4,9 +4,9 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagator_variable::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::TimeTablePerPointPropagator;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
@@ -23,30 +23,30 @@ pub(crate) struct Task<Var> {
     pub(crate) id: LocalId,
 }
 
-impl<Var: IntVar + 'static> Task<Var> {
+impl<Var: IntegerVariable + 'static> Task<Var> {
     pub(crate) fn get_id(task: &Rc<Task<Var>>) -> usize {
         task.id.unpack() as usize
     }
 }
 
-impl<Var: IntVar + 'static> Hash for Task<Var> {
+impl<Var: IntegerVariable + 'static> Hash for Task<Var> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
-impl<Var: IntVar + 'static> PartialEq for Task<Var> {
+impl<Var: IntegerVariable + 'static> PartialEq for Task<Var> {
     fn eq(&self, other: &Self) -> bool {
         self.id.unpack() == other.id.unpack()
     }
 }
 
-impl<Var: IntVar + 'static> Eq for Task<Var> {}
+impl<Var: IntegerVariable + 'static> Eq for Task<Var> {}
 
 /// The task which is passed as argument
 #[derive(Clone, Debug)]
 pub struct ArgTask<Var> {
-    /// The [`IntVar`] representing the start time of a task
+    /// The [`IntegerVariable`] representing the start time of a task
     pub start_time: Var,
     /// The processing time of the [`start_time`][ArgTask::start_time] (also referred to as
     /// duration of a task)
@@ -125,7 +125,7 @@ pub(crate) struct CumulativeParameters<Var> {
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
 }
 
-impl<Var: IntVar + 'static> CumulativeParameters<Var> {
+impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
     pub(crate) fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks

@@ -19,8 +19,8 @@ use std::num::NonZeroI32;
 use std::str::FromStr;
 
 use pumpkin_lib::basic_types::Function;
-use pumpkin_lib::basic_types::Literal;
-use pumpkin_lib::basic_types::PropositionalVariable;
+use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::engine::Preprocessor;
 use pumpkin_lib::engine::SatOptions;

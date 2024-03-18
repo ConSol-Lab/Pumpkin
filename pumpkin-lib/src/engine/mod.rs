@@ -4,6 +4,7 @@ mod debug_helper;
 mod preprocessor;
 mod sat;
 mod sat_cp_mediator;
+pub mod variables;
 
 pub use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;

@@ -1,14 +1,14 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 
 /// A [`ValueSelector`] which selects the median value in the domain (or if this value is already
 /// assigned then the closest variable to it in terms of index).
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainMedian;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainMedian {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMedian {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))

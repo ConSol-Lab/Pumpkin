@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::rc::Rc;
 
-use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which

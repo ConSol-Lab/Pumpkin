@@ -74,9 +74,9 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for InOrderTieBreaker<
 #[cfg(test)]
 mod tests {
     use super::InOrderTieBreaker;
-    use crate::basic_types::DomainId;
     use crate::branching::Direction;
     use crate::branching::TieBreaker;
+    use crate::engine::variables::DomainId;
 
     #[test]
     fn test_selection_first_value() {

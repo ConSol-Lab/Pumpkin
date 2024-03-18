@@ -1,5 +1,3 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -11,6 +9,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct LinearLessOrEqualConstructor<Var> {
     pub reif: Option<Literal>,
 }
 
-impl<Var: IntVar + 'static> LinearLessOrEqualConstructor<Var> {
+impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
     pub fn new(x: Box<[Var]>, c: i32) -> Self {
         LinearLessOrEqualConstructor { x, c, reif: None }
     }
@@ -44,7 +44,7 @@ pub struct LinearLessOrEqualPropagator<Var> {
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
 where
-    Var: IntVar,
+    Var: IntegerVariable,
 {
     type Propagator = LinearLessOrEqualPropagator<Var>;
 
@@ -74,7 +74,7 @@ where
 
 impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
 where
-    Var: IntVar,
+    Var: IntegerVariable,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.x, self.c, &self.reif)
@@ -102,7 +102,7 @@ where
     }
 }
 
-fn perform_propagation<Var: IntVar>(
+fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
     x: &[PropagatorVariable<Var>],
     c: i32,

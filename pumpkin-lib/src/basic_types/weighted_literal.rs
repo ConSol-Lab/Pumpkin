@@ -1,4 +1,4 @@
-use super::Literal;
+use crate::engine::variables::Literal;
 
 #[derive(Clone, Copy, Debug)]
 /// A struct containing a literal, weight and (optionally) the bound which the literal represents

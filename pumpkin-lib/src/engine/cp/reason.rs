@@ -133,8 +133,8 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::DomainId;
     use crate::conjunction;
+    use crate::engine::variables::DomainId;
     use crate::engine::AssignmentsInteger;
     use crate::engine::AssignmentsPropositional;
 

@@ -4,9 +4,9 @@
 //!
 //! The naming of the constraints follows the MiniZinc standard library where possible.
 
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::propagators::arithmetic::absolute_value::AbsoluteValueConstructor;
 use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicationConstructor;
@@ -28,11 +28,11 @@ pub trait ConstraintsExt {
         Constructor::Propagator: 'static;
 
     /// Adds the constraint `array[index] = rhs`.
-    fn array_var_int_element<ElementVar: IntVar + 'static>(
+    fn array_var_int_element<ElementVar: IntegerVariable + 'static>(
         &mut self,
-        index: impl IntVar + 'static,
+        index: impl IntegerVariable + 'static,
         array: impl Into<Box<[ElementVar]>>,
-        rhs: impl IntVar + 'static,
+        rhs: impl IntegerVariable + 'static,
     ) -> bool {
         self.post(ElementConstructor {
             index,
@@ -42,7 +42,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `\sum terms_i != rhs`.
-    fn int_lin_ne<Var: IntVar + 'static>(
+    fn int_lin_ne<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -51,7 +51,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `reif -> \sum terms_i != rhs`.
-    fn int_lin_ne_reif<Var: IntVar + 'static>(
+    fn int_lin_ne_reif<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -61,7 +61,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
-    fn int_lin_le<Var: IntVar + 'static>(
+    fn int_lin_le<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -70,7 +70,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
-    fn int_lin_le_reif<Var: IntVar + 'static>(
+    fn int_lin_le_reif<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -84,7 +84,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
-    fn int_lin_eq<Var: IntVar + 'static>(
+    fn int_lin_eq<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -100,7 +100,7 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `reif -> (\sum terms_i = rhs)`.
-    fn int_lin_eq_reif<Var: IntVar + 'static>(
+    fn int_lin_eq_reif<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -117,67 +117,94 @@ pub trait ConstraintsExt {
     }
 
     /// Adds the constraint `lhs != rhs`.
-    fn int_ne<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    fn int_ne<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.int_lin_ne([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> lhs != rhs`.
-    fn int_ne_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+    fn int_ne_reif<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
         self.int_lin_ne_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs <= rhs`.
-    fn int_le<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    fn int_le<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.int_lin_le([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> (lhs <= rhs)`.
-    fn int_le_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+    fn int_le_reif<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
         self.int_lin_le_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs < rhs`.
-    fn int_lt<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    fn int_lt<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.int_le(lhs.scaled(1), rhs.offset(-1))
     }
 
     /// Adds the constraint `reif -> (lhs < rhs)`.
-    fn int_lt_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+    fn int_lt_reif<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
         self.int_le_reif(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
     /// Adds the constraint `lhs = rhs`.
-    fn int_eq<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    fn int_eq<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.int_lin_eq([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif -> (lhs = rhs)`.
-    fn int_eq_reif<Var: IntVar + 'static>(&mut self, lhs: Var, rhs: Var, reif: Literal) -> bool {
+    fn int_eq_reif<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
         self.int_lin_eq_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `a + b = c`.
-    fn int_plus<Var: IntVar + 'static>(&mut self, a: Var, b: Var, c: Var) -> bool {
+    fn int_plus<Var: IntegerVariable + 'static>(&mut self, a: Var, b: Var, c: Var) -> bool {
         self.int_lin_eq([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
     }
 
     /// Adds the constraint `a * b = c`.
     fn int_times(
         &mut self,
-        a: impl IntVar + 'static,
-        b: impl IntVar + 'static,
-        c: impl IntVar + 'static,
+        a: impl IntegerVariable + 'static,
+        b: impl IntegerVariable + 'static,
+        c: impl IntegerVariable + 'static,
     ) -> bool {
         self.post(IntegerMultiplicationConstructor { a, b, c })
     }
 
     /// Adds the constraint `|signed| = absolute`.
-    fn int_abs(&mut self, signed: impl IntVar + 'static, absolute: impl IntVar + 'static) -> bool {
+    fn int_abs(
+        &mut self,
+        signed: impl IntegerVariable + 'static,
+        absolute: impl IntegerVariable + 'static,
+    ) -> bool {
         self.post(AbsoluteValueConstructor { signed, absolute })
     }
 
     /// Adds the constraint that all variables must be distinct.
-    fn all_different<Var: IntVar + 'static>(&mut self, variables: impl Into<Box<[Var]>>) -> bool {
+    fn all_different<Var: IntegerVariable + 'static>(
+        &mut self,
+        variables: impl Into<Box<[Var]>>,
+    ) -> bool {
         let variables = variables.into();
 
         for i in 0..variables.len() {
@@ -199,7 +226,7 @@ pub trait ConstraintsExt {
     /// this is not the case then this method will panic.
     ///
     /// For now we assume that the durations, resource requirements and bound are constant.
-    fn cumulative<Var: IntVar + 'static + std::fmt::Debug + Copy>(
+    fn cumulative<Var: IntegerVariable + 'static + std::fmt::Debug + Copy>(
         &mut self,
         start_times: &[Var],
         durations: &[i32],
@@ -226,10 +253,10 @@ pub trait ConstraintsExt {
     }
 
     /// Posts the constraint `max(array) = m`.
-    fn maximum<Var: IntVar + 'static>(
+    fn maximum<Var: IntegerVariable + 'static>(
         &mut self,
         array: impl Into<Box<[Var]>>,
-        rhs: impl IntVar + 'static,
+        rhs: impl IntegerVariable + 'static,
     ) -> bool {
         self.post(MaximumConstructor {
             array: array.into(),
@@ -238,10 +265,10 @@ pub trait ConstraintsExt {
     }
 
     /// Posts the constraint `min(array) = m`.
-    fn minimum<Var: IntVar + 'static>(
+    fn minimum<Var: IntegerVariable + 'static>(
         &mut self,
         array: impl IntoIterator<Item = Var>,
-        rhs: impl IntVar + 'static,
+        rhs: impl IntegerVariable + 'static,
     ) -> bool {
         let array = array
             .into_iter()

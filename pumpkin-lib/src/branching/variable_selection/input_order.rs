@@ -1,9 +1,9 @@
 use log::warn;
 
-use crate::basic_types::DomainId;
-use crate::basic_types::PropositionalVariable;
 use crate::branching::SelectionContext;
 use crate::branching::VariableSelector;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::PropositionalVariable;
 
 /// A [`VariableSelector`] which selects the first variable which is not fixed given the order in
 /// the provided list.

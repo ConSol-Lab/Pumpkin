@@ -1,6 +1,3 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 #[cfg(doc)]
 use crate::basic_types::Random;
 use crate::basic_types::Solution;
@@ -11,6 +8,9 @@ use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]

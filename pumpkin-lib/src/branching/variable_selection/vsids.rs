@@ -1,12 +1,12 @@
 use log::warn;
 
 use super::VariableSelector;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::KeyValueHeap;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which implements [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
@@ -152,7 +152,7 @@ impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
     }
 }
 
-impl<Var: IntVar + Copy + StorageKey> VariableSelector<Var> for Vsids<Var> {
+impl<Var: IntegerVariable + Copy + StorageKey> VariableSelector<Var> for Vsids<Var> {
     fn select_variable(&mut self, context: &SelectionContext) -> Option<Var> {
         loop {
             // We peek the first variable, note that we do not pop since we do not (yet) want to
@@ -232,9 +232,9 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
 mod tests {
     use super::Vsids;
     use crate::basic_types::tests::TestRandom;
-    use crate::basic_types::PropositionalVariable;
     use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
+    use crate::engine::variables::PropositionalVariable;
 
     #[test]
     fn vsids_bumped_var_is_max() {

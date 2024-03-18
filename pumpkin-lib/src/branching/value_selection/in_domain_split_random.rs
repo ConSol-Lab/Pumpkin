@@ -1,8 +1,8 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::Literal;
 use crate::basic_types::PredicateConstructor;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
 
 /// A [`ValueSelector`] which bisects the domain in the middle (between the lower-bound and
 /// lower-bound, disregarding holes), randomly selecting whether to exclude the lower-half or the

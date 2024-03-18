@@ -3,7 +3,6 @@
 //! input parameters.
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateConstructor;
 use crate::basic_types::PropositionalConjunction;
@@ -13,6 +12,7 @@ use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
+use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
@@ -36,7 +36,7 @@ pub(crate) enum ChangeWithExplanationBound {
 ///
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-pub(crate) fn create_naive_explanation<'a, Var: IntVar + 'static>(
+pub(crate) fn create_naive_explanation<'a, Var: IntegerVariable + 'static>(
     change_and_explanation_bound: &ChangeWithExplanationBound,
     task: &Rc<Task<Var>>,
     context: &PropagationContextMut,
@@ -70,7 +70,7 @@ pub(crate) fn create_naive_explanation<'a, Var: IntVar + 'static>(
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
-pub(crate) fn create_inconsistency<Var: IntVar + 'static>(
+pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     conflict_tasks: &[Rc<Task<Var>>],
 ) -> Inconsistency {
@@ -92,7 +92,7 @@ pub(crate) fn create_inconsistency<Var: IntVar + 'static>(
 /// Propagates the start variable of [`propagating_task`][Task] to the provided `propagation_value`
 /// and eagerly calculates the [`explanation`][PropositionalConjunction] given the `profile_tasks`
 /// which were responsible for the propagation
-pub(crate) fn propagate_and_explain<Var: IntVar + 'static>(
+pub(crate) fn propagate_and_explain<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     change_and_explanation_bound: ChangeWithExplanationBound,
     propagating_task: &Rc<Task<Var>>,
@@ -127,7 +127,7 @@ pub(crate) fn propagate_and_explain<Var: IntVar + 'static>(
 /// registered for [`DomainEvents`].
 ///
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
-pub(crate) fn create_tasks<Var: IntVar + 'static>(
+pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
     mut context: PropagatorConstructorContext<'_>,
 ) -> Vec<Task<Var>> {
@@ -161,7 +161,7 @@ pub(crate) fn create_tasks<Var: IntVar + 'static>(
 }
 
 /// Initialises the bounds at the root
-pub(crate) fn initialise_at_root<Var: IntVar + 'static>(
+pub(crate) fn initialise_at_root<Var: IntegerVariable + 'static>(
     update_bounds: bool,
     params: &mut CumulativeParameters<Var>,
     context: &PropagationContextMut,
@@ -181,7 +181,7 @@ pub(crate) fn initialise_at_root<Var: IntVar + 'static>(
 
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
-pub(crate) fn update_bounds_task<Var: IntVar + 'static>(
+pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     bounds: &mut [(i32, i32)],
     task: &Rc<Task<Var>>,
@@ -196,7 +196,7 @@ pub(crate) fn update_bounds_task<Var: IntVar + 'static>(
 /// `context`.
 ///
 /// This method is currently used during bactracking/synchronisation
-pub(crate) fn reset_bounds_clear_updated<Var: IntVar + 'static>(
+pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
     updated: &mut Vec<UpdatedTaskInfo<Var>>,
     bounds: &mut Vec<(i32, i32)>,

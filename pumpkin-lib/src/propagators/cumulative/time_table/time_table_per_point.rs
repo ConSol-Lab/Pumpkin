@@ -8,7 +8,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
@@ -20,6 +19,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::initialise_at_root;
@@ -33,7 +33,7 @@ use crate::pumpkin_assert_extreme;
 /// different time-points - This method creates a resource profile per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
 /// has a generic argument which represents the type of variable used for modelling the start
-/// variables, this will be an implementation of [`IntVar`].
+/// variables, this will be an implementation of [`IntegerVariable`].
 ///
 /// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
 ///  for more information about time-table reasoning.
@@ -59,7 +59,7 @@ pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>
 
 impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>
 where
-    Var: IntVar + 'static + std::fmt::Debug,
+    Var: IntegerVariable + 'static + std::fmt::Debug,
 {
     type Propagator = TimeTablePerPointPropagator<Var>;
 
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     pub(crate) fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
@@ -141,7 +141,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> Propagator for TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context,

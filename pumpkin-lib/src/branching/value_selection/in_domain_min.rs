@@ -1,13 +1,13 @@
 use super::ValueSelector;
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 
 /// [`ValueSelector`] which chooses to assign the provided variable to its lowest-bound.
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainMin;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainMin {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMin {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         context.get_literal_for_predicate(
             decision_variable.upper_bound_predicate(context.lower_bound(decision_variable)),

@@ -1,9 +1,9 @@
 use std::fs;
 
 use crate::basic_types::FileFormat;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Solution;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 
 #[derive(Default, Debug)]
 pub struct Instance {

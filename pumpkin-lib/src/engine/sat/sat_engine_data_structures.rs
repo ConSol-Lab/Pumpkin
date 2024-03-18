@@ -1,7 +1,7 @@
 use crate::basic_types::ClauseReference;
-use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::sat::AssignmentsPropositional;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]

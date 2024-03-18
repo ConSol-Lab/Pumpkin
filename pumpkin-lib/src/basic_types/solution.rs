@@ -1,7 +1,7 @@
-use crate::basic_types::DomainId;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::pumpkin_assert_moderate;

@@ -1,8 +1,8 @@
-use crate::basic_types::DomainId;
 use crate::basic_types::HashMap;
-use crate::basic_types::Literal;
 use crate::basic_types::Solution;
 use crate::basic_types::WeightedLiteral;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintSatisfactionSolver;

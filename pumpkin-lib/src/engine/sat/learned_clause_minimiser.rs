@@ -1,6 +1,5 @@
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
-use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -8,6 +7,7 @@ use crate::engine::constraint_satisfaction_solver::ConflictAnalysisResult;
 use crate::engine::sat::AssignmentsPropositional;
 use crate::engine::sat::SATEngineDataStructures;
 use crate::engine::sat_cp_mediator::SATCPMediator;
+use crate::engine::variables::Literal;
 use crate::engine::CPEngineDataStructures;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;

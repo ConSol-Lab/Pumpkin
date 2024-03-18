@@ -1,7 +1,7 @@
-use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::variables::IntegerVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {

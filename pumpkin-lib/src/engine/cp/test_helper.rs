@@ -4,17 +4,13 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::DomainId;
+use super::propagation::EnqueueDecision;
+use super::WatchListPropositional;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::PropositionalVariable;
-use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -23,12 +19,16 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
+use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::WatchListCP;
-use crate::engine::WatchListPropositional;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default, Debug)]
@@ -93,7 +93,7 @@ impl TestSolver {
         ))
     }
 
-    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+    pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(&self.assignments_integer, value)
     }
 

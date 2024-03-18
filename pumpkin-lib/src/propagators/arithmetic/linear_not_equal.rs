@@ -1,9 +1,7 @@
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -15,6 +13,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -56,7 +56,7 @@ pub struct LinearNotEqualPropagator<Var> {
 
 impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>
 where
-    Var: IntVar + 'static,
+    Var: IntegerVariable + 'static,
 {
     type Propagator = LinearNotEqualPropagator<Var>;
 
@@ -85,7 +85,7 @@ where
 
 impl<Var> Propagator for LinearNotEqualPropagator<Var>
 where
-    Var: IntVar + 'static,
+    Var: IntegerVariable + 'static,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)

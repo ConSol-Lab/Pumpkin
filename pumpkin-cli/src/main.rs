@@ -28,6 +28,7 @@ use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::engine::constraint_satisfaction_solver::RestartOptions;
+use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
 use pumpkin_lib::optimisation::OptimisationResult;

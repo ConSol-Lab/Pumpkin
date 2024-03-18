@@ -1,80 +1,17 @@
-//! A variable, in the context of the solver, is a view onto a domain. It may forward domain
-//! information unaltered, or apply transformations which can be performed without the need of
-//! constraints.
-
 use std::cmp::Ordering;
 
 use enumset::EnumSet;
 
-use crate::basic_types::DomainId;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::reason::ReasonRef;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
-
-pub trait IntVar: Clone + PredicateConstructor<Value = i32> {
-    type AffineView: IntVar;
-
-    /// Get the lower bound of the variable.
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32;
-
-    /// Get the upper bound of the variable.
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32;
-
-    /// Determine whether the value is in the domain of this variable.
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool;
-
-    /// Get a predicate description (bounds + holes) of the domain of this variable.
-    /// N.B. can be very expensive with large domains, and very large with holey domains
-    ///
-    /// This should not be used to explicitly check for holes in the domain, but only to build
-    /// explanations. If views change the observed domain, they will not change this description,
-    /// because it should be a description of the domain in the solver.
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate>;
-
-    /// Remove a value from the domain of this variable.
-    fn remove(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
-
-    /// Tighten the lower bound of the domain of this variable.
-    fn set_lower_bound(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
-
-    /// Tighten the upper bound of the domain of this variable.
-    fn set_upper_bound(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain>;
-
-    /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
-
-    /// Decode a domain event for this variable.
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
-
-    /// Get a variable which domain is scaled compared to the domain of self.
-    ///
-    /// The scaled domain will have holes in it. E.g. if we have `dom(x) = {1, 2}`, then
-    /// `dom(x.scaled(2)) = {2, 4}` and *not* `dom(x.scaled(2)) = {1, 2, 3, 4}`.
-    fn scaled(&self, scale: i32) -> Self::AffineView;
-
-    /// Get a variable which domain has a constant offset to the domain of self.
-    fn offset(&self, offset: i32) -> Self::AffineView;
-}
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
 /// domain of `x`.
@@ -83,80 +20,6 @@ pub struct AffineView<Inner> {
     inner: Inner,
     scale: i32,
     offset: i32,
-}
-
-impl IntVar for DomainId {
-    type AffineView = AffineView<Self>;
-
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
-        assignment.get_lower_bound(*self)
-    }
-
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
-        assignment.get_upper_bound(*self)
-    }
-
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
-        assignment.is_value_in_domain(*self, value)
-    }
-
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
-        assignment.get_domain_description(*self)
-    }
-
-    fn remove(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.remove_value_from_domain(*self, value, reason)
-    }
-
-    fn set_lower_bound(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.tighten_lower_bound(*self, value, reason)
-    }
-
-    fn set_upper_bound(
-        &self,
-        assignment: &mut AssignmentsInteger,
-        value: i32,
-        reason: Option<ReasonRef>,
-    ) -> Result<(), EmptyDomain> {
-        assignment.tighten_upper_bound(*self, value, reason)
-    }
-
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
-        watchers.watch_all(*self, events);
-    }
-
-    fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
-        event.unwrap()
-    }
-
-    fn scaled(&self, scale: i32) -> Self::AffineView {
-        AffineView::new(*self, scale, 0)
-    }
-
-    fn offset(&self, offset: i32) -> Self::AffineView {
-        AffineView::new(*self, 1, offset)
-    }
-}
-
-impl From<DomainId> for AffineView<DomainId> {
-    fn from(value: DomainId) -> Self {
-        AffineView::new(value, 1, 0)
-    }
-}
-
-enum Rounding {
-    Up,
-    Down,
 }
 
 impl<Inner> AffineView<Inner> {
@@ -207,9 +70,9 @@ impl<Inner> AffineView<Inner> {
     }
 }
 
-impl<View> IntVar for AffineView<View>
+impl<View> IntegerVariable for AffineView<View>
 where
-    View: IntVar,
+    View: IntegerVariable,
 {
     type AffineView = Self;
 
@@ -383,6 +246,17 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
             Predicate::True
         }
     }
+}
+
+impl From<DomainId> for AffineView<DomainId> {
+    fn from(value: DomainId) -> Self {
+        AffineView::new(value, 1, 0)
+    }
+}
+
+enum Rounding {
+    Up,
+    Down,
 }
 
 #[cfg(test)]

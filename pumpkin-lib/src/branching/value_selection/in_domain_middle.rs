@@ -1,9 +1,9 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 #[cfg(doc)]
 use crate::branching::InDomainMedian;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_simple;
 
 /// A [`ValueSelector`] which selects the middle value in the domain (or if this value is already
@@ -14,7 +14,7 @@ use crate::pumpkin_assert_simple;
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainMiddle;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainMiddle {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMiddle {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         let bound = context.lower_bound(decision_variable)
             + (context.get_size_of_domain(decision_variable) as f64 / 2.0).floor() as i32;

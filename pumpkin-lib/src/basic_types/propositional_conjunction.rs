@@ -1,5 +1,5 @@
-use super::Literal;
 use super::Predicate;
+use crate::engine::variables::Literal;
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
@@ -132,7 +132,7 @@ macro_rules! conjunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::DomainId;
+    use crate::engine::variables::DomainId;
     use crate::predicate;
 
     #[test]

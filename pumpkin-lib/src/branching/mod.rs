@@ -17,7 +17,7 @@
 //! [`OptimisationSolver::solve`]:
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-//! # use pumpkin_lib::basic_types::PropositionalVariable;
+//! # use pumpkin_lib::engine::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::variable_selection::Vsids;
 //! # use pumpkin_lib::branching::value_selection::PhaseSaving;
 //! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
@@ -41,7 +41,7 @@
 //! [`IndependentVariableValueBrancher::default_over_all_propositional_variables`].
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-//! # use pumpkin_lib::basic_types::PropositionalVariable;
+//! # use pumpkin_lib::engine::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! let mut solver = ConstraintSatisfactionSolver::default();

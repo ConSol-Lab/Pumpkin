@@ -1,18 +1,18 @@
 use std::fmt::Debug;
 
-use crate::basic_types::variables::IntVar;
-#[cfg(doc)]
-use crate::basic_types::DomainId;
-use crate::basic_types::IntegerVariableGeneratorIterator;
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
-use crate::basic_types::PropositionalVariable;
-use crate::basic_types::PropositionalVariableGeneratorIterator;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
 #[cfg(doc)]
 use crate::engine::propagation::PropagationContext;
+use crate::engine::variables::DomainGeneratorIterator;
+#[cfg(doc)]
+use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
+use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::SATCPMediator;
@@ -22,8 +22,8 @@ use crate::pumpkin_assert_advanced;
 /// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods
 /// which might be extended in the future.
 ///
-/// Besides retrieving bounds of [`Literal`]s and [`IntVar`]s, it provides methods for retrieving
-/// the [`Literal`] which represents the [`IntVar`]s (using
+/// Besides retrieving bounds of [`Literal`]s and [`IntegerVariable`]s, it provides methods for
+/// retrieving the [`Literal`] which represents the [`IntegerVariable`]s (using
 /// [`SelectionContext::get_literal_for_predicate`]).
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
@@ -55,24 +55,24 @@ impl<'a> SelectionContext<'a> {
     }
 
     /// Returns the difference between the upper-bound and the lower-bound of the provided
-    /// [`IntVar`]. Note that this is different from the number of values which are in the domain of
-    /// `var` since this calculation does not take into account holes in the domain.
-    pub fn get_size_of_domain<Var: IntVar>(&self, var: Var) -> i32 {
+    /// [`IntegerVariable`]. Note that this is different from the number of values which are in the
+    /// domain of `var` since this calculation does not take into account holes in the domain.
+    pub fn get_size_of_domain<Var: IntegerVariable>(&self, var: Var) -> i32 {
         var.upper_bound(self.assignments_integer) - var.lower_bound(self.assignments_integer)
     }
 
-    /// Returns the lower bound of the provided [`IntVar`]
-    pub fn lower_bound<Var: IntVar>(&self, var: Var) -> i32 {
+    /// Returns the lower bound of the provided [`IntegerVariable`]
+    pub fn lower_bound<Var: IntegerVariable>(&self, var: Var) -> i32 {
         var.lower_bound(self.assignments_integer)
     }
 
-    /// Returns the upper bound of the provided [`IntVar`]
-    pub fn upper_bound<Var: IntVar>(&self, var: Var) -> i32 {
+    /// Returns the upper bound of the provided [`IntegerVariable`]
+    pub fn upper_bound<Var: IntegerVariable>(&self, var: Var) -> i32 {
         var.upper_bound(self.assignments_integer)
     }
 
-    /// Determines whether the provided value is in the domain of the provided [`IntVar`]
-    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+    /// Determines whether the provided value is in the domain of the provided [`IntegerVariable`]
+    pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(self.assignments_integer, value)
     }
 
@@ -88,8 +88,9 @@ impl<'a> SelectionContext<'a> {
         literal
     }
 
-    /// Determines whether the provided [`IntVar`] has a unit domain (i.e. a domain of size 1)
-    pub fn is_integer_fixed<Var: IntVar>(&self, var: Var) -> bool {
+    /// Determines whether the provided [`IntegerVariable`] has a unit domain (i.e. a domain of size
+    /// 1)
+    pub fn is_integer_fixed<Var: IntegerVariable>(&self, var: Var) -> bool {
         self.lower_bound(var.clone()) == self.upper_bound(var)
     }
 
@@ -105,7 +106,7 @@ impl<'a> SelectionContext<'a> {
     }
 
     /// Returns all currently defined [`DomainId`] in the provided [`AssignmentsInteger`].
-    pub fn get_domains(&self) -> IntegerVariableGeneratorIterator {
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
         self.assignments_integer.get_domains()
     }
 

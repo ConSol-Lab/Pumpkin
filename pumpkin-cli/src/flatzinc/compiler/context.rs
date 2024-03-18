@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use pumpkin_lib::basic_types::DomainId;
 use pumpkin_lib::basic_types::HashMap;
 use pumpkin_lib::basic_types::HashSet;
-use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 use crate::flatzinc::instance::Output;

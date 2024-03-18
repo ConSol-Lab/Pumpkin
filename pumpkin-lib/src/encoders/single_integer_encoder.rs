@@ -61,9 +61,9 @@ impl PseudoBooleanConstraintEncoderInterface for SingleIntegerEncoder {
 #[cfg(test)]
 mod tests {
     use super::SingleIntegerEncoder;
-    use crate::basic_types::DomainId;
     use crate::basic_types::WeightedLiteral;
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
+    use crate::engine::variables::DomainId;
     use crate::engine::ConstraintSatisfactionSolver;
 
     fn weighted_literals(

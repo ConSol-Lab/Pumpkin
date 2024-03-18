@@ -1,4 +1,4 @@
-use super::Literal;
+use crate::engine::variables::Literal;
 
 /// A SAT solver branching decision.
 ///

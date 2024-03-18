@@ -121,9 +121,9 @@ fn print_solution_from_solver(
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_lib::basic_types::DomainId;
-    use pumpkin_lib::basic_types::Literal;
-    use pumpkin_lib::basic_types::PropositionalVariable;
+    use pumpkin_lib::engine::variables::DomainId;
+    use pumpkin_lib::engine::variables::Literal;
+    use pumpkin_lib::engine::variables::PropositionalVariable;
 
     use super::*;
 

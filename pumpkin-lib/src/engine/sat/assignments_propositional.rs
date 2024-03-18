@@ -1,12 +1,12 @@
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
-use crate::basic_types::PropositionalVariableGeneratorIterator;
 use crate::basic_types::Trail;
 #[cfg(test)]
 use crate::engine::reason::ReasonRef;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
+use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 

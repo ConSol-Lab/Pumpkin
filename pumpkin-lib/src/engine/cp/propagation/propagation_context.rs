@@ -1,11 +1,11 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::engine::propagation::PropagatorVariable;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::EmptyDomain;
@@ -104,23 +104,26 @@ pub(crate) trait ReadDomains: private::HasAssignments {
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
-    fn is_fixed<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> bool {
+    fn is_fixed<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> bool {
         self.lower_bound(var) == self.upper_bound(var)
     }
 
-    fn lower_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
+    fn lower_bound<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> i32 {
         var.inner.lower_bound(self.assignments_integer())
     }
 
-    fn upper_bound<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> i32 {
+    fn upper_bound<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> i32 {
         var.inner.upper_bound(self.assignments_integer())
     }
 
-    fn contains<Var: IntVar>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
+    fn contains<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
         var.inner.contains(self.assignments_integer(), value)
     }
 
-    fn describe_domain<Var: IntVar>(&self, var: &PropagatorVariable<Var>) -> Vec<Predicate> {
+    fn describe_domain<Var: IntegerVariable>(
+        &self,
+        var: &PropagatorVariable<Var>,
+    ) -> Vec<Predicate> {
         var.inner.describe_domain(self.assignments_integer())
     }
 }
@@ -128,7 +131,7 @@ pub(crate) trait ReadDomains: private::HasAssignments {
 impl<T: private::HasAssignments> ReadDomains for T {}
 
 impl PropagationContextMut<'_> {
-    pub fn remove<Var: IntVar, R: Into<Reason>>(
+    pub fn remove<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &PropagatorVariable<Var>,
         value: i32,
@@ -143,7 +146,7 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn set_upper_bound<Var: IntVar, R: Into<Reason>>(
+    pub fn set_upper_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &PropagatorVariable<Var>,
         bound: i32,
@@ -158,7 +161,7 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn set_lower_bound<Var: IntVar, R: Into<Reason>>(
+    pub fn set_lower_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &PropagatorVariable<Var>,
         bound: i32,

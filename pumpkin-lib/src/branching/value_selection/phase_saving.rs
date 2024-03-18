@@ -2,10 +2,10 @@ use log::warn;
 
 use super::ValueSelector;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
 
 /// A [`ValueSelector`] which implements [phase saving \[1\]](https://www.researchgate.net/profile/Thammanit-Pipatsrisawat/publication/220944633_A_Lightweight_Component_Caching_Scheme_for_Satisfiability_Solvers/links/0f31753c48ffead666000000/A-Lightweight-Component-Caching-Scheme-for-Satisfiability-Solvers.pdf).

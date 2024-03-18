@@ -5,7 +5,6 @@ use std::iter::once;
 use log::debug;
 use log::warn;
 
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -13,6 +12,7 @@ use crate::engine::cp::AssignmentsInteger;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
+use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::SATCPMediator;
 use crate::engine::SATEngineDataStructures;

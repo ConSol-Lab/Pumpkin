@@ -1,11 +1,11 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::IntegerVariableGeneratorIterator;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
+use crate::engine::variables::DomainGeneratorIterator;
+use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -35,8 +35,8 @@ impl AssignmentsInteger {
         self.domains.len() as u32
     }
 
-    pub fn get_domains(&self) -> IntegerVariableGeneratorIterator {
-        IntegerVariableGeneratorIterator::new(0, self.num_domains())
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
+        DomainGeneratorIterator::new(0, self.num_domains())
     }
 
     pub fn num_trail_entries(&self) -> usize {

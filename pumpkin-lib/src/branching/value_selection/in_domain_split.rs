@@ -1,7 +1,7 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_advanced;
 
 /// A [`ValueSelector`] which splits the domain in half (based on the lower-bound and upper-bound,
@@ -12,14 +12,14 @@ use crate::pumpkin_assert_advanced;
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainSplit;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainSplit {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainSplit {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         InDomainSplit::get_literal_excluding_upper_half(context, decision_variable)
     }
 }
 
 impl InDomainSplit {
-    pub fn get_literal_excluding_upper_half<Var: IntVar + Copy>(
+    pub fn get_literal_excluding_upper_half<Var: IntegerVariable + Copy>(
         context: &SelectionContext,
         decision_variable: Var,
     ) -> Literal {

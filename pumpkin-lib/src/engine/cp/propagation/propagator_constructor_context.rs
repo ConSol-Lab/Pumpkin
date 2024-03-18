@@ -1,10 +1,10 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::WatchListCP;
 use crate::engine::WatchListPropositional;
 use crate::engine::Watchers;
@@ -34,7 +34,7 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    pub fn register<Var: IntVar>(
+    pub fn register<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,

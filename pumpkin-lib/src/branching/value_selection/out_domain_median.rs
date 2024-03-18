@@ -1,8 +1,8 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::Literal;
 use crate::basic_types::PredicateConstructor;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
 
 /// A [`ValueSelector`] which excludes the median value from the domain.
 #[derive(Debug, Copy, Clone)]

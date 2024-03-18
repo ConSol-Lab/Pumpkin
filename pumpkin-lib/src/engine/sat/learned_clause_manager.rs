@@ -2,11 +2,11 @@ use super::AssignmentsPropositional;
 use super::LearnedClauseSortingStrategy;
 use super::SATEngineDataStructures;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::Literal;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::variables::Literal;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
 

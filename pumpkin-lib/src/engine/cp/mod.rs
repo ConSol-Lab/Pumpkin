@@ -25,13 +25,13 @@ pub use watch_list_propositional::*;
 mod tests {
     use assignments_integer::AssignmentsInteger;
 
-    use crate::basic_types::Literal;
-    use crate::basic_types::PropositionalVariable;
     use crate::conjunction;
     use crate::engine::cp::assignments_integer;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonStore;
+    use crate::engine::variables::Literal;
+    use crate::engine::variables::PropositionalVariable;
     use crate::engine::AssignmentsPropositional;
 
     #[test]

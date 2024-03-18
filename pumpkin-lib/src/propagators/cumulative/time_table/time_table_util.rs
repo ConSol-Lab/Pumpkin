@@ -5,15 +5,15 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContextMut;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
+use crate::engine::propagation::ReadDomains;
+use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
 use crate::propagators::util::propagate_and_explain;
 use crate::propagators::util::update_bounds_task;
@@ -42,7 +42,7 @@ pub(crate) struct ResourceProfile<Var> {
     pub(crate) height: i32,
 }
 
-impl<Var: IntVar + 'static> ResourceProfile<Var> {
+impl<Var: IntegerVariable + 'static> ResourceProfile<Var> {
     pub(crate) fn default(time: i32) -> ResourceProfile<Var> {
         ResourceProfile {
             start: time,
@@ -55,7 +55,7 @@ impl<Var: IntVar + 'static> ResourceProfile<Var> {
 
 /// Determines whether a time-table propagator should enqueue and updates the appropriate structures
 /// for processing during propagation
-pub(crate) fn should_enqueue<Var: IntVar + 'static>(
+pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &mut CumulativeParameters<Var>,
     updated_task: Rc<Task<Var>>,
     context: &PropagationContextMut,
@@ -102,7 +102,7 @@ pub(crate) fn should_enqueue<Var: IntVar + 'static>(
 
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
-pub(crate) fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
+pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     start: i32,
@@ -119,7 +119,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntVar + 'static>(
 }
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
-pub(crate) fn task_has_overlap_with_interval<Var: IntVar + 'static>(
+pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     start: i32,
@@ -145,7 +145,7 @@ fn has_overlap_with_interval(lower_bound: i32, upper_bound: i32, start: i32, end
 /// sorted in increasing order in terms of [`ResourceProfile::start`] and that the
 /// [`ResourceProfile`] is maximal (i.e. the [`ResourceProfile::start`] and [`ResourceProfile::end`]
 /// cannot be increased or decreased, respectively).
-pub(crate) fn propagate_based_on_timetable<'a, Var: IntVar + 'static>(
+pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
@@ -216,7 +216,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntVar + 'static>(
 ///
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
-fn lower_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
+fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
@@ -236,7 +236,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
 ///       [`ResourceProfile`]
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
-fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
+fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
     context: &PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
@@ -250,7 +250,7 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntVar + 'static>(
 }
 
 /// Propagates the lower-bound of the task to avoid overlap with the [`ResourceProfile`] `profile`
-fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
+fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
@@ -273,7 +273,7 @@ fn propagate_lower_bound_task_by_profile<Var: IntVar + 'static>(
 }
 
 /// Propagates the upper-bound of the task to avoid overlap with the [`ResourceProfile`] `profile`
-fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
+fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
@@ -305,7 +305,7 @@ fn propagate_upper_bound_task_by_profile<Var: IntVar + 'static>(
 ///
 /// Note that this method can only find [`Inconsistency::EmptyDomain`] conflicts which means that we
 /// handle that error in the parent function
-fn check_whether_task_can_be_updated_by_profile<Var: IntVar + 'static>(
+fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,

@@ -1,4 +1,3 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -10,6 +9,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
@@ -22,7 +22,9 @@ pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     pub(crate) absolute: VB,
 }
 
-impl<VA: IntVar, VB: IntVar> PropagatorConstructor for AbsoluteValueConstructor<VA, VB> {
+impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
+    for AbsoluteValueConstructor<VA, VB>
+{
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -38,7 +40,7 @@ pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     absolute: PropagatorVariable<VB>,
 }
 
-impl<VA: IntVar, VB: IntVar> Propagator for AbsoluteValuePropagator<VA, VB> {
+impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }

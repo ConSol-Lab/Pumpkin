@@ -15,7 +15,7 @@ use bitfield::BitRange;
 use bitfield::BitRangeMut;
 
 use super::ClauseInterface;
-use crate::basic_types::Literal;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_moderate;
 
 #[repr(C)] // important to keep the c layout since the code below relies on this layout
@@ -219,9 +219,9 @@ impl std::ops::IndexMut<u32> for ClauseInlined {
 #[cfg(test)]
 mod tests {
 
-    use crate::basic_types::Literal;
     use crate::engine::clause_allocators::ClauseInlined;
     use crate::engine::clause_allocators::ClauseInterface;
+    use crate::engine::variables::Literal;
 
     #[ignore]
     #[test]

@@ -1,11 +1,11 @@
-use pumpkin_lib::basic_types::variables::AffineView;
-use pumpkin_lib::basic_types::variables::IntVar;
-use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::basic_types::Literal;
 use pumpkin_lib::basic_types::WeightedLiteral;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::encoders::PseudoBooleanConstraintEncoder;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::variables::AffineView;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::IntegerVariable;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 pub(crate) fn int_lin_le_reif(

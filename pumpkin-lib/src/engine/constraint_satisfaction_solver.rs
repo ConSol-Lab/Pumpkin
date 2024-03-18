@@ -17,13 +17,10 @@ use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::DomainId;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Random;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
@@ -38,6 +35,9 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::sat::SATEngineDataStructures;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::DebugHelper;
@@ -87,7 +87,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
 /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-/// # use pumpkin_lib::basic_types::variables::IntVar;
+/// # use pumpkin_lib::engine::variables::IntegerVariable;
 /// // We create a solver with default options (note that this is only possible in a testing environment)
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///
@@ -330,7 +330,8 @@ impl ConstraintSatisfactionSolver {
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::basic_types::{PropositionalVariable, Literal};
+    /// # use pumpkin_lib::engine::variables::PropositionalVariable;
+    /// # use pumpkin_lib::engine::variables::Literal;
     /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
     ///
@@ -507,7 +508,7 @@ impl ConstraintSatisfactionSolver {
     /// # Example
     /// ```
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::basic_types::Literal;
+    /// # use pumpkin_lib::engine::variables::Literal;
     /// let mut solver = ConstraintSatisfactionSolver::default();
     /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
     ///
@@ -1944,8 +1945,8 @@ impl Default for ConstraintSatisfactionSolver {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::basic_types::Literal;
     use crate::branching::IndependentVariableValueBrancher;
+    use crate::engine::variables::Literal;
 
     fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))

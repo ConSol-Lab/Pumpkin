@@ -2,9 +2,9 @@
 use super::LocalId;
 #[cfg(doc)]
 use super::PropagatorConstructorContext;
-use crate::basic_types::Literal;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
+use crate::engine::variables::Literal;
 
 /// A propagator variable is a handle to a variable for a propagator.
 /// For all practical purposes, this is the variable that propagators operate on.

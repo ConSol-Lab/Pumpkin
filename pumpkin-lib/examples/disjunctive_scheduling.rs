@@ -3,10 +3,10 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
-use pumpkin_lib::basic_types::variables::IntVar;
-use pumpkin_lib::basic_types::Literal;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::variables::IntegerVariable;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {

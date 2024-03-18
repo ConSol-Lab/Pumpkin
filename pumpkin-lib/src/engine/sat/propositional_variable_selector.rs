@@ -1,7 +1,7 @@
 use crate::basic_types::KeyValueHeap;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
 use crate::engine::sat::AssignmentsPropositional;
+use crate::engine::variables::PropositionalVariable;
 
 #[derive(Debug)]
 pub struct PropositionalVariableSelector {

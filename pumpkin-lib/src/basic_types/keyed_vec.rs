@@ -10,7 +10,7 @@ use std::ops::IndexMut;
 /// # Example Usage:
 /// ```rust
 /// # use pumpkin_lib::basic_types::KeyedVec;
-/// # use pumpkin_lib::basic_types::DomainId;
+/// # use pumpkin_lib::engine::variables::DomainId;
 /// // We create a list of integers
 /// let elements: Vec<i32> = vec![1, 2, 3];
 /// // Now we create a structure which can be indexed by DomainId

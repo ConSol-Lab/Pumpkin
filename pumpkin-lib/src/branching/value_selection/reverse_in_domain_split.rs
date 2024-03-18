@@ -1,7 +1,7 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_advanced;
 
 /// A [`ValueSelector`] which splits the domain in half (based on the lower-bound and upper-bound,
@@ -12,7 +12,7 @@ use crate::pumpkin_assert_advanced;
 #[derive(Debug, Copy, Clone)]
 pub struct ReverseInDomainSplit;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for ReverseInDomainSplit {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for ReverseInDomainSplit {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         // Note that the domain of the variable should always have at least 2 values in it
         // (otherwise it should have been reported as fixed and not selected)

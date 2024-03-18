@@ -1,9 +1,9 @@
 use super::InDomainSplit;
-use crate::basic_types::DomainId;
-use crate::basic_types::Literal;
 use crate::basic_types::PredicateConstructor;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
 
 /// If the domain consists of several intervals (e.g. a variable with the domain {0, 1, 4, 5, 6, 9,
 /// 10} consists of the interval {[0-1], [4-6], [9-10]}), then this [`ValueSelector`] will reduce

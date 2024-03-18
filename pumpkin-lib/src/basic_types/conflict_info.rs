@@ -1,8 +1,8 @@
 use crate::basic_types::ConstraintReference;
-use crate::basic_types::Literal;
 use crate::basic_types::PropositionalConjunction;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
+use crate::engine::variables::Literal;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]

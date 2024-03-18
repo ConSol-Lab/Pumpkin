@@ -140,7 +140,7 @@ impl From<ClauseReference> for ConstraintReference {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::Literal;
+    use crate::engine::variables::Literal;
 
     #[test]
     fn test_binary_clause_conversion() {

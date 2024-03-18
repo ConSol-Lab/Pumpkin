@@ -1,6 +1,5 @@
 use log::warn;
 
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -12,6 +11,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 
 /// A bounds-consistent propagator for maintaining the constraint `a * b = c`. The propagator
 /// assumes `a, b, c >= 0`.
@@ -35,9 +35,9 @@ const ID_C: LocalId = LocalId::from(2);
 
 impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationConstructor<VA, VB, VC>
 where
-    VA: IntVar,
-    VB: IntVar,
-    VC: IntVar,
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
 {
     type Propagator = IntegerMultiplicationPropagator<VA, VB, VC>;
 
@@ -52,9 +52,9 @@ where
 
 impl<VA, VB, VC> Propagator for IntegerMultiplicationPropagator<VA, VB, VC>
 where
-    VA: IntVar,
-    VB: IntVar,
-    VC: IntVar,
+    VA: IntegerVariable,
+    VB: IntegerVariable,
+    VC: IntegerVariable,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c)
@@ -90,7 +90,7 @@ where
     }
 }
 
-fn perform_propagation<VA: IntVar, VB: IntVar, VC: IntVar>(
+fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
     a: &PropagatorVariable<VA>,
     b: &PropagatorVariable<VB>,

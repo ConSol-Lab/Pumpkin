@@ -1,5 +1,5 @@
 use crate::basic_types::KeyedVec;
-use crate::basic_types::PropositionalVariable;
+use crate::engine::variables::PropositionalVariable;
 
 #[derive(Default, Debug)]
 pub struct PropositionalValueSelector {

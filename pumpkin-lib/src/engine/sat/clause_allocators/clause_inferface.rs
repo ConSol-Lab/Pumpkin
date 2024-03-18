@@ -1,4 +1,4 @@
-use crate::basic_types::Literal;
+use crate::engine::variables::Literal;
 
 // Does not make sense to have an is_empty() function since clauses are never empty
 #[allow(clippy::len_without_is_empty)]

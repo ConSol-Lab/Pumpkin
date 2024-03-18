@@ -1,13 +1,13 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 
 /// [`ValueSelector`] which chooses to assign the provided variable to its upper-bound.
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainMax;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainMax {
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMax {
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
         context.get_literal_for_predicate(
             decision_variable.lower_bound_predicate(context.upper_bound(decision_variable)),

@@ -1,4 +1,4 @@
-use super::DomainId;
+use crate::engine::variables::DomainId;
 
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Predicate {

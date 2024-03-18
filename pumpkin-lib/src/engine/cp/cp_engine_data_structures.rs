@@ -1,6 +1,5 @@
 use std::cmp::min;
 
-use crate::basic_types::DomainId;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::propagation::EnqueueDecision;
@@ -9,6 +8,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
+use crate::engine::variables::DomainId;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::BooleanDomainEvent;

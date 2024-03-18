@@ -1,5 +1,5 @@
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
+use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]

@@ -1,4 +1,3 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
@@ -11,6 +10,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`.
@@ -20,7 +20,7 @@ pub struct MaximumConstructor<ElementVar, Rhs> {
     pub rhs: Rhs,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> PropagatorConstructor
+impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
     for MaximumConstructor<ElementVar, Rhs>
 {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
@@ -54,7 +54,9 @@ pub struct MaximumPropagator<ElementVar, Rhs> {
     rhs: PropagatorVariable<Rhs>,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> Propagator for MaximumPropagator<ElementVar, Rhs> {
+impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
+    for MaximumPropagator<ElementVar, Rhs>
+{
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }

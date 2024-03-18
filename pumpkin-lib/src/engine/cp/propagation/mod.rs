@@ -22,8 +22,8 @@
 //! - A propagator struct that implements the [`Propagator`] trait. Within the propagator, domain
 //!   changes on variables are done using [`PropagatorVariable`]s.
 //! - A constructor struct that implements [`PropagatorConstructor`], which contains necessary
-//!   information to create the propagator. For example, it may contain an array of IntVars and some
-//!   constants that will be used by the propagator.
+//!   information to create the propagator. For example, it may contain an array of IntegerVariables
+//!   and some constants that will be used by the propagator.
 //! - The [`PropagatorConstructor`] contains the logic needed to create the propagator. Note that
 //!   [`PropagatorConstructor`] receives [`PropagatorConstructorContext`], which is used to retrieve
 //!   [`PropagatorVariable`]s.
