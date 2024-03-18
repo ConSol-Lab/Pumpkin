@@ -1771,7 +1771,7 @@ impl Counters {
             "averageLearnedClauseLength",
             self.average_learned_clause_length.value(),
         );
-        log_statistic("TimeSpentInSolverInMilliseconds", self.time_spent_in_solver);
+        log_statistic("timeSpentInSolverInMilliseconds", self.time_spent_in_solver);
         log_statistic(
             "averageBacktrackAmount",
             self.average_backtrack_amount.value(),
