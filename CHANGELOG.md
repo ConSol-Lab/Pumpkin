@@ -98,6 +98,7 @@
 * Added initial setup for programmable search
 * Add support for optimization functions MiniZinc
 * Add MiniZinc statistic logging
+* Add signal handling for graceful(ish) shutdown
 
 ## Bugfixes
 

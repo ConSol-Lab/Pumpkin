@@ -7,12 +7,14 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
+use log::debug;
 use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::signal_handling::signal_handler;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConflictInfo;
@@ -584,7 +586,12 @@ impl ConstraintSatisfactionSolver {
 
     fn solve_internal(&mut self, brancher: &mut impl Brancher) -> CSPSolverExecutionFlag {
         loop {
+            if signal_handler::should_terminate() {
+                debug!("Received signal to quit");
+                return CSPSolverExecutionFlag::Timeout;
+            }
             if self.stopwatch.get_remaining_time_budget() <= 0 {
+                debug!("Reached time-out");
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }

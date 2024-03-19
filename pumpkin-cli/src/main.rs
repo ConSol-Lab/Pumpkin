@@ -23,6 +23,7 @@ use parsers::dimacs::CSPSolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::WcnfInstance;
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
+use pumpkin_lib::basic_types::signal_handling::signal_handler;
 use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
@@ -241,6 +242,9 @@ fn main() {
 
 fn run() -> PumpkinResult<()> {
     pumpkin_lib::print_pumpkin_assert_warning_message!();
+
+    // Register the handling of signals (for example CTRL+C)
+    signal_handler::register_signals()?;
 
     let args = Args::parse();
 

@@ -18,6 +18,7 @@ mod propagation_status_cp_one_step;
 mod propositional_conjunction;
 mod random;
 pub mod sequence_generators;
+pub mod signal_handling;
 mod solution;
 mod solution_value_pair;
 pub mod statistic_logging;
