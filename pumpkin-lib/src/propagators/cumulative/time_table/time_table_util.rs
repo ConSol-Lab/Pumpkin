@@ -2,22 +2,24 @@
 //! reasoning (see [`crate::propagators::cumulative::time_table`] for more information) such as
 //! [`should_enqueue`] or [`propagate_based_on_timetable`].
 
+use std::cell::OnceCell;
 use std::cmp::max;
 use std::rc::Rc;
 
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
+use crate::basic_types::Predicate;
+use crate::basic_types::PredicateConstructor;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
-use crate::propagators::util::propagate_and_explain;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::ChangeWithExplanationBound;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
@@ -185,6 +187,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks
         let mut task_index = 0;
+        let mut profile_explanation = OnceCell::new();
         while task_index < tasks_to_consider.len() {
             let task = Rc::clone(tasks_to_consider.get(task_index));
             if context.is_fixed(&task.start_variable)
@@ -202,7 +205,13 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
                 continue;
             }
             task_index += 1;
-            check_whether_task_can_be_updated_by_profile(context, &task, profile, parameters)?;
+            check_whether_task_can_be_updated_by_profile(
+                context,
+                &task,
+                profile,
+                parameters,
+                &mut profile_explanation,
+            )?;
         }
     }
     Ok(())
@@ -255,20 +264,37 @@ fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
+    explanation: Rc<Vec<Predicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
         "Lower-bound of task is being propagated by profile while the conditions do not hold"
     );
-    // The new lower-bound is set to be after the current profile
-    let new_lower_bound = profile.end + 1;
+    // The new value to which the lower-bound of `task` will be propagated
+    let new_lower_bound_value = profile.end + 1;
+
+    // Create the predicate which is used in the "lazy" explanation
+    // Note that this is not the value to which the lower-bound is propagated but rather the
+    // predicate which ensures that `task` has the most general bound possible such that
+    // this propagation would have taken place.
+    let general_explanation_lower_bound_predicate = task
+        .start_variable
+        .lower_bound_predicate(max(0, profile.start - task.processing_time + 1));
     // Then we perform the actual propagation using this bound and the responsible tasks
-    propagate_and_explain(
-        context,
-        ChangeWithExplanationBound::LowerBound(max(0, profile.start - task.processing_time + 1)), /* Use the minimum bound which would have propagated the profile at index */
-        task,
-        new_lower_bound,
-        &profile.profile_tasks,
+    // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
+    // scratch but we only clone the underlying structure when it is used in an explanation; this
+    // prevents creating (possibly a very similar) explanation for every propagation which we do
+    context.set_lower_bound(
+        &task.start_variable,
+        new_lower_bound_value,
+        move |_context: &PropagationContext| {
+            // We clone the underlying Vec in the Rc and adjust it to include the appropriate
+            // predicate for the type of propagation (using the
+            // `general_explanation_lower_bound_predicate` which we constructed earlier)
+            let mut reason = (*explanation).clone();
+            reason.push(general_explanation_lower_bound_predicate);
+            reason.into()
+        },
     )
 }
 
@@ -278,24 +304,39 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
+    explanation: Rc<Vec<Predicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
         "Upper-bound of task is being propagated by profile while the conditions do not hold"
     );
+    // The new value to which the upper-bound of `task` will be propagated.
     // The new upper-bound is set such that if the task is started at its latest starting time, it
     // will never overlap with the profile
-    let new_upper_bound = profile.start - task.processing_time;
+    let new_upper_bound_value = profile.start - task.processing_time;
+
+    // Create the predicate which is used in the "lazy" explanation
+    // Note that this is not the value to which the upper-bound is propagated but rather the
+    // predicate which ensures that `task` has the most general bound possible such that
+    // this propagation would have taken place.
+    let general_explanation_upper_bound_predicate = task
+        .start_variable
+        .upper_bound_predicate(max(context.upper_bound(&task.start_variable), profile.end));
     // Then we perform the actual propagation using this bound and the responsible tasks
-    propagate_and_explain(
-        context,
-        ChangeWithExplanationBound::UpperBound(max(
-            context.upper_bound(&task.start_variable),
-            profile.end,
-        )),
-        task,
-        new_upper_bound,
-        &profile.profile_tasks,
+    // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
+    // scratch but we only clone the underlying structure when it is used in an explanation; this
+    // prevents creating (possibly a very similar) explanation for every propagation which we do
+    context.set_upper_bound(
+        &task.start_variable,
+        new_upper_bound_value,
+        move |_context: &PropagationContext| {
+            // We clone the underlying Vec in the Rc and adjust it to include the appropriate
+            // predicate for the type of propagation (using the
+            // `general_explanation_upper_bound_predicate` which we constructed earlier)
+            let mut reason = (*explanation).clone();
+            reason.push(general_explanation_upper_bound_predicate);
+            reason.into()
+        },
     )
 }
 
@@ -310,6 +351,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
+    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
 ) -> Result<(), EmptyDomain> {
     if profile.height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
@@ -321,11 +363,52 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
         // The current task has an overlap with the current resource profile (i.e. it could be
         // propagated by the current profile)
         if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            propagate_lower_bound_task_by_profile(context, task, parameters, profile)?;
+            let explanation = create_profile_explanation(context, profile, profile_explanation);
+            propagate_lower_bound_task_by_profile(context, task, parameters, profile, explanation)?;
         }
         if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            propagate_upper_bound_task_by_profile(context, task, parameters, profile)?;
+            let explanation = create_profile_explanation(context, profile, profile_explanation);
+            propagate_upper_bound_task_by_profile(context, task, parameters, profile, explanation)?;
         }
     }
     Ok(())
+}
+
+/// Initialises the `profile_explanation` structure with the [`Predicate::lower_bound_predicate`]
+/// and [`Predicate::upper_bound_predicate`] of all of the [`ResourceProfile::profile_tasks`] of the
+/// provided `profile`.
+///
+/// Creates an explanation consisting of all bounds of the variables causing a propagation (See [Section 4.5 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)).
+/// Note that this is not necessarily a minimal explanation, it could be the case that some of the
+/// tasks can be removed from the explanation depending on which task is propagated.
+///
+/// Note that this method stores an [`Rc`] in `profile_explanations` and then clones it, this means
+/// that the [`Rc`] is created only once for each profile.
+///
+/// # Bibliography
+/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
+/// Computer Science and Software Engineering, 2011.
+fn create_profile_explanation<Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    profile: &ResourceProfile<Var>,
+    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
+) -> Rc<Vec<Predicate>> {
+    Rc::clone(profile_explanation.get_or_init(|| {
+        Rc::new(
+            profile
+                .profile_tasks
+                .iter()
+                .flat_map(|profile_task| {
+                    [
+                        profile_task.start_variable.lower_bound_predicate(
+                            context.lower_bound(&profile_task.start_variable),
+                        ),
+                        profile_task.start_variable.upper_bound_predicate(
+                            context.upper_bound(&profile_task.start_variable),
+                        ),
+                    ]
+                })
+                .collect::<Vec<Predicate>>(),
+        )
+    }))
 }

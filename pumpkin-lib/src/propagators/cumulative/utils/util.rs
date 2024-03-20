@@ -13,60 +13,10 @@ use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::EmptyDomain;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
-use crate::pumpkin_assert_simple;
-
-/// An enum containing possible domain changes (lower-bound and upper-bound) with the bound used for
-/// explaining the change. For example, let's say we propagate [x >= 5] and this is due to the
-/// lower-bound [x >= 2] then the [`ChangeWithExplanationBound`] will be `LowerBound(2)`.
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum ChangeWithExplanationBound {
-    LowerBound(i32),
-    UpperBound(i32),
-}
-
-/// Creates an explanation consisting of all bounds of the variables causing a propagation (See [Section 4.5 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf))
-///
-/// `change_and_explanation_bound` stores the change (i.e. lower-bound or upper-bound change)
-/// and the explanation bound which should be used
-///
-/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
-/// Computer Science and Software Engineering, 2011.
-pub(crate) fn create_naive_explanation<'a, Var: IntegerVariable + 'static>(
-    change_and_explanation_bound: &ChangeWithExplanationBound,
-    task: &Rc<Task<Var>>,
-    context: &PropagationContextMut,
-    profile_tasks: impl Iterator<Item = &'a Rc<Task<Var>>>,
-) -> PropositionalConjunction {
-    let mut explanation = vec![
-        // First we include the lower- or upper-bound of the task
-        match change_and_explanation_bound {
-            ChangeWithExplanationBound::LowerBound(explanation_bound) => task
-                .start_variable
-                .lower_bound_predicate(*explanation_bound),
-            ChangeWithExplanationBound::UpperBound(explanation_bound) => task
-                .start_variable
-                .upper_bound_predicate(*explanation_bound),
-        },
-    ];
-
-    // Then we go through all of the tasks and add their lower/upper-bounds to the explanation
-    for task in profile_tasks {
-        explanation.push(
-            task.start_variable
-                .lower_bound_predicate(context.lower_bound(&task.start_variable)),
-        );
-        explanation.push(
-            task.start_variable
-                .upper_bound_predicate(context.upper_bound(&task.start_variable)),
-        );
-    }
-    PropositionalConjunction::from(explanation)
-}
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
@@ -87,40 +37,6 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
     }
 
     Inconsistency::from(PropositionalConjunction::from(error_clause))
-}
-
-/// Propagates the start variable of [`propagating_task`][Task] to the provided `propagation_value`
-/// and eagerly calculates the [`explanation`][PropositionalConjunction] given the `profile_tasks`
-/// which were responsible for the propagation
-pub(crate) fn propagate_and_explain<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
-    change_and_explanation_bound: ChangeWithExplanationBound,
-    propagating_task: &Rc<Task<Var>>,
-    propagation_value: i32,
-    profile_tasks: &[Rc<Task<Var>>],
-) -> Result<(), EmptyDomain> {
-    pumpkin_assert_simple!(
-        !profile_tasks.is_empty(),
-        "A propagation has to have occurred due to another task"
-    );
-    let explanation = create_naive_explanation(
-        &change_and_explanation_bound,
-        propagating_task,
-        context,
-        profile_tasks.iter(),
-    );
-    match change_and_explanation_bound {
-        ChangeWithExplanationBound::LowerBound(_) => context.set_lower_bound(
-            &propagating_task.start_variable,
-            propagation_value,
-            explanation,
-        ),
-        ChangeWithExplanationBound::UpperBound(_) => context.set_upper_bound(
-            &propagating_task.start_variable,
-            propagation_value,
-            explanation,
-        ),
-    }
 }
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
