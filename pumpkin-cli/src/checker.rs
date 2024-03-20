@@ -2,13 +2,16 @@ use std::cmp::Ordering;
 
 use pumpkin_lib::basic_types::FileFormat;
 use pumpkin_lib::basic_types::Instance;
-use pumpkin_lib::basic_types::Solution;
+use pumpkin_lib::basic_types::SolutionReference;
 
 use crate::result::PumpkinError;
 use crate::result::PumpkinResult;
 
 #[allow(dead_code)]
-pub(crate) fn verify_cnf_solution(file_location: &str, solution: &Solution) -> PumpkinResult<()> {
+pub(crate) fn verify_cnf_solution(
+    file_location: &str,
+    solution: SolutionReference,
+) -> PumpkinResult<()> {
     let mut instance = Instance::default();
     instance.read_file(file_location, FileFormat::CnfDimacsPLine)?;
 
@@ -22,7 +25,7 @@ pub(crate) fn verify_cnf_solution(file_location: &str, solution: &Solution) -> P
 #[allow(dead_code)]
 pub(crate) fn verify_wcnf_solution(
     file_location: &str,
-    solution: &Solution,
+    solution: SolutionReference,
     reported_objective_value: u64,
 ) -> PumpkinResult<()> {
     let mut instance = Instance::default();

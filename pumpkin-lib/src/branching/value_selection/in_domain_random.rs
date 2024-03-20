@@ -3,6 +3,7 @@ use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 
 /// A [`ValueSelector`] which assigns to a random value in the domain.
 #[derive(Debug, Clone, Copy)]
@@ -24,6 +25,16 @@ impl ValueSelector<DomainId> for InDomainRandom {
         context.get_literal_for_predicate(
             decision_variable.equality_predicate(values_in_domain[random_index]),
         )
+    }
+}
+
+impl ValueSelector<PropositionalVariable> for InDomainRandom {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: PropositionalVariable,
+    ) -> Literal {
+        Literal::new(decision_variable, context.random().generate_bool(0.5))
     }
 }
 

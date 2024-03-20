@@ -10,18 +10,17 @@ use std::io::Read;
 use std::path::Path;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
-use pumpkin_lib::optimisation::OptimisationResult;
 
+use self::instance::FlatZincInstance;
+use self::instance::Output;
+use self::minizinc_optimiser::MinizincOptimisationResult;
 use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::error::FlatZincError;
-use crate::flatzinc::instance::FlatZincInstance;
-use crate::flatzinc::instance::Output;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
@@ -33,41 +32,42 @@ pub(crate) fn solve(
     let instance = File::open(instance)?;
 
     let instance = parse_and_compile(&mut solver, instance)?;
-
-    // TODO: add proper search procedure here
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
-        let mut optimisation_solver =
-            MinizincOptimiser::new(&mut solver, *objective_function, &instance);
-        match optimisation_solver.solve(None, brancher) {
-            OptimisationResult::Optimal {
-                solution: _,
-                objective_value,
+        let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
+        match optimisation_solver.solve(
+            None,
+            instance.search.expect("Expected a search to be defined"),
+            &instance.outputs,
+        ) {
+            MinizincOptimisationResult::Optimal {
+                optimal_objective_value,
             } => {
                 println!("==========");
-                Some(objective_value)
+                Some(optimal_objective_value)
             }
-            OptimisationResult::Satisfiable {
-                best_solution: _,
-                objective_value,
-            } => Some(objective_value),
-            OptimisationResult::Infeasible => {
+            MinizincOptimisationResult::Satisfiable {
+                best_found_objective_value,
+            } => Some(best_found_objective_value),
+            MinizincOptimisationResult::Infeasible => {
                 println!("{MSG_UNSATISFIABLE}");
                 None
             }
-            OptimisationResult::Unknown => {
+            MinizincOptimisationResult::Unknown => {
                 println!("{MSG_UNKNOWN}");
                 None
             }
         }
     } else {
-        match solver.solve(i64::MAX, &mut brancher) {
+        match solver.solve(
+            i64::MAX,
+            &mut instance.search.expect("Expected a search to be defined"),
+        ) {
             CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
                 solver.get_integer_assignments(),
                 solver.get_propositional_assignments(),
-                &instance,
+                &outputs,
             ),
             CSPSolverExecutionFlag::Infeasible => println!("{MSG_UNSATISFIABLE}"),
             CSPSolverExecutionFlag::Timeout => println!("{MSG_UNKNOWN}"),
@@ -94,9 +94,9 @@ fn parse_and_compile(
 fn print_solution_from_solver(
     assignments_integer: &AssignmentsInteger,
     assignments_propositional: &AssignmentsPropositional,
-    instance: &FlatZincInstance,
+    outputs: &[Output],
 ) {
-    for output_specification in instance.outputs() {
+    for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => output.print_value(|literal| {
                 assignments_propositional.is_literal_assigned_true(*literal)

@@ -7,6 +7,7 @@
 //! or larger.
 
 mod anti_first_fail;
+mod dynamic_variable_selector;
 mod first_fail;
 mod input_order;
 mod largest;
@@ -18,6 +19,7 @@ mod variable_selector;
 mod vsids;
 
 pub use anti_first_fail::*;
+pub use dynamic_variable_selector::*;
 pub use first_fail::*;
 pub use input_order::*;
 pub use largest::*;

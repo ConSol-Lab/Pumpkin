@@ -2,7 +2,8 @@ use log::warn;
 
 use super::ValueSelector;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Solution;
+use crate::basic_types::ProblemSolution;
+use crate::basic_types::SolutionReference;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
 use crate::engine::variables::Literal;
@@ -121,9 +122,14 @@ where
         }
     }
 
-    fn on_solution(&mut self, solution: &Solution) {
-        for literal in solution.get_propositional_solution() {
-            self.update(literal.get_propositional_variable(), literal.is_positive())
+    fn on_solution(&mut self, solution: SolutionReference) {
+        for propositional_variable_index in 0..self.saved_values.len() {
+            let propositional_variable =
+                PropositionalVariable::new(propositional_variable_index as u32);
+            self.update(
+                propositional_variable,
+                solution.get_propositional_variable_value(propositional_variable),
+            )
         }
     }
 }

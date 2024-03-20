@@ -60,6 +60,7 @@
 //! \[1\] F. Rossi, P. Van Beek, and T. Walsh, Handbook of constraint programming. Elsevier, 2006.
 
 mod brancher;
+mod dynamic_brancher;
 mod independent_variable_value_brancher;
 mod selection_context;
 pub mod tie_breaking;
@@ -67,6 +68,7 @@ pub mod value_selection;
 pub mod variable_selection;
 
 pub use brancher::Brancher;
+pub use dynamic_brancher::DynamicBrancher;
 pub use independent_variable_value_brancher::IndependentVariableValueBrancher;
 pub use selection_context::SelectionContext;
 pub use tie_breaking::*;

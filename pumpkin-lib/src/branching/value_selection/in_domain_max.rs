@@ -2,6 +2,7 @@ use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 
 /// [`ValueSelector`] which chooses to assign the provided variable to its upper-bound.
 #[derive(Debug, Copy, Clone)]
@@ -12,6 +13,16 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMax {
         context.get_literal_for_predicate(
             decision_variable.lower_bound_predicate(context.upper_bound(decision_variable)),
         )
+    }
+}
+
+impl ValueSelector<PropositionalVariable> for InDomainMax {
+    fn select_value(
+        &mut self,
+        _context: &mut SelectionContext,
+        decision_variable: PropositionalVariable,
+    ) -> Literal {
+        Literal::new(decision_variable, true)
     }
 }
 

@@ -99,6 +99,7 @@
 * Add support for optimization functions MiniZinc
 * Add MiniZinc statistic logging
 * Add signal handling for graceful(ish) shutdown
+* Added support for search annotations MiniZinc
 
 ## Bugfixes
 

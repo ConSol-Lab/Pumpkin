@@ -4,7 +4,7 @@ use super::value_selection::PhaseSaving;
 use super::value_selection::ValueSelector;
 use super::VariableSelector;
 use super::Vsids;
-use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
@@ -125,7 +125,7 @@ where
             .on_encoding_objective_function(all_variables);
     }
 
-    fn on_solution(&mut self, solution: &Solution) {
+    fn on_solution(&mut self, solution: SolutionReference) {
         self.value_selector.on_solution(solution);
     }
 }

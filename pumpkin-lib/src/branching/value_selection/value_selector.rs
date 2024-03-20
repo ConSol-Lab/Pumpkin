@@ -1,4 +1,4 @@
-use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
@@ -43,5 +43,5 @@ pub trait ValueSelector<Var> {
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
-    fn on_solution(&mut self, _solution: &Solution) {}
+    fn on_solution(&mut self, _solution: SolutionReference) {}
 }

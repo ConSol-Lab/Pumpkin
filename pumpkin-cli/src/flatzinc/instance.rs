@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::rc::Rc;
 
+use pumpkin_lib::branching::DynamicBrancher;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::variables::Literal;
 
@@ -28,9 +29,11 @@ impl FlatzincObjective {
 pub(crate) struct FlatZincInstance {
     pub(super) outputs: Vec<Output>,
     pub(super) objective_function: Option<FlatzincObjective>,
+    pub(super) search: Option<DynamicBrancher>,
 }
 
 impl FlatZincInstance {
+    #[cfg(test)]
     pub(crate) fn outputs(&self) -> impl Iterator<Item = &Output> + '_ {
         self.outputs.iter()
     }

@@ -95,6 +95,7 @@ mod tests {
     use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
     use super::*;
+    use crate::flatzinc::ast::SearchStrategy;
     use crate::flatzinc::ast::SingleVarDecl;
     use crate::flatzinc::compiler::context::Domain;
 
@@ -237,6 +238,12 @@ mod tests {
                 goal: flatzinc::Goal::Satisfy,
                 annotations: vec![],
             },
+            search: crate::flatzinc::ast::Search::Int(SearchStrategy {
+                variables: flatzinc::AnnExpr::String("test".to_owned()),
+                variable_selection_strategy:
+                    crate::flatzinc::ast::VariableSelectionStrategy::AntiFirstFail,
+                value_selection_strategy: crate::flatzinc::ast::ValueSelectionStrategy::InDomain,
+            }),
         }
     }
 }

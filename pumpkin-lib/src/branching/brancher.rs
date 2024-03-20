@@ -1,6 +1,6 @@
 #[cfg(doc)]
 use crate::basic_types::Random;
-use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 #[cfg(doc)]
 use crate::branching;
 #[cfg(doc)]
@@ -75,5 +75,5 @@ pub trait Brancher {
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
-    fn on_solution(&mut self, _solution: &Solution) {}
+    fn on_solution(&mut self, _solution: SolutionReference) {}
 }

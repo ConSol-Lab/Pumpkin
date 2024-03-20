@@ -432,6 +432,16 @@ impl ConstraintSatisfactionSolver {
         &self.state
     }
 
+    /// Creates an instance of [`SelectionContext`] based on the internal structures of the solver.
+    pub fn create_selection_context(&mut self) -> SelectionContext {
+        SelectionContext::new(
+            &self.cp_data_structures.assignments_integer,
+            &self.sat_data_structures.assignments_propositional,
+            &self.sat_cp_mediator,
+            &mut self.internal_parameters.random_generator,
+        )
+    }
+
     pub fn get_random_generator(&mut self) -> &mut impl Random {
         &mut self.internal_parameters.random_generator
     }
@@ -653,12 +663,7 @@ impl ConstraintSatisfactionSolver {
             }
             Ok(())
         } else {
-            let decided_literal = brancher.next_decision(&mut SelectionContext::new(
-                &self.cp_data_structures.assignments_integer,
-                &self.sat_data_structures.assignments_propositional,
-                &self.sat_cp_mediator,
-                &mut self.internal_parameters.random_generator,
-            ));
+            let decided_literal = brancher.next_decision(&mut self.create_selection_context());
             if let Some(literal) = decided_literal {
                 self.counters.num_decisions += 1;
                 self.sat_data_structures

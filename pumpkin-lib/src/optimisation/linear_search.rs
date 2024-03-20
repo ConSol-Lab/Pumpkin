@@ -4,6 +4,7 @@ use super::OptimisationResult;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::Function;
 use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
 use crate::encoders::PseudoBooleanConstraintEncoder;
@@ -37,10 +38,11 @@ impl LinearSearch {
             "Linear search assumes the solver contains a feasible solution."
         );
 
-        let mut best_solution = Solution::new(
+        let mut best_solution: Solution = SolutionReference::new(
             csp_solver.get_propositional_assignments(),
             csp_solver.get_integer_assignments(),
-        );
+        )
+        .into();
 
         let mut best_objective_value = objective_function.evaluate_assignment(
             csp_solver.get_propositional_assignments(),
@@ -66,7 +68,7 @@ impl LinearSearch {
             if best_objective_value == objective_function.get_constant_term() {
                 log_statistics_with_objective(csp_solver, best_objective_value as i64);
                 return OptimisationResult::Optimal {
-                    solution: best_solution.clone(),
+                    solution: best_solution,
                     objective_value: best_objective_value as i64,
                 };
             }
@@ -97,7 +99,10 @@ impl LinearSearch {
                 };
             }
 
-            brancher.on_solution(&best_solution);
+            brancher.on_solution(SolutionReference::new(
+                csp_solver.get_propositional_assignments(),
+                csp_solver.get_integer_assignments(),
+            ));
 
             let csp_execution_flag =
                 csp_solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher);
@@ -119,10 +124,11 @@ impl LinearSearch {
                         csp_solver.get_propositional_assignments(),
                         csp_solver.get_integer_assignments(),
                     );
-                    best_solution.update(
+                    best_solution = SolutionReference::new(
                         csp_solver.get_propositional_assignments(),
                         csp_solver.get_integer_assignments(),
-                    );
+                    )
+                    .into();
 
                     println!("o {}", best_objective_value);
                     info!(

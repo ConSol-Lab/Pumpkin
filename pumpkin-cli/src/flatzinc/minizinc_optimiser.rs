@@ -2,44 +2,42 @@ use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ConstraintOperationError;
-use pumpkin_lib::basic_types::Solution;
+use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::branching::DynamicBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
-use pumpkin_lib::optimisation::OptimisationResult;
 use pumpkin_lib::pumpkin_assert_simple;
 
-use super::instance::FlatZincInstance;
 use super::instance::FlatzincObjective;
+use super::instance::Output;
 use super::print_solution_from_solver;
 
 pub(crate) struct MinizincOptimiser<'a> {
     csp_solver: &'a mut ConstraintSatisfactionSolver,
     objective_function: FlatzincObjective,
-    instance: &'a FlatZincInstance,
 }
 
 impl<'a> MinizincOptimiser<'a> {
     pub(crate) fn new(
         csp_solver: &'a mut ConstraintSatisfactionSolver,
         objective_function: FlatzincObjective,
-        instance: &'a FlatZincInstance,
     ) -> Self {
         Self {
             csp_solver,
             objective_function,
-            instance,
         }
     }
 
     pub(crate) fn solve(
         &mut self,
         time_limit: Option<Duration>,
-        mut brancher: impl Brancher,
-    ) -> OptimisationResult {
+        mut brancher: DynamicBrancher,
+        outputs: &[Output],
+    ) -> MinizincOptimisationResult {
         let stopwatch = Stopwatch::new(
             time_limit
                 .map(|limit| limit.as_secs() as i64)
@@ -51,6 +49,10 @@ impl<'a> MinizincOptimiser<'a> {
             .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
         match initial_solve {
             CSPSolverExecutionFlag::Feasible => {
+                brancher.on_solution(SolutionReference::new(
+                    self.get_propositional_assignments(),
+                    self.get_integer_assignments(),
+                ));
                 log_statistics_with_objective(
                     self.csp_solver,
                     self.csp_solver
@@ -61,29 +63,24 @@ impl<'a> MinizincOptimiser<'a> {
                 print_solution_from_solver(
                     self.get_integer_assignments(),
                     self.get_propositional_assignments(),
-                    self.instance,
+                    outputs,
                 )
             }
-            CSPSolverExecutionFlag::Infeasible => return OptimisationResult::Infeasible,
-            CSPSolverExecutionFlag::Timeout => return OptimisationResult::Unknown,
+            CSPSolverExecutionFlag::Infeasible => return MinizincOptimisationResult::Infeasible,
+            CSPSolverExecutionFlag::Timeout => return MinizincOptimisationResult::Unknown,
         }
 
         let mut best_objective_value =
             self.csp_solver
                 .get_integer_assignments()
                 .get_assigned_value(*self.objective_function.get_domain()) as i64;
-        let mut best_solution = Solution::new(
-            self.csp_solver.get_propositional_assignments(),
-            self.csp_solver.get_integer_assignments(),
-        );
 
         loop {
             self.csp_solver.restore_state_at_root(&mut brancher);
 
             if self.strengthen(best_objective_value).is_err() {
-                return OptimisationResult::Optimal {
-                    solution: best_solution,
-                    objective_value: best_objective_value,
+                return MinizincOptimisationResult::Optimal {
+                    optimal_objective_value: best_objective_value,
                 };
             }
 
@@ -99,10 +96,12 @@ impl<'a> MinizincOptimiser<'a> {
                         .get_integer_assignments()
                         .get_assigned_value(*self.objective_function.get_domain())
                         as i64;
-                    best_solution.update(
-                        self.csp_solver.get_propositional_assignments(),
-                        self.csp_solver.get_integer_assignments(),
-                    );
+
+                    brancher.on_solution(SolutionReference::new(
+                        self.get_propositional_assignments(),
+                        self.get_integer_assignments(),
+                    ));
+
                     log_statistics_with_objective(
                         self.csp_solver,
                         self.csp_solver
@@ -113,19 +112,17 @@ impl<'a> MinizincOptimiser<'a> {
                     print_solution_from_solver(
                         self.get_integer_assignments(),
                         self.get_propositional_assignments(),
-                        self.instance,
+                        outputs,
                     );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
-                    return OptimisationResult::Optimal {
-                        solution: best_solution,
-                        objective_value: best_objective_value,
+                    return MinizincOptimisationResult::Optimal {
+                        optimal_objective_value: best_objective_value,
                     }
                 }
                 CSPSolverExecutionFlag::Timeout => {
-                    return OptimisationResult::Satisfiable {
-                        best_solution,
-                        objective_value: best_objective_value,
+                    return MinizincOptimisationResult::Satisfiable {
+                        best_found_objective_value: best_objective_value,
                     }
                 }
             }
@@ -192,4 +189,19 @@ impl<'a> MinizincOptimiser<'a> {
             }
         );
     }
+}
+
+/// The result of calling [`MinizincOptimiser::solve()`].
+#[derive(Debug)]
+pub(crate) enum MinizincOptimisationResult {
+    /// There exists no solution with a better objective value than this one.
+    Optimal { optimal_objective_value: i64 },
+    /// The optimal solution was not found within the time budget. However, at least one solution
+    /// was found. The provided solution is the solution with the best objective value that was
+    /// encountered.
+    Satisfiable { best_found_objective_value: i64 },
+    /// No solutions exist to the constraint satisfaction problem.
+    Infeasible,
+    /// No solution was found within the time budget.
+    Unknown,
 }

@@ -418,15 +418,24 @@ fn cnf_problem(
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
     let solution = match csp_solver.solve(time_limit_in_secs(time_limit), &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
-            let solution = Solution::new(
+            let solution = SolutionReference::new(
                 csp_solver.get_propositional_assignments(),
                 csp_solver.get_integer_assignments(),
             );
 
             println!("s SATISFIABLE");
+            let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(&solution, solution.num_propositional_variables(), true)
+                stringify_solution(
+                    &SolutionReference::new(
+                        csp_solver.get_propositional_assignments(),
+                        csp_solver.get_integer_assignments(),
+                    )
+                    .into(),
+                    num_propositional_variables,
+                    true
+                )
             );
 
             Some(solution)
@@ -464,7 +473,7 @@ fn stringify_solution(
     (1..num_variables)
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
-            if solution[var] {
+            if solution.get_propositional_variable_value(var) {
                 format!("{} ", var.index())
             } else {
                 format!("-{} ", var.index())

@@ -1,5 +1,6 @@
+use super::solution::ProblemSolution;
 use crate::basic_types::HashMap;
-use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
@@ -71,7 +72,7 @@ impl Function {
             && self.constant_term == 0
     }
 
-    pub fn evaluate_solution(&self, solution: &Solution) -> u64 {
+    pub fn evaluate_solution(&self, solution: SolutionReference) -> u64 {
         let mut value: u64 = self.constant_term;
         // add the contribution of the propositional part
         for term in self.get_weighted_literals() {
@@ -83,7 +84,7 @@ impl Function {
         for term in self.get_weighted_integers() {
             let domain_id = *term.0;
             let weight = *term.1;
-            value += weight * solution[domain_id] as u64;
+            value += weight * solution.get_integer_value(domain_id) as u64;
         }
         value
     }

@@ -58,13 +58,18 @@ impl<'a> PropagationContextMut<'a> {
     }
 }
 
+/// A trait which defines common methods for retrieving the [`AssignmentsInteger`] and
+/// [`AssignmentsPropositional`] from the structure which implements this trait.
+pub trait HasAssignments {
+    /// Returns the stored [`AssignmentsInteger`].
+    fn assignments_integer(&self) -> &AssignmentsInteger;
+
+    /// Returns the stored [`AssignmentsPropositional`].
+    fn assignments_propositional(&self) -> &AssignmentsPropositional;
+}
+
 mod private {
     use super::*;
-
-    pub(crate) trait HasAssignments {
-        fn assignments_integer(&self) -> &AssignmentsInteger;
-        fn assignments_propositional(&self) -> &AssignmentsPropositional;
-    }
 
     impl HasAssignments for PropagationContext<'_> {
         fn assignments_integer(&self) -> &AssignmentsInteger {
@@ -87,7 +92,7 @@ mod private {
     }
 }
 
-pub(crate) trait ReadDomains: private::HasAssignments {
+pub(crate) trait ReadDomains: HasAssignments {
     fn is_literal_fixed(&self, var: &PropagatorVariable<Literal>) -> bool {
         self.assignments_propositional()
             .is_literal_assigned(var.inner)
@@ -128,7 +133,7 @@ pub(crate) trait ReadDomains: private::HasAssignments {
     }
 }
 
-impl<T: private::HasAssignments> ReadDomains for T {}
+impl<T: HasAssignments> ReadDomains for T {}
 
 impl PropagationContextMut<'_> {
     pub fn remove<Var: IntegerVariable, R: Into<Reason>>(

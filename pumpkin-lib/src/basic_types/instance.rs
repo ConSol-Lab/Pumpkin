@@ -1,7 +1,8 @@
 use std::fs;
 
+use super::solution::ProblemSolution;
 use crate::basic_types::FileFormat;
-use crate::basic_types::Solution;
+use crate::basic_types::SolutionReference;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 
@@ -12,13 +13,13 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn are_hard_clauses_violated(&self, solution: &Solution) -> bool {
+    pub fn are_hard_clauses_violated(&self, solution: SolutionReference) -> bool {
         self.hard_clauses
             .iter()
             .any(|clause| Instance::is_clause_violated(clause, solution))
     }
 
-    pub fn compute_soft_clause_violation(&self, solution: &Solution) -> u64 {
+    pub fn compute_soft_clause_violation(&self, solution: SolutionReference) -> u64 {
         self.soft_clauses
             .iter()
             .filter_map(|soft_clause| {
@@ -35,7 +36,7 @@ impl Instance {
         self.hard_clauses.is_empty() && self.soft_clauses.is_empty()
     }
 
-    fn is_clause_violated(literals: &[Literal], solution: &Solution) -> bool {
+    fn is_clause_violated(literals: &[Literal], solution: SolutionReference) -> bool {
         literals
             .iter()
             .all(|literal| !solution.get_literal_value(*literal))

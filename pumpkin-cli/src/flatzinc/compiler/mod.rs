@@ -2,6 +2,7 @@ mod collect_domains;
 mod constraints;
 mod context;
 mod create_objective;
+mod create_search_strategy;
 mod define_constants;
 mod define_variable_arrays;
 mod merge_equivalences;
@@ -28,9 +29,11 @@ pub(crate) fn compile(
     define_variable_arrays::run(&ast, &mut context)?;
     post_constraints::run(&ast, &mut context)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
+    let search = create_search_strategy::run(&ast, &mut context)?;
 
     Ok(FlatZincInstance {
         outputs: context.outputs,
         objective_function,
+        search: Some(search),
     })
 }
