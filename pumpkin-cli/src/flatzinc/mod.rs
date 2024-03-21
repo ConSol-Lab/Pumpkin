@@ -11,6 +11,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::branching::DynamicBrancher;
+use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -30,6 +32,7 @@ const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 pub(crate) fn solve(
     mut solver: ConstraintSatisfactionSolver,
     instance: impl AsRef<Path>,
+    free_search: bool,
     time_limit: Option<Duration>,
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
@@ -38,12 +41,17 @@ pub(crate) fn solve(
     let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
+        let brancher = if free_search {
+            // The free search flag is active, we just use the default brancher
+            DynamicBrancher::new(vec![Box::new(
+                IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            )])
+        } else {
+            instance.search.expect("Expected a search to be defined")
+        };
+
         let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
-        match optimisation_solver.solve(
-            time_limit,
-            instance.search.expect("Expected a search to be defined"),
-            &instance.outputs,
-        ) {
+        match optimisation_solver.solve(time_limit, brancher, &instance.outputs) {
             MinizincOptimisationResult::Optimal {
                 optimal_objective_value,
             } => {

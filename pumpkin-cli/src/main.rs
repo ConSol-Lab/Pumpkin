@@ -129,12 +129,23 @@ struct Args {
     time_limit: Option<u64>,
 
     /// The random seed to use for the PRNG. This influences the initial order of the variables.
-    #[arg(long = "random-seed", default_value_t = 42)]
+    #[arg(short = 'r', long = "random-seed", default_value_t = 42)]
     random_seed: u64,
 
     /// Enables log message output from the solver
     #[arg(short = 'v', long = "verbose", default_value_t = false)]
     verbose: bool,
+
+    /// Enables logging of statistics from the solver
+    #[arg(short = 's', long = "log-statistics", default_value_t = false)]
+    log_statistics: bool,
+
+    /// Instructs the solver to perform free search when solving a MiniZinc model; this flag
+    /// indicates that it is allowed to ignore the search annotations specified in the model.
+    /// See the [MiniZinc specification](https://www.minizinc.org/doc-2.6.3/en/fzn-spec.html#cmdoption-f)
+    /// for more information.
+    #[arg(short = 'f', long = "free-search", default_value_t = false)]
+    free_search: bool,
 
     /// If `--verbose` is enabled removes the timestamp information from the log messages
     #[arg(long = "omit-timestamp", default_value_t = false)]
@@ -162,19 +173,20 @@ struct Args {
 fn configure_logging(
     file_format: FileFormat,
     verbose: bool,
+    log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
         FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine | FileFormat::MaxSAT2022 => {
-            configure_logging_sat(verbose, omit_timestamp, omit_call_site)
+            configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
         }
-        FileFormat::FlatZinc => configure_logging_minizinc(verbose),
+        FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
     }
 }
 
-fn configure_logging_minizinc(verbose: bool) -> std::io::Result<()> {
-    statistic_logger::configure("%%%mzn-stat:", Some("%%%mzn-stat-end"));
+fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
+    statistic_logger::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -196,10 +208,11 @@ fn configure_logging_minizinc(verbose: bool) -> std::io::Result<()> {
 
 fn configure_logging_sat(
     verbose: bool,
+    log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
-    statistic_logger::configure("c STAT", None);
+    statistic_logger::configure(log_statistics, "c STAT", None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -260,6 +273,7 @@ fn run() -> PumpkinResult<()> {
     configure_logging(
         file_format,
         args.verbose,
+        args.log_statistics,
         args.omit_timestamp,
         args.omit_call_site,
     )?;
@@ -326,6 +340,7 @@ fn run() -> PumpkinResult<()> {
         FileFormat::FlatZinc => flatzinc::solve(
             ConstraintSatisfactionSolver::new(sat_options, solver_options),
             instance_path,
+            args.free_search,
             time_limit,
         )?,
     }

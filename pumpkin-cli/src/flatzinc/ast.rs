@@ -28,7 +28,6 @@ use pumpkin_lib::pumpkin_assert_eq_simple;
 use pumpkin_lib::pumpkin_assert_simple;
 
 use super::error::FlatZincError;
-
 pub(crate) enum VariableSelectionStrategy {
     AntiFirstFail,
     DomWDeg,
