@@ -4,6 +4,7 @@
 
 use std::cell::OnceCell;
 use std::cmp::max;
+use std::ops::Range;
 use std::rc::Rc;
 
 #[cfg(doc)]
@@ -19,7 +20,6 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
-use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
@@ -55,39 +55,59 @@ impl<Var: IntegerVariable + 'static> ResourceProfile<Var> {
     }
 }
 
-/// Determines whether a time-table propagator should enqueue and updates the appropriate structures
-/// for processing during propagation
+/// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
+/// currently be enqueued and potentially the updated [`Task`] (in the form of a
+/// [`UpdatedTaskInfo`]) if the mandatory part of this [`Task`] has changed.
+pub(crate) struct ShouldEnqueueResult<Var> {
+    /// Whether the propagator which called this method should be enqueued
+    pub(crate) decision: EnqueueDecision,
+    /// If the mandatory part of the task passed to [`should_enqueue`] has changed then this field
+    /// will contain the corresponding [`UpdatedTaskInfo`] otherwise it will be [`None`].
+    ///
+    /// In general, non-incremental propagators will not make use of this field since they will
+    /// propagate from scratch anyways.
+    pub(crate) update: Option<UpdatedTaskInfo<Var>>,
+}
+
+/// Determines whether a time-table propagator should enqueue and returns a structure containing the
+/// [`EnqueueDecision`] and the info of the task with the extended mandatory part (or [`None`] if no
+/// such task exists). This method should be called in the
+/// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
-    parameters: &mut CumulativeParameters<Var>,
-    updated_task: Rc<Task<Var>>,
+    parameters: &CumulativeParameters<Var>,
+    updated_task: &Rc<Task<Var>>,
     context: &PropagationContextMut,
     empty_time_table: bool,
-) -> EnqueueDecision {
-    let task = &parameters.tasks[updated_task.id.unpack() as usize];
+) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
-        context.lower_bound(&task.start_variable) > parameters.bounds[task.id.unpack() as usize].0
-            || parameters.bounds[task.id.unpack() as usize].1
-                >= context.upper_bound(&task.start_variable)
+        context.lower_bound(&updated_task.start_variable) > parameters.bounds[updated_task.id.unpack() as usize].0
+            || parameters.bounds[updated_task.id.unpack() as usize].1
+                >= context.upper_bound(&updated_task.start_variable)
         , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound,
            this either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates
            or the stored bounds were not managed properly"
     );
-    let old_lower_bound = parameters.bounds[task.id.unpack() as usize].0;
-    let old_upper_bound = parameters.bounds[task.id.unpack() as usize].1;
+
+    let mut result = ShouldEnqueueResult {
+        decision: EnqueueDecision::Skip,
+        update: None,
+    };
+
+    let old_lower_bound = parameters.bounds[updated_task.id.unpack() as usize].0;
+    let old_upper_bound = parameters.bounds[updated_task.id.unpack() as usize].1;
 
     // We check whether a mandatory part was extended/introduced
-    if context.upper_bound(&task.start_variable)
-        < context.lower_bound(&task.start_variable) + task.processing_time
+    if context.upper_bound(&updated_task.start_variable)
+        < context.lower_bound(&updated_task.start_variable) + updated_task.processing_time
     {
-        parameters.updated.push(UpdatedTaskInfo {
-            task: Rc::clone(task),
+        result.update = Some(UpdatedTaskInfo {
+            task: Rc::clone(updated_task),
             old_lower_bound,
             old_upper_bound,
-            new_lower_bound: context.lower_bound(&task.start_variable),
-            new_upper_bound: context.upper_bound(&task.start_variable),
+            new_lower_bound: context.lower_bound(&updated_task.start_variable),
+            new_upper_bound: context.upper_bound(&updated_task.start_variable),
         });
     }
-    update_bounds_task(context, &mut parameters.bounds, task);
 
     // If the time-table is empty and we have not received any updates (e.g. no mandatory parts have
     // been introduced since the last propagation) then we can determine that no propagation will
@@ -95,10 +115,80 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     // could be the case that a task which has been updated can now propagate due to an existing
     // profile (this is due to the fact that we only propagate bounds and (currently) do not create
     // holes in the domain!).
-    if !empty_time_table || !parameters.updated.is_empty() {
-        EnqueueDecision::Enqueue
+    if !empty_time_table || !parameters.updated.is_empty() || result.update.is_some() {
+        result.decision = EnqueueDecision::Enqueue;
+    }
+    result
+}
+
+/// An enum which specifies whether a current mandatory part was extended or whether a fully new
+/// mandatory part is introduced; see [`generate_update_range`] for more information.
+pub(crate) enum AddedMandatoryConsumption {
+    /// There was an existing mandatory part but it has been extended by an update; the first
+    /// [`Range`] is the added mandatory part due to an update of the upper-bound of the start time
+    /// and the second [`Range`] si the added mandatory part due to an update of the lower-bound of
+    /// the start time.
+    AdditionalMandatoryParts(Range<i32>, Range<i32>),
+    /// There was no existing mandatory part before the update but there is one now.
+    FullyNewMandatoryPart(Range<i32>),
+}
+
+impl Iterator for AddedMandatoryConsumption {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            AddedMandatoryConsumption::AdditionalMandatoryParts(
+                first_added_part,
+                second_added_part,
+            ) => first_added_part.next().or_else(|| second_added_part.next()),
+            AddedMandatoryConsumption::FullyNewMandatoryPart(fully_new_added_part) => {
+                fully_new_added_part.next()
+            }
+        }
+    }
+}
+
+/// When a [`Task`] is updated (i.e. its release time increased or its deadline decreased), this
+/// function determines at which times mandatory parts are added.
+/// It returns an [`AddedMandatoryConsumption`] consisting of two possibilities:
+/// - If a fully new mandatory part is added (i.e. there previously was not a mandatory part but
+///   after the update there is) then it will return a
+///   [`AddedMandatoryConsumption::FullyNewMandatoryPart`] containing the range of time-points which
+///   are covered by the new mandatory part.
+/// - If a mandatory part already existed then the new mandatory parts extend the already existing
+///   mandatory part either before, after or both. In this case, it will return a
+///   [`AddedMandatoryConsumption::AdditionalMandatoryParts`]. The first [`Range`] held by this
+///   structure will contain the mandatory part introduced by a potential update of the upper-bound
+///   of the start time (consisting of [LST', LST] where LST is the previous latest start time and
+///   LST' is the updated latest start time) and the second [`Range`] held by this structure will
+///   consist of the mandatory part introduced by a potential update of the lower-bound of the start
+///   time (consisting of [EST, EST']).
+///
+/// Note: It is required that the task has a mandatory part in the current state of the solver.
+pub(crate) fn generate_update_range<Var: IntegerVariable + 'static>(
+    task: &Task<Var>,
+    prev_lower_bound: i32,
+    prev_upper_bound: i32,
+    new_lower_bound: i32,
+    new_upper_bound: i32,
+) -> AddedMandatoryConsumption {
+    pumpkin_assert_moderate!(
+        new_upper_bound < new_lower_bound + task.processing_time,
+        "The `generate_update_range` method assumes that the task has a new mandatory part"
+    );
+    if prev_upper_bound < prev_lower_bound + task.processing_time {
+        // A mandatory part existed previously, the current mandatory part has thus been extended
+        AddedMandatoryConsumption::AdditionalMandatoryParts(
+            new_upper_bound..prev_upper_bound,
+            prev_lower_bound + task.processing_time..new_lower_bound + task.processing_time,
+        )
     } else {
-        EnqueueDecision::Skip
+        // A mandatory part did not exist previously but the task has a mandatory part after the
+        // update
+        AddedMandatoryConsumption::FullyNewMandatoryPart(
+            new_upper_bound..new_lower_bound + task.processing_time,
+        )
     }
 }
 
@@ -140,6 +230,42 @@ fn has_overlap_with_interval(lower_bound: i32, upper_bound: i32, start: i32, end
     start < upper_bound && lower_bound <= end
 }
 
+/// A method which checks whether the time-table (provided in the form of an iterator) is sorted
+/// based on start time and that the profiles are maximal (i.e. the [`ResourceProfile::start`] and
+/// [`ResourceProfile::end`] cannot be increased or decreased, respectively). It returns true if
+/// both of these invariants hold and false otherwise.
+fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable + 'static>(
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+) -> bool {
+    let collected_time_table = time_table.clone().collect::<Vec<_>>();
+    let sorted_profiles = collected_time_table.is_empty()
+        || (0..collected_time_table.len() - 1).all(|profile_index| {
+            collected_time_table[profile_index].end < collected_time_table[profile_index + 1].start
+        });
+    if !sorted_profiles {
+        eprintln!("The provided time-table was not ordered according to start/end times");
+    }
+
+    let non_overlapping_profiles = collected_time_table.is_empty()
+        || (0..collected_time_table.len()).all(|profile_index| {
+            (0..collected_time_table.len()).all(|other_profile_index| {
+                let current_profile = collected_time_table[profile_index];
+                let other_profile = collected_time_table[other_profile_index];
+                profile_index == other_profile_index
+                    || !has_overlap_with_interval(
+                        current_profile.start,
+                        current_profile.end + 1,
+                        other_profile.start,
+                        other_profile.end,
+                    )
+            })
+        });
+    if !non_overlapping_profiles {
+        eprintln!("There was overlap between profiles in the provided time-table");
+    }
+    sorted_profiles && non_overlapping_profiles
+}
+
 /// Checks whether propagations should occur based on the current state of the time-table
 ///
 /// It goes over all profiles and all tasks and determines which ones should be propagated;
@@ -153,36 +279,10 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
-        {
-            let collected_time_table = time_table.clone().collect::<Vec<_>>();
-            collected_time_table.is_empty()
-                || (0..collected_time_table.len() - 1).all(|profile_index| {
-                    collected_time_table[profile_index].end
-                        < collected_time_table[profile_index + 1].start
-                })
-        },
-        "The provided time-table was not ordered according to start/end times"
+        debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
+        "The provided time-table did not adhere to the invariants"
     );
-    pumpkin_assert_extreme!(
-        {
-            let collected_time_table = time_table.clone().collect::<Vec<_>>();
-            collected_time_table.is_empty()
-                || (0..collected_time_table.len()).all(|profile_index| {
-                    (0..collected_time_table.len()).all(|other_profile_index| {
-                        let current_profile = collected_time_table[profile_index];
-                        let other_profile = collected_time_table[other_profile_index];
-                        profile_index == other_profile_index
-                            || !has_overlap_with_interval(
-                                current_profile.start,
-                                current_profile.end + 1,
-                                other_profile.start,
-                                other_profile.end,
-                            )
-                    })
-                })
-        },
-        "There was overlap between profiles in the provided time-table"
-    );
+
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks

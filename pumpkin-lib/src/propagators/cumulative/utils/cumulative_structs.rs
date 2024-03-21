@@ -7,6 +7,7 @@ use std::rc::Rc;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
+use crate::propagators::TimeTablePerPointIncrementalPropagator;
 use crate::propagators::TimeTablePerPointPropagator;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
@@ -83,6 +84,12 @@ impl<Var, T> CumulativeConstructor<Var, T> {
 /// method for each type `T`
 pub type TimeTablePerPoint<Var> = CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
+/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
+/// type of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
+/// `new` method for each type `T`
+pub type TimeTablePerPointIncremental<Var> =
+    CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>;
+
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
 #[derive(Debug)]
@@ -107,7 +114,7 @@ pub(crate) struct UpdatedTaskInfo<Var> {
 /// - The known bounds
 /// - The values which have been updated since the previous propagation
 #[derive(Debug)]
-pub(crate) struct CumulativeParameters<Var> {
+pub struct CumulativeParameters<Var> {
     /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
     /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
     /// sharing of the tasks

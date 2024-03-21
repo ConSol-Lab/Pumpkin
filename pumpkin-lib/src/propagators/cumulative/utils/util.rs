@@ -14,7 +14,6 @@ use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
 
@@ -76,25 +75,6 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
         .collect::<Vec<Task<Var>>>()
 }
 
-/// Initialises the bounds at the root
-pub(crate) fn initialise_at_root<Var: IntegerVariable + 'static>(
-    update_bounds: bool,
-    params: &mut CumulativeParameters<Var>,
-    context: &PropagationContextMut,
-) {
-    if update_bounds {
-        params.bounds.clear();
-        for task in params.tasks.iter() {
-            params.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ))
-        }
-    }
-
-    params.updated.clear();
-}
-
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
 pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
@@ -126,4 +106,19 @@ pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
             context.upper_bound(&task.start_variable),
         ))
     }
+}
+
+/// Determines whether the stored bounds are equal when propagation occurs
+pub(crate) fn check_bounds_equal_at_propagation<Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    tasks: &[Rc<Task<Var>>],
+    bounds: &[(i32, i32)],
+) -> bool {
+    tasks.iter().all(|current| {
+        bounds[current.id.unpack() as usize]
+            == (
+                context.lower_bound(&current.start_variable),
+                context.upper_bound(&current.start_variable),
+            )
+    })
 }

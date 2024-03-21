@@ -178,7 +178,7 @@ impl TestSolver {
     ) -> PropagationStatusCP {
         let mut num_trail_entries = self.assignments_integer.num_trail_entries()
             + self.assignments_propositional.num_trail_entries();
-
+        self.notify_propagator(propagator);
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
@@ -188,6 +188,7 @@ impl TestSolver {
                     &mut self.assignments_propositional,
                 );
                 propagator.propagate(&mut context)?;
+                self.notify_propagator(propagator);
             }
             if self.assignments_integer.num_trail_entries()
                 + self.assignments_propositional.num_trail_entries()
@@ -199,6 +200,23 @@ impl TestSolver {
                 + self.assignments_propositional.num_trail_entries();
         }
         Ok(())
+    }
+
+    fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
+        let events = self
+            .assignments_integer
+            .drain_domain_events()
+            .collect::<Vec<_>>();
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+        );
+        for (event, domain) in events {
+            for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
+                let _ = propagator.notify(&mut context, propagator_var.variable, event.into());
+            }
+        }
     }
 
     pub fn notify(
