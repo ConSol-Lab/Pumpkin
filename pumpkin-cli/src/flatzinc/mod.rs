@@ -8,6 +8,7 @@ mod parser;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::engine::AssignmentsInteger;
@@ -21,6 +22,7 @@ use self::instance::Output;
 use self::minizinc_optimiser::MinizincOptimisationResult;
 use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::error::FlatZincError;
+use crate::time_limit_in_secs;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
@@ -28,6 +30,7 @@ const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 pub(crate) fn solve(
     mut solver: ConstraintSatisfactionSolver,
     instance: impl AsRef<Path>,
+    time_limit: Option<Duration>,
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
@@ -37,7 +40,7 @@ pub(crate) fn solve(
     let value = if let Some(objective_function) = &instance.objective_function {
         let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
         match optimisation_solver.solve(
-            None,
+            time_limit,
             instance.search.expect("Expected a search to be defined"),
             &instance.outputs,
         ) {
@@ -61,7 +64,7 @@ pub(crate) fn solve(
         }
     } else {
         match solver.solve(
-            i64::MAX,
+            time_limit_in_secs(time_limit),
             &mut instance.search.expect("Expected a search to be defined"),
         ) {
             CSPSolverExecutionFlag::Feasible => print_solution_from_solver(

@@ -124,7 +124,7 @@ struct Args {
     #[arg(long = "restart-geometric-coef")]
     restart_geometric_coef: Option<f64>,
 
-    /// The time budget for the solver, given in seconds.
+    /// The time budget for the solver, given in milliseconds.
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
@@ -299,7 +299,7 @@ fn run() -> PumpkinResult<()> {
         random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
 
-    let time_limit = args.time_limit.map(Duration::from_secs);
+    let time_limit = args.time_limit.map(Duration::from_millis);
     let instance_path = args
         .instance_path
         .to_str()
@@ -326,6 +326,7 @@ fn run() -> PumpkinResult<()> {
         FileFormat::FlatZinc => flatzinc::solve(
             ConstraintSatisfactionSolver::new(sat_options, solver_options),
             instance_path,
+            time_limit,
         )?,
     }
 
