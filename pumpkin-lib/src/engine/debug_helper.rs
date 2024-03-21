@@ -237,7 +237,7 @@ impl DebugHelper {
                 // The predicate was either a propagation for the assignments_integer or
                 // assignments_propositional
                 assert!(
-                    assignments_integer_clone.does_predicate_hold(propagated_predicate) | assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
+                    assignments_integer_clone.does_predicate_hold(propagated_predicate) || assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n

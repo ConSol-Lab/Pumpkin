@@ -83,7 +83,7 @@ impl ConstraintReference {
     }
 
     pub fn is_clause(&self) -> bool {
-        self.is_virtual_binary_clause() | self.is_allocated_clause()
+        self.is_virtual_binary_clause() || self.is_allocated_clause()
     }
 
     fn is_virtual_binary_clause(&self) -> bool {
