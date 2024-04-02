@@ -289,6 +289,7 @@ fn run() -> PumpkinResult<()> {
         Some(
             OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .read(true)
                 .write(true)
                 .open(path_buf.as_path())?,
