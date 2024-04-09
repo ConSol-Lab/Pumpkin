@@ -17,6 +17,7 @@
 * Added cumulative propagator(s)
   * Added propagator utilising time-table reasoning per time point
   * Added incremental version of a propagator utilising time-table reasoning per time point
+  * Added propagator using time-table reasoning over intervals
 * Extended collection of statistics to include conflict size, learned clause length and backtrack amount
 * Added logging of statistics using `info!` when using the `OptimisationSolver` 
 * Refactored the CP and propositional trails, and extracted a trail abstraction.
