@@ -1,5 +1,7 @@
 //! Crate to run integration tests for the solver.
 
+pub mod flatzinc;
+
 use std::fs::File;
 use std::path::Path;
 use std::path::PathBuf;
@@ -29,6 +31,13 @@ impl Files {
 }
 
 pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
+    run_solver_with_options(instance_path, std::iter::empty())
+}
+
+pub fn run_solver_with_options<'a>(
+    instance_path: impl AsRef<Path>,
+    args: impl IntoIterator<Item = &'a str>,
+) -> Files {
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
     let instance_path = instance_path.as_ref();
@@ -42,7 +51,13 @@ pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
     let err_file_path = instance_path.with_extension("err");
     let proof_file_path = instance_path.with_extension("proof");
 
-    let mut child = Command::new(solver)
+    let mut command = Command::new(solver);
+
+    for arg in args {
+        let _ = command.arg(arg);
+    }
+
+    let mut child = command
         .arg("--certificate-path")
         .arg(&proof_file_path)
         .arg(instance_path)

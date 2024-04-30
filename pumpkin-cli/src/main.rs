@@ -39,6 +39,8 @@ use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
+use crate::flatzinc::FlatZincOptions;
+
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -146,6 +148,15 @@ struct Args {
     /// for more information.
     #[arg(short = 'f', long = "free-search", default_value_t = false)]
     free_search: bool,
+
+    /// Instructs the solver to report all solutions in the case of satisfaction problems,
+    /// or print intermediate solutions of increasing quality in the case of optimisation
+    /// problems.
+    ///
+    /// See the [MiniZinc specification](https://www.minizinc.org/doc-2.8.2/en/fzn-spec.html#cmdoption-a)
+    /// for more information.
+    #[arg(short = 'a', long = "all-solutions", default_value_t = false)]
+    all_solutions: bool,
 
     /// If `--verbose` is enabled removes the timestamp information from the log messages
     #[arg(long = "omit-timestamp", default_value_t = false)]
@@ -341,8 +352,11 @@ fn run() -> PumpkinResult<()> {
         FileFormat::FlatZinc => flatzinc::solve(
             ConstraintSatisfactionSolver::new(learning_options, solver_options),
             instance_path,
-            args.free_search,
             time_limit,
+            FlatZincOptions {
+                free_search: args.free_search,
+                all_solutions: args.all_solutions,
+            },
         )?,
     }
 

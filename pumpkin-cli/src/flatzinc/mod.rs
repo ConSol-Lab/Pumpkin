@@ -11,6 +11,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+use pumpkin_lib::basic_types::SolutionReference;
+use pumpkin_lib::basic_types::Stopwatch;
+use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::branching::DynamicBrancher;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::AssignmentsInteger;
@@ -24,16 +27,25 @@ use self::instance::Output;
 use self::minizinc_optimiser::MinizincOptimisationResult;
 use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::error::FlatZincError;
-use crate::time_limit_in_secs;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FlatZincOptions {
+    /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
+    pub(crate) free_search: bool,
+
+    /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
+    /// the solver to print intermediate solutions.
+    pub(crate) all_solutions: bool,
+}
+
 pub(crate) fn solve(
     mut solver: ConstraintSatisfactionSolver,
     instance: impl AsRef<Path>,
-    free_search: bool,
     time_limit: Option<Duration>,
+    options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
@@ -41,7 +53,7 @@ pub(crate) fn solve(
     let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
-        let brancher = if free_search {
+        let brancher = if options.free_search {
             // The free search flag is active, we just use the default brancher
             DynamicBrancher::new(vec![Box::new(
                 IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
@@ -71,20 +83,65 @@ pub(crate) fn solve(
             }
         }
     } else {
-        match solver.solve(
-            time_limit_in_secs(time_limit),
-            &mut instance.search.expect("Expected a search to be defined"),
-        ) {
-            CSPSolverExecutionFlag::Feasible => print_solution_from_solver(
-                solver.get_integer_assignments(),
-                solver.get_propositional_assignments(),
-                &outputs,
-            ),
-            CSPSolverExecutionFlag::Infeasible => println!("{MSG_UNSATISFIABLE}"),
-            CSPSolverExecutionFlag::Timeout => println!("{MSG_UNKNOWN}"),
+        let stopwatch = Stopwatch::new(
+            time_limit
+                .map(|limit| limit.as_secs() as i64)
+                .unwrap_or(i64::MAX),
+        );
+
+        let mut brancher = instance.search.expect("Expected a search to be defined");
+
+        let mut found_solution = false;
+
+        loop {
+            match solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher) {
+                CSPSolverExecutionFlag::Feasible => {
+                    found_solution = true;
+
+                    print_solution_from_solver(
+                        solver.get_integer_assignments(),
+                        solver.get_propositional_assignments(),
+                        &outputs,
+                    );
+
+                    brancher.on_solution(SolutionReference::new(
+                        solver.get_propositional_assignments(),
+                        solver.get_integer_assignments(),
+                    ));
+
+                    let blocking_clause = solver.get_blocking_clause();
+                    solver.restore_state_at_root(&mut brancher);
+
+                    if solver.add_permanent_clause(blocking_clause).is_err() {
+                        println!("==========");
+                        break;
+                    }
+                }
+                CSPSolverExecutionFlag::Infeasible if !found_solution => {
+                    println!("{MSG_UNSATISFIABLE}");
+                    break;
+                }
+                CSPSolverExecutionFlag::Infeasible => {
+                    println!("==========");
+                    break;
+                }
+
+                // Only when no solutions are found should the UNKNOWN marker be printed.
+                CSPSolverExecutionFlag::Timeout if !found_solution => {
+                    println!("{MSG_UNKNOWN}");
+                    break;
+                }
+                CSPSolverExecutionFlag::Timeout => break,
+            }
+
+            if !options.all_solutions {
+                break;
+            }
         }
+
         None
     };
+
     if let Some(value) = value {
         log_statistics_with_objective(&solver, value)
     } else {

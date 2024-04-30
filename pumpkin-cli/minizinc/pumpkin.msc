@@ -4,7 +4,7 @@
     "version": "0.1",
     "executable": "../../target/release/pumpkin-cli",
     "mznlib": "./lib",
-    "stdFlags": ["-v", "-f", "-r", "-t", "-s"],
+    "stdFlags": ["-v", "-f", "-r", "-t", "-s", "-a"],
 
     "tags": ["cp", "lcg", "int"]
 }

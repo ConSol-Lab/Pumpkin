@@ -813,6 +813,34 @@ impl ConstraintSatisfactionSolver {
         self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
         self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
     }
+
+    /// Get a clause which blocks the current solution from occurring again.
+    ///
+    /// Used when iterating solutions. This method must be called before
+    /// [`Self::restore_state_at_root()`] is called.
+    pub fn get_blocking_clause(&mut self) -> Vec<Literal> {
+        self.get_propositional_assignments()
+            .get_propositional_variables()
+            .filter(|&var| {
+                var != self
+                    .get_propositional_assignments()
+                    .true_literal
+                    .get_propositional_variable()
+            })
+            .map(|var| {
+                pumpkin_assert_simple!(self
+                    .get_propositional_assignments()
+                    .is_variable_assigned(var));
+
+                Literal::new(
+                    var,
+                    !self
+                        .get_propositional_assignments()
+                        .is_variable_assigned_true(var),
+                )
+            })
+            .collect()
+    }
 }
 
 // methods that serve as the main building blocks
