@@ -22,8 +22,8 @@ use pumpkin_lib::basic_types::Function;
 use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::engine::LearningOptions;
 use pumpkin_lib::engine::Preprocessor;
-use pumpkin_lib::engine::SatOptions;
 use pumpkin_lib::engine::SatisfactionSolverOptions;
 use thiserror::Error;
 
@@ -485,17 +485,17 @@ pub(crate) struct SolverDimacsSink {
 /// [`ConstraintSatisfactionSolver::new()`].
 pub(crate) struct CSPSolverArgs {
     solver_options: SatisfactionSolverOptions,
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
 }
 
 impl CSPSolverArgs {
     pub(crate) fn new(
-        sat_options: SatOptions,
+        learning_options: LearningOptions,
         solver_options: SatisfactionSolverOptions,
     ) -> CSPSolverArgs {
         CSPSolverArgs {
             solver_options,
-            sat_options,
+            learning_options,
         }
     }
 }
@@ -519,7 +519,7 @@ impl DimacsSink for SolverDimacsSink {
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
         let CSPSolverArgs {
             solver_options,
-            sat_options,
+            learning_options: sat_options,
         } = args;
 
         let mut solver = ConstraintSatisfactionSolver::new(sat_options, solver_options);

@@ -238,6 +238,7 @@ impl AssignmentsPropositional {
 
     /// This iterator returns the literals on the trail in _reverse_ order (LIFO)
     pub fn synchronise(&mut self, new_decision_level: usize) -> impl Iterator<Item = Literal> + '_ {
+        pumpkin_assert_simple!(new_decision_level < self.get_decision_level());
         self.trail.synchronise(new_decision_level).inspect(|entry| {
             let variable = entry.get_propositional_variable();
 

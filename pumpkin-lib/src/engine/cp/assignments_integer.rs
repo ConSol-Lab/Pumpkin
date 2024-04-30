@@ -13,8 +13,8 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
-    domains: KeyedVec<DomainId, IntegerDomainExplicit>, /* indicates if value j is in the domain
-                                                         * of the integer variable */
+    /// indicates if value j is in the domain of the integer variable
+    domains: KeyedVec<DomainId, IntegerDomainExplicit>,
 
     events: EventSink,
 }

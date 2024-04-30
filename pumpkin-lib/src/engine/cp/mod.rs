@@ -1,5 +1,4 @@
 mod assignments_integer;
-mod cp_engine_data_structures;
 pub mod domain_events;
 mod event_sink;
 pub mod opaque_domain_event;
@@ -7,15 +6,16 @@ pub mod propagation;
 mod propagator_queue;
 pub mod reason;
 pub mod test_helper;
+mod variable_literal_mappings;
 mod watch_list_cp;
 mod watch_list_propositional;
 
 pub use assignments_integer::AssignmentsInteger;
 pub use assignments_integer::ConstraintProgrammingTrailEntry;
 pub use assignments_integer::EmptyDomain;
-pub use cp_engine_data_structures::CPEngineDataStructures;
 pub use event_sink::*;
 pub use propagator_queue::PropagatorQueue;
+pub use variable_literal_mappings::VariableLiteralMappings;
 pub use watch_list_cp::IntDomainEvent;
 pub use watch_list_cp::WatchListCP;
 pub use watch_list_cp::Watchers;

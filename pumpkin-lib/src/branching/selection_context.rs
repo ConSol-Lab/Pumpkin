@@ -15,7 +15,7 @@ use crate::engine::variables::PropositionalVariable;
 use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::SATCPMediator;
+use crate::engine::VariableLiteralMappings;
 use crate::pumpkin_assert_advanced;
 
 /// The context provided to the [`Brancher`],
@@ -27,7 +27,7 @@ use crate::pumpkin_assert_advanced;
 /// [`SelectionContext::get_literal_for_predicate`]).
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
-    sat_cp_mediator: &'a SATCPMediator,
+    variable_literal_mappings: &'a VariableLiteralMappings,
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
     random_generator: &'a mut dyn Random,
@@ -37,11 +37,11 @@ impl<'a> SelectionContext<'a> {
     pub fn new(
         assignments_integer: &'a AssignmentsInteger,
         assignments_propositional: &'a AssignmentsPropositional,
-        sat_cp_mediator: &'a SATCPMediator,
+        variable_literal_mappings: &'a VariableLiteralMappings,
         rng: &'a mut dyn Random,
     ) -> Self {
         SelectionContext {
-            sat_cp_mediator,
+            variable_literal_mappings,
             assignments_integer,
             assignments_propositional,
             random_generator: rng,
@@ -81,9 +81,11 @@ impl<'a> SelectionContext<'a> {
     /// currently does not hold nor is the returned literal assigned.
     pub fn get_literal_for_predicate(&self, pred: Predicate) -> Literal {
         pumpkin_assert_advanced!(!self.assignments_integer.does_predicate_hold(pred), "The provided predicate holds before the decision is made, this indicates a wrongly implemented variable/value selector");
-        let literal = self
-            .sat_cp_mediator
-            .get_predicate_literal(pred, self.assignments_integer);
+        let literal = self.variable_literal_mappings.get_literal(
+            pred,
+            self.assignments_propositional,
+            self.assignments_integer,
+        );
         pumpkin_assert_advanced!(!self.assignments_propositional.is_literal_assigned(literal), "The returned literal holds before the decision is made, this indicates a wrongly implemented variable/value selector");
         literal
     }
@@ -124,9 +126,14 @@ impl<'a> SelectionContext<'a> {
         num_integer_variables: usize,
         num_propositional_variables: usize,
         domains: Option<Vec<(i32, i32)>>,
-    ) -> (AssignmentsInteger, AssignmentsPropositional, SATCPMediator) {
-        use crate::engine::CPEngineDataStructures;
-        use crate::engine::SATEngineDataStructures;
+    ) -> (
+        AssignmentsInteger,
+        AssignmentsPropositional,
+        VariableLiteralMappings,
+    ) {
+        use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+        use crate::engine::WatchListCP;
+        use crate::engine::WatchListPropositional;
         use crate::propagators::clausal::BasicClausalPropagator;
         use crate::pumpkin_assert_simple;
 
@@ -138,37 +145,38 @@ impl<'a> SelectionContext<'a> {
             }
         });
 
-        let mut mediator = SATCPMediator::default();
+        let mut mediator = VariableLiteralMappings::default();
         let mut clausal_propagator = BasicClausalPropagator::default();
-        let mut sat_data_structures = SATEngineDataStructures::default();
-        let mut cp_data_structures = CPEngineDataStructures::default();
+        let mut assignments_propositional = AssignmentsPropositional::default();
+        let mut assignments_integer = AssignmentsInteger::default();
+        let mut clause_allocator = ClauseAllocator::default();
+        let mut watch_list_propositional = WatchListPropositional::default();
+        let mut watch_list_cp = WatchListCP::default();
 
         let root_variable = mediator.create_new_propositional_variable(
-            &mut cp_data_structures.watch_list_propositional,
+            &mut watch_list_propositional,
             &mut clausal_propagator,
-            &mut sat_data_structures,
+            &mut assignments_propositional,
         );
         let true_literal = Literal::new(root_variable, true);
 
-        sat_data_structures.assignments_propositional.true_literal = true_literal;
+        assignments_propositional.true_literal = true_literal;
 
-        sat_data_structures.assignments_propositional.false_literal = !true_literal;
+        assignments_propositional.false_literal = !true_literal;
 
-        mediator.true_literal = true_literal;
-        mediator.false_literal = !true_literal;
-
-        sat_data_structures
-            .assignments_propositional
-            .enqueue_decision_literal(true_literal);
+        assignments_propositional.enqueue_decision_literal(true_literal);
 
         if let Some(domains) = domains.as_ref() {
             for (_, (lower_bound, upper_bound)) in (0..num_integer_variables).zip(domains) {
                 let _ = mediator.create_new_domain(
                     *lower_bound,
                     *upper_bound,
+                    &mut assignments_integer,
+                    &mut watch_list_cp,
+                    &mut watch_list_propositional,
                     &mut clausal_propagator,
-                    &mut sat_data_structures,
-                    &mut cp_data_structures,
+                    &mut assignments_propositional,
+                    &mut clause_allocator,
                 );
             }
         } else {
@@ -176,9 +184,12 @@ impl<'a> SelectionContext<'a> {
                 let _ = mediator.create_new_domain(
                     0,
                     10,
+                    &mut assignments_integer,
+                    &mut watch_list_cp,
+                    &mut watch_list_propositional,
                     &mut clausal_propagator,
-                    &mut sat_data_structures,
-                    &mut cp_data_structures,
+                    &mut assignments_propositional,
+                    &mut clause_allocator,
                 );
             }
         }
@@ -187,16 +198,12 @@ impl<'a> SelectionContext<'a> {
             // We create an additional variable to ensure that the generator returns the correct
             // variables
             let _ = mediator.create_new_propositional_variable(
-                &mut cp_data_structures.watch_list_propositional,
+                &mut watch_list_propositional,
                 &mut clausal_propagator,
-                &mut sat_data_structures,
+                &mut assignments_propositional,
             );
         }
 
-        (
-            cp_data_structures.assignments_integer,
-            sat_data_structures.assignments_propositional,
-            mediator,
-        )
+        (assignments_integer, assignments_propositional, mediator)
     }
 }

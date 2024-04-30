@@ -56,8 +56,9 @@ mod tests {
 
         assert_eq!(
             selected_literal,
-            mediator.get_predicate_literal(
+            mediator.get_literal(
                 domain_ids[0].lower_bound_predicate(5),
+                &assignments_propositional,
                 &assignments_integer
             )
         )
@@ -82,8 +83,9 @@ mod tests {
 
         assert_eq!(
             selected_literal,
-            mediator.get_predicate_literal(
+            mediator.get_literal(
                 domain_ids[0].lower_bound_predicate(2),
+                &assignments_propositional,
                 &assignments_integer
             )
         )

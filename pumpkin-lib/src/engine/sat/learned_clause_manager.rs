@@ -1,17 +1,16 @@
 use super::AssignmentsPropositional;
-use super::LearnedClauseSortingStrategy;
-use super::SATEngineDataStructures;
 use crate::basic_types::ClauseReference;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::variables::Literal;
+use crate::propagators::clausal::is_clause_propagating;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Copy, Clone)]
-pub struct SatOptions {
+pub struct LearningOptions {
     pub max_clause_activity: f32,
     pub clause_activity_decay_factor: f32,
     pub num_high_lbd_learned_clauses_max: u64,
@@ -19,7 +18,7 @@ pub struct SatOptions {
     pub lbd_threshold: u32,
 }
 
-impl Default for SatOptions {
+impl Default for LearningOptions {
     fn default() -> Self {
         Self {
             max_clause_activity: 1e20,
@@ -27,6 +26,21 @@ impl Default for SatOptions {
             num_high_lbd_learned_clauses_max: 4000,
             high_lbd_learned_clause_sorting_strategy: LearnedClauseSortingStrategy::Activity,
             lbd_threshold: 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LearnedClauseSortingStrategy {
+    Activity,
+    Lbd,
+}
+
+impl std::fmt::Display for LearnedClauseSortingStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            LearnedClauseSortingStrategy::Lbd => write!(f, "lbd"),
+            LearnedClauseSortingStrategy::Activity => write!(f, "activity"),
         }
     }
 }
@@ -42,12 +56,12 @@ struct LearnedClauses {
 #[derive(Debug)]
 pub struct LearnedClauseManager {
     learned_clauses: LearnedClauses,
-    parameters: SatOptions,
+    parameters: LearningOptions,
     clause_bump_increment: f32,
 }
 
 impl LearnedClauseManager {
-    pub fn new(sat_options: SatOptions) -> Self {
+    pub fn new(sat_options: LearningOptions) -> Self {
         LearnedClauseManager {
             learned_clauses: LearnedClauses::default(),
             parameters: sat_options,
@@ -83,7 +97,8 @@ impl LearnedClauseManager {
 
     pub fn shrink_learned_clause_database_if_needed(
         &mut self,
-        sat_data_structures: &mut SATEngineDataStructures,
+        assignments: &AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
         clausal_propagator: &mut ClausalPropagatorType,
     ) {
         // only consider clause removals once the threshold is reached
@@ -98,19 +113,20 @@ impl LearnedClauseManager {
         //  + remove roughly of the clauses that have high lbd
         // this could be done in a single step but for simplicity we keep it as two separate steps
 
-        self.promote_high_lbd_clauses(sat_data_structures);
+        self.promote_high_lbd_clauses(clause_allocator);
 
-        self.remove_high_lbd_clauses(sat_data_structures, clausal_propagator);
+        self.remove_high_lbd_clauses(assignments, clause_allocator, clausal_propagator);
     }
 
     fn remove_high_lbd_clauses(
         &mut self,
-        sat_data_structures: &mut SATEngineDataStructures,
+        assignments: &AssignmentsPropositional,
+        clause_allocator: &mut ClauseAllocator,
         clausal_propagator: &mut ClausalPropagatorType,
     ) {
         // roughly half of the learned clauses will be removed
 
-        self.sort_high_lbd_clauses_by_quality_decreasing_order(sat_data_structures);
+        self.sort_high_lbd_clauses_by_quality_decreasing_order(clause_allocator);
 
         // the removal is done in two phases
         //  in the first phase, clauses are deleted but the clause references are not removed from
@@ -127,42 +143,37 @@ impl LearnedClauseManager {
             }
 
             // protected clauses are skipped
-            if sat_data_structures.clause_allocator[clause_reference]
-                .is_protected_against_deletion()
-            {
-                sat_data_structures.clause_allocator[clause_reference]
-                    .clear_protection_against_deletion();
+            if clause_allocator[clause_reference].is_protected_against_deletion() {
+                clause_allocator[clause_reference].clear_protection_against_deletion();
                 continue;
             }
 
             // clauses that are currently in propagation are skipped
             //  otherwise there may be problems with conflict analysis
-            if sat_data_structures.is_clause_propagating(clause_reference) {
+            if is_clause_propagating(assignments, clause_allocator, clause_reference) {
                 continue;
             }
 
             // remove the clause from the watch list
             clausal_propagator.remove_clause_from_consideration(
-                sat_data_structures.clause_allocator[clause_reference].get_literal_slice(),
+                clause_allocator[clause_reference].get_literal_slice(),
                 clause_reference,
             );
 
             // delete the clause
-            sat_data_structures
-                .clause_allocator
-                .delete_clause(clause_reference);
+            clause_allocator.delete_clause(clause_reference);
 
             num_clauses_to_remove -= 1;
         }
 
-        self.learned_clauses.high_lbd.retain(|&clause_reference| {
-            !sat_data_structures.clause_allocator[clause_reference].is_deleted()
-        });
+        self.learned_clauses
+            .high_lbd
+            .retain(|&clause_reference| !clause_allocator[clause_reference].is_deleted());
     }
 
     fn sort_high_lbd_clauses_by_quality_decreasing_order(
         &mut self,
-        sat_data_structures: &mut SATEngineDataStructures,
+        clause_allocator: &mut ClauseAllocator,
     ) {
         // sort the learned clauses
         // the ordering is such that the better clauses are in the front
@@ -172,12 +183,8 @@ impl LearnedClauseManager {
         self.learned_clauses
             .high_lbd
             .sort_unstable_by(|clause_reference1, clause_reference2| {
-                let clause1 = sat_data_structures
-                    .clause_allocator
-                    .get_clause(*clause_reference1);
-                let clause2 = sat_data_structures
-                    .clause_allocator
-                    .get_clause(*clause_reference2);
+                let clause1 = clause_allocator.get_clause(*clause_reference1);
+                let clause2 = clause_allocator.get_clause(*clause_reference2);
 
                 match self.parameters.high_lbd_learned_clause_sorting_strategy {
                     LearnedClauseSortingStrategy::Activity => {
@@ -188,7 +195,7 @@ impl LearnedClauseManager {
                             .partial_cmp(&clause1.get_activity())
                             .unwrap()
                     }
-                    LearnedClauseSortingStrategy::LBD => {
+                    LearnedClauseSortingStrategy::Lbd => {
                         if clause1.lbd() != clause2.lbd() {
                             clause1.lbd().cmp(&clause2.lbd())
                         } else {
@@ -204,19 +211,18 @@ impl LearnedClauseManager {
             });
     }
 
-    fn promote_high_lbd_clauses(&mut self, sat_data_structures: &mut SATEngineDataStructures) {
+    fn promote_high_lbd_clauses(&mut self, clause_allocator: &mut ClauseAllocator) {
         // promote clauses: we do this in two passes for simplicity of implementation
         //  add the clauses references to the low_lbd group
         for &clause_reference in &self.learned_clauses.high_lbd {
-            let lbd = sat_data_structures.clause_allocator[clause_reference].lbd();
+            let lbd = clause_allocator[clause_reference].lbd();
             if lbd <= self.parameters.lbd_threshold {
                 self.learned_clauses.low_lbd.push(clause_reference);
             }
         }
         //  remove the low lbd clauses from the high_lbd group
         self.learned_clauses.high_lbd.retain(|&clause_reference| {
-            sat_data_structures.clause_allocator[clause_reference].lbd()
-                > self.parameters.lbd_threshold
+            clause_allocator[clause_reference].lbd() > self.parameters.lbd_threshold
         });
     }
 

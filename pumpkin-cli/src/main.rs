@@ -28,8 +28,8 @@ use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
-use pumpkin_lib::engine::constraint_satisfaction_solver::RestartOptions;
 use pumpkin_lib::engine::variables::PropositionalVariable;
+use pumpkin_lib::engine::RestartOptions;
 use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
 use pumpkin_lib::optimisation::OptimisationResult;
@@ -278,7 +278,7 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
-    let sat_options = SatOptions {
+    let learning_options = LearningOptions {
         num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
         high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy.inner,
         lbd_threshold: args.learning_lbd_threshold,
@@ -323,14 +323,14 @@ fn run() -> PumpkinResult<()> {
 
     match file_format {
         FileFormat::CnfDimacsPLine => cnf_problem(
-            sat_options,
+            learning_options,
             solver_options,
             time_limit,
             instance_path,
             verify_outcome,
         )?,
         FileFormat::WcnfDimacsPLine => wcnf_problem(
-            sat_options,
+            learning_options,
             solver_options,
             time_limit,
             instance_path,
@@ -339,7 +339,7 @@ fn run() -> PumpkinResult<()> {
         )?,
         FileFormat::MaxSAT2022 => todo!(),
         FileFormat::FlatZinc => flatzinc::solve(
-            ConstraintSatisfactionSolver::new(sat_options, solver_options),
+            ConstraintSatisfactionSolver::new(learning_options, solver_options),
             instance_path,
             args.free_search,
             time_limit,
@@ -350,7 +350,7 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn wcnf_problem(
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -364,7 +364,7 @@ fn wcnf_problem(
         last_instance_variable,
     } = parse_wcnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(sat_options, solver_options),
+        CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
     let brancher =
@@ -419,7 +419,7 @@ fn wcnf_problem(
 }
 
 fn cnf_problem(
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -428,7 +428,7 @@ fn cnf_problem(
     let instance_file = File::open(instance_path)?;
     let mut csp_solver = parse_cnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(sat_options, solver_options),
+        CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
     let mut brancher =
@@ -508,7 +508,7 @@ fn learned_clause_sorting_strategy_parser(
     s: &str,
 ) -> Result<CliArg<LearnedClauseSortingStrategy>, String> {
     match s {
-        "lbd" => Ok(LearnedClauseSortingStrategy::LBD.into()),
+        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd.into()),
         "activity" => Ok(LearnedClauseSortingStrategy::Activity.into()),
         value => Err(format!(
             "'{value}' is not a valid learned clause sorting strategy"

@@ -6,7 +6,7 @@ use crate::engine::variables::Literal;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
-use crate::engine::SATCPMediator;
+use crate::engine::VariableLiteralMappings;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 // Allow the larger `Explanation` variant since this `ConflictInfo` type is not used very often,
@@ -27,7 +27,7 @@ pub enum ConflictInfo {
         reference: ConstraintReference,
         /// The literal which should be both true and false at the same time (due to the
         /// propagation of a [`Literal`], this could occur due to synchronization in
-        /// [`SATCPMediator::synchronise_propositional_trail_based_on_integer_trail`] or due to
+        /// [`ConstraintSatisfactionSolver::synchronise_propositional_trail_based_on_integer_trail`] or due to
         /// clausal propagation).
         literal: Literal,
     },

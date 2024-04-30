@@ -68,8 +68,11 @@ mod tests {
 
         assert_eq!(
             selected_literal,
-            mediator
-                .get_predicate_literal(domain_ids[0].equality_predicate(3), &assignments_integer)
+            mediator.get_literal(
+                domain_ids[0].equality_predicate(3),
+                &assignments_propositional,
+                &assignments_integer
+            )
         )
     }
 }

@@ -5,6 +5,8 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 use crate::engine::debug_helper::DebugDyn;
 use crate::engine::propagation::PropagationContext;
+#[cfg(doc)]
+use crate::engine::ConflictAnalysisContext;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]
@@ -58,12 +60,13 @@ pub struct ReasonRef(pub(crate) u32);
 /// A reason for CP propagator to make a change
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
-    ///   propagated literal itself, which is added by the `SATCPMediator` later on.
+    ///   propagated literal itself, which is added by the
+    /// [`ConflictAnalysisContext`] later on.
     Eager(PropositionalConjunction),
     /// A lazy reason, which contains a closure that computes the reason later. Again, the
-    ///   propagated literal is _not_ part of the reason but added by the `SATCPMediator`.
-    /// Lazy reasons are typically computed only once, then replaced by an Eager version with the
-    ///   result.
+    ///   propagated literal is _not_ part of the reason but added by the
+    /// [`ConflictAnalysisContext`]. Lazy reasons are typically computed
+    /// only once, then replaced by an Eager version with the   result.
     Lazy(Box<dyn LazyReason>),
 }
 

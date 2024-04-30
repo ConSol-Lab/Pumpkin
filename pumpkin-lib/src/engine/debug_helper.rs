@@ -8,14 +8,14 @@ use log::warn;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::cp::AssignmentsInteger;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::SATCPMediator;
-use crate::engine::SATEngineDataStructures;
+use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_simple;
 
@@ -47,12 +47,12 @@ impl DebugHelper {
     pub fn debug_fixed_point_propagation(
         clausal_propagator: &ClausalPropagatorType,
         assignments_integer: &AssignmentsInteger,
-        sat_data_structures: &SATEngineDataStructures,
+        assignments_propositional: &AssignmentsPropositional,
+        clause_allocator: &ClauseAllocator,
         propagators_cp: &[Box<dyn Propagator>],
     ) -> bool {
         let mut assignments_integer_clone = assignments_integer.clone();
-        let mut assignments_propostional_clone =
-            sat_data_structures.assignments_propositional.clone();
+        let mut assignments_propostional_clone = assignments_propositional.clone();
         // check whether constraint programming propagators missed anything
         //  ask each propagator to propagate from scratch, and check whether any new propagations
         // took place  if a new propagation took place, then the main propagation loop
@@ -113,17 +113,16 @@ impl DebugHelper {
             }
         }
         // then check the clausal propagator
-        pumpkin_assert_simple!(clausal_propagator.debug_check_state(
-            &sat_data_structures.assignments_propositional,
-            &sat_data_structures.clause_allocator
-        ));
+        pumpkin_assert_simple!(
+            clausal_propagator.debug_check_state(assignments_propositional, clause_allocator)
+        );
         true
     }
 
     pub fn debug_reported_failure(
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
-        sat_cp_mediator: &SATCPMediator,
+        variable_literal_mappings: &VariableLiteralMappings,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -131,7 +130,7 @@ impl DebugHelper {
         DebugHelper::debug_reported_propagations_reproduce_failure(
             assignments_integer,
             assignments_propositional,
-            sat_cp_mediator,
+            variable_literal_mappings,
             failure_reason,
             propagator,
             propagator_id,
@@ -140,7 +139,7 @@ impl DebugHelper {
         DebugHelper::debug_reported_propagations_negate_failure_and_check(
             assignments_integer,
             assignments_propositional,
-            sat_cp_mediator,
+            variable_literal_mappings,
             failure_reason,
             propagator,
             propagator_id,
@@ -153,7 +152,7 @@ impl DebugHelper {
         reason: &PropositionalConjunction,
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
-        sat_cp_mediator: &SATCPMediator,
+        variable_literal_mappings: &VariableLiteralMappings,
         propagator: &dyn Propagator,
         propagator_id: u32,
     ) -> bool {
@@ -209,7 +208,7 @@ impl DebugHelper {
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
                     &assignments_integer_clone,
                     &mut assignments_propositional_clone,
-                    sat_cp_mediator,
+                    variable_literal_mappings,
                     &reason_predicates,
                     &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
@@ -237,7 +236,7 @@ impl DebugHelper {
                 // The predicate was either a propagation for the assignments_integer or
                 // assignments_propositional
                 assert!(
-                    assignments_integer_clone.does_predicate_hold(propagated_predicate) || assignments_propositional_clone.is_literal_assigned_true(sat_cp_mediator.get_predicate_literal(propagated_predicate, &assignments_integer_clone,)),
+                    assignments_integer_clone.does_predicate_hold(propagated_predicate) || assignments_propositional_clone.is_literal_assigned_true(variable_literal_mappings.get_literal(propagated_predicate, &assignments_propositional_clone, &assignments_integer_clone,)),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n
@@ -281,7 +280,7 @@ impl DebugHelper {
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
                     &assignments_integer_clone,
                     &mut assignments_propositional_clone,
-                    sat_cp_mediator,
+                    variable_literal_mappings,
                     &failing_predicates,
                     &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
@@ -323,7 +322,7 @@ impl DebugHelper {
     fn debug_reported_propagations_reproduce_failure(
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
-        sat_cp_mediator: &SATCPMediator,
+        variable_literal_mappings: &VariableLiteralMappings,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -342,7 +341,7 @@ impl DebugHelper {
             DebugHelper::debug_add_predicates_to_assignment_propositional(
                 &assignments_integer_clone,
                 &mut assignments_propositional_clone,
-                sat_cp_mediator,
+                variable_literal_mappings,
                 &reason_predicates,
                 &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
             );
@@ -378,7 +377,7 @@ impl DebugHelper {
     fn debug_reported_propagations_negate_failure_and_check(
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
-        sat_cp_mediator: &SATCPMediator,
+        variable_literal_mappings: &VariableLiteralMappings,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -405,7 +404,7 @@ impl DebugHelper {
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
                     &assignments_integer_clone,
                     &mut assignments_propositional_clone,
-                    sat_cp_mediator,
+                    variable_literal_mappings,
                     &reason_predicates,
                     &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
@@ -467,12 +466,16 @@ impl DebugHelper {
     fn debug_add_predicates_to_assignment_propositional(
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &mut AssignmentsPropositional,
-        sat_cp_mediator: &SATCPMediator,
+        variable_literal_mappings: &VariableLiteralMappings,
         predicates: &[Predicate],
         literals: &[Literal],
     ) -> bool {
         for predicate in predicates {
-            let literal = sat_cp_mediator.get_predicate_literal(*predicate, assignments_integer);
+            let literal = variable_literal_mappings.get_literal(
+                *predicate,
+                assignments_propositional,
+                assignments_integer,
+            );
             if assignments_propositional.is_literal_assigned_false(literal) {
                 debug!(
                     "Trivial failure detected in the given reason.\n

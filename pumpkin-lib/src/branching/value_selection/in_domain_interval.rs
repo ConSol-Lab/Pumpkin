@@ -69,8 +69,9 @@ mod tests {
         let selected_literal = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(
             selected_literal,
-            mediator.get_predicate_literal(
+            mediator.get_literal(
                 domain_ids[0].upper_bound_predicate(1),
+                &assignments_propositional,
                 &assignments_integer
             )
         )
@@ -95,8 +96,9 @@ mod tests {
 
         assert_eq!(
             selected_literal,
-            mediator.get_predicate_literal(
+            mediator.get_literal(
                 domain_ids[0].upper_bound_predicate(5),
+                &assignments_propositional,
                 &assignments_integer
             )
         )
@@ -121,8 +123,9 @@ mod tests {
 
         assert_eq!(
             selected_literal,
-            mediator.get_predicate_literal(
+            mediator.get_literal(
                 domain_ids[0].upper_bound_predicate(1),
+                &assignments_propositional,
                 &assignments_integer
             )
         )

@@ -1,17 +1,20 @@
+mod conflict_analysis;
 pub mod constraint_satisfaction_solver;
 pub(crate) mod cp;
 mod debug_helper;
 mod preprocessor;
 mod sat;
-mod sat_cp_mediator;
 pub mod variables;
 
+pub use conflict_analysis::ConflictAnalysisContext;
+pub use conflict_analysis::ConflictAnalysisResult;
+pub use conflict_analysis::ResolutionConflictAnalyser;
 pub use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
+pub use cp::VariableLiteralMappings;
 pub use cp::*;
 pub use debug_helper::DebugDyn;
 pub use debug_helper::DebugHelper;
 pub use domain_events::DomainEvents;
 pub use preprocessor::Preprocessor;
 pub use sat::*;
-pub use sat_cp_mediator::SATCPMediator;
