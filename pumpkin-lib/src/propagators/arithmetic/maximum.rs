@@ -32,7 +32,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
             .cloned()
             .enumerate()
             .map(|(idx, var)| {
-                context.register(var, DomainEvents::UPPER_BOUND, LocalId::from(idx as u32))
+                context.register(var, DomainEvents::BOUNDS, LocalId::from(idx as u32))
             })
             .collect::<Box<_>>();
 
