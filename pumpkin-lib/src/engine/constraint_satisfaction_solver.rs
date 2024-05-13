@@ -853,7 +853,7 @@ impl ConstraintSatisfactionSolver {
         );
         self.state.declare_solving();
         self.stopwatch.reset(time_limit_in_seconds);
-        self.assumptions = assumptions.to_owned();
+        assumptions.clone_into(&mut self.assumptions);
     }
 
     fn solve_internal(&mut self, brancher: &mut impl Brancher) -> CSPSolverExecutionFlag {

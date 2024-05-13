@@ -1,5 +1,3 @@
-use flatzinc::AnnExpr;
-use flatzinc::Annotation;
 use log::warn;
 use pumpkin_lib::branching::AntiFirstFail;
 use pumpkin_lib::branching::DynamicValueSelector;
@@ -176,7 +174,7 @@ pub(crate) enum Search {
 }
 
 pub(crate) struct SearchStrategy {
-    pub(crate) variables: AnnExpr,
+    pub(crate) variables: flatzinc::AnnExpr,
     pub(crate) variable_selection_strategy: VariableSelectionStrategy,
     pub(crate) value_selection_strategy: ValueSelectionStrategy,
 }
@@ -239,7 +237,7 @@ impl FlatZincAstBuilder {
         let _ = self.solve_item.insert(solve_item);
     }
 
-    fn find_search(annotation: &Annotation) -> Search {
+    fn find_search(annotation: &flatzinc::Annotation) -> Search {
         match &annotation.id[..] {
             "bool_search" => Search::Bool(FlatZincAstBuilder::find_direct_search(annotation)),
             "float_search" => panic!("Search over floats is currently not supported"),
@@ -251,7 +249,7 @@ impl FlatZincAstBuilder {
                     "Expected a single expression for sequential search"
                 );
                 Search::Seq(match &annotation.expressions[0] {
-                    AnnExpr::Annotations(annotations) => annotations
+                    flatzinc::AnnExpr::Annotations(annotations) => annotations
                         .iter()
                         .map(FlatZincAstBuilder::find_search)
                         .collect::<Vec<_>>(),
@@ -265,7 +263,7 @@ impl FlatZincAstBuilder {
         }
     }
 
-    fn find_direct_search(annotation: &Annotation) -> SearchStrategy {
+    fn find_direct_search(annotation: &flatzinc::Annotation) -> SearchStrategy {
         // First element is the optimization variable
         // Second element is the variable selection strategy
         // Third element is the value selection strategy
@@ -287,7 +285,7 @@ impl FlatZincAstBuilder {
         }
     }
 
-    fn find_variable_selection_strategy(input: &AnnExpr) -> VariableSelectionStrategy {
+    fn find_variable_selection_strategy(input: &flatzinc::AnnExpr) -> VariableSelectionStrategy {
         match input {
             flatzinc::AnnExpr::Expr(inner) => match inner {
                 flatzinc::Expr::VarParIdentifier(identifier) => match &identifier[..] {
@@ -309,7 +307,7 @@ impl FlatZincAstBuilder {
         }
     }
 
-    fn find_value_selection_strategy(input: &AnnExpr) -> ValueSelectionStrategy {
+    fn find_value_selection_strategy(input: &flatzinc::AnnExpr) -> ValueSelectionStrategy {
         match input {
             flatzinc::AnnExpr::Expr(inner) => match inner {
                 flatzinc::Expr::VarParIdentifier(identifier) => match &identifier[..] {
@@ -385,14 +383,14 @@ pub(crate) enum VarArrayDecl {
         #[allow(dead_code)]
         ix: flatzinc::IndexSet,
         id: String,
-        annos: Vec<Annotation>,
+        annos: Vec<flatzinc::Annotation>,
         array_expr: Option<flatzinc::ArrayOfBoolExpr>,
     },
     Int {
         #[allow(dead_code)]
         ix: flatzinc::IndexSet,
         id: String,
-        annos: Vec<Annotation>,
+        annos: Vec<flatzinc::Annotation>,
         array_expr: Option<flatzinc::ArrayOfIntExpr>,
     },
 }
