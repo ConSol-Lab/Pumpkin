@@ -93,6 +93,10 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub(crate) fn is_identifier_parameter(&mut self, identifier: &str) -> bool {
+        self.integer_parameters.contains_key(identifier)
+    }
+
     // pub fn resolve_bool_constant(&self, identifier: &str) -> Option<bool> {
     //     self.boolean_parameters.get(identifier).copied()
     // }
@@ -207,6 +211,19 @@ impl CompilationContext<'_> {
                 .collect::<Result<Rc<[i32]>, _>>(),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
+    }
+
+    pub(crate) fn resolve_integer_constant_from_id(
+        &mut self,
+        identifier: &str,
+    ) -> Result<DomainId, FlatZincError> {
+        let value = self.resolve_int_expr_to_const(&flatzinc::IntExpr::VarParIdentifier(
+            identifier.to_owned(),
+        ))?;
+        Ok(*self
+            .constant_domain_ids
+            .entry(value)
+            .or_insert_with(|| self.solver.create_new_integer_variable(value, value)))
     }
 
     pub(crate) fn resolve_integer_constant_from_expr(

@@ -1,0 +1,3 @@
+int: objective = 10;
+
+solve maximize objective;
