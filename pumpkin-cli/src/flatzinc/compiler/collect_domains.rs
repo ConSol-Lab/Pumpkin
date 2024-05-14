@@ -5,6 +5,7 @@ use std::rc::Rc;
 use flatzinc::Annotation;
 
 use super::context::CompilationContext;
+use super::context::Domain;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::ast::SingleVarDecl;
 use crate::flatzinc::instance::Output;
@@ -45,7 +46,10 @@ pub(crate) fn run(
                         if domain.is_constant() {
                             *context
                                 .constant_domain_ids
-                                .entry(domain.lb)
+                                .entry(match &domain {
+                                    Domain::IntervalDomain { lb, ub: _ } => *lb,
+                                    Domain::SparseDomain { values } => values[0],
+                                })
                                 .or_insert_with(|| domain.into_variable(context.solver))
                         } else {
                             domain.into_variable(context.solver)

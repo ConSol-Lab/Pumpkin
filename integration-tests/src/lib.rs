@@ -200,12 +200,14 @@ pub fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str)
     let files = run_solver_with_options(instance_path, ["-a"]);
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
+
     let expected_file =
         std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
 
     let actual_solutions = output
         .parse::<Solutions<ORDERED>>()
         .expect("Valid solution");
+
     let expected_solutions = expected_file
         .parse::<Solutions<ORDERED>>()
         .expect("Valid solution");

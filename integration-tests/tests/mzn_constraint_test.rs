@@ -12,6 +12,7 @@ macro_rules! mzn_test {
 
 mzn_test!(int_eq);
 mzn_test!(int_eq_reif);
+mzn_test!(set_in);
 mzn_test!(array_int_maximum);
 mzn_test!(array_int_minimum);
 mzn_test!(int_min);

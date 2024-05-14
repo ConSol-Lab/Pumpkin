@@ -169,6 +169,10 @@ pub(crate) fn run(
             "bool_not" => compile_bool_not(context, exprs)?,
 
             "set_in_reif" => compile_set_in_reif(context, exprs)?,
+            "set_in" => {
+                // We do not do anything further as we handle the domain changes in a pre-processing step (see `handle_set_in.rs`).
+                true
+            },
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
@@ -269,7 +273,7 @@ fn compile_set_in_reif(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "par_set_in_reif");
+    check_parameters!(exprs, 3, "set_in_reif");
 
     let variable = context.resolve_integer_variable(&exprs[0])?;
     let set = context.resolve_set_constant(&exprs[1])?;

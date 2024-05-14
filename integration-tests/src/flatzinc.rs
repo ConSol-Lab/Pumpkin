@@ -52,7 +52,6 @@ impl<const ORDERED: bool> FromStr for Solutions<ORDERED> {
 
         let assignments = s
             .split("----------")
-            .filter(|line| !line.starts_with('%'))
             .map(parse_solution)
             .collect::<Result<_, _>>()?;
         Ok(Solutions { assignments })
@@ -65,7 +64,7 @@ fn parse_solution(solution: &str) -> Result<BTreeMap<String, Value>, String> {
     solution
         .lines()
         .map(|line| line.trim())
-        .filter(|line| !line.is_empty())
+        .filter(|line| !line.is_empty() && !line.starts_with('%'))
         .map(parse_solution_line)
         .collect()
 }
