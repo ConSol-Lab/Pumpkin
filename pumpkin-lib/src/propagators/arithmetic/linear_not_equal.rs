@@ -162,7 +162,7 @@ where
                     )
                 },
             )?;
-        } else if lhs == self.rhs {
+        } else if num_fixed == self.terms.len() && lhs == self.rhs {
             if reified && !context.is_literal_fixed(self.reif.as_ref().unwrap()) {
                 // Conflict was found but we can set the reified literal to false to satisfy the
                 // constraint
@@ -377,5 +377,19 @@ mod tests {
         solver.propagate(&mut propagator).expect("non-empty domain");
 
         assert!(solver.contains(y, -2));
+    }
+
+    #[test]
+    fn conflict_not_detected_if_not_all_fixed() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(0, 0);
+        let y = solver.new_variable(-1, 1);
+        let reif = solver.new_literal();
+
+        let _ = solver
+            .new_propagator(LinearNotEqualConstructor::reified([x, y].into(), 0, reif))
+            .expect("non-empty domain");
+
+        assert!(!solver.is_literal_assigned(reif))
     }
 }

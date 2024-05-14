@@ -17,6 +17,7 @@ mzn_test!(array_int_maximum);
 mzn_test!(array_int_minimum);
 mzn_test!(int_min);
 mzn_test!(int_max);
+mzn_test!(int_lin_ne_reif);
 
 fn run_mzn_constraint_test(instance_name: &str) {
     ensure_release_binary_built();
