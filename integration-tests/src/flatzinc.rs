@@ -20,12 +20,27 @@ impl FromStr for Value {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Solutions {
-    assignments: BTreeSet<BTreeMap<String, Value>>,
+#[derive(Debug)]
+pub struct Solutions<const ORDERED: bool> {
+    assignments: Vec<BTreeMap<String, Value>>,
 }
 
-impl FromStr for Solutions {
+impl<const ORDERED: bool> PartialEq for Solutions<ORDERED> {
+    fn eq(&self, other: &Self) -> bool {
+        if ORDERED {
+            // If the solutions are ordered then we do a comparison which also checks the order (by
+            // simply comparing the vecs)
+            self.assignments == other.assignments
+        } else {
+            // If the solutions are unordered then we go a comparison on an ordered BTreeSet which
+            // means that we disregard the order in which the solver(s) found the solutions
+            self.assignments.iter().collect::<BTreeSet<_>>()
+                == other.assignments.iter().collect::<BTreeSet<_>>()
+        }
+    }
+}
+
+impl<const ORDERED: bool> FromStr for Solutions<ORDERED> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

@@ -12,6 +12,8 @@ use std::time::Duration;
 
 use wait_timeout::ChildExt;
 
+use crate::flatzinc::Solutions;
+
 #[derive(Debug)]
 pub struct Files {
     pub instance_file: PathBuf,
@@ -180,4 +182,33 @@ pub fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()
     }
 
     files.cleanup()
+}
+
+pub fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
+    ensure_release_binary_built();
+
+    let instance_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let snapshot_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.expected",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let files = run_solver_with_options(instance_path, ["-a"]);
+
+    let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
+    let expected_file =
+        std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
+
+    let actual_solutions = output
+        .parse::<Solutions<ORDERED>>()
+        .expect("Valid solution");
+    let expected_solutions = expected_file
+        .parse::<Solutions<ORDERED>>()
+        .expect("Valid solution");
+
+    assert_eq!(actual_solutions, expected_solutions);
 }

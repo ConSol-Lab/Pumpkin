@@ -766,7 +766,7 @@ impl ConstraintSatisfactionSolver {
         // for a custom domain propagator  this would also simplify the code below, no
         // additional checks would be needed? Not sure.
 
-        if self.assignments_integer.num_domains() == 0 || self.cp_propagators.is_empty() {
+        if self.assignments_integer.num_domains() == 0 {
             self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
             return Ok(());
         }
