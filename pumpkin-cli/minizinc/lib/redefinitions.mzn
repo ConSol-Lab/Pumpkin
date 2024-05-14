@@ -37,6 +37,3 @@ predicate pumpkin_bool_xor(var bool: a, var bool: b);
 predicate pumpkin_bool_xor_reif(var bool: a, var bool: b, var bool: r);
 
 % Set Constraints
-
-predicate set_in_reif(var int: x, set of int: S, var bool: r) = par_set_in_reif(x, S, r);
-predicate par_set_in_reif(var int: x, set of int: S, var bool: r);

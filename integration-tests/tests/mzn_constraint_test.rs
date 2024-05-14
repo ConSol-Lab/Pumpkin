@@ -17,3 +17,5 @@ mzn_test!(array_int_minimum);
 mzn_test!(int_min);
 mzn_test!(int_max);
 mzn_test!(int_lin_ne_reif);
+mzn_test!(set_in_reif_interval);
+mzn_test!(set_in_reif_sparse);

@@ -168,7 +168,7 @@ pub(crate) fn run(
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs)?,
             "bool_not" => compile_bool_not(context, exprs)?,
 
-            "par_set_in_reif" => compile_set_in_reif(context, exprs)?,
+            "set_in_reif" => compile_set_in_reif(context, exprs)?,
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
@@ -280,25 +280,43 @@ fn compile_set_in_reif(
             lower_bound,
             upper_bound,
         } => {
-            let lb_variable = *context
-                .constant_domain_ids
-                .entry(lower_bound)
-                .or_insert_with(|| {
+            // `reif -> x \in S`
+            // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
+            let forward = context
+                .solver
+                .add_permanent_clause(vec![
+                    !reif,
                     context
                         .solver
-                        .create_new_integer_variable(lower_bound, lower_bound)
-                });
-            let ub_variable = *context
-                .constant_domain_ids
-                .entry(upper_bound)
-                .or_insert_with(|| {
-                    context
-                        .solver
-                        .create_new_integer_variable(upper_bound, upper_bound)
-                });
+                        .get_lower_bound_literal(variable, lower_bound),
+                ])
+                .is_ok()
+                && context
+                    .solver
+                    .add_permanent_clause(vec![
+                        !reif,
+                        !context
+                            .solver
+                            .get_lower_bound_literal(variable, upper_bound + 1),
+                    ])
+                    .is_ok();
 
-            int_le_reif(context.solver, variable, ub_variable, reif)
-                && int_le_reif(context.solver, lb_variable, variable, reif)
+            // `!reif -> x \notin S`
+            // Decomposed to `!reif -> (x < lb \/ x > ub)`
+            let backward = context
+                .solver
+                .add_permanent_clause(vec![
+                    reif,
+                    !context
+                        .solver
+                        .get_lower_bound_literal(variable, lower_bound),
+                    context
+                        .solver
+                        .get_lower_bound_literal(variable, upper_bound + 1),
+                ])
+                .is_ok();
+
+            forward && backward
         }
 
         Set::Sparse { values } => {

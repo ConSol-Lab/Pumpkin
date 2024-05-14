@@ -1,0 +1,7 @@
+var bool : reif :: output_var;
+
+var 1..7 : x ::output_var;
+
+constraint set_in_reif(x, {1, 3}, reif);
+
+solve satisfy;
