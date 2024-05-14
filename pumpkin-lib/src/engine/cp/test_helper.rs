@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(any(test, doc))]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;

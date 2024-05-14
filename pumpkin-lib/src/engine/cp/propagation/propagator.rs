@@ -5,6 +5,12 @@ use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
+#[cfg(doc)]
+use crate::engine::propagation::PropagatorConstructor;
+#[cfg(doc)]
+use crate::engine::propagation::PropagatorConstructorContext;
+#[cfg(doc)]
+use crate::engine::propagation::PropagatorVariable;
 use crate::engine::BooleanDomainEvent;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
@@ -76,6 +82,10 @@ pub trait Propagator {
     ///
     /// By default the propagator is always enqueued for every event. Not all propagators will
     /// benefit from implementing this, so it is not required to do so.
+    ///
+    /// Note that the variables and events to which the propagator is subscribed to are determined
+    /// upon propagator construction via [`PropagatorConstructor`],
+    /// by creating [`PropagatorVariable`]s using [`PropagatorConstructorContext::register()`].
     fn notify(
         &mut self,
         _context: &mut PropagationContextMut,

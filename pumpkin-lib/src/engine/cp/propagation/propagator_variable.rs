@@ -10,9 +10,14 @@ use crate::engine::variables::Literal;
 /// For all practical purposes, this is the variable that propagators operate on.
 /// Propagator variables are obtained through [`PropagatorConstructorContext::register()`].
 
-/// In the backend, ['PropagatorVariable'] is a wrapper around the internal representation
+/// In the backend, [`PropagatorVariable`] is a wrapper around the internal representation
 /// of the variable in the solver, i.e., it keeps track of the [`LocalId`] when modifying the
-/// domain. This is done to seamlessly incorporate 'views' in the solver.
+/// domain. This is done to seamlessly incorporate views \[1\] in the solver.
+///
+/// # Bibliography
+/// \[1\] C. Schulte and G. Tack, ‘Views and iterators for generic constraint implementations’, in
+/// International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
+/// 118–132.
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
     pub(super) inner: Var,

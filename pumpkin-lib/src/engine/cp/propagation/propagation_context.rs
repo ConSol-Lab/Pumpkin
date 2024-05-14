@@ -10,14 +10,13 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::EmptyDomain;
 
-/// ['PropagationContext'] is passed to propagators during propagation.
-/// It may be queried to retrieve information about the current variable domains,
-/// e.g., the lower bound of a particular variable),
-/// or apply changes to the domain,
-/// e.g., set [x >= 5].
+/// [`PropagationContext`] is passed to propagators during propagation.
+/// It may be queried to retrieve information about the current variable domains such as the
+/// lower-bound of a particular variable, or used to apply changes to the domain of a variable
+/// e.g. set `[x >= 5]`.
 ///
 ///
-/// Note that the ['PropagationContext'] is the only point of communication beween
+/// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
 #[derive(Debug)]
 pub struct PropagationContext<'a> {
