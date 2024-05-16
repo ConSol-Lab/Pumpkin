@@ -362,13 +362,16 @@ fn compile_bool_not(
     // TODO: Take this constraint into account when creating variables, as these can be opposite
     // literals of the same PropositionalVariable. Unsure how often this actually appears in models
     // though.
-    check_parameters!(exprs, 2, "bool_eq");
+    check_parameters!(exprs, 2, "bool_not");
 
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b, !a]).is_ok();
+    // a != b
+    // -> !(a /\ b) /\ !(!a /\ !b)
+    // -> (!a \/ !b) /\ (a \/ b)
+    let c1 = context.solver.add_permanent_clause(vec![a, b]).is_ok();
+    let c2 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
 
     Ok(c1 && c2)
 }
