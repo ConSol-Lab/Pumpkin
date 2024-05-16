@@ -16,11 +16,13 @@ use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::branching::DynamicBrancher;
 use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::AssignmentsInteger;
 use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
+use pumpkin_lib::pumpkin_assert_moderate;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;
@@ -109,10 +111,10 @@ pub(crate) fn solve(
                         solver.get_integer_assignments(),
                     ));
 
-                    let blocking_clause = solver.get_blocking_clause();
-                    solver.restore_state_at_root(&mut brancher);
+                    let could_find_another_solution =
+                        add_blocking_clause(&mut solver, &outputs, &mut brancher);
 
-                    if solver.add_permanent_clause(blocking_clause).is_err() {
+                    if !could_find_another_solution {
                         println!("==========");
                         break;
                     }
@@ -149,6 +151,72 @@ pub(crate) fn solve(
     }
 
     Ok(())
+}
+
+/// Creates a clause which prevents the current solution from occurring again by going over the
+/// defined output variables and creating a clause which prevents those values from being assigned.
+///
+/// This method is used when attempting to find multiple solutions. It restores the state of the
+/// passed [`ConstraintSatisfactionSolver`] to the root (using
+/// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
+/// was successful (i.e. it is possible that there could be another solution) and returns false
+/// otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
+/// solutions).
+fn add_blocking_clause(
+    solver: &mut ConstraintSatisfactionSolver,
+    outputs: &[Output],
+    brancher: &mut impl Brancher,
+) -> bool {
+    let clause = outputs
+        .iter()
+        .flat_map(|output| match output {
+            Output::Bool(bool) => {
+                pumpkin_assert_moderate!(solver
+                    .get_propositional_assignments()
+                    .is_literal_assigned(*bool.get_variable()));
+                let value = solver
+                    .get_propositional_assignments()
+                    .is_variable_assigned_true(bool.get_variable().get_propositional_variable());
+                Box::new(std::iter::once(Literal::new(
+                    bool.get_variable().get_propositional_variable(),
+                    value,
+                )))
+            }
+            Output::Int(int) => {
+                let value = solver
+                    .get_integer_assignments()
+                    .get_assigned_value(*int.get_variable());
+                Box::new(std::iter::once(
+                    solver.get_equality_literal(*int.get_variable(), value),
+                ))
+            }
+            Output::ArrayOfBool(array_of_bool) => {
+                let literals: Box<dyn Iterator<Item = Literal>> =
+                    Box::new(array_of_bool.get_contents().map(|literal| {
+                        pumpkin_assert_moderate!(solver
+                            .get_propositional_assignments()
+                            .is_literal_assigned(*literal));
+                        let value = solver
+                            .get_propositional_assignments()
+                            .is_variable_assigned_true(literal.get_propositional_variable());
+                        Literal::new(literal.get_propositional_variable(), value)
+                    }));
+                literals
+            }
+            Output::ArrayOfInt(array_of_ints) => {
+                Box::new(array_of_ints.get_contents().map(|int| {
+                    let value = solver.get_integer_assignments().get_assigned_value(*int);
+                    solver.get_equality_literal(*int, value)
+                }))
+            }
+        })
+        .map(|literal| !literal)
+        .collect::<Vec<_>>();
+    solver.restore_state_at_root(brancher);
+    if clause.is_empty() {
+        return false;
+    }
+    solver.add_permanent_clause(clause).is_ok()
 }
 
 fn parse_and_compile(

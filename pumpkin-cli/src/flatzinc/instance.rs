@@ -97,6 +97,10 @@ impl<T> VariableOutput<T> {
     pub(crate) fn print_value<V: Display>(&self, value: impl FnOnce(&T) -> V) {
         println!("{} = {};", self.id, value(&self.variable));
     }
+
+    pub(crate) fn get_variable(&self) -> &T {
+        &self.variable
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,5 +139,9 @@ impl<T> ArrayOutput<T> {
             "{} = array{num_dimensions}d({shape_buf}[{array_buf}]);",
             self.id
         );
+    }
+
+    pub(crate) fn get_contents(&self) -> impl Iterator<Item = &T> {
+        self.contents.iter()
     }
 }

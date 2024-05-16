@@ -1,12 +1,16 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::fmt::Display;
 use std::str::FromStr;
+
+use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(variant_size_differences)]
 enum Value {
     Int(i32),
     Bool(bool),
+    IntArray(Vec<i32>),
 }
 
 impl FromStr for Value {
@@ -15,8 +19,39 @@ impl FromStr for Value {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.parse::<i32>()
             .map(Value::Int)
-            .or_else(|_| s.parse::<bool>().map(Value::Bool))
+            .or_else(|_| {
+                s.parse::<bool>()
+                    .map(Value::Bool)
+                    .or_else(|_| create_array_from_string(s))
+            })
             .map_err(|e| e.to_string())
+    }
+}
+
+struct IntArrayError;
+impl Display for IntArrayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Could not parse int array")
+    }
+}
+
+fn create_array_from_string(s: &str) -> Result<Value, IntArrayError> {
+    let captures = Regex::new(r"array1d\([0-9]+\.\.[0-9]+,\s*\[(\d+(?:,\s\d+)*\d*)\]\)")
+        .unwrap()
+        .captures_iter(s)
+        .next();
+    if let Some(captures) = captures {
+        Ok(Value::IntArray(
+            captures
+                .get(1)
+                .unwrap()
+                .as_str()
+                .split(", ")
+                .map(|integer| integer.parse::<i32>().unwrap())
+                .collect::<Vec<_>>(),
+        ))
+    } else {
+        Err(IntArrayError)
     }
 }
 
