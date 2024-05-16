@@ -10,3 +10,4 @@ macro_rules! mzn_optimization_test {
     };
 }
 mzn_optimization_test!(constant_objective);
+mzn_optimization_test!(unfixed_objective);

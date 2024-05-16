@@ -39,6 +39,10 @@ impl DynamicBrancher {
             brancher_index: 0,
         }
     }
+
+    pub fn add_brancher(&mut self, brancher: Box<dyn Brancher>) {
+        self.branchers.push(brancher)
+    }
 }
 
 impl Brancher for DynamicBrancher {

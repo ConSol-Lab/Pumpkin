@@ -227,6 +227,8 @@ fn parse_and_compile(
     compiler::compile(ast, solver)
 }
 
+/// Prints the current solution stored in the provided [`AssignmentsInteger`] and
+/// [`AssignmentsPropositional`].
 fn print_solution_from_solver(
     assignments_integer: &AssignmentsInteger,
     assignments_propositional: &AssignmentsPropositional,

@@ -53,6 +53,7 @@ impl<'a> MinizincOptimiser<'a> {
                     self.get_propositional_assignments(),
                     self.get_integer_assignments(),
                 ));
+
                 log_statistics_with_objective(
                     self.csp_solver,
                     self.csp_solver
@@ -113,7 +114,7 @@ impl<'a> MinizincOptimiser<'a> {
                         self.get_integer_assignments(),
                         self.get_propositional_assignments(),
                         outputs,
-                    );
+                    )
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return MinizincOptimisationResult::Optimal {
