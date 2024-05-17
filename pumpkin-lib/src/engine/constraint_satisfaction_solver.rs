@@ -446,7 +446,7 @@ impl ConstraintSatisfactionSolver {
         time_limit_in_seconds: i64,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
-        if self.state.is_infeasible() {
+        if self.state.is_inconsistent() {
             return CSPSolverExecutionFlag::Infeasible;
         }
 
@@ -475,8 +475,8 @@ impl ConstraintSatisfactionSolver {
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         assert!(
-            !self.is_in_infeasible_state(),
-            "variables cannot be created in an infeasible state"
+            !self.state.is_inconsistent(),
+            "Variables cannot be created in an inconsistent state"
         );
 
         self.variable_literal_mappings.create_new_domain(
@@ -1269,7 +1269,7 @@ impl ConstraintSatisfactionSolver {
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
-        if self.is_in_infeasible_state() {
+        if self.state.is_inconsistent() {
             return false;
         }
 
@@ -1307,12 +1307,6 @@ impl ConstraintSatisfactionSolver {
 
             self.state.no_conflict()
         }
-    }
-
-    fn is_in_infeasible_state(&mut self) -> bool {
-        self.state.conflicting()
-            || self.state.is_infeasible()
-            || self.state.is_infeasible_under_assumptions()
     }
 
     /// Creates a clause from `literals` and adds it to the current formula.
@@ -1486,6 +1480,12 @@ impl CSPSolverState {
 
     pub fn is_infeasible(&self) -> bool {
         matches!(self.internal_state, CSPSolverStateInternal::Infeasible)
+    }
+
+    /// Determines whether the current state is inconsistent; i.e. whether it is conflicting,
+    /// infeasible or infeasible under assumptions
+    pub fn is_inconsistent(&self) -> bool {
+        self.conflicting() || self.is_infeasible() || self.is_infeasible_under_assumptions()
     }
 
     pub fn is_infeasible_under_assumptions(&self) -> bool {

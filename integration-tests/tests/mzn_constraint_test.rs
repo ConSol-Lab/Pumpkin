@@ -20,6 +20,7 @@ mzn_test!(int_max);
 mzn_test!(int_lin_ne_reif);
 mzn_test!(set_in_reif_interval);
 mzn_test!(set_in_reif_sparse);
+mzn_test!(int_lin_le);
 mzn_test!(int_lin_eq_reif);
 mzn_test!(bool_xor_reif);
 mzn_test!(bool_xor);
