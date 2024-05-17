@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use super::value_selection::PhaseSaving;
 use super::value_selection::ValueSelector;
+use super::SolutionGuidedValueSelector;
 use super::VariableSelector;
 use super::Vsids;
 use crate::basic_types::SolutionReference;
@@ -46,30 +47,35 @@ where
     }
 }
 
-impl
-    IndependentVariableValueBrancher<
+type DefaultBrancher = IndependentVariableValueBrancher<
+    PropositionalVariable,
+    Vsids<PropositionalVariable>,
+    SolutionGuidedValueSelector<
         PropositionalVariable,
-        Vsids<PropositionalVariable>,
+        bool,
         PhaseSaving<PropositionalVariable, bool>,
-    >
-{
+    >,
+>;
+
+impl DefaultBrancher {
     /// Creates a default [`IndependentVariableValueBrancher`] which uses [`Vsids`] as
-    /// [`VariableSelector`] and [`PhaseSaving`] as its [`ValueSelector`]; it searches over all
+    /// [`VariableSelector`] and [`SolutionGuidedValueSelector`] (with [`PhaseSaving`] as its
+    /// back-up selector) as its [`ValueSelector`]; it searches over all
     /// [`PropositionalVariable`]s defined in the provided `solver`.
     pub fn default_over_all_propositional_variables(
         solver: &ConstraintSatisfactionSolver,
-    ) -> IndependentVariableValueBrancher<
-        PropositionalVariable,
-        Vsids<PropositionalVariable>,
-        PhaseSaving<PropositionalVariable, bool>,
-    > {
+    ) -> DefaultBrancher {
         let variables = solver
             .get_propositional_assignments()
             .get_propositional_variables()
             .collect::<Vec<_>>();
         IndependentVariableValueBrancher {
             variable_selector: Vsids::new(&variables),
-            value_selector: PhaseSaving::new(&variables),
+            value_selector: SolutionGuidedValueSelector::new(
+                &variables,
+                Vec::new(),
+                PhaseSaving::new(&variables),
+            ),
             variable_type: PhantomData,
         }
     }

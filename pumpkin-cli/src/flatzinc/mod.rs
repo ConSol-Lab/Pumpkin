@@ -23,6 +23,7 @@ use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::pumpkin_assert_moderate;
+use pumpkin_lib::pumpkin_assert_simple;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;
@@ -237,19 +238,21 @@ fn print_solution_from_solver(
     for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => output.print_value(|literal| {
+                pumpkin_assert_simple!(assignments_propositional.is_literal_assigned(*literal));
                 assignments_propositional.is_literal_assigned_true(*literal)
             }),
 
             Output::Int(output) => {
-                output.print_value(|domain_id| assignments_integer.get_lower_bound(*domain_id))
+                output.print_value(|domain_id| assignments_integer.get_assigned_value(*domain_id))
             }
 
             Output::ArrayOfBool(output) => output.print_value(|literal| {
+                pumpkin_assert_simple!(assignments_propositional.is_literal_assigned(*literal));
                 assignments_propositional.is_literal_assigned_true(*literal)
             }),
 
             Output::ArrayOfInt(output) => {
-                output.print_value(|domain_id| assignments_integer.get_lower_bound(*domain_id))
+                output.print_value(|domain_id| assignments_integer.get_assigned_value(*domain_id))
             }
         }
     }

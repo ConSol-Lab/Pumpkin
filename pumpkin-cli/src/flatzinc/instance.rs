@@ -23,13 +23,6 @@ impl FlatzincObjective {
             FlatzincObjective::Minimize(domain) => domain,
         }
     }
-
-    pub(crate) fn is_maximizing(&self) -> bool {
-        match self {
-            FlatzincObjective::Maximize(_) => true,
-            FlatzincObjective::Minimize(_) => false,
-        }
-    }
 }
 
 #[derive(Default)]
