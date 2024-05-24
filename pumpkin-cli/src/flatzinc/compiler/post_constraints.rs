@@ -155,11 +155,11 @@ pub(crate) fn run(
             "bool2int" => compile_bool2int(context, exprs)?,
 
             "bool_lin_eq" => {
-                compile_bool_lin_predicate(context, exprs, "bool_lin_eq", bool_lin_eq)?
+                compile_bool_lin_eq_predicate(context, exprs)?
             }
 
             "bool_lin_le" => {
-                compile_bool_lin_predicate(context, exprs, "bool_lin_le", bool_lin_le)?
+                compile_bool_lin_le_predicate(context, exprs)?
             }
 
             "bool_and" => compile_bool_and(context, exprs)?,
@@ -690,19 +690,30 @@ fn compile_reified_int_lin_predicate(
     Ok(post_constraint(context.solver, terms, rhs, reif))
 }
 
-fn compile_bool_lin_predicate(
+fn compile_bool_lin_eq_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, &[i32], &[Literal], i32) -> bool,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, name);
+    check_parameters!(exprs, 3, "bool_lin_eq");
+
+    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+    let bools = context.resolve_bool_variable_array(&exprs[1])?;
+    let rhs = context.resolve_integer_variable(&exprs[2])?;
+
+    Ok(bool_lin_eq(context.solver, &weights, &bools, rhs))
+}
+
+fn compile_bool_lin_le_predicate(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "bool_lin_le");
 
     let weights = context.resolve_array_integer_constants(&exprs[0])?;
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(post_constraint(context.solver, &weights, &bools, rhs))
+    Ok(bool_lin_le(context.solver, &weights, &bools, rhs))
 }
 
 fn compile_all_different(

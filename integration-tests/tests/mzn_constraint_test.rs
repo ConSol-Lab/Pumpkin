@@ -25,3 +25,5 @@ mzn_test!(int_lin_eq_reif);
 mzn_test!(bool_xor_reif);
 mzn_test!(bool_xor);
 mzn_test!(bool_not);
+mzn_test!(bool_lin_eq);
+mzn_test!(bool_lin_le);
