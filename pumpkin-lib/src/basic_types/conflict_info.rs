@@ -23,12 +23,10 @@ pub enum ConflictInfo {
     },
     /// The conflict is triggered in the propositional representation.
     Propagation {
-        /// The reference to the conflicting constraint.
+        /// The reference to the constraint propagating `literal` to the opposite polarity of the
+        /// current assignment.
         reference: ConstraintReference,
-        /// The literal which should be both true and false at the same time (due to the
-        /// propagation of a [`Literal`], this could occur due to synchronization in
-        /// [`ConstraintSatisfactionSolver::synchronise_propositional_trail_based_on_integer_trail`] or due to
-        /// clausal propagation).
+        /// The literal which should be both true and false at the same time.
         literal: Literal,
     },
     /// The conflict is triggered by a [`Propagator`].

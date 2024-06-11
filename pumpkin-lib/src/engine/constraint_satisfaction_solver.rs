@@ -24,7 +24,6 @@ use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
-use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
@@ -42,7 +41,6 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
-use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
@@ -270,18 +268,9 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    /// Returning `AssignmentsInteger` too is a workaround to allow its usage after a
-    ///  call to this. The other option is to inline this method, but then you need to
-    ///  expose `self.reason_store` as a public field.
-    pub fn compute_reason(&mut self, reason_ref: ReasonRef) -> &PropositionalConjunction {
-        let context =
-            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
-        let reason = self.reason_store.get_or_compute(reason_ref, &context);
-        reason.expect("reason reference should not be stale")
-    }
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
     /// true is returned.
-    pub fn process_domain_events(&mut self) -> bool {
+    fn process_domain_events(&mut self) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
         if self.watch_list_cp.is_watching_anything() {
@@ -694,9 +683,7 @@ impl ConstraintSatisfactionSolver {
         self.state.declare_ready();
     }
 
-    pub fn synchronise_propositional_trail_based_on_integer_trail(
-        &mut self,
-    ) -> Option<ConflictInfo> {
+    fn synchronise_propositional_trail_based_on_integer_trail(&mut self) -> Option<ConflictInfo> {
         // for each entry on the integer trail, we now add the equivalent propositional
         // representation on the propositional trail  note that only one literal per
         // predicate will be stored      since the clausal propagator will propagate other
@@ -748,7 +735,7 @@ impl ConstraintSatisfactionSolver {
         None
     }
 
-    pub fn synchronise_integer_trail_based_on_propositional_trail(
+    fn synchronise_integer_trail_based_on_propositional_trail(
         &mut self,
     ) -> Result<(), EmptyDomain> {
         pumpkin_assert_moderate!(
@@ -803,7 +790,7 @@ impl ConstraintSatisfactionSolver {
         Ok(())
     }
 
-    pub fn synchronise_assignments(&mut self) {
+    fn synchronise_assignments(&mut self) {
         pumpkin_assert_simple!(
             self.sat_trail_synced_position >= self.assignments_propositional.num_trail_entries()
         );
