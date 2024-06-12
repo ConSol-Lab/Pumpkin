@@ -38,6 +38,8 @@
   * int_eq_reif
   * int_plus
   * int_times
+  * int_div
+  * int_mod
   * int_abs
   * int_max
   * int_min

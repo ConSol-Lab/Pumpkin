@@ -216,7 +216,7 @@ impl PseudoBooleanConstraintEncoder {
             State::Encoded(ref mut encoder) => {
                 pumpkin_assert_simple!(
                     self.k_previous > k,
-                    "The strenthened k value for the right hand side is not smaller than the previous k."
+                    "The strenthened k value ({k}) for the right hand side is not smaller than the previous k ({}).", self.k_previous
                 );
 
                 pumpkin_assert_simple!(

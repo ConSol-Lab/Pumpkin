@@ -49,9 +49,9 @@ pub(crate) struct DifferenceLogicPropagator<V> {
 impl<V> PropagatorConstructor for DifferenceLogicConstructor<V>
 where
     V: IntegerVariable + Hash + Eq + 'static,
-    <V as IntegerVariable>::AffineView: Hash + Eq,
+    V::AffineView: IntegerVariable + Hash + Eq,
 {
-    type Propagator = DifferenceLogicPropagator<<V as IntegerVariable>::AffineView>;
+    type Propagator = DifferenceLogicPropagator<V::AffineView>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
@@ -274,6 +274,7 @@ mod tests {
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
+    use crate::engine::variables::TransformableVariable;
     use crate::engine::IntDomainEvent::UpperBound;
 
     #[test]

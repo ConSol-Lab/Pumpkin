@@ -207,6 +207,7 @@ mod tests {
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
+    use crate::engine::variables::TransformableVariable;
 
     #[test]
     fn test_value_is_removed() {

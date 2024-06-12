@@ -4,7 +4,9 @@ use super::LocalId;
 use super::PropagatorConstructorContext;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
+use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::engine::variables::TransformableVariable;
 
 /// A propagator variable is a handle to a variable for a propagator.
 /// For all practical purposes, this is the variable that propagators operate on.
@@ -21,6 +23,22 @@ use crate::engine::variables::Literal;
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
     pub(super) inner: Var,
+}
+
+impl<Var: IntegerVariable> TransformableVariable<PropagatorVariable<Var::AffineView>>
+    for PropagatorVariable<Var>
+{
+    fn scaled(&self, scale: i32) -> PropagatorVariable<Var::AffineView> {
+        PropagatorVariable {
+            inner: self.inner.scaled(scale),
+        }
+    }
+
+    fn offset(&self, offset: i32) -> PropagatorVariable<Var::AffineView> {
+        PropagatorVariable {
+            inner: self.inner.offset(offset),
+        }
+    }
 }
 
 impl<Var> PropagatorVariable<Var> {

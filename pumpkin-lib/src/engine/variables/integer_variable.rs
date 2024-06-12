@@ -1,5 +1,6 @@
 use enumset::EnumSet;
 
+use super::TransformableVariable;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -9,7 +10,9 @@ use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
 
-pub trait IntegerVariable: Clone + PredicateConstructor<Value = i32> {
+pub trait IntegerVariable:
+    Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView>
+{
     type AffineView: IntegerVariable;
 
     /// Get the lower bound of the variable.
@@ -58,13 +61,4 @@ pub trait IntegerVariable: Clone + PredicateConstructor<Value = i32> {
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
-
-    /// Get a variable which domain is scaled compared to the domain of self.
-    ///
-    /// The scaled domain will have holes in it. E.g. if we have `dom(x) = {1, 2}`, then
-    /// `dom(x.scaled(2)) = {2, 4}` and *not* `dom(x.scaled(2)) = {1, 2, 3, 4}`.
-    fn scaled(&self, scale: i32) -> Self::AffineView;
-
-    /// Get a variable which domain has a constant offset to the domain of self.
-    fn offset(&self, offset: i32) -> Self::AffineView;
 }

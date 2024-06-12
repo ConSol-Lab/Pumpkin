@@ -1,5 +1,6 @@
 use enumset::EnumSet;
 
+use super::TransformableVariable;
 use crate::basic_types::Predicate;
 use crate::basic_types::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -75,12 +76,14 @@ impl IntegerVariable for DomainId {
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         event.unwrap()
     }
+}
 
-    fn scaled(&self, scale: i32) -> Self::AffineView {
+impl TransformableVariable<AffineView<DomainId>> for DomainId {
+    fn scaled(&self, scale: i32) -> AffineView<DomainId> {
         AffineView::new(*self, scale, 0)
     }
 
-    fn offset(&self, offset: i32) -> Self::AffineView {
+    fn offset(&self, offset: i32) -> AffineView<DomainId> {
         AffineView::new(*self, 1, offset)
     }
 }

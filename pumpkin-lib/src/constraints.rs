@@ -13,6 +13,7 @@ use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicatio
 use crate::propagators::arithmetic::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::arithmetic::maximum::MaximumConstructor;
+use crate::propagators::division::DivisionConstructor;
 use crate::propagators::element::ElementConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTablePerPoint;
@@ -26,6 +27,10 @@ pub trait ConstraintsExt {
     where
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static;
+
+    fn lower_bound(&self, var: &impl IntegerVariable) -> i32;
+    fn upper_bound(&self, var: &impl IntegerVariable) -> i32;
+    fn contains(&self, var: &impl IntegerVariable, value: i32) -> bool;
 
     /// Adds the constraint `array[index] = rhs`.
     fn array_var_int_element<ElementVar: IntegerVariable + 'static>(
@@ -191,6 +196,32 @@ pub trait ConstraintsExt {
         self.post(IntegerMultiplicationConstructor { a, b, c })
     }
 
+    /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
+    /// propagator performs truncating division (i.e. rounding towards 0).
+    ///
+    /// The propagator assumes that the `denominator` is a non-zero integer.
+    ///
+    /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
+    fn int_div(
+        &mut self,
+        numerator: impl IntegerVariable + 'static,
+        denominator: impl IntegerVariable + 'static,
+        rhs: impl IntegerVariable + 'static,
+    ) -> bool
+    where
+        Self: Sized,
+    {
+        pumpkin_assert_simple!(
+            !self.contains(&denominator, 0),
+            "We do not support a value of 0 in the domain of the denominator of `int_div`"
+        );
+        self.post(DivisionConstructor {
+            numerator,
+            denominator,
+            rhs,
+        })
+    }
+
     /// Adds the constraint `|signed| = absolute`.
     fn int_abs(
         &mut self,
@@ -285,5 +316,17 @@ impl ConstraintsExt for ConstraintSatisfactionSolver {
         Constructor::Propagator: 'static,
     {
         self.add_propagator(constructor)
+    }
+
+    fn lower_bound(&self, var: &impl IntegerVariable) -> i32 {
+        var.lower_bound(self.get_integer_assignments())
+    }
+
+    fn upper_bound(&self, var: &impl IntegerVariable) -> i32 {
+        var.upper_bound(self.get_integer_assignments())
+    }
+
+    fn contains(&self, var: &impl IntegerVariable, value: i32) -> bool {
+        var.contains(self.get_integer_assignments(), value)
     }
 }

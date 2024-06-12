@@ -7,7 +7,7 @@ use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(variant_size_differences)]
-enum Value {
+pub(crate) enum Value {
     Int(i32),
     Bool(bool),
     IntArray(Vec<i32>),
@@ -57,7 +57,7 @@ fn create_array_from_string(s: &str) -> Result<Value, IntArrayError> {
 
 #[derive(Debug)]
 pub struct Solutions<const ORDERED: bool> {
-    assignments: Vec<BTreeMap<String, Value>>,
+    pub(crate) assignments: Vec<BTreeMap<String, Value>>,
 }
 
 impl<const ORDERED: bool> PartialEq for Solutions<ORDERED> {

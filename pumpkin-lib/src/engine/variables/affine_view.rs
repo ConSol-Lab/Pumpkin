@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use enumset::EnumSet;
 
+use super::TransformableVariable;
 use crate::basic_types::Predicate;
 use crate::basic_types::PredicateConstructor;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -12,6 +13,7 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
+use crate::math::num_ext::NumExt;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
 /// domain of `x`.
@@ -36,32 +38,9 @@ impl<Inner> AffineView<Inner> {
     fn invert(&self, value: i32, rounding: Rounding) -> i32 {
         let inverted_translation = value - self.offset;
 
-        // TODO: The source is taken from the standard library nightly implementation of these
-        // methods. Once they are stabilized, these definitions can be removed.
-        // Tracking issue: https://github.com/rust-lang/rust/issues/88581
-        fn div_ceil(lhs: i32, rhs: i32) -> i32 {
-            let d = lhs / rhs;
-            let r = lhs % rhs;
-            if (r > 0 && rhs > 0) || (r < 0 && rhs < 0) {
-                d + 1
-            } else {
-                d
-            }
-        }
-
-        fn div_floor(lhs: i32, rhs: i32) -> i32 {
-            let d = lhs / rhs;
-            let r = lhs % rhs;
-            if (r > 0 && rhs < 0) || (r < 0 && rhs > 0) {
-                d - 1
-            } else {
-                d
-            }
-        }
-
         match rounding {
-            Rounding::Up => div_ceil(inverted_translation, self.scale),
-            Rounding::Down => div_floor(inverted_translation, self.scale),
+            Rounding::Up => <i32 as NumExt>::div_ceil(inverted_translation, self.scale),
+            Rounding::Down => <i32 as NumExt>::div_floor(inverted_translation, self.scale),
         }
     }
 
@@ -171,15 +150,20 @@ where
             self.inner.unpack_event(event)
         }
     }
+}
 
-    fn scaled(&self, scale: i32) -> Self::AffineView {
+impl<View> TransformableVariable<AffineView<View>> for AffineView<View>
+where
+    View: IntegerVariable,
+{
+    fn scaled(&self, scale: i32) -> AffineView<View> {
         let mut result = self.clone();
         result.scale *= scale;
         result.offset *= scale;
         result
     }
 
-    fn offset(&self, offset: i32) -> Self::AffineView {
+    fn offset(&self, offset: i32) -> AffineView<View> {
         let mut result = self.clone();
         result.offset += offset;
         result

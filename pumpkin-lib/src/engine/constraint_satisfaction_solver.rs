@@ -102,6 +102,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 /// # use pumpkin_lib::engine::variables::IntegerVariable;
+/// # use pumpkin_lib::engine::variables::TransformableVariable;
 /// // We create a solver with default options (note that this is only possible in a testing environment)
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///

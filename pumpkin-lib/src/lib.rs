@@ -3,6 +3,7 @@ pub mod branching;
 pub mod constraints;
 pub mod encoders;
 pub mod engine;
+pub mod math;
 pub mod optimisation;
 pub mod propagators;
 pub mod pumpkin_asserts;

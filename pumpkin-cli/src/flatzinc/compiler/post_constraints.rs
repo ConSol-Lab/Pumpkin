@@ -5,8 +5,8 @@ use std::rc::Rc;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::AffineView;
 use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::IntegerVariable;
 use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::predicate;
 
@@ -130,8 +130,15 @@ pub(crate) fn run(
                 "int_eq_reif",
                 int_eq_reif,
             )?,
-            "int_plus" => compile_int_plus(context, exprs, annos)?,
-            "int_times" => compile_int_times(context, exprs, annos)?,
+            "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
+                solver.int_plus(a, b, c)
+            })?,
+            "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
+                solver.int_times(a, b, c)
+            })?,
+            "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
+                solver.int_div(a, b, c)
+            })?,
             "int_abs" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
                     solver.int_abs(a, b)
@@ -578,32 +585,25 @@ fn compile_array_bool_and(
     Ok(first_implication && second_implication)
 }
 
-fn compile_int_plus(
+fn compile_ternary_int_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
+    predicate_name: &str,
+    post_constraint: impl FnOnce(
+        &mut ConstraintSatisfactionSolver,
+        DomainId,
+        DomainId,
+        DomainId,
+    ) -> bool,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_plus");
+    check_parameters!(exprs, 3, predicate_name);
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
     let c = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.int_plus(a, b, c))
-}
-
-fn compile_int_times(
-    context: &mut CompilationContext,
-    exprs: &[flatzinc::Expr],
-    _: &[flatzinc::Annotation],
-) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_times");
-
-    let a = context.resolve_integer_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
-    let c = context.resolve_integer_variable(&exprs[2])?;
-
-    Ok(context.solver.int_times(a, b, c))
+    Ok(post_constraint(context.solver, a, b, c))
 }
 
 fn compile_binary_int_predicate(
