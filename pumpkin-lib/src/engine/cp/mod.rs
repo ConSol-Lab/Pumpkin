@@ -28,6 +28,7 @@ mod tests {
     use crate::conjunction;
     use crate::engine::cp::assignments_integer;
     use crate::engine::propagation::PropagationContextMut;
+    use crate::engine::propagation::PropagatorId;
     use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonStore;
     use crate::engine::variables::Literal;
@@ -48,6 +49,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =
@@ -71,6 +73,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =
@@ -94,6 +97,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result = context.remove(&PropagatorVariable::new(domain), 15, conjunction!());
@@ -118,6 +122,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =

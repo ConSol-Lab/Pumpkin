@@ -1,10 +1,12 @@
 use super::ConflictAnalysisContext;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::ClauseReference;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::basic_types::KeyedVec;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
 use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsPropositional;
@@ -89,9 +91,9 @@ impl ResolutionConflictAnalyser {
             ));
             // note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
-                context.get_propagation_clause_reference(propagated_literal)
+                context.get_propagation_clause_reference(propagated_literal, &mut |_| {})
             } else {
-                let conflict = context.get_conflict_reason_clause_reference();
+                let conflict = context.get_conflict_reason_clause_reference(&mut |_| {});
                 context
                     .counters
                     .average_conflict_size
@@ -237,7 +239,7 @@ impl ResolutionConflictAnalyser {
         is_extracting_core: bool,
         context: &mut ConflictAnalysisContext,
     ) {
-        self.compute_all_decision_learning_helper(None, is_extracting_core, context);
+        self.compute_all_decision_learning_helper(None, is_extracting_core, context, |_| {});
     }
 
     // the helper is used to facilitate usage when extracting the clausal core
@@ -247,6 +249,7 @@ impl ResolutionConflictAnalyser {
         mut next_literal: Option<Literal>,
         is_extracting_core: bool,
         context: &mut ConflictAnalysisContext,
+        mut on_analysis_step: impl FnMut(AnalysisStep),
     ) {
         self.seen.resize(
             context
@@ -269,11 +272,12 @@ impl ResolutionConflictAnalyser {
         let mut next_trail_index = context.assignments_propositional.num_trail_entries() - 1;
 
         loop {
-            // note that the 'next_literal' is only None in the first iteration
+            // Note that the 'next_literal' is given as input.
+            //  If it is none, it is none in the first iteration only
             let clause_reference = if let Some(propagated_literal) = next_literal {
-                context.get_propagation_clause_reference(propagated_literal)
+                context.get_propagation_clause_reference(propagated_literal, &mut on_analysis_step)
             } else {
-                context.get_conflict_reason_clause_reference()
+                context.get_conflict_reason_clause_reference(&mut on_analysis_step)
             };
             context
                 .learned_clause_manager
@@ -291,13 +295,16 @@ impl ResolutionConflictAnalyser {
             for &reason_literal in
                 &context.clause_allocator[clause_reference].get_literal_slice()[start_index..]
             {
+                if self.seen[reason_literal.get_propositional_variable()] {
+                    continue;
+                }
+
                 // only consider non-root assignments that have not been considered before
                 let is_root_assignment = context
                     .assignments_propositional
                     .is_literal_root_assignment(reason_literal);
-                let seen = self.seen[reason_literal.get_propositional_variable()];
 
-                if !is_root_assignment && !seen {
+                if !is_root_assignment {
                     // mark the variable as seen so that we do not process it more than once
                     self.seen[reason_literal.get_propositional_variable()] = true;
 
@@ -323,8 +330,11 @@ impl ResolutionConflictAnalyser {
                         .assignments_propositional
                         .is_literal_decision(reason_literal)
                     {
+                        on_analysis_step(AnalysisStep::Unit(reason_literal));
                         self.analysis_result.learned_literals.push(reason_literal);
                     }
+                } else if is_root_assignment {
+                    on_analysis_step(AnalysisStep::Unit(reason_literal));
                 }
             }
 
@@ -415,6 +425,19 @@ impl ResolutionConflictAnalyser {
         // the return value is stored in the input 'analysis_result'
     }
 
+    pub fn get_conflict_reasons(
+        &mut self,
+        context: &mut ConflictAnalysisContext,
+        on_analysis_step: impl FnMut(AnalysisStep),
+    ) {
+        let next_literal = if context.solver_state.is_infeasible_under_assumptions() {
+            Some(!context.solver_state.get_violated_assumption())
+        } else {
+            None
+        };
+        self.compute_all_decision_learning_helper(next_literal, true, context, on_analysis_step);
+    }
+
     pub fn compute_clausal_core(
         &mut self,
         context: &mut ConflictAnalysisContext,
@@ -459,7 +482,12 @@ impl ResolutionConflictAnalyser {
         // assumptions might be implied  this corresponds to the all-decision CDCL learning
         // scheme
         else {
-            self.compute_all_decision_learning_helper(Some(!violated_assumption), true, context);
+            self.compute_all_decision_learning_helper(
+                Some(!violated_assumption),
+                true,
+                context,
+                |_| {},
+            );
             self.analysis_result
                 .learned_literals
                 .push(!violated_assumption);
@@ -761,7 +789,7 @@ impl ResolutionConflictAnalyser {
             return;
         }
 
-        let reason_reference = context.get_propagation_clause_reference(input_literal);
+        let reason_reference = context.get_propagation_clause_reference(input_literal, &mut |_| {});
 
         for i in 1..context.clause_allocator.get_clause(reason_reference).len() {
             let antecedent_literal = !context.clause_allocator.get_clause(reason_reference)[i];
@@ -901,4 +929,16 @@ enum Label {
     Poison,
     Removable,
     Keep,
+}
+
+#[derive(Clone, Debug)]
+#[allow(variant_size_differences)]
+pub enum AnalysisStep<'a> {
+    AllocatedClause(ClauseReference),
+    Propagation {
+        propagator: PropagatorId,
+        conjunction: &'a [Literal],
+        propagated: Literal,
+    },
+    Unit(Literal),
 }

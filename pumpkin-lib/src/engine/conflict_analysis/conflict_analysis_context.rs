@@ -1,5 +1,6 @@
+use super::AnalysisStep;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::ConflictInfo;
+use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -59,6 +60,7 @@ impl<'a> ConflictAnalysisContext<'a> {
     pub fn get_propagation_clause_reference(
         &mut self,
         propagated_literal: Literal,
+        on_analysis_step: &mut impl FnMut(AnalysisStep),
     ) -> ClauseReference {
         pumpkin_assert_moderate!(
             !self
@@ -78,13 +80,18 @@ impl<'a> ConflictAnalysisContext<'a> {
 
         // Case 1: the literal was propagated by the clausal propagator
         if constraint_reference.is_clause() {
-            self.clausal_propagator
+            let reference = self
+                .clausal_propagator
                 .get_literal_propagation_clause_reference(
                     propagated_literal,
                     self.assignments_propositional,
                     self.clause_allocator,
                     self.explanation_clause_manager,
-                )
+                );
+
+            on_analysis_step(AnalysisStep::AllocatedClause(reference));
+
+            reference
         }
         // Case 2: the literal was placed on the propositional trail while synchronising the CP
         // trail with the propositional trail
@@ -92,6 +99,7 @@ impl<'a> ConflictAnalysisContext<'a> {
             self.create_clause_from_propagation_reason(
                 propagated_literal,
                 constraint_reference.get_reason_ref(),
+                on_analysis_step,
             )
         }
     }
@@ -102,23 +110,35 @@ impl<'a> ConflictAnalysisContext<'a> {
     /// constructed based on the explanation given by the propagator.
     ///
     /// Note that the solver will panic in case the solver is not in conflicting state.
-    pub fn get_conflict_reason_clause_reference(&mut self) -> ClauseReference {
+    pub fn get_conflict_reason_clause_reference(
+        &mut self,
+        on_analysis_step: &mut impl FnMut(AnalysisStep),
+    ) -> ClauseReference {
         match self.solver_state.get_conflict_info() {
-            ConflictInfo::VirtualBinaryClause { lit1, lit2 } => self
+            StoredConflictInfo::VirtualBinaryClause { lit1, lit2 } => self
                 .explanation_clause_manager
                 .add_explanation_clause_unchecked(vec![*lit1, *lit2], self.clause_allocator),
-            ConflictInfo::Propagation { literal, reference } => {
+            StoredConflictInfo::Propagation { literal, reference } => {
                 if reference.is_clause() {
-                    reference.as_clause_reference()
+                    let clause_ref = reference.as_clause_reference();
+                    on_analysis_step(AnalysisStep::AllocatedClause(clause_ref));
+                    clause_ref
                 } else {
-                    self.create_clause_from_propagation_reason(*literal, reference.get_reason_ref())
+                    self.create_clause_from_propagation_reason(
+                        *literal,
+                        reference.get_reason_ref(),
+                        on_analysis_step,
+                    )
                 }
             }
-            ConflictInfo::Explanation(propositional_conjunction) => {
+            StoredConflictInfo::Explanation {
+                propagator,
+                conjunction,
+            } => {
                 // create the explanation clause
                 //  allocate a fresh vector each time might be a performance bottleneck
                 //  todo better ways
-                let explanation_literals = propositional_conjunction
+                let explanation_literals: Vec<Literal> = conjunction
                     .iter()
                     .map(|&p| {
                         !self.variable_literal_mappings.get_literal(
@@ -127,8 +147,14 @@ impl<'a> ConflictAnalysisContext<'a> {
                             self.assignments_integer,
                         )
                     })
-                    .chain(propositional_conjunction.iter_literals().map(|&l| !l))
+                    .chain(conjunction.iter_literals().map(|&l| !l))
                     .collect();
+
+                on_analysis_step(AnalysisStep::Propagation {
+                    propagator: *propagator,
+                    conjunction: &explanation_literals,
+                    propagated: self.assignments_propositional.false_literal,
+                });
 
                 self.explanation_clause_manager
                     .add_explanation_clause_unchecked(explanation_literals, self.clause_allocator)
@@ -142,9 +168,11 @@ impl<'a> ConflictAnalysisContext<'a> {
         &mut self,
         propagated_literal: Literal,
         reason_ref: ReasonRef,
+        on_analysis_step: &mut impl FnMut(AnalysisStep),
     ) -> ClauseReference {
         let propagation_context =
             PropagationContext::new(self.assignments_integer, self.assignments_propositional);
+        let propagator = self.reason_store.get_propagator(reason_ref);
         let reason = self
             .reason_store
             .get_or_compute(reason_ref, &propagation_context)
@@ -153,7 +181,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
         // important to keep propagated literal at the zero-th position
-        let explanation_literals = std::iter::once(propagated_literal)
+        let explanation_literals: Vec<Literal> = std::iter::once(propagated_literal)
             .chain(reason.iter().map(|&p| {
                 !self.variable_literal_mappings.get_literal(
                     p,
@@ -163,6 +191,12 @@ impl<'a> ConflictAnalysisContext<'a> {
             }))
             .chain(reason.iter_literals().map(|&p| !p))
             .collect();
+
+        on_analysis_step(AnalysisStep::Propagation {
+            propagator,
+            conjunction: &explanation_literals[1..],
+            propagated: propagated_literal,
+        });
 
         self.explanation_clause_manager
             .add_explanation_clause_unchecked(explanation_literals, self.clause_allocator)

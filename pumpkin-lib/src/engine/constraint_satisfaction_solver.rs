@@ -13,11 +13,17 @@ use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
+use super::clause_allocators::ClauseAllocatorInterface;
+use super::clause_allocators::ClauseInterface;
+use super::conflict_analysis::AnalysisStep;
+use super::conflict_analysis::ConflictAnalysisResult;
+use super::conflict_analysis::ResolutionConflictAnalyser;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::signal_handling::signal_handler;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::ConstraintReference;
@@ -27,9 +33,11 @@ use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
+use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::clause_allocators::ClauseAllocatorBasic;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::cp::WatchListPropositional;
@@ -48,15 +56,12 @@ use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::BooleanDomainEvent;
-use crate::engine::ConflictAnalysisContext;
-use crate::engine::ConflictAnalysisResult;
 use crate::engine::DebugHelper;
 use crate::engine::EmptyDomain;
 use crate::engine::ExplanationClauseManager;
 use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
 use crate::engine::LearningOptions;
-use crate::engine::ResolutionConflictAnalyser;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::engine::VariableLiteralMappings;
@@ -138,9 +143,9 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
-    state: CSPSolverState,
+    pub(crate) state: CSPSolverState,
     /// Tracks information related to the assignments of propositional variables.
-    assignments_propositional: AssignmentsPropositional,
+    pub(crate) assignments_propositional: AssignmentsPropositional,
     /// Responsible for clausal propagation based on the two-watched scheme.
     /// Although technically just another propagator, we treat the clausal propagator in a special
     /// way due to efficiency and conflict analysis.
@@ -152,7 +157,7 @@ pub struct ConstraintSatisfactionSolver {
     /// through the clause allocator. There are two notable exceptions:
     /// - Unit clauses are stored directly on the trail.
     /// - Binary clauses may be inlined in the watch lists of the clausal propagator.
-    clause_allocator: ClauseAllocator,
+    pub(crate) clause_allocator: ClauseAllocator,
     /// Tracks information about all learned clauses, with the exception of
     /// unit clauses which are directly stored on the trail.
     learned_clause_manager: LearnedClauseManager,
@@ -165,7 +170,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Performs conflict analysis, core extraction, and minimisation.
     conflict_analyser: ResolutionConflictAnalyser,
     /// Tracks information related to the assignments of integer variables.
-    assignments_integer: AssignmentsInteger,
+    pub(crate) assignments_integer: AssignmentsInteger,
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_cp: WatchListCP,
@@ -181,11 +186,11 @@ pub struct ConstraintSatisfactionSolver {
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis
-    reason_store: ReasonStore,
+    pub(crate) reason_store: ReasonStore,
     /// Contains events that need to be processe to notify propagators of event occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
-    variable_literal_mappings: VariableLiteralMappings,
+    pub(crate) variable_literal_mappings: VariableLiteralMappings,
     /// Used during synchronisation of the propositional and integer trail.
     /// [`AssignmentsInteger::trail`][`cp_trail_synced_position`] is the next entry
     /// that needs to be synchronised with [`AssignmentsPropositional::trail`].
@@ -292,6 +297,7 @@ impl ConstraintSatisfactionSolver {
                         &mut self.assignments_integer,
                         &mut self.reason_store,
                         &mut self.assignments_propositional,
+                        propagator_var.propagator,
                     );
 
                     let enqueue_decision =
@@ -322,6 +328,7 @@ impl ConstraintSatisfactionSolver {
                             &mut self.assignments_integer,
                             &mut self.reason_store,
                             &mut self.assignments_propositional,
+                            propagator_var.propagator,
                         );
 
                         let enqueue_decision =
@@ -349,6 +356,14 @@ impl ConstraintSatisfactionSolver {
             &self.assignments_propositional,
             &self.assignments_integer,
         )
+    }
+
+    pub(crate) fn is_conflicting(&self) -> bool {
+        self.state.conflicting()
+    }
+
+    pub(crate) fn declare_ready(&mut self) {
+        self.state.declare_ready()
     }
 
     // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
@@ -580,10 +595,6 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         brancher: &mut impl Brancher,
     ) -> Result<Vec<Literal>, Literal> {
-        pumpkin_assert_moderate!(
-            self.state.is_infeasible_under_assumptions() || self.state.is_infeasible()
-        );
-
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
@@ -600,6 +611,7 @@ impl ConstraintSatisfactionSolver {
             learned_clause_manager: &mut self.learned_clause_manager,
             restart_strategy: &mut self.restart_strategy,
         };
+
         let core = self
             .conflict_analyser
             .compute_clausal_core(&mut conflict_analysis_context);
@@ -609,6 +621,32 @@ impl ConstraintSatisfactionSolver {
         }
 
         core
+    }
+
+    pub(crate) fn get_conflict_reasons(
+        &mut self,
+        brancher: &mut impl Brancher,
+        on_analysis_step: impl FnMut(AnalysisStep),
+    ) {
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assumptions: &self.assumptions,
+            clausal_propagator: &self.clausal_propagator,
+            variable_literal_mappings: &self.variable_literal_mappings,
+            assignments_integer: &self.assignments_integer,
+            assignments_propositional: &self.assignments_propositional,
+            internal_parameters: &self.internal_parameters,
+            solver_state: &mut self.state,
+            brancher,
+            clause_allocator: &mut self.clause_allocator,
+            explanation_clause_manager: &mut self.explanation_clause_manager,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+            learned_clause_manager: &mut self.learned_clause_manager,
+            restart_strategy: &mut self.restart_strategy,
+        };
+
+        self.conflict_analyser
+            .get_conflict_reasons(&mut conflict_analysis_context, on_analysis_step);
     }
 
     /// Returns an infinite iterator of positive literals of new variables.
@@ -675,11 +713,6 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_simple!(
-            self.state.has_solution() && self.get_decision_level() > 0
-                || self.state.is_infeasible_under_assumptions()
-        );
-
         self.backtrack(0, brancher);
         self.state.declare_ready();
     }
@@ -901,7 +934,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Returns true if the assumption was successfully enqueued, and false otherwise
-    fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
+    pub(crate) fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
         // Case 1: the assumption is unassigned, assign it
         if self
             .assignments_propositional
@@ -932,7 +965,7 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    fn declare_new_decision_level(&mut self) {
+    pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments_propositional.increase_decision_level();
         self.assignments_integer.increase_decision_level();
         self.reason_store.increase_decision_level();
@@ -1070,7 +1103,7 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
+    pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
         let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
@@ -1116,7 +1149,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    fn propagate_enqueued(&mut self) {
+    pub(crate) fn propagate_enqueued(&mut self) {
         let num_assigned_variables_old = self.assignments_integer.num_trail_entries();
 
         loop {
@@ -1124,7 +1157,8 @@ impl ConstraintSatisfactionSolver {
 
             if let Some(conflict_info) = conflict_info {
                 // The previous propagation triggered an empty domain.
-                self.state.declare_conflict(conflict_info);
+                self.state
+                    .declare_conflict(conflict_info.try_into().unwrap());
                 break;
             }
 
@@ -1134,7 +1168,8 @@ impl ConstraintSatisfactionSolver {
             );
 
             if let Err(conflict_info) = clausal_propagation_status {
-                self.state.declare_conflict(conflict_info);
+                self.state
+                    .declare_conflict(conflict_info.try_into().unwrap());
                 break;
             }
 
@@ -1162,7 +1197,14 @@ impl ConstraintSatisfactionSolver {
                     // the case that there are literals in the conflict_info found by the CP
                     // propagator which are not assigned in the SAT-view (which leads to an error
                     // during conflict analysis)
-                    self.state.declare_conflict(result.unwrap_or(conflict_info));
+                    self.state.declare_conflict(
+                        result
+                            .map(|ci| {
+                                ci.try_into()
+                                    .expect("this is not a ConflictInfo::Explanation")
+                            })
+                            .unwrap_or(conflict_info),
+                    );
                     break;
                 }
             } // end match
@@ -1201,6 +1243,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            propagator_id,
         );
 
         match propagator.propagate(&mut context) {
@@ -1220,7 +1263,9 @@ impl ConstraintSatisfactionSolver {
                     ));
                 }
 
-                PropagationStatusOneStepCP::ConflictDetected { conflict_info }
+                PropagationStatusOneStepCP::ConflictDetected {
+                    conflict_info: conflict_info.into_stored(propagator_id),
+                }
             }
 
             Ok(()) => {
@@ -1248,6 +1293,35 @@ impl ConstraintSatisfactionSolver {
 
 // methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
+    /// Add a clause (of at least length 2) which could later be deleted. Be mindful of the effect
+    /// of this on learned clauses etc. if a solve call were to be invoked after adding a clause
+    /// through this function.
+    ///
+    /// The clause is marked as 'learned'.
+    pub(crate) fn add_allocated_deletable_clause(
+        &mut self,
+        clause: Vec<Literal>,
+    ) -> ClauseReference {
+        self.clausal_propagator
+            .add_clause_unchecked(clause, true, &mut self.clause_allocator)
+            .unwrap()
+    }
+
+    /// Delete an allocated clause. Users of this method must ensure the state of the solver stays
+    /// well-defined. In particular, if there are learned clauses derived through this clause, and
+    /// it is removed, those learned clauses may no-longer be valid.
+    pub(crate) fn delete_allocated_clause(&mut self, reference: ClauseReference) -> Vec<Literal> {
+        let clause = self.clause_allocator[reference]
+            .get_literal_slice()
+            .to_vec();
+
+        self.clausal_propagator
+            .remove_clause_from_consideration(&clause, reference);
+        self.clause_allocator.delete_clause(reference);
+
+        clause
+    }
+
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///
@@ -1290,6 +1364,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            new_propagator_id,
         );
         // let mut context = self.create_propagation_context_mut();
 
@@ -1389,7 +1464,7 @@ impl ConstraintSatisfactionSolver {
             && self.propagator_queue.is_empty()
     }
 
-    fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
             self.assignments_propositional.get_decision_level()
                 == self.assignments_integer.get_decision_level()
@@ -1441,7 +1516,7 @@ enum CSPSolverStateInternal {
     Solving,
     ContainsSolution,
     Conflict {
-        conflict_info: ConflictInfo,
+        conflict_info: StoredConflictInfo,
     },
     Infeasible,
     InfeasibleUnderAssumptions {
@@ -1505,7 +1580,7 @@ impl CSPSolverState {
         }
     }
 
-    pub fn get_conflict_info(&self) -> &ConflictInfo {
+    pub fn get_conflict_info(&self) -> &StoredConflictInfo {
         if let CSPSolverStateInternal::Conflict { conflict_info } = &self.internal_state {
             conflict_info
         } else {
@@ -1524,14 +1599,12 @@ impl CSPSolverState {
         )
     }
 
-    fn declare_ready(&mut self) {
-        pumpkin_assert_simple!(
-            self.has_solution() && !self.is_infeasible() || self.is_infeasible_under_assumptions()
-        );
+    pub(crate) fn declare_ready(&mut self) {
         self.internal_state = CSPSolverStateInternal::Ready;
     }
 
     pub fn declare_solving(&mut self) {
+        dbg!(&self.internal_state);
         pumpkin_assert_simple!((self.is_ready() || self.conflicting()) && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Solving;
     }
@@ -1540,7 +1613,7 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::Infeasible;
     }
 
-    fn declare_conflict(&mut self, conflict_info: ConflictInfo) {
+    fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
         pumpkin_assert_simple!(!self.conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
@@ -1567,10 +1640,10 @@ impl CSPSolverState {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::basic_types::ConflictInfo;
     use crate::basic_types::Predicate;
     use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::basic_types::StoredConflictInfo;
     use crate::branching::IndependentVariableValueBrancher;
     use crate::conjunction;
     use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
@@ -1848,7 +1921,7 @@ mod tests {
         assert!(matches!(
             solver.state.internal_state,
             CSPSolverStateInternal::Conflict {
-                conflict_info: ConflictInfo::Propagation {
+                conflict_info: StoredConflictInfo::Propagation {
                     reference: _,
                     literal: _,
                 },

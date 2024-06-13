@@ -73,6 +73,7 @@ impl DebugHelper {
                 &mut assignments_integer_clone,
                 &mut reason_store,
                 &mut assignments_propostional_clone,
+                PropagatorId(propagator_id.try_into().unwrap()),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
 
@@ -220,6 +221,7 @@ impl DebugHelper {
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
+                    PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);
@@ -292,6 +294,7 @@ impl DebugHelper {
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
+                    PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);
@@ -353,6 +356,7 @@ impl DebugHelper {
                 &mut assignments_integer_clone,
                 &mut reason_store,
                 &mut assignments_propositional_clone,
+                propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
             assert!(
@@ -415,6 +419,7 @@ impl DebugHelper {
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
+                    propagator_id,
                 );
                 let debug_propagation_status_cp =
                     propagator.debug_propagate_from_scratch(&mut context);

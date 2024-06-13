@@ -1,14 +1,12 @@
-mod conflict_analysis;
+pub mod conflict_analysis;
 pub mod constraint_satisfaction_solver;
 pub(crate) mod cp;
 mod debug_helper;
 mod preprocessor;
+pub mod rp_engine;
 mod sat;
 pub mod variables;
 
-pub use conflict_analysis::ConflictAnalysisContext;
-pub use conflict_analysis::ConflictAnalysisResult;
-pub use conflict_analysis::ResolutionConflictAnalyser;
 pub use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
 pub use cp::VariableLiteralMappings;

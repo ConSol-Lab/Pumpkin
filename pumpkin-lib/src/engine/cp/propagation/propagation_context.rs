@@ -1,3 +1,4 @@
+use super::PropagatorId;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::Predicate;
@@ -41,6 +42,7 @@ pub struct PropagationContextMut<'a> {
     assignments_integer: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
     assignments_propositional: &'a mut AssignmentsPropositional,
+    propagator: PropagatorId,
 }
 
 impl<'a> PropagationContextMut<'a> {
@@ -48,11 +50,13 @@ impl<'a> PropagationContextMut<'a> {
         assignments_integer: &'a mut AssignmentsInteger,
         reason_store: &'a mut ReasonStore,
         assignments_propositional: &'a mut AssignmentsPropositional,
+        propagator: PropagatorId,
     ) -> Self {
         PropagationContextMut {
             assignments_integer,
             reason_store,
             assignments_propositional,
+            propagator,
         }
     }
 }
@@ -142,7 +146,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if var.inner.contains(self.assignments_integer, value) {
-            let reason = self.reason_store.push(reason.into());
+            let reason = self.reason_store.push(self.propagator, reason.into());
             return var
                 .inner
                 .remove(self.assignments_integer, value, Some(reason));
@@ -157,7 +161,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound < var.inner.upper_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(reason.into());
+            let reason = self.reason_store.push(self.propagator, reason.into());
             return var
                 .inner
                 .set_upper_bound(self.assignments_integer, bound, Some(reason));
@@ -172,7 +176,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound > var.inner.lower_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(reason.into());
+            let reason = self.reason_store.push(self.propagator, reason.into());
             return var
                 .inner
                 .set_lower_bound(self.assignments_integer, bound, Some(reason));
@@ -190,7 +194,7 @@ impl PropagationContextMut<'_> {
             .assignments_propositional
             .is_literal_assigned(var.inner)
         {
-            let reason = self.reason_store.push(reason.into());
+            let reason = self.reason_store.push(self.propagator, reason.into());
             let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
                 if bound { var.inner } else { !var.inner },
                 ConstraintReference::create_reason_reference(reason),

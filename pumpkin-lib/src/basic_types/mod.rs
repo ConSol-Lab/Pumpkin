@@ -27,7 +27,7 @@ mod weighted_literal;
 
 pub use branching_decision::BranchingDecision;
 pub use clause_reference::ClauseReference;
-pub use conflict_info::ConflictInfo;
+pub use conflict_info::*;
 pub use constraint_operation_error::ConstraintOperationError;
 pub use constraint_reference::ConstraintReference;
 pub use csp_solver_execution_flag::CSPSolverExecutionFlag;

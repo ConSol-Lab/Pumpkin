@@ -90,6 +90,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         ))
     }
 
@@ -116,6 +117,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         propagator.notify(
             &mut context,
@@ -172,6 +174,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         propagator.propagate(&mut context)
     }
@@ -190,6 +193,7 @@ impl TestSolver {
                     &mut self.assignments_integer,
                     &mut self.reason_store,
                     &mut self.assignments_propositional,
+                    PropagatorId(0),
                 );
                 propagator.propagate(&mut context)?;
                 self.notify_propagator(propagator);
@@ -215,6 +219,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
@@ -234,6 +239,7 @@ impl TestSolver {
                 &mut self.assignments_integer,
                 &mut self.reason_store,
                 &mut self.assignments_propositional,
+                PropagatorId(0),
             ),
             local_id,
             event,

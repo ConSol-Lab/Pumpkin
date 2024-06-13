@@ -5,5 +5,4 @@ mod conflict_analysis_context;
 mod resolution_conflict_analyser;
 
 pub use conflict_analysis_context::ConflictAnalysisContext;
-pub use resolution_conflict_analyser::ConflictAnalysisResult;
-pub use resolution_conflict_analyser::ResolutionConflictAnalyser;
+pub use resolution_conflict_analyser::*;
