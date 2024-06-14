@@ -131,8 +131,8 @@ fn main() {
             for row in matrix.iter() {
                 let line = row
                     .iter()
-                    .map(|&var| {
-                        if solver.get_integer_assignments().get_assigned_value(var) == 1 {
+                    .map(|var| {
+                        if solver.get_assigned_integer_value(var).unwrap() == 1 {
                             String::from("| * ")
                         } else {
                             String::from("|   ")

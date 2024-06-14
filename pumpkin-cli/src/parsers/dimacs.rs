@@ -23,7 +23,6 @@ use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::engine::LearningOptions;
-use pumpkin_lib::engine::Preprocessor;
 use pumpkin_lib::engine::SatisfactionSolverOptions;
 use thiserror::Error;
 
@@ -538,19 +537,15 @@ impl DimacsSink for SolverDimacsSink {
     }
 
     fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
-        let mapped = self.mapped_clause(clause);
-
-        let mut clause =
-            Preprocessor::preprocess_clause(mapped, self.solver.get_propositional_assignments());
+        let mut clause = self.mapped_clause(clause);
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
             SoftClauseAddition::RootViolated
-        } else if clause.iter().any(|literal| {
-            self.solver
-                .get_propositional_assignments()
-                .is_literal_assigned_true(*literal)
-        }) {
+        } else if clause
+            .iter()
+            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or_default())
+        {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {

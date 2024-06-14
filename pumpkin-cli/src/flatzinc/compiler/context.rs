@@ -66,8 +66,8 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
-        let true_literal = solver.get_propositional_assignments().true_literal;
-        let false_literal = solver.get_propositional_assignments().false_literal;
+        let true_literal = solver.get_true_literal();
+        let false_literal = solver.get_false_literal();
 
         CompilationContext {
             solver,
@@ -600,18 +600,18 @@ impl Domain {
         match self {
             Domain::IntervalDomain { lb, ub } => {
                 if lb == ub && lb == 1 {
-                    solver.get_propositional_assignments().true_literal
+                    solver.get_true_literal()
                 } else if lb == ub && lb == 0 {
-                    solver.get_propositional_assignments().false_literal
+                    solver.get_false_literal()
                 } else {
                     Literal::new(solver.create_new_propositional_variable(), true)
                 }
             }
             Domain::SparseDomain { values } => {
                 if values.len() == 1 && values[0] == 1 {
-                    solver.get_propositional_assignments().true_literal
+                    solver.get_true_literal()
                 } else if values.len() == 1 && values[0] == 0 {
-                    solver.get_propositional_assignments().false_literal
+                    solver.get_false_literal()
                 } else {
                     Literal::new(solver.create_new_propositional_variable(), true)
                 }

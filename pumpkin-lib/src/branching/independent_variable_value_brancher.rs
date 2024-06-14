@@ -65,10 +65,12 @@ impl DefaultBrancher {
     pub fn default_over_all_propositional_variables(
         solver: &ConstraintSatisfactionSolver,
     ) -> DefaultBrancher {
+        #[allow(deprecated)]
         let variables = solver
             .get_propositional_assignments()
             .get_propositional_variables()
             .collect::<Vec<_>>();
+
         IndependentVariableValueBrancher {
             variable_selector: Vsids::new(&variables),
             value_selector: SolutionGuidedValueSelector::new(

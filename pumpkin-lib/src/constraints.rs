@@ -319,14 +319,14 @@ impl ConstraintsExt for ConstraintSatisfactionSolver {
     }
 
     fn lower_bound(&self, var: &impl IntegerVariable) -> i32 {
-        var.lower_bound(self.get_integer_assignments())
+        self.get_lower_bound(var)
     }
 
     fn upper_bound(&self, var: &impl IntegerVariable) -> i32 {
-        var.upper_bound(self.get_integer_assignments())
+        self.get_upper_bound(var)
     }
 
     fn contains(&self, var: &impl IntegerVariable, value: i32) -> bool {
-        var.contains(self.get_integer_assignments(), value)
+        self.integer_variable_contains(var, value)
     }
 }

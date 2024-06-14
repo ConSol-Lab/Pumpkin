@@ -4,8 +4,6 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 
@@ -89,25 +87,19 @@ impl Function {
         value
     }
 
-    pub fn evaluate_assignment(
-        &self,
-        assignments_propositional: &AssignmentsPropositional,
-        assignments_integer: &AssignmentsInteger,
-    ) -> u64 {
+    pub fn evaluate_assignment(&self, solution: SolutionReference<'_>) -> u64 {
         let mut value: u64 = self.constant_term;
         // add the contribution of the propositional part
         for term in self.get_weighted_literals() {
             let literal = *term.0;
             let weight = *term.1;
-            pumpkin_assert_moderate!(assignments_propositional.is_literal_assigned(literal));
-            value += weight * (assignments_propositional.is_literal_assigned_true(literal) as u64);
+            value += weight * (solution.get_literal_value(literal) as u64);
         }
         // add the contribution of the integer part
         for term in self.get_weighted_integers() {
             let domain_id = *term.0;
             let weight = *term.1;
-            pumpkin_assert_moderate!(assignments_integer.is_domain_assigned(domain_id));
-            value += weight * assignments_integer.get_assigned_value(domain_id) as u64;
+            value += weight * solution.get_integer_value(domain_id) as u64;
         }
         value
     }
@@ -129,12 +121,8 @@ impl Function {
             let domain_id = *term.0;
             let weight = *term.1;
 
-            let lower_bound = csp_solver
-                .get_integer_assignments()
-                .get_initial_lower_bound(domain_id);
-            let upper_bound = csp_solver
-                .get_integer_assignments()
-                .get_upper_bound(domain_id);
+            let lower_bound = csp_solver.get_lower_bound(&domain_id);
+            let upper_bound = csp_solver.get_upper_bound(&domain_id);
 
             // note that we only needs lower bound literals starting from lower_bound+1
             //  the literals before those contribute to the objective function but not in a way that

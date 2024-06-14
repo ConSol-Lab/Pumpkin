@@ -4,7 +4,6 @@ use super::OptimisationResult;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::Function;
 use crate::basic_types::Solution;
-use crate::basic_types::SolutionReference;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
 use crate::encoders::PseudoBooleanConstraintEncoder;
@@ -38,16 +37,11 @@ impl LinearSearch {
             "Linear search assumes the solver contains a feasible solution."
         );
 
-        let mut best_solution: Solution = SolutionReference::new(
-            csp_solver.get_propositional_assignments(),
-            csp_solver.get_integer_assignments(),
-        )
-        .into();
+        #[allow(deprecated)]
+        let mut best_solution: Solution = csp_solver.get_solution_reference().into();
 
-        let mut best_objective_value = objective_function.evaluate_assignment(
-            csp_solver.get_propositional_assignments(),
-            csp_solver.get_integer_assignments(),
-        );
+        let mut best_objective_value =
+            objective_function.evaluate_assignment(best_solution.as_reference());
 
         println!("o {}", best_objective_value);
         info!(
@@ -79,6 +73,7 @@ impl LinearSearch {
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
 
             if first_iteration {
+                #[allow(deprecated)]
                 brancher.on_encoding_objective_function(
                     &csp_solver
                         .get_propositional_assignments()
@@ -99,36 +94,28 @@ impl LinearSearch {
                 };
             }
 
-            brancher.on_solution(SolutionReference::new(
-                csp_solver.get_propositional_assignments(),
-                csp_solver.get_integer_assignments(),
-            ));
+            #[allow(deprecated)]
+            brancher.on_solution(csp_solver.get_solution_reference());
 
             let csp_execution_flag =
                 csp_solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher);
 
             match csp_execution_flag {
                 CSPSolverExecutionFlag::Feasible => {
+                    #[allow(deprecated)]
+                    let solution_ref = csp_solver.get_solution_reference();
+                    let new_objective_value = objective_function.evaluate_assignment(solution_ref);
+
                     pumpkin_assert_moderate!(
-                        objective_function.evaluate_assignment(
-                            csp_solver.get_propositional_assignments(),
-                            csp_solver.get_integer_assignments()
-                        ) < best_objective_value,
+                        new_objective_value < best_objective_value,
                         "Each iteration of linear search must yield a strictly better solution."
                     );
 
                     // need to include a simple refinement step here, since it could be that the
                     // returned solution can be trivially improved
 
-                    best_objective_value = objective_function.evaluate_assignment(
-                        csp_solver.get_propositional_assignments(),
-                        csp_solver.get_integer_assignments(),
-                    );
-                    best_solution = SolutionReference::new(
-                        csp_solver.get_propositional_assignments(),
-                        csp_solver.get_integer_assignments(),
-                    )
-                    .into();
+                    best_objective_value = new_objective_value;
+                    best_solution = solution_ref.into();
 
                     println!("o {}", best_objective_value);
                     info!(

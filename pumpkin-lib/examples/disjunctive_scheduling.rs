@@ -79,10 +79,10 @@ fn main() {
         .zip(processing_times)
         .collect::<Vec<_>>();
     start_variables_and_processing_times.sort_by(|(s1, _), (s2, _)| {
-        return solver
-            .get_integer_assignments()
-            .get_assigned_value(**s1)
-            .cmp(&solver.get_integer_assignments().get_assigned_value(**s2));
+        solver
+            .get_assigned_integer_value(*s1)
+            .unwrap()
+            .cmp(&solver.get_assigned_integer_value(*s2).unwrap())
     });
 
     println!(
@@ -91,9 +91,8 @@ fn main() {
             .iter()
             .map(|(var, processing_time)| format!(
                 "[{}, {}]",
-                solver.get_integer_assignments().get_assigned_value(**var),
-                solver.get_integer_assignments().get_assigned_value(**var)
-                    + *processing_time as i32
+                solver.get_assigned_integer_value(*var).unwrap(),
+                solver.get_assigned_integer_value(*var).unwrap() + *processing_time as i32
             ))
             .collect::<Vec<_>>()
             .join(" - ")

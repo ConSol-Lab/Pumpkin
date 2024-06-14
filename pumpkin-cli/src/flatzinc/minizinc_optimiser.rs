@@ -2,12 +2,9 @@ use std::time::Duration;
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ConstraintOperationError;
-use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::branching::DynamicBrancher;
-use pumpkin_lib::engine::AssignmentsInteger;
-use pumpkin_lib::engine::AssignmentsPropositional;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::pumpkin_assert_simple;
@@ -49,23 +46,17 @@ impl<'a> MinizincOptimiser<'a> {
             .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
         match initial_solve {
             CSPSolverExecutionFlag::Feasible => {
-                brancher.on_solution(SolutionReference::new(
-                    self.get_propositional_assignments(),
-                    self.get_integer_assignments(),
-                ));
+                #[allow(deprecated)]
+                brancher.on_solution(self.csp_solver.get_solution_reference());
 
                 log_statistics_with_objective(
                     self.csp_solver,
                     self.csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain())
-                        as i64,
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned") as i64,
                 );
-                print_solution_from_solver(
-                    self.get_integer_assignments(),
-                    self.get_propositional_assignments(),
-                    outputs,
-                )
+                #[allow(deprecated)]
+                print_solution_from_solver(self.csp_solver.get_solution_reference(), outputs)
             }
             CSPSolverExecutionFlag::Infeasible => return MinizincOptimisationResult::Infeasible,
             CSPSolverExecutionFlag::Timeout => return MinizincOptimisationResult::Unknown,
@@ -73,8 +64,8 @@ impl<'a> MinizincOptimiser<'a> {
 
         let mut best_objective_value =
             self.csp_solver
-                .get_integer_assignments()
-                .get_assigned_value(*self.objective_function.get_domain()) as i64;
+                .get_assigned_integer_value(self.objective_function.get_domain())
+                .expect("expected variable to be assigned") as i64;
 
         loop {
             self.csp_solver.restore_state_at_root(&mut brancher);
@@ -94,27 +85,22 @@ impl<'a> MinizincOptimiser<'a> {
 
                     best_objective_value = self
                         .csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain())
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned")
                         as i64;
 
-                    brancher.on_solution(SolutionReference::new(
-                        self.get_propositional_assignments(),
-                        self.get_integer_assignments(),
-                    ));
+                    #[allow(deprecated)]
+                    brancher.on_solution(self.csp_solver.get_solution_reference());
 
                     log_statistics_with_objective(
                         self.csp_solver,
                         self.csp_solver
-                            .get_integer_assignments()
-                            .get_assigned_value(*self.objective_function.get_domain())
+                            .get_assigned_integer_value(self.objective_function.get_domain())
+                            .expect("expected variable to be assigned")
                             as i64,
                     );
-                    print_solution_from_solver(
-                        self.get_integer_assignments(),
-                        self.get_propositional_assignments(),
-                        outputs,
-                    )
+                    #[allow(deprecated)]
+                    print_solution_from_solver(self.csp_solver.get_solution_reference(), outputs)
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return MinizincOptimisationResult::Optimal {
@@ -141,31 +127,21 @@ impl<'a> MinizincOptimiser<'a> {
         }
     }
 
-    fn get_integer_assignments(&self) -> &AssignmentsInteger {
-        self.csp_solver.get_integer_assignments()
-    }
-
-    fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
-        self.csp_solver.get_propositional_assignments()
-    }
-
     fn debug_bound_change(&self, best_objective_value: i64) {
         pumpkin_assert_simple!(
             match self.objective_function {
                 FlatzincObjective::Maximize(_) => {
                     (self
                         .csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain())
-                        as i64)
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned") as i64)
                         > best_objective_value
                 }
                 FlatzincObjective::Minimize(_) => {
                     (self
                         .csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain())
-                        as i64)
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned") as i64)
                         < best_objective_value
                 }
             },
@@ -174,15 +150,15 @@ impl<'a> MinizincOptimiser<'a> {
                 FlatzincObjective::Maximize(_) => format!(
                     "The current bound {} should be larger than the previous bound {}",
                     self.csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain()),
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned"),
                     best_objective_value
                 ),
                 FlatzincObjective::Minimize(_) => format!(
                     "The current bound {} should be smaller than the previous bound {}",
                     self.csp_solver
-                        .get_integer_assignments()
-                        .get_assigned_value(*self.objective_function.get_domain()),
+                        .get_assigned_integer_value(self.objective_function.get_domain())
+                        .expect("expected variable to be assigned"),
                     best_objective_value
                 ),
             }

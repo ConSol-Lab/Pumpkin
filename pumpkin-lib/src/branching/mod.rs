@@ -22,6 +22,7 @@
 //! # use pumpkin_lib::branching::value_selection::PhaseSaving;
 //! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+//! # use pumpkin_lib::engine::variables::Literal;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
 //! let variables = vec![solver.create_new_propositional_variable()];
@@ -31,8 +32,8 @@
 //! let result = solver.solve(i64::MAX, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
-//!     .get_propositional_assignments()
-//!     .is_variable_assigned(variable)));
+//!     .get_literal_value(Literal::new(variable, true))
+//!     .is_some()));
 //! ```
 //!
 //!
@@ -44,6 +45,7 @@
 //! # use pumpkin_lib::engine::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+//! # use pumpkin_lib::engine::variables::Literal;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
 //! let variables = vec![solver.create_new_propositional_variable()];
@@ -53,8 +55,8 @@
 //! let result = solver.solve(i64::MAX, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
-//!     .get_propositional_assignments()
-//!     .is_variable_assigned(variable)));
+//!     .get_literal_value(Literal::new(variable, true))
+//!     .is_some()));
 //! ```
 //!
 //! \[1\] F. Rossi, P. Van Beek, and T. Walsh, Handbook of constraint programming. Elsevier, 2006.

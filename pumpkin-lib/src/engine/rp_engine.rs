@@ -93,22 +93,13 @@ impl RpEngine {
 
         let false_count = clause
             .iter()
-            .filter(|&&literal| {
-                self.solver
-                    .get_propositional_assignments()
-                    .is_literal_assigned_false(literal)
-            })
+            .filter(|&&literal| self.solver.get_literal_value(literal) == Some(false))
             .count();
 
         if false_count == clause.len() - 1 {
             clause
                 .iter()
-                .find(|&&literal| {
-                    !self
-                        .solver
-                        .get_propositional_assignments()
-                        .is_literal_assigned(literal)
-                })
+                .find(|&&literal| self.solver.get_literal_value(literal).is_some())
                 .copied()
         } else {
             None
@@ -116,11 +107,10 @@ impl RpEngine {
     }
 
     fn check_assigned_literals(&mut self, clause: &[Literal]) {
-        if clause.iter().any(|&literal| {
-            self.solver
-                .get_propositional_assignments()
-                .is_literal_assigned(literal)
-        }) {
+        if clause
+            .iter()
+            .any(|&literal| self.solver.get_literal_value(literal).is_some())
+        {
             warn!("Adding RP clause with assigned literals.");
         }
     }

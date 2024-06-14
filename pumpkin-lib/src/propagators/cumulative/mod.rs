@@ -73,7 +73,6 @@
 //!
 //! let horizon = durations.iter().sum::<i32>();
 //! let start_times = [start_0, start_1, start_2];
-//! let assignments = solver.get_integer_assignments();
 //!
 //! // Now we check whether the resource constraint is satisfied at each time-point t
 //! assert!((0..=horizon).all(|t| {
@@ -82,8 +81,10 @@
 //!         .iter()
 //!         .enumerate()
 //!         .filter_map(|(task_index, start_time)| {
-//!             if assignments.get_assigned_value(*start_time) <= t
-//!                 && assignments.get_assigned_value(*start_time) + durations[task_index] > t
+//!             if solver.get_assigned_integer_value(start_time).unwrap() <= t
+//!                 && solver.get_assigned_integer_value(start_time).unwrap()
+//!                     + durations[task_index]
+//!                     > t
 //!             {
 //!                 Some(resource_requirements[task_index])
 //!             } else {
@@ -99,16 +100,16 @@
 //! // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and Task 1
 //! // overlap
 //! assert!(
-//!     assignments.get_assigned_value(start_2)
-//!         >= assignments.get_assigned_value(start_0) + durations[0]
-//!         && assignments.get_assigned_value(start_2)
-//!             >= assignments.get_assigned_value(start_1) + durations[1]
+//!     solver.get_assigned_integer_value(&start_2).unwrap()
+//!         >= solver.get_assigned_integer_value(&start_0).unwrap() + durations[0]
+//!         && solver.get_assigned_integer_value(&start_2).unwrap()
+//!             >= solver.get_assigned_integer_value(&start_1).unwrap() + durations[1]
 //! );
 //! assert!(
-//!     assignments.get_assigned_value(start_0)
-//!         < assignments.get_assigned_value(start_1) + durations[1]
-//!         && assignments.get_assigned_value(start_1)
-//!             < assignments.get_assigned_value(start_0) + durations[0]
+//!     solver.get_assigned_integer_value(&start_0).unwrap()
+//!         < solver.get_assigned_integer_value(&start_1).unwrap() + durations[1]
+//!         && solver.get_assigned_integer_value(&start_1).unwrap()
+//!             < solver.get_assigned_integer_value(&start_0).unwrap() + durations[0]
 //! );
 //! ```
 mod time_table;

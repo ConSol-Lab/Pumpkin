@@ -49,9 +49,8 @@ fn main() {
                 println!("{row_separator}");
 
                 let queen_col = solver
-                    .get_integer_assignments()
-                    .get_assigned_value(variables[row as usize])
-                    as u32;
+                    .get_assigned_integer_value(&variables[row as usize])
+                    .unwrap() as u32;
 
                 for col in 0..n {
                     let string = if queen_col == col { "| * " } else { "|   " };

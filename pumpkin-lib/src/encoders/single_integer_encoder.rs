@@ -99,10 +99,8 @@ mod tests {
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_propositional_assignments()
-            .is_literal_assigned_false(
-                csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-            )));
+            .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+            == Some(false)));
     }
 
     #[test]
@@ -136,10 +134,8 @@ mod tests {
         assert!(result.is_ok());
         assert!(
             ((lower_bound as u64 + 1)..=upper_bound as u64).all(|lower_bound| csp_solver
-                .get_propositional_assignments()
-                .is_literal_unassigned(
-                    csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-                ))
+                .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+                .is_none())
         );
     }
 
@@ -161,10 +157,8 @@ mod tests {
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_propositional_assignments()
-            .is_literal_assigned_false(
-                csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-            )));
+            .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+            == Some(false)));
     }
 
     #[test]

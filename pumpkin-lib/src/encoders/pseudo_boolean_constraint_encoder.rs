@@ -196,15 +196,14 @@ impl PseudoBooleanConstraintEncoder {
         self.constant_term
     }
 
+    #[allow(deprecated)]
     pub fn constrain_at_most_k(
         &mut self,
         k: u64,
         csp_solver: &mut ConstraintSatisfactionSolver,
     ) -> Result<(), EncodingError> {
         pumpkin_assert_simple!(
-            csp_solver
-                .get_propositional_assignments()
-                .is_at_the_root_level(),
+            csp_solver.is_at_the_root_level(),
             "Can only add encodings at the root level."
         );
 
@@ -358,9 +357,7 @@ impl PseudoBooleanConstraintEncoder {
 
             for term in &weighted_literals {
                 if term.weight > k - self.constant_term
-                    && csp_solver
-                        .get_propositional_assignments()
-                        .is_literal_unassigned(term.literal)
+                    && csp_solver.get_literal_value(term.literal).is_none()
                 {
                     has_assigned = true;
 
@@ -368,10 +365,7 @@ impl PseudoBooleanConstraintEncoder {
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }
-                } else if csp_solver
-                    .get_propositional_assignments()
-                    .is_literal_assigned_true(term.literal)
-                {
+                } else if csp_solver.get_literal_value(term.literal) == Some(true) {
                     self.constant_term += term.weight;
                 }
             }
@@ -384,11 +378,7 @@ impl PseudoBooleanConstraintEncoder {
         // collect terms that are not assigned at the root level
         let unassigned_weighted_literals: Vec<WeightedLiteral> = weighted_literals
             .iter()
-            .filter(|term| {
-                csp_solver
-                    .get_propositional_assignments()
-                    .is_literal_unassigned(term.literal)
-            })
+            .filter(|term| csp_solver.get_literal_value(term.literal).is_none())
             .copied()
             .collect();
 

@@ -18,6 +18,7 @@ use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
 use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
+use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::signal_handling::signal_handler;
@@ -31,6 +32,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
+use crate::basic_types::SolutionReference;
 use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
 use crate::basic_types::StoredConflictInfo;
@@ -128,7 +130,9 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 ///
 /// // Now we check that the result is feasible and that the chosen values for the two variables are different
 /// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
-/// assert!(solver.get_integer_assignments().get_assigned_value(x) != solver.get_integer_assignments().get_assigned_value(y));
+/// assert!(
+///     solver.get_assigned_integer_value(&x).unwrap() != solver.get_assigned_integer_value(&y).unwrap()
+/// );
 /// ```
 ///
 /// # Bibliography
@@ -356,6 +360,18 @@ impl ConstraintSatisfactionSolver {
             &self.assignments_propositional,
             &self.assignments_integer,
         )
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+        SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub fn is_at_the_root_level(&self) -> bool {
+        self.assignments_propositional.is_at_the_root_level()
     }
 
     pub(crate) fn is_conflicting(&self) -> bool {
@@ -677,6 +693,55 @@ impl ConstraintSatisfactionSolver {
             )
     }
 
+    /// Get a literal which is globally true.
+    pub fn get_true_literal(&self) -> Literal {
+        self.assignments_propositional.true_literal
+    }
+
+    /// Get a literal which is globally false.
+    pub fn get_false_literal(&self) -> Literal {
+        self.assignments_propositional.false_literal
+    }
+
+    /// Get the lower bound for the given variable.
+    pub fn get_lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        variable.lower_bound(&self.assignments_integer)
+    }
+
+    /// Get the upper bound for the given variable.
+    pub fn get_upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        variable.upper_bound(&self.assignments_integer)
+    }
+
+    /// Determine whether `value` is in the domain of `variable`.
+    pub fn integer_variable_contains(&self, variable: &impl IntegerVariable, value: i32) -> bool {
+        variable.contains(&self.assignments_integer, value)
+    }
+
+    /// Get the assigned integer for the given variable. If it is not assigned, `None` is returned.
+    pub fn get_assigned_integer_value(&self, variable: &impl IntegerVariable) -> Option<i32> {
+        let lb = self.get_lower_bound(variable);
+        let ub = self.get_upper_bound(variable);
+
+        if lb == ub {
+            Some(lb)
+        } else {
+            None
+        }
+    }
+
+    /// Get the value of the given literal, which could be unassigned.
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        if self.assignments_propositional.is_literal_assigned(literal) {
+            Some(
+                self.assignments_propositional
+                    .is_literal_assigned_true(literal),
+            )
+        } else {
+            None
+        }
+    }
+
     pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
         self.variable_literal_mappings.get_lower_bound_literal(
             domain,
@@ -704,12 +769,9 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
-    pub fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
+    #[deprecated = "users of the solvers should not have to access solver fields"]
+    pub(crate) fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
         &self.assignments_propositional
-    }
-
-    pub fn get_integer_assignments(&self) -> &AssignmentsInteger {
-        &self.assignments_integer
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
@@ -1891,12 +1953,7 @@ mod tests {
         solver.propagate_enqueued();
 
         assert!(solver.state.is_inconsistent());
-        assert_eq!(
-            solver
-                .get_integer_assignments()
-                .get_assigned_value(variable),
-            1
-        );
+        assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
 
         // We check whether the conflict which is returned is the conflict found by the SAT-solver
         // rather than the one found by the CP solver.
