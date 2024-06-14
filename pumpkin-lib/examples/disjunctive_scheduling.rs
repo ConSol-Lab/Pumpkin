@@ -62,7 +62,7 @@ fn main() {
             let _ = solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_permanent_clause(vec![literal, precedence_literals[y][x]]);
+            let _ = solver.add_clause([literal, precedence_literals[y][x]]);
         }
     }
 

@@ -430,7 +430,7 @@ impl ConstraintSatisfactionSolver {
         csp_solver.true_literal = true_literal;
         csp_solver.false_literal = !true_literal;
 
-        let result = csp_solver.add_unit_clause(true_literal);
+        let result = csp_solver.add_clause([true_literal]);
         pumpkin_assert_simple!(result.is_ok());
 
         csp_solver
@@ -568,8 +568,8 @@ impl ConstraintSatisfactionSolver {
     /// let mut solver = ConstraintSatisfactionSolver::default();
     /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
     ///
-    /// solver.add_permanent_clause(vec![x[0], x[1], x[2]]);
-    /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
+    /// solver.add_clause([x[0], x[1], x[2]]);
+    /// solver.add_clause([x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut brancher =
@@ -1383,9 +1383,9 @@ impl ConstraintSatisfactionSolver {
     /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
     /// returned. Subsequent calls to this method will always return an error, and no
     /// modification of the solver will take place.
-    pub fn add_permanent_clause(
+    pub fn add_clause(
         &mut self,
-        literals: Vec<Literal>,
+        literals: impl IntoIterator<Item = Literal>,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         pumpkin_assert_moderate!(self.is_propagation_complete());
@@ -1394,6 +1394,8 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleState);
         }
 
+        let literals: Vec<Literal> = literals.into_iter().collect();
+
         let result = self.clausal_propagator.add_permanent_clause(
             literals,
             &mut self.assignments_propositional,
@@ -1401,12 +1403,22 @@ impl ConstraintSatisfactionSolver {
         );
 
         if result.is_err() {
-            self.state.declare_infeasible()
+            self.state.declare_infeasible();
+            return Err(ConstraintOperationError::InfeasibleClause);
         }
-        result
+
+        self.propagate_enqueued();
+
+        if self.state.is_infeasible() {
+            self.state.declare_infeasible();
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+
+        Ok(())
     }
 
-    pub fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
+    #[deprecated = "use add_clause instead"]
+    pub(crate) fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
         self.clausal_propagator.add_permanent_implication_unchecked(
             lhs,
             rhs,
@@ -1414,45 +1426,15 @@ impl ConstraintSatisfactionSolver {
         );
     }
 
-    pub fn add_permanent_ternary_clause_unchecked(&mut self, a: Literal, b: Literal, c: Literal) {
+    #[deprecated = "use add_clause instead"]
+    pub(crate) fn add_permanent_ternary_clause_unchecked(
+        &mut self,
+        a: Literal,
+        b: Literal,
+        c: Literal,
+    ) {
         self.clausal_propagator
             .add_permanent_ternary_clause_unchecked(a, b, c, &mut self.clause_allocator);
-    }
-
-    pub fn add_unit_clause(
-        &mut self,
-        unit_clause: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_simple!(self.get_decision_level() == 0);
-        pumpkin_assert_simple!(self.is_propagation_complete());
-
-        // if the literal representing the unit clause is unassigned, assign it
-        if self
-            .assignments_propositional
-            .is_literal_unassigned(unit_clause)
-        {
-            self.assignments_propositional
-                .enqueue_decision_literal(unit_clause);
-
-            self.propagate_enqueued();
-
-            if self.state.conflicting() {
-                Err(ConstraintOperationError::InfeasibleClause)
-            } else {
-                Ok(())
-            }
-        }
-        // the unit clause is already present, no need to do anything
-        else if self
-            .assignments_propositional
-            .is_literal_assigned_true(unit_clause)
-        {
-            Ok(())
-        }
-        // the unit clause is falsified at the root level
-        else {
-            Err(ConstraintOperationError::InfeasibleClause)
-        }
     }
 }
 
@@ -1853,9 +1835,9 @@ mod tests {
         let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
         let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
 
-        let _ = solver.add_permanent_clause(vec![lit1, lit2]);
-        let _ = solver.add_permanent_clause(vec![lit1, !lit2]);
-        let _ = solver.add_permanent_clause(vec![!lit1, lit2]);
+        let _ = solver.add_clause([lit1, lit2]);
+        let _ = solver.add_clause([lit1, !lit2]);
+        let _ = solver.add_clause([!lit1, lit2]);
         (solver, vec![lit1, lit2])
     }
 
@@ -1887,7 +1869,7 @@ mod tests {
         assert!(result);
 
         // We add the clause that will lead to the conflict in the SAT-solver
-        let result = solver.add_permanent_clause(vec![
+        let result = solver.add_clause([
             solver.get_equality_literal(variable, 2),
             solver.get_equality_literal(variable, 3),
             solver.get_equality_literal(variable, 4),
@@ -1954,7 +1936,7 @@ mod tests {
     #[test]
     fn simple_core_extraction_1_infeasible() {
         let (mut solver, lits) = create_instance1();
-        let _ = solver.add_permanent_clause(vec![!lits[0], !lits[1]]);
+        let _ = solver.add_clause([!lits[0], !lits[1]]);
         run_test(
             solver,
             vec![!lits[1], !lits[0]],
@@ -1980,8 +1962,8 @@ mod tests {
         let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
         let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
 
-        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
-        let _ = solver.add_permanent_clause(vec![lit1, !lit2, lit3]);
+        let _ = solver.add_clause([lit1, lit2, lit3]);
+        let _ = solver.add_clause([lit1, !lit2, lit3]);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -2025,7 +2007,7 @@ mod tests {
         let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
         let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
         let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
-        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
+        let _ = solver.add_clause([lit1, lit2, lit3]);
         (solver, vec![lit1, lit2, lit3])
     }
 

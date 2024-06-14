@@ -132,14 +132,12 @@ impl<'a> MinizincOptimiser<'a> {
 
     fn strengthen(&mut self, best_objective_value: i64) -> Result<(), ConstraintOperationError> {
         match self.objective_function {
-            FlatzincObjective::Maximize(domain) => self.csp_solver.add_unit_clause(
-                self.csp_solver
-                    .get_lower_bound_literal(domain, (best_objective_value + 1) as i32),
-            ),
-            FlatzincObjective::Minimize(domain) => self.csp_solver.add_unit_clause(
-                self.csp_solver
-                    .get_upper_bound_literal(domain, (best_objective_value - 1) as i32),
-            ),
+            FlatzincObjective::Maximize(domain) => self.csp_solver.add_clause([self
+                .csp_solver
+                .get_lower_bound_literal(domain, (best_objective_value + 1) as i32)]),
+            FlatzincObjective::Minimize(domain) => self.csp_solver.add_clause([self
+                .csp_solver
+                .get_upper_bound_literal(domain, (best_objective_value - 1) as i32)]),
         }
     }
 

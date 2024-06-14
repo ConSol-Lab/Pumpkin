@@ -43,7 +43,7 @@ impl PseudoBooleanConstraintEncoderInterface for SingleIntegerEncoder {
             {
                 self.index_last_added_weighted_literal = i;
                 if csp_solver
-                    .add_unit_clause(!self.weighted_literals[i].literal)
+                    .add_clause([!self.weighted_literals[i].literal])
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -111,8 +111,7 @@ mod tests {
         let k: u64 = 5;
         let mut csp_solver = ConstraintSatisfactionSolver::default();
         let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
-        let _ =
-            csp_solver.add_unit_clause(csp_solver.get_lower_bound_literal(domain, k as i32 + 1));
+        let _ = csp_solver.add_clause([csp_solver.get_lower_bound_literal(domain, k as i32 + 1)]);
 
         let weight = 1;
         let weighted_literals =
@@ -183,7 +182,7 @@ mod tests {
         assert!(result.is_ok());
         let mut encoder = result.unwrap();
         let k = 5;
-        let _ = csp_solver.add_unit_clause(csp_solver.get_lower_bound_literal(domain, k + 1));
+        let _ = csp_solver.add_clause([csp_solver.get_lower_bound_literal(domain, k + 1)]);
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_err());
     }

@@ -282,10 +282,10 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
-        let _ = solver.add_permanent_clause(xs.clone());
-        let _ = solver.add_permanent_clause(vec![xs[0], !xs[1]]);
-        let _ = solver.add_permanent_clause(vec![!xs[0], xs[1]]);
-        let _ = solver.add_permanent_clause(vec![!xs[0], !xs[1]]);
+        let _ = solver.add_clause(xs.clone());
+        let _ = solver.add_clause([xs[0], !xs[1]]);
+        let _ = solver.add_clause([!xs[0], xs[1]]);
+        let _ = solver.add_clause([!xs[0], !xs[1]]);
 
         let mut checker = RpEngine::new(solver);
         let result = checker
@@ -310,10 +310,10 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
-        let _ = solver.add_permanent_clause(xs.clone());
-        let _ = solver.add_permanent_clause(vec![xs[0], !xs[1]]);
-        let _ = solver.add_permanent_clause(vec![!xs[0], xs[1]]);
-        let _ = solver.add_permanent_clause(vec![!xs[0], !xs[1]]);
+        let _ = solver.add_clause(xs.clone());
+        let _ = solver.add_clause([xs[0], !xs[1]]);
+        let _ = solver.add_clause([!xs[0], xs[1]]);
+        let _ = solver.add_clause([!xs[0], !xs[1]]);
 
         let mut checker = RpEngine::new(solver);
         let result = checker

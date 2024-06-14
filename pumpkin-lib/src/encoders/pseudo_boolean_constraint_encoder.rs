@@ -364,7 +364,7 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    let result = csp_solver.add_unit_clause(!term.literal);
+                    let result = csp_solver.add_clause([!term.literal]);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }

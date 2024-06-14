@@ -217,7 +217,7 @@ fn add_blocking_clause(
     if clause.is_empty() {
         return false;
     }
-    solver.add_permanent_clause(clause).is_ok()
+    solver.add_clause(clause).is_ok()
 }
 
 fn parse_and_compile(

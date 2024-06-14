@@ -295,7 +295,7 @@ fn compile_set_in_reif(
             // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
             let forward = context
                 .solver
-                .add_permanent_clause(vec![
+                .add_clause([
                     !reif,
                     context
                         .solver
@@ -304,7 +304,7 @@ fn compile_set_in_reif(
                 .is_ok()
                 && context
                     .solver
-                    .add_permanent_clause(vec![
+                    .add_clause([
                         !reif,
                         !context
                             .solver
@@ -316,7 +316,7 @@ fn compile_set_in_reif(
             // Decomposed to `!reif -> (x < lb \/ x > ub)`
             let backward = context
                 .solver
-                .add_permanent_clause(vec![
+                .add_clause([
                     reif,
                     !context
                         .solver
@@ -377,8 +377,8 @@ fn compile_bool_not(
     // a != b
     // -> !(a /\ b) /\ !(!a /\ !b)
     // -> (!a \/ !b) /\ (a \/ b)
-    let c1 = context.solver.add_permanent_clause(vec![a, b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
+    let c1 = context.solver.add_clause([a, b]).is_ok();
+    let c2 = context.solver.add_clause([!a, !b]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -393,10 +393,10 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b, r]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!a, b, !r]).is_ok();
-    let c3 = context.solver.add_permanent_clause(vec![a, !b, !r]).is_ok();
-    let c4 = context.solver.add_permanent_clause(vec![a, b, r]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b, r]).is_ok();
+    let c2 = context.solver.add_clause([!a, b, !r]).is_ok();
+    let c3 = context.solver.add_clause([a, !b, !r]).is_ok();
+    let c4 = context.solver.add_clause([a, b, r]).is_ok();
 
     Ok(c1 && c2 && c3 && c4)
 }
@@ -412,8 +412,8 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, b]).is_ok();
+    let c2 = context.solver.add_clause([!b, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -427,12 +427,12 @@ fn compile_bool_clause(
     let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
     let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
 
-    let clause = clause_1
+    let clause: Vec<Literal> = clause_1
         .iter()
         .copied()
         .chain(clause_2.iter().map(|&literal| !literal))
         .collect();
-    Ok(context.solver.add_permanent_clause(clause).is_ok())
+    Ok(context.solver.add_clause(clause).is_ok())
 }
 
 fn compile_bool_and(
@@ -445,10 +445,10 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!r, a]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!r, b]).is_ok();
+    let c1 = context.solver.add_clause([!r, a]).is_ok();
+    let c2 = context.solver.add_clause([!r, b]).is_ok();
 
-    let c3 = context.solver.add_permanent_clause(vec![!a, !b, r]).is_ok();
+    let c3 = context.solver.add_clause([!a, !b, r]).is_ok();
 
     Ok(c1 && c2 && c3)
 }
@@ -467,8 +467,8 @@ fn compile_bool2int(
 
     let b_lit = context.solver.get_predicate_literal(predicate![b == 1]);
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, b_lit]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b_lit, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
+    let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -494,8 +494,8 @@ fn compile_bool_xor(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![b, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b]).is_ok();
+    let c2 = context.solver.add_clause([b, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -510,13 +510,10 @@ fn compile_bool_xor_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context
-        .solver
-        .add_permanent_clause(vec![!a, !b, !r])
-        .is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!a, b, r]).is_ok();
-    let c3 = context.solver.add_permanent_clause(vec![a, !b, r]).is_ok();
-    let c4 = context.solver.add_permanent_clause(vec![a, b, !r]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b, !r]).is_ok();
+    let c2 = context.solver.add_clause([!a, b, r]).is_ok();
+    let c3 = context.solver.add_clause([a, !b, r]).is_ok();
+    let c4 = context.solver.add_clause([a, b, !r]).is_ok();
 
     Ok(c1 && c2 && c3 && c4)
 }
@@ -546,11 +543,11 @@ fn compile_array_var_bool_element(
 
         success &= context
             .solver
-            .add_permanent_clause(vec![!predicate_lit, !rhs, array[i]])
+            .add_clause([!predicate_lit, !rhs, array[i]])
             .is_ok();
         success &= context
             .solver
-            .add_permanent_clause(vec![!predicate_lit, !array[i], rhs])
+            .add_clause([!predicate_lit, !array[i], rhs])
             .is_ok();
     }
 
@@ -567,20 +564,17 @@ fn compile_array_bool_and(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     // /\conjunction -> r
-    let clause = conjunction
+    let clause: Vec<Literal> = conjunction
         .iter()
         .map(|&literal| !literal)
         .chain(std::iter::once(r))
         .collect();
-    let first_implication = context.solver.add_permanent_clause(clause).is_ok();
+    let first_implication = context.solver.add_clause(clause).is_ok();
 
     // r -> /\conjunction
-    let second_implication = conjunction.iter().all(|&literal| {
-        context
-            .solver
-            .add_permanent_clause(vec![!r, literal])
-            .is_ok()
-    });
+    let second_implication = conjunction
+        .iter()
+        .all(|&literal| context.solver.add_clause([!r, literal]).is_ok());
 
     Ok(first_implication && second_implication)
 }

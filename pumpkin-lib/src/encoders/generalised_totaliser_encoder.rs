@@ -65,7 +65,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.index_last_added_weighted_literal = i;
 
                 if csp_solver
-                    .add_unit_clause(!weighted_literals[i].literal)
+                    .add_clause([!weighted_literals[i].literal])
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -196,6 +196,7 @@ impl GeneralisedTotaliserEncoder {
                 //  define sums of one literal from node1
                 //  node1[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
+                    #[allow(deprecated)]
                     csp_solver.add_permanent_implication_unchecked(
                         weighted_literal.literal,
                         *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
@@ -205,6 +206,7 @@ impl GeneralisedTotaliserEncoder {
                 //  define sums of one literal from node2
                 //  node2[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
+                    #[allow(deprecated)]
                     csp_solver.add_permanent_implication_unchecked(
                         weighted_literal.literal,
                         *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
@@ -218,6 +220,7 @@ impl GeneralisedTotaliserEncoder {
                     for wl2 in &self.layers[index_current_layer].nodes[index_node2] {
                         let combined_weight = wl1.weight + wl2.weight;
                         if combined_weight <= k {
+                            #[allow(deprecated)]
                             csp_solver.add_permanent_ternary_clause_unchecked(
                                 !wl1.literal,
                                 !wl2.literal,
@@ -230,6 +233,7 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
+                            #[allow(deprecated)]
                             csp_solver
                                 .add_permanent_implication_unchecked(wl1.literal, !wl2.literal);
                             self.num_clauses_added += 1;

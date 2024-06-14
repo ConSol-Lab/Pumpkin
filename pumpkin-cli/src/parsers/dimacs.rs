@@ -534,7 +534,7 @@ impl DimacsSink for SolverDimacsSink {
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
         let mapped = self.mapped_clause(clause);
-        let _ = self.solver.add_permanent_clause(mapped);
+        let _ = self.solver.add_clause(mapped);
     }
 
     fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
@@ -561,7 +561,7 @@ impl DimacsSink for SolverDimacsSink {
             // General case, a soft clause with more than one literal.
             let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
             clause.push(soft_literal);
-            let _ = self.solver.add_permanent_clause(clause);
+            let _ = self.solver.add_clause(clause);
 
             SoftClauseAddition::Added(soft_literal)
         }

@@ -65,12 +65,12 @@ pub(crate) fn array_bool_or(
     // \/clause -> r
     let all_implications = clause
         .iter()
-        .all(|&literal| solver.add_permanent_clause(vec![!literal, reif]).is_ok());
+        .all(|&literal| solver.add_clause([!literal, reif]).is_ok());
 
     // r -> \/clause
     clause.insert(0, !reif);
 
-    all_implications && solver.add_permanent_clause(clause).is_ok()
+    all_implications && solver.add_clause(clause).is_ok()
 }
 
 pub(crate) fn int_ne_reif(
@@ -103,12 +103,12 @@ pub(crate) fn bool_lin_le(
         .map(|(index, bool)| {
             let corresponding_domain_id = solver.create_new_integer_variable(0, 1);
             // bool -> [domain = 1]
-            let _ = solver.add_permanent_clause(vec![
+            let _ = solver.add_clause([
                 !*bool,
                 solver.get_lower_bound_literal(corresponding_domain_id, 1),
             ]);
             // !bool -> [domain = 0]
-            let _ = solver.add_permanent_clause(vec![
+            let _ = solver.add_clause([
                 *bool,
                 solver.get_upper_bound_literal(corresponding_domain_id, 0),
             ]);
@@ -130,12 +130,12 @@ pub(crate) fn bool_lin_eq(
         .map(|(index, bool)| {
             let corresponding_domain_id = solver.create_new_integer_variable(0, 1);
             // bool -> [domain = 1]
-            let _ = solver.add_permanent_clause(vec![
+            let _ = solver.add_clause([
                 !*bool,
                 solver.get_lower_bound_literal(corresponding_domain_id, 1),
             ]);
             // !bool -> [domain = 0]
-            let _ = solver.add_permanent_clause(vec![
+            let _ = solver.add_clause([
                 *bool,
                 solver.get_upper_bound_literal(corresponding_domain_id, 0),
             ]);
