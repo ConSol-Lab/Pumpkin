@@ -196,6 +196,15 @@ fn configure_logging(
     }
 }
 
+fn configure_logging_unknown() -> std::io::Result<()> {
+    env_logger::Builder::new()
+        .format(move |buf, record| writeln!(buf, "{}", record.args()))
+        .filter_level(LevelFilter::Trace)
+        .target(env_logger::Target::Stdout)
+        .init();
+    Ok(())
+}
+
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
     statistic_logger::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
     let level_filter = if verbose {
@@ -258,7 +267,7 @@ fn main() {
     match run() {
         Ok(()) => {}
         Err(e) => {
-            error!("Execution failed, error: {:#?}", e);
+            error!("Execution failed, error: {}", e);
             std::process::exit(1);
         }
     }
@@ -277,6 +286,7 @@ fn run() -> PumpkinResult<()> {
         Some("wcnf") => FileFormat::WcnfDimacsPLine,
         Some("fzn") => FileFormat::FlatZinc,
         _ => {
+            configure_logging_unknown()?;
             return Err(PumpkinError::invalid_instance(args.instance_path.display()));
         }
     };
