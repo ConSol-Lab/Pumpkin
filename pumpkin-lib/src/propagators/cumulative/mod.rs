@@ -39,7 +39,7 @@
 //! // We can infer that Task 0 and Task 1 execute at the same time
 //! // while Task 2 will start after them
 //! use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-//! use pumpkin_lib::branching::IndependentVariableValueBrancher;
+//! use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! use pumpkin_lib::constraints::ConstraintsExt;
 //! use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 //! use pumpkin_lib::propagators::ArgTask;

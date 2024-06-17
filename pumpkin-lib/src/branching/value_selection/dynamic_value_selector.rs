@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use super::ValueSelector;
 use crate::basic_types::SolutionReference;
 #[cfg(doc)]
-use crate::branching::DynamicBrancher;
+use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;

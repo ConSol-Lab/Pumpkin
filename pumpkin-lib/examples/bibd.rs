@@ -13,7 +13,7 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;

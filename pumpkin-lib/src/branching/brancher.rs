@@ -14,6 +14,8 @@ use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
+use crate::engine::RestartStrategy;
+#[cfg(doc)]
 use crate::optimisation::LinearSearch;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
@@ -76,4 +78,8 @@ pub trait Brancher {
 
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
+
+    /// This method is called whenever a restart is performed as determined by the
+    /// [`RestartStrategy`].
+    fn on_restart(&mut self) {}
 }

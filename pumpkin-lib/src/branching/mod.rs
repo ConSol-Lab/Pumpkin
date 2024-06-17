@@ -20,7 +20,7 @@
 //! # use pumpkin_lib::engine::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::variable_selection::Vsids;
 //! # use pumpkin_lib::branching::value_selection::PhaseSaving;
-//! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+//! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! # use pumpkin_lib::engine::variables::Literal;
 //! let mut solver = ConstraintSatisfactionSolver::default();
@@ -43,7 +43,7 @@
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 //! # use pumpkin_lib::engine::variables::PropositionalVariable;
-//! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+//! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! # use pumpkin_lib::engine::variables::Literal;
 //! let mut solver = ConstraintSatisfactionSolver::default();
@@ -62,21 +62,20 @@
 //! \[1\] F. Rossi, P. Van Beek, and T. Walsh, Handbook of constraint programming. Elsevier, 2006.
 
 mod brancher;
-mod dynamic_brancher;
-mod independent_variable_value_brancher;
+pub mod branchers;
 mod selection_context;
 pub mod tie_breaking;
 pub mod value_selection;
 pub mod variable_selection;
 
 pub use brancher::Brancher;
-pub use dynamic_brancher::DynamicBrancher;
-pub use independent_variable_value_brancher::IndependentVariableValueBrancher;
 pub use selection_context::SelectionContext;
 pub use tie_breaking::*;
 pub use value_selection::*;
 pub use variable_selection::*;
 
+#[cfg(doc)]
+use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::SolutionGuidedValueSelector;
 #[cfg(doc)]

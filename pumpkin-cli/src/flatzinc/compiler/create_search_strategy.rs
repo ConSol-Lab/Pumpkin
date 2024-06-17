@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
+use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::branching::DynamicBrancher;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 

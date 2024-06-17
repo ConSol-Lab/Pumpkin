@@ -1,13 +1,13 @@
 use std::marker::PhantomData;
 
-use super::value_selection::PhaseSaving;
-use super::value_selection::ValueSelector;
-use super::SolutionGuidedValueSelector;
-use super::VariableSelector;
-use super::Vsids;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
+use crate::branching::PhaseSaving;
 use crate::branching::SelectionContext;
+use crate::branching::SolutionGuidedValueSelector;
+use crate::branching::ValueSelector;
+use crate::branching::VariableSelector;
+use crate::branching::Vsids;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -47,7 +47,7 @@ where
     }
 }
 
-type DefaultBrancher = IndependentVariableValueBrancher<
+pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,
     Vsids<PropositionalVariable>,
     SolutionGuidedValueSelector<

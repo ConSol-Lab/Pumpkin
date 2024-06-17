@@ -1,5 +1,5 @@
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;

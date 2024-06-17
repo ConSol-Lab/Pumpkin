@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use super::Brancher;
-use super::SelectionContext;
 use crate::basic_types::SolutionReference;
+use crate::branching::Brancher;
+use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;

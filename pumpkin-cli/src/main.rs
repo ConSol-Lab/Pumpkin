@@ -26,7 +26,7 @@ use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
 use pumpkin_lib::basic_types::signal_handling::signal_handler;
 use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::RestartOptions;

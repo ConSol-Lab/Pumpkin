@@ -106,7 +106,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// ```
 /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 /// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
-/// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+/// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 /// # use pumpkin_lib::engine::variables::IntegerVariable;
 /// # use pumpkin_lib::engine::variables::TransformableVariable;
@@ -578,7 +578,7 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
     /// # use pumpkin_lib::engine::variables::PropositionalVariable;
     /// # use pumpkin_lib::engine::variables::Literal;
-    /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+    /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
     ///
     /// let mut solver = ConstraintSatisfactionSolver::default();
@@ -1688,7 +1688,7 @@ mod tests {
     use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
-    use crate::branching::IndependentVariableValueBrancher;
+    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
     use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
     use crate::engine::propagation::propagation_context::HasAssignments;
