@@ -1648,7 +1648,6 @@ impl CSPSolverState {
     }
 
     pub fn declare_solving(&mut self) {
-        dbg!(&self.internal_state);
         pumpkin_assert_simple!((self.is_ready() || self.conflicting()) && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Solving;
     }
