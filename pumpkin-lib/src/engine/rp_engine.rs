@@ -316,7 +316,7 @@ mod tests {
     fn fixing_a_queen_in_3queens_triggers_conflict_under_rp() {
         let (solver, queens) = create_3queens();
 
-        let proof_c1 = [solver.get_equality_literal(queens[0], 0)];
+        let proof_c1 = [solver.get_literal(predicate![queens[0] == 0])];
         let mut checker = RpEngine::new(solver);
 
         let Err(conflict) = checker.propagate_under_assumptions(proof_c1) else {
@@ -330,8 +330,8 @@ mod tests {
     fn with_deletable_clauses_3queens_is_unsat_under_propagation() {
         let (solver, queens) = create_3queens();
 
-        let lit_q0_neq_0 = solver.get_predicate_literal(predicate![queens[0] != 0]);
-        let lit_q0_neq_1 = solver.get_predicate_literal(predicate![queens[0] != 1]);
+        let lit_q0_neq_0 = solver.get_literal(predicate![queens[0] != 0]);
+        let lit_q0_neq_1 = solver.get_literal(predicate![queens[0] != 1]);
 
         let proof_c1 = [lit_q0_neq_0];
         let proof_c2 = [lit_q0_neq_1];

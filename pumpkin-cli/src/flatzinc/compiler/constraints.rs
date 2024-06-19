@@ -4,6 +4,7 @@ use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::predicate;
 
 pub(crate) fn int_lin_le_reif(
     solver: &mut ConstraintSatisfactionSolver,
@@ -105,12 +106,12 @@ pub(crate) fn bool_lin_le(
             // bool -> [domain = 1]
             let _ = solver.add_clause([
                 !*bool,
-                solver.get_lower_bound_literal(corresponding_domain_id, 1),
+                solver.get_literal(predicate![corresponding_domain_id >= 1]),
             ]);
             // !bool -> [domain = 0]
             let _ = solver.add_clause([
                 *bool,
-                solver.get_upper_bound_literal(corresponding_domain_id, 0),
+                solver.get_literal(predicate![corresponding_domain_id <= 0]),
             ]);
             corresponding_domain_id.scaled(weights[index])
         })
@@ -132,12 +133,12 @@ pub(crate) fn bool_lin_eq(
             // bool -> [domain = 1]
             let _ = solver.add_clause([
                 !*bool,
-                solver.get_lower_bound_literal(corresponding_domain_id, 1),
+                solver.get_literal(predicate![corresponding_domain_id >= 1]),
             ]);
             // !bool -> [domain = 0]
             let _ = solver.add_clause([
                 *bool,
-                solver.get_upper_bound_literal(corresponding_domain_id, 0),
+                solver.get_literal(predicate![corresponding_domain_id <= 0]),
             ]);
             corresponding_domain_id.scaled(weights[index])
         })

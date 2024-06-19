@@ -5,6 +5,7 @@ use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Clone, Default, Debug)]
@@ -128,7 +129,7 @@ impl Function {
             //  the literals before those contribute to the objective function but not in a way that
             // can be changed
             for i in (lower_bound + 1)..=upper_bound {
-                let literal = csp_solver.get_lower_bound_literal(domain_id, i);
+                let literal = csp_solver.get_literal(predicate![domain_id >= i]);
                 weighted_literals.push(WeightedLiteral {
                     literal,
                     weight,

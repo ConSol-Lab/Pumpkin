@@ -7,6 +7,7 @@ use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
+use pumpkin_lib::predicate;
 use pumpkin_lib::pumpkin_assert_simple;
 
 use super::instance::FlatzincObjective;
@@ -120,10 +121,10 @@ impl<'a> MinizincOptimiser<'a> {
         match self.objective_function {
             FlatzincObjective::Maximize(domain) => self.csp_solver.add_clause([self
                 .csp_solver
-                .get_lower_bound_literal(domain, (best_objective_value + 1) as i32)]),
+                .get_literal(predicate![domain >= (best_objective_value + 1) as i32])]),
             FlatzincObjective::Minimize(domain) => self.csp_solver.add_clause([self
                 .csp_solver
-                .get_upper_bound_literal(domain, (best_objective_value - 1) as i32)]),
+                .get_literal(predicate![domain <= (best_objective_value - 1) as i32])]),
         }
     }
 

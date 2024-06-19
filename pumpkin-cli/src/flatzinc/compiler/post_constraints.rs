@@ -299,7 +299,7 @@ fn compile_set_in_reif(
                     !reif,
                     context
                         .solver
-                        .get_lower_bound_literal(variable, lower_bound),
+                        .get_literal(predicate![variable >= lower_bound]),
                 ])
                 .is_ok()
                 && context
@@ -308,7 +308,7 @@ fn compile_set_in_reif(
                         !reif,
                         !context
                             .solver
-                            .get_lower_bound_literal(variable, upper_bound + 1),
+                            .get_literal(predicate![variable >= upper_bound + 1]),
                     ])
                     .is_ok();
 
@@ -320,10 +320,10 @@ fn compile_set_in_reif(
                     reif,
                     !context
                         .solver
-                        .get_lower_bound_literal(variable, lower_bound),
+                        .get_literal(predicate![variable >= lower_bound]),
                     context
                         .solver
-                        .get_lower_bound_literal(variable, upper_bound + 1),
+                        .get_literal(predicate![variable >= upper_bound + 1]),
                 ])
                 .is_ok();
 
@@ -333,11 +333,7 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| {
-                    context
-                        .solver
-                        .get_predicate_literal(predicate![variable == value])
-                })
+                .map(|&value| context.solver.get_literal(predicate![variable == value]))
                 .collect::<Vec<_>>();
 
             array_bool_or(context.solver, clause, reif)
@@ -465,7 +461,7 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    let b_lit = context.solver.get_predicate_literal(predicate![b == 1]);
+    let b_lit = context.solver.get_literal(predicate![b == 1]);
 
     let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
     let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
@@ -537,9 +533,7 @@ fn compile_array_var_bool_element(
 
         // [index = mzn_index] -> (rhs <-> array[i])
 
-        let predicate_lit = context
-            .solver
-            .get_predicate_literal(predicate![index == mzn_index]);
+        let predicate_lit = context.solver.get_literal(predicate![index == mzn_index]);
 
         success &= context
             .solver

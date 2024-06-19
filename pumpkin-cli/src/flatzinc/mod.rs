@@ -21,6 +21,7 @@ use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
+use pumpkin_lib::predicate;
 
 use self::instance::FlatZincInstance;
 use self::instance::Output;
@@ -181,7 +182,9 @@ fn add_blocking_clause(
             Output::Int(int) => {
                 let domain = *int.get_variable();
                 let value = solution.get_integer_value(domain);
-                Box::new(std::iter::once(solver.get_equality_literal(domain, value)))
+                Box::new(std::iter::once(
+                    solver.get_literal(predicate![domain == value]),
+                ))
             }
 
             #[allow(trivial_casts)]
@@ -199,7 +202,7 @@ fn add_blocking_clause(
             Output::ArrayOfInt(array_of_ints) => {
                 Box::new(array_of_ints.get_contents().map(|&domain| {
                     let value = solution.get_integer_value(domain);
-                    solver.get_equality_literal(domain, value)
+                    solver.get_literal(predicate![domain == value])
                 })) as Box<dyn Iterator<Item = Literal>>
             }
         })

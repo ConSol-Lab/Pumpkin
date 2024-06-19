@@ -354,7 +354,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Given a predicate, returns the corresponding literal.
-    pub fn get_predicate_literal(&self, predicate: Predicate) -> Literal {
+    pub fn get_literal(&self, predicate: Predicate) -> Literal {
         self.variable_literal_mappings.get_literal(
             predicate,
             &self.assignments_propositional,
@@ -740,33 +740,6 @@ impl ConstraintSatisfactionSolver {
         } else {
             None
         }
-    }
-
-    pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
-        self.variable_literal_mappings.get_lower_bound_literal(
-            domain,
-            lower_bound,
-            &self.assignments_propositional,
-            &self.assignments_integer,
-        )
-    }
-
-    pub fn get_upper_bound_literal(&self, domain: DomainId, upper_bound: i32) -> Literal {
-        self.variable_literal_mappings.get_upper_bound_literal(
-            domain,
-            upper_bound,
-            &self.assignments_propositional,
-            &self.assignments_integer,
-        )
-    }
-
-    pub fn get_equality_literal(&self, domain: DomainId, equality_constant: i32) -> Literal {
-        self.variable_literal_mappings.get_equality_literal(
-            domain,
-            equality_constant,
-            &self.assignments_propositional,
-            &self.assignments_integer,
-        )
     }
 
     #[deprecated = "users of the solvers should not have to access solver fields"]
@@ -1931,10 +1904,10 @@ mod tests {
 
         // We add the clause that will lead to the conflict in the SAT-solver
         let result = solver.add_clause([
-            solver.get_equality_literal(variable, 2),
-            solver.get_equality_literal(variable, 3),
-            solver.get_equality_literal(variable, 4),
-            solver.get_equality_literal(variable, 5),
+            solver.get_literal(predicate![variable == 2]),
+            solver.get_literal(predicate![variable == 3]),
+            solver.get_literal(predicate![variable == 4]),
+            solver.get_literal(predicate![variable == 5]),
         ]);
         assert!(result.is_ok());
 
@@ -2094,7 +2067,7 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
         let domain_id = solver.create_new_integer_variable(0, 10);
 
-        let result = solver.get_upper_bound_literal(domain_id, -2);
+        let result = solver.get_literal(predicate![domain_id <= -2]);
         assert_eq!(result, solver.assignments_propositional.false_literal);
     }
 
@@ -2102,7 +2075,7 @@ mod tests {
     fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
         let mut solver = ConstraintSatisfactionSolver::default();
         let domain_id = solver.create_new_integer_variable(0, 10);
-        let result = solver.get_lower_bound_literal(domain_id, -2);
+        let result = solver.get_literal(predicate![domain_id >= -2]);
         assert_eq!(result, solver.assignments_propositional.true_literal);
     }
 
@@ -2120,25 +2093,25 @@ mod tests {
 
         assert_eq!(
             solver.assignments_propositional.true_literal,
-            solver.get_lower_bound_literal(domain_id, lb,)
+            solver.get_literal(predicate![domain_id >= lb])
         );
 
         assert_eq!(
             solver.assignments_propositional.false_literal,
-            solver.get_upper_bound_literal(domain_id, lb - 1,)
+            solver.get_literal(predicate![domain_id <= lb - 1])
         );
 
         assert!(solver
             .assignments_propositional
-            .is_literal_unassigned(solver.get_equality_literal(domain_id, lb,)));
+            .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
 
         assert_eq!(
             solver.assignments_propositional.false_literal,
-            solver.get_equality_literal(domain_id, lb - 1,)
+            solver.get_literal(predicate![domain_id == lb - 1])
         );
 
         for value in (lb + 1)..ub {
-            let literal = solver.get_lower_bound_literal(domain_id, value);
+            let literal = solver.get_literal(predicate![domain_id >= value]);
 
             assert!(solver
                 .assignments_propositional
@@ -2146,23 +2119,23 @@ mod tests {
 
             assert!(solver
                 .assignments_propositional
-                .is_literal_unassigned(solver.get_equality_literal(domain_id, value,)));
+                .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
         }
 
         assert_eq!(
             solver.assignments_propositional.false_literal,
-            solver.get_lower_bound_literal(domain_id, ub + 1,)
+            solver.get_literal(predicate![domain_id >= ub + 1])
         );
         assert_eq!(
             solver.assignments_propositional.true_literal,
-            solver.get_upper_bound_literal(domain_id, ub,)
+            solver.get_literal(predicate![domain_id <= ub])
         );
         assert!(solver
             .assignments_propositional
-            .is_literal_unassigned(solver.get_equality_literal(domain_id, ub,)));
+            .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
         assert_eq!(
             solver.assignments_propositional.false_literal,
-            solver.get_equality_literal(domain_id, ub + 1,)
+            solver.get_literal(predicate![domain_id == ub + 1])
         );
     }
 
@@ -2196,8 +2169,7 @@ mod tests {
         let _ = solver.synchronise_propositional_trail_based_on_integer_trail();
 
         for lower_bound in 0..=8 {
-            let literal =
-                solver.get_predicate_literal(domain_id.lower_bound_predicate(lower_bound));
+            let literal = solver.get_literal(domain_id.lower_bound_predicate(lower_bound));
             assert!(
                 solver
                     .assignments_propositional
@@ -2219,7 +2191,7 @@ mod tests {
             let lower_bound_predicate = predicate![domain_id >= bound];
             let equality_predicate = predicate![domain_id == bound];
             for predicate in [lower_bound_predicate, equality_predicate] {
-                let literal = solver.get_predicate_literal(predicate);
+                let literal = solver.get_literal(predicate);
                 assert!(
                     solver.variable_literal_mappings.literal_to_predicates[literal]
                         .contains(&predicate)

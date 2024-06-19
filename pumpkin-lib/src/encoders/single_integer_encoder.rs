@@ -65,6 +65,7 @@ mod tests {
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
     use crate::engine::variables::DomainId;
     use crate::engine::ConstraintSatisfactionSolver;
+    use crate::predicate;
 
     fn weighted_literals(
         csp_solver: &mut ConstraintSatisfactionSolver,
@@ -75,7 +76,7 @@ mod tests {
     ) -> Vec<WeightedLiteral> {
         ((lower_bound + 1)..=upper_bound)
             .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
+                let literal = csp_solver.get_literal(predicate![domain >= i]);
                 WeightedLiteral {
                     literal,
                     weight,
@@ -99,7 +100,7 @@ mod tests {
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+            .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
             == Some(false)));
     }
 
@@ -109,7 +110,7 @@ mod tests {
         let k: u64 = 5;
         let mut csp_solver = ConstraintSatisfactionSolver::default();
         let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
-        let _ = csp_solver.add_clause([csp_solver.get_lower_bound_literal(domain, k as i32 + 1)]);
+        let _ = csp_solver.add_clause([csp_solver.get_literal(predicate![domain >= k as i32 + 1])]);
 
         let weight = 1;
         let weighted_literals =
@@ -134,7 +135,7 @@ mod tests {
         assert!(result.is_ok());
         assert!(
             ((lower_bound as u64 + 1)..=upper_bound as u64).all(|lower_bound| csp_solver
-                .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+                .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
                 .is_none())
         );
     }
@@ -157,7 +158,7 @@ mod tests {
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_literal_value(csp_solver.get_lower_bound_literal(domain, lower_bound as i32))
+            .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
             == Some(false)));
     }
 
@@ -176,7 +177,7 @@ mod tests {
         assert!(result.is_ok());
         let mut encoder = result.unwrap();
         let k = 5;
-        let _ = csp_solver.add_clause([csp_solver.get_lower_bound_literal(domain, k + 1)]);
+        let _ = csp_solver.add_clause([csp_solver.get_literal(predicate![domain >= k + 1])]);
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_err());
     }
