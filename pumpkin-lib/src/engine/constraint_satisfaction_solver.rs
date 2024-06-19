@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Instant;
 
-use log::debug;
 use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -18,10 +17,10 @@ use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
 use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
+use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::signal_handling::signal_handler;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ClauseReference;
@@ -33,7 +32,6 @@ use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
-use crate::basic_types::Stopwatch;
 use crate::basic_types::StorageKey;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -110,6 +108,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 /// # use pumpkin_lib::engine::variables::IntegerVariable;
 /// # use pumpkin_lib::engine::variables::TransformableVariable;
+/// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 /// // We create a solver with default options (note that this is only possible in a testing environment)
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///
@@ -126,7 +125,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 ///
 /// // Then we solve the problem given a time-limit and a branching strategy
-/// let result = solver.solve(i64::MAX, &mut brancher);
+/// let result = solver.solve(&mut Indefinite, &mut brancher);
 ///
 /// // Now we check that the result is feasible and that the chosen values for the two variables are different
 /// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
@@ -208,8 +207,6 @@ pub struct ConstraintSatisfactionSolver {
     /// Convenience literals used in special cases.
     true_literal: Literal,
     false_literal: Literal,
-    /// Used to approximately track time.
-    stopwatch: Stopwatch,
     /// A set of counters updated during the search.
     counters: Counters,
     /// Used to store the learned clause.
@@ -236,7 +233,6 @@ impl Debug for ConstraintSatisfactionSolver {
             .field("cp_propagators", &cp_propagators)
             .field("counters", &self.counters)
             .field("internal_parameters", &self.internal_parameters)
-            .field("stopwatch", &self.stopwatch)
             .field("analysis_result", &self.analysis_result)
             .finish()
     }
@@ -431,7 +427,6 @@ impl ConstraintSatisfactionSolver {
             cp_propagators: vec![],
             counters: Counters::default(),
             internal_parameters: solver_options,
-            stopwatch: Stopwatch::new(i64::MAX),
             analysis_result: ConflictAnalysisResult::default(),
         };
         // we introduce a dummy variable set to true at the root level
@@ -454,17 +449,17 @@ impl ConstraintSatisfactionSolver {
 
     pub fn solve(
         &mut self,
-        time_limit_in_seconds: i64,
+        termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
         let dummy_assumptions: Vec<Literal> = vec![];
-        self.solve_under_assumptions(&dummy_assumptions, time_limit_in_seconds, brancher)
+        self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
     }
 
     pub fn solve_under_assumptions(
         &mut self,
         assumptions: &[Literal],
-        time_limit_in_seconds: i64,
+        termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
         if self.state.is_inconsistent() {
@@ -473,8 +468,8 @@ impl ConstraintSatisfactionSolver {
 
         let start_time = Instant::now();
 
-        self.initialise(assumptions, time_limit_in_seconds);
-        let result = self.solve_internal(brancher);
+        self.initialise(assumptions);
+        let result = self.solve_internal(termination, brancher);
 
         self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
 
@@ -578,6 +573,7 @@ impl ConstraintSatisfactionSolver {
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
     /// # use pumpkin_lib::engine::variables::PropositionalVariable;
     /// # use pumpkin_lib::engine::variables::Literal;
+    /// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
     /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
     ///
@@ -590,7 +586,7 @@ impl ConstraintSatisfactionSolver {
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut brancher =
     ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    /// solver.solve_under_assumptions(&assumptions, i64::MAX, &mut brancher);
+    /// solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
     ///
     /// let core = solver
     ///     .extract_clausal_core(&mut brancher)
@@ -873,25 +869,23 @@ impl ConstraintSatisfactionSolver {
 
 // methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
-    fn initialise(&mut self, assumptions: &[Literal], time_limit_in_seconds: i64) {
+    fn initialise(&mut self, assumptions: &[Literal]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
             "Solver is not expected to be in the infeasible under assumptions state when initialising.
              Missed extracting the core?"
         );
         self.state.declare_solving();
-        self.stopwatch.reset(time_limit_in_seconds);
         assumptions.clone_into(&mut self.assumptions);
     }
 
-    fn solve_internal(&mut self, brancher: &mut impl Brancher) -> CSPSolverExecutionFlag {
+    fn solve_internal(
+        &mut self,
+        termination: &mut impl TerminationCondition,
+        brancher: &mut impl Brancher,
+    ) -> CSPSolverExecutionFlag {
         loop {
-            if signal_handler::should_terminate() {
-                debug!("Received signal to quit");
-                return CSPSolverExecutionFlag::Timeout;
-            }
-            if self.stopwatch.get_remaining_time_budget() <= 0 {
-                debug!("Reached time-out");
+            if termination.should_stop() {
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }
@@ -1670,6 +1664,7 @@ mod tests {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonRef;
+    use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
@@ -1850,7 +1845,7 @@ mod tests {
     ) {
         let mut brancher =
             IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-        let flag = solver.solve_under_assumptions(&assumptions, i64::MAX, &mut brancher);
+        let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 
         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {

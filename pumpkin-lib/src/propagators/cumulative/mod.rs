@@ -41,6 +41,7 @@
 //! use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! use pumpkin_lib::constraints::ConstraintsExt;
+//! use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 //! use pumpkin_lib::propagators::ArgTask;
 //! use pumpkin_lib::propagators::TimeTablePerPoint;
@@ -66,7 +67,7 @@
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 //!
-//! let result = solver.solve(i64::MAX, &mut brancher);
+//! let result = solver.solve(&mut Indefinite, &mut brancher);
 //!
 //! // We check whether the result was feasible
 //! assert_eq!(CSPSolverExecutionFlag::Feasible, result);

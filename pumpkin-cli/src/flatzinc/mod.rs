@@ -13,10 +13,10 @@ use std::time::Duration;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ProblemSolution;
 use pumpkin_lib::basic_types::SolutionReference;
-use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::engine::termination::time_budget::TimeBudget;
 use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
@@ -50,6 +50,8 @@ pub(crate) fn solve(
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
+    let mut termination = time_limit.map(TimeBudget::starting_now);
+
     let instance = parse_and_compile(&mut solver, instance)?;
     let outputs = instance.outputs.clone();
 
@@ -64,7 +66,7 @@ pub(crate) fn solve(
         };
 
         let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
-        match optimisation_solver.solve(time_limit, brancher, &instance.outputs) {
+        match optimisation_solver.solve(&mut termination, brancher, &instance.outputs) {
             MinizincOptimisationResult::Optimal {
                 optimal_objective_value,
             } => {
@@ -84,18 +86,12 @@ pub(crate) fn solve(
             }
         }
     } else {
-        let stopwatch = Stopwatch::new(
-            time_limit
-                .map(|limit| limit.as_secs() as i64)
-                .unwrap_or(i64::MAX),
-        );
-
         let mut brancher = instance.search.expect("Expected a search to be defined");
 
         let mut found_solution = false;
 
         loop {
-            match solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher) {
+            match solver.solve(&mut termination, &mut brancher) {
                 CSPSolverExecutionFlag::Feasible => {
                     found_solution = true;
 

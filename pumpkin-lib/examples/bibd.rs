@@ -15,6 +15,7 @@
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::termination::indefinite::Indefinite;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -124,7 +125,7 @@ fn main() {
 
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    match solver.solve(i64::MAX, &mut brancher) {
+    match solver.solve(&mut Indefinite, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 

@@ -1,8 +1,6 @@
 mod linear_search;
 mod optimiser;
 
-use std::time::Duration;
-
 pub use linear_search::*;
 use log::debug;
 pub use optimiser::*;
@@ -13,6 +11,7 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::Function;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
+use crate::engine::termination::TerminationCondition;
 use crate::engine::ConstraintSatisfactionSolver;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
@@ -55,19 +54,13 @@ pub fn log_statistics(csp_solver: &ConstraintSatisfactionSolver) {
 impl OptimisationSolver {
     pub fn solve(
         &mut self,
-        time_limit: Option<Duration>,
+        termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
     ) -> OptimisationResult {
-        let stopwatch = Stopwatch::new(
-            time_limit
-                .map(|limit| limit.as_secs() as i64)
-                .unwrap_or(i64::MAX),
-        );
+        let process_time = Stopwatch::starting_now();
 
         // Compute an initial solution from which to start minimizing
-        let initial_solve_result = self
-            .csp_solver
-            .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
+        let initial_solve_result = self.csp_solver.solve(termination, &mut brancher);
 
         match initial_solve_result {
             CSPSolverExecutionFlag::Infeasible => {
@@ -81,13 +74,14 @@ impl OptimisationSolver {
             _ => {
                 debug!(
                     "Initial solution took {} seconds",
-                    stopwatch.get_elapsed_time()
+                    process_time.elapsed().as_secs(),
                 );
 
                 self.linear_search.solve(
                     &mut self.csp_solver,
+                    process_time,
                     &self.objective_function,
-                    &stopwatch,
+                    termination,
                     brancher,
                 )
             }

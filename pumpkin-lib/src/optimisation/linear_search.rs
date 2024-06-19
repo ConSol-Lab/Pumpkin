@@ -8,6 +8,7 @@ use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
 use crate::encoders::PseudoBooleanConstraintEncoder;
 use crate::encoders::PseudoBooleanEncoding;
+use crate::engine::termination::TerminationCondition;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::optimisation::log_statistics_with_objective;
 use crate::pumpkin_assert_moderate;
@@ -28,8 +29,9 @@ impl LinearSearch {
     pub fn solve(
         &self,
         csp_solver: &mut ConstraintSatisfactionSolver,
+        process_time: Stopwatch,
         objective_function: &Function,
-        stopwatch: &Stopwatch,
+        termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
     ) -> OptimisationResult {
         pumpkin_assert_simple!(
@@ -47,8 +49,8 @@ impl LinearSearch {
         info!(
             "Current objective is {} after {} seconds ({} ms)",
             best_objective_value,
-            stopwatch.get_elapsed_time(),
-            stopwatch.get_elapsed_time_millis(),
+            process_time.elapsed().as_secs(),
+            process_time.elapsed().as_millis(),
         );
         let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
             objective_function,
@@ -97,8 +99,7 @@ impl LinearSearch {
             #[allow(deprecated)]
             brancher.on_solution(csp_solver.get_solution_reference());
 
-            let csp_execution_flag =
-                csp_solver.solve(stopwatch.get_remaining_time_budget(), &mut brancher);
+            let csp_execution_flag = csp_solver.solve(termination, &mut brancher);
 
             match csp_execution_flag {
                 CSPSolverExecutionFlag::Feasible => {
@@ -121,8 +122,8 @@ impl LinearSearch {
                     info!(
                         "Current objective is {} after {} seconds ({} ms)",
                         best_objective_value,
-                        stopwatch.get_elapsed_time(),
-                        stopwatch.get_elapsed_time_millis(),
+                        process_time.elapsed().as_secs(),
+                        process_time.elapsed().as_millis(),
                     );
                 }
                 CSPSolverExecutionFlag::Infeasible => {

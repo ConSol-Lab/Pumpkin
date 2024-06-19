@@ -5,6 +5,7 @@ mod debug_helper;
 mod preprocessor;
 pub mod rp_engine;
 mod sat;
+pub mod termination;
 pub mod variables;
 
 pub use constraint_satisfaction_solver::ConstraintSatisfactionSolver;

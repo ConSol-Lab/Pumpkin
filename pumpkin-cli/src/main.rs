@@ -28,6 +28,7 @@ use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::termination::time_budget::TimeBudget;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::RestartOptions;
 use pumpkin_lib::engine::*;
@@ -400,7 +401,9 @@ fn wcnf_problem(
         LinearSearch::new(upper_bound_encoding),
     );
 
-    let result = match solver.solve(time_limit, brancher) {
+    let mut termination = time_limit.map(TimeBudget::starting_now);
+
+    let result = match solver.solve(&mut termination, brancher) {
         OptimisationResult::Optimal {
             solution,
             objective_value,
@@ -455,9 +458,10 @@ fn cnf_problem(
         CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
+    let mut termination = time_limit.map(TimeBudget::starting_now);
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
-    let solution = match csp_solver.solve(time_limit_in_secs(time_limit), &mut brancher) {
+    let solution = match csp_solver.solve(&mut termination, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             #[allow(deprecated)]
             let solution = csp_solver.get_solution_reference();
@@ -488,12 +492,6 @@ fn cnf_problem(
     }
 
     Ok(())
-}
-
-fn time_limit_in_secs(time_limit: Option<Duration>) -> i64 {
-    time_limit
-        .map(|limit| limit.as_secs() as i64)
-        .unwrap_or(i64::MAX)
 }
 
 fn stringify_solution(

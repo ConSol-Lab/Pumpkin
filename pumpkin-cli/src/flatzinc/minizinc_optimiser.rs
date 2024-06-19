@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ConstraintOperationError;
-use pumpkin_lib::basic_types::Stopwatch;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::engine::termination::TerminationCondition;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::predicate;
@@ -32,19 +30,11 @@ impl<'a> MinizincOptimiser<'a> {
 
     pub(crate) fn solve(
         &mut self,
-        time_limit: Option<Duration>,
+        termination: &mut impl TerminationCondition,
         mut brancher: DynamicBrancher,
         outputs: &[Output],
     ) -> MinizincOptimisationResult {
-        let stopwatch = Stopwatch::new(
-            time_limit
-                .map(|limit| limit.as_secs() as i64)
-                .unwrap_or(i64::MAX),
-        );
-
-        let initial_solve = self
-            .csp_solver
-            .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
+        let initial_solve = self.csp_solver.solve(termination, &mut brancher);
         match initial_solve {
             CSPSolverExecutionFlag::Feasible => {
                 #[allow(deprecated)]
@@ -77,9 +67,7 @@ impl<'a> MinizincOptimiser<'a> {
                 };
             }
 
-            let solve_result = self
-                .csp_solver
-                .solve(stopwatch.get_remaining_time_budget(), &mut brancher);
+            let solve_result = self.csp_solver.solve(termination, &mut brancher);
             match solve_result {
                 CSPSolverExecutionFlag::Feasible => {
                     self.debug_bound_change(best_objective_value);

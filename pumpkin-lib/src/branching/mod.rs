@@ -23,13 +23,14 @@
 //! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! # use pumpkin_lib::engine::variables::Literal;
+//! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
 //! let variables = vec![solver.create_new_propositional_variable()];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::new(Vsids::new(&variables), PhaseSaving::new(&variables));
-//! let result = solver.solve(i64::MAX, &mut brancher);
+//! let result = solver.solve(&mut Indefinite, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
 //!     .get_literal_value(Literal::new(variable, true))
@@ -46,13 +47,14 @@
 //! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 //! # use pumpkin_lib::engine::variables::Literal;
+//! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
 //! let variables = vec![solver.create_new_propositional_variable()];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-//! let result = solver.solve(i64::MAX, &mut brancher);
+//! let result = solver.solve(&mut Indefinite, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
 //!     .get_literal_value(Literal::new(variable, true))
