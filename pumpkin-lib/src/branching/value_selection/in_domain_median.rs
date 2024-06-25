@@ -1,7 +1,8 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
+use crate::predicate;
 
 /// A [`ValueSelector`] which selects the median value in the domain (or if this value is already
 /// assigned then the closest variable to it in terms of index).
@@ -9,54 +10,48 @@ use crate::engine::variables::Literal;
 pub struct InDomainMedian;
 
 impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMedian {
-    fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: Var,
+    ) -> Predicate {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))
             .filter(|bound| context.contains(decision_variable, *bound))
             .collect::<Vec<_>>();
-        context.get_literal_for_predicate(
-            decision_variable.equality_predicate(values_in_domain[values_in_domain.len() / 2]),
-        )
+        predicate!(decision_variable == values_in_domain[values_in_domain.len() / 2])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::basic_types::PredicateConstructor;
     use crate::branching::InDomainMedian;
     use crate::branching::SelectionContext;
     use crate::branching::ValueSelector;
+    use crate::predicate;
 
     #[test]
     fn test_returns_correct_literal() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMedian;
 
-        let selected_literal = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(
-            selected_literal,
-            mediator.get_literal(
-                domain_ids[0].equality_predicate(5),
-                &assignments_propositional,
-                &assignments_integer
-            )
-        )
+        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
+        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 5))
     }
 
     #[test]
     fn test_returns_correct_literal_no_median() {
-        let (mut assignments_integer, assignments_propositional, mediator) =
+        let (mut assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(1, 0, Some(vec![(1, 10)]));
         let mut test_rng = TestRandom::default();
 
@@ -68,24 +63,16 @@ mod tests {
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
 
-        let selected_literal = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(
-            selected_literal,
-            mediator.get_literal(
-                domain_ids[0].equality_predicate(5),
-                &assignments_propositional,
-                &assignments_integer
-            )
-        )
+        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
+        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 5))
     }
 
     #[test]
     fn test_returns_correct_literal_removed_median() {
-        let (mut assignments_integer, assignments_propositional, mediator) =
+        let (mut assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(1, 0, Some(vec![(1, 10)]));
         let mut test_rng = TestRandom::default();
 
@@ -97,18 +84,10 @@ mod tests {
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
 
-        let selected_literal = selector.select_value(&mut context, domain_ids[0]);
-        assert_eq!(
-            selected_literal,
-            mediator.get_literal(
-                domain_ids[0].equality_predicate(6),
-                &assignments_propositional,
-                &assignments_integer
-            )
-        )
+        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
+        assert_eq!(selected_predicate, predicate!(domain_ids[0] == 6))
     }
 }

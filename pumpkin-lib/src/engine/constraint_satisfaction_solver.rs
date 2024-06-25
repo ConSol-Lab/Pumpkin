@@ -28,7 +28,6 @@ use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -42,6 +41,7 @@ use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::cp::WatchListPropositional;
 use crate::engine::debug_helper::DebugDyn;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -351,11 +351,18 @@ impl ConstraintSatisfactionSolver {
 
     /// Given a predicate, returns the corresponding literal.
     pub fn get_literal(&self, predicate: Predicate) -> Literal {
-        self.variable_literal_mappings.get_literal(
-            predicate,
-            &self.assignments_propositional,
-            &self.assignments_integer,
-        )
+        match predicate {
+            Predicate::IntegerPredicate(integer_predicate) => {
+                self.variable_literal_mappings.get_literal(
+                    integer_predicate,
+                    &self.assignments_propositional,
+                    &self.assignments_integer,
+                )
+            }
+            bool_predicate => bool_predicate
+                .get_literal_of_bool_predicate(self.assignments_propositional.true_literal)
+                .unwrap(),
+        }
     }
 
     /// This is a temporary accessor to help refactoring.
@@ -850,7 +857,8 @@ impl ConstraintSatisfactionSolver {
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.variable_literal_mappings.literal_to_predicates[literal].len() {
             let predicate = self.variable_literal_mappings.literal_to_predicates[literal][j];
-            self.assignments_integer.apply_predicate(predicate, None)?;
+            self.assignments_integer
+                .apply_integer_predicate(predicate, None)?;
         }
         Ok(())
     }
@@ -944,16 +952,28 @@ impl ConstraintSatisfactionSolver {
             }
             Ok(())
         } else {
-            let decided_literal = brancher.next_decision(&mut SelectionContext::new(
+            let decided_predicate = brancher.next_decision(&mut SelectionContext::new(
                 &self.assignments_integer,
                 &self.assignments_propositional,
-                &self.variable_literal_mappings,
                 &mut self.internal_parameters.random_generator,
             ));
-            if let Some(literal) = decided_literal {
+            if let Some(predicate) = decided_predicate {
                 self.counters.num_decisions += 1;
                 self.assignments_propositional
-                    .enqueue_decision_literal(literal);
+                    .enqueue_decision_literal(match predicate {
+                        Predicate::IntegerPredicate(integer_predicate) => {
+                            self.variable_literal_mappings.get_literal(
+                                integer_predicate,
+                                &self.assignments_propositional,
+                                &self.assignments_integer,
+                            )
+                        }
+                        bool_predicate => bool_predicate
+                            .get_literal_of_bool_predicate(
+                                self.assignments_propositional.true_literal,
+                            )
+                            .unwrap(),
+                    });
                 Ok(())
             } else {
                 self.state.declare_solution_found();
@@ -1650,13 +1670,13 @@ impl CSPSolverState {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
     use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
     use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
+    use crate::engine::predicates::integer_predicate::IntegerPredicate;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::propagation_context::HasAssignments;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::Propagator;
@@ -1752,35 +1772,37 @@ mod tests {
         ) -> crate::basic_types::PropagationStatusCP {
             while let Some(propagation) = self.propagations.pop() {
                 match propagation.1 {
-                    Predicate::LowerBound {
-                        domain_id: _,
-                        lower_bound,
-                    } => {
-                        let result =
-                            context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
-                        assert!(result.is_ok())
-                    }
-                    Predicate::UpperBound {
-                        domain_id: _,
-                        upper_bound,
-                    } => {
-                        let result =
-                            context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
-                        assert!(result.is_ok())
-                    }
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant,
-                    } => {
-                        let result =
-                            context.remove(&propagation.0, not_equal_constant, propagation.2);
-                        assert!(result.is_ok())
-                    }
-                    Predicate::Equal {
-                        domain_id: _,
-                        equality_constant: _,
-                    } => todo!(),
-                    _ => unreachable!(),
+                    Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
+                        IntegerPredicate::LowerBound {
+                            domain_id: _,
+                            lower_bound,
+                        } => {
+                            let result =
+                                context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::UpperBound {
+                            domain_id: _,
+                            upper_bound,
+                        } => {
+                            let result =
+                                context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::NotEqual {
+                            domain_id: _,
+                            not_equal_constant,
+                        } => {
+                            let result =
+                                context.remove(&propagation.0, not_equal_constant, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::Equal {
+                            domain_id: _,
+                            equality_constant: _,
+                        } => todo!(),
+                    },
+                    _ => todo!(),
                 }
             }
             if !self.conflicts.is_empty() {
@@ -1798,9 +1820,12 @@ mod tests {
             // return the correct result in this case
             if self.conflicts.is_empty()
                 && self.original_propagations.iter().all(|propagation| {
-                    context
-                        .assignments_integer()
-                        .does_predicate_hold(propagation.1)
+                    context.assignments_integer().does_integer_predicate_hold(
+                        propagation
+                            .1
+                            .try_into()
+                            .expect("Expected provided predicate to be integer"),
+                    )
                 })
             {
                 Err(crate::basic_types::Inconsistency::EmptyDomain)
@@ -1882,15 +1907,15 @@ mod tests {
         // domain and then we report a conflict based on the assigned values.
         let propagator_constructor = TestPropagatorConstructor {
             propagations: vec![
-                (variable.disequality_predicate(2), conjunction!()),
-                (variable.upper_bound_predicate(3), conjunction!()),
-                (variable.disequality_predicate(3), conjunction!()),
-                (other_variable.disequality_predicate(4), conjunction!()),
-                (other_variable.upper_bound_predicate(4), conjunction!()),
+                (predicate!(variable != 2), conjunction!()),
+                (predicate!(variable <= 3), conjunction!()),
+                (predicate!(variable != 3), conjunction!()),
+                (predicate!(other_variable != 4), conjunction!()),
+                (predicate!(other_variable <= 4), conjunction!()),
             ],
             conflicts: vec![PropositionalConjunction::from(vec![
-                other_variable.equality_predicate(3),
-                variable.equality_predicate(1),
+                predicate!(other_variable == 3),
+                predicate!(variable == 1),
             ])],
         };
 
@@ -2164,7 +2189,7 @@ mod tests {
         let _ = solver.synchronise_propositional_trail_based_on_integer_trail();
 
         for lower_bound in 0..=8 {
-            let literal = solver.get_literal(domain_id.lower_bound_predicate(lower_bound));
+            let literal = solver.get_literal(predicate!(domain_id >= lower_bound));
             assert!(
                 solver
                     .assignments_propositional
@@ -2189,7 +2214,7 @@ mod tests {
                 let literal = solver.get_literal(predicate);
                 assert!(
                     solver.variable_literal_mappings.literal_to_predicates[literal]
-                        .contains(&predicate)
+                        .contains(&predicate.try_into().unwrap())
                 )
             }
         }

@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -46,7 +47,7 @@ impl DynamicBrancher {
 }
 
 impl Brancher for DynamicBrancher {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         loop {
             if self.brancher_index >= self.branchers.len() {
                 return None;

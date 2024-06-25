@@ -118,17 +118,12 @@ fn perform_propagation<Var: IntegerVariable>(
                 .collect();
             context.assign_literal(reif.as_ref().unwrap(), false, reason)?;
         } else if !reified || context.is_literal_true(reif.as_ref().unwrap()) {
-            let reason: Vec<_> = x
+            let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
+                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                 .collect();
-            let conjunction = if reified {
-                let x1 = reif.as_ref().unwrap().get_literal();
-                PropositionalConjunction::new(reason.into_boxed_slice(), Box::new([x1]))
-            } else {
-                reason.into()
-            };
-            return Err(conjunction.into());
+            return Err(reason.into());
         }
     }
 
@@ -143,7 +138,7 @@ fn perform_propagation<Var: IntegerVariable>(
         let bound = c - (lb_lhs - context.lower_bound(x_i));
 
         if context.upper_bound(x_i) > bound {
-            let cp_reason: Vec<_> = x
+            let reason: PropositionalConjunction = x
                 .iter()
                 .enumerate()
                 .filter_map(|(j, x_j)| {
@@ -153,15 +148,8 @@ fn perform_propagation<Var: IntegerVariable>(
                         None
                     }
                 })
+                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                 .collect();
-            let reason = if reified {
-                PropositionalConjunction::new(
-                    cp_reason.into_boxed_slice(),
-                    Box::new([reif.as_ref().unwrap().get_literal()]),
-                )
-            } else {
-                PropositionalConjunction::new(cp_reason.into_boxed_slice(), Default::default())
-            };
 
             context.set_upper_bound(x_i, bound, reason)?;
         }
@@ -204,7 +192,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y <= 6]);
+        let reason = solver.get_reason_int(predicate![y <= 6].try_into().unwrap());
 
         assert_eq!(conjunction!([x >= 1]), *reason);
     }

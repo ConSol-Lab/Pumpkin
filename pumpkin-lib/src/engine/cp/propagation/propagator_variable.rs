@@ -2,8 +2,8 @@
 use super::LocalId;
 #[cfg(doc)]
 use super::PropagatorConstructorContext;
-use crate::basic_types::Predicate;
-use crate::basic_types::PredicateConstructor;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::variables::TransformableVariable;

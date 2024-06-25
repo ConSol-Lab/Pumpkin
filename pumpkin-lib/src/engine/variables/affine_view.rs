@@ -3,9 +3,9 @@ use std::cmp::Ordering;
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::basic_types::Predicate;
-use crate::basic_types::PredicateConstructor;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;

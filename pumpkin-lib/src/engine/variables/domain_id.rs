@@ -1,9 +1,9 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::basic_types::Predicate;
 use crate::basic_types::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;

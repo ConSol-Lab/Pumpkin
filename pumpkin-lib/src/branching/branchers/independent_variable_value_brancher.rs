@@ -8,6 +8,7 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
 use crate::branching::Vsids;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -93,7 +94,7 @@ where
     ///  - If all variables under consideration are fixed (i.e. `select_variable` return None) then
     ///    we simply return None
     ///  - Otherwise we select a value and return the corresponding literal
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         self.variable_selector
             .select_variable(context)
             .map(|selected_variable| {

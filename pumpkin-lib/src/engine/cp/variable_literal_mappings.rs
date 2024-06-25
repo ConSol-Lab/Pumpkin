@@ -5,11 +5,11 @@
 //! corresponding to atomic constraints (predicates).
 
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Predicate;
 use crate::basic_types::StorageKey;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::cp::WatchListCP;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -23,20 +23,20 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Debug, Default)]
 pub struct VariableLiteralMappings {
-    /// `domain_to_equality_literals[DomainId x][i]` is the literal
-    /// that represents [x == i + initial_lb(x)], where initial_lb(x) is
-    /// the lower bound of DomainId x at the time of creation of DomainId x.
+    /// `domain_to_equality_literals[DomainId x][i]` is the [`Literal`]
+    /// that represents `[x == i + initial_lb(x)]`, where `initial_lb(x)` is
+    /// the lower bound of [`DomainId`] `x` at the time of its creation.
     pub domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
-    /// `domain_to_lower_bound_literals[DomainId x][i]` is the literal
-    /// that represents [x >= i + initial_lb(x)], where initial_lb(x) is
-    /// the lower bound of DomainId x at the time of creation of DomainId x.
-    /// Note that the literals [x <= k] are obtained by negating [x >= k+1].
+    /// `domain_to_lower_bound_literals[DomainId x][i]` is the [`Literal`]
+    /// that represents `[x >= i + initial_lb(x)]`, where `initial_lb(x)` is
+    /// the lower bound of [`DomainId`] `x` at the time of its creation.
+    /// Note that the [`Literal`]s representing `[x <= k]` are obtained by negating `[x >= k+1]`.
     pub domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
-    /// `literal_to_predicates[literal]` is the vector of predicates associated with
-    /// the literal. Usually there are one or two predicates associated with a literal,
-    /// but due to preprocessing (not currently implemented), it could be that one literal is
-    /// associated with three or more predicates.
-    pub literal_to_predicates: KeyedVec<Literal, Vec<Predicate>>,
+    /// `literal_to_predicates[literal]` is the vector of [`IntegerPredicate`]s associated with
+    /// the `literal`. Usually there are one or two [`IntegerPredicate`]s associated with a
+    /// [`Literal`], but due to preprocessing (not currently implemented), it could be that one
+    /// [`Literal`] is associated with three or more [`IntegerPredicate`]s.
+    pub literal_to_predicates: KeyedVec<Literal, Vec<IntegerPredicate>>,
 }
 
 // methods for creating new variables
@@ -49,7 +49,7 @@ impl VariableLiteralMappings {
     fn create_new_propositional_variable_with_predicate(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
-        predicate: Predicate,
+        predicate: IntegerPredicate,
         clausal_propagator: &mut ClausalPropagatorType,
         assignments_propositional: &mut AssignmentsPropositional,
     ) -> PropositionalVariable {
@@ -199,13 +199,13 @@ impl VariableLiteralMappings {
         // literals), we have to be mindful of the polarity of the predicate.
         self.add_predicate_information_to_propositional_variable(
             lower_bound_literals[1].get_propositional_variable(),
-            predicate![domain_id != lower_bound],
+            predicate![domain_id != lower_bound].try_into().unwrap(),
         );
 
         for value in (lower_bound + 1)..upper_bound {
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
                 watch_list_propositional,
-                predicate![domain_id == value],
+                predicate![domain_id == value].try_into().unwrap(),
                 clausal_propagator,
                 assignments_propositional,
             );
@@ -223,7 +223,7 @@ impl VariableLiteralMappings {
             equality_literals.push(equals_ub);
             self.add_predicate_information_to_propositional_variable(
                 equals_ub.get_propositional_variable(),
-                predicate![domain_id == upper_bound],
+                predicate![domain_id == upper_bound].try_into().unwrap(),
             );
         }
 
@@ -287,7 +287,7 @@ impl VariableLiteralMappings {
         for value in (lower_bound + 1)..=upper_bound {
             let propositional_variable = self.create_new_propositional_variable_with_predicate(
                 watch_list_propositional,
-                predicate![domain_id >= value],
+                predicate![domain_id >= value].try_into().unwrap(),
                 clausal_propagator,
                 assignments_propositional,
             );
@@ -324,7 +324,7 @@ impl VariableLiteralMappings {
     fn add_predicate_information_to_propositional_variable(
         &mut self,
         variable: PropositionalVariable,
-        predicate: Predicate,
+        predicate: IntegerPredicate,
     ) {
         pumpkin_assert_simple!(
             !self.literal_to_predicates[Literal::new(variable, false)].contains(&predicate),
@@ -332,23 +332,24 @@ impl VariableLiteralMappings {
         );
 
         // create a closure for convenience that adds predicates to literals
-        let closure_add_predicate_to_literal =
-            |literal: Literal,
-             predicate: Predicate,
-             mapping_literal_to_predicates: &mut KeyedVec<Literal, Vec<Predicate>>| {
-                pumpkin_assert_simple!(
-                    !mapping_literal_to_predicates[literal].contains(&predicate),
-                    "The predicate is already attached to the literal, cannot do this twice."
-                );
-                // resize the mapping vector if necessary
-                if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
-                    mapping_literal_to_predicates
-                        .resize((literal.to_u32() + 1) as usize, Vec::new());
-                }
-                // append the predicate - note that the assert makes sure the same predicate is
-                // never added twice
-                mapping_literal_to_predicates[literal].push(predicate);
-            };
+        let closure_add_predicate_to_literal = |literal: Literal,
+                                                predicate: IntegerPredicate,
+                                                mapping_literal_to_predicates: &mut KeyedVec<
+            Literal,
+            Vec<IntegerPredicate>,
+        >| {
+            pumpkin_assert_simple!(
+                !mapping_literal_to_predicates[literal].contains(&predicate),
+                "The predicate is already attached to the literal, cannot do this twice."
+            );
+            // resize the mapping vector if necessary
+            if literal.to_u32() as usize >= mapping_literal_to_predicates.len() {
+                mapping_literal_to_predicates.resize((literal.to_u32() + 1) as usize, Vec::new());
+            }
+            // append the predicate - note that the assert makes sure the same predicate is
+            // never added twice
+            mapping_literal_to_predicates[literal].push(predicate);
+        };
 
         // now use the closure to add the predicate to both the positive and negative literals
 
@@ -370,22 +371,23 @@ impl VariableLiteralMappings {
 
 // methods for getting simple information on the interface of SAT and CP
 impl VariableLiteralMappings {
-    /// Returns the [`DomainId`] of the first [`Predicate`] which the provided `literal` is linked
-    /// to or [`None`] if no such [`DomainId`] exists.
+    /// Returns the [`DomainId`] of the first [`IntegerPredicate`] which the provided `literal` is
+    /// linked to or [`None`] if no such [`DomainId`] exists.
     pub fn get_domain_literal(&self, literal: Literal) -> Option<DomainId> {
         self.literal_to_predicates[literal]
             .first()
-            .map(|pred| pred.get_domain())?
+            .map(|predicate| predicate.get_domain())
     }
 
+    ///  Returns a literal which corresponds to the provided [`IntegerPredicate`].
     pub fn get_literal(
         &self,
-        predicate: Predicate,
+        predicate: IntegerPredicate,
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) -> Literal {
         match predicate {
-            Predicate::LowerBound {
+            IntegerPredicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.get_lower_bound_literal(
@@ -394,7 +396,7 @@ impl VariableLiteralMappings {
                 assignments_propositional,
                 assignments_integer,
             ),
-            Predicate::UpperBound {
+            IntegerPredicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.get_upper_bound_literal(
@@ -403,7 +405,7 @@ impl VariableLiteralMappings {
                 assignments_propositional,
                 assignments_integer,
             ),
-            Predicate::NotEqual {
+            IntegerPredicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => self.get_inequality_literal(
@@ -412,7 +414,7 @@ impl VariableLiteralMappings {
                 assignments_propositional,
                 assignments_integer,
             ),
-            Predicate::Equal {
+            IntegerPredicate::Equal {
                 domain_id,
                 equality_constant,
             } => self.get_equality_literal(
@@ -421,8 +423,6 @@ impl VariableLiteralMappings {
                 assignments_propositional,
                 assignments_integer,
             ),
-            Predicate::False => assignments_propositional.false_literal,
-            Predicate::True => assignments_propositional.true_literal,
         }
     }
 
@@ -723,13 +723,12 @@ mod tests {
             let equality_predicate = predicate![domain_id == bound];
             for predicate in [lower_bound_predicate, equality_predicate] {
                 let literal = variable_literal_mappings.get_literal(
-                    predicate,
+                    predicate.try_into().unwrap(),
                     &assignments_propositional,
                     &assignments_integer,
                 );
-                assert!(
-                    variable_literal_mappings.literal_to_predicates[literal].contains(&predicate)
-                )
+                assert!(variable_literal_mappings.literal_to_predicates[literal]
+                    .contains(&predicate.try_into().unwrap()))
             }
         }
     }

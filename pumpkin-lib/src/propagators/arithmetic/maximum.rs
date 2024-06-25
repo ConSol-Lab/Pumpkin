@@ -97,12 +97,12 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         context.set_upper_bound(
             &self.rhs,
             max_ub,
-            PropositionalConjunction::new(ub_reason.into(), [].into()),
+            PropositionalConjunction::new(ub_reason.into()),
         )?;
         context.set_lower_bound(
             &self.rhs,
             max_lb,
-            PropositionalConjunction::new(lb_reason.into(), [].into()),
+            PropositionalConjunction::new(lb_reason.into()),
         )?;
 
         Ok(())
@@ -133,7 +133,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 1, 5);
 
-        let reason = solver.get_reason_int(predicate![rhs <= 5]);
+        let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
         assert_eq!(conjunction!([a <= 3] & [b <= 4] & [c <= 5]), reason.clone());
     }
 
@@ -156,7 +156,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 5, 10);
 
-        let reason = solver.get_reason_int(predicate![rhs >= 5]);
+        let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
         assert_eq!(conjunction!([a >= 3] & [b >= 4] & [c >= 5]), reason.clone());
     }
 
@@ -179,7 +179,7 @@ mod tests {
 
         for var in array.iter() {
             solver.assert_bounds(*var, 1, 3);
-            let reason = solver.get_reason_int(predicate![var <= 3]);
+            let reason = solver.get_reason_int(predicate![var <= 3].try_into().unwrap());
             assert_eq!(conjunction!([rhs <= 3]), reason.clone());
         }
     }

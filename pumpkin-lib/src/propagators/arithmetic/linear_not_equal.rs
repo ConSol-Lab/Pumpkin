@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use crate::basic_types::ConflictInfo;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -155,11 +153,9 @@ where
                         .enumerate()
                         .filter(|&(i, _)| i != unfixed_x_i)
                         .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                        .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                         .collect::<Vec<_>>();
-                    PropositionalConjunction::new(
-                        predicates.into(),
-                        reif.map(|var| var.get_literal()).iter().copied().collect(),
-                    )
+                    predicates.into()
                 },
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
@@ -177,23 +173,18 @@ where
                 // Conflict was found, either the constraint is not reified or the reification
                 // variable is already true
 
-                let failure_reason: Vec<_> = self
+                let failure_reason: PropositionalConjunction = self
                     .terms
                     .iter()
                     .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
-                    .collect();
-
-                return Err(Inconsistency::Other(ConflictInfo::Explanation(
-                    PropositionalConjunction::new(
-                        failure_reason.into(),
+                    .chain(
                         self.reif
                             .as_ref()
-                            .map(|var| var.get_literal())
-                            .iter()
-                            .copied()
-                            .collect(),
-                    ),
-                )));
+                            .map(|variable| variable.get_literal().into()),
+                    )
+                    .collect();
+
+                return Err(failure_reason.into());
             }
         }
 
@@ -206,6 +197,7 @@ mod tests {
     use super::*;
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::test_helper::TestSolver;
     use crate::engine::variables::TransformableVariable;
 
@@ -261,7 +253,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
 
         assert_eq!(conjunction!([x == 2]), *reason);
     }
@@ -326,8 +318,12 @@ mod tests {
             .expect_err("Non empty domain");
 
         let expected: Inconsistency = PropositionalConjunction::new(
-            vec![predicate!(x == 2), predicate!(y == 2)].into(),
-            vec![reif].into(),
+            vec![
+                predicate!(x == 2),
+                predicate!(y == 2),
+                Predicate::Literal(reif),
+            ]
+            .into(),
         )
         .into();
         assert_eq!(expected, err);
@@ -352,10 +348,12 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
 
         assert_eq!(
-            PropositionalConjunction::new(vec![predicate!(x == 2)].into(), vec![reif].into()),
+            PropositionalConjunction::new(
+                vec![predicate!(x == 2), Predicate::Literal(reif),].into()
+            ),
             *reason
         );
     }

@@ -5,6 +5,7 @@ use crate::basic_types::HashMap;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::AnalysisStep;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
@@ -235,7 +236,7 @@ enum RpClause {
 struct DummyBrancher;
 
 impl Brancher for DummyBrancher {
-    fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Literal> {
+    fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
         None
     }
 }

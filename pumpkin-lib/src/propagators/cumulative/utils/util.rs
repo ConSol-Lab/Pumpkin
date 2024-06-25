@@ -4,7 +4,6 @@
 use std::rc::Rc;
 
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PredicateConstructor;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -13,6 +12,7 @@ use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
@@ -25,14 +25,12 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
 ) -> Inconsistency {
     let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
     for task in conflict_tasks.iter() {
-        error_clause.push(
-            task.start_variable
-                .upper_bound_predicate(context.upper_bound(&task.start_variable)),
-        );
-        error_clause.push(
-            task.start_variable
-                .lower_bound_predicate(context.lower_bound(&task.start_variable)),
-        );
+        error_clause.push(predicate!(
+            task.start_variable <= context.upper_bound(&task.start_variable)
+        ));
+        error_clause.push(predicate!(
+            task.start_variable >= context.lower_bound(&task.start_variable)
+        ));
     }
 
     Inconsistency::from(PropositionalConjunction::from(error_clause))

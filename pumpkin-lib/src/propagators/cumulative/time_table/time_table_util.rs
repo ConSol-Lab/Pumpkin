@@ -9,9 +9,8 @@ use std::rc::Rc;
 
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Predicate;
-use crate::basic_types::PredicateConstructor;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -20,6 +19,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
+use crate::predicate;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
@@ -377,9 +377,8 @@ fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
     // Note that this is not the value to which the lower-bound is propagated but rather the
     // predicate which ensures that `task` has the most general bound possible such that
     // this propagation would have taken place.
-    let general_explanation_lower_bound_predicate = task
-        .start_variable
-        .lower_bound_predicate(max(0, profile.start - task.processing_time + 1));
+    let general_explanation_lower_bound_predicate =
+        predicate!(task.start_variable >= max(0, profile.start - task.processing_time + 1));
     // Then we perform the actual propagation using this bound and the responsible tasks
     // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
     // scratch but we only clone the underlying structure when it is used in an explanation; this
@@ -419,9 +418,10 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     // Note that this is not the value to which the upper-bound is propagated but rather the
     // predicate which ensures that `task` has the most general bound possible such that
     // this propagation would have taken place.
-    let general_explanation_upper_bound_predicate = task
-        .start_variable
-        .upper_bound_predicate(max(context.upper_bound(&task.start_variable), profile.end));
+    let general_explanation_upper_bound_predicate = predicate!(
+        task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end)
+    );
+
     // Then we perform the actual propagation using this bound and the responsible tasks
     // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
     // scratch but we only clone the underlying structure when it is used in an explanation; this
@@ -500,11 +500,13 @@ fn create_profile_explanation<Var: IntegerVariable + 'static>(
                 .iter()
                 .flat_map(|profile_task| {
                     [
-                        profile_task.start_variable.lower_bound_predicate(
-                            context.lower_bound(&profile_task.start_variable),
+                        predicate!(
+                            profile_task.start_variable
+                                >= context.lower_bound(&profile_task.start_variable)
                         ),
-                        profile_task.start_variable.upper_bound_predicate(
-                            context.upper_bound(&profile_task.start_variable),
+                        predicate!(
+                            profile_task.start_variable
+                                <= context.upper_bound(&profile_task.start_variable)
                         ),
                     ]
                 })

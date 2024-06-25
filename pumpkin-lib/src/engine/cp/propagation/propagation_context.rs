@@ -1,7 +1,7 @@
 use super::PropagatorId;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Predicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorVariable;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;

@@ -394,11 +394,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 mod tests {
     use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTableOverInterval;
 
@@ -459,10 +459,10 @@ mod tests {
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
-                    s1.upper_bound_predicate(1),
-                    s1.lower_bound_predicate(1),
-                    s2.upper_bound_predicate(1),
-                    s2.lower_bound_predicate(1),
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 >= 1),
+                    predicate!(s2 <= 1),
                 ];
                 expected
                     .iter()
@@ -629,12 +629,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(9),
-                s1.lower_bound_predicate(6),
-                s1.upper_bound_predicate(6),
+                predicate!(s2 <= 9),
+                predicate!(s1 >= 6),
+                predicate!(s1 <= 6),
             ]),
             reason
         );
@@ -818,12 +820,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(0),
-                s1.lower_bound_predicate(1),
-                s1.upper_bound_predicate(1),
+                predicate!(s2 >= 0),
+                predicate!(s1 >= 1),
+                predicate!(s1 <= 1),
             ]),
             reason
         );
@@ -867,12 +871,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(5),
-                s2.lower_bound_predicate(5),
-                s3.lower_bound_predicate(2),
+                predicate!(s2 <= 5),
+                predicate!(s2 >= 5),
+                predicate!(s3 >= 2),
             ]),
             reason
         );

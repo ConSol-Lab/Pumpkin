@@ -330,10 +330,10 @@ mod tests {
         assert_eq!(0, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![c >= 0]);
+        let reason_lb = solver.get_reason_int(predicate![c >= 0].try_into().unwrap());
         assert_eq!(conjunction!([a >= 0] & [b >= 0]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![c <= 12]);
+        let reason_ub = solver.get_reason_int(predicate![c <= 12].try_into().unwrap());
         assert_eq!(
             conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
             *reason_ub
@@ -360,10 +360,10 @@ mod tests {
         assert_eq!(2, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![b >= 1]);
+        let reason_lb = solver.get_reason_int(predicate![b >= 1].try_into().unwrap());
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![b <= 6]);
+        let reason_ub = solver.get_reason_int(predicate![b <= 6].try_into().unwrap());
         assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 
@@ -387,10 +387,10 @@ mod tests {
         assert_eq!(3, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![a >= 1]);
+        let reason_lb = solver.get_reason_int(predicate![a >= 1].try_into().unwrap());
         assert_eq!(conjunction!([b >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![a <= 4]);
+        let reason_ub = solver.get_reason_int(predicate![a <= 4].try_into().unwrap());
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 }

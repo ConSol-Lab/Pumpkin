@@ -6,6 +6,7 @@ use crate::basic_types::ProblemSolution;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
@@ -93,13 +94,13 @@ where
         &mut self,
         context: &mut SelectionContext,
         decision_variable: PropositionalVariable,
-    ) -> Literal {
+    ) -> Predicate {
         match self.saved_values[decision_variable] {
             Some(value) => {
                 pumpkin_assert_moderate!(
                     !context.is_propositional_variable_fixed(decision_variable)
                 );
-                Literal::new(decision_variable, value)
+                Literal::new(decision_variable, value).into()
             }
             None => self
                 .backup_selector
@@ -141,16 +142,16 @@ mod tests {
     use crate::branching::value_selection::PhaseSaving;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
+    use crate::engine::predicates::predicate::Predicate;
 
     #[test]
     fn saved_value_is_returned_prop() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 1, None);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
@@ -165,18 +166,21 @@ mod tests {
 
         let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
-        assert!(chosen.is_positive())
+        if let Predicate::Literal(chosen) = chosen {
+            assert!(chosen.is_positive())
+        } else {
+            panic!("Predicate which was not a literal was returned")
+        }
     }
 
     #[test]
     fn initial_value_is_returned_prop() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 1, None);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
@@ -189,18 +193,21 @@ mod tests {
 
         let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
-        assert!(chosen.is_positive())
+        if let Predicate::Literal(chosen) = chosen {
+            assert!(chosen.is_positive())
+        } else {
+            panic!("Predicate which was not a literal was returned")
+        }
     }
 
     #[test]
     fn backup_is_used_when_value_is_not_saved() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 1, None);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
@@ -216,6 +223,10 @@ mod tests {
 
         let chosen = solution_guided.select_value(&mut context, propositional_variables[0]);
 
-        assert!(chosen.is_positive())
+        if let Predicate::Literal(chosen) = chosen {
+            assert!(chosen.is_positive())
+        } else {
+            panic!("Predicate which was not a literal was returned")
+        }
     }
 }

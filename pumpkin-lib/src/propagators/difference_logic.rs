@@ -359,10 +359,10 @@ mod tests {
         assert_eq!(3, solver.upper_bound(x_1)); // by f2
 
         let flipped_x_1 = x_1.scaled(-1);
-        let reason_x_1_lb = solver.get_reason_int(predicate![flipped_x_1 <= 2]);
+        let reason_x_1_lb = solver.get_reason_int(predicate![flipped_x_1 <= 2].try_into().unwrap());
         assert_eq!(conjunction!([x_0 >= -3]), *reason_x_1_lb);
 
-        let reason_x_0_ub = solver.get_reason_int(predicate![x_0 <= 2]);
+        let reason_x_0_ub = solver.get_reason_int(predicate![x_0 <= 2].try_into().unwrap());
         assert_eq!(conjunction!([x_1 <= 3]), *reason_x_0_ub);
     }
 

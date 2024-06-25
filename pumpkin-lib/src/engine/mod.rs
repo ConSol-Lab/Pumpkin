@@ -2,6 +2,7 @@ pub mod conflict_analysis;
 pub mod constraint_satisfaction_solver;
 pub(crate) mod cp;
 mod debug_helper;
+pub mod predicates;
 mod preprocessor;
 pub mod rp_engine;
 mod sat;

@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use crate::basic_types::Predicate;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
@@ -10,24 +9,16 @@ use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::VariableLiteralMappings;
-use crate::pumpkin_assert_advanced;
 
 /// The context provided to the [`Brancher`],
 /// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods
 /// which might be extended in the future.
-///
-/// Besides retrieving bounds of [`Literal`]s and [`IntegerVariable`]s, it provides methods for
-/// retrieving the [`Literal`] which represents the [`IntegerVariable`]s (using
-/// [`SelectionContext::get_literal_for_predicate`]).
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
-    variable_literal_mappings: &'a VariableLiteralMappings,
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
     random_generator: &'a mut dyn Random,
@@ -37,11 +28,9 @@ impl<'a> SelectionContext<'a> {
     pub fn new(
         assignments_integer: &'a AssignmentsInteger,
         assignments_propositional: &'a AssignmentsPropositional,
-        variable_literal_mappings: &'a VariableLiteralMappings,
         rng: &'a mut dyn Random,
     ) -> Self {
         SelectionContext {
-            variable_literal_mappings,
             assignments_integer,
             assignments_propositional,
             random_generator: rng,
@@ -74,20 +63,6 @@ impl<'a> SelectionContext<'a> {
     /// Determines whether the provided value is in the domain of the provided [`IntegerVariable`]
     pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(self.assignments_integer, value)
-    }
-
-    /// Returns the [`Literal`] representing the provided [`Predicate`]. This method should be used
-    /// when making a decision; due to this fact, it should be the case that the predicate
-    /// currently does not hold nor is the returned literal assigned.
-    pub fn get_literal_for_predicate(&self, pred: Predicate) -> Literal {
-        pumpkin_assert_advanced!(!self.assignments_integer.does_predicate_hold(pred), "The provided predicate holds before the decision is made, this indicates a wrongly implemented variable/value selector");
-        let literal = self.variable_literal_mappings.get_literal(
-            pred,
-            self.assignments_propositional,
-            self.assignments_integer,
-        );
-        pumpkin_assert_advanced!(!self.assignments_propositional.is_literal_assigned(literal), "The returned literal holds before the decision is made, this indicates a wrongly implemented variable/value selector");
-        literal
     }
 
     /// Determines whether the provided [`IntegerVariable`] has a unit domain (i.e. a domain of size
@@ -126,12 +101,10 @@ impl<'a> SelectionContext<'a> {
         num_integer_variables: usize,
         num_propositional_variables: usize,
         domains: Option<Vec<(i32, i32)>>,
-    ) -> (
-        AssignmentsInteger,
-        AssignmentsPropositional,
-        VariableLiteralMappings,
-    ) {
+    ) -> (AssignmentsInteger, AssignmentsPropositional) {
         use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+        use crate::engine::variables::Literal;
+        use crate::engine::VariableLiteralMappings;
         use crate::engine::WatchListCP;
         use crate::engine::WatchListPropositional;
         use crate::propagators::clausal::BasicClausalPropagator;
@@ -204,6 +177,6 @@ impl<'a> SelectionContext<'a> {
             );
         }
 
-        (assignments_integer, assignments_propositional, mediator)
+        (assignments_integer, assignments_propositional)
     }
 }

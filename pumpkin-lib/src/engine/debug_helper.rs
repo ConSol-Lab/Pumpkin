@@ -5,15 +5,15 @@ use std::iter::once;
 use log::debug;
 use log::warn;
 
-use crate::basic_types::Predicate;
+use super::predicates::integer_predicate::IntegerPredicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::cp::AssignmentsInteger;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
-use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::ClausalPropagator;
@@ -211,7 +211,6 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     variable_literal_mappings,
                     &reason_predicates,
-                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -238,7 +237,8 @@ impl DebugHelper {
                 // The predicate was either a propagation for the assignments_integer or
                 // assignments_propositional
                 assert!(
-                    assignments_integer_clone.does_predicate_hold(propagated_predicate) || assignments_propositional_clone.is_literal_assigned_true(variable_literal_mappings.get_literal(propagated_predicate, &assignments_propositional_clone, &assignments_integer_clone,)),
+                    (propagated_predicate.is_integer_predicate() && assignments_integer_clone.does_integer_predicate_hold(propagated_predicate.try_into().unwrap()))
+                    || (!propagated_predicate.is_integer_predicate() && assignments_propositional_clone.is_literal_assigned_true(propagated_predicate.get_literal_of_bool_predicate(assignments_propositional_clone.true_literal).unwrap())),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n
@@ -284,7 +284,6 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     variable_literal_mappings,
                     &failing_predicates,
-                    &reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -346,7 +345,6 @@ impl DebugHelper {
                 &mut assignments_propositional_clone,
                 variable_literal_mappings,
                 &reason_predicates,
-                &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
             );
 
         if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
@@ -402,7 +400,14 @@ impl DebugHelper {
                 assignments_propositional.debug_create_empty_clone();
 
             let negated_predicate = !*predicate;
-            let outcome = assignments_integer_clone.apply_predicate(negated_predicate, None);
+            let outcome = if let Ok(integer_predicate) =
+                <Predicate as TryInto<IntegerPredicate>>::try_into(negated_predicate)
+            {
+                assignments_integer_clone.apply_integer_predicate(integer_predicate, None)
+            } else {
+                // Will be handled when adding the predicates to the assignments propositional
+                Ok(())
+            };
 
             let adding_propositional_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_propositional(
@@ -410,7 +415,6 @@ impl DebugHelper {
                     &mut assignments_propositional_clone,
                     variable_literal_mappings,
                     &reason_predicates,
-                    &failure_reason.iter_literals().cloned().collect::<Vec<_>>(),
                 );
 
             if outcome.is_ok() && adding_propositional_predicates_was_successful {
@@ -448,20 +452,24 @@ impl DebugHelper {
         predicates: &[Predicate],
     ) -> bool {
         for predicate in predicates {
-            let outcome = assignments_integer.apply_predicate(*predicate, None);
-            match outcome {
-                Ok(()) => {
-                    // do nothing, everything is okay
-                }
-                Err(_) => {
-                    // trivial failure, this is unexpected
-                    //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
-                    debug!(
-                        "Trivial failure detected in the given reason.\n
+            if let Ok(integer_predicate) =
+                <Predicate as TryInto<IntegerPredicate>>::try_into(*predicate)
+            {
+                let outcome = assignments_integer.apply_integer_predicate(integer_predicate, None);
+                match outcome {
+                    Ok(()) => {
+                        // do nothing, everything is okay
+                    }
+                    Err(_) => {
+                        // trivial failure, this is unexpected
+                        //  e.g., this can happen if the propagator reported [x >= a] and [x <= a-1]
+                        debug!(
+                            "Trivial failure detected in the given reason.\n
                          The reported failure: {predicate}\n
                          Failure detected after trying to apply '{predicate}'.",
-                    );
-                    return false;
+                        );
+                        return false;
+                    }
                 }
             }
         }
@@ -473,14 +481,21 @@ impl DebugHelper {
         assignments_propositional: &mut AssignmentsPropositional,
         variable_literal_mappings: &VariableLiteralMappings,
         predicates: &[Predicate],
-        literals: &[Literal],
     ) -> bool {
         for predicate in predicates {
-            let literal = variable_literal_mappings.get_literal(
-                *predicate,
-                assignments_propositional,
-                assignments_integer,
-            );
+            let literal = if let Ok(integer_predicate) =
+                <Predicate as TryInto<IntegerPredicate>>::try_into(*predicate)
+            {
+                variable_literal_mappings.get_literal(
+                    integer_predicate,
+                    assignments_propositional,
+                    assignments_integer,
+                )
+            } else {
+                predicate
+                    .get_literal_of_bool_predicate(assignments_propositional.true_literal)
+                    .unwrap()
+            };
             if assignments_propositional.is_literal_assigned_false(literal) {
                 debug!(
                     "Trivial failure detected in the given reason.\n
@@ -497,9 +512,6 @@ impl DebugHelper {
                 // assigned leading to checks related to this enqueuing failing
                 assignments_propositional.enqueue_decision_literal(literal);
             }
-        }
-        for literal in literals {
-            assignments_propositional.enqueue_decision_literal(*literal);
         }
         true
     }

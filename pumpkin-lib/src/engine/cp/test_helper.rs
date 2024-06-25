@@ -7,10 +7,10 @@ use std::fmt::Formatter;
 use super::propagation::EnqueueDecision;
 use super::WatchListPropositional;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -264,7 +264,7 @@ impl TestSolver {
         }
     }
 
-    pub fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
+    pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
         let reason_ref = self.assignments_integer.get_reason_for_predicate(predicate);
         let context =
             PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);

@@ -297,7 +297,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let index_reason = solver.get_reason_int(predicate![index != 3]);
+        let index_reason = solver.get_reason_int(predicate![index != 3].try_into().unwrap());
         // reason for index removal 3 is that `x_3 != e`
         assert_eq!(
             *index_reason,
@@ -306,7 +306,7 @@ mod tests {
             )
         );
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs != 6]);
+        let rhs_reason = solver.get_reason_int(predicate![rhs != 6].try_into().unwrap());
         // reason for rhs removal 6 is that for all valid indices i `x_i != 6`
         assert_eq!(
             *rhs_reason,
@@ -333,15 +333,15 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9]);
+        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9].try_into().unwrap());
         // reason for x_1 <= 9 is that `x_1 == e` and `e <= 9`
         assert_eq!(*x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
 
-        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8]);
+        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8].try_into().unwrap());
         // reason for x_1 removal 8 is that `x_1 == e` and `e != 8`
         assert_eq!(*x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7]);
+        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7].try_into().unwrap());
         // reason for `rhs >= 7` is that `x_1 >= 7`
         assert_eq!(*rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
     }

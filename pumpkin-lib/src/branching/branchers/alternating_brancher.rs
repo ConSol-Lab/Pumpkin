@@ -5,6 +5,7 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::branching::SolutionGuidedValueSelector;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -74,7 +75,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
 }
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Literal> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         if self.is_using_default_brancher {
             self.default_brancher.next_decision(context)
         } else {

@@ -6,6 +6,7 @@ use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::constraint_satisfaction_solver::Counters;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
@@ -140,14 +141,20 @@ impl<'a> ConflictAnalysisContext<'a> {
                 //  todo better ways
                 let explanation_literals: Vec<Literal> = conjunction
                     .iter()
-                    .map(|&p| {
-                        !self.variable_literal_mappings.get_literal(
-                            p,
-                            self.assignments_propositional,
-                            self.assignments_integer,
-                        )
+                    .map(|&predicate| match predicate {
+                        Predicate::IntegerPredicate(integer_predicate) => {
+                            !self.variable_literal_mappings.get_literal(
+                                integer_predicate,
+                                self.assignments_propositional,
+                                self.assignments_integer,
+                            )
+                        }
+                        bool_predicate => !bool_predicate
+                            .get_literal_of_bool_predicate(
+                                self.assignments_propositional.true_literal,
+                            )
+                            .unwrap(),
                     })
-                    .chain(conjunction.iter_literals().map(|&l| !l))
                     .collect();
 
                 on_analysis_step(AnalysisStep::Propagation {
@@ -182,14 +189,20 @@ impl<'a> ConflictAnalysisContext<'a> {
         //  todo better ways
         // important to keep propagated literal at the zero-th position
         let explanation_literals: Vec<Literal> = std::iter::once(propagated_literal)
-            .chain(reason.iter().map(|&p| {
-                !self.variable_literal_mappings.get_literal(
-                    p,
-                    self.assignments_propositional,
-                    self.assignments_integer,
-                )
+            .chain(reason.iter().map(|&predicate| {
+                match predicate {
+                    Predicate::IntegerPredicate(integer_predicate) => {
+                        !self.variable_literal_mappings.get_literal(
+                            integer_predicate,
+                            self.assignments_propositional,
+                            self.assignments_integer,
+                        )
+                    }
+                    bool_predicate => !bool_predicate
+                        .get_literal_of_bool_predicate(self.assignments_propositional.true_literal)
+                        .unwrap(),
+                }
             }))
-            .chain(reason.iter_literals().map(|&p| !p))
             .collect();
 
         on_analysis_step(AnalysisStep::Propagation {

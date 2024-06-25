@@ -243,13 +243,12 @@ mod tests {
 
     #[test]
     fn vsids_bumped_var_is_max() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(2, 0, None);
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let domains = context.get_domains().collect::<Vec<_>>();
@@ -267,13 +266,12 @@ mod tests {
     fn vsids_no_variables_will_return_none() {
         let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&Vec::new());
 
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 0, None);
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let chosen = vsids.select_variable(&context);
