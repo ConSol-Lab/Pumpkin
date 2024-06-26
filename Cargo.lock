@@ -158,6 +158,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "drcp-format"
+version = "0.1.0"
+dependencies = [
+ "nom",
+ "thiserror",
+]
+
+[[package]]
 name = "either"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -350,6 +358,7 @@ name = "pumpkin-lib"
 version = "0.1.0"
 dependencies = [
  "bitfield",
+ "drcp-format",
  "enumset",
  "env_logger",
  "fnv",

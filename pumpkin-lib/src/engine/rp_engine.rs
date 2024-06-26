@@ -351,7 +351,7 @@ mod tests {
         let mut solver = ConstraintSatisfactionSolver::default();
 
         let queens = (0..3)
-            .map(|_| solver.create_new_integer_variable(0, 2))
+            .map(|_| solver.create_new_integer_variable(0, 2, None))
             .collect::<Vec<_>>();
         let _ = solver.all_different(queens.clone());
         let _ = solver.all_different(

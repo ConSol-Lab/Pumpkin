@@ -90,7 +90,7 @@ mod tests {
     fn test_valid_encode_at_most_k_returns_encoder() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 5;
@@ -109,7 +109,7 @@ mod tests {
         let (lower_bound, upper_bound) = (0, 10);
         let k: u64 = 5;
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
         let _ = csp_solver.add_clause([csp_solver.get_literal(predicate![domain >= k as i32 + 1])]);
 
         let weight = 1;
@@ -124,7 +124,7 @@ mod tests {
     fn test_encoding_with_k_higher_than_upper_bound_results_in_encoder() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;
@@ -144,7 +144,7 @@ mod tests {
     fn test_valid_strengthen_at_most_k_returns_ok() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;
@@ -166,7 +166,7 @@ mod tests {
     fn test_invalid_strengthen_at_most_k_returns_err() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;

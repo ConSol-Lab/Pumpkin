@@ -554,7 +554,8 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
-            let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
+            let soft_literal =
+                Literal::new(self.solver.create_new_propositional_variable(None), true);
             clause.push(soft_literal);
             let _ = self.solver.add_clause(clause);
 

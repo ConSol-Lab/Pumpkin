@@ -49,9 +49,9 @@
 //!
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
-//! let start_0 = solver.create_new_integer_variable(0, 4);
-//! let start_1 = solver.create_new_integer_variable(0, 4);
-//! let start_2 = solver.create_new_integer_variable(0, 5);
+//! let start_0 = solver.create_new_integer_variable(0, 4, None);
+//! let start_1 = solver.create_new_integer_variable(0, 4, None);
+//! let start_2 = solver.create_new_integer_variable(0, 5, None);
 //!
 //! let start_times = [start_0, start_1, start_2];
 //! let durations = [5, 2, 5];

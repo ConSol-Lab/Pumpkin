@@ -26,7 +26,7 @@ pub(crate) fn run(
                 let literal = *context
                     .boolean_variable_map
                     .entry(representative)
-                    .or_insert_with(|| domain.into_literal(context.solver));
+                    .or_insert_with(|| domain.into_literal(context.solver, id.to_string()));
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
@@ -50,9 +50,11 @@ pub(crate) fn run(
                                     Domain::IntervalDomain { lb, ub: _ } => *lb,
                                     Domain::SparseDomain { values } => values[0],
                                 })
-                                .or_insert_with(|| domain.into_variable(context.solver))
+                                .or_insert_with(|| {
+                                    domain.into_variable(context.solver, id.to_string())
+                                })
                         } else {
-                            domain.into_variable(context.solver)
+                            domain.into_variable(context.solver, id.to_string())
                         }
                     });
 
@@ -67,10 +69,13 @@ pub(crate) fn run(
                 let domain_id = if set.len() == 1 {
                     let value = i32::try_from(set[0])?;
 
-                    *context
-                        .constant_domain_ids
-                        .entry(value)
-                        .or_insert_with(|| context.solver.create_new_integer_variable(value, value))
+                    *context.constant_domain_ids.entry(value).or_insert_with(|| {
+                        context.solver.create_new_integer_variable(
+                            value,
+                            value,
+                            Some(id.to_string()),
+                        )
+                    })
                 } else {
                     let values = set
                         .iter()
@@ -78,7 +83,9 @@ pub(crate) fn run(
                         .map(i32::try_from)
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    let domain_id = context.solver.create_new_integer_variable_sparse(values);
+                    let domain_id = context
+                        .solver
+                        .create_new_integer_variable_sparse(values, Some(id.to_string()));
                     let _ = context
                         .integer_variable_map
                         .insert(Rc::clone(&id), domain_id);

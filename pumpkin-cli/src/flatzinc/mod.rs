@@ -10,12 +10,14 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
+use log::warn;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ProblemSolution;
 use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::engine::predicates::predicate::Predicate;
 use pumpkin_lib::engine::termination::time_budget::TimeBudget;
 use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -24,6 +26,7 @@ use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::predicate;
 
 use self::instance::FlatZincInstance;
+use self::instance::FlatzincObjective;
 use self::instance::Output;
 use self::minizinc_optimiser::MinizincOptimisationResult;
 use self::minizinc_optimiser::MinizincOptimiser;
@@ -70,6 +73,18 @@ pub(crate) fn solve(
             MinizincOptimisationResult::Optimal {
                 optimal_objective_value,
             } => {
+                let objective_bound_literal = solver.get_literal(get_bound_predicate(
+                    *objective_function,
+                    optimal_objective_value as i32,
+                ));
+
+                if solver
+                    .conclude_proof_optimal(objective_bound_literal)
+                    .is_err()
+                {
+                    warn!("Failed to log solver conclusion");
+                };
+
                 println!("==========");
                 Some(optimal_objective_value)
             }
@@ -77,6 +92,10 @@ pub(crate) fn solve(
                 best_found_objective_value,
             } => Some(best_found_objective_value),
             MinizincOptimisationResult::Infeasible => {
+                if solver.conclude_proof_unsat().is_err() {
+                    warn!("Failed to log solver conclusion");
+                };
+
                 println!("{MSG_UNSATISFIABLE}");
                 None
             }
@@ -110,6 +129,10 @@ pub(crate) fn solve(
                     }
                 }
                 CSPSolverExecutionFlag::Infeasible if !found_solution => {
+                    if solver.conclude_proof_unsat().is_err() {
+                        warn!("Failed to log solver conclusion");
+                    };
+
                     println!("{MSG_UNSATISFIABLE}");
                     break;
                 }
@@ -141,6 +164,16 @@ pub(crate) fn solve(
     }
 
     Ok(())
+}
+
+fn get_bound_predicate(
+    objective_function: FlatzincObjective,
+    optimal_objective_value: i32,
+) -> Predicate {
+    match objective_function {
+        FlatzincObjective::Maximize(domain) => predicate![domain <= optimal_objective_value],
+        FlatzincObjective::Minimize(domain) => predicate![domain >= optimal_objective_value],
+    }
 }
 
 /// Creates a clause which prevents the current solution from occurring again by going over the

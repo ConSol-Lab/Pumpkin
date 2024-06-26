@@ -367,6 +367,14 @@ impl VariableLiteralMappings {
             &mut self.literal_to_predicates,
         );
     }
+
+    /// Get integer predicates for a literal.
+    pub(crate) fn get_predicates(
+        &self,
+        literal: Literal,
+    ) -> impl Iterator<Item = IntegerPredicate> + '_ {
+        self.literal_to_predicates[literal].iter().copied()
+    }
 }
 
 // methods for getting simple information on the interface of SAT and CP

@@ -102,7 +102,7 @@ pub(crate) fn bool_lin_le(
         .iter()
         .enumerate()
         .map(|(index, bool)| {
-            let corresponding_domain_id = solver.create_new_integer_variable(0, 1);
+            let corresponding_domain_id = solver.create_new_integer_variable(0, 1, None);
             // bool -> [domain = 1]
             let _ = solver.add_clause([
                 !*bool,
@@ -129,7 +129,7 @@ pub(crate) fn bool_lin_eq(
         .iter()
         .enumerate()
         .map(|(index, bool)| {
-            let corresponding_domain_id = solver.create_new_integer_variable(0, 1);
+            let corresponding_domain_id = solver.create_new_integer_variable(0, 1, None);
             // bool -> [domain = 1]
             let _ = solver.add_clause([
                 !*bool,

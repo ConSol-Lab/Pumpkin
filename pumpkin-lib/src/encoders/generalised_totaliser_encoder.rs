@@ -181,7 +181,7 @@ impl GeneralisedTotaliserEncoder {
                 //  then create the variables, one for each partial sum, and register the mapping
                 // between the partial sum value and the corresponding literal
                 for partial_sum in &partial_sums {
-                    let variable = csp_solver.create_new_propositional_variable();
+                    let variable = csp_solver.create_new_propositional_variable(None);
                     let literal = Literal::new(variable, true);
                     let _ = value_to_literal_map.insert(*partial_sum, literal);
                     next_layer_node.push(WeightedLiteral {

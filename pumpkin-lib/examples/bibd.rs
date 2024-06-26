@@ -66,7 +66,7 @@ fn create_matrix(solver: &mut ConstraintSatisfactionSolver, bibd: &BIBD) -> Vec<
     (0..bibd.rows)
         .map(|_| {
             (0..bibd.columns)
-                .map(|_| solver.create_new_integer_variable(0, 1))
+                .map(|_| solver.create_new_integer_variable(0, 1, None))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()

@@ -1,6 +1,6 @@
 use crate::basic_types::StorageKey;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct PropositionalVariable {
     index: u32,
 }

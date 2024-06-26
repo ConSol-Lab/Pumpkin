@@ -76,11 +76,28 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     pub fn swap(&mut self, a: usize, b: usize) {
         self.elements.swap(a, b)
     }
+
+    pub fn into_entries(self) -> impl Iterator<Item = (Key, Value)> {
+        self.elements
+            .into_iter()
+            .enumerate()
+            .map(|(idx, value)| (Key::create_from_index(idx), value))
+    }
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
     pub fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
+    }
+
+    /// Ensure the storage can accomodate the given key. Values for keys that are between the
+    /// current last key and the given key will be `default_value`.
+    pub fn accomodate(&mut self, key: Key, default_value: Value) {
+        let idx = key.index();
+
+        if idx >= self.elements.len() {
+            self.elements.resize(idx + 1, default_value);
+        }
     }
 }
 

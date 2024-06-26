@@ -26,7 +26,7 @@
 //! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
-//! let variables = vec![solver.create_new_propositional_variable()];
+//! let variables = vec![solver.create_new_propositional_variable(None)];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::new(Vsids::new(&variables), PhaseSaving::new(&variables));
@@ -50,7 +50,7 @@
 //! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
-//! let variables = vec![solver.create_new_propositional_variable()];
+//! let variables = vec![solver.create_new_propositional_variable(None)];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);

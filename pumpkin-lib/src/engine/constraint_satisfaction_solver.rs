@@ -4,8 +4,6 @@
 use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::fs::File;
-use std::io::Write;
 use std::time::Instant;
 
 use log::warn;
@@ -31,7 +29,6 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
-use crate::basic_types::StorageKey;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
@@ -42,6 +39,7 @@ use crate::engine::cp::WatchListCP;
 use crate::engine::cp::WatchListPropositional;
 use crate::engine::debug_helper::DebugDyn;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::proof::ProofLog;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -71,6 +69,7 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::variable_names::VariableNames;
 
 pub type ClausalPropagatorType = BasicClausalPropagator;
 pub type ClauseAllocator = ClauseAllocatorBasic;
@@ -113,8 +112,8 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///
 /// // Now we create the two variables for which we want to define the propagator
-/// let x = solver.create_new_integer_variable(0, 10);
-/// let y = solver.create_new_integer_variable(0, 10);
+/// let x = solver.create_new_integer_variable(0, 10, None);
+/// let y = solver.create_new_integer_variable(0, 10, None);
 ///
 /// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
 /// //  'x != y' is represented using the propagator for 'x - y != 0'
@@ -213,6 +212,8 @@ pub struct ConstraintSatisfactionSolver {
     analysis_result: ConflictAnalysisResult,
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
+    /// The names of the variables in the solver.
+    variable_names: VariableNames,
 }
 
 impl Debug for ConstraintSatisfactionSolver {
@@ -255,8 +256,10 @@ pub struct SatisfactionSolverOptions {
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
-    /// Certificate output file or [`None`] if certificate output is disabled.
-    pub certificate_file: Option<File>,
+
+    /// The proof log.
+    pub proof_log: ProofLog,
+
     /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
     /// argument allows seeding based on CLI input.
     pub random_generator: SmallRng,
@@ -266,7 +269,7 @@ impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
-            certificate_file: None,
+            proof_log: ProofLog::default(),
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
         }
@@ -385,6 +388,22 @@ impl ConstraintSatisfactionSolver {
         self.state.declare_ready()
     }
 
+    /// Conclude the proof with the unsatisfiable claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.unsat(&self.variable_names, &self.variable_literal_mappings)
+    }
+
+    /// Conclude the proof with the optimality claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.optimal(bound, &self.variable_names, &self.variable_literal_mappings)
+    }
+
     // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
     // pumpkin_assert_simple!(
     // assignments_integer.num_domains() as usize
@@ -435,11 +454,13 @@ impl ConstraintSatisfactionSolver {
             counters: Counters::default(),
             internal_parameters: solver_options,
             analysis_result: ConflictAnalysisResult::default(),
+            variable_names: VariableNames::default(),
         };
+
         // we introduce a dummy variable set to true at the root level
         //  this is useful for convenience when a fact needs to be expressed that is always true
         //  e.g., this makes writing propagator explanations easier for corner cases
-        let root_variable = csp_solver.create_new_propositional_variable();
+        let root_variable = csp_solver.create_new_propositional_variable(Some("true".to_owned()));
         let true_literal = Literal::new(root_variable, true);
 
         csp_solver.assignments_propositional.true_literal = true_literal;
@@ -496,13 +517,18 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
-    pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+    pub fn create_new_integer_variable(
+        &mut self,
+        lower_bound: i32,
+        upper_bound: i32,
+        name: Option<String>,
+    ) -> DomainId {
         assert!(
             !self.state.is_inconsistent(),
             "Variables cannot be created in an inconsistent state"
         );
 
-        self.variable_literal_mappings.create_new_domain(
+        let domain = self.variable_literal_mappings.create_new_domain(
             lower_bound,
             upper_bound,
             &mut self.assignments_integer,
@@ -511,11 +537,21 @@ impl ConstraintSatisfactionSolver {
             &mut self.clausal_propagator,
             &mut self.assignments_propositional,
             &mut self.clause_allocator,
-        )
+        );
+
+        if let Some(name) = name {
+            self.variable_names.add_integer(domain, name);
+        }
+
+        domain
     }
 
     /// Creates an integer variable with a domain containing only the values in `values`
-    pub fn create_new_integer_variable_sparse(&mut self, mut values: Vec<i32>) -> DomainId {
+    pub fn create_new_integer_variable_sparse(
+        &mut self,
+        mut values: Vec<i32>,
+        name: Option<String>,
+    ) -> DomainId {
         assert!(
             !values.is_empty(),
             "cannot create a variable with an empty domain"
@@ -527,7 +563,7 @@ impl ConstraintSatisfactionSolver {
         let lower_bound = values[0];
         let upper_bound = values[values.len() - 1];
 
-        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound);
+        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound, name);
 
         let mut next_idx = 0;
         for value in lower_bound..=upper_bound {
@@ -668,7 +704,8 @@ impl ConstraintSatisfactionSolver {
             .get_conflict_reasons(&mut conflict_analysis_context, on_analysis_step);
     }
 
-    /// Returns an infinite iterator of positive literals of new variables.
+    /// Returns an infinite iterator of positive literals of new variables. The new variables will
+    /// be unnamed.
     ///
     /// # Example
     /// ```
@@ -683,17 +720,27 @@ impl ConstraintSatisfactionSolver {
     ///
     /// Note that this method captures the lifetime of the immutable reference to `self`.
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
-        std::iter::from_fn(|| Some(self.create_new_propositional_variable()))
+        std::iter::from_fn(|| Some(self.create_new_propositional_variable(None)))
             .map(|var| Literal::new(var, true))
     }
 
-    pub fn create_new_propositional_variable(&mut self) -> PropositionalVariable {
-        self.variable_literal_mappings
+    pub fn create_new_propositional_variable(
+        &mut self,
+        name: Option<String>,
+    ) -> PropositionalVariable {
+        let variable = self
+            .variable_literal_mappings
             .create_new_propositional_variable(
                 &mut self.watch_list_propositional,
                 &mut self.clausal_propagator,
                 &mut self.assignments_propositional,
-            )
+            );
+
+        if let Some(name) = name {
+            self.variable_names.add_propositional(variable, name);
+        }
+
+        variable
     }
 
     /// Get a literal which is globally true.
@@ -1020,22 +1067,6 @@ impl ConstraintSatisfactionSolver {
         self.reason_store.increase_decision_level();
     }
 
-    fn write_to_certificate(&mut self) -> std::io::Result<()> {
-        if let Some(cert_file) = &mut self.internal_parameters.certificate_file {
-            for lit in &self.analysis_result.learned_literals {
-                if lit.is_negative() {
-                    cert_file.write_all("-".as_bytes())?;
-                }
-                cert_file.write_all(
-                    format!("{} ", &lit.get_propositional_variable().index().to_string())
-                        .as_bytes(),
-                )?;
-            }
-            cert_file.write_all("0\n".as_bytes())?;
-        }
-        Ok(())
-    }
-
     /// Changes the state based on the conflict analysis result (stored in
     /// [`ConstraintSatisfactionSolver::analysis_result`]). It performs the following:
     /// - Adds the learned clause to the database
@@ -1078,7 +1109,11 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
-        if let Err(write_error) = self.write_to_certificate() {
+        if let Err(write_error) = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(self.analysis_result.learned_literals.iter().copied())
+        {
             warn!(
                 "Failed to update the certificate file, error message: {}",
                 write_error
@@ -1886,8 +1921,8 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
 
         let _ = solver.add_clause([lit1, lit2]);
         let _ = solver.add_clause([lit1, !lit2]);
@@ -1900,8 +1935,8 @@ mod tests {
     #[test]
     fn test_synchronisation_view() {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let variable = solver.create_new_integer_variable(1, 5);
-        let other_variable = solver.create_new_integer_variable(3, 5);
+        let variable = solver.create_new_integer_variable(1, 5, None);
+        let other_variable = solver.create_new_integer_variable(3, 5, None);
 
         // We create a test solver which propagates such that there is a jump across a hole in the
         // domain and then we report a conflict based on the assigned values.
@@ -2007,9 +2042,9 @@ mod tests {
 
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
 
         let _ = solver.add_clause([lit1, lit2, lit3]);
         let _ = solver.add_clause([lit1, !lit2, lit3]);
@@ -2053,9 +2088,9 @@ mod tests {
 
     fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
         let _ = solver.add_clause([lit1, lit2, lit3]);
         (solver, vec![lit1, lit2, lit3])
     }
@@ -2085,7 +2120,7 @@ mod tests {
     #[test]
     fn negative_upper_bound() {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10);
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
 
         let result = solver.get_literal(predicate![domain_id <= -2]);
         assert_eq!(result, solver.assignments_propositional.false_literal);
@@ -2094,7 +2129,7 @@ mod tests {
     #[test]
     fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10);
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
         let result = solver.get_literal(predicate![domain_id >= -2]);
         assert_eq!(result, solver.assignments_propositional.true_literal);
     }
@@ -2105,7 +2140,7 @@ mod tests {
         let ub = 2;
 
         let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(lb, ub);
+        let domain_id = solver.create_new_integer_variable(lb, ub, None);
 
         assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
 
@@ -2162,7 +2197,7 @@ mod tests {
     #[test]
     fn clausal_propagation_is_synced_until_right_before_conflict() {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10);
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
         let dummy_reason = ReasonRef(0);
 
         let result =
@@ -2205,7 +2240,7 @@ mod tests {
 
         let lower_bound = 0;
         let upper_bound = 10;
-        let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         for bound in lower_bound + 1..upper_bound {
             let lower_bound_predicate = predicate![domain_id >= bound];

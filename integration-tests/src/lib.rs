@@ -25,19 +25,23 @@ pub struct Files {
 impl Files {
     pub fn cleanup(self) -> std::io::Result<()> {
         std::fs::remove_file(self.log_file)?;
-        std::fs::remove_file(self.proof_file)?;
         std::fs::remove_file(self.err_file)?;
+
+        if self.proof_file.is_file() {
+            std::fs::remove_file(self.proof_file)?;
+        }
 
         Ok(())
     }
 }
 
-pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
-    run_solver_with_options(instance_path, std::iter::empty())
+pub fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> Files {
+    run_solver_with_options(instance_path, with_proof, std::iter::empty())
 }
 
 pub fn run_solver_with_options<'a>(
     instance_path: impl AsRef<Path>,
+    with_proof: bool,
     args: impl IntoIterator<Item = &'a str>,
 ) -> Files {
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -55,13 +59,15 @@ pub fn run_solver_with_options<'a>(
 
     let mut command = Command::new(solver);
 
+    if with_proof {
+        let _ = command.arg("--proof").arg(&proof_file_path);
+    }
+
     for arg in args {
         let _ = command.arg(arg);
     }
 
     let mut child = command
-        .arg("--certificate-path")
-        .arg(&proof_file_path)
         .arg(instance_path)
         .stdout(
             File::create(&log_file_path).expect("Failed to create log file for {instance_name}."),
@@ -197,7 +203,7 @@ pub fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str)
         env!("CARGO_MANIFEST_DIR")
     );
 
-    let files = run_solver_with_options(instance_path, ["-a"]);
+    let files = run_solver_with_options(instance_path, false, ["-a"]);
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
 

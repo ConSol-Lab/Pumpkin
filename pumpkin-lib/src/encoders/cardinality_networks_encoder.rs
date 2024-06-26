@@ -381,7 +381,7 @@ mod tests {
     }
 
     fn create_variables(csp_solver: &mut ConstraintSatisfactionSolver, n: usize) -> Vec<Literal> {
-        std::iter::from_fn(|| Some(csp_solver.create_new_propositional_variable()))
+        std::iter::from_fn(|| Some(csp_solver.create_new_propositional_variable(None)))
             .map(|var| Literal::new(var, true))
             .take(n)
             .collect::<Vec<_>>()

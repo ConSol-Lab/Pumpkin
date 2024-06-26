@@ -84,7 +84,11 @@ pub(crate) fn run(
                                     let value = i32::try_from(*int)?;
 
                                     Ok(*context.constant_domain_ids.entry(value).or_insert_with(
-                                        || context.solver.create_new_integer_variable(value, value),
+                                        || {
+                                            context
+                                                .solver
+                                                .create_new_integer_variable(value, value, None)
+                                        },
                                     ))
                                 }
                                 IntExpr::VarParIdentifier(identifier) => {

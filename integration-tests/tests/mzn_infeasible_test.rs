@@ -20,7 +20,7 @@ pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str) {
         env!("CARGO_MANIFEST_DIR")
     );
 
-    let files = run_solver_with_options(instance_path, ["-a"]);
+    let files = run_solver_with_options(instance_path, false, ["-a"]);
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
     assert_eq!(output, "=====UNSATISFIABLE=====\n");

@@ -5,7 +5,6 @@ mod result;
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -28,6 +27,8 @@ use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::proof::Format;
+use pumpkin_lib::engine::proof::ProofLog;
 use pumpkin_lib::engine::termination::time_budget::TimeBudget;
 use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::RestartOptions;
@@ -50,10 +51,12 @@ struct Args {
     ///  * '.wcnf' for MaxSAT instances, given in the WDIMACS format.
     instance_path: PathBuf,
 
-    /// The output path for the DRAT certificate file. By default does not output any
-    /// certifying information.
+    /// The output path for the proof file.
+    ///
+    /// When solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP
+    /// proof is logged.
     #[arg(long)]
-    certificate_path: Option<PathBuf>,
+    proof: Option<PathBuf>,
 
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
@@ -307,17 +310,21 @@ fn run() -> PumpkinResult<()> {
         ..Default::default()
     };
 
-    let certificate_file = if let Some(path_buf) = args.certificate_path {
-        Some(
-            OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .read(true)
-                .write(true)
-                .open(path_buf.as_path())?,
-        )
+    let proof_log = if let Some(path_buf) = args.proof {
+        match file_format {
+            FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+            FileFormat::WcnfDimacsPLine => {
+                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
+            }
+            FileFormat::MaxSAT2022 => {
+                return Err(PumpkinError::ProofGenerationNotSupported(
+                    "maxsat".to_owned(),
+                ))
+            }
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+        }
     } else {
-        None
+        ProofLog::default()
     };
 
     let solver_options = SatisfactionSolverOptions {
@@ -331,7 +338,7 @@ fn run() -> PumpkinResult<()> {
             num_assigned_window: args.restart_num_assigned_window,
             geometric_coef: args.restart_geometric_coef,
         },
-        certificate_file,
+        proof_log,
         learning_clause_minimisation: args.learning_clause_minimisation.inner,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
@@ -476,6 +483,10 @@ fn cnf_problem(
             Some(solution)
         }
         CSPSolverExecutionFlag::Infeasible => {
+            if csp_solver.conclude_proof_unsat().is_err() {
+                warn!("Failed to log solver conclusion");
+            };
+
             println!("s UNSATISFIABLE");
             None
         }

@@ -34,7 +34,9 @@ fn main() {
     let mut solver = ConstraintSatisfactionSolver::default();
 
     let start_variables = (0..n_tasks)
-        .map(|i| solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32))
+        .map(|i| {
+            solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32, None)
+        })
         .collect::<Vec<_>>();
 
     // Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x
@@ -42,7 +44,7 @@ fn main() {
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
-                .map(|_| Literal::new(solver.create_new_propositional_variable(), true))
+                .map(|_| Literal::new(solver.create_new_propositional_variable(None), true))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();

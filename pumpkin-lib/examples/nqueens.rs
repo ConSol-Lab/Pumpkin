@@ -19,7 +19,7 @@ fn main() {
 
     let mut solver = ConstraintSatisfactionSolver::default();
     let variables = (0..n)
-        .map(|_| solver.create_new_integer_variable(0, n as i32 - 1))
+        .map(|_| solver.create_new_integer_variable(0, n as i32 - 1, None))
         .collect::<Vec<_>>();
 
     let _ = solver.all_different(variables.clone());
