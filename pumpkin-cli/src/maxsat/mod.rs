@@ -1,6 +1,9 @@
-use std::fs::File;
+use std::{fs::File, path::Path, time::Duration};
 
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use pumpkin_lib::{
+    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
+    options::{LearningOptions, PseudoBooleanEncoding, SolverOptions},
+};
 
 use crate::{
     parsers::dimacs::{parse_wcnf, CSPSolverArgs, SolverDimacsSink, WcnfInstance},
@@ -9,7 +12,7 @@ use crate::{
 
 pub fn wcnf_problem(
     learning_options: LearningOptions,
-    solver_options: SatisfactionSolverOptions,
+    solver_options: SolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
     upper_bound_encoding: PseudoBooleanEncoding,

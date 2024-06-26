@@ -7,6 +7,8 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::options::LearningOptions;
+use crate::options::SolverOptions;
 
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
@@ -18,8 +20,13 @@ pub struct Solver {
 }
 
 impl Solver {
-    pub fn with_options() -> Self {
-        todo!()
+    pub fn with_options(learning_options: LearningOptions, solver_options: SolverOptions) -> Self {
+        Solver {
+            satisfaction_solver: ConstraintSatisfactionSolver::new(
+                learning_options,
+                solver_options,
+            ),
+        }
     }
 }
 

@@ -18,15 +18,26 @@ use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
+use parsers::dimacs::parse_cnf;
 use parsers::dimacs::CSPSolverArgs;
+use parsers::dimacs::SolverDimacsSink;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::options::*;
+use pumpkin_lib::proof::Format;
+use pumpkin_lib::proof::ProofLog;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::SolutionReference;
+use pumpkin_lib::termination::TimeBudget;
+use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
+use crate::maxsat::wcnf_problem;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -195,7 +206,7 @@ fn configure_logging_unknown() -> std::io::Result<()> {
 }
 
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
-    statistic_logger::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    pumpkin_lib::statistics::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -221,7 +232,7 @@ fn configure_logging_sat(
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
-    statistic_logger::configure(log_statistics, "c STAT", None);
+    pumpkin_lib::statistics::configure(log_statistics, "c STAT", None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -264,9 +275,6 @@ fn main() {
 
 fn run() -> PumpkinResult<()> {
     pumpkin_lib::print_pumpkin_assert_warning_message!();
-
-    // Register the handling of signals (for example CTRL+C)
-    signal_handler::register_signals()?;
 
     let args = Args::parse();
 
@@ -312,7 +320,7 @@ fn run() -> PumpkinResult<()> {
         ProofLog::default()
     };
 
-    let solver_options = SatisfactionSolverOptions {
+    let solver_options = SolverOptions {
         restart_options: RestartOptions {
             sequence_generator_type: args.restart_sequence_generator_type.inner,
             base_interval: args.restart_base_interval,
@@ -353,7 +361,7 @@ fn run() -> PumpkinResult<()> {
         )?,
         FileFormat::MaxSAT2022 => todo!(),
         FileFormat::FlatZinc => flatzinc::solve(
-            ConstraintSatisfactionSolver::new(learning_options, solver_options),
+            Solver::with_options(learning_options, solver_options),
             instance_path,
             time_limit,
             FlatZincOptions {
@@ -368,7 +376,7 @@ fn run() -> PumpkinResult<()> {
 
 fn cnf_problem(
     learning_options: LearningOptions,
-    solver_options: SatisfactionSolverOptions,
+    solver_options: SolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
     verify: bool,
@@ -382,21 +390,20 @@ fn cnf_problem(
     let mut termination = time_limit.map(TimeBudget::starting_now);
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
-    let solution = match csp_solver.solve(&mut termination, &mut brancher) {
-        CSPSolverExecutionFlag::Feasible => {
-            #[allow(deprecated)]
-            let solution = csp_solver.get_solution_reference();
+    let solution = match csp_solver.satisfy(&mut termination, &mut brancher) {
+        SatisfactionResult::Satisfiable(state) => {
+            let solution = state.as_solution();
 
             println!("s SATISFIABLE");
             let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(&solution.into(), num_propositional_variables, true)
+                stringify_solution(solution, num_propositional_variables)
             );
 
             Some(solution)
         }
-        CSPSolverExecutionFlag::Infeasible => {
+        SatisfactionResult::Unsatisfiable => {
             if csp_solver.conclude_proof_unsat().is_err() {
                 warn!("Failed to log solver conclusion");
             };
@@ -404,26 +411,16 @@ fn cnf_problem(
             println!("s UNSATISFIABLE");
             None
         }
-        CSPSolverExecutionFlag::Timeout => {
+        SatisfactionResult::Unknown => {
             println!("s UNKNOWN");
             None
         }
     };
 
-    if verify {
-        if let Some(_solution) = solution {
-            // checker::verify_cnf_solution(instance_path, &solution)?;
-        }
-    }
-
     Ok(())
 }
 
-fn stringify_solution(
-    solution: &Solution,
-    num_variables: usize,
-    terminate_with_zero: bool,
-) -> String {
+fn stringify_solution(solution: SolutionReference<'_>, num_variables: usize) -> String {
     (1..num_variables)
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
@@ -433,11 +430,7 @@ fn stringify_solution(
                 format!("-{} ", var.index())
             }
         })
-        .chain(if terminate_with_zero {
-            std::iter::once(String::from("0"))
-        } else {
-            std::iter::once(String::new())
-        })
+        .chain(std::iter::once(String::from("0")))
         .collect::<String>()
 }
 

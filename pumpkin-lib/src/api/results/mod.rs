@@ -1,3 +1,4 @@
+pub use crate::basic_types::ProblemSolution;
 pub use crate::basic_types::SolutionReference;
 
 use self::satisfiable::Satisfiable;

@@ -18,12 +18,8 @@ use std::io::Read;
 use std::num::NonZeroI32;
 use std::str::FromStr;
 
-use pumpkin_lib::basic_types::Function;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::variables::PropositionalVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::engine::LearningOptions;
-use pumpkin_lib::engine::SatisfactionSolverOptions;
+use pumpkin_lib::variables::Literal;
+use pumpkin_lib::Solver;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -513,7 +509,7 @@ impl SolverDimacsSink {
 
 impl DimacsSink for SolverDimacsSink {
     type ConstructorArgs = CSPSolverArgs;
-    type Formula = ConstraintSatisfactionSolver;
+    type Formula = Solver;
 
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
         let CSPSolverArgs {
