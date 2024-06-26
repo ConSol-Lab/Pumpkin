@@ -1,5 +1,6 @@
-mod checker;
+mod file_format;
 mod flatzinc;
+mod maxsat;
 mod parsers;
 mod result;
 
@@ -11,31 +12,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use file_format::FileFormat;
 use log::error;
 use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
-use parsers::dimacs::parse_cnf;
-use parsers::dimacs::parse_wcnf;
 use parsers::dimacs::CSPSolverArgs;
-use parsers::dimacs::SolverDimacsSink;
-use parsers::dimacs::WcnfInstance;
-use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
-use pumpkin_lib::basic_types::signal_handling::signal_handler;
-use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
-use pumpkin_lib::basic_types::*;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_lib::encoders::PseudoBooleanEncoding;
-use pumpkin_lib::engine::proof::Format;
-use pumpkin_lib::engine::proof::ProofLog;
-use pumpkin_lib::engine::termination::time_budget::TimeBudget;
-use pumpkin_lib::engine::variables::PropositionalVariable;
-use pumpkin_lib::engine::RestartOptions;
-use pumpkin_lib::engine::*;
-use pumpkin_lib::optimisation::LinearSearch;
-use pumpkin_lib::optimisation::OptimisationResult;
-use pumpkin_lib::optimisation::OptimisationSolver;
+use pumpkin_lib::options::*;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use result::PumpkinError;
@@ -376,77 +361,6 @@ fn run() -> PumpkinResult<()> {
                 all_solutions: args.all_solutions,
             },
         )?,
-    }
-
-    Ok(())
-}
-
-fn wcnf_problem(
-    learning_options: LearningOptions,
-    solver_options: SatisfactionSolverOptions,
-    time_limit: Option<Duration>,
-    instance_path: impl AsRef<Path>,
-    upper_bound_encoding: PseudoBooleanEncoding,
-    verify: bool,
-) -> Result<(), PumpkinError> {
-    let instance_file = File::open(instance_path)?;
-    let WcnfInstance {
-        formula: csp_solver,
-        objective: objective_function,
-        last_instance_variable,
-    } = parse_wcnf::<SolverDimacsSink>(
-        instance_file,
-        CSPSolverArgs::new(learning_options, solver_options),
-    )?;
-
-    let brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
-
-    let mut solver = OptimisationSolver::new(
-        csp_solver,
-        objective_function,
-        LinearSearch::new(upper_bound_encoding),
-    );
-
-    let mut termination = time_limit.map(TimeBudget::starting_now);
-
-    let result = match solver.solve(&mut termination, brancher) {
-        OptimisationResult::Optimal {
-            solution,
-            objective_value,
-        } => {
-            println!("s OPTIMAL");
-            println!(
-                "v {}",
-                stringify_solution(&solution, last_instance_variable + 1, false)
-            );
-            Some((solution, objective_value))
-        }
-        OptimisationResult::Satisfiable {
-            best_solution,
-            objective_value,
-        } => {
-            println!("s SATISFIABLE");
-            println!(
-                "v {}",
-                stringify_solution(&best_solution, last_instance_variable + 1, false)
-            );
-            Some((best_solution, objective_value))
-        }
-        OptimisationResult::Infeasible => {
-            println!("s UNSATISFIABLE");
-            None
-        }
-        OptimisationResult::Unknown => {
-            println!("s UNKNOWN");
-            None
-        }
-    };
-
-    if verify {
-        if let Some((_solution, _objective)) = result {
-            // checker::verify_wcnf_solution(instance_path, &solution, objective)?;
-        }
     }
 
     Ok(())

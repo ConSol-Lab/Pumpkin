@@ -369,7 +369,6 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
     }
