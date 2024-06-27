@@ -1,7 +1,6 @@
 use crate::{basic_types::SolutionReference, engine::ConstraintSatisfactionSolver};
 
 #[derive(Debug)]
-#[allow(unused)]
 pub struct Satisfiable<'a> {
     solver: &'a mut ConstraintSatisfactionSolver,
 }
@@ -34,7 +33,6 @@ impl<'solver> Satisfiable<'solver> {
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub struct SolutionIterator<'a> {
     solver: &'a mut ConstraintSatisfactionSolver,
 }
@@ -44,10 +42,77 @@ impl<'a> SolutionIterator<'a> {
     pub fn next_solution(&mut self) -> IteratedSolution<'a> {
         todo!()
     }
+
+    // /// Creates a clause which prevents the current solution from occurring again by going over the
+    // /// defined output variables and creating a clause which prevents those values from being assigned.
+    // ///
+    // /// This method is used when attempting to find multiple solutions. It restores the state of the
+    // /// passed [`ConstraintSatisfactionSolver`] to the root (using
+    // /// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
+    // /// was successful (i.e. it is possible that there could be another solution) and returns false
+    // /// otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
+    // /// solutions).
+    // fn add_blocking_clause(
+    //     solver: &mut Solver,
+    //     outputs: &[Output],
+    //     brancher: &mut impl Brancher,
+    // ) -> bool {
+    //     #[allow(deprecated)]
+    //     let solution = solver.get_solution_reference();
+
+    //     let clause = outputs
+    //         .iter()
+    //         .flat_map(|output| match output {
+    //             Output::Bool(bool) => {
+    //                 let literal = *bool.get_variable();
+
+    //                 let literal = if solution.get_literal_value(literal) {
+    //                     literal
+    //                 } else {
+    //                     !literal
+    //                 };
+
+    //                 Box::new(std::iter::once(literal))
+    //             }
+
+    //             Output::Int(int) => {
+    //                 let domain = *int.get_variable();
+    //                 let value = solution.get_integer_value(domain);
+    //                 Box::new(std::iter::once(
+    //                     solver.get_literal(predicate![domain == value]),
+    //                 ))
+    //             }
+
+    //             #[allow(trivial_casts)]
+    //             Output::ArrayOfBool(array_of_bool) => {
+    //                 Box::new(array_of_bool.get_contents().map(|&literal| {
+    //                     if solution.get_literal_value(literal) {
+    //                         literal
+    //                     } else {
+    //                         !literal
+    //                     }
+    //                 })) as Box<dyn Iterator<Item = Literal>>
+    //             }
+
+    //             #[allow(trivial_casts)]
+    //             Output::ArrayOfInt(array_of_ints) => {
+    //                 Box::new(array_of_ints.get_contents().map(|&domain| {
+    //                     let value = solution.get_integer_value(domain);
+    //                     solver.get_literal(predicate![domain == value])
+    //                 })) as Box<dyn Iterator<Item = Literal>>
+    //             }
+    //         })
+    //         .map(|literal| !literal)
+    //         .collect::<Vec<_>>();
+    //     solver.restore_state_at_root(brancher);
+    //     if clause.is_empty() {
+    //         return false;
+    //     }
+    //     solver.add_clause(clause).is_ok()
+    // }
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub enum IteratedSolution<'a> {
     /// A new solution was identified.
     Solution(SolutionReference<'a>),

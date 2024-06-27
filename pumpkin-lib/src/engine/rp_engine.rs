@@ -244,10 +244,11 @@ impl Brancher for DummyBrancher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraints::ConstraintsExt;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::TransformableVariable;
     use crate::predicate;
+    use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
+    use crate::variables::IntegerVariable;
 
     #[test]
     fn rp_clauses_are_removed_in_reverse_order_of_being_added() {
@@ -348,20 +349,44 @@ mod tests {
     }
 
     fn create_3queens() -> (ConstraintSatisfactionSolver, Vec<DomainId>) {
+        // TODO: Use new Solver here
+        fn all_different<Var: IntegerVariable + 'static>(
+            solver: &mut ConstraintSatisfactionSolver,
+            variables: impl Into<Box<[Var]>>,
+        ) -> bool {
+            let variables = variables.into();
+            for i in 0..variables.len() {
+                for j in i + 1..variables.len() {
+                    if !solver.add_propagator(LinearNotEqualConstructor::new(
+                        [
+                            variables[i].clone().scaled(1),
+                            variables[j].clone().scaled(-1),
+                        ]
+                        .into(),
+                        0,
+                    )) {
+                        return false;
+                    }
+                }
+            }
+            true
+        }
         let mut solver = ConstraintSatisfactionSolver::default();
 
         let queens = (0..3)
             .map(|_| solver.create_new_integer_variable(0, 2, None))
             .collect::<Vec<_>>();
-        let _ = solver.all_different(queens.clone());
-        let _ = solver.all_different(
+        let _ = all_different(&mut solver, queens.clone());
+        let _ = all_different(
+            &mut solver,
             queens
                 .iter()
                 .enumerate()
                 .map(|(i, var)| var.offset(i as i32))
                 .collect::<Vec<_>>(),
         );
-        let _ = solver.all_different(
+        let _ = all_different(
+            &mut solver,
             queens
                 .iter()
                 .enumerate()

@@ -4,6 +4,7 @@
 use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::time::Instant;
 
 use log::warn;
@@ -30,8 +31,12 @@ use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::Brancher;
+use crate::branching::PhaseSaving;
 use crate::branching::SelectionContext;
+use crate::branching::SolutionGuidedValueSelector;
+use crate::branching::Vsids;
 use crate::engine::clause_allocators::ClauseAllocatorBasic;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::cp::PropagatorQueue;
@@ -70,6 +75,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variable_names::VariableNames;
+use crate::DefaultBrancher;
 
 pub type ClausalPropagatorType = BasicClausalPropagator;
 pub type ClauseAllocator = ClauseAllocatorBasic;
@@ -501,6 +507,24 @@ impl ConstraintSatisfactionSolver {
         self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
 
         result
+    }
+
+    pub fn default_brancher_over_all_propositional_variables(&self) -> DefaultBrancher {
+        #[allow(deprecated)]
+        let variables = self
+            .get_propositional_assignments()
+            .get_propositional_variables()
+            .collect::<Vec<_>>();
+
+        IndependentVariableValueBrancher {
+            variable_selector: Vsids::new(&variables),
+            value_selector: SolutionGuidedValueSelector::new(
+                &variables,
+                Vec::new(),
+                PhaseSaving::new(&variables),
+            ),
+            variable_type: PhantomData,
+        }
     }
 
     pub fn get_state(&self) -> &CSPSolverState {

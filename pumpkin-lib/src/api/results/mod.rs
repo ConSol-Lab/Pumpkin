@@ -1,4 +1,5 @@
 pub use crate::basic_types::ProblemSolution;
+use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
 
 use self::satisfiable::Satisfiable;
@@ -23,9 +24,9 @@ pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B> {
 }
 
 #[derive(Debug)]
-pub enum OptimisationResult<'a> {
-    Optimal(SolutionReference<'a>),
-    Satisfiable(SolutionReference<'a>),
+pub enum OptimisationResult {
+    Optimal(Solution),
+    Satisfiable(Solution),
     Unsatisfiable,
     Unknown,
 }

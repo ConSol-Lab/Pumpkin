@@ -3,12 +3,13 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::engine::termination::indefinite::Indefinite;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::variables::TransformableVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::{
+    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
+    results::{ProblemSolution, SatisfactionResult},
+    termination::Indefinite,
+    variables::{Literal, TransformableVariable},
+    Solver,
+};
 
 fn main() {
     let mut args = std::env::args();
@@ -31,12 +32,10 @@ fn main() {
 
     let horizon = processing_times.iter().sum::<usize>();
 
-    let mut solver = ConstraintSatisfactionSolver::default();
+    let mut solver = Solver::default();
 
     let start_variables = (0..n_tasks)
-        .map(|i| {
-            solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32, None)
-        })
+        .map(|i| solver.new_bounded_integer(0, (horizon - processing_times[i]) as i32))
         .collect::<Vec<_>>();
 
     // Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x
@@ -44,7 +43,7 @@ fn main() {
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
-                .map(|_| Literal::new(solver.create_new_propositional_variable(None), true))
+                .map(|_| solver.new_literal())
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -57,47 +56,59 @@ fn main() {
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
             // literal => s_y - s_x <= -p_y)
-            let _ =
-                solver.int_lin_le_reif(variables.clone(), -(processing_times[y] as i32), literal);
+            let _ = solver.half_reified_linear_less_than_or_equal(
+                variables.clone(),
+                -(processing_times[y] as i32),
+                literal,
+            );
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
+            let _ = solver.half_reified_linear_less_than_or_equal(
+                variables.clone(),
+                processing_times[y] as i32,
+                !literal,
+            );
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([literal, precedence_literals[y][x]]);
         }
     }
 
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    if solver.solve(&mut Indefinite, &mut brancher)
-        == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible
-    {
+    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    if matches!(
+        solver.satisfy(&mut brancher, Indefinite),
+        SatisfactionResult::Unsatisfiable,
+    ) {
         panic!("Infeasibility Detected")
     }
+    match solver.satisfy(&mut brancher, Indefinite) {
+        SatisfactionResult::Satisfiable(satisfiable) => {
+            let solution = satisfiable.as_solution();
+            let mut start_variables_and_processing_times = start_variables
+                .iter()
+                .zip(processing_times)
+                .collect::<Vec<_>>();
+            start_variables_and_processing_times.sort_by(|(s1, _), (s2, _)| {
+                solution
+                    .get_integer_value(**s1)
+                    .cmp(&solution.get_integer_value(**s2))
+            });
 
-    let mut start_variables_and_processing_times = start_variables
-        .iter()
-        .zip(processing_times)
-        .collect::<Vec<_>>();
-    start_variables_and_processing_times.sort_by(|(s1, _), (s2, _)| {
-        solver
-            .get_assigned_integer_value(*s1)
-            .unwrap()
-            .cmp(&solver.get_assigned_integer_value(*s2).unwrap())
-    });
-
-    println!(
-        "{}",
-        start_variables_and_processing_times
-            .iter()
-            .map(|(var, processing_time)| format!(
-                "[{}, {}]",
-                solver.get_assigned_integer_value(*var).unwrap(),
-                solver.get_assigned_integer_value(*var).unwrap() + *processing_time as i32
-            ))
-            .collect::<Vec<_>>()
-            .join(" - ")
-    );
+            println!(
+                "{}",
+                start_variables_and_processing_times
+                    .iter()
+                    .map(|(var, processing_time)| format!(
+                        "[{}, {}]",
+                        solution.get_integer_value(**var),
+                        solution.get_integer_value(**var) + *processing_time as i32
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(" - ")
+            );
+        }
+        SatisfactionResult::Unsatisfiable => panic!("Infeasibility Detected"),
+        SatisfactionResult::Unknown => println!("Timeout."),
+    }
 }

@@ -13,6 +13,7 @@ use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::Solver;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.
@@ -38,16 +39,16 @@ impl OptimisationSolver {
 }
 
 pub fn log_statistics_with_objective(
-    csp_solver: &ConstraintSatisfactionSolver,
+    solver: &ConstraintSatisfactionSolver,
     best_objective_value: i64,
 ) {
     log_statistic("objective", best_objective_value);
-    csp_solver.log_statistics();
+    solver.log_statistics();
     log_statistic_postfix();
 }
 
-pub fn log_statistics(csp_solver: &ConstraintSatisfactionSolver) {
-    csp_solver.log_statistics();
+pub fn log_statistics(solver: &ConstraintSatisfactionSolver) {
+    solver.log_statistics();
     log_statistic_postfix();
 }
 

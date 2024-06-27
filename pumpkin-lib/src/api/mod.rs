@@ -1,6 +1,7 @@
 pub mod results;
 mod solver;
 
+pub use crate::basic_types::Function;
 pub use crate::engine::variables;
 pub use solver::*;
 
@@ -23,6 +24,20 @@ pub mod termination {
 
 pub mod statistics {
     pub use crate::basic_types::statistic_logging::statistic_logger::*;
+    pub use crate::optimisation::log_statistics;
+    pub use crate::optimisation::log_statistics_with_objective;
 }
 
 pub use crate::engine::proof;
+
+pub mod predicates {
+    pub use crate::engine::predicates::integer_predicate::IntegerPredicate;
+    pub use crate::engine::predicates::predicate::Predicate;
+    pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
+}
+pub use crate::pumpkin_asserts::*;
+
+pub mod hashed_structures {
+    pub use crate::basic_types::HashMap;
+    pub use crate::basic_types::HashSet;
+}

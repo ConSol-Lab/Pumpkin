@@ -51,7 +51,7 @@ impl PredicateConstructor for DomainId {
 macro_rules! predicate {
     ($($var:ident).+$([$index:expr])? >= $bound:expr) => {{
         #[allow(unused_imports)]
-        use $crate::engine::predicates::predicate_constructor::PredicateConstructor;
+        use crate::engine::predicates::predicate_constructor::PredicateConstructor;
         $($var).+$([$index])?.lower_bound_predicate($bound)
     }};
     ($($var:ident).+$([$index:expr])? <= $bound:expr) => {{

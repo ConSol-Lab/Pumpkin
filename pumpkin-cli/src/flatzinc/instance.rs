@@ -3,8 +3,8 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
 
 /// The objective function of a FlatZinc model,
 /// consisting of the direction (e.g. maximization or minimization) and the integer variable which

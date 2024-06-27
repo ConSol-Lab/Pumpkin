@@ -1,6 +1,5 @@
 pub(crate) mod basic_types;
 pub mod branching;
-pub(crate) mod constraints;
 pub(crate) mod encoders;
 pub(crate) mod engine;
 pub(crate) mod math;

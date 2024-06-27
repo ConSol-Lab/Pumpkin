@@ -2,26 +2,11 @@
 
 use std::rc::Rc;
 
-use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::variables::TransformableVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::predicate;
+use pumpkin_lib::variables::{AffineView, DomainId, Literal, TransformableVariable};
+use pumpkin_lib::{predicate, Solver};
 
-use super::constraints::bool_lin_eq;
-use super::constraints::bool_lin_le;
-use super::constraints::int_eq_reif;
-use super::constraints::int_le_reif;
-use super::constraints::int_lin_eq_reif;
-use super::constraints::int_lin_le_reif;
-use super::constraints::int_lin_ne_reif;
-use super::constraints::int_lt_reif;
-use super::constraints::int_ne_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::compiler::constraints::array_bool_or;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 
@@ -45,46 +30,46 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_ne",
-                |solver, terms, rhs| solver.int_lin_ne(terms, rhs),
+                |solver, terms, rhs| solver.linear_not_equals(terms, rhs),
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_ne_reif",
-                int_lin_ne_reif,
+                |solver, terms, rhs, reif| solver.half_reified_linear_not_equals(terms, rhs, reif),
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le",
-                |solver, terms, rhs| solver.int_lin_le(terms, rhs),
+                |solver, terms, rhs| solver.linear_less_than_or_equal(terms, rhs),
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                int_lin_le_reif,
+                |solver, terms, rhs, reif| solver.half_reified_linear_less_than_or_equal(terms, rhs, reif),
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq",
-                |solver, terms, rhs| solver.int_lin_eq(terms, rhs),
+                |solver, terms, rhs| solver.linear_equals(terms, rhs),
             )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                int_lin_eq_reif,
+                |solver, terms, rhs, reif| solver.half_reified_linear_equals(terms, rhs, reif),
             )?,
             "int_ne" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
-                    solver.int_ne(a, b)
+                    solver.binary_not_equal(a, b)
                 })?
             }
             "int_ne_reif" => compile_reified_binary_int_predicate(
@@ -92,11 +77,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_ne_reif",
-                int_ne_reif,
+                |solver, a, b, reif| solver.half_reified_binary_not_equal(a, b, reif),
             )?,
             "int_le" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
-                    solver.int_le(a, b)
+                    solver.binary_less_than_or_equal(a, b)
                 })?
             }
             "int_le_reif" => compile_reified_binary_int_predicate(
@@ -104,11 +89,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_le_reif",
-                int_le_reif,
+                |solver, a, b, reif| solver.half_reified_binary_less_than_or_equal(a, b, reif),
             )?,
             "int_lt" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
-                    solver.int_lt(a, b)
+                    solver.binary_less_than(a, b)
                 })?
             }
             "int_lt_reif" => compile_reified_binary_int_predicate(
@@ -116,11 +101,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lt_reif",
-                int_lt_reif,
+                |solver, a, b, reif| solver.half_reified_binary_less_than(a, b, reif),
             )?,
             "int_eq" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_eq", |solver, a, b| {
-                    solver.int_eq(a, b)
+                    solver.binary_equals(a, b)
                 })?
             }
             "int_eq_reif" => compile_reified_binary_int_predicate(
@@ -128,20 +113,20 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_eq_reif",
-                int_eq_reif,
+                |solver, a,b, reif| solver.half_reified_binary_equals(a, b, reif),
             )?,
             "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
-                solver.int_plus(a, b, c)
+                solver.integer_plus(a, b, c)
             })?,
             "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
-                solver.int_times(a, b, c)
+                solver.integer_multiplication(a, b, c)
             })?,
             "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
-                solver.int_div(a, b, c)
+                solver.integer_division(a, b, c)
             })?,
             "int_abs" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
-                    solver.int_abs(a, b)
+                    solver.integer_absolute(a, b)
                 })?
             }
             "int_max" => compile_int_max(context, exprs)?,
@@ -299,7 +284,7 @@ fn compile_set_in_reif(
                     !reif,
                     context
                         .solver
-                        .get_literal(predicate![variable >= lower_bound]),
+                        .get_literal_for_predicate(predicate![variable >= lower_bound]),
                 ])
                 .is_ok()
                 && context
@@ -308,7 +293,7 @@ fn compile_set_in_reif(
                         !reif,
                         !context
                             .solver
-                            .get_literal(predicate![variable >= upper_bound + 1]),
+                            .get_literal_for_predicate(predicate![variable >= upper_bound + 1]),
                     ])
                     .is_ok();
 
@@ -320,10 +305,10 @@ fn compile_set_in_reif(
                     reif,
                     !context
                         .solver
-                        .get_literal(predicate![variable >= lower_bound]),
+                        .get_literal_for_predicate(predicate![variable >= lower_bound]),
                     context
                         .solver
-                        .get_literal(predicate![variable >= upper_bound + 1]),
+                        .get_literal_for_predicate(predicate![variable >= upper_bound + 1]),
                 ])
                 .is_ok();
 
@@ -333,10 +318,14 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| context.solver.get_literal(predicate![variable == value]))
+                .map(|&value| {
+                    context
+                        .solver
+                        .get_literal_for_predicate(predicate![variable == value])
+                })
                 .collect::<Vec<_>>();
 
-            array_bool_or(context.solver, clause, reif)
+            context.solver.array_bool_or(clause, reif)
         }
     };
 
@@ -353,9 +342,7 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context
-        .solver
-        .array_var_int_element(index, array.as_ref(), rhs))
+    Ok(context.solver.element(index, array.as_ref(), rhs))
 }
 
 fn compile_bool_not(
@@ -461,7 +448,7 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    let b_lit = context.solver.get_literal(predicate![b == 1]);
+    let b_lit = context.solver.get_literal_for_predicate(predicate![b == 1]);
 
     let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
     let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
@@ -478,7 +465,7 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(array_bool_or(context.solver, clause.as_ref(), r))
+    Ok(context.solver.array_bool_or(clause.as_ref(), r))
 }
 
 fn compile_bool_xor(
@@ -533,7 +520,9 @@ fn compile_array_var_bool_element(
 
         // [index = mzn_index] -> (rhs <-> array[i])
 
-        let predicate_lit = context.solver.get_literal(predicate![index == mzn_index]);
+        let predicate_lit = context
+            .solver
+            .get_literal_for_predicate(predicate![index == mzn_index]);
 
         success &= context
             .solver
@@ -578,12 +567,7 @@ fn compile_ternary_int_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        DomainId,
-        DomainId,
-        DomainId,
-    ) -> bool,
+    post_constraint: impl FnOnce(&mut Solver, DomainId, DomainId, DomainId) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -599,7 +583,7 @@ fn compile_binary_int_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId) -> bool,
+    post_constraint: impl FnOnce(&mut Solver, DomainId, DomainId) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, predicate_name);
 
@@ -614,7 +598,7 @@ fn compile_reified_binary_int_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId, Literal) -> bool,
+    post_constraint: impl FnOnce(&mut Solver, DomainId, DomainId, Literal) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -637,11 +621,7 @@ fn compile_int_lin_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        Box<[AffineView<DomainId>]>,
-        i32,
-    ) -> bool,
+    post_constraint: impl FnOnce(&mut Solver, Box<[AffineView<DomainId>]>, i32) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -659,12 +639,7 @@ fn compile_reified_int_lin_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        Box<[AffineView<DomainId>]>,
-        i32,
-        Literal,
-    ) -> bool,
+    post_constraint: impl FnOnce(&mut Solver, Box<[AffineView<DomainId>]>, i32, Literal) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
@@ -688,7 +663,7 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(bool_lin_eq(context.solver, &weights, &bools, rhs))
+    Ok(context.solver.linear_boolean_equals(&weights, &bools, rhs))
 }
 
 fn compile_bool_lin_le_predicate(
@@ -701,7 +676,9 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(bool_lin_le(context.solver, &weights, &bools, rhs))
+    Ok(context
+        .solver
+        .linear_boolean_less_than_or_equal(&weights, &bools, rhs))
 }
 
 fn compile_all_different(

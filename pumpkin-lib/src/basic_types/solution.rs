@@ -44,7 +44,7 @@ pub trait ProblemSolution: HasAssignments {
             .is_literal_assigned_true(literal)
     }
 
-    /// Returns
+    /// Returns the assigned integer value of the provided [`DomainId`].
     fn get_integer_value(&self, domain: DomainId) -> i32 {
         pumpkin_assert_moderate!(
             self.assignments_integer().is_domain_assigned(domain),

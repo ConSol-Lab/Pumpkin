@@ -18,7 +18,11 @@ use std::io::Read;
 use std::num::NonZeroI32;
 use std::str::FromStr;
 
+use pumpkin_lib::options::LearningOptions;
+use pumpkin_lib::options::SolverOptions;
 use pumpkin_lib::variables::Literal;
+use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Function;
 use pumpkin_lib::Solver;
 use thiserror::Error;
 
@@ -472,21 +476,21 @@ fn next_header_component<'a, Num: FromStr>(
 
 /// A dimacs sink that creates a fresh [`ConstraintSatisfactionSolver`] when reading DIMACS files.
 pub(crate) struct SolverDimacsSink {
-    solver: ConstraintSatisfactionSolver,
+    solver: Solver,
     variables: Vec<PropositionalVariable>,
 }
 
 /// The arguments to construct a [`ConstraintSatisfactionSolver`]. Forwarded to
 /// [`ConstraintSatisfactionSolver::new()`].
 pub(crate) struct CSPSolverArgs {
-    solver_options: SatisfactionSolverOptions,
+    solver_options: SolverOptions,
     learning_options: LearningOptions,
 }
 
 impl CSPSolverArgs {
     pub(crate) fn new(
         learning_options: LearningOptions,
-        solver_options: SatisfactionSolverOptions,
+        solver_options: SolverOptions,
     ) -> CSPSolverArgs {
         CSPSolverArgs {
             solver_options,
@@ -517,11 +521,9 @@ impl DimacsSink for SolverDimacsSink {
             learning_options: sat_options,
         } = args;
 
-        let mut solver = ConstraintSatisfactionSolver::new(sat_options, solver_options);
-        let variables = solver
-            .new_literals()
-            .map(|literal| literal.get_propositional_variable())
-            .take(num_variables)
+        let mut solver = Solver::with_options(sat_options, solver_options);
+        let variables = (0..num_variables)
+            .map(|_| solver.new_literal().get_propositional_variable())
             .collect::<Vec<_>>();
 
         SolverDimacsSink { solver, variables }

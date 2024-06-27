@@ -1,3 +1,5 @@
+
+
 #[cfg(not(test))]
 pub const PUMPKIN_ASSERT_LEVEL_DEFINITION: u8 = PUMPKIN_ASSERT_SIMPLE;
 
@@ -10,24 +12,27 @@ pub const PUMPKIN_ASSERT_ADVANCED: u8 = 3;
 pub const PUMPKIN_ASSERT_EXTREME: u8 = 4;
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! print_pumpkin_assert_warning_message {
     () => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
-            warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
+        if pumpkin_lib::PUMPKIN_ASSERT_LEVEL_DEFINITION >= pumpkin_lib::PUMPKIN_ASSERT_MODERATE {
+            warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_lib::PUMPKIN_ASSERT_LEVEL_DEFINITION);
         };
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_simple {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
+        if crate::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
             assert!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_eq_simple {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
@@ -37,6 +42,7 @@ macro_rules! pumpkin_assert_eq_simple {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_ne_simple {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
@@ -46,6 +52,7 @@ macro_rules! pumpkin_assert_ne_simple {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_moderate {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
@@ -55,6 +62,7 @@ macro_rules! pumpkin_assert_moderate {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_ne_moderate {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
@@ -64,6 +72,7 @@ macro_rules! pumpkin_assert_ne_moderate {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_advanced {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED {
@@ -73,6 +82,7 @@ macro_rules! pumpkin_assert_advanced {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_extreme {
     ($($arg:tt)*) => {
         if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME {

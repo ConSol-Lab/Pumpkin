@@ -1,5 +1,4 @@
 mod collect_domains;
-mod constraints;
 mod context;
 mod create_objective;
 mod create_search_strategy;
@@ -11,7 +10,7 @@ mod post_constraints;
 mod prepare_variables;
 
 use context::CompilationContext;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::Solver;
 
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
@@ -19,7 +18,7 @@ use super::FlatZincError;
 
 pub(crate) fn compile(
     ast: FlatZincAst,
-    solver: &mut ConstraintSatisfactionSolver,
+    solver: &mut Solver,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut context = CompilationContext::new(solver);
 

@@ -1,4 +1,3 @@
-use super::independent_variable_value_brancher::DefaultBrancher;
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
@@ -10,6 +9,8 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::DefaultBrancher;
+use crate::Solver;
 
 /// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
 /// switching every time a solution is found ([`AlternatingStrategy::EverySolution`]), after every
@@ -54,7 +55,7 @@ pub struct AlternatingBrancher<OtherBrancher> {
 
 impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
     pub fn new(
-        solver: &ConstraintSatisfactionSolver,
+        solver: &Solver,
         other_brancher: OtherBrancher,
         strategy: AlternatingStrategy,
     ) -> Self {
@@ -62,8 +63,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             even_number_of_solutions: true,
             is_using_default_brancher: false,
             other_brancher,
-            default_brancher:
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(solver),
+            default_brancher: solver.default_brancher_over_all_propositional_variables(),
             strategy,
         }
     }
@@ -159,13 +159,15 @@ mod tests {
     use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::branching::Brancher;
     use crate::engine::ConstraintSatisfactionSolver;
+    use crate::results::SolutionReference;
+    use crate::Solver;
 
     #[test]
     fn test_every_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EverySolution,
         );
 
@@ -180,10 +182,10 @@ mod tests {
 
     #[test]
     fn test_every_other_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EveryOtherSolution,
         );
 
@@ -204,10 +206,10 @@ mod tests {
 
     #[test]
     fn test_switch_to_default_after_first_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
@@ -225,10 +227,10 @@ mod tests {
 
     #[test]
     fn test_every_other_restart() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EveryRestart,
         );
 
