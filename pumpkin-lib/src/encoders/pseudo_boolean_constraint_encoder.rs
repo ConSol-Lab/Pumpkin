@@ -22,6 +22,7 @@ use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
+use crate::Solver;
 
 pub trait PseudoBooleanConstraintEncoderInterface {
     /// Add clauses that encode \sum w_i x_i <= k and returns a [`PseudoBooleanConstraintEncoder`]
@@ -38,7 +39,7 @@ pub trait PseudoBooleanConstraintEncoderInterface {
     fn encode_at_most_k(
         weighted_literals: Vec<WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<Self, EncodingError>
     where
         Self: Sized;
@@ -50,7 +51,7 @@ pub trait PseudoBooleanConstraintEncoderInterface {
     fn strengthen_at_most_k(
         &mut self,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<(), EncodingError>;
 }
 
@@ -170,18 +171,18 @@ impl PseudoBooleanConstraintEncoder {
 
     pub fn from_function(
         function: &Function,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Self {
         let single_integer_case = function.get_weighted_literals().len() == 0
             && function.get_weighted_integers().len() == 1;
         let mut encoder = if single_integer_case {
             PseudoBooleanConstraintEncoder::from_single_integer_function(
-                function.get_function_as_weighted_literals_vector(csp_solver),
+                function.get_function_as_weighted_literals_vector(solver),
             )
         } else {
             PseudoBooleanConstraintEncoder::new(
-                function.get_function_as_weighted_literals_vector(csp_solver),
+                function.get_function_as_weighted_literals_vector(solver),
                 encoding_algorithm,
             )
         };
@@ -200,17 +201,17 @@ impl PseudoBooleanConstraintEncoder {
     pub fn constrain_at_most_k(
         &mut self,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<(), EncodingError> {
         pumpkin_assert_simple!(
-            csp_solver.is_at_the_root_level(),
+            solver.is_at_the_root_level(),
             "Can only add encodings at the root level."
         );
 
         match self.state {
             State::New(ref mut weighted_literals) => {
                 let literals = std::mem::take(weighted_literals);
-                self.create_encoding(literals, k, csp_solver)?
+                self.create_encoding(literals, k, solver)?
             }
             State::Encoded(ref mut encoder) => {
                 pumpkin_assert_simple!(
@@ -226,7 +227,7 @@ impl PseudoBooleanConstraintEncoder {
                     self.constant_term
                 );
 
-                encoder.strengthen_at_most_k(k - self.constant_term, csp_solver)?;
+                encoder.strengthen_at_most_k(k - self.constant_term, solver)?;
             }
 
             State::Preprocessed(ref mut literals) => {
@@ -237,7 +238,7 @@ impl PseudoBooleanConstraintEncoder {
                     self.state = State::Encoded(Self::create_encoder(
                         literals,
                         k,
-                        csp_solver,
+                        solver,
                         self.encoding_algorithm,
                     )?);
                 }
@@ -257,11 +258,11 @@ impl PseudoBooleanConstraintEncoder {
                          probably an error? k={k}, constant_term={}",
                     self.constant_term
                 );
-                encoder.strengthen_at_most_k(k, csp_solver)?
+                encoder.strengthen_at_most_k(k, solver)?
             }
             State::SingleIntegerNew(ref mut weighted_literals) => {
                 let literals = std::mem::take(weighted_literals);
-                let encoder = SingleIntegerEncoder::encode_at_most_k(literals, k, csp_solver)?;
+                let encoder = SingleIntegerEncoder::encode_at_most_k(literals, k, solver)?;
                 self.state = State::SingleInteger(encoder);
                 self.k_previous = k;
             }
@@ -274,12 +275,12 @@ impl PseudoBooleanConstraintEncoder {
         &mut self,
         weighted_literals: Vec<WeightedLiteral>,
         initial_k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<(), EncodingError> {
         let time_start = Instant::now();
 
         let preprocessed_weighted_literals =
-            self.initialise_and_preprocess(weighted_literals, initial_k, csp_solver)?;
+            self.initialise_and_preprocess(weighted_literals, initial_k, solver)?;
 
         let sum_weight = preprocessed_weighted_literals
             .iter()
@@ -301,7 +302,7 @@ impl PseudoBooleanConstraintEncoder {
             self.state = State::Encoded(Self::create_encoder(
                 preprocessed_weighted_literals,
                 initial_k - self.constant_term,
-                csp_solver,
+                solver,
                 self.encoding_algorithm,
             )?);
         }
@@ -320,7 +321,7 @@ impl PseudoBooleanConstraintEncoder {
         &mut self,
         weighted_literals: Vec<WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<Vec<WeightedLiteral>, EncodingError> {
         // preprocess the input before the initial encoding considering the following:
         //  1. Terms that are assigned at the root level are removed True literals decrease the
@@ -357,15 +358,15 @@ impl PseudoBooleanConstraintEncoder {
 
             for term in &weighted_literals {
                 if term.weight > k - self.constant_term
-                    && csp_solver.get_literal_value(term.literal).is_none()
+                    && solver.get_literal_value(term.literal).is_none()
                 {
                     has_assigned = true;
 
-                    let result = csp_solver.add_clause([!term.literal]);
+                    let result = solver.add_clause([!term.literal]);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }
-                } else if csp_solver.get_literal_value(term.literal) == Some(true) {
+                } else if solver.get_literal_value(term.literal) == Some(true) {
                     self.constant_term += term.weight;
                 }
             }
@@ -378,7 +379,7 @@ impl PseudoBooleanConstraintEncoder {
         // collect terms that are not assigned at the root level
         let unassigned_weighted_literals: Vec<WeightedLiteral> = weighted_literals
             .iter()
-            .filter(|term| csp_solver.get_literal_value(term.literal).is_none())
+            .filter(|term| solver.get_literal_value(term.literal).is_none())
             .copied()
             .collect();
 
@@ -388,7 +389,7 @@ impl PseudoBooleanConstraintEncoder {
     fn create_encoder(
         weighted_literals: Vec<WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Result<Box<dyn PseudoBooleanConstraintEncoderInterface>, EncodingError> {
         match encoding_algorithm {
@@ -396,13 +397,13 @@ impl PseudoBooleanConstraintEncoder {
                 let encoder = GeneralisedTotaliserEncoder::encode_at_most_k(
                     weighted_literals,
                     k,
-                    csp_solver,
+                    solver,
                 )?;
                 Ok(Box::new(encoder))
             }
             PseudoBooleanEncoding::CNE => {
                 let encoder =
-                    CardinalityNetworkEncoder::encode_at_most_k(weighted_literals, k, csp_solver)?;
+                    CardinalityNetworkEncoder::encode_at_most_k(weighted_literals, k, solver)?;
                 Ok(Box::new(encoder))
             }
             PseudoBooleanEncoding::SingleInteger => {

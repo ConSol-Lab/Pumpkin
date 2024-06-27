@@ -93,7 +93,7 @@ impl Solution {
         }
     }
 
-    pub(crate) fn as_reference(&self) -> SolutionReference<'_> {
+    pub fn as_reference(&self) -> SolutionReference<'_> {
         SolutionReference {
             assignments_propositional: &self.assignments_propositional,
             assignments_integer: &self.assignments_integer,

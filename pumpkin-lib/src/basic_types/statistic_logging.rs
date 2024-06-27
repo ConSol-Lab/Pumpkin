@@ -5,6 +5,8 @@ pub mod statistic_logger {
     use std::fmt::Display;
     use std::sync::OnceLock;
 
+    use crate::engine::ConstraintSatisfactionSolver;
+
     static STATISTIC_PREFIX: OnceLock<&str> = OnceLock::new();
     static AFTER_STATISTICS: OnceLock<Option<&str>> = OnceLock::new();
     static LOG_STATISTICS: OnceLock<bool> = OnceLock::new();
@@ -50,5 +52,19 @@ pub mod statistic_logger {
                 println!("{post_fix}")
             }
         }
+    }
+
+    pub fn log_statistics_with_objective(
+        solver: &ConstraintSatisfactionSolver,
+        best_objective_value: i64,
+    ) {
+        log_statistic("objective", best_objective_value);
+        solver.log_statistics();
+        log_statistic_postfix();
+    }
+
+    pub fn log_statistics(solver: &ConstraintSatisfactionSolver) {
+        solver.log_statistics();
+        log_statistic_postfix();
     }
 }

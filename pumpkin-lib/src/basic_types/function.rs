@@ -7,6 +7,7 @@ use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
+use crate::Solver;
 
 #[derive(Clone, Default, Debug)]
 pub struct Function {
@@ -107,7 +108,7 @@ impl Function {
 
     pub fn get_function_as_weighted_literals_vector(
         &self,
-        csp_solver: &ConstraintSatisfactionSolver,
+        solver: &Solver,
     ) -> Vec<WeightedLiteral> {
         let mut weighted_literals: Vec<WeightedLiteral> = self
             .get_weighted_literals()
@@ -122,14 +123,14 @@ impl Function {
             let domain_id = *term.0;
             let weight = *term.1;
 
-            let lower_bound = csp_solver.get_lower_bound(&domain_id);
-            let upper_bound = csp_solver.get_upper_bound(&domain_id);
+            let lower_bound = solver.lower_bound(&domain_id);
+            let upper_bound = solver.upper_bound(&domain_id);
 
             // note that we only needs lower bound literals starting from lower_bound+1
             //  the literals before those contribute to the objective function but not in a way that
             // can be changed
             for i in (lower_bound + 1)..=upper_bound {
-                let literal = csp_solver.get_literal(predicate![domain_id >= i]);
+                let literal = solver.get_literal_for_predicate(predicate![domain_id >= i]);
                 weighted_literals.push(WeightedLiteral {
                     literal,
                     weight,

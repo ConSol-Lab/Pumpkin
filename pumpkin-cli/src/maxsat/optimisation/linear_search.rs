@@ -1,18 +1,16 @@
 use log::info;
+use pumpkin_lib::{
+    asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
+    branching::Brancher,
+    encodings::PseudoBooleanConstraintEncoder,
+    options::PseudoBooleanEncoding,
+    results::ProblemSolution,
+    termination::TerminationCondition,
+    variables::PropositionalVariable,
+    Function, Solution, Solver, Stopwatch,
+};
 
-use super::OptimisationResult;
-use crate::basic_types::CSPSolverExecutionFlag;
-use crate::basic_types::Function;
-use crate::basic_types::Solution;
-use crate::basic_types::Stopwatch;
-use crate::branching::Brancher;
-use crate::encoders::PseudoBooleanConstraintEncoder;
-use crate::encoders::PseudoBooleanEncoding;
-use crate::engine::termination::TerminationCondition;
-use crate::engine::ConstraintSatisfactionSolver;
-use crate::optimisation::log_statistics_with_objective;
-use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
+use super::optimisation_result::OptimisationResult;
 
 #[derive(Debug, Copy, Clone)]
 pub struct LinearSearch {
@@ -28,19 +26,13 @@ impl LinearSearch {
 
     pub fn solve(
         &self,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
         process_time: Stopwatch,
         objective_function: &Function,
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
     ) -> OptimisationResult {
-        pumpkin_assert_simple!(
-            csp_solver.get_state().has_solution(),
-            "Linear search assumes the solver contains a feasible solution."
-        );
-
-        #[allow(deprecated)]
-        let mut best_solution: Solution = csp_solver.get_solution_reference().into();
+        let mut best_solution: Solution = solver.get_solution_reference().into();
 
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
@@ -54,7 +46,7 @@ impl LinearSearch {
         );
         let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
             objective_function,
-            csp_solver,
+            solver,
             self.upper_bound_encoding,
         );
 
@@ -62,24 +54,25 @@ impl LinearSearch {
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
-                log_statistics_with_objective(csp_solver, best_objective_value as i64);
+                solver.log_statistics_with_objective(best_objective_value as i64);
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value as i64,
                 };
             }
 
-            csp_solver.restore_state_at_root(&mut brancher);
+            solver.restore_state_at_root(&mut brancher);
 
             let encoding_status =
-                upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
+                upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
 
             if first_iteration {
                 #[allow(deprecated)]
                 brancher.on_encoding_objective_function(
-                    &csp_solver
-                        .get_propositional_assignments()
-                        .get_propositional_variables()
+                    &(1..solver
+                        .get_solution_reference()
+                        .num_propositional_variables() as u32)
+                        .map(PropositionalVariable::new)
                         .collect::<Vec<_>>(),
                 );
 
@@ -89,7 +82,7 @@ impl LinearSearch {
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
-                log_statistics_with_objective(csp_solver, best_objective_value as i64);
+                solver.log_statistics_with_objective(best_objective_value as i64);
                 return OptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value as i64,
@@ -97,14 +90,13 @@ impl LinearSearch {
             }
 
             #[allow(deprecated)]
-            brancher.on_solution(csp_solver.get_solution_reference());
+            brancher.on_solution(solver.get_solution_reference());
 
-            let csp_execution_flag = csp_solver.solve(termination, &mut brancher);
+            let result = solver.satisfy(&mut brancher, termination);
 
-            match csp_execution_flag {
-                CSPSolverExecutionFlag::Feasible => {
-                    #[allow(deprecated)]
-                    let solution_ref = csp_solver.get_solution_reference();
+            match result {
+                pumpkin_lib::results::SatisfactionResult::Satisfiable(satisfiable) => {
+                    let solution_ref = satisfiable.as_solution();
                     let new_objective_value = objective_function.evaluate_assignment(solution_ref);
 
                     pumpkin_assert_moderate!(
@@ -126,16 +118,16 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                CSPSolverExecutionFlag::Infeasible => {
-                    log_statistics_with_objective(csp_solver, best_objective_value as i64);
+                pumpkin_lib::results::SatisfactionResult::Unsatisfiable => {
+                    solver.log_statistics_with_objective(best_objective_value as i64);
 
                     return OptimisationResult::Optimal {
                         solution: best_solution,
                         objective_value: best_objective_value as i64,
                     };
                 }
-                CSPSolverExecutionFlag::Timeout => {
-                    log_statistics_with_objective(csp_solver, best_objective_value as i64);
+                pumpkin_lib::results::SatisfactionResult::Unknown => {
+                    solver.log_statistics_with_objective(best_objective_value as i64);
                     return OptimisationResult::Satisfiable {
                         best_solution,
                         objective_value: best_objective_value as i64,

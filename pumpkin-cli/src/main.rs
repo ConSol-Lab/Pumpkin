@@ -28,8 +28,11 @@ use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::SolutionReference;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solution;
 use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -344,13 +347,9 @@ fn run() -> PumpkinResult<()> {
     let verify_outcome = args.verify_solution;
 
     match file_format {
-        FileFormat::CnfDimacsPLine => cnf_problem(
-            learning_options,
-            solver_options,
-            time_limit,
-            instance_path,
-            verify_outcome,
-        )?,
+        FileFormat::CnfDimacsPLine => {
+            cnf_problem(learning_options, solver_options, time_limit, instance_path)?
+        }
         FileFormat::WcnfDimacsPLine => wcnf_problem(
             learning_options,
             solver_options,
@@ -379,32 +378,31 @@ fn cnf_problem(
     solver_options: SolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
-    verify: bool,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
-    let mut csp_solver = parse_cnf::<SolverDimacsSink>(
+    let mut solver = parse_cnf::<SolverDimacsSink>(
         instance_file,
         CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
-    let mut termination = time_limit.map(TimeBudget::starting_now);
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
-    let solution = match csp_solver.satisfy(&mut termination, &mut brancher) {
+    let mut termination =
+        TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
+    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let solution = match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(state) => {
-            let solution = state.as_solution();
+            let solution: Solution = state.as_solution().into();
 
             println!("s SATISFIABLE");
             let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(solution, num_propositional_variables)
+                stringify_solution(&solution, num_propositional_variables, true)
             );
 
             Some(solution)
         }
         SatisfactionResult::Unsatisfiable => {
-            if csp_solver.conclude_proof_unsat().is_err() {
+            if solver.conclude_proof_unsat().is_err() {
                 warn!("Failed to log solver conclusion");
             };
 
@@ -420,17 +418,25 @@ fn cnf_problem(
     Ok(())
 }
 
-fn stringify_solution(solution: SolutionReference<'_>, num_variables: usize) -> String {
+fn stringify_solution(
+    solution: &Solution,
+    num_variables: usize,
+    terminate_with_zero: bool,
+) -> String {
     (1..num_variables)
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
             if solution.get_propositional_variable_value(var) {
-                format!("{} ", var.index())
+                format!("{} ", var.get_index())
             } else {
-                format!("-{} ", var.index())
+                format!("-{} ", var.get_index())
             }
         })
-        .chain(std::iter::once(String::from("0")))
+        .chain(if terminate_with_zero {
+            std::iter::once(String::from("0"))
+        } else {
+            std::iter::once(String::new())
+        })
         .collect::<String>()
 }
 

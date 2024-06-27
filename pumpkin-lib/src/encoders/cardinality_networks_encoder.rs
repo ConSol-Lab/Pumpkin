@@ -2,11 +2,14 @@ use std::time::Instant;
 
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
+use crate::basic_types::StorageKey;
 use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrengthen;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
+use crate::variables::PropositionalVariable;
+use crate::Solver;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental
@@ -35,7 +38,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
     fn encode_at_most_k(
         weighted_literals: Vec<crate::basic_types::WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<Self, EncodingError>
     where
         Self: Sized,
@@ -59,14 +62,10 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
             None => vec![],
         };
 
-        CardinalityNetworkEncoder::new(literals, k, csp_solver)
+        CardinalityNetworkEncoder::new(literals, k, solver)
     }
 
-    fn strengthen_at_most_k(
-        &mut self,
-        k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Result<(), EncodingError> {
+    fn strengthen_at_most_k(&mut self, k: u64, solver: &mut Solver) -> Result<(), EncodingError> {
         if k == 0 && self.output.is_empty() {
             return Ok(());
         }
@@ -78,7 +77,7 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
         println!("c CNE k = {k}");
 
-        if csp_solver.add_clause([!self.output[k as usize]]).is_err() {
+        if solver.add_clause([!self.output[k as usize]]).is_err() {
             Err(CannotStrengthen)
         } else {
             Ok(())
@@ -88,34 +87,26 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
 impl CardinalityNetworkEncoder {
     /// Create a new encoder from the given literals which form the left-hand side.
-    pub fn new(
-        literals: Vec<Literal>,
-        p: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Result<Self, EncodingError> {
+    pub fn new(literals: Vec<Literal>, p: u64, solver: &mut Solver) -> Result<Self, EncodingError> {
         let mut encoder = CardinalityNetworkEncoder {
             literals,
             output: vec![],
             num_clauses_added: 0,
         };
 
-        encoder.create_encoding(p, csp_solver)?;
+        encoder.create_encoding(p, solver)?;
 
         Ok(encoder)
     }
 
-    fn create_encoding(
-        &mut self,
-        p: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Result<(), EncodingError> {
+    fn create_encoding(&mut self, p: u64, solver: &mut Solver) -> Result<(), EncodingError> {
         pumpkin_assert_simple!(
             self.output.is_empty(),
             "Can only generate the encoding once."
         );
 
         let time_start = Instant::now();
-        let result = self.generate_clauses(p, csp_solver);
+        let result = self.generate_clauses(p, solver);
 
         println!(
             "c encoding added {} clauses to the solver.",
@@ -130,7 +121,7 @@ impl CardinalityNetworkEncoder {
         if result.is_err() {
             println!("c encoding detected conflict at the root!");
         } else if !self.output.is_empty() {
-            let r = csp_solver.add_clause([!self.output[p as usize]]);
+            let r = solver.add_clause([!self.output[p as usize]]);
             if r.is_err() {
                 return Err(EncodingError::RootPropagationConflict);
             }
@@ -139,11 +130,7 @@ impl CardinalityNetworkEncoder {
         result
     }
 
-    fn generate_clauses(
-        &mut self,
-        p: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Result<(), EncodingError> {
+    fn generate_clauses(&mut self, p: u64, solver: &mut Solver) -> Result<(), EncodingError> {
         let n = self.literals.len() as u64;
 
         if n == 0 {
@@ -153,13 +140,12 @@ impl CardinalityNetworkEncoder {
         let k = find_next_power_of_two(p);
 
         let num_padding_literals = round_up_to_multiple(n, k) - n;
-        let padding_lits = csp_solver
-            .new_literals()
-            .take(num_padding_literals as usize)
+        let padding_lits = (0..num_padding_literals)
+            .map(|_| solver.new_literal())
             .collect::<Vec<_>>();
 
         for &lit in padding_lits.iter() {
-            if csp_solver.add_clause([!lit]).is_err() {
+            if solver.add_clause([!lit]).is_err() {
                 return Err(EncodingError::RootPropagationConflict);
             }
         }
@@ -168,7 +154,7 @@ impl CardinalityNetworkEncoder {
             .card(
                 &[self.literals.as_slice(), padding_lits.as_slice()].concat(),
                 k,
-                csp_solver,
+                solver,
             )
             .unwrap_or_default();
 
@@ -183,19 +169,18 @@ impl CardinalityNetworkEncoder {
         &mut self,
         a: &[Literal],
         b: &[Literal],
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Option<Vec<Literal>> {
         pumpkin_assert_eq_simple!(a.len(), b.len());
 
         if a.len() == 1 {
-            let c = csp_solver.new_literals().take(2).collect::<Vec<_>>();
-
+            let c = vec![solver.new_literal(), solver.new_literal()];
             let a = a[0];
             let b = b[0];
 
-            try_add_clause!(self, csp_solver, vec![!a, !b, c[1]]);
-            try_add_clause!(self, csp_solver, vec![!a, c[0]]);
-            try_add_clause!(self, csp_solver, vec![!b, c[0]]);
+            try_add_clause!(self, solver, vec![!a, !b, c[1]]);
+            try_add_clause!(self, solver, vec![!a, c[0]]);
+            try_add_clause!(self, solver, vec![!b, c[0]]);
 
             return Some(c);
         }
@@ -206,55 +191,53 @@ impl CardinalityNetworkEncoder {
         let a_odd = odd_literals(a);
         let b_odd = odd_literals(b);
 
-        let d = self.s_merge(&a_odd, &b_odd, csp_solver)?;
-        let e = self.s_merge(&a_even, &b_even, csp_solver)?;
+        let d = self.s_merge(&a_odd, &b_odd, solver)?;
+        let e = self.s_merge(&a_even, &b_even, solver)?;
 
         pumpkin_assert_eq_simple!((a.len() >> 1) + 1, d.len());
         pumpkin_assert_eq_simple!((a.len() >> 1) + 1, e.len());
 
-        let mut c = csp_solver.new_literals().take(a.len()).collect::<Vec<_>>();
+        let mut c = (0..a.len())
+            .map(|_| solver.new_literal())
+            .collect::<Vec<_>>();
         c.insert(0, d[0]);
 
         for i in 0..(a.len() >> 1) {
-            try_add_clause!(self, csp_solver, vec![!d[i + 1], !e[i], c[2 * (i + 1)]]);
-            try_add_clause!(self, csp_solver, vec![!d[i + 1], c[2 * (i + 1) - 1]]);
-            try_add_clause!(self, csp_solver, vec![!e[i], c[2 * (i + 1) - 1]]);
+            try_add_clause!(self, solver, vec![!d[i + 1], !e[i], c[2 * (i + 1)]]);
+            try_add_clause!(self, solver, vec![!d[i + 1], c[2 * (i + 1) - 1]]);
+            try_add_clause!(self, solver, vec![!e[i], c[2 * (i + 1) - 1]]);
         }
 
         Some(c)
     }
 
-    fn h_sort(
-        &mut self,
-        seq: &[Literal],
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Option<Vec<Literal>> {
+    fn h_sort(&mut self, seq: &[Literal], solver: &mut Solver) -> Option<Vec<Literal>> {
         pumpkin_assert_simple!(seq.len() & 1 == 0);
 
         let n = seq.len() >> 1;
 
         if n == 1 {
-            return self.h_merge(&[seq[0]], &[seq[1]], csp_solver);
+            return self.h_merge(&[seq[0]], &[seq[1]], solver);
         }
 
-        let d = self.h_sort(&seq[..n], csp_solver)?;
-        let d_prime = self.h_sort(&seq[n..], csp_solver)?;
+        let d = self.h_sort(&seq[..n], solver)?;
+        let d_prime = self.h_sort(&seq[n..], solver)?;
 
-        self.h_merge(&d, &d_prime, csp_solver)
+        self.h_merge(&d, &d_prime, solver)
     }
 
     fn h_merge(
         &mut self,
         a: &[Literal],
         b: &[Literal],
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Option<Vec<Literal>> {
         pumpkin_assert_eq_simple!(a.len(), b.len());
 
         let n = a.len();
 
         if n == 1 {
-            return self.s_merge(a, b, csp_solver);
+            return self.s_merge(a, b, solver);
         }
 
         let a_even = even_literals(a);
@@ -262,44 +245,38 @@ impl CardinalityNetworkEncoder {
         let a_odd = odd_literals(a);
         let b_odd = odd_literals(b);
 
-        let d = self.h_merge(&a_odd, &b_odd, csp_solver)?;
-        let e = self.h_merge(&a_even, &b_even, csp_solver)?;
+        let d = self.h_merge(&a_odd, &b_odd, solver)?;
+        let e = self.h_merge(&a_even, &b_even, solver)?;
 
-        let mut c = csp_solver
-            .new_literals()
-            .take(2 * n - 2)
+        let mut c = (0..2 * n - 2)
+            .map(|_| solver.new_literal())
             .collect::<Vec<_>>();
 
         c.insert(0, d[0]);
         c.push(e[e.len() - 1]);
 
         for i in 0..(n - 1) {
-            try_add_clause!(self, csp_solver, vec![!d[i + 1], !e[i], c[2 * (i + 1)]]);
-            try_add_clause!(self, csp_solver, vec![!d[i + 1], c[2 * (i + 1) - 1]]);
-            try_add_clause!(self, csp_solver, vec![!e[i], c[2 * (i + 1) - 1]]);
+            try_add_clause!(self, solver, vec![!d[i + 1], !e[i], c[2 * (i + 1)]]);
+            try_add_clause!(self, solver, vec![!d[i + 1], c[2 * (i + 1) - 1]]);
+            try_add_clause!(self, solver, vec![!e[i], c[2 * (i + 1) - 1]]);
         }
 
         Some(c)
     }
 
-    fn card(
-        &mut self,
-        a: &[Literal],
-        k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
-    ) -> Option<Vec<Literal>> {
+    fn card(&mut self, a: &[Literal], k: u64, solver: &mut Solver) -> Option<Vec<Literal>> {
         let n = a.len() as u64;
         let m = n / k;
         pumpkin_assert_eq_simple!(n, m * k);
 
         if n == k {
-            return self.h_sort(a, csp_solver);
+            return self.h_sort(a, solver);
         }
 
-        let d = self.card(&a[..k as usize], k, csp_solver)?;
-        let d_prime = self.card(&a[k as usize..], k, csp_solver)?;
+        let d = self.card(&a[..k as usize], k, solver)?;
+        let d_prime = self.card(&a[k as usize..], k, solver)?;
 
-        let mut c = self.s_merge(&d, &d_prime, csp_solver)?;
+        let mut c = self.s_merge(&d, &d_prime, solver)?;
         let _ = c.remove(c.len() - 1);
 
         Some(c)
@@ -348,41 +325,39 @@ mod tests {
 
     #[test]
     fn test_cardinality_constraint_no_input_literals() {
-        let mut csp_solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut ub =
-            CardinalityNetworkEncoder::new(vec![], 0, &mut csp_solver).expect("valid encoding");
+            CardinalityNetworkEncoder::new(vec![], 0, &mut solver).expect("valid encoding");
 
-        ub.strengthen_at_most_k(0, &mut csp_solver)
+        ub.strengthen_at_most_k(0, &mut solver)
             .expect("should not fail");
     }
 
     #[test]
     fn test_smallest_cardinality_constraint() {
-        let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let xs = create_variables(&mut csp_solver, 2);
+        let mut solver = Solver::default();
+        let xs = create_variables(&mut solver, 2);
 
-        let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut csp_solver);
+        let _ = CardinalityNetworkEncoder::new(xs.clone(), 1, &mut solver);
 
-        assert!(csp_solver.add_clause([xs[0]]).is_ok());
-        assert!(csp_solver.add_clause([xs[1]]).is_err());
+        assert!(solver.add_clause([xs[0]]).is_ok());
+        assert!(solver.add_clause([xs[1]]).is_err());
     }
 
     #[test]
     fn test_small_cardinality_constraint() {
-        let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let xs = create_variables(&mut csp_solver, 3);
+        let mut solver = Solver::default();
+        let xs = create_variables(&mut solver, 3);
 
-        let _ =
-            CardinalityNetworkEncoder::new(xs.clone(), 2, &mut csp_solver).expect("valid encoding");
+        let _ = CardinalityNetworkEncoder::new(xs.clone(), 2, &mut solver).expect("valid encoding");
 
-        assert!(csp_solver.add_clause([xs[0]]).is_ok());
-        assert!(csp_solver.add_clause([xs[1]]).is_ok());
-        assert!(csp_solver.add_clause([xs[2]]).is_err());
+        assert!(solver.add_clause([xs[0]]).is_ok());
+        assert!(solver.add_clause([xs[1]]).is_ok());
+        assert!(solver.add_clause([xs[2]]).is_err());
     }
 
-    fn create_variables(csp_solver: &mut ConstraintSatisfactionSolver, n: usize) -> Vec<Literal> {
-        std::iter::from_fn(|| Some(csp_solver.create_new_propositional_variable(None)))
-            .map(|var| Literal::new(var, true))
+    fn create_variables(solver: &mut Solver, n: usize) -> Vec<Literal> {
+        std::iter::from_fn(|| Some(solver.new_literal()))
             .take(n)
             .collect::<Vec<_>>()
     }

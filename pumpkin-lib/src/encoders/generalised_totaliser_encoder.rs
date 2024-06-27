@@ -8,6 +8,7 @@ use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::Solver;
 
 /// Implementation of the generalized totalizer encoding for pseudo-boolean constraints.
 ///
@@ -25,7 +26,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
     fn encode_at_most_k(
         mut weighted_literals: Vec<WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<Self, EncodingError> {
         // a good heuristic is to sort the literals by weight with a stable ordering
         //  this reduces the size of the encoding significantly
@@ -36,7 +37,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
             layers: vec![],
             num_clauses_added: 0,
         };
-        encoder.encode_at_most_k_standard_case(weighted_literals, k, csp_solver);
+        encoder.encode_at_most_k_standard_case(weighted_literals, k, solver);
 
         Ok(encoder)
     }
@@ -44,7 +45,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
     fn strengthen_at_most_k(
         &mut self,
         new_k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) -> Result<(), EncodingError> {
         pumpkin_assert_simple!(self.index_last_added_weighted_literal > 0);
         pumpkin_assert_simple!(
@@ -64,10 +65,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                if csp_solver
-                    .add_clause([!weighted_literals[i].literal])
-                    .is_err()
-                {
+                if solver.add_clause([!weighted_literals[i].literal]).is_err() {
                     return Err(EncodingError::CannotStrengthen);
                 }
             } else {
@@ -98,7 +96,7 @@ impl GeneralisedTotaliserEncoder {
         &mut self,
         weighted_literals: Vec<WeightedLiteral>,
         k: u64,
-        csp_solver: &mut ConstraintSatisfactionSolver,
+        solver: &mut Solver,
     ) {
         // the generalised totaliser encoding can be visualised as a binary tree
         //  the leaf nodes are the input literals
@@ -181,8 +179,7 @@ impl GeneralisedTotaliserEncoder {
                 //  then create the variables, one for each partial sum, and register the mapping
                 // between the partial sum value and the corresponding literal
                 for partial_sum in &partial_sums {
-                    let variable = csp_solver.create_new_propositional_variable(None);
-                    let literal = Literal::new(variable, true);
+                    let literal = solver.new_literal();
                     let _ = value_to_literal_map.insert(*partial_sum, literal);
                     next_layer_node.push(WeightedLiteral {
                         literal,
@@ -196,21 +193,19 @@ impl GeneralisedTotaliserEncoder {
                 //  define sums of one literal from node1
                 //  node1[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
-                    #[allow(deprecated)]
-                    csp_solver.add_permanent_implication_unchecked(
-                        weighted_literal.literal,
+                    solver.add_clause(vec![
+                        !weighted_literal.literal,
                         *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
-                    );
+                    ]);
                     self.num_clauses_added += 1;
                 }
                 //  define sums of one literal from node2
                 //  node2[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
-                    #[allow(deprecated)]
-                    csp_solver.add_permanent_implication_unchecked(
-                        weighted_literal.literal,
+                    solver.add_clause(vec![
+                        !weighted_literal.literal,
                         *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
-                    );
+                    ]);
                     self.num_clauses_added += 1;
                 }
                 //  define sums could happen as a result of adding a weight from node1 and a weight
@@ -220,12 +215,11 @@ impl GeneralisedTotaliserEncoder {
                     for wl2 in &self.layers[index_current_layer].nodes[index_node2] {
                         let combined_weight = wl1.weight + wl2.weight;
                         if combined_weight <= k {
-                            #[allow(deprecated)]
-                            csp_solver.add_permanent_ternary_clause_unchecked(
+                            solver.add_clause(vec![
                                 !wl1.literal,
                                 !wl2.literal,
                                 *value_to_literal_map.get(&combined_weight).unwrap(),
-                            );
+                            ]);
                             self.num_clauses_added += 1;
                         // explicitly forbid the assignment of both literals
                         //  note: could look into improving this part with implications weight[i] ->
@@ -233,9 +227,7 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            #[allow(deprecated)]
-                            csp_solver
-                                .add_permanent_implication_unchecked(wl1.literal, !wl2.literal);
+                            solver.add_clause(vec![wl1.literal, !wl2.literal]);
                             self.num_clauses_added += 1;
                         }
                     }

@@ -1,4 +1,5 @@
-use crate::basic_types::Solution;
+use pumpkin_lib::Solution;
+
 #[cfg(doc)]
 use crate::optimisation::OptimisationSolver;
 

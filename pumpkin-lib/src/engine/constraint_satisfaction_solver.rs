@@ -1747,6 +1747,7 @@ mod tests {
     use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
     use crate::predicate;
+    use crate::Solver;
 
     /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
     /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),
@@ -1926,8 +1927,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: Result<Vec<Literal>, Literal>,
     ) {
-        let mut brancher =
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+        let mut brancher = solver.default_brancher_over_all_propositional_variables();
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 

@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use pumpkin_lib::options::LearningOptions;
 use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::variables::Literal;
 use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Function;
@@ -540,10 +541,11 @@ impl DimacsSink for SolverDimacsSink {
         if clause.is_empty() {
             // The soft clause is violated at the root level.
             SoftClauseAddition::RootViolated
-        } else if clause
-            .iter()
-            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or_default())
-        {
+        } else if clause.iter().any(|literal| {
+            self.solver
+                .get_solution_reference()
+                .get_literal_value(*literal)
+        }) {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
@@ -552,8 +554,7 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
-            let soft_literal =
-                Literal::new(self.solver.create_new_propositional_variable(None), true);
+            let soft_literal = self.solver.new_literal();
             clause.push(soft_literal);
             let _ = self.solver.add_clause(clause);
 

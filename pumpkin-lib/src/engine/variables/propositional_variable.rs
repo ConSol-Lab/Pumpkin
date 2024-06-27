@@ -9,6 +9,10 @@ impl PropositionalVariable {
     pub fn new(index: u32) -> PropositionalVariable {
         PropositionalVariable { index }
     }
+
+    pub fn get_index(&self) -> u32 {
+        self.index
+    }
 }
 
 impl std::fmt::Display for PropositionalVariable {

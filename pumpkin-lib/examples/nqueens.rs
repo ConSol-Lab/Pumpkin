@@ -42,7 +42,7 @@ fn main() {
     let _ = solver.all_different(diag2);
 
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
-    match solver.satisfy(&mut brancher, Indefinite) {
+    match solver.satisfy(&mut brancher, &mut Indefinite) {
         SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
             let solution_reference = solution.as_solution();
@@ -66,9 +66,9 @@ fn main() {
         }
         SatisfactionResult::Unsatisfiable => {
             println!("{n}-queens is unsatisfiable.");
-        },
+        }
         SatisfactionResult::Unknown => {
             println!("Timeout.");
-        },
+        }
     }
 }

@@ -62,13 +62,25 @@ impl Solver {
     }
 
     pub fn log_statistics(&self) {
-        self.log_statistics();
+        self.satisfaction_solver.log_statistics();
         log_statistic_postfix();
     }
 }
 
 /// Functions to create and retrieve integer and propositional variables.
 impl Solver {
+    pub fn lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        self.satisfaction_solver.get_lower_bound(variable)
+    }
+
+    pub fn upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        self.satisfaction_solver.get_upper_bound(variable)
+    }
+
+    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+        self.satisfaction_solver.get_solution_reference()
+    }
+
     /// Get a literal which is globally true.
     pub fn get_true_literal(&self) -> Literal {
         self.satisfaction_solver.get_true_literal()
@@ -142,8 +154,23 @@ impl Solver {
 
     /// Get the literal corresponding to the given predicate. As the literal may need to be
     /// created, this possibly mutates the solver.
-    pub fn get_literal_for_predicate(&mut self, predicate: Predicate) -> Literal {
+    pub fn get_literal_for_predicate(&self, predicate: Predicate) -> Literal {
         self.satisfaction_solver.get_literal(predicate)
+    }
+
+    pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
+        self.satisfaction_solver.restore_state_at_root(brancher)
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub fn is_at_the_root_level(&self) -> bool {
+        self.satisfaction_solver.is_at_the_root_level()
+    }
+
+    /// Get the value of the given literal, which could be unassigned.
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        self.satisfaction_solver.get_literal_value(literal)
     }
 }
 
@@ -167,7 +194,7 @@ impl Solver {
     pub fn satisfy(
         &mut self,
         brancher: &mut impl Brancher,
-        termination: impl TerminationCondition,
+        termination: &mut impl TerminationCondition,
     ) -> SatisfactionResult<'_> {
         // Find solutions to the model currently in the solver.
         //
@@ -182,7 +209,7 @@ impl Solver {
     pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher>(
         &'this mut self,
         brancher: &'brancher mut B,
-        termination: impl TerminationCondition,
+        termination: &mut impl TerminationCondition,
         assumptions: impl IntoIterator<Item = Literal>,
     ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
         todo!()
@@ -726,11 +753,6 @@ impl Solver {
     pub fn default_brancher_over_all_propositional_variables(&self) -> DefaultBrancher {
         self.satisfaction_solver
             .default_brancher_over_all_propositional_variables()
-    }
-
-    #[cfg(test)]
-    pub fn get_solution_reference(&self) -> SolutionReference {
-        self.satisfaction_solver.get_solution_reference()
     }
 }
 

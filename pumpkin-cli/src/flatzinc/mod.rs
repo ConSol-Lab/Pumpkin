@@ -107,7 +107,7 @@ pub(crate) fn solve(
     } else {
         let mut brancher = instance.search.expect("Expected a search to be defined");
 
-        match solver.satisfy(&mut brancher, termination) {
+        match solver.satisfy(&mut brancher, &mut termination) {
             SatisfactionResult::Satisfiable(satisfiable) => {
                 if options.all_solutions {
                     let mut solution_iterator = satisfiable.iterate_solutions();

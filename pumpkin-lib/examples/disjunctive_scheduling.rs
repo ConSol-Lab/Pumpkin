@@ -77,12 +77,12 @@ fn main() {
 
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
     if matches!(
-        solver.satisfy(&mut brancher, Indefinite),
+        solver.satisfy(&mut brancher, &mut Indefinite),
         SatisfactionResult::Unsatisfiable,
     ) {
         panic!("Infeasibility Detected")
     }
-    match solver.satisfy(&mut brancher, Indefinite) {
+    match solver.satisfy(&mut brancher, &mut Indefinite) {
         SatisfactionResult::Satisfiable(satisfiable) => {
             let solution = satisfiable.as_solution();
             let mut start_variables_and_processing_times = start_variables
