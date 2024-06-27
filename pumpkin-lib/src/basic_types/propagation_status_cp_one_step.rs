@@ -1,14 +1,14 @@
 use super::conflict_info::StoredConflictInfo;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub enum PropagationStatusOneStepCP {
+pub(crate) enum PropagationStatusOneStepCP {
     ConflictDetected { conflict_info: StoredConflictInfo },
     PropagationHappened,
     FixedPoint,
 }
 
 impl PropagationStatusOneStepCP {
-    pub fn no_conflict(&self) -> bool {
+    pub(crate) fn no_conflict(&self) -> bool {
         matches!(
             *self,
             PropagationStatusOneStepCP::PropagationHappened

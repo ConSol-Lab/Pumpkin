@@ -114,7 +114,7 @@
 //! );
 //! ```
 mod time_table;
-pub use time_table::*;
+pub(crate) use time_table::*;
 
 mod utils;
-pub use utils::*;
+pub(crate) use utils::*;

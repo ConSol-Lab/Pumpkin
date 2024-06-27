@@ -1,7 +1,4 @@
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::predicate;
-use pumpkin_lib::pumpkin_assert_simple;
 use pumpkin_lib::results::OptimisationResult;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::termination::TerminationCondition;
@@ -40,17 +37,24 @@ impl<'a> MinizincOptimiser<'a> {
                     .minimise(&mut brancher, termination, objective_variable)
             }
         };
+
         match output {
-            OptimisationResult::Optimal(solution) => MinizincOptimisationResult::Optimal {
-                optimal_objective_value: solution
-                    .get_integer_value(*self.objective_function.get_domain())
-                    as i64,
-            },
-            OptimisationResult::Satisfiable(solution) => MinizincOptimisationResult::Satisfiable {
-                best_found_objective_value: solution
-                    .get_integer_value(*self.objective_function.get_domain())
-                    as i64,
-            },
+            OptimisationResult::Optimal(solution) => {
+                print_solution_from_solver(self.solver.get_solution_reference(), outputs);
+                MinizincOptimisationResult::Optimal {
+                    optimal_objective_value: solution
+                        .get_integer_value(*self.objective_function.get_domain())
+                        as i64,
+                }
+            }
+            OptimisationResult::Satisfiable(solution) => {
+                print_solution_from_solver(self.solver.get_solution_reference(), outputs);
+                MinizincOptimisationResult::Satisfiable {
+                    best_found_objective_value: solution
+                        .get_integer_value(*self.objective_function.get_domain())
+                        as i64,
+                }
+            }
             OptimisationResult::Unsatisfiable => MinizincOptimisationResult::Infeasible,
             OptimisationResult::Unknown => MinizincOptimisationResult::Unknown,
         }

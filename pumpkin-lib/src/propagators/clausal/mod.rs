@@ -13,7 +13,6 @@ mod basic_clausal;
 mod binary_inline_clausal;
 mod clausal_propagator;
 
-pub use basic_clausal::BasicClausalPropagator;
-pub use binary_inline_clausal::BinaryInlineClausalPropagator;
-pub use clausal_propagator::is_clause_propagating;
-pub use clausal_propagator::ClausalPropagator;
+pub(crate) use basic_clausal::BasicClausalPropagator;
+pub(crate) use clausal_propagator::is_clause_propagating;
+pub(crate) use clausal_propagator::ClausalPropagator;

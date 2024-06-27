@@ -2,7 +2,7 @@ use super::AssignmentsPropositional;
 use crate::engine::variables::Literal;
 
 #[derive(Debug, Copy, Clone)]
-pub struct Preprocessor {}
+pub(crate) struct Preprocessor {}
 
 impl Preprocessor {
     // does simple preprocessing, modifying the input vector of literals
@@ -13,7 +13,7 @@ impl Preprocessor {
     // the clause is violated at the root, it will become empty  if the clause is satisfied at
     // the root, its content will be changed to only include the true_literal this preprocessing
     // is also for correctness, i.e., clauses should not have duplicated literals for instance
-    pub fn preprocess_clause(
+    pub(crate) fn preprocess_clause(
         mut literals: Vec<Literal>,
         assignments: &AssignmentsPropositional,
     ) -> Vec<Literal> {

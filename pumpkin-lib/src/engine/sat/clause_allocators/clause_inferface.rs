@@ -2,7 +2,7 @@ use crate::engine::variables::Literal;
 
 // Does not make sense to have an is_empty() function since clauses are never empty
 #[allow(clippy::len_without_is_empty)]
-pub trait ClauseInterface:
+pub(crate) trait ClauseInterface:
     std::ops::Index<u32, Output = Literal> + std::ops::IndexMut<u32, Output = Literal>
 {
     fn len(&self) -> u32;

@@ -18,16 +18,16 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Default, Debug)]
 /// The outcome of clause learning.
-pub struct ConflictAnalysisResult {
+pub(crate) struct ConflictAnalysisResult {
     /// The new learned clause with the propagating literal after backjumping at index 0 and the
     /// literal with the next highest decision level at index 1.
-    pub learned_literals: Vec<Literal>,
+    pub(crate) learned_literals: Vec<Literal>,
     /// The decision level to backtrack to.
-    pub backjump_level: usize,
+    pub(crate) backjump_level: usize,
 }
 
 #[derive(Default, Debug)]
-pub struct ResolutionConflictAnalyser {
+pub(crate) struct ResolutionConflictAnalyser {
     // data structures used for conflict analysis
     seen: KeyedVec<PropositionalVariable, bool>,
     analysis_result: ConflictAnalysisResult,
@@ -59,7 +59,7 @@ impl ResolutionConflictAnalyser {
     /// # Bibliography
     /// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
     /// solvers’, in Handbook of satisfiability, IOS press, 2021
-    pub fn compute_1uip(
+    pub(crate) fn compute_1uip(
         &mut self,
         context: &mut ConflictAnalysisContext,
     ) -> ConflictAnalysisResult {
@@ -425,7 +425,7 @@ impl ResolutionConflictAnalyser {
         // the return value is stored in the input 'analysis_result'
     }
 
-    pub fn get_conflict_reasons(
+    pub(crate) fn get_conflict_reasons(
         &mut self,
         context: &mut ConflictAnalysisContext,
         on_analysis_step: impl FnMut(AnalysisStep),
@@ -438,7 +438,7 @@ impl ResolutionConflictAnalyser {
         self.compute_all_decision_learning_helper(next_literal, true, context, on_analysis_step);
     }
 
-    pub fn compute_clausal_core(
+    pub(crate) fn compute_clausal_core(
         &mut self,
         context: &mut ConflictAnalysisContext,
     ) -> Result<Vec<Literal>, Literal> {
@@ -692,7 +692,7 @@ impl ResolutionConflictAnalyser {
     /// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
     /// to improved propositional proof traces’. SAT'09.
     /// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
-    pub fn remove_dominated_literals(&mut self, context: &mut ConflictAnalysisContext) {
+    pub(crate) fn remove_dominated_literals(&mut self, context: &mut ConflictAnalysisContext) {
         self.num_minimisation_calls += 1;
         self.num_literals_seen_total += self.analysis_result.learned_literals.len();
         let num_literals_before_minimisation = self.analysis_result.learned_literals.len();
@@ -910,11 +910,11 @@ impl ResolutionConflictAnalyser {
         self.current_depth == 500
     }
 
-    pub fn num_literals_removed_total(&self) -> usize {
+    pub(crate) fn num_literals_removed_total(&self) -> usize {
         self.num_literals_removed_total
     }
 
-    pub fn percentage_num_removed_literals_per_clause(&self) -> f64 {
+    pub(crate) fn percentage_num_removed_literals_per_clause(&self) -> f64 {
         if self.num_literals_seen_total > 0 {
             1.0_f64 - (self.num_literals_removed_total as f64 / self.num_literals_seen_total as f64)
         } else {
@@ -933,7 +933,7 @@ enum Label {
 
 #[derive(Clone, Debug)]
 #[allow(variant_size_differences)]
-pub enum AnalysisStep<'a> {
+pub(crate) enum AnalysisStep<'a> {
     AllocatedClause(ClauseReference),
     Propagation {
         propagator: PropagatorId,

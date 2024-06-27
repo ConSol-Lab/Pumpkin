@@ -2,8 +2,12 @@
 
 use std::rc::Rc;
 
-use pumpkin_lib::variables::{AffineView, DomainId, Literal, TransformableVariable};
-use pumpkin_lib::{predicate, Solver};
+use pumpkin_lib::predicate;
+use pumpkin_lib::variables::AffineView;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
+use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;

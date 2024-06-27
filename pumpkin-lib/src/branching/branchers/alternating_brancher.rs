@@ -1,4 +1,3 @@
-use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
@@ -8,7 +7,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -156,10 +154,7 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::branching::Brancher;
-    use crate::engine::ConstraintSatisfactionSolver;
-    use crate::results::SolutionReference;
     use crate::Solver;
 
     #[test]

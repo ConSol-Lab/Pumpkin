@@ -1,5 +1,6 @@
-use std::marker::PhantomData;
-
+use super::results::OptimisationResult;
+use super::results::SatisfactionResult;
+use super::results::SatisfactionResultUnderAssumptions;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashSet;
@@ -28,17 +29,13 @@ use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTablePerPoint;
 use crate::pumpkin_assert_simple;
+use crate::results::satisfiable::Satisfiable;
+use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::results::SolutionReference;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
-use crate::statistics::log_statistics_with_objective;
-use crate::variables::AffineView;
 use crate::variables::PropositionalVariable;
 use crate::variables::TransformableVariable;
-
-use super::results::OptimisationResult;
-use super::results::SatisfactionResult;
-use super::results::SatisfactionResultUnderAssumptions;
 
 #[derive(Debug, Default)]
 pub struct Solver {
@@ -100,7 +97,8 @@ impl Solver {
         )
     }
 
-    /// Create a fresh propositional variable with a given name and return the literal with positive polarity.
+    /// Create a fresh propositional variable with a given name and return the literal with positive
+    /// polarity.
     pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
         Literal::new(
             self.satisfaction_solver
@@ -191,11 +189,11 @@ impl Solver {
 
 /// Functions which solve the model.
 impl Solver {
-    pub fn satisfy(
+    pub fn satisfy<'brancher, 'termination, B: Brancher, T: TerminationCondition>(
         &mut self,
-        brancher: &mut impl Brancher,
-        termination: &mut impl TerminationCondition,
-    ) -> SatisfactionResult<'_> {
+        brancher: &'brancher mut B,
+        termination: &'termination mut T,
+    ) -> SatisfactionResult<'_, 'brancher, 'termination, B, T> {
         // Find solutions to the model currently in the solver.
         //
         // The key idea here is that, when the `SolveResult` is dropped, the solver is
@@ -203,16 +201,51 @@ impl Solver {
         // regarding the current decision level in the solver, because other methods in
         // its public API *cannot* be called unless the solver is at the root.
 
-        todo!()
+        match self.satisfaction_solver.solve(termination, brancher) {
+            CSPSolverExecutionFlag::Feasible => SatisfactionResult::Satisfiable(Satisfiable::new(
+                &mut self.satisfaction_solver,
+                brancher,
+                termination,
+            )),
+            CSPSolverExecutionFlag::Infeasible => SatisfactionResult::Unsatisfiable,
+            CSPSolverExecutionFlag::Timeout => SatisfactionResult::Unknown,
+        }
     }
 
-    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher>(
+    pub fn satisfy_under_assumptions<
+        'this,
+        'brancher,
+        'termination,
+        B: Brancher,
+        T: TerminationCondition,
+    >(
         &'this mut self,
         brancher: &'brancher mut B,
-        termination: &mut impl TerminationCondition,
-        assumptions: impl IntoIterator<Item = Literal>,
-    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
-        todo!()
+        termination: &'termination mut T,
+        assumptions: &[Literal],
+    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, 'termination, B, T> {
+        match self
+            .satisfaction_solver
+            .solve_under_assumptions(&assumptions, termination, brancher)
+        {
+            CSPSolverExecutionFlag::Feasible => SatisfactionResultUnderAssumptions::Satisfiable(
+                Satisfiable::new(&mut self.satisfaction_solver, brancher, termination),
+            ),
+            CSPSolverExecutionFlag::Infeasible => {
+                if self
+                    .satisfaction_solver
+                    .state
+                    .is_infeasible_under_assumptions()
+                {
+                    SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
+                        UnsatisfiableUnderAssumptions::new(&mut self.satisfaction_solver, brancher),
+                    )
+                } else {
+                    SatisfactionResultUnderAssumptions::Unsatisfiable
+                }
+            }
+            CSPSolverExecutionFlag::Timeout => SatisfactionResultUnderAssumptions::Unknown,
+        }
     }
 
     pub fn minimise(
@@ -233,8 +266,6 @@ impl Solver {
                         .expect("Expected objective variable to be assigned")
                         as i64,
                 );
-                // #[allow(deprecated)]
-                // print_solution_from_solver(self.csp_solver.get_solution_reference(), outputs)
             }
             CSPSolverExecutionFlag::Infeasible => return OptimisationResult::Unsatisfiable,
             CSPSolverExecutionFlag::Timeout => return OptimisationResult::Unknown,
@@ -272,8 +303,6 @@ impl Solver {
                     brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
                     self.log_statistics_with_objective(best_objective_value);
-                    // #[allow(deprecated)]
-                    // print_solution_from_solver(self.csp_solver.get_solution_reference(), outputs)
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     return OptimisationResult::Optimal(best_solution);
@@ -294,7 +323,9 @@ impl Solver {
         self.minimise(brancher, termination, objective_variable.scaled(-1))
     }
 
-    /// Given the current objective value `best_objective_value`, it adds a constraint specifying that the objective value should be at most `best_objective_value - 1`. Note that it is assumed that we are always minimising the variable.
+    /// Given the current objective value `best_objective_value`, it adds a constraint specifying
+    /// that the objective value should be at most `best_objective_value - 1`. Note that it is
+    /// assumed that we are always minimising the variable.
     fn strengthen(
         &mut self,
         objective_variable: &impl IntegerVariable,
@@ -631,10 +662,7 @@ impl Solver {
         let terms = terms.into();
         self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)
             && self.half_reified_linear_less_than_or_equal(
-                terms
-                    .into_iter()
-                    .map(|term| term.scaled(-1))
-                    .collect::<Vec<_>>(),
+                terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
                 -rhs - 1,
                 !reif,
             )

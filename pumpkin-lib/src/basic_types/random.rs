@@ -92,7 +92,7 @@ where
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use std::cmp::Ordering;
     use std::ops::Range;
 
@@ -103,9 +103,9 @@ pub mod tests {
     /// and returns them in order. If more values are attempted to be generated than are provided
     /// then this will result in panicking.
     #[derive(Debug, Default)]
-    pub struct TestRandom {
-        pub usizes: Vec<usize>,
-        pub bools: Vec<bool>,
+    pub(crate) struct TestRandom {
+        pub(crate) usizes: Vec<usize>,
+        pub(crate) bools: Vec<bool>,
     }
 
     impl Random for TestRandom {

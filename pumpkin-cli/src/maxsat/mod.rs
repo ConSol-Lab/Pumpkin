@@ -1,23 +1,24 @@
-use std::{fs::File, path::Path, time::Duration};
+use std::fs::File;
+use std::path::Path;
+use std::time::Duration;
 pub(crate) mod optimisation;
 
-use optimisation::{
-    linear_search::LinearSearch, optimisation_result::OptimisationResult,
-    optimisation_solver::OptimisationSolver,
-};
-use pumpkin_lib::{
-    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
-    options::{LearningOptions, PseudoBooleanEncoding, SolverOptions},
-    termination::TimeBudget,
-};
+use optimisation::linear_search::LinearSearch;
+use optimisation::optimisation_result::OptimisationResult;
+use optimisation::optimisation_solver::OptimisationSolver;
+use pumpkin_lib::options::LearningOptions;
+use pumpkin_lib::options::PseudoBooleanEncoding;
+use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::termination::TimeBudget;
 
-use crate::{
-    parsers::dimacs::{parse_wcnf, CSPSolverArgs, SolverDimacsSink, WcnfInstance},
-    result::PumpkinError,
-    stringify_solution,
-};
+use crate::parsers::dimacs::parse_wcnf;
+use crate::parsers::dimacs::CSPSolverArgs;
+use crate::parsers::dimacs::SolverDimacsSink;
+use crate::parsers::dimacs::WcnfInstance;
+use crate::result::PumpkinError;
+use crate::stringify_solution;
 
-pub fn wcnf_problem(
+pub(crate) fn wcnf_problem(
     learning_options: LearningOptions,
     solver_options: SolverOptions,
     time_limit: Option<Duration>,

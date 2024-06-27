@@ -74,9 +74,9 @@ mod time_table_per_point;
 mod time_table_per_point_incremental;
 mod time_table_util;
 
-pub use time_table_over_interval::*;
-pub use time_table_per_point::*;
-pub use time_table_per_point_incremental::*;
+pub(crate) use time_table_over_interval::*;
+pub(crate) use time_table_per_point::*;
+pub(crate) use time_table_per_point_incremental::*;
 
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;

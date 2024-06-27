@@ -20,7 +20,7 @@ use crate::pumpkin_assert_moderate;
 
 #[repr(C)] // important to keep the c layout since the code below relies on this layout
 #[derive(Debug, Copy, Clone)]
-pub struct ClauseInlined {
+pub(crate) struct ClauseInlined {
     lbd_and_flags: u32,
     num_literals: u32,
     literals: [Literal; 0],
@@ -163,7 +163,7 @@ impl ClauseInlined {
     // this method assumes that enough memory is available at the location
     //  see 'num_bytes_required_for_clause'
     #[allow(clippy::mut_from_ref)]
-    pub fn create_clause_at_memory_location(
+    pub(crate) fn create_clause_at_memory_location(
         loc: *mut u32,
         literals: &[Literal],
         is_learned: bool,
@@ -190,7 +190,7 @@ impl ClauseInlined {
     /// Since we manually manage the memory for the clause
     /// it is important to know exactly the size of the clause
     /// note that size_of will not report the correct value, so we have this method
-    pub fn num_u32s_required_for_clause(num_literals: u32, is_learned: bool) -> u32 {
+    pub(crate) fn num_u32s_required_for_clause(num_literals: u32, is_learned: bool) -> u32 {
         // 1 for lbd and flags
         // 1 for storing the number of literals
         // `num_literals` for the literals

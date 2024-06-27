@@ -1,8 +1,8 @@
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
 use crate::basic_types::WeightedLiteral;
-use crate::engine::ConstraintSatisfactionSolver;
-use crate::{pumpkin_assert_simple, Solver};
+use crate::pumpkin_assert_simple;
+use crate::Solver;
 
 #[derive(Debug)]
 pub struct SingleIntegerEncoder {
@@ -60,8 +60,8 @@ mod tests {
     use crate::basic_types::WeightedLiteral;
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
     use crate::engine::variables::DomainId;
-    use crate::engine::ConstraintSatisfactionSolver;
-    use crate::{predicate, Solver};
+    use crate::predicate;
+    use crate::Solver;
 
     fn weighted_literals(
         solver: &mut Solver,

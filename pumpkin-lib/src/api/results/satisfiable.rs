@@ -1,11 +1,32 @@
-use crate::{basic_types::SolutionReference, engine::ConstraintSatisfactionSolver};
+use crate::basic_types::{CSPSolverExecutionFlag, SolutionReference};
+use crate::branching::Brancher;
+use crate::engine::ConstraintSatisfactionSolver;
+use crate::termination::TerminationCondition;
+use crate::variables::Literal;
+use crate::{Solution, Solver};
 
 #[derive(Debug)]
-pub struct Satisfiable<'a> {
-    solver: &'a mut ConstraintSatisfactionSolver,
+pub struct Satisfiable<'solver, 'brancher, 'termination, B, T> {
+    solver: &'solver mut ConstraintSatisfactionSolver,
+    brancher: &'brancher mut B,
+    termination: &'termination mut T,
 }
 
-impl<'solver> Satisfiable<'solver> {
+impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
+    Satisfiable<'solver, 'brancher, 'termination, B, T>
+{
+    pub fn new(
+        solver: &'solver mut ConstraintSatisfactionSolver,
+        brancher: &'brancher mut B,
+        termination: &'termination mut T,
+    ) -> Self {
+        Satisfiable {
+            solver,
+            brancher,
+            termination,
+        }
+    }
+
     /// Get the solution the solver obtained.
     pub fn as_solution<'this>(&'this self) -> SolutionReference<'solver>
     where
@@ -26,96 +47,86 @@ impl<'solver> Satisfiable<'solver> {
     ///   again.
     ///   - When the solver concludes no more solutions exist, the solver is now in an inconstent
     ///   state at the root and no more variables/constraints can be added.
-    pub fn iterate_solutions(self) -> SolutionIterator<'solver> {
-        // Note: this takes ownership of `self` and converts to an iterator over solutions.
-        todo!()
+    pub fn iterate_solutions(self) -> SolutionIterator<'solver, 'brancher, 'termination, B, T> {
+        SolutionIterator::new(self.solver, self.brancher, self.termination)
     }
 }
 
 #[derive(Debug)]
-pub struct SolutionIterator<'a> {
-    solver: &'a mut ConstraintSatisfactionSolver,
+pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
+    solver: &'solver mut ConstraintSatisfactionSolver,
+    brancher: &'brancher mut B,
+    termination: &'termination mut T,
 }
 
-impl<'a> SolutionIterator<'a> {
-    /// Find a new solution.
-    pub fn next_solution(&mut self) -> IteratedSolution<'a> {
-        todo!()
+impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
+    SolutionIterator<'solver, 'brancher, 'termination, B, T>
+{
+    pub fn new(
+        solver: &'solver mut ConstraintSatisfactionSolver,
+        brancher: &'brancher mut B,
+        termination: &'termination mut T,
+    ) -> Self {
+        SolutionIterator {
+            solver,
+            brancher,
+            termination,
+        }
     }
 
-    // /// Creates a clause which prevents the current solution from occurring again by going over the
-    // /// defined output variables and creating a clause which prevents those values from being assigned.
-    // ///
-    // /// This method is used when attempting to find multiple solutions. It restores the state of the
-    // /// passed [`ConstraintSatisfactionSolver`] to the root (using
-    // /// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
-    // /// was successful (i.e. it is possible that there could be another solution) and returns false
-    // /// otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
-    // /// solutions).
-    // fn add_blocking_clause(
-    //     solver: &mut Solver,
-    //     outputs: &[Output],
-    //     brancher: &mut impl Brancher,
-    // ) -> bool {
-    //     #[allow(deprecated)]
-    //     let solution = solver.get_solution_reference();
+    /// Find a new solution by blocking the previous solution from being found.
+    pub fn next_solution(&mut self) -> IteratedSolution {
+        if SolutionIterator::<B, T>::add_blocking_clause(self.solver, self.brancher) {
+            match self.solver.solve(self.termination, self.brancher) {
+                CSPSolverExecutionFlag::Feasible => {
+                    IteratedSolution::Solution(self.solver.get_solution_reference().into())
+                }
+                CSPSolverExecutionFlag::Infeasible => IteratedSolution::Finished,
+                CSPSolverExecutionFlag::Timeout => IteratedSolution::Unknown,
+            }
+        } else {
+            return IteratedSolution::Finished;
+        }
+    }
 
-    //     let clause = outputs
-    //         .iter()
-    //         .flat_map(|output| match output {
-    //             Output::Bool(bool) => {
-    //                 let literal = *bool.get_variable();
-
-    //                 let literal = if solution.get_literal_value(literal) {
-    //                     literal
-    //                 } else {
-    //                     !literal
-    //                 };
-
-    //                 Box::new(std::iter::once(literal))
-    //             }
-
-    //             Output::Int(int) => {
-    //                 let domain = *int.get_variable();
-    //                 let value = solution.get_integer_value(domain);
-    //                 Box::new(std::iter::once(
-    //                     solver.get_literal(predicate![domain == value]),
-    //                 ))
-    //             }
-
-    //             #[allow(trivial_casts)]
-    //             Output::ArrayOfBool(array_of_bool) => {
-    //                 Box::new(array_of_bool.get_contents().map(|&literal| {
-    //                     if solution.get_literal_value(literal) {
-    //                         literal
-    //                     } else {
-    //                         !literal
-    //                     }
-    //                 })) as Box<dyn Iterator<Item = Literal>>
-    //             }
-
-    //             #[allow(trivial_casts)]
-    //             Output::ArrayOfInt(array_of_ints) => {
-    //                 Box::new(array_of_ints.get_contents().map(|&domain| {
-    //                     let value = solution.get_integer_value(domain);
-    //                     solver.get_literal(predicate![domain == value])
-    //                 })) as Box<dyn Iterator<Item = Literal>>
-    //             }
-    //         })
-    //         .map(|literal| !literal)
-    //         .collect::<Vec<_>>();
-    //     solver.restore_state_at_root(brancher);
-    //     if clause.is_empty() {
-    //         return false;
-    //     }
-    //     solver.add_clause(clause).is_ok()
-    // }
+    /// Creates a clause which prevents the current solution from occurring again by going over the defined output variables and creating a clause which prevents those values from
+    /// being assigned. This method is used when attempting to find multiple solutions. It restores the state of the
+    /// passed [`ConstraintSatisfactionSolver`] to the root (using [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
+    /// was successful (i.e. it is possible that there could be another solution) and returns false otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
+    /// solutions).
+    fn add_blocking_clause(
+        solver: &mut ConstraintSatisfactionSolver,
+        brancher: &mut impl Brancher,
+    ) -> bool {
+        let clause = solver
+            .get_propositional_assignments()
+            .get_propositional_variables()
+            .filter(|propositional_variable| {
+                solver
+                    .get_propositional_assignments()
+                    .is_variable_assigned(*propositional_variable)
+            })
+            .map(|propositional_variable| {
+                !Literal::new(
+                    propositional_variable,
+                    solver
+                        .get_propositional_assignments()
+                        .is_variable_assigned_true(propositional_variable),
+                )
+            })
+            .collect::<Vec<_>>();
+        solver.restore_state_at_root(brancher);
+        if clause.is_empty() {
+            return false;
+        }
+        solver.add_clause(clause).is_ok()
+    }
 }
 
 #[derive(Debug)]
-pub enum IteratedSolution<'a> {
+pub enum IteratedSolution {
     /// A new solution was identified.
-    Solution(SolutionReference<'a>),
+    Solution(Solution),
 
     /// No more solutions exist.
     Finished,

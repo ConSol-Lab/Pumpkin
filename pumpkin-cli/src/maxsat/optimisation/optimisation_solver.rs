@@ -1,22 +1,24 @@
 use log::debug;
-use pumpkin_lib::{
-    branching::Brancher, statistics::log_statistics, termination::TerminationCondition, Function,
-    Solver, Stopwatch,
-};
+use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::termination::TerminationCondition;
+use pumpkin_lib::Function;
+use pumpkin_lib::Solver;
+use pumpkin_lib::Stopwatch;
 
-use super::{linear_search::LinearSearch, optimisation_result::OptimisationResult};
+use super::linear_search::LinearSearch;
+use super::optimisation_result::OptimisationResult;
 
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.
 #[derive(Debug)]
-pub struct OptimisationSolver {
+pub(crate) struct OptimisationSolver {
     solver: Solver,
     objective_function: Function,
     linear_search: LinearSearch,
 }
 
 impl OptimisationSolver {
-    pub fn new(
+    pub(crate) fn new(
         csp_solver: Solver,
         objective_function: Function,
         linear_search: LinearSearch,
@@ -30,7 +32,7 @@ impl OptimisationSolver {
 }
 
 impl OptimisationSolver {
-    pub fn solve(
+    pub(crate) fn solve(
         &mut self,
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,

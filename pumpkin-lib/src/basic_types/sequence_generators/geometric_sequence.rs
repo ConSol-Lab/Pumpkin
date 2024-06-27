@@ -6,13 +6,13 @@ use super::SequenceGenerator;
 // When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since
 // intermediate values will be rounded down Note that overflows are not taken into account
 #[derive(Debug, Copy, Clone)]
-pub struct GeometricSequence {
+pub(crate) struct GeometricSequence {
     current_value: i64,
     multiplication_factor: f64,
 }
 
 impl GeometricSequence {
-    pub fn new(starting_value: i64, multiplication_factor: f64) -> GeometricSequence {
+    pub(crate) fn new(starting_value: i64, multiplication_factor: f64) -> GeometricSequence {
         GeometricSequence {
             current_value: starting_value,
             multiplication_factor,

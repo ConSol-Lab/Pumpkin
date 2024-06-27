@@ -4,7 +4,7 @@ use crate::engine::variables::Literal;
 
 // the trait requires the [] operator
 //  and its corresponding Clause must implement the ClauseInterface
-pub trait ClauseAllocatorInterface<Clause: ClauseInterface>:
+pub(crate) trait ClauseAllocatorInterface<Clause: ClauseInterface>:
     std::ops::Index<ClauseReference, Output = Clause>
     + std::ops::IndexMut<ClauseReference, Output = Clause>
 {

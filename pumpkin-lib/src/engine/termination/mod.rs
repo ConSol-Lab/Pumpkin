@@ -3,10 +3,10 @@
 //! made. The most common example would be [`time_budget::TimeBudget`], which gives the solver a
 //! certain time budget to complete its search.
 
-pub mod combinator;
-pub mod indefinite;
-pub mod os_signal;
-pub mod time_budget;
+pub(crate) mod combinator;
+pub(crate) mod indefinite;
+pub(crate) mod os_signal;
+pub(crate) mod time_budget;
 
 /// The central trait that defines a termination condition. A termination condition determines when
 /// the solver should give up searching for solutions.

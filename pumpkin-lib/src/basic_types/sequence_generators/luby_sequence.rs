@@ -6,14 +6,14 @@ use super::SequenceGenerator;
 // Generating the next element is computed in constant time using Knuth's 'reluctant doubling'
 // formula Note that overflows are not taken into account
 #[derive(Debug, Copy, Clone)]
-pub struct LubySequence {
+pub(crate) struct LubySequence {
     u: i64,
     v: i64,
     base_value: i64,
 }
 
 impl LubySequence {
-    pub fn new(base_value: i64) -> LubySequence {
+    pub(crate) fn new(base_value: i64) -> LubySequence {
         LubySequence {
             u: 1,
             v: 1,

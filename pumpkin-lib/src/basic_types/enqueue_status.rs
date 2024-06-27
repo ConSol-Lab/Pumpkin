@@ -1,5 +1,5 @@
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum EnqueueStatus {
+pub(crate) enum EnqueueStatus {
     ShouldEnqueue,
     DoNotEnqueue,
 }

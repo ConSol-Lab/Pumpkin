@@ -14,18 +14,18 @@ use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
-pub struct LinearLessOrEqualConstructor<Var> {
-    pub x: Box<[Var]>,
-    pub c: i32,
-    pub reif: Option<Literal>,
+pub(crate) struct LinearLessOrEqualConstructor<Var> {
+    pub(crate) x: Box<[Var]>,
+    pub(crate) c: i32,
+    pub(crate) reif: Option<Literal>,
 }
 
 impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
-    pub fn new(x: Box<[Var]>, c: i32) -> Self {
+    pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
         LinearLessOrEqualConstructor { x, c, reif: None }
     }
 
-    pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
+    pub(crate) fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
         LinearLessOrEqualConstructor {
             x,
             c,
@@ -36,10 +36,10 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 
 /// Propagator for the constraint `reif => \sum x_i <= c`.
 #[derive(Debug)]
-pub struct LinearLessOrEqualPropagator<Var> {
+pub(crate) struct LinearLessOrEqualPropagator<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
-    pub reif: Option<PropagatorVariable<Literal>>,
+    pub(crate) reif: Option<PropagatorVariable<Literal>>,
 }
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>

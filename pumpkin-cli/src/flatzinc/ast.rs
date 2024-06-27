@@ -1,5 +1,4 @@
 use log::warn;
-use pumpkin_lib::asserts;
 use pumpkin_lib::branching::AntiFirstFail;
 use pumpkin_lib::branching::DynamicValueSelector;
 use pumpkin_lib::branching::DynamicVariableSelector;

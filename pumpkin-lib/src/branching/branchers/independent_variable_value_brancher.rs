@@ -2,18 +2,13 @@ use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
-use crate::branching::PhaseSaving;
 use crate::branching::SelectionContext;
-use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
-use crate::branching::Vsids;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
-use crate::engine::ConstraintSatisfactionSolver;
-use crate::Solver;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.

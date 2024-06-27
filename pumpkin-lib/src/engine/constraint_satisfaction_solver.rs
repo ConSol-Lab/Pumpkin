@@ -77,8 +77,8 @@ use crate::pumpkin_assert_simple;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
 
-pub type ClausalPropagatorType = BasicClausalPropagator;
-pub type ClauseAllocator = ClauseAllocatorBasic;
+pub(crate) type ClausalPropagatorType = BasicClausalPropagator;
+pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
 /// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
@@ -1565,10 +1565,10 @@ impl ConstraintSatisfactionSolver {
 /// Structure responsible for storing several statistics of the solving process of the
 /// [`ConstraintSatisfactionSolver`].
 #[derive(Default, Debug, Copy, Clone)]
-pub struct Counters {
-    pub num_decisions: u64,
-    pub num_conflicts: u64,
-    pub average_conflict_size: CumulativeMovingAverage,
+pub(crate) struct Counters {
+    pub(crate) num_decisions: u64,
+    pub(crate) num_conflicts: u64,
+    pub(crate) average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
     num_unit_clauses_learned: u64,
     average_learned_clause_length: CumulativeMovingAverage,
@@ -1730,7 +1730,6 @@ mod tests {
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
     use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
     use crate::engine::predicates::integer_predicate::IntegerPredicate;
@@ -1747,7 +1746,6 @@ mod tests {
     use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
     use crate::predicate;
-    use crate::Solver;
 
     /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
     /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),

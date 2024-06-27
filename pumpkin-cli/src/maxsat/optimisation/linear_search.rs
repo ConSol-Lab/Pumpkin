@@ -1,30 +1,31 @@
 use log::info;
-use pumpkin_lib::{
-    asserts::{pumpkin_assert_moderate, pumpkin_assert_simple},
-    branching::Brancher,
-    encodings::PseudoBooleanConstraintEncoder,
-    options::PseudoBooleanEncoding,
-    results::ProblemSolution,
-    termination::TerminationCondition,
-    variables::PropositionalVariable,
-    Function, Solution, Solver, Stopwatch,
-};
+use pumpkin_lib::asserts::pumpkin_assert_moderate;
+use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::encodings::PseudoBooleanConstraintEncoder;
+use pumpkin_lib::options::PseudoBooleanEncoding;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::termination::TerminationCondition;
+use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Function;
+use pumpkin_lib::Solution;
+use pumpkin_lib::Solver;
+use pumpkin_lib::Stopwatch;
 
 use super::optimisation_result::OptimisationResult;
 
 #[derive(Debug, Copy, Clone)]
-pub struct LinearSearch {
+pub(crate) struct LinearSearch {
     upper_bound_encoding: PseudoBooleanEncoding,
 }
 
 impl LinearSearch {
-    pub fn new(upper_bound_encoding: PseudoBooleanEncoding) -> LinearSearch {
+    pub(crate) fn new(upper_bound_encoding: PseudoBooleanEncoding) -> LinearSearch {
         LinearSearch {
             upper_bound_encoding,
         }
     }
 
-    pub fn solve(
+    pub(crate) fn solve(
         &self,
         solver: &mut Solver,
         process_time: Stopwatch,

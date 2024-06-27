@@ -47,23 +47,23 @@ impl<Var: IntegerVariable + 'static> Eq for Task<Var> {}
 
 /// The task which is passed as argument
 #[derive(Clone, Debug)]
-pub struct ArgTask<Var> {
+pub(crate) struct ArgTask<Var> {
     /// The [`IntegerVariable`] representing the start time of a task
-    pub start_time: Var,
+    pub(crate) start_time: Var,
     /// The processing time of the [`start_time`][ArgTask::start_time] (also referred to as
     /// duration of a task)
-    pub processing_time: i32,
+    pub(crate) processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
-    pub resource_usage: i32,
+    pub(crate) resource_usage: i32,
 }
 
 /// The arguments which are required to create the constraint/propagators
 #[derive(Debug, Clone)]
-pub struct CumulativeConstructor<Var, T> {
+pub(crate) struct CumulativeConstructor<Var, T> {
     /// A box containing all of the [`ArgTask`]s
-    pub tasks: Box<[ArgTask<Var>]>,
+    pub(crate) tasks: Box<[ArgTask<Var>]>,
     /// The capacity of the resource
-    pub capacity: i32,
+    pub(crate) capacity: i32,
     /// We use [`PhantomData`] to differentiate between the different types of propagators;
     /// without this field we would need to create a new argument struct for each cumulative
     /// propagator
@@ -71,7 +71,7 @@ pub struct CumulativeConstructor<Var, T> {
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
-    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
+    pub(crate) fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
         CumulativeConstructor {
             tasks,
             capacity,
@@ -83,18 +83,19 @@ impl<Var, T> CumulativeConstructor<Var, T> {
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
 /// method for each type `T`
-pub type TimeTablePerPoint<Var> = CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
+pub(crate) type TimeTablePerPoint<Var> =
+    CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
 /// `new` method for each type `T`
-pub type TimeTablePerPointIncremental<Var> =
+pub(crate) type TimeTablePerPointIncremental<Var> =
     CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>;
 
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTableOverIntervalPropagator`]; this is used to prevent creating a different
 /// `new` method for each type `T`
-pub type TimeTableOverInterval<Var> =
+pub(crate) type TimeTableOverInterval<Var> =
     CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>;
 
 /// Stores the information of an updated task; for example in the context of
@@ -121,7 +122,7 @@ pub(crate) struct UpdatedTaskInfo<Var> {
 /// - The known bounds
 /// - The values which have been updated since the previous propagation
 #[derive(Debug)]
-pub struct CumulativeParameters<Var> {
+pub(crate) struct CumulativeParameters<Var> {
     /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
     /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
     /// sharing of the tasks

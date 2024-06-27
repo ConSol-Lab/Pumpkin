@@ -9,9 +9,9 @@
 //!   predicates which are always true/false.
 //!
 //! In general, these [`Predicate`]s are used to represent propagations, explanations or decisions.
-pub mod integer_predicate;
-pub mod predicate;
-pub mod predicate_constructor;
+pub(crate) mod integer_predicate;
+pub(crate) mod predicate;
+pub(crate) mod predicate_constructor;
 #[cfg(doc)]
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 #[cfg(doc)]

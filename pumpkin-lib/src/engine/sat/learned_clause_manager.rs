@@ -54,14 +54,14 @@ struct LearnedClauses {
 // todo explain the learned clause removal strategy
 
 #[derive(Debug)]
-pub struct LearnedClauseManager {
+pub(crate) struct LearnedClauseManager {
     learned_clauses: LearnedClauses,
     parameters: LearningOptions,
     clause_bump_increment: f32,
 }
 
 impl LearnedClauseManager {
-    pub fn new(sat_options: LearningOptions) -> Self {
+    pub(crate) fn new(sat_options: LearningOptions) -> Self {
         LearnedClauseManager {
             learned_clauses: LearnedClauses::default(),
             parameters: sat_options,
@@ -69,7 +69,7 @@ impl LearnedClauseManager {
         }
     }
 
-    pub fn add_learned_clause(
+    pub(crate) fn add_learned_clause(
         &mut self,
         learned_clause_literals: Vec<Literal>,
         clausal_propagator: &mut ClausalPropagatorType,
@@ -95,7 +95,7 @@ impl LearnedClauseManager {
         }
     }
 
-    pub fn shrink_learned_clause_database_if_needed(
+    pub(crate) fn shrink_learned_clause_database_if_needed(
         &mut self,
         assignments: &AssignmentsPropositional,
         clause_allocator: &mut ClauseAllocator,
@@ -226,7 +226,7 @@ impl LearnedClauseManager {
         });
     }
 
-    pub fn update_clause_lbd_and_bump_activity(
+    pub(crate) fn update_clause_lbd_and_bump_activity(
         &mut self,
         clause_reference: ClauseReference,
         assignments: &AssignmentsPropositional,
@@ -240,7 +240,7 @@ impl LearnedClauseManager {
         }
     }
 
-    pub fn update_lbd(
+    pub(crate) fn update_lbd(
         &mut self,
         clause_reference: ClauseReference,
         assignments: &AssignmentsPropositional,
@@ -258,7 +258,7 @@ impl LearnedClauseManager {
         }
     }
 
-    pub fn compute_lbd_for_literals(
+    pub(crate) fn compute_lbd_for_literals(
         &self,
         literals: &[Literal],
         assignments: &AssignmentsPropositional,
@@ -288,7 +288,7 @@ impl LearnedClauseManager {
         codes.len() as u32
     }
 
-    pub fn bump_clause_activity(
+    pub(crate) fn bump_clause_activity(
         &mut self,
         clause_reference: ClauseReference,
         clause_allocator: &mut ClauseAllocator,
@@ -306,7 +306,7 @@ impl LearnedClauseManager {
             .increase_activity(self.clause_bump_increment);
     }
 
-    pub fn rescale_clause_activities(&mut self, clause_allocator: &mut ClauseAllocator) {
+    pub(crate) fn rescale_clause_activities(&mut self, clause_allocator: &mut ClauseAllocator) {
         self.learned_clauses
             .high_lbd
             .iter()
@@ -317,7 +317,7 @@ impl LearnedClauseManager {
         self.clause_bump_increment /= self.parameters.max_clause_activity;
     }
 
-    pub fn decay_clause_activities(&mut self) {
+    pub(crate) fn decay_clause_activities(&mut self) {
         self.clause_bump_increment /= self.parameters.clause_activity_decay_factor;
     }
 }

@@ -2,13 +2,10 @@ use std::time::Instant;
 
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
-use crate::basic_types::StorageKey;
 use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStrengthen;
 use crate::engine::variables::Literal;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
-use crate::variables::PropositionalVariable;
 use crate::Solver;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in

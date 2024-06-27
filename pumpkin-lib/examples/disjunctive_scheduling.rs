@@ -3,13 +3,11 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
-use pumpkin_lib::{
-    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
-    results::{ProblemSolution, SatisfactionResult},
-    termination::Indefinite,
-    variables::{Literal, TransformableVariable},
-    Solver,
-};
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 fn main() {
     let mut args = std::env::args();

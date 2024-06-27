@@ -19,12 +19,11 @@ use super::SingleIntegerEncoder;
 use crate::basic_types::Function;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::Literal;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
 use crate::Solver;
 
-pub trait PseudoBooleanConstraintEncoderInterface {
+pub(crate) trait PseudoBooleanConstraintEncoderInterface {
     /// Add clauses that encode \sum w_i x_i <= k and returns a [`PseudoBooleanConstraintEncoder`]
     /// object. The encoder can later be used to strengthen the constraint (see
     /// [`PseudoBooleanConstraintEncoderInterface::strengthen_at_most_k`])
@@ -48,11 +47,7 @@ pub trait PseudoBooleanConstraintEncoderInterface {
     /// Assumes the k is smaller than the previous k, and that
     /// [`PseudoBooleanConstraintEncoderInterface::encode_at_most_k`] has been
     /// called some time before
-    fn strengthen_at_most_k(
-        &mut self,
-        k: u64,
-        solver: &mut Solver,
-    ) -> Result<(), EncodingError>;
+    fn strengthen_at_most_k(&mut self, k: u64, solver: &mut Solver) -> Result<(), EncodingError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -394,11 +389,8 @@ impl PseudoBooleanConstraintEncoder {
     ) -> Result<Box<dyn PseudoBooleanConstraintEncoderInterface>, EncodingError> {
         match encoding_algorithm {
             PseudoBooleanEncoding::GTE => {
-                let encoder = GeneralisedTotaliserEncoder::encode_at_most_k(
-                    weighted_literals,
-                    k,
-                    solver,
-                )?;
+                let encoder =
+                    GeneralisedTotaliserEncoder::encode_at_most_k(weighted_literals, k, solver)?;
                 Ok(Box::new(encoder))
             }
             PseudoBooleanEncoding::CNE => {

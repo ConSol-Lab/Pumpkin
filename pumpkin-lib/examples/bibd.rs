@@ -12,13 +12,11 @@
 //! - `l(v - 1) = r(k - 1)`
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_lib::{
-    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
-    results::{ProblemSolution, SatisfactionResult},
-    termination::Indefinite,
-    variables::DomainId,
-    Solver,
-};
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::Solver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {

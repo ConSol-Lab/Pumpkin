@@ -1,7 +1,7 @@
 //! Responsible for behaviour related to logging statistics with a specific pre-fix and closing
 //! lines.
 
-pub mod statistic_logger {
+pub(crate) mod statistic_logger {
     use std::fmt::Display;
     use std::sync::OnceLock;
 

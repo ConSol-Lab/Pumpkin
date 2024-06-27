@@ -2,8 +2,10 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_lib::hashed_structures::{HashMap, HashSet};
-use pumpkin_lib::variables::{DomainId, Literal};
+use pumpkin_lib::hashed_structures::HashMap;
+use pumpkin_lib::hashed_structures::HashSet;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
 use pumpkin_lib::Solver;
 
 use crate::flatzinc::instance::Output;

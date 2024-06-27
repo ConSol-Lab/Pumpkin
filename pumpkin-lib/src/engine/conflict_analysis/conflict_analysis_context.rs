@@ -24,26 +24,26 @@ use crate::pumpkin_assert_moderate;
 /// Used during conflict analysis to provide the necessary information.
 /// All fields are made public for the time being for simplicity. In the future that may change.
 #[allow(missing_debug_implementations)]
-pub struct ConflictAnalysisContext<'a> {
-    pub clausal_propagator: &'a ClausalPropagatorType,
-    pub variable_literal_mappings: &'a VariableLiteralMappings,
-    pub assignments_integer: &'a AssignmentsInteger,
-    pub assignments_propositional: &'a AssignmentsPropositional,
-    pub internal_parameters: &'a SatisfactionSolverOptions,
-    pub assumptions: &'a Vec<Literal>,
+pub(crate) struct ConflictAnalysisContext<'a> {
+    pub(crate) clausal_propagator: &'a ClausalPropagatorType,
+    pub(crate) variable_literal_mappings: &'a VariableLiteralMappings,
+    pub(crate) assignments_integer: &'a AssignmentsInteger,
+    pub(crate) assignments_propositional: &'a AssignmentsPropositional,
+    pub(crate) internal_parameters: &'a SatisfactionSolverOptions,
+    pub(crate) assumptions: &'a Vec<Literal>,
 
-    pub solver_state: &'a mut CSPSolverState,
-    pub brancher: &'a mut dyn Brancher,
-    pub clause_allocator: &'a mut ClauseAllocator,
-    pub explanation_clause_manager: &'a mut ExplanationClauseManager,
-    pub reason_store: &'a mut ReasonStore,
-    pub counters: &'a mut Counters,
-    pub learned_clause_manager: &'a mut LearnedClauseManager,
-    pub restart_strategy: &'a mut RestartStrategy,
+    pub(crate) solver_state: &'a mut CSPSolverState,
+    pub(crate) brancher: &'a mut dyn Brancher,
+    pub(crate) clause_allocator: &'a mut ClauseAllocator,
+    pub(crate) explanation_clause_manager: &'a mut ExplanationClauseManager,
+    pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) counters: &'a mut Counters,
+    pub(crate) learned_clause_manager: &'a mut LearnedClauseManager,
+    pub(crate) restart_strategy: &'a mut RestartStrategy,
 }
 
 impl<'a> ConflictAnalysisContext<'a> {
-    pub fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
             self.assignments_propositional.get_decision_level()
                 == self.assignments_integer.get_decision_level()
@@ -58,7 +58,7 @@ impl<'a> ConflictAnalysisContext<'a> {
     ///
     /// Note that information about the reason for propagation of root literals is not properly
     /// kept, so asking about the reason for a root propagation will cause a panic.
-    pub fn get_propagation_clause_reference(
+    pub(crate) fn get_propagation_clause_reference(
         &mut self,
         propagated_literal: Literal,
         on_analysis_step: &mut impl FnMut(AnalysisStep),
@@ -111,7 +111,7 @@ impl<'a> ConflictAnalysisContext<'a> {
     /// constructed based on the explanation given by the propagator.
     ///
     /// Note that the solver will panic in case the solver is not in conflicting state.
-    pub fn get_conflict_reason_clause_reference(
+    pub(crate) fn get_conflict_reason_clause_reference(
         &mut self,
         on_analysis_step: &mut impl FnMut(AnalysisStep),
     ) -> ClauseReference {

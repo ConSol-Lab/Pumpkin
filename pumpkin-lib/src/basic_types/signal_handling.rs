@@ -4,7 +4,7 @@
 //! This is used to gracefully shut down the solver when, for example, a time-limit is reached (e.g.
 //! the [MiniZinc](https://www.minizinc.org/) runner sends such a signal when the solver is running past its allowed time-limit).
 
-pub mod signal_handler {
+pub(crate) mod signal_handler {
     use std::io::Error;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
@@ -17,7 +17,7 @@ pub mod signal_handler {
 
     /// Registers the appropriate signals in [`TERM_SIGNALS`]; note that if *any* of the signals is
     /// received twice then the application will shut down.
-    pub fn register_signals() -> Result<(), Error> {
+    pub(crate) fn register_signals() -> Result<(), Error> {
         for signal in TERM_SIGNALS {
             // If we received a signal twice (e.g. when the user presses CTRL+C twice) then the
             // application will be terminated
@@ -35,7 +35,7 @@ pub mod signal_handler {
     }
 
     /// Returns `true` if the application has received the signal to shut down and false otherwise.
-    pub fn should_terminate() -> bool {
+    pub(crate) fn should_terminate() -> bool {
         SIGNAL_RECEIVED.load(Ordering::Relaxed)
     }
 }

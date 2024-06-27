@@ -4,5 +4,5 @@
 mod conflict_analysis_context;
 mod resolution_conflict_analyser;
 
-pub use conflict_analysis_context::ConflictAnalysisContext;
-pub use resolution_conflict_analyser::*;
+pub(crate) use conflict_analysis_context::ConflictAnalysisContext;
+pub(crate) use resolution_conflict_analyser::*;

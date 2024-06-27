@@ -11,19 +11,15 @@ use std::path::Path;
 use std::time::Duration;
 
 use log::warn;
-
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
-use pumpkin_lib::results::satisfiable;
 use pumpkin_lib::results::satisfiable::IteratedSolution;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::SolutionReference;
 use pumpkin_lib::termination::TimeBudget;
-use pumpkin_lib::variables::Literal;
 use pumpkin_lib::Solver;
 
 use self::instance::FlatZincInstance;
@@ -114,8 +110,8 @@ pub(crate) fn solve(
                     loop {
                         match solution_iterator.next_solution() {
                             IteratedSolution::Solution(solution) => {
-                                print_solution_from_solver(solution, &outputs);
-                                brancher.on_solution(solution);
+                                print_solution_from_solver(solution.as_reference(), &outputs);
+                                brancher.on_solution(solution.as_reference());
                             }
                             IteratedSolution::Finished => {
                                 println!("==========");

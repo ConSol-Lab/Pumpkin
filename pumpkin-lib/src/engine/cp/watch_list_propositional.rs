@@ -23,7 +23,7 @@ impl Default for WatchListPropositional {
 }
 
 #[derive(Debug)]
-pub struct WatchersPropositional<'a> {
+pub(crate) struct WatchersPropositional<'a> {
     propagator_var: PropagatorVarId,
     watch_list: &'a mut WatchListPropositional,
 }
@@ -84,7 +84,7 @@ impl<'a> WatchersPropositional<'a> {
         }
     }
 
-    pub fn watch_all(&mut self, domain: Literal, events: EnumSet<BooleanDomainEvent>) {
+    pub(crate) fn watch_all(&mut self, domain: Literal, events: EnumSet<BooleanDomainEvent>) {
         self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 

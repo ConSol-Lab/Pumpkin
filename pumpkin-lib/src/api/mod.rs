@@ -1,10 +1,11 @@
 pub mod results;
 mod solver;
 
+pub use solver::*;
+
 pub use crate::basic_types::Function;
 pub use crate::basic_types::Solution;
 pub use crate::engine::variables;
-pub use solver::*;
 
 pub mod options {
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;

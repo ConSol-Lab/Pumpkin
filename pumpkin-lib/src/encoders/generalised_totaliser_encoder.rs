@@ -5,7 +5,6 @@ use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInte
 use crate::basic_types::HashMap;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::Literal;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::Solver;

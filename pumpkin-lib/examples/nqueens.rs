@@ -1,10 +1,8 @@
-use pumpkin_lib::{
-    branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher,
-    results::{ProblemSolution, SatisfactionResult},
-    termination::Indefinite,
-    variables::TransformableVariable,
-    Solver,
-};
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 fn main() {
     let n = std::env::args()

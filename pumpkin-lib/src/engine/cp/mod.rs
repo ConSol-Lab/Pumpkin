@@ -1,25 +1,23 @@
 mod assignments_integer;
-pub mod domain_events;
+pub(crate) mod domain_events;
 mod event_sink;
-pub mod opaque_domain_event;
-pub mod propagation;
+pub(crate) mod opaque_domain_event;
+pub(crate) mod propagation;
 mod propagator_queue;
-pub mod reason;
-pub mod test_helper;
+pub(crate) mod reason;
+pub(crate) mod test_helper;
 mod variable_literal_mappings;
 mod watch_list_cp;
 mod watch_list_propositional;
 
-pub use assignments_integer::AssignmentsInteger;
-pub use assignments_integer::ConstraintProgrammingTrailEntry;
-pub use assignments_integer::EmptyDomain;
-pub use event_sink::*;
-pub use propagator_queue::PropagatorQueue;
-pub use variable_literal_mappings::VariableLiteralMappings;
-pub use watch_list_cp::IntDomainEvent;
-pub use watch_list_cp::WatchListCP;
-pub use watch_list_cp::Watchers;
-pub use watch_list_propositional::*;
+pub(crate) use assignments_integer::AssignmentsInteger;
+pub(crate) use assignments_integer::EmptyDomain;
+pub(crate) use propagator_queue::PropagatorQueue;
+pub(crate) use variable_literal_mappings::VariableLiteralMappings;
+pub(crate) use watch_list_cp::IntDomainEvent;
+pub(crate) use watch_list_cp::WatchListCP;
+pub(crate) use watch_list_cp::Watchers;
+pub(crate) use watch_list_propositional::*;
 
 #[cfg(test)]
 mod tests {

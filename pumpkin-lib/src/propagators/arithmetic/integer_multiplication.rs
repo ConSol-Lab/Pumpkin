@@ -16,17 +16,17 @@ use crate::pumpkin_assert_simple;
 /// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
 /// a conflict if the variables are fixed.
 #[derive(Debug)]
-pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
+pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: PropagatorVariable<VA>,
     b: PropagatorVariable<VB>,
     c: PropagatorVariable<VC>,
 }
 
 #[derive(Debug)]
-pub struct IntegerMultiplicationConstructor<VA, VB, VC> {
-    pub a: VA,
-    pub b: VB,
-    pub c: VC,
+pub(crate) struct IntegerMultiplicationConstructor<VA, VB, VC> {
+    pub(crate) a: VA,
+    pub(crate) b: VB,
+    pub(crate) c: VC,
 }
 
 const ID_A: LocalId = LocalId::from(0);

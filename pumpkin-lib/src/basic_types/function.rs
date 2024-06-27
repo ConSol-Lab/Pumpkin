@@ -4,7 +4,6 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::Solver;

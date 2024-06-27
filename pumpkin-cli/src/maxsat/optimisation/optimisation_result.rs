@@ -5,7 +5,7 @@ use crate::optimisation::OptimisationSolver;
 
 /// The result of calling [`OptimisationSolver::solve()`].
 #[derive(Debug)]
-pub enum OptimisationResult {
+pub(crate) enum OptimisationResult {
     /// There exists no solution with a better objective value than this one.
     Optimal {
         solution: Solution,
