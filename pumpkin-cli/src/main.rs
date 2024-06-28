@@ -341,7 +341,6 @@ fn run() -> PumpkinResult<()> {
         .instance_path
         .to_str()
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
-    let verify_outcome = args.verify_solution;
 
     match file_format {
         FileFormat::CnfDimacsPLine => {
@@ -353,7 +352,6 @@ fn run() -> PumpkinResult<()> {
             time_limit,
             instance_path,
             args.upper_bound_encoding.inner,
-            verify_outcome,
         )?,
         FileFormat::MaxSAT2022 => todo!(),
         FileFormat::FlatZinc => flatzinc::solve(

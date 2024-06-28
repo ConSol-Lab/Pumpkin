@@ -59,7 +59,6 @@ impl LinearSearch {
                 solver.log_statistics_with_objective(best_objective_value as i64);
                 return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
-                    objective_value: best_objective_value as i64,
                 };
             }
 
@@ -86,7 +85,6 @@ impl LinearSearch {
                 solver.log_statistics_with_objective(best_objective_value as i64);
                 return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
-                    objective_value: best_objective_value as i64,
                 };
             }
 
@@ -121,15 +119,11 @@ impl LinearSearch {
 
                     return MaxSatOptimisationResult::Optimal {
                         solution: best_solution,
-                        objective_value: best_objective_value as i64,
                     };
                 }
                 SatisfactionResult::Unknown => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
-                    return MaxSatOptimisationResult::Satisfiable {
-                        best_solution,
-                        objective_value: best_objective_value as i64,
-                    };
+                    return MaxSatOptimisationResult::Satisfiable { best_solution };
                 }
             }
         }

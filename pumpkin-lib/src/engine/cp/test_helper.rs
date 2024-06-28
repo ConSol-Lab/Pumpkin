@@ -27,7 +27,6 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
-use crate::engine::IntDomainEvent;
 use crate::engine::WatchListCP;
 
 /// A container for CP variables, which can be used to test propagators.
@@ -150,10 +149,6 @@ impl TestSolver {
             .enqueue_decision_literal(if val { var } else { !var });
     }
 
-    pub(crate) fn is_literal_true(&self, var: Literal) -> bool {
-        self.assignments_propositional.is_literal_assigned_true(var)
-    }
-
     pub(crate) fn is_literal_false(&self, var: Literal) -> bool {
         self.assignments_propositional
             .is_literal_assigned_false(var)
@@ -247,24 +242,6 @@ impl TestSolver {
             local_id,
             event,
         )
-    }
-
-    pub(crate) fn notify_changed(
-        &mut self,
-        propagator: &mut BoxedPropagator,
-        id: DomainId,
-        event: IntDomainEvent,
-    ) {
-        let opaque_event: OpaqueDomainEvent = event.into();
-        let propagator_var_ids = self.watch_list.get_affected_propagators(event, id).to_vec();
-        for pvi in propagator_var_ids {
-            assert_eq!(
-                pvi.propagator,
-                PropagatorId(0),
-                "We assume a single propagator per TestSolver in notify_changed"
-            );
-            let _ = self.notify(propagator, opaque_event, pvi.variable);
-        }
     }
 
     pub(crate) fn get_reason_int(

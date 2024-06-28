@@ -9,7 +9,7 @@ use crate::Solver;
 /// Note that if this case occurs, we would recommend using [`Solver::maximise`] or
 /// [Solver::minimise] directly.
 #[derive(Debug)]
-pub struct SingleIntegerEncoder {
+pub(crate) struct SingleIntegerEncoder {
     index_last_added_weighted_literal: usize,
     weighted_literals: Vec<WeightedLiteral>,
 }

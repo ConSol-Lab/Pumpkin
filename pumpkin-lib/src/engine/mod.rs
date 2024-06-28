@@ -5,10 +5,10 @@ mod debug_helper;
 pub(crate) mod predicates;
 mod preprocessor;
 pub mod proof;
-pub(crate) mod rp_engine;
+pub mod rp_engine;
 mod sat;
 pub(crate) mod termination;
-pub mod variables;
+pub(crate) mod variables;
 
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;

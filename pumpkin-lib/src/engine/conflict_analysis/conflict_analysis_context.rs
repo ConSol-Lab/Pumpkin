@@ -15,7 +15,6 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ExplanationClauseManager;
 use crate::engine::LearnedClauseManager;
-use crate::engine::RestartStrategy;
 use crate::engine::SatisfactionSolverOptions;
 use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::ClausalPropagator;
@@ -39,7 +38,6 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) counters: &'a mut Counters,
     pub(crate) learned_clause_manager: &'a mut LearnedClauseManager,
-    pub(crate) restart_strategy: &'a mut RestartStrategy,
 }
 
 impl<'a> ConflictAnalysisContext<'a> {

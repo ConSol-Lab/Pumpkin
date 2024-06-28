@@ -99,6 +99,7 @@ pub mod statistics {
 }
 
 pub use crate::engine::proof;
+pub use crate::engine::rp_engine;
 
 pub mod predicates {
     //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).

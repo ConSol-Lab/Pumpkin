@@ -175,10 +175,6 @@ impl RestartStrategy {
         }
     }
 
-    pub(crate) fn number_of_restarts(&self) -> u64 {
-        self.number_of_restarts
-    }
-
     /// Determines whether the restart strategy indicates that a restart should take place; the
     /// strategy considers three conditions (in this order):
     /// - If no restarts have taken place yet then a restart can only take place if the number of

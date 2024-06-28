@@ -24,7 +24,6 @@ pub(crate) fn wcnf_problem(
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
     upper_bound_encoding: PseudoBooleanEncoding,
-    verify: bool,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
     let WcnfInstance {
@@ -46,38 +45,28 @@ pub(crate) fn wcnf_problem(
 
     let mut termination = time_limit.map(TimeBudget::starting_now);
 
-    let result = match solver.solve(&mut termination, brancher) {
-        MaxSatOptimisationResult::Optimal {
-            solution,
-            objective_value,
-        } => {
+    match solver.solve(&mut termination, brancher) {
+        MaxSatOptimisationResult::Optimal { solution } => {
             println!("s OPTIMAL");
             println!(
                 "v {}",
                 stringify_solution(&solution, last_instance_variable + 1, false)
             );
-            Some((solution, objective_value))
         }
-        MaxSatOptimisationResult::Satisfiable {
-            best_solution,
-            objective_value,
-        } => {
+        MaxSatOptimisationResult::Satisfiable { best_solution } => {
             println!("s SATISFIABLE");
             println!(
                 "v {}",
                 stringify_solution(&best_solution, last_instance_variable + 1, false)
             );
-            Some((best_solution, objective_value))
         }
         MaxSatOptimisationResult::Infeasible => {
             println!("s UNSATISFIABLE");
-            None
         }
         MaxSatOptimisationResult::Unknown => {
             println!("s UNKNOWN");
-            None
         }
-    };
+    }
 
     Ok(())
 }

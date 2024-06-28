@@ -48,15 +48,6 @@ impl<
         Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
     > KeyValueHeap<Key, Value>
 {
-    pub(crate) fn new() -> KeyValueHeap<Key, Value> {
-        KeyValueHeap {
-            values: Vec::default(),
-            map_key_to_position: KeyedVec::default(),
-            map_position_to_key: Vec::default(),
-            end_position: 0,
-        }
-    }
-
     /// Return the key with maximum value from the heap, or None if the heap is empty. Note that
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///

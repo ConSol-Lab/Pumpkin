@@ -688,7 +688,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
 
         let core = self
@@ -722,7 +721,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
 
         self.conflict_analyser
@@ -1127,7 +1125,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
         self.conflict_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -1524,26 +1521,6 @@ impl ConstraintSatisfactionSolver {
         }
 
         Ok(())
-    }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
-        self.clausal_propagator.add_permanent_implication_unchecked(
-            lhs,
-            rhs,
-            &mut self.clause_allocator,
-        );
-    }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_ternary_clause_unchecked(
-        &mut self,
-        a: Literal,
-        b: Literal,
-        c: Literal,
-    ) {
-        self.clausal_propagator
-            .add_permanent_ternary_clause_unchecked(a, b, c, &mut self.clause_allocator);
     }
 }
 

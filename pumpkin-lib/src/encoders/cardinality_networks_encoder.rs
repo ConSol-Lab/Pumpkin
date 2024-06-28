@@ -16,7 +16,7 @@ use crate::Solver;
 /// Asín, Roberto, et al. Cardinality networks: a theoretical and empirical study.
 /// Constraints, 2011, 16: 195-221.
 #[derive(Debug)]
-pub struct CardinalityNetworkEncoder {
+pub(crate) struct CardinalityNetworkEncoder {
     literals: Vec<Literal>,
     output: Vec<Literal>,
     num_clauses_added: usize,
@@ -84,7 +84,11 @@ impl PseudoBooleanConstraintEncoderInterface for CardinalityNetworkEncoder {
 
 impl CardinalityNetworkEncoder {
     /// Create a new encoder from the given literals which form the left-hand side.
-    pub fn new(literals: Vec<Literal>, p: u64, solver: &mut Solver) -> Result<Self, EncodingError> {
+    pub(crate) fn new(
+        literals: Vec<Literal>,
+        p: u64,
+        solver: &mut Solver,
+    ) -> Result<Self, EncodingError> {
         let mut encoder = CardinalityNetworkEncoder {
             literals,
             output: vec![],

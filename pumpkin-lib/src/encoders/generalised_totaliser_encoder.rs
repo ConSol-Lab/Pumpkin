@@ -15,7 +15,7 @@ use crate::Solver;
 /// \[1] "Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben
 /// Martins, Vasco Manquinho; CP '15
 #[derive(Debug)]
-pub struct GeneralisedTotaliserEncoder {
+pub(crate) struct GeneralisedTotaliserEncoder {
     index_last_added_weighted_literal: usize,
     layers: Vec<Layer>,
     num_clauses_added: usize,

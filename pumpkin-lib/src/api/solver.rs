@@ -172,6 +172,7 @@ impl Solver {
     /// This is a temporary accessor to help refactoring.
     #[deprecated = "will be removed in favor of new state-based api"]
     pub fn is_at_the_root_level(&self) -> bool {
+        #[allow(deprecated)]
         self.satisfaction_solver.is_at_the_root_level()
     }
 
@@ -238,7 +239,7 @@ impl Solver {
     ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, 'termination, B, T> {
         match self
             .satisfaction_solver
-            .solve_under_assumptions(&assumptions, termination, brancher)
+            .solve_under_assumptions(assumptions, termination, brancher)
         {
             CSPSolverExecutionFlag::Feasible => SatisfactionResultUnderAssumptions::Satisfiable(
                 Satisfiable::new(&mut self.satisfaction_solver, brancher, termination),

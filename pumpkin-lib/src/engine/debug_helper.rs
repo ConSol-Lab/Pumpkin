@@ -148,6 +148,7 @@ impl DebugHelper {
         true
     }
 
+    #[allow(unused)]
     pub(crate) fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &PropositionalConjunction,

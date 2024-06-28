@@ -149,25 +149,25 @@
 //!
 //! // Then we solve to satisfaction
 //! let assumptions = vec![
-//! 	solver.get_literal_for_predicate(predicate!(x == 1)),
-//! 	solver.get_literal_for_predicate(predicate!(y <= 1)),
-//! 	solver.get_literal_for_predicate(predicate!(y != 0)),
+//!     solver.get_literal_for_predicate(predicate!(x == 1)),
+//!     solver.get_literal_for_predicate(predicate!(y <= 1)),
+//!     solver.get_literal_for_predicate(predicate!(y != 0)),
 //! ];
 //! let result =
-//! 	solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+//!     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
 //!
 //! if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
-//! 	mut unsatisfiable,
+//!     mut unsatisfiable,
 //! ) = result
 //! {
-//! 	{
-//! 		let core = unsatisfiable.extract_core();
+//!     {
+//!         let core = unsatisfiable.extract_core();
 //!
-//! 		// The core should be equal to the negation of all literals in the assumptions
-//! 		assert!(assumptions
-//! 			.into_iter()
-//! 			.all(|literal| core.contains(&(!literal))));
-//! 	}
+//!         // The core should be equal to the negation of all literals in the assumptions
+//!         assert!(assumptions
+//!             .into_iter()
+//!             .all(|literal| core.contains(&(!literal))));
+//!     }
 //! }
 //!  ```
 //! # Bibliography

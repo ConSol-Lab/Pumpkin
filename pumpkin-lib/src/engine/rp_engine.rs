@@ -13,7 +13,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 /// An API for performing backwards reverse propagation of a clausal proof. The API allows the
 /// reasons for all propagations that are used to derive the RP clause to be accessed.
 #[derive(Debug)]
-pub(crate) struct RpEngine {
+pub struct RpEngine {
     solver: ConstraintSatisfactionSolver,
     rp_clauses: Vec<RpClause>,
     rp_unit_clauses: HashMap<Literal, RpClauseHandle>,
@@ -21,10 +21,10 @@ pub(crate) struct RpEngine {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct RpClauseHandle(usize);
+pub struct RpClauseHandle(usize);
 
 #[derive(Debug)]
-pub(crate) enum ConflictReason {
+pub enum ConflictReason {
     Clause(RpClauseHandle),
     Propagator {
         propagator: PropagatorId,
@@ -33,12 +33,12 @@ pub(crate) enum ConflictReason {
     },
 }
 
-pub(crate) type ReversePropagationConflict = Vec<ConflictReason>;
+pub type ReversePropagationConflict = Vec<ConflictReason>;
 
 impl RpEngine {
     /// Create a new checker based on a `solver` initialized with the model of the problem.
     /// The `solver` should be at the root.
-    pub(crate) fn new(solver: ConstraintSatisfactionSolver) -> Self {
+    pub fn new(solver: ConstraintSatisfactionSolver) -> Self {
         assert_eq!(
             0,
             solver.get_decision_level(),
@@ -55,7 +55,7 @@ impl RpEngine {
 
     /// Add a new reverse propagating clause to the checker. The clause should not be empty, and
     /// the checker should not be in an conflicting state.
-    pub(crate) fn add_rp_clause(
+    pub fn add_rp_clause(
         &mut self,
         clause: impl IntoIterator<Item = Literal>,
     ) -> Result<RpClauseHandle, ReversePropagationConflict> {
@@ -117,7 +117,7 @@ impl RpEngine {
     }
 
     /// Remove the last clause in the proof from consideration and return the literals it contains.
-    pub(crate) fn remove_last_rp_clause(&mut self) -> Option<Vec<Literal>> {
+    pub fn remove_last_rp_clause(&mut self) -> Option<Vec<Literal>> {
         let last_rp_clause = self.rp_clauses.pop()?;
 
         let result = match last_rp_clause {
@@ -147,7 +147,7 @@ impl RpEngine {
     }
 
     /// Perform unit propagation under assumptions.
-    pub(crate) fn propagate_under_assumptions(
+    pub fn propagate_under_assumptions(
         &mut self,
         assumptions: impl IntoIterator<Item = Literal>,
     ) -> Result<(), Vec<ConflictReason>> {

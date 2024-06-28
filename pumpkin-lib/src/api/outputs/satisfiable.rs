@@ -99,7 +99,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
                 CSPSolverExecutionFlag::Timeout => IteratedSolution::Unknown,
             }
         } else {
-            return IteratedSolution::Finished;
+            IteratedSolution::Finished
         }
     }
 
@@ -142,6 +142,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 }
 
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum IteratedSolution {
     /// A new solution was identified.

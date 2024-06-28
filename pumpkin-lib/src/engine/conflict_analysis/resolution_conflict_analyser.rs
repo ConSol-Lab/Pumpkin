@@ -909,18 +909,6 @@ impl ResolutionConflictAnalyser {
         pumpkin_assert_moderate!(self.current_depth <= 500);
         self.current_depth == 500
     }
-
-    pub(crate) fn num_literals_removed_total(&self) -> usize {
-        self.num_literals_removed_total
-    }
-
-    pub(crate) fn percentage_num_removed_literals_per_clause(&self) -> f64 {
-        if self.num_literals_seen_total > 0 {
-            1.0_f64 - (self.num_literals_removed_total as f64 / self.num_literals_seen_total as f64)
-        } else {
-            0.0
-        }
-    }
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
