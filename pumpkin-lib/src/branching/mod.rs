@@ -10,11 +10,9 @@
 //!   [`Vsids`] strategy.
 //! - The [`ValueSelector`] which defines the method required of a value selector (including the
 //!   hooks into the solver); the main method of this trait is the [`ValueSelector::select_value`]
-//!   method. An example implementation of this trait is the [`SolutionGuidedValueSelector`]
-//!   strategy.
+//!   method.
 //!
-//! A [`Brancher`] is expected to be passed to both [`ConstraintSatisfactionSolver::solve`] and
-//! [`OptimisationSolver::solve`]:
+//! A [`Brancher`] is expected to be passed to both [`Solver::solve`]:
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 //! # use pumpkin_lib::engine::variables::PropositionalVariable;
@@ -79,14 +77,8 @@ pub use variable_selection::*;
 #[cfg(doc)]
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
-use crate::branching::value_selection::SolutionGuidedValueSelector;
-#[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 #[cfg(doc)]
-use crate::branching::variable_selection::Vsids;
-#[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::optimisation::OptimisationSolver;
+use crate::Solver;

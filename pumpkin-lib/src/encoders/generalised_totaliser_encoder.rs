@@ -192,19 +192,23 @@ impl GeneralisedTotaliserEncoder {
                 //  define sums of one literal from node1
                 //  node1[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
-                    solver.add_clause(vec![
-                        !weighted_literal.literal,
-                        *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
-                    ]);
+                    solver
+                        .add_clause(vec![
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
+                        ])
+                        .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
                 }
                 //  define sums of one literal from node2
                 //  node2[weight] -> next_layer_node[weight]
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
-                    solver.add_clause(vec![
-                        !weighted_literal.literal,
-                        *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
-                    ]);
+                    solver
+                        .add_clause(vec![
+                            !weighted_literal.literal,
+                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
+                        ])
+                        .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
                 }
                 //  define sums could happen as a result of adding a weight from node1 and a weight
@@ -214,11 +218,13 @@ impl GeneralisedTotaliserEncoder {
                     for wl2 in &self.layers[index_current_layer].nodes[index_node2] {
                         let combined_weight = wl1.weight + wl2.weight;
                         if combined_weight <= k {
-                            solver.add_clause(vec![
-                                !wl1.literal,
-                                !wl2.literal,
-                                *value_to_literal_map.get(&combined_weight).unwrap(),
-                            ]);
+                            solver
+                                .add_clause(vec![
+                                    !wl1.literal,
+                                    !wl2.literal,
+                                    *value_to_literal_map.get(&combined_weight).unwrap(),
+                                ])
+                                .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         // explicitly forbid the assignment of both literals
                         //  note: could look into improving this part with implications weight[i] ->
@@ -226,7 +232,7 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            solver.add_clause(vec![wl1.literal, !wl2.literal]);
+                            solver.add_clause(vec![!wl1.literal, !wl2.literal]).expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         }
                     }

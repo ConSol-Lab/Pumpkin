@@ -121,6 +121,8 @@ where
         {
             self.saved_values.push(None);
         }
+        self.backup_selector
+            .on_encoding_objective_function(all_variables)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
@@ -132,6 +134,7 @@ where
                 solution.get_propositional_variable_value(propositional_variable),
             )
         }
+        self.backup_selector.on_solution(solution)
     }
 }
 

@@ -202,11 +202,14 @@ impl Solver {
         // its public API *cannot* be called unless the solver is at the root.
 
         match self.satisfaction_solver.solve(termination, brancher) {
-            CSPSolverExecutionFlag::Feasible => SatisfactionResult::Satisfiable(Satisfiable::new(
-                &mut self.satisfaction_solver,
-                brancher,
-                termination,
-            )),
+            CSPSolverExecutionFlag::Feasible => {
+                brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+                SatisfactionResult::Satisfiable(Satisfiable::new(
+                    &mut self.satisfaction_solver,
+                    brancher,
+                    termination,
+                ))
+            }
             CSPSolverExecutionFlag::Infeasible => SatisfactionResult::Unsatisfiable,
             CSPSolverExecutionFlag::Timeout => SatisfactionResult::Unknown,
         }
@@ -489,6 +492,16 @@ impl Solver {
         self.half_reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
+    /// Adds the constraint `reif <-> (lhs <= rhs)`.
+    pub fn reified_binary_less_than_or_equal<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
+        self.reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+    }
+
     /// Adds the constraint `lhs < rhs`.
     pub fn binary_less_than<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1))
@@ -504,6 +517,16 @@ impl Solver {
         self.half_reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
+    /// Adds the constraint `reif <-> (lhs < rhs)`.
+    pub fn reified_binary_less_than<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
+        self.reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
+    }
+
     /// Adds the constraint `lhs = rhs`.
     pub fn binary_equals<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
         self.linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
@@ -517,6 +540,17 @@ impl Solver {
         reif: Literal,
     ) -> bool {
         self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+    }
+
+    /// Adds the constraint `reif <-> (lhs = rhs)`.
+    pub fn reified_binary_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+        reif: Literal,
+    ) -> bool {
+        self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+            && self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, !reif)
     }
 
     /// Adds the constraint `a + b = c`.

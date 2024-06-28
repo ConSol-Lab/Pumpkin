@@ -4,6 +4,7 @@ use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::encodings::PseudoBooleanConstraintEncoder;
 use pumpkin_lib::options::PseudoBooleanEncoding;
 use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Function;
@@ -68,7 +69,6 @@ impl LinearSearch {
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
 
             if first_iteration {
-                #[allow(deprecated)]
                 brancher.on_encoding_objective_function(
                     &(1..solver
                         .get_solution_reference()
@@ -90,13 +90,10 @@ impl LinearSearch {
                 };
             }
 
-            #[allow(deprecated)]
-            brancher.on_solution(solver.get_solution_reference());
-
             let result = solver.satisfy(&mut brancher, termination);
 
             match result {
-                pumpkin_lib::results::SatisfactionResult::Satisfiable(satisfiable) => {
+                SatisfactionResult::Satisfiable(satisfiable) => {
                     let solution_ref = satisfiable.as_solution();
                     let new_objective_value = objective_function.evaluate_assignment(solution_ref);
 
@@ -119,7 +116,7 @@ impl LinearSearch {
                         process_time.elapsed().as_millis(),
                     );
                 }
-                pumpkin_lib::results::SatisfactionResult::Unsatisfiable => {
+                SatisfactionResult::Unsatisfiable => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
 
                     return OptimisationResult::Optimal {
@@ -127,7 +124,7 @@ impl LinearSearch {
                         objective_value: best_objective_value as i64,
                     };
                 }
-                pumpkin_lib::results::SatisfactionResult::Unknown => {
+                SatisfactionResult::Unknown => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
                     return OptimisationResult::Satisfiable {
                         best_solution,

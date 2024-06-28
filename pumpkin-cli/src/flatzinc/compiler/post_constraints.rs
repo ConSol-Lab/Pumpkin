@@ -41,7 +41,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_ne_reif",
-                |solver, terms, rhs, reif| solver.half_reified_linear_not_equals(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_not_equals(terms, rhs, reif),
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
@@ -55,7 +55,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                |solver, terms, rhs, reif| solver.half_reified_linear_less_than_or_equal(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_less_than_or_equal(terms, rhs, reif),
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
@@ -69,7 +69,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                |solver, terms, rhs, reif| solver.half_reified_linear_equals(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_equals(terms, rhs, reif),
             )?,
             "int_ne" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
@@ -81,7 +81,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_ne_reif",
-                |solver, a, b, reif| solver.half_reified_binary_not_equal(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_not_equals(a, b, reif),
             )?,
             "int_le" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
@@ -93,7 +93,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_le_reif",
-                |solver, a, b, reif| solver.half_reified_binary_less_than_or_equal(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_less_than_or_equal(a, b, reif),
             )?,
             "int_lt" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
@@ -105,7 +105,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lt_reif",
-                |solver, a, b, reif| solver.half_reified_binary_less_than(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_less_than(a, b, reif),
             )?,
             "int_eq" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_eq", |solver, a, b| {
@@ -117,7 +117,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_eq_reif",
-                |solver, a,b, reif| solver.half_reified_binary_equals(a, b, reif),
+                |solver, a,b, reif| solver.reified_binary_equals(a, b, reif),
             )?,
             "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
                 solver.integer_plus(a, b, c)

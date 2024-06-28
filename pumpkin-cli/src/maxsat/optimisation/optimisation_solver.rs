@@ -1,5 +1,6 @@
 use log::debug;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::Function;
 use pumpkin_lib::Solver;
@@ -43,7 +44,7 @@ impl OptimisationSolver {
         let initial_solve_result = self.solver.satisfy(&mut brancher, termination);
 
         match initial_solve_result {
-            pumpkin_lib::results::SatisfactionResult::Satisfiable(_) => {
+            SatisfactionResult::Satisfiable(satisfiable) => {
                 debug!(
                     "Initial solution took {} seconds",
                     process_time.elapsed().as_secs(),
@@ -57,11 +58,11 @@ impl OptimisationSolver {
                     brancher,
                 )
             }
-            pumpkin_lib::results::SatisfactionResult::Unsatisfiable => {
+            SatisfactionResult::Unsatisfiable => {
                 self.solver.log_statistics();
                 OptimisationResult::Infeasible
             }
-            pumpkin_lib::results::SatisfactionResult::Unknown => {
+            SatisfactionResult::Unknown => {
                 self.solver.log_statistics();
                 OptimisationResult::Unknown
             }

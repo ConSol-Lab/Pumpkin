@@ -1,9 +1,11 @@
-use crate::basic_types::{CSPSolverExecutionFlag, SolutionReference};
+use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::termination::TerminationCondition;
 use crate::variables::Literal;
-use crate::{Solution, Solver};
+use crate::Solution;
+use crate::Solver;
 
 #[derive(Debug)]
 pub struct Satisfiable<'solver, 'brancher, 'termination, B, T> {
@@ -48,6 +50,8 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
     ///   - When the solver concludes no more solutions exist, the solver is now in an inconstent
     ///   state at the root and no more variables/constraints can be added.
     pub fn iterate_solutions(self) -> SolutionIterator<'solver, 'brancher, 'termination, B, T> {
+        self.brancher
+            .on_solution(self.solver.get_solution_reference());
         SolutionIterator::new(self.solver, self.brancher, self.termination)
     }
 }
@@ -74,11 +78,14 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
         }
     }
 
-    /// Find a new solution by blocking the previous solution from being found.
+    /// Find a new solution by blocking the previous solution from being found. Also calls the
+    /// [`Brancher::on_solution`] method from the [`Brancher`] used to run the initial solve.
     pub fn next_solution(&mut self) -> IteratedSolution {
         if SolutionIterator::<B, T>::add_blocking_clause(self.solver, self.brancher) {
             match self.solver.solve(self.termination, self.brancher) {
                 CSPSolverExecutionFlag::Feasible => {
+                    self.brancher
+                        .on_solution(self.solver.get_solution_reference());
                     IteratedSolution::Solution(self.solver.get_solution_reference().into())
                 }
                 CSPSolverExecutionFlag::Infeasible => IteratedSolution::Finished,
@@ -89,11 +96,14 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
         }
     }
 
-    /// Creates a clause which prevents the current solution from occurring again by going over the defined output variables and creating a clause which prevents those values from
-    /// being assigned. This method is used when attempting to find multiple solutions. It restores the state of the
-    /// passed [`ConstraintSatisfactionSolver`] to the root (using [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
-    /// was successful (i.e. it is possible that there could be another solution) and returns false otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
-    /// solutions).
+    /// Creates a clause which prevents the current solution from occurring again by going over the
+    /// defined output variables and creating a clause which prevents those values from
+    /// being assigned. This method is used when attempting to find multiple solutions. It restores
+    /// the state of the passed [`ConstraintSatisfactionSolver`] to the root (using
+    /// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the
+    /// clause was successful (i.e. it is possible that there could be another solution) and
+    /// returns false otherwise (i.e. if adding a clause led to a conflict which indicates that
+    /// there are no more solutions).
     fn add_blocking_clause(
         solver: &mut ConstraintSatisfactionSolver,
         brancher: &mut impl Brancher,

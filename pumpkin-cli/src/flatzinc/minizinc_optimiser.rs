@@ -40,7 +40,7 @@ impl<'a> MinizincOptimiser<'a> {
 
         match output {
             OptimisationResult::Optimal(solution) => {
-                print_solution_from_solver(self.solver.get_solution_reference(), outputs);
+                print_solution_from_solver(solution.as_reference(), outputs);
                 MinizincOptimisationResult::Optimal {
                     optimal_objective_value: solution
                         .get_integer_value(*self.objective_function.get_domain())
@@ -48,7 +48,7 @@ impl<'a> MinizincOptimiser<'a> {
                 }
             }
             OptimisationResult::Satisfiable(solution) => {
-                print_solution_from_solver(self.solver.get_solution_reference(), outputs);
+                print_solution_from_solver(solution.as_reference(), outputs);
                 MinizincOptimisationResult::Satisfiable {
                     best_found_objective_value: solution
                         .get_integer_value(*self.objective_function.get_domain())

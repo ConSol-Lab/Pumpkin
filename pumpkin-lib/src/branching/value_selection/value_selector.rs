@@ -6,8 +6,6 @@ use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::optimisation::LinearSearch;
 
 /// A trait containing the interface for [`ValueSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting a value
@@ -36,13 +34,14 @@ pub trait ValueSelector<Var> {
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// A function which is called when new [`PropositionalVariable`]s are added to the solver when
-    /// encoding the objective function this method is currently only called during
-    /// [`LinearSearch`] when the encoding of the objective function is added.
+    /// encoding an objective function.
     ///
     /// Note that this method provides **all** [`PropositionalVariable`]s and it is up to the
     /// selector to determine how to handle it.
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
-    /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
+    /// This method is called when a solution is found; either when iterating over all solutions in
+    /// the case of a satisfiable problem or on solutions of increasing quality when solving an
+    /// optimisation problem.
     fn on_solution(&mut self, _solution: SolutionReference) {}
 }

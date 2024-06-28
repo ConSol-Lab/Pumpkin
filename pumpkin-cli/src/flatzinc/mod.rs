@@ -105,13 +105,13 @@ pub(crate) fn solve(
 
         match solver.satisfy(&mut brancher, &mut termination) {
             SatisfactionResult::Satisfiable(satisfiable) => {
+                print_solution_from_solver(satisfiable.as_solution(), &outputs);
                 if options.all_solutions {
                     let mut solution_iterator = satisfiable.iterate_solutions();
                     loop {
                         match solution_iterator.next_solution() {
                             IteratedSolution::Solution(solution) => {
                                 print_solution_from_solver(solution.as_reference(), &outputs);
-                                brancher.on_solution(solution.as_reference());
                             }
                             IteratedSolution::Finished => {
                                 println!("==========");

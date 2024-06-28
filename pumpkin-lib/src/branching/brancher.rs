@@ -13,11 +13,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::engine::RestartStrategy;
-#[cfg(doc)]
-use crate::optimisation::LinearSearch;
+use crate::results::satisfiable::Satisfiable;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
 /// [`ValueSelector`]).
@@ -47,8 +43,7 @@ pub trait Brancher {
     /// A function which is called after a [`Literal`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `literal` which is the
     /// [`Literal`] which has been reset. This method could thus be called multiple times in a
-    /// single backtracking operation by the solver
-    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
+    /// single backtracking operation by the solver.
     fn on_unassign_literal(&mut self, _literal: Literal) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
@@ -75,7 +70,9 @@ pub trait Brancher {
     /// selector to determine how to handle it.
     fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
-    /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
+    /// This method is called when a solution is found; this will either be called when a new
+    /// incumbent solution is found (i.e. a solution with a better objective value than previously
+    /// known) or when a new solution is found when iterating over solutions using [`Satisfiable`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
     /// This method is called whenever a restart is performed as determined by the

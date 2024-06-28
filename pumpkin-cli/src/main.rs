@@ -384,7 +384,7 @@ fn cnf_problem(
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
-    let solution = match solver.satisfy(&mut brancher, &mut termination) {
+    match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(state) => {
             let solution: Solution = state.as_solution().into();
 
@@ -394,8 +394,6 @@ fn cnf_problem(
                 "v {}",
                 stringify_solution(&solution, num_propositional_variables, true)
             );
-
-            Some(solution)
         }
         SatisfactionResult::Unsatisfiable => {
             if solver.conclude_proof_unsat().is_err() {
@@ -403,11 +401,9 @@ fn cnf_problem(
             };
 
             println!("s UNSATISFIABLE");
-            None
         }
         SatisfactionResult::Unknown => {
             println!("s UNKNOWN");
-            None
         }
     };
 
