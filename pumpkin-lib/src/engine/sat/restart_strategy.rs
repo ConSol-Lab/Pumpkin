@@ -9,6 +9,8 @@ use crate::basic_types::sequence_generators::LubySequence;
 use crate::basic_types::sequence_generators::SequenceGenerator;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 
+/// The options which are used by the solver to determine when a restart should occur.
+///
 /// An implementation of a restart strategy based on the specfication of [Section 4 of \[1\]](https://fmv.jku.at/papers/BiereFroehlich-POS15.pdf)
 /// (for more information about the Glucose restart strategies see [\[2\]](https://www.cril.univ-artois.fr/articles/xxmain.pdf) and
 /// [\[3\]](http://www.pragmaticsofsat.org/2012/slides-glucose.pdf)). The idea is to restart when the

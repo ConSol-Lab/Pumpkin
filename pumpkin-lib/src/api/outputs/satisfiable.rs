@@ -2,11 +2,13 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::results::Solution;
 use crate::termination::TerminationCondition;
 use crate::variables::Literal;
-use crate::Solution;
-use crate::Solver;
 
+/// A struct which allows either the retrieval of the current solution using
+/// [`Satisfiable::as_solution`] or allows iterating over solutions using the [`SolutionIterator`]
+/// provided by [`Satisfiable::iterate_solutions`].
 #[derive(Debug)]
 pub struct Satisfiable<'solver, 'brancher, 'termination, B, T> {
     solver: &'solver mut ConstraintSatisfactionSolver,
@@ -56,6 +58,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
     }
 }
 
+/// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
 #[derive(Debug)]
 pub struct SolutionIterator<'solver, 'brancher, 'termination, B, T> {
     solver: &'solver mut ConstraintSatisfactionSolver,
@@ -108,6 +111,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
         solver: &mut ConstraintSatisfactionSolver,
         brancher: &mut impl Brancher,
     ) -> bool {
+        #[allow(deprecated)]
         let clause = solver
             .get_propositional_assignments()
             .get_propositional_variables()
@@ -133,6 +137,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
     }
 }
 
+/// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
 #[derive(Debug)]
 pub enum IteratedSolution {
     /// A new solution was identified.

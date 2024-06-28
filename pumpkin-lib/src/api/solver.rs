@@ -37,6 +37,20 @@ use crate::statistics::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
 use crate::variables::TransformableVariable;
 
+/// The main interaction point which allows the creation of variables, the addition of constraints,
+/// and solving problems.
+///
+///
+/// # Creating Variables
+/// TODO
+/// 
+/// # Adding Constraints
+/// TODO
+/// 
+/// # Solving optimisation problems
+/// TODO
+/// 
+
 #[derive(Debug, Default)]
 pub struct Solver {
     satisfaction_solver: ConstraintSatisfactionSolver,
@@ -107,11 +121,6 @@ impl Solver {
         )
     }
 
-    /// Return a [`DomainId`] with a singleton domain.
-    pub fn get_constant_integer(&mut self, _value: i32) -> DomainId {
-        todo!()
-    }
-
     /// Create a new integer variable with the given bounds.
     pub fn new_bounded_integer(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         self.satisfaction_solver
@@ -132,9 +141,10 @@ impl Solver {
         )
     }
 
-    /// Create a new integer variable which has a domain of predefined values.
-    pub fn new_sparse_integer(&mut self, values: impl Into<HashSet<i32>>) -> DomainId {
-        let values: HashSet<i32> = values.into();
+    /// Create a new integer variable which has a domain of predefined values. We remove duplicates
+    /// by converting to a hash set
+    pub fn new_sparse_integer(&mut self, values: impl Into<Vec<i32>>) -> DomainId {
+        let values: HashSet<i32> = values.into().into_iter().collect();
 
         self.satisfaction_solver
             .create_new_integer_variable_sparse(values.into_iter().collect(), None)

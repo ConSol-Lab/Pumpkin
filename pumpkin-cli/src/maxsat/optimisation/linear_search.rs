@@ -2,17 +2,17 @@ use log::info;
 use pumpkin_lib::asserts::pumpkin_assert_moderate;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::encodings::PseudoBooleanConstraintEncoder;
-use pumpkin_lib::options::PseudoBooleanEncoding;
+use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::Solution;
 use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Function;
-use pumpkin_lib::Solution;
 use pumpkin_lib::Solver;
-use pumpkin_lib::Stopwatch;
 
-use super::optimisation_result::OptimisationResult;
+use super::optimisation_result::MaxSatOptimisationResult;
+use super::stopwatch::Stopwatch;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct LinearSearch {
@@ -33,7 +33,7 @@ impl LinearSearch {
         objective_function: &Function,
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
-    ) -> OptimisationResult {
+    ) -> MaxSatOptimisationResult {
         let mut best_solution: Solution = solver.get_solution_reference().into();
 
         let mut best_objective_value =
@@ -57,7 +57,7 @@ impl LinearSearch {
         loop {
             if best_objective_value == objective_function.get_constant_term() {
                 solver.log_statistics_with_objective(best_objective_value as i64);
-                return OptimisationResult::Optimal {
+                return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value as i64,
                 };
@@ -84,7 +84,7 @@ impl LinearSearch {
             //  meaning the current best solution is optimal
             if encoding_status.is_err() {
                 solver.log_statistics_with_objective(best_objective_value as i64);
-                return OptimisationResult::Optimal {
+                return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,
                     objective_value: best_objective_value as i64,
                 };
@@ -119,14 +119,14 @@ impl LinearSearch {
                 SatisfactionResult::Unsatisfiable => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
 
-                    return OptimisationResult::Optimal {
+                    return MaxSatOptimisationResult::Optimal {
                         solution: best_solution,
                         objective_value: best_objective_value as i64,
                     };
                 }
                 SatisfactionResult::Unknown => {
                     solver.log_statistics_with_objective(best_objective_value as i64);
-                    return OptimisationResult::Satisfiable {
+                    return MaxSatOptimisationResult::Satisfiable {
                         best_solution,
                         objective_value: best_objective_value as i64,
                     };

@@ -76,6 +76,8 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
+#[cfg(doc)]
+use crate::Solver;
 
 pub(crate) type ClausalPropagatorType = BasicClausalPropagator;
 pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
@@ -254,11 +256,10 @@ impl Default for ConstraintSatisfactionSolver {
     }
 }
 
-/// Options for the [`ConstraintSatisfactionSolver`], see `main.rs` for more information
-/// on these parameters.
+/// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
-    /// The options used by the [`RestartStrategy`]
+    /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
@@ -266,8 +267,8 @@ pub struct SatisfactionSolverOptions {
     /// The proof log.
     pub proof_log: ProofLog,
 
-    /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
-    /// argument allows seeding based on CLI input.
+    /// A random generator which is used by the [`Solver`], passing it as an
+    /// argument allows seeding of the randomization.
     pub random_generator: SmallRng,
 }
 
@@ -701,6 +702,7 @@ impl ConstraintSatisfactionSolver {
         core
     }
 
+    #[allow(unused)]
     pub(crate) fn get_conflict_reasons(
         &mut self,
         brancher: &mut impl Brancher,

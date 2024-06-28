@@ -232,7 +232,9 @@ impl GeneralisedTotaliserEncoder {
                         //  todo check if these clauses are necessary, and see if the trade-off
                         // makes sense      I think it is necessary
                         } else {
-                            solver.add_clause(vec![!wl1.literal, !wl2.literal]).expect("Adding encoding clause should not lead to conflict");
+                            solver
+                                .add_clause(vec![!wl1.literal, !wl2.literal])
+                                .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         }
                     }

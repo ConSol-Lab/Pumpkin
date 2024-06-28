@@ -1,3 +1,5 @@
+//! Contains structures for logging proofs for the [`Solver`].
+
 mod dimacs;
 mod proof_literals;
 
@@ -14,7 +16,13 @@ use self::proof_literals::ProofLiterals;
 use super::variables::Literal;
 use super::VariableLiteralMappings;
 use crate::variable_names::VariableNames;
+#[cfg(doc)]
+use crate::Solver;
 
+/// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
+/// allow the following types of proofs:
+/// - A CP proof log - This can be created using [`ProofLog::cp`].
+/// - A DIMACS proof log - This can be created using [`ProofLog::dimacs`].
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,

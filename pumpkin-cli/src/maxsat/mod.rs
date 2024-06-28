@@ -4,10 +4,10 @@ use std::time::Duration;
 pub(crate) mod optimisation;
 
 use optimisation::linear_search::LinearSearch;
-use optimisation::optimisation_result::OptimisationResult;
+use optimisation::optimisation_result::MaxSatOptimisationResult;
 use optimisation::optimisation_solver::OptimisationSolver;
+use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::options::LearningOptions;
-use pumpkin_lib::options::PseudoBooleanEncoding;
 use pumpkin_lib::options::SolverOptions;
 use pumpkin_lib::termination::TimeBudget;
 
@@ -47,7 +47,7 @@ pub(crate) fn wcnf_problem(
     let mut termination = time_limit.map(TimeBudget::starting_now);
 
     let result = match solver.solve(&mut termination, brancher) {
-        OptimisationResult::Optimal {
+        MaxSatOptimisationResult::Optimal {
             solution,
             objective_value,
         } => {
@@ -58,7 +58,7 @@ pub(crate) fn wcnf_problem(
             );
             Some((solution, objective_value))
         }
-        OptimisationResult::Satisfiable {
+        MaxSatOptimisationResult::Satisfiable {
             best_solution,
             objective_value,
         } => {
@@ -69,11 +69,11 @@ pub(crate) fn wcnf_problem(
             );
             Some((best_solution, objective_value))
         }
-        OptimisationResult::Infeasible => {
+        MaxSatOptimisationResult::Infeasible => {
             println!("s UNSATISFIABLE");
             None
         }
-        OptimisationResult::Unknown => {
+        MaxSatOptimisationResult::Unknown => {
             println!("s UNKNOWN");
             None
         }

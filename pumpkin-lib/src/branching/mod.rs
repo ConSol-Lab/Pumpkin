@@ -1,5 +1,5 @@
-//! Provides structures and traits to define the decision making procedure of the solver
-//! (e.g. [`ConstraintSatisfactionSolver`]).
+//! Contains structures and traits to define the decision making procedure of the solver
+//! (e.g. [`Solver`]).
 //!
 //! In general, it provides 3 traits:
 //! - The [`Brancher`] which defines how a branching procedure (which selects an unfixed variable and splits the domain in some way, see [Section 4.3.1 of \[1\]](http://www.cse.unsw.com.au/~tw/brwhkr08.pdf)

@@ -1,11 +1,11 @@
-use pumpkin_lib::Solution;
+use pumpkin_lib::results::Solution;
 
 #[cfg(doc)]
-use crate::optimisation::OptimisationSolver;
+use super::optimisation_solver::OptimisationSolver;
 
 /// The result of calling [`OptimisationSolver::solve()`].
 #[derive(Debug)]
-pub(crate) enum OptimisationResult {
+pub(crate) enum MaxSatOptimisationResult {
     /// There exists no solution with a better objective value than this one.
     Optimal {
         solution: Solution,

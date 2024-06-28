@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_lib::hashed_structures::HashMap;
-use pumpkin_lib::hashed_structures::HashSet;
 use pumpkin_lib::variables::DomainId;
 use pumpkin_lib::variables::Literal;
 use pumpkin_lib::Solver;

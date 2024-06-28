@@ -1,13 +1,5 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
-/// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
-/// The idea is to separate the 'preprocessing' of the input and encoding algorithm
-///     this way all encoders can benefit from the same preprocessing
-///     and the encoding algorithm can then consider only canonical cases for its input
-///
-/// The trait 'PseudoBooleanConstraintEncoderInterface' provides the interface
-///     encoders are expected to implement this trait
-/// PseudoBooleanConstraintEncoder acts as a wrapper around the interface structs
 use std::time::Instant;
 
 use log::debug;
@@ -23,6 +15,14 @@ use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
 use crate::Solver;
 
+/// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
+/// The idea is to separate the 'preprocessing' of the input and encoding algorithm
+///     this way all encoders can benefit from the same preprocessing
+///     and the encoding algorithm can then consider only canonical cases for its input
+///
+/// The trait 'PseudoBooleanConstraintEncoderInterface' provides the interface
+///     encoders are expected to implement this trait
+/// PseudoBooleanConstraintEncoder acts as a wrapper around the interface structs
 pub(crate) trait PseudoBooleanConstraintEncoderInterface {
     /// Add clauses that encode \sum w_i x_i <= k and returns a [`PseudoBooleanConstraintEncoder`]
     /// object. The encoder can later be used to strengthen the constraint (see
@@ -50,25 +50,44 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
     fn strengthen_at_most_k(&mut self, k: u64, solver: &mut Solver) -> Result<(), EncodingError>;
 }
 
+/// Specifies the type of pseudo-boolean encoding which is used by the
+/// [`PseudoBooleanConstraintEncoder`].
 #[derive(Clone, Copy, Debug)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum PseudoBooleanEncoding {
-    GTE,
-    CNE,
+    /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
+    /// \[1\].
+    ///
+    /// # Bibliography
+    /// \[1] "Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben
+    /// Martins, Vasco Manquinho; CP '15
+    GeneralizedTotalizer,
+    /// Specifies the usage of the cardinality network \[1\] encoding for unweighted cardinality
+    /// constraints in the form `x1 + ... + xn <= k`. The encoding is arc-consistent and
+    /// supports incremental strengthening of the upper bound.
+    ///
+    /// # Bibliography
+    /// \[1\] R. Asín, R. Nieuwenhuis, A. Oliveras, and E. Rodríguez-Carbonell, ‘Cardinality
+    /// networks: a theoretical and empirical study’, Constraints, vol. 16, pp. 195–221, 2011.
+    CardinalityNetwork,
+    /// Specifies the usage of an econding which takes as input a single integer.
+    ///
+    /// Note that if this case occurs, it is recommended to use [`Solver::maximise`] or
+    /// [Solver::minimise] directly.
     SingleInteger,
 }
 
 impl std::fmt::Display for PseudoBooleanEncoding {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PseudoBooleanEncoding::GTE => write!(f, "gte"),
-            PseudoBooleanEncoding::CNE => write!(f, "cne"),
+            PseudoBooleanEncoding::GeneralizedTotalizer => write!(f, "gte"),
+            PseudoBooleanEncoding::CardinalityNetwork => write!(f, "cne"),
             PseudoBooleanEncoding::SingleInteger => write!(f, "single_integer"),
         }
     }
 }
 
-/// main struct through which encoders are to be used
+/// The main struct through which the constraint encoders are to be used
 #[derive(Debug)]
 pub struct PseudoBooleanConstraintEncoder {
     state: State,
@@ -388,12 +407,12 @@ impl PseudoBooleanConstraintEncoder {
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Result<Box<dyn PseudoBooleanConstraintEncoderInterface>, EncodingError> {
         match encoding_algorithm {
-            PseudoBooleanEncoding::GTE => {
+            PseudoBooleanEncoding::GeneralizedTotalizer => {
                 let encoder =
                     GeneralisedTotaliserEncoder::encode_at_most_k(weighted_literals, k, solver)?;
                 Ok(Box::new(encoder))
             }
-            PseudoBooleanEncoding::CNE => {
+            PseudoBooleanEncoding::CardinalityNetwork => {
                 let encoder =
                     CardinalityNetworkEncoder::encode_at_most_k(weighted_literals, k, solver)?;
                 Ok(Box::new(encoder))

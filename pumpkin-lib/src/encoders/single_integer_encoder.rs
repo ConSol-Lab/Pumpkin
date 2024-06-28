@@ -4,6 +4,10 @@ use crate::basic_types::WeightedLiteral;
 use crate::pumpkin_assert_simple;
 use crate::Solver;
 
+/// An encoder which takes as input a single integer encoding.
+///
+/// Note that if this case occurs, we would recommend using [`Solver::maximise`] or
+/// [Solver::minimise] directly.
 #[derive(Debug)]
 pub struct SingleIntegerEncoder {
     index_last_added_weighted_literal: usize,

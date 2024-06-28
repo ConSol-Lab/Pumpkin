@@ -21,14 +21,15 @@ use log::LevelFilter;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::CSPSolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::options::*;
 use pumpkin_lib::proof::Format;
 use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::Solution;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
-use pumpkin_lib::Solution;
 use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -170,7 +171,7 @@ struct Args {
     #[arg(
         long = "upper-bound-encoding",
         value_parser = upper_bound_encoding_parser,
-        default_value_t = PseudoBooleanEncoding::GTE.into()
+        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer.into()
     )]
     upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 
@@ -446,8 +447,8 @@ fn learned_clause_sorting_strategy_parser(
 
 fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>, String> {
     match s {
-        "gte" => Ok(PseudoBooleanEncoding::GTE.into()),
-        "cne" => Ok(PseudoBooleanEncoding::CNE.into()),
+        "gte" => Ok(PseudoBooleanEncoding::GeneralizedTotalizer.into()),
+        "cne" => Ok(PseudoBooleanEncoding::CardinalityNetwork.into()),
         value => Err(format!("'{value}' is not a valid upper bound encoding.")),
     }
 }

@@ -8,6 +8,8 @@ use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::Solver;
 
+/// A struct which represents a weighted linear function over [`Literal`]s, [`DomainId`]s, and a
+/// constant term.
 #[derive(Clone, Default, Debug)]
 pub struct Function {
     weighted_literals: HashMap<Literal, u64>,

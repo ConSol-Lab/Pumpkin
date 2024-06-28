@@ -1,7 +1,11 @@
 use crate::branching::Brancher;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+#[cfg(doc)]
+use crate::Solver;
 
+/// A struct which allows the retrieval of an unsatisfiable core consisting of the provided
+/// assumptions passed to the initial [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
 pub struct UnsatisfiableUnderAssumptions<'solver, 'brancher, B> {
     solver: &'solver mut ConstraintSatisfactionSolver,
