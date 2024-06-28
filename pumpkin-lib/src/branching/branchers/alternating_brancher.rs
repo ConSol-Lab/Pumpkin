@@ -1,3 +1,6 @@
+//! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
+//! on the strategy specified in [`AlternatingStrategy`].
+
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;

@@ -2,12 +2,22 @@ use super::integer_predicate::IntegerPredicate;
 use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
+/// A trait which defines methods for creating a [`Predicate`]. It currently only specifies the
+/// creation of [`Predicate`]s based on [`IntegerPredicate`]s.
 pub trait PredicateConstructor {
+    /// The value used to represent a bound.
     type Value;
 
+    /// Creates a lower-bound predicate (e.g. `[x >= v]`).
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate;
+
+    /// Creates an upper-bound predicate (e.g. `[x <= v]`).
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate;
+
+    /// Creates an equality predicate (e.g. `[x == v]`).
     fn equality_predicate(&self, bound: Self::Value) -> Predicate;
+
+    /// Creates a disequality predicate (e.g. `[x != v]`).
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate;
 }
 
@@ -54,7 +64,6 @@ impl PredicateConstructor for DomainId {
 /// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::predicate;
 /// # use pumpkin_lib::predicates::IntegerPredicate;
-///
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 ///

@@ -1,3 +1,6 @@
+//! A [`Brancher`] which simply switches uses a single [`VariableSelector`] and a single
+//! [`ValueSelector`].
+
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;

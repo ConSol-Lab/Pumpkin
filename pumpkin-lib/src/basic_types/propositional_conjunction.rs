@@ -1,5 +1,7 @@
 use crate::engine::predicates::predicate::Predicate;
 
+/// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
+/// <= 10]`).
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
     predicates_in_conjunction: Box<[Predicate]>,
@@ -90,7 +92,6 @@ impl PartialEq for PropositionalConjunction {
 /// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::conjunction;
 /// # use pumpkin_lib::predicate;
-///
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 /// let y = solver.new_bounded_integer(5, 15);

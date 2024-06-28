@@ -2,6 +2,8 @@ use crate::basic_types::StorageKey;
 use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
 
+/// A boolean variable in the solver; represents a [`PropositionalVariable`] but with a certain
+/// polarity (i.e. it is either the positive [`PropositionalVariable`] or its negation).
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Literal {
     code: u32,

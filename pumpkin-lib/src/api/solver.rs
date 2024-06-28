@@ -845,6 +845,7 @@ impl Solver {
     }
 }
 
+/// The type of [`Brancher`] which is created by [`Solver::default_brancher_over_all_propositional_variables`]
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,
     Vsids<PropositionalVariable>,

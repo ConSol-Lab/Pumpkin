@@ -1,3 +1,5 @@
+//! Contains the representation of a satisfiable solution for satisfaction problems.
+
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
@@ -9,6 +11,8 @@ use crate::variables::Literal;
 /// A struct which allows either the retrieval of the current solution using
 /// [`Satisfiable::as_solution`] or allows iterating over solutions using the [`SolutionIterator`]
 /// provided by [`Satisfiable::iterate_solutions`].
+///
+/// Note that when this struct is dropped (using [`Drop`]) then the [`Solver`] is reset.
 #[derive(Debug)]
 pub struct Satisfiable<'solver, 'brancher, 'termination, B, T> {
     solver: &'solver mut ConstraintSatisfactionSolver,

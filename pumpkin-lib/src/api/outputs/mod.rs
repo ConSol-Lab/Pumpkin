@@ -35,6 +35,7 @@ pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, 'termination, B,
     Unknown,
 }
 
+/// The result of a call to [`Solver::maximise`] or [`Solve::minmise`].
 #[derive(Debug)]
 pub enum OptimisationResult {
     /// Indicates that an optimal solution has been found and proven to be optimal. It provides an
