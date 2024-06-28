@@ -43,13 +43,12 @@ use crate::variables::TransformableVariable;
 ///
 /// # Creating Variables
 /// TODO
-/// 
+///
 /// # Adding Constraints
 /// TODO
-/// 
+///
 /// # Solving optimisation problems
 /// TODO
-/// 
 
 #[derive(Debug, Default)]
 pub struct Solver {
@@ -845,7 +844,8 @@ impl Solver {
     }
 }
 
-/// The type of [`Brancher`] which is created by [`Solver::default_brancher_over_all_propositional_variables`]
+/// The type of [`Brancher`] which is created by
+/// [`Solver::default_brancher_over_all_propositional_variables`]
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,
     Vsids<PropositionalVariable>,

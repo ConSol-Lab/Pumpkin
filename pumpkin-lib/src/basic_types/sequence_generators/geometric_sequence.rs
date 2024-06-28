@@ -5,7 +5,7 @@ use super::SequenceGenerator;
 ///  f(0) = a
 /// When 'm' is not an integer, the above formula is _not_ the same as f(i) = a * m^i since
 /// intermediate values will be rounded down
-/// 
+///
 /// Note that overflows are not taken into account
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct GeometricSequence {
