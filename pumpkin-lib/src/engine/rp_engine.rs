@@ -357,14 +357,17 @@ mod tests {
             let variables = variables.into();
             for i in 0..variables.len() {
                 for j in i + 1..variables.len() {
-                    if !solver.add_propagator(LinearNotEqualConstructor::new(
-                        [
-                            variables[i].clone().scaled(1),
-                            variables[j].clone().scaled(-1),
-                        ]
-                        .into(),
-                        0,
-                    )) {
+                    if !solver
+                        .add_propagator(LinearNotEqualConstructor::new(
+                            [
+                                variables[i].clone().scaled(1),
+                                variables[j].clone().scaled(-1),
+                            ]
+                            .into(),
+                            0,
+                        ))
+                        .is_ok()
+                    {
                         return false;
                     }
                 }

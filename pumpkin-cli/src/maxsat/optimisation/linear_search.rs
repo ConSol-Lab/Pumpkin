@@ -33,8 +33,9 @@ impl LinearSearch {
         objective_function: &Function,
         termination: &mut impl TerminationCondition,
         mut brancher: impl Brancher,
+        initial_solution: Solution,
     ) -> MaxSatOptimisationResult {
-        let mut best_solution: Solution = solver.get_solution_reference().into();
+        let mut best_solution: Solution = initial_solution;
 
         let mut best_objective_value =
             objective_function.evaluate_assignment(best_solution.as_reference());
@@ -69,9 +70,7 @@ impl LinearSearch {
 
             if first_iteration {
                 brancher.on_encoding_objective_function(
-                    &(1..solver
-                        .get_solution_reference()
-                        .num_propositional_variables() as u32)
+                    &(1..best_solution.num_propositional_variables() as u32)
                         .map(PropositionalVariable::new)
                         .collect::<Vec<_>>(),
                 );

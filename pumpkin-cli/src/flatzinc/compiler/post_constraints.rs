@@ -34,46 +34,46 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_ne",
-                |solver, terms, rhs| solver.linear_not_equals(terms, rhs),
+                |solver, terms, rhs| solver.linear_not_equals(terms, rhs).is_ok(),
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_ne_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_not_equals(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_not_equals(terms, rhs, reif).is_ok(),
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le",
-                |solver, terms, rhs| solver.linear_less_than_or_equal(terms, rhs),
+                |solver, terms, rhs| solver.linear_less_than_or_equal(terms, rhs).is_ok(),
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_less_than_or_equal(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_less_than_or_equal(terms, rhs, reif).is_ok(),
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq",
-                |solver, terms, rhs| solver.linear_equals(terms, rhs),
+                |solver, terms, rhs| solver.linear_equals(terms, rhs).is_ok(),
             )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_equals(terms, rhs, reif),
+                |solver, terms, rhs, reif| solver.reified_linear_equals(terms, rhs, reif).is_ok(),
             )?,
             "int_ne" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
-                    solver.binary_not_equal(a, b)
+                    solver.binary_not_equal(a, b).is_ok()
                 })?
             }
             "int_ne_reif" => compile_reified_binary_int_predicate(
@@ -81,11 +81,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_ne_reif",
-                |solver, a, b, reif| solver.reified_binary_not_equals(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_not_equals(a, b, reif).is_ok(),
             )?,
             "int_le" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
-                    solver.binary_less_than_or_equal(a, b)
+                    solver.binary_less_than_or_equal(a, b).is_ok()
                 })?
             }
             "int_le_reif" => compile_reified_binary_int_predicate(
@@ -93,11 +93,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_le_reif",
-                |solver, a, b, reif| solver.reified_binary_less_than_or_equal(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_less_than_or_equal(a, b, reif).is_ok(),
             )?,
             "int_lt" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
-                    solver.binary_less_than(a, b)
+                    solver.binary_less_than(a, b).is_ok()
                 })?
             }
             "int_lt_reif" => compile_reified_binary_int_predicate(
@@ -105,11 +105,11 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lt_reif",
-                |solver, a, b, reif| solver.reified_binary_less_than(a, b, reif),
+                |solver, a, b, reif| solver.reified_binary_less_than(a, b, reif).is_ok(),
             )?,
             "int_eq" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_eq", |solver, a, b| {
-                    solver.binary_equals(a, b)
+                    solver.binary_equals(a, b).is_ok()
                 })?
             }
             "int_eq_reif" => compile_reified_binary_int_predicate(
@@ -117,20 +117,20 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_eq_reif",
-                |solver, a,b, reif| solver.reified_binary_equals(a, b, reif),
+                |solver, a,b, reif| solver.reified_binary_equals(a, b, reif).is_ok(),
             )?,
             "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
-                solver.integer_plus(a, b, c)
+                solver.integer_plus(a, b, c).is_ok()
             })?,
             "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
-                solver.integer_multiplication(a, b, c)
+                solver.integer_multiplication(a, b, c).is_ok()
             })?,
             "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
-                solver.integer_division(a, b, c)
+                solver.integer_division(a, b, c).is_ok()
             })?,
             "int_abs" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
-                    solver.integer_absolute(a, b)
+                    solver.integer_absolute(a, b).is_ok()
                 })?
             }
             "int_max" => compile_int_max(context, exprs)?,
@@ -207,12 +207,15 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    Ok(context.solver.cumulative(
-        &start_times,
-        &durations,
-        &resource_requirements,
-        resource_capacity,
-    ))
+    Ok(context
+        .solver
+        .cumulative(
+            &start_times,
+            &durations,
+            &resource_requirements,
+            resource_capacity,
+        )
+        .is_ok())
 }
 
 fn compile_array_int_maximum(
@@ -224,7 +227,7 @@ fn compile_array_int_maximum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(context.solver.maximum(array.as_ref(), rhs))
+    Ok(context.solver.maximum(array.as_ref(), rhs).is_ok())
 }
 
 fn compile_array_int_minimum(
@@ -236,7 +239,7 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(context.solver.minimum(array.iter().copied(), rhs))
+    Ok(context.solver.minimum(array.iter().copied(), rhs).is_ok())
 }
 
 fn compile_int_max(
@@ -249,7 +252,7 @@ fn compile_int_max(
     let b = context.resolve_integer_variable(&exprs[1])?;
     let c = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.maximum([a, b], c))
+    Ok(context.solver.maximum([a, b], c).is_ok())
 }
 
 fn compile_int_min(
@@ -262,7 +265,7 @@ fn compile_int_min(
     let b = context.resolve_integer_variable(&exprs[1])?;
     let c = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.minimum([a, b], c))
+    Ok(context.solver.minimum([a, b], c).is_ok())
 }
 
 fn compile_set_in_reif(
@@ -329,7 +332,7 @@ fn compile_set_in_reif(
                 })
                 .collect::<Vec<_>>();
 
-            context.solver.array_bool_or(clause, reif)
+            context.solver.array_bool_or(clause, reif).is_ok()
         }
     };
 
@@ -346,7 +349,7 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.element(index, array.as_ref(), rhs))
+    Ok(context.solver.element(index, array.as_ref(), rhs).is_ok())
 }
 
 fn compile_bool_not(
@@ -469,7 +472,7 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(context.solver.array_bool_or(clause.as_ref(), r))
+    Ok(context.solver.array_bool_or(clause.as_ref(), r).is_ok())
 }
 
 fn compile_bool_xor(
@@ -667,7 +670,10 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.linear_boolean_equals(&weights, &bools, rhs))
+    Ok(context
+        .solver
+        .linear_boolean_equals(&weights, &bools, rhs)
+        .is_ok())
 }
 
 fn compile_bool_lin_le_predicate(
@@ -682,7 +688,8 @@ fn compile_bool_lin_le_predicate(
 
     Ok(context
         .solver
-        .linear_boolean_less_than_or_equal(&weights, &bools, rhs))
+        .linear_boolean_less_than_or_equal(&weights, &bools, rhs)
+        .is_ok())
 }
 
 fn compile_all_different(
@@ -693,5 +700,5 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    Ok(context.solver.all_different(variables))
+    Ok(context.solver.all_different(variables).is_ok())
 }

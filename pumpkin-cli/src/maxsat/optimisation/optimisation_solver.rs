@@ -44,11 +44,13 @@ impl OptimisationSolver {
         let initial_solve_result = self.solver.satisfy(&mut brancher, termination);
 
         match initial_solve_result {
-            SatisfactionResult::Satisfiable(_) => {
+            SatisfactionResult::Satisfiable(satisfiable) => {
                 debug!(
                     "Initial solution took {} seconds",
                     process_time.elapsed().as_secs(),
                 );
+
+                let initial_solution = satisfiable.as_solution().into();
 
                 self.linear_search.solve(
                     &mut self.solver,
@@ -56,6 +58,7 @@ impl OptimisationSolver {
                     &self.objective_function,
                     termination,
                     brancher,
+                    initial_solution,
                 )
             }
             SatisfactionResult::Unsatisfiable => {

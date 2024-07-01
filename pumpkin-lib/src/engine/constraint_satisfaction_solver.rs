@@ -1400,13 +1400,16 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator<Constructor>(&mut self, constructor: Constructor) -> bool
+    pub fn add_propagator<Constructor>(
+        &mut self,
+        constructor: Constructor,
+    ) -> Result<(), ConstraintOperationError>
     where
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
         if self.state.is_inconsistent() {
-            return false;
+            return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
@@ -1438,11 +1441,15 @@ impl ConstraintSatisfactionSolver {
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
             self.state.declare_infeasible();
-            false
+            Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
             self.propagate_enqueued();
 
-            self.state.no_conflict()
+            if self.state.no_conflict() {
+                Ok(())
+            } else {
+                Err(ConstraintOperationError::InfeasiblePropagator)
+            }
         }
     }
 
@@ -1917,7 +1924,7 @@ mod tests {
         };
 
         let result = solver.add_propagator(propagator_constructor);
-        assert!(result);
+        assert!(result.is_ok());
 
         // We add the clause that will lead to the conflict in the SAT-solver
         let result = solver.add_clause([

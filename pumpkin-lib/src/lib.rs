@@ -41,7 +41,7 @@
 //!      let value_z = solution.get_integer_value(z);
 //!
 //!      // It should be the case that all of the assigned values are different.
-//!      assert!(x != y && x != z && y != z);
+//!      assert!(value_x != value_y && value_x != value_z && value_y != value_z);
 //!  } else {
 //!      panic!("This problem should be satisfiable")
 //!  }
@@ -89,7 +89,7 @@
 //!         let value_z = solution.get_integer_value(z);
 //!
 //!         // It should be the case that all of the assigned values are different.
-//!         assert!(x != y && x != z && y != z);
+//!         assert!(value_x != value_y && value_x != value_z && value_y != value_z);
 //!
 //!         known_solutions.push((value_x, value_y, value_z));
 //!     }

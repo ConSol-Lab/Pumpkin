@@ -46,10 +46,64 @@ use crate::variables::TransformableVariable;
 ///
 ///
 /// # Creating Variables
-/// TODO
+/// As stated in [`crate::variables`], we can create two types of variables: propositional variables
+/// and integer variables.
+///
+/// ```rust
+/// # use pumpkin_lib::solving::Solver;
+/// # use crate::pumpkin_lib::variables::TransformableVariable;
+/// let mut solver = Solver::default();
+///
+/// // Integer Variables
+///
+/// // We can create an integer variable with a domain in the range [0, 10]
+/// let integer_between_bounds = solver.new_bounded_integer(0, 10);
+///
+/// // For proof logging purposes, we can also create such a variable with a name
+/// let named_integer_between_bounds = solver.new_named_bounded_integer(0, 10, "x");
+///
+/// // We can also create an integer variable with a non-continuous domain in the follow way
+/// let mut sparse_integer = solver.new_sparse_integer(vec![0, 3, 5]);
+///
+/// // For proof logging purposes, we can also create such a variable with a name
+/// let named_sparse_integer = solver.new_named_sparse_integer(vec![0, 3, 5], "y");
+///
+/// // Additionally, we can also create an affine view over a variable with both a scale and an offset (or either)
+/// let view_over_integer = integer_between_bounds.scaled(-1).offset(15);
+///
+///
+/// // Propositional Variable
+///
+/// // We can create a literal
+/// let literal = solver.new_literal();
+///
+/// // For proof logging purposes, we can also create such a variable with a name
+/// let named_literal = solver.new_named_literal("z");
+///
+/// // We can also get the propositional variable from the literal
+/// let propositional_variable = literal.get_propositional_variable();
+///
+/// // We can also create an iterator of new literals and get a number of them at once
+/// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();
+/// assert_eq!(list_of_5_literals.len(), 5);
+/// ```
 ///
 /// # Adding Constraints
-/// TODO
+/// There are a number of pre-defined constraints which can be added.
+/// ```rust
+/// # use pumpkin_lib::solving::Solver;
+/// let mut solver = Solver::default();
+///
+/// // First we create 3 variables
+/// let x = solver.new_bounded_integer(0, 2);
+/// let y = solver.new_bounded_integer(0, 2);
+/// let z = solver.new_bounded_integer(0, 2);
+///
+/// // Then we can add a constraint to the solver, for this example we will use the all-different
+/// let result_of_adding_all_different = solver.all_different(vec![x, y, z]);
+/// // We assume that adding the all-different constraint did not lead to a conflict at the root level
+/// assert!(result_of_adding_all_different.is_ok());
+/// ```
 ///
 /// # Solving optimisation problems
 /// TODO
@@ -81,7 +135,34 @@ impl Solver {
     }
 }
 
-/// Functions to create and retrieve integer and propositional variables.
+/// Hidden methods
+impl Solver {
+    #[doc(hidden)]
+    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+        self.satisfaction_solver.get_solution_reference()
+    }
+
+    #[doc(hidden)] // Used by the minizinc context
+    /// Get a literal which is globally true.
+    pub fn get_true_literal(&self) -> Literal {
+        self.satisfaction_solver.get_true_literal()
+    }
+
+    #[doc(hidden)] // Used by the minizinc context
+    /// Get a literal which is globally false.
+    pub fn get_false_literal(&self) -> Literal {
+        self.satisfaction_solver.get_false_literal()
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub(crate) fn is_at_the_root_level(&self) -> bool {
+        #[allow(deprecated)]
+        self.satisfaction_solver.is_at_the_root_level()
+    }
+}
+
+/// Methods to retrieve information about variables
 impl Solver {
     pub fn lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_lower_bound(variable)
@@ -91,20 +172,25 @@ impl Solver {
         self.satisfaction_solver.get_upper_bound(variable)
     }
 
-    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
-        self.satisfaction_solver.get_solution_reference()
+    /// Get the literal corresponding to the given predicate. As the literal may need to be
+    /// created, this possibly mutates the solver.
+    pub fn get_literal_for_predicate(&self, predicate: Predicate) -> Literal {
+        self.satisfaction_solver.get_literal(predicate)
     }
 
-    /// Get a literal which is globally true.
-    pub fn get_true_literal(&self) -> Literal {
-        self.satisfaction_solver.get_true_literal()
+    /// Get the value of the given literal, which could be unassigned.
+    pub(crate) fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        self.satisfaction_solver.get_literal_value(literal)
     }
 
-    /// Get a literal which is globally false.
-    pub fn get_false_literal(&self) -> Literal {
-        self.satisfaction_solver.get_false_literal()
+    #[doc(hidden)]
+    pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
+        self.satisfaction_solver.restore_state_at_root(brancher)
     }
+}
 
+/// Functions to create and retrieve integer and propositional variables.
+impl Solver {
     /// Returns an infinite iterator of positive literals of new variables. The new variables will
     /// be unnamed.
     ///
@@ -181,31 +267,9 @@ impl Solver {
         self.satisfaction_solver
             .create_new_integer_variable_sparse(values.into(), Some(name.into()))
     }
-
-    /// Get the literal corresponding to the given predicate. As the literal may need to be
-    /// created, this possibly mutates the solver.
-    pub fn get_literal_for_predicate(&self, predicate: Predicate) -> Literal {
-        self.satisfaction_solver.get_literal(predicate)
-    }
-
-    pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        self.satisfaction_solver.restore_state_at_root(brancher)
-    }
-
-    /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
-    pub fn is_at_the_root_level(&self) -> bool {
-        #[allow(deprecated)]
-        self.satisfaction_solver.is_at_the_root_level()
-    }
-
-    /// Get the value of the given literal, which could be unassigned.
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.satisfaction_solver.get_literal_value(literal)
-    }
 }
 
-/// Functions for satisfaction_solver.add_propagatoring new constraints to the solver.
+/// Functions for adding new constraints to the solver.
 impl Solver {
     /// Creates a clause from `literals` and adds it to the current formula.
     ///
@@ -220,7 +284,7 @@ impl Solver {
     }
 }
 
-/// Functions which solve the model.
+/// Functions for solving with the constraints that have been added to the [`Solver`].
 impl Solver {
     pub fn satisfy<'brancher, 'termination, B: Brancher, T: TerminationCondition>(
         &mut self,
@@ -404,7 +468,7 @@ impl Solver {
         index: impl IntegerVariable + 'static,
         array: impl Into<Box<[ElementVar]>>,
         rhs: impl IntegerVariable + 'static,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver.add_propagator(ElementConstructor {
             index,
             array: array.into(),
@@ -417,7 +481,7 @@ impl Solver {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(LinearNotEqualConstructor::new(terms.into(), rhs))
     }
@@ -428,7 +492,7 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(LinearNotEqualConstructor::reified(terms.into(), rhs, reif))
     }
@@ -438,7 +502,7 @@ impl Solver {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(LinearLessOrEqualConstructor::new(terms.into(), rhs))
     }
@@ -449,7 +513,7 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(LinearLessOrEqualConstructor::reified(
                 terms.into(),
@@ -463,12 +527,10 @@ impl Solver {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
 
-        if !self.linear_less_than_or_equal(terms.clone(), rhs) {
-            return false;
-        }
+        self.linear_less_than_or_equal(terms.clone(), rhs)?;
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
         self.linear_less_than_or_equal(negated, -rhs)
@@ -480,19 +542,21 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
 
-        if !self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif) {
-            return false;
-        }
+        self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)?;
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
         self.half_reified_linear_less_than_or_equal(negated, -rhs, reif)
     }
 
     /// Adds the constraint `lhs != rhs`.
-    pub fn binary_not_equal<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    pub fn binary_not_equal<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+    ) -> Result<(), ConstraintOperationError> {
         self.linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
@@ -502,7 +566,7 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
@@ -511,7 +575,7 @@ impl Solver {
         &mut self,
         lhs: Var,
         rhs: Var,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
@@ -521,7 +585,7 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.half_reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
@@ -531,12 +595,16 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs < rhs`.
-    pub fn binary_less_than<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    pub fn binary_less_than<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+    ) -> Result<(), ConstraintOperationError> {
         self.binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1))
     }
 
@@ -546,7 +614,7 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.half_reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
@@ -556,12 +624,16 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
     /// Adds the constraint `lhs = rhs`.
-    pub fn binary_equals<Var: IntegerVariable + 'static>(&mut self, lhs: Var, rhs: Var) -> bool {
+    pub fn binary_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        lhs: Var,
+        rhs: Var,
+    ) -> Result<(), ConstraintOperationError> {
         self.linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
@@ -571,7 +643,7 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
@@ -581,13 +653,18 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
-        self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
-            && self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, !reif)
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)?;
+        self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, !reif)
     }
 
     /// Adds the constraint `a + b = c`.
-    pub fn integer_plus<Var: IntegerVariable + 'static>(&mut self, a: Var, b: Var, c: Var) -> bool {
+    pub fn integer_plus<Var: IntegerVariable + 'static>(
+        &mut self,
+        a: Var,
+        b: Var,
+        c: Var,
+    ) -> Result<(), ConstraintOperationError> {
         self.linear_equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
     }
 
@@ -597,7 +674,7 @@ impl Solver {
         a: impl IntegerVariable + 'static,
         b: impl IntegerVariable + 'static,
         c: impl IntegerVariable + 'static,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(IntegerMultiplicationConstructor { a, b, c })
     }
@@ -613,7 +690,7 @@ impl Solver {
         numerator: impl IntegerVariable + 'static,
         denominator: impl IntegerVariable + 'static,
         rhs: impl IntegerVariable + 'static,
-    ) -> bool
+    ) -> Result<(), ConstraintOperationError>
     where
         Self: Sized,
     {
@@ -636,7 +713,7 @@ impl Solver {
         &mut self,
         signed: impl IntegerVariable + 'static,
         absolute: impl IntegerVariable + 'static,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(AbsoluteValueConstructor { signed, absolute })
     }
@@ -645,18 +722,16 @@ impl Solver {
     pub fn all_different<Var: IntegerVariable + 'static>(
         &mut self,
         variables: impl Into<Box<[Var]>>,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let variables = variables.into();
 
         for i in 0..variables.len() {
             for j in i + 1..variables.len() {
-                if !self.binary_not_equal(variables[i].clone(), variables[j].clone()) {
-                    return false;
-                }
+                self.binary_not_equal(variables[i].clone(), variables[j].clone())?;
             }
         }
 
-        true
+        Ok(())
     }
 
     /// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
@@ -763,7 +838,7 @@ impl Solver {
         durations: &[i32],
         resource_requirements: &[i32],
         resource_capacity: i32,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
             "The number of start variables, durations and resource requirements should be the same!car"
@@ -789,7 +864,7 @@ impl Solver {
         &mut self,
         array: impl Into<Box<[Var]>>,
         rhs: impl IntegerVariable + 'static,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver.add_propagator(MaximumConstructor {
             array: array.into(),
             rhs,
@@ -801,7 +876,7 @@ impl Solver {
         &mut self,
         array: impl IntoIterator<Item = Var>,
         rhs: impl IntegerVariable + 'static,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let array = array
             .into_iter()
             .map(|var| var.scaled(-1))
@@ -815,14 +890,14 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
-        self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)
-            && self.half_reified_linear_less_than_or_equal(
-                terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
-                -rhs - 1,
-                !reif,
-            )
+        self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)?;
+        self.half_reified_linear_less_than_or_equal(
+            terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
+            -rhs - 1,
+            !reif,
+        )
     }
 
     /// Adds the constraint `reif <-> \sum terms_i = rhs`.
@@ -831,14 +906,18 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
-        self.half_reified_linear_equals(terms.clone(), rhs, reif)
-            && self.half_reified_linear_not_equals(terms, rhs, !reif)
+        self.half_reified_linear_equals(terms.clone(), rhs, reif)?;
+        self.half_reified_linear_not_equals(terms, rhs, !reif)
     }
 
     /// Adds the constraint `reif <-> clause`.
-    pub fn array_bool_or(&mut self, clause: impl Into<Vec<Literal>>, reif: Literal) -> bool {
+    pub fn array_bool_or(
+        &mut self,
+        clause: impl Into<Vec<Literal>>,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
         let mut clause = clause.into();
 
         // \/clause -> r
@@ -849,7 +928,10 @@ impl Solver {
         // r -> \/clause
         clause.insert(0, !reif);
 
-        all_implications && self.add_clause(clause).is_ok()
+        if !all_implications {
+            return Err(ConstraintOperationError::InfeasiblePropagator);
+        }
+        self.add_clause(clause)
     }
 
     /// Adds the constraint `reif <-> lhs != rhs`.
@@ -858,9 +940,9 @@ impl Solver {
         lhs: Var,
         rhs: Var,
         reif: Literal,
-    ) -> bool {
-        self.half_reified_binary_not_equal(lhs.clone(), rhs.clone(), reif)
-            && self.half_reified_binary_equals(lhs, rhs, reif)
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_binary_not_equal(lhs.clone(), rhs.clone(), reif)?;
+        self.half_reified_binary_equals(lhs, rhs, reif)
     }
 
     /// Adds the constraint `reif <-> \sum terms_i != rhs`.
@@ -869,10 +951,10 @@ impl Solver {
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
         reif: Literal,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
-        self.half_reified_linear_not_equals(terms.clone(), rhs, reif)
-            && self.half_reified_linear_equals(terms, rhs, !reif)
+        self.half_reified_linear_not_equals(terms.clone(), rhs, reif)?;
+        self.half_reified_linear_equals(terms, rhs, !reif)
     }
 
     /// Adds the constraint `\sum weights_i * bools_i <= rhs`.
@@ -881,7 +963,7 @@ impl Solver {
         weights: &[i32],
         bools: &[Literal],
         rhs: i32,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let domains = bools
             .iter()
             .enumerate()
@@ -907,7 +989,7 @@ impl Solver {
         weights: &[i32],
         bools: &[Literal],
         rhs: DomainId,
-    ) -> bool {
+    ) -> Result<(), ConstraintOperationError> {
         let domains = bools
             .iter()
             .enumerate()
@@ -943,6 +1025,7 @@ impl Solver {
 
 /// Proof logging methods
 impl Solver {
+    #[doc(hidden)]
     /// Conclude the proof with the unsatisfiable claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
@@ -950,6 +1033,7 @@ impl Solver {
         self.satisfaction_solver.conclude_proof_unsat()
     }
 
+    #[doc(hidden)]
     /// Conclude the proof with the optimality claim.
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
