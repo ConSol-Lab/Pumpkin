@@ -12,7 +12,7 @@ use pumpkin_lib::options::SolverOptions;
 use pumpkin_lib::termination::TimeBudget;
 
 use crate::parsers::dimacs::parse_wcnf;
-use crate::parsers::dimacs::CSPSolverArgs;
+use crate::parsers::dimacs::SolverArgs;
 use crate::parsers::dimacs::SolverDimacsSink;
 use crate::parsers::dimacs::WcnfInstance;
 use crate::result::PumpkinError;
@@ -32,7 +32,7 @@ pub(crate) fn wcnf_problem(
         last_instance_variable,
     } = parse_wcnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(learning_options, solver_options),
+        SolverArgs::new(learning_options, solver_options),
     )?;
 
     let brancher = solver.default_brancher_over_all_propositional_variables();

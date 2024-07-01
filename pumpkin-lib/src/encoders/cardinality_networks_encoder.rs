@@ -6,7 +6,7 @@ use crate::encoders::pseudo_boolean_constraint_encoder::EncodingError::CannotStr
 use crate::engine::variables::Literal;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
-use crate::Solver;
+use crate::solving::Solver;
 
 /// An implementation of the cardinality network encoding for unweighted cardinality constraints in
 /// the form `x1 + ... + xn <= k`. The encoding is arc-consistent and supports incremental

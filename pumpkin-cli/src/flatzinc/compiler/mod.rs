@@ -10,7 +10,7 @@ mod post_constraints;
 mod prepare_variables;
 
 use context::CompilationContext;
-use pumpkin_lib::Solver;
+use pumpkin_lib::solving::Solver;
 
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;

@@ -6,19 +6,6 @@ use std::ops::IndexMut;
 /// of type `Key`.
 ///
 /// Almost all features of this structure require that `Key` implements the [StorageKey] trait.
-///
-/// # Example Usage:
-/// ```rust
-/// # use pumpkin_lib::basic_types::KeyedVec;
-/// # use pumpkin_lib::engine::variables::DomainId;
-/// // We create a list of integers
-/// let elements: Vec<i32> = vec![1, 2, 3];
-/// // Now we create a structure which can be indexed by DomainId
-/// let keyed_vec: KeyedVec<DomainId, i32> = KeyedVec::new(elements);
-///
-/// // In the end, it should be the case that a DomainId with ID 1 corresponds to the element `2`
-/// assert_eq!(keyed_vec[DomainId::new(1)], 2);
-/// ```
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct KeyedVec<Key, Value> {
     /// [PhantomData] to ensure that the [KeyedVec] is bound to the structure

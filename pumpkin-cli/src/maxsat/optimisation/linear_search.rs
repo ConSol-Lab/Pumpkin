@@ -1,15 +1,15 @@
 use log::info;
 use pumpkin_lib::asserts::pumpkin_assert_moderate;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::encodings::Function;
 use pumpkin_lib::encodings::PseudoBooleanConstraintEncoder;
 use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::variables::PropositionalVariable;
-use pumpkin_lib::Function;
-use pumpkin_lib::Solver;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;

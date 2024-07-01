@@ -9,16 +9,16 @@ use rand::SeedableRng;
 use crate::branching::InDomainRandom;
 #[cfg(doc)]
 use crate::branching::SelectionContext;
-#[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_moderate;
+#[cfg(doc)]
+use crate::solving::Solver;
 
 /// A trait for generating random values; an example of where this is used is in the
 /// [`InDomainRandom`] value selector where it is used to determine which value in the domain to
 /// select.
 ///
 /// At the moment, the randomness in the solver is controlled by the
-/// [`ConstraintSatisfactionSolver`] and the random number generator is by this structure to the
+/// [`Solver`] and the random number generator is by this structure to the
 /// [`SelectionContext`].
 ///
 /// # Testing
@@ -35,7 +35,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_lib::basic_types::Random;
+    /// # use pumpkin_lib::solving::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we flip a coin with probability 0.5
@@ -58,7 +58,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_lib::basic_types::Random;
+    /// # use pumpkin_lib::solving::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we create the elements to select from

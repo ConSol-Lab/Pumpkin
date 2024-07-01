@@ -5,6 +5,8 @@ use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::results::Solution;
+#[cfg(doc)]
+use crate::solving::Solver;
 use crate::termination::TerminationCondition;
 use crate::variables::Literal;
 

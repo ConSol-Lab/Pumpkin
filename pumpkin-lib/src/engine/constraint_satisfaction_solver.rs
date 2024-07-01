@@ -74,10 +74,10 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::variable_names::VariableNames;
-use crate::DefaultBrancher;
+use crate::solving::DefaultBrancher;
 #[cfg(doc)]
-use crate::Solver;
+use crate::solving::Solver;
+use crate::variable_names::VariableNames;
 
 pub(crate) type ClausalPropagatorType = BasicClausalPropagator;
 pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
@@ -103,43 +103,6 @@ pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
 /// [`ConstraintSatisfactionSolver::add_propagator`] to add a propagator). If a conflict is found by
 /// any of the propagators (including the clausal one) then the solver will analyse the conflict
 /// using 1UIP reasoning and backtrack if possible.
-///
-/// ## Example
-/// This example will show how to set-up the [`ConstraintSatisfactionSolver`] to solve a simple not
-/// equals problem between two variables. Note that any constraint is added in the form of
-/// propagators.
-/// ```
-/// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
-/// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-/// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-/// # use pumpkin_lib::engine::variables::IntegerVariable;
-/// # use pumpkin_lib::engine::variables::TransformableVariable;
-/// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
-/// // We create a solver with default options (note that this is only possible in a testing environment)
-/// let mut solver = ConstraintSatisfactionSolver::default();
-///
-/// // Now we create the two variables for which we want to define the propagator
-/// let x = solver.create_new_integer_variable(0, 10, None);
-/// let y = solver.create_new_integer_variable(0, 10, None);
-///
-/// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
-/// //  'x != y' is represented using the propagator for 'x - y != 0'
-/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualConstructor::new([x.into(), y.scaled(-1)].into(), 0));
-/// assert!(no_root_level_conflict);
-///
-/// // We create a branching strategy, in our case we will simply use the default one
-/// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-///
-/// // Then we solve the problem given a time-limit and a branching strategy
-/// let result = solver.solve(&mut Indefinite, &mut brancher);
-///
-/// // Now we check that the result is feasible and that the chosen values for the two variables are different
-/// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
-/// assert!(
-///     solver.get_assigned_integer_value(&x).unwrap() != solver.get_assigned_integer_value(&y).unwrap()
-/// );
-/// ```
 ///
 /// # Bibliography
 /// \[1\] T. Feydy and P. J. Stuckey, ‘Lazy clause generation reengineered’, in International
@@ -637,38 +600,48 @@ impl ConstraintSatisfactionSolver {
     /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::engine::variables::PropositionalVariable;
-    /// # use pumpkin_lib::engine::variables::Literal;
-    /// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
+    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::variables::PropositionalVariable;
+    /// # use pumpkin_lib::variables::Literal;
+    /// # use pumpkin_lib::termination::Indefinite;
     /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-    /// let solver = ConstraintSatisfactionSolver::default();
-    ///
-    /// let mut solver = ConstraintSatisfactionSolver::default();
-    /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
+    /// # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
+    /// let mut solver = Solver::default();
+    /// let x = vec![
+    ///     solver.new_literal(),
+    ///     solver.new_literal(),
+    ///     solver.new_literal(),
+    /// ];
     ///
     /// solver.add_clause([x[0], x[1], x[2]]);
     /// solver.add_clause([x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
-    /// let mut brancher =
-    ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    /// solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
+    /// let mut termination = Indefinite;
+    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    /// let result =
+    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
     ///
-    /// let core = solver
-    ///     .extract_clausal_core(&mut brancher)
-    ///     .expect("the instance is unsatisfiable");
+    /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
+    ///     mut unsatisfiable,
+    /// ) = result
+    /// {
+    ///     {
+    ///         let core = unsatisfiable.extract_core();
     ///
-    /// // The order of the literals in the core is undefined, so we check for unordered equality.
-    /// assert_eq!(
-    ///     core.len(),
-    ///     assumptions.len(),
-    ///     "the core has the length of the number of assumptions"
-    /// );
-    /// assert!(
-    ///     core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///     "all literals in the core are negated assumptions"
-    /// );
+    ///         // The order of the literals in the core is undefined, so we check for unordered
+    ///         // equality.
+    ///         assert_eq!(
+    ///             core.len(),
+    ///             assumptions.len(),
+    ///             "the core has the length of the number of assumptions"
+    ///         );
+    ///         assert!(
+    ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
+    ///             "all literals in the core are negated assumptions"
+    ///         );
+    ///     }
+    /// }
     /// ```
     pub fn extract_clausal_core(
         &mut self,
@@ -729,17 +702,6 @@ impl ConstraintSatisfactionSolver {
 
     /// Returns an infinite iterator of positive literals of new variables. The new variables will
     /// be unnamed.
-    ///
-    /// # Example
-    /// ```
-    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::engine::variables::Literal;
-    /// let mut solver = ConstraintSatisfactionSolver::default();
-    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
-    ///
-    /// // `literals` contains 5 positive literals of newly created propositional variables.
-    /// assert_eq!(literals.len(), 5);
-    /// ```
     ///
     /// Note that this method captures the lifetime of the immutable reference to `self`.
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {

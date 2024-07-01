@@ -19,7 +19,7 @@ use log::warn;
 use log::Level;
 use log::LevelFilter;
 use parsers::dimacs::parse_cnf;
-use parsers::dimacs::CSPSolverArgs;
+use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::options::*;
@@ -28,9 +28,9 @@ use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
-use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use result::PumpkinError;
@@ -377,7 +377,7 @@ fn cnf_problem(
     let instance_file = File::open(instance_path)?;
     let mut solver = parse_cnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(learning_options, solver_options),
+        SolverArgs::new(learning_options, solver_options),
     )?;
 
     let mut termination =

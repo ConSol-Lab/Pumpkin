@@ -10,8 +10,8 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
-use crate::DefaultBrancher;
-use crate::Solver;
+use crate::solving::DefaultBrancher;
+use crate::solving::Solver;
 
 /// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
 /// switching every time a solution is found ([`AlternatingStrategy::EverySolution`]), after every
@@ -158,7 +158,7 @@ mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
     use crate::branching::Brancher;
-    use crate::Solver;
+    use crate::solving::Solver;
 
     #[test]
     fn test_every_solution() {

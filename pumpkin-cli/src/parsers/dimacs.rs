@@ -18,13 +18,13 @@ use std::io::Read;
 use std::num::NonZeroI32;
 use std::str::FromStr;
 
+use pumpkin_lib::encodings::Function;
 use pumpkin_lib::options::LearningOptions;
 use pumpkin_lib::options::SolverOptions;
 use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::variables::Literal;
 use pumpkin_lib::variables::PropositionalVariable;
-use pumpkin_lib::Function;
-use pumpkin_lib::Solver;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -475,25 +475,25 @@ fn next_header_component<'a, Num: FromStr>(
         .map_err(|_| DimacsParseError::InvalidHeader(header.to_owned()))
 }
 
-/// A dimacs sink that creates a fresh [`ConstraintSatisfactionSolver`] when reading DIMACS files.
+/// A dimacs sink that creates a fresh [`Solver`] when reading DIMACS files.
 pub(crate) struct SolverDimacsSink {
     solver: Solver,
     variables: Vec<PropositionalVariable>,
 }
 
-/// The arguments to construct a [`ConstraintSatisfactionSolver`]. Forwarded to
-/// [`ConstraintSatisfactionSolver::new()`].
-pub(crate) struct CSPSolverArgs {
+/// The arguments to construct a [`Solver`]. Forwarded to
+/// [`Solver::with_options()`].
+pub(crate) struct SolverArgs {
     solver_options: SolverOptions,
     learning_options: LearningOptions,
 }
 
-impl CSPSolverArgs {
+impl SolverArgs {
     pub(crate) fn new(
         learning_options: LearningOptions,
         solver_options: SolverOptions,
-    ) -> CSPSolverArgs {
-        CSPSolverArgs {
+    ) -> SolverArgs {
+        SolverArgs {
             solver_options,
             learning_options,
         }
@@ -513,11 +513,11 @@ impl SolverDimacsSink {
 }
 
 impl DimacsSink for SolverDimacsSink {
-    type ConstructorArgs = CSPSolverArgs;
+    type ConstructorArgs = SolverArgs;
     type Formula = Solver;
 
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
-        let CSPSolverArgs {
+        let SolverArgs {
             solver_options,
             learning_options: sat_options,
         } = args;

@@ -7,7 +7,7 @@ use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::Literal;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::Solver;
+use crate::solving::Solver;
 
 /// Implementation of the generalized totalizer encoding for pseudo-boolean constraints.
 ///

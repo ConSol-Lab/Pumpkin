@@ -4,7 +4,7 @@ pub(crate) mod cp;
 mod debug_helper;
 pub(crate) mod predicates;
 mod preprocessor;
-pub mod proof;
+pub(crate) mod proof;
 pub mod rp_engine;
 mod sat;
 pub(crate) mod termination;

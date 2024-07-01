@@ -5,6 +5,10 @@ use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
 pub mod satisfiable;
 pub mod unsatisfiable;
+#[cfg(doc)]
+use crate::solving::Solver;
+#[cfg(doc)]
+use crate::termination::TerminationCondition;
 
 /// The result of a call to [`Solver::satisfy`].
 #[derive(Debug)]
@@ -35,7 +39,7 @@ pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, 'termination, B,
     Unknown,
 }
 
-/// The result of a call to [`Solver::maximise`] or [`Solve::minmise`].
+/// The result of a call to [`Solver::maximise`] or [`Solver::minimise`].
 #[derive(Debug)]
 pub enum OptimisationResult {
     /// Indicates that an optimal solution has been found and proven to be optimal. It provides an

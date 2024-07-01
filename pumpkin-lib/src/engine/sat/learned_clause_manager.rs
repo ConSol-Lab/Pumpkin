@@ -9,7 +9,7 @@ use crate::propagators::clausal::is_clause_propagating;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
 #[cfg(doc)]
-use crate::Solver;
+use crate::solving::Solver;
 
 /// Options which determine how the learned clauses are handled within the [`Solver`]. These options
 /// influence when the learned clause database removed clauses.

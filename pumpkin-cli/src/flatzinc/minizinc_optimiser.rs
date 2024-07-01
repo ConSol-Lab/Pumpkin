@@ -1,8 +1,8 @@
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::results::OptimisationResult;
 use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
-use pumpkin_lib::Solver;
 
 use super::instance::FlatzincObjective;
 use super::instance::Output;

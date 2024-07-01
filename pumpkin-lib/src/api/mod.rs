@@ -21,13 +21,20 @@ pub mod results {
     pub use crate::api::outputs::SolutionReference;
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
-    use crate::Solver;
+    use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+    #[cfg(doc)]
+    use crate::solving::Solver;
 }
 mod solver;
 
-pub use solver::*;
-
-pub use crate::basic_types::Function;
+pub mod solving {
+    //! The main interaction point with Pumpkin; specifies structs related to solving, the main
+    //! one being the [`Solver`].
+    pub use crate::api::solver::DefaultBrancher;
+    pub use crate::api::solver::Solver;
+    pub use crate::basic_types::ConstraintOperationError;
+    pub use crate::basic_types::Random;
+}
 
 pub mod variables {
     //! Contains the variables which are used by the [`Solver`].
@@ -54,7 +61,7 @@ pub mod variables {
     pub use crate::engine::variables::PropositionalVariable;
     pub use crate::engine::variables::TransformableVariable;
     #[cfg(doc)]
-    use crate::Solver;
+    use crate::solving::Solver;
 }
 
 pub mod options {
@@ -70,7 +77,7 @@ pub mod options {
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     #[cfg(doc)]
-    use crate::Solver;
+    use crate::solving::Solver;
 }
 
 pub mod termination {
@@ -89,7 +96,7 @@ pub mod termination {
     pub use crate::engine::termination::time_budget::*;
     pub use crate::engine::termination::TerminationCondition;
     #[cfg(doc)]
-    use crate::Solver;
+    use crate::solving::Solver;
 }
 
 pub mod statistics {
@@ -98,8 +105,14 @@ pub mod statistics {
     pub use crate::basic_types::statistic_logging::statistic_logger::*;
 }
 
-pub use crate::engine::proof;
-pub use crate::engine::rp_engine;
+pub mod proof {
+    //! Contains structures for logging proofs for the [`Solver`].
+    pub use crate::engine::proof::Format;
+    pub use crate::engine::proof::ProofLog;
+    pub use crate::engine::rp_engine;
+    #[cfg(doc)]
+    use crate::solving::Solver;
+}
 
 pub mod predicates {
     //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
@@ -108,8 +121,7 @@ pub mod predicates {
     //! - **Predicates over integers** - These [`IntegerPredicate`]s specify atomic constraints of
     //!   the form `[x >= v]`, `[x <= v]`, `[x == v]`, and `[x != v]`.
     //! - **Predicates over literals** - These [`Predicate::Literal`]s specify [`Literal`]s which
-    //!   are linked to the aforementioned [`IntegerPredicate`]s through the
-    //!   [`VariableLiteralMappings`].
+    //!   are linked to the aforementioned [`IntegerPredicate`]s.
     //! - **Always True/False** - The [`Predicate::True`]/[`Predicate::False`] specify logical
     //!   predicates which are always true/false.
     //!
@@ -119,11 +131,14 @@ pub mod predicates {
     pub use crate::engine::predicates::integer_predicate::IntegerPredicate;
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
+    #[cfg(doc)]
+    use crate::variables::Literal;
 }
 
 pub mod encodings {
     //! Contains structures which encode pseudo-boolean constraints via the
     //! [`PseudoBooleanConstraintEncoder`].
+    pub use crate::basic_types::Function;
     pub use crate::encoders::PseudoBooleanConstraintEncoder;
     pub use crate::encoders::PseudoBooleanEncoding;
 }

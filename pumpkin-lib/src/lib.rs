@@ -11,7 +11,7 @@
 //! pre-defined constraints to the solver.
 //!
 //!  ```rust
-//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::solving::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResult;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::results::ProblemSolution;
@@ -49,12 +49,12 @@
 //!
 //! # Obtaining multiple solutions
 //! Pumpkin supports obtaining multiple solutions from the [`Solver`] when solving satisfaction
-//! problems. The same solution is prevend from occurring multiple times by adding blocking clauses
-//! to the solver which means that after iterating over solutions, these solutions will remain
-//! blocked if the solver is used again.
+//! problems. The same solution is prevented from occurring multiple times by adding blocking
+//! clauses to the solver which means that after iterating over solutions, these solutions will
+//! remain blocked if the solver is used again.
 //!
 //! ```rust
-//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::solving::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResult;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::results::ProblemSolution;
@@ -127,7 +127,7 @@
 //! # Obtaining an unsatisfiable core
 //! Pumpkin allows the user to specify assumptions which can then be used to extract an unsatisfiable core.
 //! ```rust
-//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::solving::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::predicate;
@@ -195,3 +195,6 @@ pub(crate) mod variable_names;
 mod api;
 
 pub use api::*;
+
+#[cfg(doc)]
+use crate::solving::Solver;

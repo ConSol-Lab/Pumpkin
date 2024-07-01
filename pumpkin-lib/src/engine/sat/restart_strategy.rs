@@ -43,8 +43,6 @@ use crate::basic_types::sequence_generators::SequenceGeneratorType;
 ///
 /// \[5\] M. Luby, A. Sinclair, and D. Zuckerman, ‘Optimal speedup of Las Vegas algorithms’,
 /// Information Processing Letters, vol. 47, no. 4, pp. 173–180, 1993.
-
-/// Parameters related to the restarts as provided to [`RestartStrategy`].
 #[derive(Debug, Clone, Copy)]
 pub struct RestartOptions {
     /// Decides the sequence based on which the restarts are performed.
@@ -56,12 +54,11 @@ pub struct RestartOptions {
     pub base_interval: u64,
     /// The minimum number of conflicts to be reached before the first restart is considered
     pub min_num_conflicts_before_first_restart: u64,
-    /// Used to determine if a restart should be forced (part of [`RestartStrategy`]).
-    /// The state is "bad" if the current LBD value (see [`RestartStrategy`] for a
-    /// definition) is much greater than the global LBD average A greater/lower value for
-    /// lbd-coef means a less/more frequent restart policy
+    /// Used to determine if a restart should be forced.
+    /// The state is "bad" if the current LBD value is much greater than the global LBD average A
+    /// greater/lower value for lbd-coef means a less/more frequent restart policy
     pub lbd_coef: f64,
-    /// Used to determine if a restart should be blocked (part of [`RestartStrategy`]).
+    /// Used to determine if a restart should be blocked.
     /// To be used in combination with
     /// [`RestartOptions::num_assigned_window`].
     /// A restart is blocked if the number of assigned propositional variables is must greater than
@@ -69,7 +66,7 @@ pub struct RestartOptions {
     /// [`RestartOptions::num_assigned_coef`] means fewer/more blocked restarts
     pub num_assigned_coef: f64,
     /// Used to determine the length of the recent past that should be considered when deciding on
-    /// blocking restarts (part of [`RestartStrategy`]). The solver considers the last
+    /// blocking restarts. The solver considers the last
     /// [`RestartOptions::num_assigned_window`] conflicts as the reference point for the
     /// number of assigned variables
     pub num_assigned_window: u64,

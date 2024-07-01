@@ -20,7 +20,7 @@ mod weighted_literal;
 
 pub(crate) use clause_reference::ClauseReference;
 pub(crate) use conflict_info::*;
-pub(crate) use constraint_operation_error::ConstraintOperationError;
+pub use constraint_operation_error::ConstraintOperationError;
 pub(crate) use constraint_reference::ConstraintReference;
 pub(crate) use csp_solver_execution_flag::CSPSolverExecutionFlag;
 pub use function::Function;
@@ -31,7 +31,7 @@ pub(crate) use propagation_status_cp::Inconsistency;
 pub(crate) use propagation_status_cp::PropagationStatusCP;
 pub(crate) use propagation_status_cp_one_step::PropagationStatusOneStepCP;
 pub use propositional_conjunction::PropositionalConjunction;
-pub(crate) use random::*;
+pub use random::*;
 pub use solution::ProblemSolution;
 pub use solution::Solution;
 pub use solution::SolutionReference;

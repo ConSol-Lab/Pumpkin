@@ -13,7 +13,7 @@ use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::Literal;
 use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
-use crate::Solver;
+use crate::solving::Solver;
 
 /// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
 /// The idea is to separate the 'preprocessing' of the input and encoding algorithm

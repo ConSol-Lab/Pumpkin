@@ -14,9 +14,9 @@
 
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::Indefinite;
 use pumpkin_lib::variables::DomainId;
-use pumpkin_lib::Solver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {

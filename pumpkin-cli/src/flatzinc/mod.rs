@@ -18,8 +18,8 @@ use pumpkin_lib::results::satisfiable::IteratedSolution;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::SolutionReference;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TimeBudget;
-use pumpkin_lib::Solver;
 
 use self::instance::FlatZincInstance;
 use self::instance::FlatzincObjective;

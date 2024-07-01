@@ -6,7 +6,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
-use crate::Solver;
+use crate::solving::Solver;
 
 /// A struct which represents a weighted linear function over [`Literal`]s, [`DomainId`]s, and a
 /// constant term.

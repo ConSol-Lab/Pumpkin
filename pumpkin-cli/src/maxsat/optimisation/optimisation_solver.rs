@@ -1,9 +1,9 @@
 use log::debug;
 use pumpkin_lib::branching::Brancher;
+use pumpkin_lib::encodings::Function;
 use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
-use pumpkin_lib::Function;
-use pumpkin_lib::Solver;
 
 use super::linear_search::LinearSearch;
 use super::optimisation_result::MaxSatOptimisationResult;

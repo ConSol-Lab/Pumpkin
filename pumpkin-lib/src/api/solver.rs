@@ -6,6 +6,10 @@ use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashSet;
 use crate::basic_types::Solution;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+#[cfg(doc)]
+use crate::branching::value_selection::ValueSelector;
+#[cfg(doc)]
+use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::branching::PhaseSaving;
 use crate::branching::SolutionGuidedValueSelector;
@@ -99,6 +103,25 @@ impl Solver {
     /// Get a literal which is globally false.
     pub fn get_false_literal(&self) -> Literal {
         self.satisfaction_solver.get_false_literal()
+    }
+
+    /// Returns an infinite iterator of positive literals of new variables. The new variables will
+    /// be unnamed.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::variables::Literal;
+    /// let mut solver = Solver::default();
+    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
+    ///
+    /// // `literals` contains 5 positive literals of newly created propositional variables.
+    /// assert_eq!(literals.len(), 5);
+    /// ```
+    ///
+    /// Note that this method captures the lifetime of the immutable reference to `self`.
+    pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
+        std::iter::from_fn(|| Some(self.new_literal()))
     }
 
     /// Create a fresh propositional variable and return the literal with positive polarity.
@@ -638,12 +661,102 @@ impl Solver {
 
     /// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
     /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
-    /// exceeds `bound`. See [`crate::propagators`] for more information.
+    /// exceeds `bound`.
+    ///
+    /// The implementation uses a form of time-table reasoning (for an example of this type of
+    /// reasoning, see \[1], note that it does **not** implement the specific algorithm in the paper
+    /// but that the reasoning used is the same).
     ///
     /// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
     /// this is not the case then this method will panic.
     ///
-    /// For now we assume that the durations, resource requirements and bound are constant.
+    /// # Example
+    /// ```rust
+    /// // We construct three tasks for a resource with capacity 2:
+    /// // - Task 0: Start times: [0, 5], Processing time: 4, Resource usage: 1
+    /// // - Task 1: Start times: [0, 5], Processing time: 2, Resource usage: 1
+    /// // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
+    /// // We can infer that Task 0 and Task 1 execute at the same time
+    /// // while Task 2 will start after them
+    /// # use pumpkin_lib::termination::Indefinite;
+    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::results::SatisfactionResult;
+    /// # use pumpkin_lib::results::satisfiable::Satisfiable;
+    /// # use crate::pumpkin_lib::results::ProblemSolution;
+    /// let solver = Solver::default();
+    ///
+    /// let mut solver = Solver::default();
+    ///
+    /// let start_0 = solver.new_bounded_integer(0, 4);
+    /// let start_1 = solver.new_bounded_integer(0, 4);
+    /// let start_2 = solver.new_bounded_integer(0, 5);
+    ///
+    /// let start_times = [start_0, start_1, start_2];
+    /// let durations = [5, 2, 5];
+    /// let resource_requirements = [1, 1, 2];
+    /// let resource_capacity = 2;
+    ///
+    /// solver.cumulative(
+    ///     &start_times,
+    ///     &durations,
+    ///     &resource_requirements,
+    ///     resource_capacity,
+    /// );
+    ///
+    /// let mut termination = Indefinite;
+    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    ///
+    /// let result = solver.satisfy(&mut brancher, &mut termination);
+    ///
+    /// // We check whether the result was feasible
+    /// if let SatisfactionResult::Satisfiable(satisfiable) = result {
+    ///     let solution = satisfiable.as_solution();
+    ///     let horizon = durations.iter().sum::<i32>();
+    ///     let start_times = [start_0, start_1, start_2];
+    ///
+    ///     // Now we check whether the resource constraint is satisfied at each time-point t
+    ///     assert!((0..=horizon).all(|t| {
+    ///         // We gather all of the resource usages at the current time t
+    ///         let resource_usage_at_t = start_times
+    ///             .iter()
+    ///             .enumerate()
+    ///             .filter_map(|(task_index, start_time)| {
+    ///                 if solution.get_integer_value(*start_time) <= t
+    ///                     && solution.get_integer_value(*start_time) + durations[task_index] > t
+    ///                 {
+    ///                     Some(resource_requirements[task_index])
+    ///                 } else {
+    ///                     None
+    ///                 }
+    ///             })
+    ///             .sum::<i32>();
+    ///         // Then we check whether the resource usage at the current time point is lower than
+    ///         // the resource capacity
+    ///         resource_usage_at_t <= resource_capacity
+    ///     }));
+    ///
+    ///     // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and
+    ///     // Task 1 overlap
+    ///     assert!(
+    ///         solution.get_integer_value(start_2)
+    ///             >= solution.get_integer_value(start_0) + durations[0]
+    ///             && solution.get_integer_value(start_2)
+    ///                 >= solution.get_integer_value(start_1) + durations[1]
+    ///     );
+    ///     assert!(
+    ///         solution.get_integer_value(start_0)
+    ///             < solution.get_integer_value(start_1) + durations[1]
+    ///             && solution.get_integer_value(start_1)
+    ///                 < solution.get_integer_value(start_0) + durations[0]
+    ///     );
+    /// }
+    /// ```
+    ///
+    /// # Bibliography
+    /// \[1\] S. Gay, R. Hartert, and P. Schaus, ‘Simple and scalable time-table filtering for the
+    /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
+    /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
+    /// 21, 2015, pp. 149–157.
     pub fn cumulative<Var: IntegerVariable + 'static + std::fmt::Debug + Copy>(
         &mut self,
         start_times: &[Var],

@@ -50,21 +50,19 @@ pub trait Brancher {
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
     /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
     /// previously fixed. This method could thus be called multiple times in a single
-    /// backtracking operation by the solver
-    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
+    /// backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
-    /// A function which is called when a [`Literal`] appears in a conflict during conflict analysis
-    /// (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
+    /// A function which is called when a [`Literal`] appears in a conflict during conflict
+    /// analysis.
     fn on_appearance_in_conflict_literal(&mut self, _literal: Literal) {}
 
     /// A function which is called when an integer variable appears in a conflict during conflict
-    /// analysis (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
+    /// analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
 
     /// A function which is called when new [`PropositionalVariable`]s are added to the solver when
-    /// encoding the objective function; this method is currently only called during
-    /// [`LinearSearch`] when the encoding of the objective function is added.
+    /// encoding the objective function.
     ///
     /// Note that this method provides **all** [`Literal`]s of the solver and it is up to the
     /// selector to determine how to handle it.
@@ -75,7 +73,6 @@ pub trait Brancher {
     /// known) or when a new solution is found when iterating over solutions using [`Satisfiable`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
-    /// This method is called whenever a restart is performed as determined by the
-    /// [`RestartStrategy`].
+    /// This method is called whenever a restart is performed.
     fn on_restart(&mut self) {}
 }
