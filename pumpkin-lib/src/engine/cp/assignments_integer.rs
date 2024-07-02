@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crate::basic_types::HashMap;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
@@ -189,10 +191,13 @@ impl AssignmentsInteger {
         self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
     }
 
-    pub fn get_trail_position(&self, _predicate: Predicate) -> usize {
-        // tricky! The predicate may not be explicitly on the trail
-
-        todo!();
+    /// Returns the index of the trail entry at which point the given predicate became true.
+    /// In case the predicate is not true, then the function returns None.
+    /// Note that it is not necessary for the predicate to be explicitly present on the trail,
+    /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
+    /// trail position for [x >= 10] will be returned for the case [x >= 6].
+    pub fn get_trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
+        self.domains[integer_predicate.get_domain()].get_trail_position(integer_predicate)
     }
 }
 
@@ -560,7 +565,10 @@ impl IntegerDomainExplicit {
         // (in case those are commonly used)
 
         // find the update with largest trail position
-        // that is smaller or equal than the input trail position
+        // that is smaller than or equal to the input trail position
+
+        // Recall that by the nature of the updates,
+        // the updates are stored in increasing order of trail position.
         self.lower_bound_updates
             .iter()
             .filter(|u| u.trail_position <= trail_position)
@@ -591,7 +599,10 @@ impl IntegerDomainExplicit {
         // (in case those are commonly used)
 
         // find the update with largest trail position
-        // that is smaller or equal than the input trail position
+        // that is smaller than or equal to the input trail position
+
+        // Recall that by the nature of the updates,
+        // the updates are stored in increasing order of trail position.
         self.upper_bound_updates
             .iter()
             .filter(|u| u.trail_position <= trail_position)
@@ -612,8 +623,6 @@ impl IntegerDomainExplicit {
     }
 
     fn contains_at_trail_position(&self, value: i32, trail_position: usize) -> bool {
-        // this could possibly be done simpler?
-
         // if the value is out of bounds, then we can safety say that the value is not in the domain
         if self.lower_bound_at_trail_position(trail_position) > value
             || self.upper_bound_at_trail_position(trail_position) < value
@@ -624,8 +633,8 @@ impl IntegerDomainExplicit {
 
         // in case the hole is made at the given trail position or earlier,
         // the value is not in the domain
-        if let Some(p) = self.holes.get_key_value(&value) {
-            if p.1.trail_position <= trail_position {
+        if let Some(p) = self.holes.get(&value) {
+            if p.trail_position <= trail_position {
                 return false;
             }
         }
@@ -879,6 +888,114 @@ impl IntegerDomainExplicit {
         pumpkin_assert_simple!(self.upper_bound() == entry.old_upper_bound);
 
         pumpkin_assert_moderate!(self.debug_bounds_check());
+    }
+
+    fn get_trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
+        // Perhaps the recursion could be done in a cleaner way,
+        // e.g., separate functions dependibng on the type of predicate.
+        // For the initial version, the current version is okay.
+        match integer_predicate {
+            IntegerPredicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => {
+                // Recall that by the nature of the updates,
+                // the updates are stored in increasing order of the lower bound.
+
+                // for now a simple inefficient linear scan
+                // in the future this should be done with binary search
+
+                // find the update with smallest lower bound
+                // that is greater than or equal to the input lower bound
+                self.lower_bound_updates
+                    .iter()
+                    .find(|u| u.bound >= lower_bound)
+                    .map(|u| u.trail_position)
+            }
+            IntegerPredicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => {
+                // Recall that by the nature of the updates,
+                // the updates are stored in decreasing order of the upper bound.
+
+                // for now a simple inefficient linear scan
+                // in the future this should be done with binary search
+
+                // find the update with greatest upper bound
+                // that is smaller than or equal to the input upper bound
+                self.lower_bound_updates
+                    .iter()
+                    .find(|u| u.bound <= upper_bound)
+                    .map(|u| u.trail_position)
+            }
+            IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                // Check in the explictly stored holes.
+                // If the value has been removed explicitly,
+                // then the stored time is the first time the value was removed.
+                if let Some(p) = self.holes.get(&not_equal_constant) {
+                    Some(p.trail_position)
+                } else {
+                    // Otherwise, check the case when the lower/upper bound surpassed the value.
+                    // If this never happened, then report that the predicate is not true.
+
+                    // Note that it cannot be that both the lower bound and upper bound surpassed
+                    // the not equals constant, i.e., at most one of the two may happen.
+                    // So we can stop as soon as we find one of the two.
+
+                    // Check the lower bound first.
+                    if let Some(trail_position) =
+                        self.get_trail_position(IntegerPredicate::LowerBound {
+                            domain_id,
+                            lower_bound: not_equal_constant + 1,
+                        })
+                    {
+                        // The lower bound removed the value from the domain,
+                        // report the trail position of the lower bound.
+                        Some(trail_position)
+                    } else {
+                        // The lower bound did not surpass the value,
+                        // now check the upper bound.
+                        self.get_trail_position(IntegerPredicate::UpperBound {
+                            domain_id,
+                            upper_bound: not_equal_constant - 1,
+                        })
+                    }
+                }
+            }
+            IntegerPredicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                // For equality to hold, both the lower and upper bound predicates must hold.
+                // Check lower bound first.
+                if let Some(lb_trail_position) =
+                    self.get_trail_position(IntegerPredicate::LowerBound {
+                        domain_id,
+                        lower_bound: equality_constant,
+                    })
+                {
+                    // The lower bound found,
+                    // now the check depends on the upper bound.
+                    // If both the lower and upper bounds are present,
+                    // report the trail position of the bound that was set last.
+                    // Otherwise, return that the predicate is not on the trail.
+                    self.get_trail_position(IntegerPredicate::UpperBound {
+                        domain_id,
+                        upper_bound: equality_constant,
+                    })
+                    .map(|ub_trail_position| cmp::max(lb_trail_position, ub_trail_position))
+                }
+                // If the lower bound is never reached,
+                // then surely the equality predicate cannot be true.
+                else {
+                    None
+                }
+            }
+        }
     }
 }
 
