@@ -161,9 +161,12 @@ impl AssignmentsInteger {
         predicates.push(predicate![domain_id >= domain.lower_bound()]);
         predicates.push(predicate![domain_id <= domain.upper_bound()]);
         // then the holes...
-        for i in (domain.lower_bound() + 1)..domain.upper_bound() {
-            if !domain.is_value_in_domain[domain.get_index(i)] {
-                predicates.push(predicate![domain_id != i]);
+        for hole in &self.domains[domain_id].holes {
+            // Only record holes that are within the lower and upper bound.
+            // Note that the bound values cannot be in the holes,
+            // so we can use strictly lower/greater than comparison
+            if domain.lower_bound() < *hole.0 && *hole.0 < domain.upper_bound() {
+                predicates.push(predicate![domain_id != *hole.0]);
             }
         }
         predicates
@@ -498,27 +501,24 @@ struct IntegerDomainExplicit {
     /// Auxiliary data structure to make it easy to check if a value is present or not.
     /// This is done to avoid going through 'hole_updates'.
     /// It maps a removed value with its decision level and trail position.
-    /// Note: This field subsumes the role of 'is_value_in_domain',
-    /// which will eventually be removed.
     holes: HashMap<i32, PairDecisionLevelTrailPosition>,
-
-    // lower_bound: i32,
-    // upper_bound: i32,
-    // initial_lower_bound: i32,
-    // initial_upper_bound: i32,
-    offset: i32,
-
-    is_value_in_domain: Box<[bool]>,
+    // todo:
+    // Tracking holes could be avoided if possible. For example, we could starting to track
+    // holes only after receiving a request for a hole, at which point this data structure
+    // initialises the hole data structure. The motivation is that there may be many instances that
+    // do not make use of holes, so we want an elegant way to avoid keeping track of hole
+    // information. Could go further and only track holes for some period of time, and if there are
+    // no requests for holes within that period, the data structure disables hole tracking. However
+    // this would only really make sense if this turns out to be computationally intensive.
+    // To summarise:
+    // + holes -> could keep it uninitialised until first request. Could disable it after not being
+    //   used for a long time. It can be recomputed from the holes updates.
+    // + domains -> same story.
 }
 
 impl IntegerDomainExplicit {
     fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Cannot create an empty domain.");
-
-        let size = upper_bound - lower_bound + 1;
-        let is_value_in_domain = vec![true; size as usize];
-
-        let offset = -lower_bound;
 
         let lower_bound_updates = vec![BoundUpdateInfo {
             bound: lower_bound,
@@ -538,8 +538,6 @@ impl IntegerDomainExplicit {
             upper_bound_updates,
             hole_updates: vec![],
             holes: Default::default(),
-            offset,
-            is_value_in_domain: is_value_in_domain.into(),
         }
     }
 
@@ -618,8 +616,9 @@ impl IntegerDomainExplicit {
     }
 
     fn contains(&self, value: i32) -> bool {
-        let idx = self.get_index(value);
-        self.lower_bound() <= value && value <= self.upper_bound() && self.is_value_in_domain[idx]
+        self.lower_bound() <= value
+            && value <= self.upper_bound()
+            && !self.holes.contains_key(&value)
     }
 
     fn contains_at_trail_position(&self, value: i32, trail_position: usize) -> bool {
@@ -649,13 +648,10 @@ impl IntegerDomainExplicit {
         trail_position: usize,
         events: &mut EventSink,
     ) {
-        if removed_value < self.lower_bound() || removed_value > self.upper_bound() {
-            return;
-        }
-
-        let idx = self.get_index(removed_value);
-
-        if !self.is_value_in_domain[idx] {
+        if removed_value < self.lower_bound()
+            || removed_value > self.upper_bound()
+            || self.holes.contains_key(&removed_value)
+        {
             return;
         }
 
@@ -669,7 +665,14 @@ impl IntegerDomainExplicit {
             triggered_upper_bound_update: false,
         };
 
-        self.is_value_in_domain[idx] = false;
+        let old_value = self.holes.insert(
+            removed_value,
+            PairDecisionLevelTrailPosition {
+                decision_level,
+                trail_position,
+            },
+        );
+        pumpkin_assert_moderate!(old_value.is_none());
 
         // check if removing a value triggers a lower bound update
         if self.lower_bound() == removed_value {
@@ -737,11 +740,7 @@ impl IntegerDomainExplicit {
     }
 
     fn update_upper_bound_with_respect_to_holes(&mut self) {
-        // the first check ensures that we do not access a vector location with negative index
-        while self.upper_bound() + self.offset >= 0
-            && !self.is_value_in_domain[self.get_index(self.upper_bound())]
-        {
-            // events.event_occurred(IntDomainEvent::UpperBound, self.id);
+        while self.holes.contains_key(&self.upper_bound()) {
             self.upper_bound_updates.last_mut().unwrap().bound -= 1;
         }
     }
@@ -786,16 +785,9 @@ impl IntegerDomainExplicit {
     }
 
     fn update_lower_bound_with_respect_to_holes(&mut self) {
-        while self.get_index(self.lower_bound()) < self.is_value_in_domain.len()
-            && !self.is_value_in_domain[self.get_index(self.lower_bound())]
-        {
-            // events.event_occurred(IntDomainEvent::LowerBound, self.id);
+        while self.holes.contains_key(&self.lower_bound()) {
             self.lower_bound_updates.last_mut().unwrap().bound += 1;
         }
-    }
-
-    fn get_index(&self, value: i32) -> usize {
-        (value + self.offset) as usize
     }
 
     fn debug_bounds_check(&self) -> bool {
@@ -803,13 +795,10 @@ impl IntegerDomainExplicit {
         if self.lower_bound() > self.upper_bound() {
             true
         } else {
-            let lb_idx = self.get_index(self.lower_bound());
-            let ub_idx = self.get_index(self.upper_bound());
-
-            lb_idx < self.is_value_in_domain.len()
-                && ub_idx < self.is_value_in_domain.len()
-                && self.is_value_in_domain[lb_idx]
-                && self.is_value_in_domain[ub_idx]
+            self.lower_bound() >= self.initial_lower_bound()
+                && self.upper_bound() <= self.initial_upper_bound()
+                && !self.holes.contains_key(&self.lower_bound())
+                && !self.holes.contains_key(&self.upper_bound())
         }
     }
 
@@ -852,9 +841,6 @@ impl IntegerDomainExplicit {
                     .pop()
                     .expect("Must have record of domain removal.");
                 pumpkin_assert_moderate!(hole_update.removed_value == not_equal_constant);
-
-                let value_idx = self.get_index(not_equal_constant);
-                self.is_value_in_domain[value_idx] = true;
 
                 let _ = self
                     .holes
