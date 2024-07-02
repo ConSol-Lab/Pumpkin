@@ -1329,7 +1329,7 @@ mod tests {
     }
 
     #[test]
-    fn lower_bound_change_revert() {
+    fn lower_bound_change_backtrack() {
         let mut assignment = AssignmentsInteger::default();
         let domain_id1 = assignment.grow(0, 100);
         let domain_id2 = assignment.grow(0, 50);
@@ -1384,5 +1384,44 @@ mod tests {
         let _ = assignment.synchronise(1);
 
         assert_eq!(assignment.get_lower_bound(domain_id1), 2);
+    }
+
+    #[test]
+    fn lower_bound_inbetween_updates() {
+        let (_, domain, _) = get_domain1();
+        assert_eq!(domain.lower_bound_at_trail_position(25), 10);
+    }
+
+    #[test]
+    fn lower_bound_beyond_trail_position() {
+        let (_, domain, _) = get_domain1();
+        assert_eq!(domain.lower_bound_at_trail_position(1000), 50);
+    }
+
+    #[test]
+    fn lower_bound_at_update() {
+        let (_, domain, _) = get_domain1();
+        assert_eq!(domain.lower_bound_at_trail_position(50), 20);
+    }
+
+    #[test]
+    fn lower_bound_at_trail_position_after_removals() {
+        let (_, mut domain, mut events) = get_domain1();
+        domain.remove_value(50, 11, 75, &mut events);
+        domain.remove_value(51, 11, 77, &mut events);
+        domain.remove_value(52, 11, 80, &mut events);
+
+        assert_eq!(domain.lower_bound_at_trail_position(77), 52);
+    }
+
+    #[test]
+    fn lower_bound_at_trail_position_after_removals_and_bound_update() {
+        let (_, mut domain, mut events) = get_domain1();
+        domain.remove_value(50, 11, 75, &mut events);
+        domain.remove_value(51, 11, 77, &mut events);
+        domain.remove_value(52, 11, 80, &mut events);
+        domain.set_lower_bound(60, 11, 150, &mut events);
+
+        assert_eq!(domain.lower_bound_at_trail_position(100), 53);
     }
 }
