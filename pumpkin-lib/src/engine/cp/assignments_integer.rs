@@ -1327,4 +1327,62 @@ mod tests {
             Some(150)
         );
     }
+
+    #[test]
+    fn lower_bound_change_revert() {
+        let mut assignment = AssignmentsInteger::default();
+        let domain_id1 = assignment.grow(0, 100);
+        let domain_id2 = assignment.grow(0, 50);
+
+        // decision level 1
+        assignment.increase_decision_level();
+        assignment
+            .apply_integer_predicate(
+                IntegerPredicate::LowerBound {
+                    domain_id: domain_id1,
+                    lower_bound: 2,
+                },
+                None,
+            )
+            .expect("");
+        assignment
+            .apply_integer_predicate(
+                IntegerPredicate::LowerBound {
+                    domain_id: domain_id2,
+                    lower_bound: 25,
+                },
+                None,
+            )
+            .expect("");
+
+        // decision level 2
+        assignment.increase_decision_level();
+        assignment
+            .apply_integer_predicate(
+                IntegerPredicate::LowerBound {
+                    domain_id: domain_id1,
+                    lower_bound: 5,
+                },
+                None,
+            )
+            .expect("");
+
+        // decision level 3
+        assignment.increase_decision_level();
+        assignment
+            .apply_integer_predicate(
+                IntegerPredicate::LowerBound {
+                    domain_id: domain_id1,
+                    lower_bound: 7,
+                },
+                None,
+            )
+            .expect("");
+
+        assert_eq!(assignment.get_lower_bound(domain_id1), 7);
+
+        let _ = assignment.synchronise(1);
+
+        assert_eq!(assignment.get_lower_bound(domain_id1), 2);
+    }
 }
