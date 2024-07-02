@@ -109,8 +109,24 @@ impl AssignmentsInteger {
         self.domains[domain_id].lower_bound
     }
 
+    pub fn get_lower_bound_at_trail_position(
+        &self,
+        _domain_id: DomainId,
+        _trail_position: usize,
+    ) -> i32 {
+        todo!();
+    }
+
     pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].upper_bound
+    }
+
+    pub fn get_upper_bound_at_trail_position(
+        &self,
+        _domain_id: DomainId,
+        _trail_position: usize,
+    ) -> i32 {
+        todo!();
     }
 
     pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
@@ -124,6 +140,10 @@ impl AssignmentsInteger {
     pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
         self.domains[domain_id].lower_bound
+    }
+
+    pub fn get_domain_iterator(&self, _domain_id: DomainId) {
+        todo!();
     }
 
     pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
@@ -151,12 +171,20 @@ impl AssignmentsInteger {
         domain.contains(value)
     }
 
+    pub fn is_value_in_domain_at_trail_position(&self, _domain_id: DomainId, _value: i32) -> bool {
+        todo!();
+    }
+
     pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
         self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
     }
 
     pub fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
         self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
+    }
+
+    pub fn get_trail_position(&self, _predicate: Predicate) -> usize {
+        todo!();
     }
 }
 
