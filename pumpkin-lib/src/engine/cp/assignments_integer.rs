@@ -502,18 +502,6 @@ struct IntegerDomainExplicit {
     /// This is done to avoid going through 'hole_updates'.
     /// It maps a removed value with its decision level and trail position.
     holes: HashMap<i32, PairDecisionLevelTrailPosition>,
-    // todo:
-    // Tracking holes could be avoided if possible. For example, we could starting to track
-    // holes only after receiving a request for a hole, at which point this data structure
-    // initialises the hole data structure. The motivation is that there may be many instances that
-    // do not make use of holes, so we want an elegant way to avoid keeping track of hole
-    // information. Could go further and only track holes for some period of time, and if there are
-    // no requests for holes within that period, the data structure disables hole tracking. However
-    // this would only really make sense if this turns out to be computationally intensive.
-    // To summarise:
-    // + holes -> could keep it uninitialised until first request. Could disable it after not being
-    //   used for a long time. It can be recomputed from the holes updates.
-    // + domains -> same story.
 }
 
 impl IntegerDomainExplicit {
