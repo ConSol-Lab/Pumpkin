@@ -478,6 +478,8 @@ struct IntegerDomainExplicit {
     hole_updates: Vec<HoleUpdateInfo>,
     /// Auxiliary data structure to make it easy to check if a value is present or not.
     /// This is done to avoid going through 'hole_updates'.
+    /// Note: this currently performs the same role as 'is_value_in_domain',
+    /// the latter will eventually be removed
     removed_holes: HashSet<i32>,
 
     // lower_bound: i32,
@@ -522,24 +524,35 @@ impl IntegerDomainExplicit {
     }
 
     fn lower_bound(&self) -> i32 {
-        todo!();
+        // the last entry contains the current lower bound
+        self.lower_bound_updates
+            .last()
+            .expect("Cannot be empty.")
+            .bound
     }
 
     fn initial_lower_bound(&self) -> i32 {
-        todo!();
+        // the first entry is never removed,
+        // and contains the bound that was assigned upon creation
+        self.lower_bound_updates[0].bound
     }
 
     fn upper_bound(&self) -> i32 {
-        todo!();
+        // the last entry contains the current upper bound
+        self.upper_bound_updates
+            .last()
+            .expect("Cannot be empty.")
+            .bound
     }
 
     fn initial_upper_bound(&self) -> i32 {
-        todo!();
+        // the first entry is never removed,
+        // and contains the bound that was assigned upon creation
+        self.upper_bound_updates[0].bound
     }
 
     fn contains(&self, value: i32) -> bool {
         let idx = self.get_index(value);
-
         self.lower_bound() <= value && value <= self.upper_bound() && self.is_value_in_domain[idx]
     }
 
@@ -597,8 +610,9 @@ impl IntegerDomainExplicit {
         decision_level: usize,
         trail_position: usize,
     ) -> bool {
-        self.upper_bound_updates.last().unwrap().decision_level <= decision_level
-            && self.upper_bound_updates.last().unwrap().trail_position < trail_position
+        trail_position == 0
+            || self.upper_bound_updates.last().unwrap().decision_level <= decision_level
+                && self.upper_bound_updates.last().unwrap().trail_position < trail_position
     }
 
     fn set_upper_bound(
@@ -645,8 +659,9 @@ impl IntegerDomainExplicit {
         decision_level: usize,
         trail_position: usize,
     ) -> bool {
-        self.lower_bound_updates.last().unwrap().decision_level <= decision_level
-            && self.lower_bound_updates.last().unwrap().trail_position < trail_position
+        trail_position == 0
+            || self.lower_bound_updates.last().unwrap().decision_level <= decision_level
+                && self.lower_bound_updates.last().unwrap().trail_position < trail_position
     }
 
     fn set_lower_bound(
