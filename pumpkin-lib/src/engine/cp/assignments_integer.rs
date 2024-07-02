@@ -1,3 +1,4 @@
+use crate::basic_types::HashSet;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
@@ -106,7 +107,7 @@ impl AssignmentsInteger {
 // methods for getting info about the domains
 impl AssignmentsInteger {
     pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].lower_bound
+        self.domains[domain_id].lower_bound()
     }
 
     pub fn get_lower_bound_at_trail_position(
@@ -118,7 +119,7 @@ impl AssignmentsInteger {
     }
 
     pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].upper_bound
+        self.domains[domain_id].upper_bound()
     }
 
     pub fn get_upper_bound_at_trail_position(
@@ -130,16 +131,16 @@ impl AssignmentsInteger {
     }
 
     pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].initial_lower_bound
+        self.domains[domain_id].initial_lower_bound()
     }
 
     pub fn get_initial_upper_bound(&self, domain_id: DomainId) -> i32 {
-        self.domains[domain_id].initial_upper_bound
+        self.domains[domain_id].initial_upper_bound()
     }
 
     pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
-        self.domains[domain_id].lower_bound
+        self.domains[domain_id].lower_bound()
     }
 
     pub fn get_domain_iterator(&self, _domain_id: DomainId) {
@@ -150,15 +151,15 @@ impl AssignmentsInteger {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
         // if fixed, this is just one predicate
-        if domain.lower_bound == domain.upper_bound {
-            predicates.push(predicate![domain_id == domain.lower_bound]);
+        if domain.lower_bound() == domain.upper_bound() {
+            predicates.push(predicate![domain_id == domain.lower_bound()]);
             return predicates;
         }
         // if not fixed, start with the bounds...
-        predicates.push(predicate![domain_id >= domain.lower_bound]);
-        predicates.push(predicate![domain_id <= domain.upper_bound]);
+        predicates.push(predicate![domain_id >= domain.lower_bound()]);
+        predicates.push(predicate![domain_id <= domain.upper_bound()]);
         // then the holes...
-        for i in (domain.lower_bound + 1)..domain.upper_bound {
+        for i in (domain.lower_bound() + 1)..domain.upper_bound() {
             if !domain.is_value_in_domain[domain.get_index(i)] {
                 predicates.push(predicate![domain_id != i]);
             }
@@ -208,6 +209,9 @@ impl AssignmentsInteger {
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
 
+        // important to record trail position _before_ pushing to the trail
+        let trail_position = self.trail.len();
+
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
             old_lower_bound,
@@ -215,8 +219,15 @@ impl AssignmentsInteger {
             reason,
         });
 
+        let decision_level = self.get_decision_level();
         let domain = &mut self.domains[domain_id];
-        domain.set_lower_bound(new_lower_bound, &mut self.events);
+
+        domain.set_lower_bound(
+            new_lower_bound,
+            decision_level,
+            trail_position,
+            &mut self.events,
+        );
 
         domain.verify_consistency()
     }
@@ -239,6 +250,9 @@ impl AssignmentsInteger {
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
 
+        // important to record trail position _before_ pushing to the trail
+        let trail_position = self.trail.len();
+
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
             old_lower_bound,
@@ -246,8 +260,15 @@ impl AssignmentsInteger {
             reason,
         });
 
+        let decision_level = self.get_decision_level();
         let domain = &mut self.domains[domain_id];
-        domain.set_upper_bound(new_upper_bound, &mut self.events);
+
+        domain.set_upper_bound(
+            new_upper_bound,
+            decision_level,
+            trail_position,
+            &mut self.events,
+        );
 
         domain.verify_consistency()
     }
@@ -291,6 +312,9 @@ impl AssignmentsInteger {
         let old_lower_bound = self.get_lower_bound(domain_id);
         let old_upper_bound = self.get_upper_bound(domain_id);
 
+        // important to record trail position _before_ pushing to the trail
+        let trail_position = self.trail.len();
+
         self.trail.push(ConstraintProgrammingTrailEntry {
             predicate,
             old_lower_bound,
@@ -298,8 +322,15 @@ impl AssignmentsInteger {
             reason,
         });
 
+        let decision_level = self.get_decision_level();
         let domain = &mut self.domains[domain_id];
-        domain.remove_value(removed_value_from_domain, &mut self.events);
+
+        domain.remove_value(
+            removed_value_from_domain,
+            decision_level,
+            trail_position,
+            &mut self.events,
+        );
 
         domain.verify_consistency()
     }
@@ -372,10 +403,10 @@ impl AssignmentsInteger {
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
             let domain_id = entry.predicate.get_domain();
-            let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
-                let value_before = self.domains[domain_id].lower_bound;
+            let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
+                let value_before = self.domains[domain_id].lower_bound();
                 self.domains[domain_id].undo_trail_entry(&entry);
-                if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
+                if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
                     // Variable used to be fixed but is not after backtracking
                     unfixed_variables.push((domain_id, value_before));
                 }
@@ -413,6 +444,24 @@ pub struct ConstraintProgrammingTrailEntry {
     pub reason: Option<ReasonRef>,
 }
 
+#[derive(Clone, Debug)]
+struct BoundUpdateInfo {
+    bound: i32,
+    decision_level: usize,
+    trail_position: usize,
+}
+
+#[derive(Clone, Debug)]
+struct HoleUpdateInfo {
+    removed_value: i32,
+    #[allow(dead_code)]
+    decision_level: usize,
+    #[allow(dead_code)]
+    trail_position: usize,
+    triggered_lower_bound_update: bool,
+    triggered_upper_bound_update: bool,
+}
+
 /// This is the CP representation of a domain. It stores the individual values that are in the
 /// domain, alongside the current bounds. To support negative values, and to prevent allocating
 /// more memory than the size of the domain, an offset is determined which is used to index into
@@ -423,12 +472,18 @@ pub struct ConstraintProgrammingTrailEntry {
 #[derive(Clone, Debug)]
 struct IntegerDomainExplicit {
     id: DomainId,
+    /// 'updates' fields chronologically records the changes to the domain
+    lower_bound_updates: Vec<BoundUpdateInfo>,
+    upper_bound_updates: Vec<BoundUpdateInfo>,
+    hole_updates: Vec<HoleUpdateInfo>,
+    /// Auxiliary data structure to make it easy to check if a value is present or not.
+    /// This is done to avoid going through 'hole_updates'.
+    removed_holes: HashSet<i32>,
 
-    lower_bound: i32,
-    upper_bound: i32,
-    initial_lower_bound: i32,
-    initial_upper_bound: i32,
-
+    // lower_bound: i32,
+    // upper_bound: i32,
+    // initial_lower_bound: i32,
+    // initial_upper_bound: i32,
     offset: i32,
 
     is_value_in_domain: Box<[bool]>,
@@ -443,89 +498,192 @@ impl IntegerDomainExplicit {
 
         let offset = -lower_bound;
 
+        let lower_bound_updates = vec![BoundUpdateInfo {
+            bound: lower_bound,
+            decision_level: 0,
+            trail_position: 0,
+        }];
+
+        let upper_bound_updates = vec![BoundUpdateInfo {
+            bound: upper_bound,
+            decision_level: 0,
+            trail_position: 0,
+        }];
+
         IntegerDomainExplicit {
             id,
-            lower_bound,
-            upper_bound,
-            initial_lower_bound: lower_bound,
-            initial_upper_bound: upper_bound,
+            lower_bound_updates,
+            upper_bound_updates,
+            hole_updates: vec![],
+            removed_holes: Default::default(),
             offset,
             is_value_in_domain: is_value_in_domain.into(),
         }
     }
 
+    fn lower_bound(&self) -> i32 {
+        todo!();
+    }
+
+    fn initial_lower_bound(&self) -> i32 {
+        todo!();
+    }
+
+    fn upper_bound(&self) -> i32 {
+        todo!();
+    }
+
+    fn initial_upper_bound(&self) -> i32 {
+        todo!();
+    }
+
     fn contains(&self, value: i32) -> bool {
         let idx = self.get_index(value);
 
-        self.lower_bound <= value && value <= self.upper_bound && self.is_value_in_domain[idx]
+        self.lower_bound() <= value && value <= self.upper_bound() && self.is_value_in_domain[idx]
     }
 
-    fn remove_value(&mut self, value: i32, events: &mut EventSink) {
-        if value < self.lower_bound || value > self.upper_bound {
+    fn remove_value(
+        &mut self,
+        removed_value: i32,
+        decision_level: usize,
+        trail_position: usize,
+        events: &mut EventSink,
+    ) {
+        if removed_value < self.lower_bound() || removed_value > self.upper_bound() {
             return;
         }
 
-        let idx = self.get_index(value);
+        let idx = self.get_index(removed_value);
 
-        if self.is_value_in_domain[idx] {
-            events.event_occurred(IntDomainEvent::Removal, self.id);
+        if !self.is_value_in_domain[idx] {
+            return;
         }
+
+        events.event_occurred(IntDomainEvent::Removal, self.id);
+
+        let mut hole_update_info = HoleUpdateInfo {
+            removed_value,
+            decision_level,
+            trail_position,
+            triggered_lower_bound_update: false,
+            triggered_upper_bound_update: false,
+        };
 
         self.is_value_in_domain[idx] = false;
 
-        self.update_lower_bound(events);
-        self.update_upper_bound(events);
+        // check if removing a value triggers a lower bound update
+        if self.lower_bound() == removed_value {
+            self.set_lower_bound(removed_value + 1, decision_level, trail_position, events);
+            hole_update_info.triggered_lower_bound_update = true;
+        }
+        // check if removing the value triggers an upper bound update
+        if self.upper_bound() == removed_value {
+            self.set_upper_bound(removed_value - 1, decision_level, trail_position, events);
+            hole_update_info.triggered_upper_bound_update = true;
+        }
 
-        if self.lower_bound == self.upper_bound {
+        if self.lower_bound() == self.upper_bound() {
             events.event_occurred(IntDomainEvent::Assign, self.id);
         }
+
+        self.hole_updates.push(hole_update_info);
+        let value_not_present = self.removed_holes.insert(removed_value);
+        pumpkin_assert_moderate!(value_not_present);
     }
 
-    fn set_upper_bound(&mut self, value: i32, events: &mut EventSink) {
-        if value >= self.upper_bound {
+    fn debug_is_valid_upper_bound_domain_update(
+        &self,
+        decision_level: usize,
+        trail_position: usize,
+    ) -> bool {
+        self.upper_bound_updates.last().unwrap().decision_level <= decision_level
+            && self.upper_bound_updates.last().unwrap().trail_position < trail_position
+    }
+
+    fn set_upper_bound(
+        &mut self,
+        new_upper_bound: i32,
+        decision_level: usize,
+        trail_position: usize,
+        events: &mut EventSink,
+    ) {
+        pumpkin_assert_moderate!(
+            self.debug_is_valid_upper_bound_domain_update(decision_level, trail_position)
+        );
+
+        if new_upper_bound >= self.upper_bound() {
             return;
         }
 
         events.event_occurred(IntDomainEvent::UpperBound, self.id);
 
-        self.upper_bound = value;
-        self.update_upper_bound(events);
+        self.upper_bound_updates.push(BoundUpdateInfo {
+            bound: new_upper_bound,
+            decision_level,
+            trail_position,
+        });
+        self.update_upper_bound_with_respect_to_holes();
 
-        if self.lower_bound == self.upper_bound {
+        if self.lower_bound() == self.upper_bound() {
             events.event_occurred(IntDomainEvent::Assign, self.id);
         }
     }
 
-    fn set_lower_bound(&mut self, value: i32, events: &mut EventSink) {
-        if value <= self.lower_bound {
+    fn update_upper_bound_with_respect_to_holes(&mut self) {
+        // the first check ensures that we do not access a vector location with negative index
+        while self.upper_bound() + self.offset >= 0
+            && !self.is_value_in_domain[self.get_index(self.upper_bound())]
+        {
+            // events.event_occurred(IntDomainEvent::UpperBound, self.id);
+            self.upper_bound_updates.last_mut().unwrap().bound -= 1;
+        }
+    }
+
+    fn debug_is_valid_lower_bound_domain_update(
+        &self,
+        decision_level: usize,
+        trail_position: usize,
+    ) -> bool {
+        self.lower_bound_updates.last().unwrap().decision_level <= decision_level
+            && self.lower_bound_updates.last().unwrap().trail_position < trail_position
+    }
+
+    fn set_lower_bound(
+        &mut self,
+        new_lower_bound: i32,
+        decision_level: usize,
+        trail_position: usize,
+        events: &mut EventSink,
+    ) {
+        pumpkin_assert_moderate!(
+            self.debug_is_valid_lower_bound_domain_update(decision_level, trail_position)
+        );
+
+        if new_lower_bound <= self.lower_bound() {
             return;
         }
 
         events.event_occurred(IntDomainEvent::LowerBound, self.id);
 
-        self.lower_bound = value;
-        self.update_lower_bound(events);
+        self.lower_bound_updates.push(BoundUpdateInfo {
+            bound: new_lower_bound,
+            decision_level,
+            trail_position,
+        });
+        self.update_lower_bound_with_respect_to_holes();
 
-        if self.lower_bound == self.upper_bound {
+        if self.lower_bound() == self.upper_bound() {
             events.event_occurred(IntDomainEvent::Assign, self.id);
         }
     }
 
-    fn update_lower_bound(&mut self, events: &mut EventSink) {
-        while self.get_index(self.lower_bound) < self.is_value_in_domain.len()
-            && !self.is_value_in_domain[self.get_index(self.lower_bound)]
+    fn update_lower_bound_with_respect_to_holes(&mut self) {
+        while self.get_index(self.lower_bound()) < self.is_value_in_domain.len()
+            && !self.is_value_in_domain[self.get_index(self.lower_bound())]
         {
-            events.event_occurred(IntDomainEvent::LowerBound, self.id);
-            self.lower_bound += 1;
-        }
-    }
-
-    fn update_upper_bound(&mut self, events: &mut EventSink) {
-        while self.upper_bound + self.offset >= 0
-            && !self.is_value_in_domain[self.get_index(self.upper_bound)]
-        {
-            events.event_occurred(IntDomainEvent::UpperBound, self.id);
-            self.upper_bound -= 1;
+            // events.event_occurred(IntDomainEvent::LowerBound, self.id);
+            self.lower_bound_updates.last_mut().unwrap().bound += 1;
         }
     }
 
@@ -535,11 +693,11 @@ impl IntegerDomainExplicit {
 
     fn debug_bounds_check(&self) -> bool {
         // If the domain is empty, the lower bound will be greater than the upper bound.
-        if self.lower_bound > self.upper_bound {
+        if self.lower_bound() > self.upper_bound() {
             true
         } else {
-            let lb_idx = self.get_index(self.lower_bound);
-            let ub_idx = self.get_index(self.upper_bound);
+            let lb_idx = self.get_index(self.lower_bound());
+            let ub_idx = self.get_index(self.upper_bound());
 
             lb_idx < self.is_value_in_domain.len()
                 && ub_idx < self.is_value_in_domain.len()
@@ -549,7 +707,7 @@ impl IntegerDomainExplicit {
     }
 
     fn verify_consistency(&self) -> Result<(), EmptyDomain> {
-        if self.lower_bound > self.upper_bound {
+        if self.lower_bound() > self.upper_bound() {
             Err(EmptyDomain)
         } else {
             Ok(())
@@ -557,17 +715,68 @@ impl IntegerDomainExplicit {
     }
 
     fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
-        if let IntegerPredicate::NotEqual {
-            domain_id: _,
-            not_equal_constant,
-        } = entry.predicate
-        {
-            let value_idx = self.get_index(not_equal_constant);
-            self.is_value_in_domain[value_idx] = true;
-        }
+        match entry.predicate {
+            IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: _,
+            } => {
+                pumpkin_assert_moderate!(domain_id == self.id);
 
-        self.lower_bound = entry.old_lower_bound;
-        self.upper_bound = entry.old_upper_bound;
+                let _ = self.lower_bound_updates.pop();
+                pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
+            }
+            IntegerPredicate::UpperBound {
+                domain_id,
+                upper_bound: _,
+            } => {
+                pumpkin_assert_moderate!(domain_id == self.id);
+
+                let _ = self.upper_bound_updates.pop();
+                pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
+            }
+            IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                pumpkin_assert_moderate!(domain_id == self.id);
+
+                let hole_update = self
+                    .hole_updates
+                    .pop()
+                    .expect("Must have record of domain removal.");
+                pumpkin_assert_moderate!(hole_update.removed_value == not_equal_constant);
+
+                let value_idx = self.get_index(not_equal_constant);
+                self.is_value_in_domain[value_idx] = true;
+
+                let successfully_removed_value = self.removed_holes.remove(&not_equal_constant);
+                pumpkin_assert_moderate!(successfully_removed_value);
+
+                if hole_update.triggered_lower_bound_update {
+                    let _ = self.lower_bound_updates.pop();
+                    pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
+                }
+
+                if hole_update.triggered_upper_bound_update {
+                    let _ = self.upper_bound_updates.pop();
+                    pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
+                }
+            }
+            IntegerPredicate::Equal {
+                domain_id: _,
+                equality_constant: _,
+            } => {
+                // I think we never push equality predicates to the trail
+                // in the current version. Equality gets substituted
+                // by a lower and upper bound predicate.
+                unreachable!()
+            }
+        };
+
+        // these asserts will be removed, for now it is a sanity check
+        // later we may remove the old bound from the trail entry since it is not needed
+        pumpkin_assert_simple!(self.lower_bound() == entry.old_lower_bound);
+        pumpkin_assert_simple!(self.upper_bound() == entry.old_upper_bound);
 
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
@@ -697,7 +906,7 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, &mut events);
+        domain.remove_value(2, 0, 1, &mut events);
 
         assert!(!domain.contains(2));
     }
@@ -708,10 +917,10 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, &mut events);
-        domain.remove_value(1, &mut events);
+        domain.remove_value(2, 0, 1, &mut events);
+        domain.remove_value(1, 0, 2, &mut events);
 
-        assert_eq!(3, domain.lower_bound);
+        assert_eq!(3, domain.lower_bound());
     }
 
     #[test]
@@ -720,10 +929,10 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(4, &mut events);
-        domain.remove_value(5, &mut events);
+        domain.remove_value(4, 0, 1, &mut events);
+        domain.remove_value(5, 0, 2, &mut events);
 
-        assert_eq!(3, domain.upper_bound);
+        assert_eq!(3, domain.upper_bound());
     }
 
     #[test]
@@ -732,9 +941,9 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(4, &mut events);
-        domain.remove_value(1, &mut events);
-        domain.remove_value(1, &mut events);
+        domain.remove_value(4, 0, 1, &mut events);
+        domain.remove_value(1, 0, 2, &mut events);
+        domain.remove_value(1, 0, 3, &mut events);
     }
 
     #[test]
@@ -743,10 +952,10 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, &mut events);
-        domain.set_lower_bound(2, &mut events);
+        domain.remove_value(2, 0, 1, &mut events);
+        domain.set_lower_bound(2, 0, 2, &mut events);
 
-        assert_eq!(3, domain.lower_bound);
+        assert_eq!(3, domain.lower_bound());
     }
 
     #[test]
@@ -755,10 +964,10 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
-        domain.remove_value(4, &mut events);
-        domain.set_upper_bound(4, &mut events);
+        domain.remove_value(4, 0, 1, &mut events);
+        domain.set_upper_bound(4, 0, 2, &mut events);
 
-        assert_eq!(3, domain.upper_bound);
+        assert_eq!(3, domain.upper_bound());
     }
 
     #[test]
