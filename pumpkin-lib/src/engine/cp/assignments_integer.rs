@@ -112,10 +112,10 @@ impl AssignmentsInteger {
 
     pub fn get_lower_bound_at_trail_position(
         &self,
-        _domain_id: DomainId,
-        _trail_position: usize,
+        domain_id: DomainId,
+        trail_position: usize,
     ) -> i32 {
-        todo!();
+        self.domains[domain_id].lower_bound_at_trail_position(domain_id, trail_position)
     }
 
     pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
@@ -124,10 +124,10 @@ impl AssignmentsInteger {
 
     pub fn get_upper_bound_at_trail_position(
         &self,
-        _domain_id: DomainId,
-        _trail_position: usize,
+        domain_id: DomainId,
+        trail_position: usize,
     ) -> i32 {
-        todo!();
+        self.domains[domain_id].upper_bound_at_trail_position(domain_id, trail_position)
     }
 
     pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
@@ -143,8 +143,8 @@ impl AssignmentsInteger {
         self.domains[domain_id].lower_bound()
     }
 
-    pub fn get_domain_iterator(&self, _domain_id: DomainId) {
-        todo!();
+    pub fn get_domain_iterator(&self, domain_id: DomainId) {
+        self.domains[domain_id].domain_iterator()
     }
 
     pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
@@ -172,8 +172,13 @@ impl AssignmentsInteger {
         domain.contains(value)
     }
 
-    pub fn is_value_in_domain_at_trail_position(&self, _domain_id: DomainId, _value: i32) -> bool {
-        todo!();
+    pub fn is_value_in_domain_at_trail_position(
+        &self,
+        domain_id: DomainId,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        self.domains[domain_id].contains_at_trail_position(domain_id, value, trail_position)
     }
 
     pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
@@ -537,6 +542,10 @@ impl IntegerDomainExplicit {
         self.lower_bound_updates[0].bound
     }
 
+    fn lower_bound_at_trail_position(&self, _domain_id: DomainId, _trail_position: usize) -> i32 {
+        todo!();
+    }
+
     fn upper_bound(&self) -> i32 {
         // the last entry contains the current upper bound
         self.upper_bound_updates
@@ -551,9 +560,26 @@ impl IntegerDomainExplicit {
         self.upper_bound_updates[0].bound
     }
 
+    fn upper_bound_at_trail_position(&self, _domain_id: DomainId, _trail_position: usize) -> i32 {
+        todo!();
+    }
+
+    fn domain_iterator(&self) {
+        todo!();
+    }
+
     fn contains(&self, value: i32) -> bool {
         let idx = self.get_index(value);
         self.lower_bound() <= value && value <= self.upper_bound() && self.is_value_in_domain[idx]
+    }
+
+    fn contains_at_trail_position(
+        &self,
+        _domain_id: DomainId,
+        _value: i32,
+        _trail_position: usize,
+    ) -> bool {
+        todo!();
     }
 
     fn remove_value(
