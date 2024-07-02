@@ -1,4 +1,4 @@
-use crate::basic_types::HashSet;
+use crate::basic_types::HashMap;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
@@ -115,7 +115,7 @@ impl AssignmentsInteger {
         domain_id: DomainId,
         trail_position: usize,
     ) -> i32 {
-        self.domains[domain_id].lower_bound_at_trail_position(domain_id, trail_position)
+        self.domains[domain_id].lower_bound_at_trail_position(trail_position)
     }
 
     pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
@@ -127,7 +127,7 @@ impl AssignmentsInteger {
         domain_id: DomainId,
         trail_position: usize,
     ) -> i32 {
-        self.domains[domain_id].upper_bound_at_trail_position(domain_id, trail_position)
+        self.domains[domain_id].upper_bound_at_trail_position(trail_position)
     }
 
     pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
@@ -178,7 +178,7 @@ impl AssignmentsInteger {
         value: i32,
         trail_position: usize,
     ) -> bool {
-        self.domains[domain_id].contains_at_trail_position(domain_id, value, trail_position)
+        self.domains[domain_id].contains_at_trail_position(value, trail_position)
     }
 
     pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
@@ -190,6 +190,8 @@ impl AssignmentsInteger {
     }
 
     pub fn get_trail_position(&self, _predicate: Predicate) -> usize {
+        // tricky! The predicate may not be explicitly on the trail
+
         todo!();
     }
 }
@@ -450,6 +452,13 @@ pub struct ConstraintProgrammingTrailEntry {
 }
 
 #[derive(Clone, Debug)]
+struct PairDecisionLevelTrailPosition {
+    #[allow(dead_code)]
+    decision_level: usize,
+    trail_position: usize,
+}
+
+#[derive(Clone, Debug)]
 struct BoundUpdateInfo {
     bound: i32,
     decision_level: usize,
@@ -483,9 +492,10 @@ struct IntegerDomainExplicit {
     hole_updates: Vec<HoleUpdateInfo>,
     /// Auxiliary data structure to make it easy to check if a value is present or not.
     /// This is done to avoid going through 'hole_updates'.
-    /// Note: this currently performs the same role as 'is_value_in_domain',
-    /// the latter will eventually be removed
-    removed_holes: HashSet<i32>,
+    /// It maps a removed value with its decision level and trail position.
+    /// Note: This field subsumes the role of 'is_value_in_domain',
+    /// which will eventually be removed.
+    holes: HashMap<i32, PairDecisionLevelTrailPosition>,
 
     // lower_bound: i32,
     // upper_bound: i32,
@@ -522,7 +532,7 @@ impl IntegerDomainExplicit {
             lower_bound_updates,
             upper_bound_updates,
             hole_updates: vec![],
-            removed_holes: Default::default(),
+            holes: Default::default(),
             offset,
             is_value_in_domain: is_value_in_domain.into(),
         }
@@ -542,8 +552,21 @@ impl IntegerDomainExplicit {
         self.lower_bound_updates[0].bound
     }
 
-    fn lower_bound_at_trail_position(&self, _domain_id: DomainId, _trail_position: usize) -> i32 {
-        todo!();
+    fn lower_bound_at_trail_position(&self, trail_position: usize) -> i32 {
+        // for now a simple inefficient linear scan
+        // in the future this should be done with binary search
+        // possibly caching old queries, and
+        // maybe even first checking large/small trail position values
+        // (in case those are commonly used)
+
+        // find the update with largest trail position
+        // that is smaller or equal than the input trail position
+        self.lower_bound_updates
+            .iter()
+            .filter(|u| u.trail_position <= trail_position)
+            .last()
+            .expect("Cannot fail")
+            .bound
     }
 
     fn upper_bound(&self) -> i32 {
@@ -560,11 +583,26 @@ impl IntegerDomainExplicit {
         self.upper_bound_updates[0].bound
     }
 
-    fn upper_bound_at_trail_position(&self, _domain_id: DomainId, _trail_position: usize) -> i32 {
-        todo!();
+    fn upper_bound_at_trail_position(&self, trail_position: usize) -> i32 {
+        // for now a simple inefficient linear scan
+        // in the future this should be done with binary search
+        // possibly caching old queries, and
+        // maybe even first checking large/small trail position values
+        // (in case those are commonly used)
+
+        // find the update with largest trail position
+        // that is smaller or equal than the input trail position
+        self.upper_bound_updates
+            .iter()
+            .filter(|u| u.trail_position <= trail_position)
+            .last()
+            .expect("Cannot fail")
+            .bound
     }
 
     fn domain_iterator(&self) {
+        // to be done at some point later,
+        // for now we keep the method as a reminder
         todo!();
     }
 
@@ -573,13 +611,26 @@ impl IntegerDomainExplicit {
         self.lower_bound() <= value && value <= self.upper_bound() && self.is_value_in_domain[idx]
     }
 
-    fn contains_at_trail_position(
-        &self,
-        _domain_id: DomainId,
-        _value: i32,
-        _trail_position: usize,
-    ) -> bool {
-        todo!();
+    fn contains_at_trail_position(&self, value: i32, trail_position: usize) -> bool {
+        // this could possibly be done simpler?
+
+        // if the value is out of bounds, then we can safety say that the value is not in the domain
+        if self.lower_bound_at_trail_position(trail_position) > value
+            || self.upper_bound_at_trail_position(trail_position) < value
+        {
+            return false;
+        }
+        // otherwise we need to check if there is a hole with that specific value
+
+        // in case the hole is made at the given trail position or earlier,
+        // the value is not in the domain
+        if let Some(p) = self.holes.get_key_value(&value) {
+            if p.1.trail_position <= trail_position {
+                return false;
+            }
+        }
+        // since none of the previous checks triggered, the value is in the domain
+        true
     }
 
     fn remove_value(
@@ -627,8 +678,14 @@ impl IntegerDomainExplicit {
         }
 
         self.hole_updates.push(hole_update_info);
-        let value_not_present = self.removed_holes.insert(removed_value);
-        pumpkin_assert_moderate!(value_not_present);
+        let old_entry = self.holes.insert(
+            removed_value,
+            PairDecisionLevelTrailPosition {
+                decision_level,
+                trail_position,
+            },
+        );
+        pumpkin_assert_moderate!(old_entry.is_none());
     }
 
     fn debug_is_valid_upper_bound_domain_update(
@@ -790,8 +847,10 @@ impl IntegerDomainExplicit {
                 let value_idx = self.get_index(not_equal_constant);
                 self.is_value_in_domain[value_idx] = true;
 
-                let successfully_removed_value = self.removed_holes.remove(&not_equal_constant);
-                pumpkin_assert_moderate!(successfully_removed_value);
+                let _ = self
+                    .holes
+                    .remove(&not_equal_constant)
+                    .expect("Must be present.");
 
                 if hole_update.triggered_lower_bound_update {
                     let _ = self.lower_bound_updates.pop();
