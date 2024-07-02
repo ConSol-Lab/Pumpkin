@@ -197,7 +197,7 @@ impl AssignmentsInteger {
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
     pub fn get_trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
-        self.domains[integer_predicate.get_domain()].get_trail_position(integer_predicate)
+        self.domains[integer_predicate.get_domain()].trail_position(integer_predicate)
     }
 }
 
@@ -890,7 +890,7 @@ impl IntegerDomainExplicit {
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
 
-    fn get_trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
+    fn trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
         // Perhaps the recursion could be done in a cleaner way,
         // e.g., separate functions dependibng on the type of predicate.
         // For the initial version, the current version is okay.
@@ -948,7 +948,7 @@ impl IntegerDomainExplicit {
 
                     // Check the lower bound first.
                     if let Some(trail_position) =
-                        self.get_trail_position(IntegerPredicate::LowerBound {
+                        self.trail_position(IntegerPredicate::LowerBound {
                             domain_id,
                             lower_bound: not_equal_constant + 1,
                         })
@@ -959,7 +959,7 @@ impl IntegerDomainExplicit {
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.get_trail_position(IntegerPredicate::UpperBound {
+                        self.trail_position(IntegerPredicate::UpperBound {
                             domain_id,
                             upper_bound: not_equal_constant - 1,
                         })
@@ -972,18 +972,17 @@ impl IntegerDomainExplicit {
             } => {
                 // For equality to hold, both the lower and upper bound predicates must hold.
                 // Check lower bound first.
-                if let Some(lb_trail_position) =
-                    self.get_trail_position(IntegerPredicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    })
-                {
+                if let Some(lb_trail_position) = self.trail_position(IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound: equality_constant,
+                }) {
                     // The lower bound found,
                     // now the check depends on the upper bound.
+
                     // If both the lower and upper bounds are present,
                     // report the trail position of the bound that was set last.
                     // Otherwise, return that the predicate is not on the trail.
-                    self.get_trail_position(IntegerPredicate::UpperBound {
+                    self.trail_position(IntegerPredicate::UpperBound {
                         domain_id,
                         upper_bound: equality_constant,
                     })
@@ -1211,5 +1210,121 @@ mod tests {
         for event in required_events.as_ref() {
             assert!(slice.contains(&(*event, domain)));
         }
+    }
+
+    fn get_domain1() -> (DomainId, IntegerDomainExplicit, EventSink) {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomainExplicit::new(0, 100, domain_id);
+        domain.set_lower_bound(2, 0, 1, &mut events);
+        domain.set_lower_bound(5, 1, 2, &mut events);
+        domain.set_lower_bound(10, 2, 10, &mut events);
+        domain.set_lower_bound(20, 5, 50, &mut events);
+        domain.set_lower_bound(50, 10, 70, &mut events);
+
+        (domain_id, domain, events)
+    }
+
+    #[test]
+    fn lower_bound_trail_position_inbetween_value() {
+        let (domain_id, domain, _) = get_domain1();
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: 12,
+            }),
+            Some(50)
+        );
+    }
+
+    #[test]
+    fn lower_bound_trail_position_last_bound() {
+        let (domain_id, domain, _) = get_domain1();
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: 50,
+            }),
+            Some(70)
+        );
+    }
+
+    #[test]
+    fn lower_bound_trail_position_beyond_value() {
+        let (domain_id, domain, _) = get_domain1();
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: 101,
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn lower_bound_trail_position_trivial() {
+        let (domain_id, domain, _) = get_domain1();
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: -10,
+            }),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn lower_bound_trail_position_with_removals() {
+        let (domain_id, mut domain, mut events) = get_domain1();
+        domain.remove_value(50, 11, 75, &mut events);
+        domain.remove_value(51, 11, 77, &mut events);
+        domain.remove_value(52, 11, 80, &mut events);
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound: 52,
+            }),
+            Some(77)
+        );
+    }
+
+    #[test]
+    fn removal_trail_position() {
+        let (domain_id, mut domain, mut events) = get_domain1();
+        domain.remove_value(50, 11, 75, &mut events);
+        domain.remove_value(51, 11, 77, &mut events);
+        domain.remove_value(52, 11, 80, &mut events);
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant: 50,
+            }),
+            Some(75)
+        );
+    }
+
+    #[test]
+    fn removal_trail_position_after_lower_bound() {
+        let (domain_id, mut domain, mut events) = get_domain1();
+        domain.remove_value(50, 11, 75, &mut events);
+        domain.remove_value(51, 11, 77, &mut events);
+        domain.remove_value(52, 11, 80, &mut events);
+        domain.set_lower_bound(60, 11, 150, &mut events);
+
+        assert_eq!(
+            domain.trail_position(IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant: 55,
+            }),
+            Some(150)
+        );
     }
 }
