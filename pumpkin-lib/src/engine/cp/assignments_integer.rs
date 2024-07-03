@@ -18,7 +18,7 @@ use crate::pumpkin_assert_simple;
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
     /// indicates if value j is in the domain of the integer variable
-    domains: KeyedVec<DomainId, IntegerDomainExplicit>,
+    domains: KeyedVec<DomainId, IntegerDomain>,
 
     events: EventSink,
 }
@@ -81,7 +81,7 @@ impl AssignmentsInteger {
         };
 
         self.domains
-            .push(IntegerDomainExplicit::new(lower_bound, upper_bound, id));
+            .push(IntegerDomain::new(lower_bound, upper_bound, id));
 
         self.events.grow();
 
@@ -145,7 +145,7 @@ impl AssignmentsInteger {
         self.domains[domain_id].lower_bound()
     }
 
-    pub fn get_domain_iterator(&self, domain_id: DomainId) {
+    pub fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
         self.domains[domain_id].domain_iterator()
     }
 
@@ -484,28 +484,27 @@ struct HoleUpdateInfo {
     triggered_upper_bound_update: bool,
 }
 
-/// This is the CP representation of a domain. It stores the individual values that are in the
-/// domain, alongside the current bounds. To support negative values, and to prevent allocating
-/// more memory than the size of the domain, an offset is determined which is used to index into
-/// the slice that keeps track of whether an individual value is in the domain.
-///
-/// When the domain is in an empty state, `lower_bound > upper_bound` and the state of the
-/// `is_value_in_domain` field is undefined.
+/// This is the CP representation of a domain. It stores the bounds alongside holes in the domain.
+/// When the domain is in an empty state, `lower_bound > upper_bound`.
+/// The domain tracks all domain changes, so it is possible to query the domain at a given
+/// cp trail position, i.e., the domain at some previous point in time.
+/// This is needed to support lazy explanations.
 #[derive(Clone, Debug)]
-struct IntegerDomainExplicit {
+struct IntegerDomain {
     id: DomainId,
-    /// 'updates' fields chronologically records the changes to the domain
+    /// The 'updates' fields chronologically records the changes to the domain.
     lower_bound_updates: Vec<BoundUpdateInfo>,
     upper_bound_updates: Vec<BoundUpdateInfo>,
     hole_updates: Vec<HoleUpdateInfo>,
     /// Auxiliary data structure to make it easy to check if a value is present or not.
     /// This is done to avoid going through 'hole_updates'.
     /// It maps a removed value with its decision level and trail position.
+    /// In the future we could consider using direct hashing if the domain is small.
     holes: HashMap<i32, PairDecisionLevelTrailPosition>,
 }
 
-impl IntegerDomainExplicit {
-    fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomainExplicit {
+impl IntegerDomain {
+    fn new(lower_bound: i32, upper_bound: i32, id: DomainId) -> IntegerDomain {
         pumpkin_assert_simple!(lower_bound <= upper_bound, "Cannot create an empty domain.");
 
         let lower_bound_updates = vec![BoundUpdateInfo {
@@ -520,7 +519,7 @@ impl IntegerDomainExplicit {
             trail_position: 0,
         }];
 
-        IntegerDomainExplicit {
+        IntegerDomain {
             id,
             lower_bound_updates,
             upper_bound_updates,
@@ -597,10 +596,12 @@ impl IntegerDomainExplicit {
             .bound
     }
 
-    fn domain_iterator(&self) {
-        // to be done at some point later,
-        // for now we keep the method as a reminder
-        todo!();
+    fn domain_iterator(&self) -> IntegerDomainIterator {
+        // ideally we use into_iter but I did not manage to get it to work,
+        // because the iterator takes a lifelines
+        // (the iterator takes a reference to the domain).
+        // So this will do for now.
+        IntegerDomainIterator::new(self)
     }
 
     fn contains(&self, value: i32) -> bool {
@@ -645,39 +646,15 @@ impl IntegerDomainExplicit {
 
         events.event_occurred(IntDomainEvent::Removal, self.id);
 
-        let mut hole_update_info = HoleUpdateInfo {
+        self.hole_updates.push(HoleUpdateInfo {
             removed_value,
             decision_level,
             trail_position,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
-        };
-
-        let old_value = self.holes.insert(
-            removed_value,
-            PairDecisionLevelTrailPosition {
-                decision_level,
-                trail_position,
-            },
-        );
-        pumpkin_assert_moderate!(old_value.is_none());
-
-        // check if removing a value triggers a lower bound update
-        if self.lower_bound() == removed_value {
-            self.set_lower_bound(removed_value + 1, decision_level, trail_position, events);
-            hole_update_info.triggered_lower_bound_update = true;
-        }
-        // check if removing the value triggers an upper bound update
-        if self.upper_bound() == removed_value {
-            self.set_upper_bound(removed_value - 1, decision_level, trail_position, events);
-            hole_update_info.triggered_upper_bound_update = true;
-        }
-
-        if self.lower_bound() == self.upper_bound() {
-            events.event_occurred(IntDomainEvent::Assign, self.id);
-        }
-
-        self.hole_updates.push(hole_update_info);
+        });
+        // note that it is important to remove the hole now,
+        // because the later if statements may use the holes
         let old_entry = self.holes.insert(
             removed_value,
             PairDecisionLevelTrailPosition {
@@ -686,6 +663,27 @@ impl IntegerDomainExplicit {
             },
         );
         pumpkin_assert_moderate!(old_entry.is_none());
+
+        // check if removing a value triggers a lower bound update
+        if self.lower_bound() == removed_value {
+            self.set_lower_bound(removed_value + 1, decision_level, trail_position, events);
+            self.hole_updates
+                .last_mut()
+                .expect("we just pushed a value, so must be present")
+                .triggered_lower_bound_update = true;
+        }
+        // check if removing the value triggers an upper bound update
+        if self.upper_bound() == removed_value {
+            self.set_upper_bound(removed_value - 1, decision_level, trail_position, events);
+            self.hole_updates
+                .last_mut()
+                .expect("we just pushed a value, so must be present")
+                .triggered_upper_bound_update = true;
+        }
+
+        if self.lower_bound() == self.upper_bound() {
+            events.event_occurred(IntDomainEvent::Assign, self.id);
+        }
     }
 
     fn debug_is_valid_upper_bound_domain_update(
@@ -972,6 +970,52 @@ impl IntegerDomainExplicit {
     }
 }
 
+#[derive(Debug)]
+pub struct IntegerDomainIterator<'a> {
+    domain: &'a IntegerDomain,
+    current_value: i32,
+}
+
+impl IntegerDomainIterator<'_> {
+    fn new(domain: &IntegerDomain) -> IntegerDomainIterator {
+        IntegerDomainIterator {
+            domain,
+            current_value: domain.lower_bound(),
+        }
+    }
+}
+
+impl Iterator for IntegerDomainIterator<'_> {
+    type Item = i32;
+    fn next(&mut self) -> Option<i32> {
+        // We would not expect to iterate through inconsistent domains,
+        // although we support trying to do so. Not sure if this is good a idea?
+        if self.domain.verify_consistency().is_err() {
+            return None;
+        }
+
+        // Note that the current value is never a hole. This is guaranteed by 1) having
+        // a consistent domain, 2) the iterator starts with the lower bound,
+        // and 3) the while loop after this if statement updates the current value
+        // to a non-hole value (if there are any left within the bounds).
+        let result = if self.current_value <= self.domain.upper_bound() {
+            Some(self.current_value)
+        } else {
+            None
+        };
+
+        self.current_value += 1;
+        // If the current value is within the bounds, but is not in the domain,
+        // linearly look for the next non-hole value.
+        while self.current_value <= self.domain.upper_bound()
+            && !self.domain.contains(self.current_value)
+        {
+            self.current_value += 1;
+        }
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1095,7 +1139,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(2, 0, 1, &mut events);
 
         assert!(!domain.contains(2));
@@ -1106,7 +1150,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(2, 0, 1, &mut events);
         domain.remove_value(1, 0, 2, &mut events);
 
@@ -1118,7 +1162,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(4, 0, 1, &mut events);
         domain.remove_value(5, 0, 2, &mut events);
 
@@ -1130,7 +1174,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(4, 0, 1, &mut events);
         domain.remove_value(1, 0, 2, &mut events);
         domain.remove_value(1, 0, 3, &mut events);
@@ -1141,7 +1185,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(2, 0, 1, &mut events);
         domain.set_lower_bound(2, 0, 2, &mut events);
 
@@ -1153,7 +1197,7 @@ mod tests {
         let mut events = EventSink::default();
         events.grow();
 
-        let mut domain = IntegerDomainExplicit::new(1, 5, DomainId::new(0));
+        let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(4, 0, 1, &mut events);
         domain.set_upper_bound(4, 0, 2, &mut events);
 
@@ -1186,12 +1230,12 @@ mod tests {
         }
     }
 
-    fn get_domain1() -> (DomainId, IntegerDomainExplicit, EventSink) {
+    fn get_domain1() -> (DomainId, IntegerDomain, EventSink) {
         let mut events = EventSink::default();
         events.grow();
 
         let domain_id = DomainId::new(0);
-        let mut domain = IntegerDomainExplicit::new(0, 100, domain_id);
+        let mut domain = IntegerDomain::new(0, 100, domain_id);
         domain.set_lower_bound(2, 0, 1, &mut events);
         domain.set_lower_bound(5, 1, 2, &mut events);
         domain.set_lower_bound(10, 2, 10, &mut events);
@@ -1397,5 +1441,99 @@ mod tests {
         domain.set_lower_bound(60, 11, 150, &mut events);
 
         assert_eq!(domain.lower_bound_at_trail_position(100), 53);
+    }
+
+    #[test]
+    fn inconsistent_bound_updates() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomain::new(0, 2, domain_id);
+        domain.set_lower_bound(2, 1, 1, &mut events);
+        domain.set_upper_bound(1, 1, 2, &mut events);
+        assert!(domain.verify_consistency().is_err());
+    }
+
+    #[test]
+    fn inconsistent_domain_removals() {
+        let mut events = EventSink::default();
+        events.grow();
+
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomain::new(0, 2, domain_id);
+        domain.remove_value(1, 1, 1, &mut events);
+        domain.remove_value(2, 1, 2, &mut events);
+        domain.remove_value(0, 1, 3, &mut events);
+        assert!(domain.verify_consistency().is_err());
+    }
+
+    #[test]
+    fn domain_iterator_simple() {
+        let domain_id = DomainId::new(0);
+        let domain = IntegerDomain::new(0, 5, domain_id);
+        let mut iter = domain.domain_iterator();
+        assert_eq!(iter.next(), Some(0));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn domain_iterator_skip_holes() {
+        let mut events = EventSink::default();
+        events.grow();
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomain::new(0, 5, domain_id);
+        domain.remove_value(2, 0, 1, &mut events);
+        domain.remove_value(4, 0, 10, &mut events);
+
+        let mut iter = domain.domain_iterator();
+        assert_eq!(iter.next(), Some(0));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn domain_iterator_removed_bounds() {
+        let mut events = EventSink::default();
+        events.grow();
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomain::new(0, 5, domain_id);
+        domain.remove_value(0, 0, 1, &mut events);
+        domain.remove_value(5, 0, 10, &mut events);
+
+        let mut iter = domain.domain_iterator();
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn domain_iterator_removed_values_present_beyond_bounds() {
+        let mut events = EventSink::default();
+        events.grow();
+        let domain_id = DomainId::new(0);
+        let mut domain = IntegerDomain::new(0, 10, domain_id);
+        domain.remove_value(7, 0, 1, &mut events);
+        domain.remove_value(9, 0, 5, &mut events);
+        domain.remove_value(2, 0, 7, &mut events);
+        domain.set_upper_bound(6, 1, 10, &mut events);
+
+        let mut iter = domain.domain_iterator();
+        assert_eq!(iter.next(), Some(0));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(4));
+        assert_eq!(iter.next(), Some(5));
+        assert_eq!(iter.next(), Some(6));
+        assert_eq!(iter.next(), None);
     }
 }
