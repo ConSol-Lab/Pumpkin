@@ -105,6 +105,8 @@
 * Add signal handling for graceful(ish) shutdown
 * Added support for search annotations MiniZinc
 * Implemented API for reverse propagation, including deletable clauses.
+* Replaced explicit CP representation with a compact version.
+* Added functionality to query domain values at given trail position.
 
 ## Bugfixes
 
