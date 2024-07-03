@@ -5,9 +5,9 @@
 
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::Indefinite;
 use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 fn main() {
     let mut args = std::env::args();
@@ -81,8 +81,7 @@ fn main() {
         panic!("Infeasibility Detected")
     }
     match solver.satisfy(&mut brancher, &mut Indefinite) {
-        SatisfactionResult::Satisfiable(satisfiable) => {
-            let solution = satisfiable.as_solution();
+        SatisfactionResult::Satisfiable(solution) => {
             let mut start_variables_and_processing_times = start_variables
                 .iter()
                 .zip(processing_times)

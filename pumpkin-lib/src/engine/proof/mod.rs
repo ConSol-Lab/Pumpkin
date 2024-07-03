@@ -15,9 +15,9 @@ use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
 use super::variables::Literal;
 use super::VariableLiteralMappings;
-#[cfg(doc)]
-use crate::solving::Solver;
 use crate::variable_names::VariableNames;
+#[cfg(doc)]
+use crate::Solver;
 
 /// A proof log which logs the proof steps necessary to prove unsatisfiability or optimality. We
 /// allow the following types of proofs:

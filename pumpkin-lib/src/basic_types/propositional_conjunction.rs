@@ -89,7 +89,7 @@ impl PartialEq for PropositionalConjunction {
 /// # Example
 /// ```rust
 /// # use pumpkin_lib::predicates::PropositionalConjunction;
-/// # use pumpkin_lib::solving::Solver;
+/// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::conjunction;
 /// # use pumpkin_lib::predicate;
 /// let mut solver = Solver::default();

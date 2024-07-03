@@ -2,7 +2,7 @@ use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::PseudoBooleanConstraintEncoderInterface;
 use crate::basic_types::WeightedLiteral;
 use crate::pumpkin_assert_simple;
-use crate::solving::Solver;
+use crate::Solver;
 
 /// An encoder which takes as input a single integer encoding.
 ///
@@ -65,7 +65,7 @@ mod tests {
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
     use crate::engine::variables::DomainId;
     use crate::predicate;
-    use crate::solving::Solver;
+    use crate::Solver;
 
     fn weighted_literals(
         solver: &mut Solver,
@@ -76,7 +76,7 @@ mod tests {
     ) -> Vec<WeightedLiteral> {
         ((lower_bound + 1)..=upper_bound)
             .map(|i| {
-                let literal = solver.get_literal_for_predicate(predicate![domain >= i]);
+                let literal = solver.get_literal(predicate![domain >= i]);
                 WeightedLiteral {
                     literal,
                     weight,
@@ -99,11 +99,9 @@ mod tests {
 
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut solver);
         assert!(result.is_ok());
-        assert!(
-            (k + 1..=upper_bound as u64).all(|lower_bound| solver.get_literal_value(
-                solver.get_literal_for_predicate(predicate![domain >= lower_bound as i32])
-            ) == Some(false))
-        );
+        assert!((k + 1..=upper_bound as u64).all(|lower_bound| solver
+            .get_literal_value(solver.get_literal(predicate![domain >= lower_bound as i32]))
+            == Some(false)));
     }
 
     #[test]
@@ -112,8 +110,7 @@ mod tests {
         let k: u64 = 5;
         let mut solver = Solver::default();
         let domain = solver.new_bounded_integer(lower_bound, upper_bound);
-        let _ = solver
-            .add_clause([solver.get_literal_for_predicate(predicate![domain >= k as i32 + 1])]);
+        let _ = solver.add_clause([solver.get_literal(predicate![domain >= k as i32 + 1])]);
 
         let weight = 1;
         let weighted_literals =
@@ -138,9 +135,7 @@ mod tests {
         assert!(result.is_ok());
         assert!(
             ((lower_bound as u64 + 1)..=upper_bound as u64).all(|lower_bound| solver
-                .get_literal_value(
-                    solver.get_literal_for_predicate(predicate![domain >= lower_bound as i32])
-                )
+                .get_literal_value(solver.get_literal(predicate![domain >= lower_bound as i32]))
                 .is_none())
         );
     }
@@ -162,11 +157,9 @@ mod tests {
         let k = 5;
         let result = encoder.strengthen_at_most_k(5, &mut solver);
         assert!(result.is_ok());
-        assert!(
-            (k + 1..=upper_bound as u64).all(|lower_bound| solver.get_literal_value(
-                solver.get_literal_for_predicate(predicate![domain >= lower_bound as i32])
-            ) == Some(false))
-        );
+        assert!((k + 1..=upper_bound as u64).all(|lower_bound| solver
+            .get_literal_value(solver.get_literal(predicate![domain >= lower_bound as i32]))
+            == Some(false)));
     }
 
     #[test]
@@ -184,7 +177,7 @@ mod tests {
         assert!(result.is_ok());
         let mut encoder = result.unwrap();
         let k = 5;
-        let _ = solver.add_clause([solver.get_literal_for_predicate(predicate![domain >= k + 1])]);
+        let _ = solver.add_clause([solver.get_literal(predicate![domain >= k + 1])]);
         let result = encoder.strengthen_at_most_k(5, &mut solver);
         assert!(result.is_err());
     }

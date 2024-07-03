@@ -1,21 +1,22 @@
-use self::satisfiable::Satisfiable;
 use self::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub use crate::basic_types::ProblemSolution;
 use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
-pub mod satisfiable;
+pub mod solution_iterator;
 pub mod unsatisfiable;
-#[cfg(doc)]
-use crate::solving::Solver;
+use crate::branching::Brancher;
 #[cfg(doc)]
 use crate::termination::TerminationCondition;
+#[cfg(doc)]
+use crate::Solver;
 
 /// The result of a call to [`Solver::satisfy`].
 #[derive(Debug)]
-pub enum SatisfactionResult<'solver, 'brancher, 'termination, B, T> {
+#[allow(clippy::large_enum_variant)]
+pub enum SatisfactionResult {
     /// Indicates that a solution was found and provides an instance of [`Satisfiable`] which
     /// allows the retrieval of the solution and allows iterating over multiple solutions.
-    Satisfiable(Satisfiable<'solver, 'brancher, 'termination, B, T>),
+    Satisfiable(Solution),
     /// Indicates that there is no solution to the satisfaction problem.
     Unsatisfiable,
     /// Indicates that it is not known whether a solution exists. This is likely due to a
@@ -25,10 +26,10 @@ pub enum SatisfactionResult<'solver, 'brancher, 'termination, B, T> {
 
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
-pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, 'termination, B, T> {
+pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
     /// Indicates that a solution was found and provides an instance of [`Satisfiable`] which
     /// allows the retrieval of the solution and allows iterating over multiple solutions.
-    Satisfiable(Satisfiable<'solver, 'brancher, 'termination, B, T>),
+    Satisfiable(Solution),
     /// Indicates that there is no solution to the satisfaction problem due to the provided
     /// assumptions.
     UnsatisfiableUnderAssumptions(UnsatisfiableUnderAssumptions<'solver, 'brancher, B>),

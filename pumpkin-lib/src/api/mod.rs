@@ -1,5 +1,10 @@
 mod outputs;
 
+pub use crate::api::solver::DefaultBrancher;
+pub use crate::api::solver::Solver;
+pub use crate::basic_types::ConstraintOperationError;
+pub use crate::basic_types::Random;
+
 pub mod results {
     //! Contains the outputs of solving using the [`Solver`].
     //!
@@ -12,7 +17,7 @@ pub mod results {
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract
     //! a core consisting of the assumptions using
     //! [`UnsatisfiableUnderAssumptions::extract_core`].
-    pub use crate::api::outputs::satisfiable;
+    pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
     pub use crate::api::outputs::OptimisationResult;
     pub use crate::api::outputs::ProblemSolution;
@@ -23,18 +28,9 @@ pub mod results {
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
     #[cfg(doc)]
-    use crate::solving::Solver;
+    use crate::Solver;
 }
 mod solver;
-
-pub mod solving {
-    //! The main interaction point with Pumpkin; specifies structs related to solving, the main
-    //! one being the [`Solver`].
-    pub use crate::api::solver::DefaultBrancher;
-    pub use crate::api::solver::Solver;
-    pub use crate::basic_types::ConstraintOperationError;
-    pub use crate::basic_types::Random;
-}
 
 pub mod variables {
     //! Contains the variables which are used by the [`Solver`].
@@ -61,7 +57,7 @@ pub mod variables {
     pub use crate::engine::variables::PropositionalVariable;
     pub use crate::engine::variables::TransformableVariable;
     #[cfg(doc)]
-    use crate::solving::Solver;
+    use crate::Solver;
 }
 
 pub mod options {
@@ -77,7 +73,7 @@ pub mod options {
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     #[cfg(doc)]
-    use crate::solving::Solver;
+    use crate::Solver;
 }
 
 pub mod termination {
@@ -96,7 +92,7 @@ pub mod termination {
     pub use crate::engine::termination::time_budget::*;
     pub use crate::engine::termination::TerminationCondition;
     #[cfg(doc)]
-    use crate::solving::Solver;
+    use crate::Solver;
 }
 
 pub mod statistics {
@@ -111,7 +107,7 @@ pub mod proof {
     pub use crate::engine::proof::ProofLog;
     pub use crate::engine::rp_engine;
     #[cfg(doc)]
-    use crate::solving::Solver;
+    use crate::Solver;
 }
 
 pub mod predicates {

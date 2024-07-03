@@ -10,8 +10,8 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
-use crate::solving::DefaultBrancher;
-use crate::solving::Solver;
+use crate::DefaultBrancher;
+use crate::Solver;
 
 /// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
 /// switching every time a solution is found ([`AlternatingStrategy::EverySolution`]), after every
@@ -158,7 +158,10 @@ mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
     use crate::branching::Brancher;
-    use crate::solving::Solver;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
+    use crate::results::SolutionReference;
+    use crate::Solver;
 
     #[test]
     fn test_every_solution() {
@@ -169,12 +172,15 @@ mod tests {
             AlternatingStrategy::EverySolution,
         );
 
+        let assignments_propositional = AssignmentsPropositional::default();
+        let assignments_integer = AssignmentsInteger::default();
+        let empty_solution_reference =
+            SolutionReference::new(&assignments_propositional, &assignments_integer);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
     }
 
@@ -187,18 +193,19 @@ mod tests {
             AlternatingStrategy::EveryOtherSolution,
         );
 
+        let assignments_propositional = AssignmentsPropositional::default();
+        let assignments_integer = AssignmentsInteger::default();
+        let empty_solution_reference =
+            SolutionReference::new(&assignments_propositional, &assignments_integer);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
     }
 
@@ -211,15 +218,17 @@ mod tests {
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
+        let assignments_propositional = AssignmentsPropositional::default();
+        let assignments_integer = AssignmentsInteger::default();
+        let empty_solution_reference =
+            SolutionReference::new(&assignments_propositional, &assignments_integer);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
     }
 

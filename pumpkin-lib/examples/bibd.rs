@@ -14,9 +14,9 @@
 
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::Indefinite;
 use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::Solver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {
@@ -124,8 +124,7 @@ fn main() {
 
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
-        SatisfactionResult::Satisfiable(satisfiable) => {
-            let solution = satisfiable.as_solution();
+        SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 
             for row in matrix.iter() {

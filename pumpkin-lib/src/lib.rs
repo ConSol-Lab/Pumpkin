@@ -11,7 +11,7 @@
 //! pre-defined constraints to the solver.
 //!
 //!  ```rust
-//!  # use pumpkin_lib::solving::Solver;
+//!  # use pumpkin_lib::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResult;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::results::ProblemSolution;
@@ -34,8 +34,7 @@
 //!  // Then we solve to satisfaction
 //!  let result = solver.satisfy(&mut brancher, &mut termination);
 //!
-//!  if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!      let solution = satisfiable.as_solution();
+//!  if let SatisfactionResult::Satisfiable(solution) = result {
 //!      let value_x = solution.get_integer_value(x);
 //!      let value_y = solution.get_integer_value(y);
 //!      let value_z = solution.get_integer_value(z);
@@ -47,18 +46,65 @@
 //!  }
 //!  ```
 //!
+//! # Using Pumpkin to solve an optimization problem
+//! Pumpkin can be used to solve optimization problems. It expects the objective to be provided in
+//! the form of a single integer variable.
+//! ```rust
+//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::results::OptimisationResult;
+//!  # use pumpkin_lib::termination::Indefinite;
+//!  # use pumpkin_lib::results::ProblemSolution;
+//! # use std::cmp::max;
+//! // We create the solver with default options
+//! let mut solver = Solver::default();
+//!
+//! // We create 3 variables with domains within the range [0, 10]
+//! let x = solver.new_bounded_integer(5, 10);
+//! let y = solver.new_bounded_integer(-3, 15);
+//! let z = solver.new_bounded_integer(7, 25);
+//! let objective = solver.new_bounded_integer(-10, 30);
+//!
+//! // We create the constraints:
+//! // - x + y + z = 17
+//! // - maximum(x, y, z) = objective
+//! solver.linear_equals(vec![x, y, z], 17);
+//! solver.maximum(vec![x, y, z], objective);
+//!
+//! // We create a termination condition which allows the solver to run indefinitely
+//! let mut termination = Indefinite;
+//! // And we create a search strategy (in this case, simply the default)
+//! let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//!
+//! // Then we solve to optimality,
+//! let result = solver.minimise(&mut brancher, &mut termination, objective);
+//!
+//! if let OptimisationResult::Optimal(optimal_solution) = result {
+//!     let value_x = optimal_solution.get_integer_value(x);
+//!     let value_y = optimal_solution.get_integer_value(y);
+//!     let value_z = optimal_solution.get_integer_value(z);
+//!     // The maximum objective values is 7;
+//!     // with one possible solution being: {x = 5, y = 5, z = 7, objective = 7}.
+//!     assert!(value_x + value_y + value_z == 17);
+//!     assert!(
+//!         max(value_x, max(value_y, value_z)) == optimal_solution.get_integer_value(objective)
+//!     );
+//!     assert_eq!(optimal_solution.get_integer_value(objective), 7);
+//! } else {
+//!     panic!("This problem should have an optimal solution")
+//! }
+//! ```
+//!
 //! # Obtaining multiple solutions
 //! Pumpkin supports obtaining multiple solutions from the [`Solver`] when solving satisfaction
 //! problems. The same solution is prevented from occurring multiple times by adding blocking
 //! clauses to the solver which means that after iterating over solutions, these solutions will
 //! remain blocked if the solver is used again.
-//!
 //! ```rust
-//!  # use pumpkin_lib::solving::Solver;
+//!  # use pumpkin_lib::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResult;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::results::ProblemSolution;
-//!  # use pumpkin_lib::results::satisfiable::IteratedSolution;
+//!  # use pumpkin_lib::results::solution_iterator::IteratedSolution;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
 //!
@@ -76,58 +122,49 @@
 //! let mut brancher = solver.default_brancher_over_all_propositional_variables();
 //!
 //! // Then we solve to satisfaction
-//! let result = solver.satisfy(&mut brancher, &mut termination);
+//! let mut solution_iterator = solver.get_solution_iterator(&mut brancher, &mut termination);
+//!
+//! let mut number_of_solutions = 0;
 //!
 //! // We keep track of a list of known solutions
 //! let mut known_solutions = Vec::new();
 //!
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     {
-//!         let solution = satisfiable.as_solution();
-//!         let value_x = solution.get_integer_value(x);
-//!         let value_y = solution.get_integer_value(y);
-//!         let value_z = solution.get_integer_value(z);
+//! loop {
+//!     match solution_iterator.next_solution() {
+//!         IteratedSolution::Solution(solution) => {
+//!             number_of_solutions += 1;
+//!             // We have found another solution, the same invariant should hold
+//!             let value_x = solution.get_integer_value(x);
+//!             let value_y = solution.get_integer_value(y);
+//!             let value_z = solution.get_integer_value(z);
+//!             assert!(x != y && x != z && y != z);
 //!
-//!         // It should be the case that all of the assigned values are different.
-//!         assert!(value_x != value_y && value_x != value_z && value_y != value_z);
-//!
-//!         known_solutions.push((value_x, value_y, value_z));
-//!     }
-//!
-//!     // Now we can iterate over the solutions
-//!     let mut solution_iterator = satisfiable.iterate_solutions();
-//!     loop {
-//!         match solution_iterator.next_solution() {
-//!             IteratedSolution::Solution(solution) => {
-//!                 // We have found another solution, the same invariant should hold
-//!                 let value_x = solution.get_integer_value(x);
-//!                 let value_y = solution.get_integer_value(y);
-//!                 let value_z = solution.get_integer_value(z);
-//!                 assert!(x != y && x != z && y != z);
-//!
-//!                 // It should also be the case that we have not found this solution before
-//!                 assert!(!known_solutions.contains(&(value_x, value_y, value_z)));
-//!                 known_solutions.push((value_x, value_y, value_z));
-//!             }
-//!             IteratedSolution::Finished => {
-//!                 // No more solutions exist
-//!                 break;
-//!             }
-//!             IteratedSolution::Unknown => {
-//!                 // Our termination condition has caused the solver to terminate
-//!                 break;
-//!             }
+//!             // It should also be the case that we have not found this solution before
+//!             assert!(!known_solutions.contains(&(value_x, value_y, value_z)));
+//!             known_solutions.push((value_x, value_y, value_z));
+//!         }
+//!         IteratedSolution::Finished => {
+//!             // No more solutions exist
+//!             break;
+//!         }
+//!         IteratedSolution::Unknown => {
+//!             // Our termination condition has caused the solver to terminate
+//!             break;
+//!         }
+//!         IteratedSolution::Unsatisfiable => {
+//!             panic!("Problem should be satisfiable")
 //!         }
 //!     }
-//! } else {
-//!     panic!("This problem should be satisfiable")
 //! }
+//! // There are six possible solutions to this problem
+//! assert_eq!(number_of_solutions, 6)
 //!  ```
 //!
 //! # Obtaining an unsatisfiable core
-//! Pumpkin allows the user to specify assumptions which can then be used to extract an unsatisfiable core.
+//! Pumpkin allows the user to specify assumptions which can then be used to extract an
+//! unsatisfiable core.
 //! ```rust
-//!  # use pumpkin_lib::solving::Solver;
+//!  # use pumpkin_lib::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
 //!  # use pumpkin_lib::termination::Indefinite;
 //!  # use pumpkin_lib::predicate;
@@ -149,9 +186,9 @@
 //!
 //! // Then we solve to satisfaction
 //! let assumptions = vec![
-//!     solver.get_literal_for_predicate(predicate!(x == 1)),
-//!     solver.get_literal_for_predicate(predicate!(y <= 1)),
-//!     solver.get_literal_for_predicate(predicate!(y != 0)),
+//!     solver.get_literal(predicate!(x == 1)),
+//!     solver.get_literal(predicate!(y <= 1)),
+//!     solver.get_literal(predicate!(y != 0)),
 //! ];
 //! let result =
 //!     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
@@ -163,8 +200,8 @@
 //!     {
 //!         let core = unsatisfiable.extract_core();
 //!
-//!         // The core should be equal to the negation of all literals in the assumptions
-//!         assert!(assumptions
+//!         // In this case, the core should be equal to the negation of all literals in the
+//! assumptions         assert!(assumptions
 //!             .into_iter()
 //!             .all(|literal| core.contains(&(!literal))));
 //!     }
@@ -197,4 +234,4 @@ mod api;
 pub use api::*;
 
 #[cfg(doc)]
-use crate::solving::Solver;
+use crate::Solver;

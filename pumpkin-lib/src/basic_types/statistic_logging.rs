@@ -23,10 +23,7 @@ pub(crate) mod statistic_logger {
     /// Logs the provided statistic with name `name` and value `value`. At the moment it will log in
     /// the format `STATISTIC_PREFIX NAME=VALUE`.
     pub fn log_statistic(name: impl Display, value: impl Display) {
-        if *LOG_STATISTICS
-            .get()
-            .expect("The verbosity should always be set in the statistic logger")
-        {
+        if *LOG_STATISTICS.get().unwrap_or(&false) {
             println!(
                 "{} {name}={value}",
                 STATISTIC_PREFIX.get().expect(
@@ -40,10 +37,7 @@ pub(crate) mod statistic_logger {
     /// output format) require that a block of statistics is followed by a closing line; this
     /// function outputs this closing line **if** it is configued.
     pub fn log_statistic_postfix() {
-        if *LOG_STATISTICS
-            .get()
-            .expect("The verbosity should always be set in the statistic logger")
-        {
+        if *LOG_STATISTICS.get().unwrap_or(&false) {
             if let Some(post_fix) = AFTER_STATISTICS.get().expect(
                     "If the verbosity is set to true then the statistic-postfix should also be initialized"
                 ) {

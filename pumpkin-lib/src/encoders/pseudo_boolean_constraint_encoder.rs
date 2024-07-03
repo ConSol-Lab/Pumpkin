@@ -13,7 +13,7 @@ use crate::basic_types::WeightedLiteral;
 use crate::engine::variables::Literal;
 use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
-use crate::solving::Solver;
+use crate::Solver;
 
 /// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
 /// The idea is to separate the 'preprocessing' of the input and encoding algorithm
@@ -217,11 +217,6 @@ impl PseudoBooleanConstraintEncoder {
         k: u64,
         solver: &mut Solver,
     ) -> Result<(), EncodingError> {
-        pumpkin_assert_simple!(
-            solver.is_at_the_root_level(),
-            "Can only add encodings at the root level."
-        );
-
         match self.state {
             State::New(ref mut weighted_literals) => {
                 let literals = std::mem::take(weighted_literals);

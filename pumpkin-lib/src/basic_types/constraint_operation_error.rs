@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[cfg(doc)]
-use crate::solving::Solver;
+use crate::Solver;
 
 /// Errors related to adding constraints to the [`Solver`].
 #[derive(Error, Debug, Copy, Clone)]

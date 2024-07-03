@@ -9,6 +9,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::Solver;
 
 /// An API for performing backwards reverse propagation of a clausal proof. The API allows the
 /// reasons for all propagations that are used to derive the RP clause to be accessed.
@@ -36,17 +37,10 @@ pub enum ConflictReason {
 pub type ReversePropagationConflict = Vec<ConflictReason>;
 
 impl RpEngine {
-    /// Create a new checker based on a `solver` initialized with the model of the problem.
-    /// The `solver` should be at the root.
-    pub fn new(solver: ConstraintSatisfactionSolver) -> Self {
-        assert_eq!(
-            0,
-            solver.get_decision_level(),
-            "the solver given to the checker must be at the root"
-        );
-
+    /// Create a new checker based on a [`Solver`] initialized with the model of the problem.
+    pub fn new(solver: Solver) -> Self {
         RpEngine {
-            solver,
+            solver: solver.into_satisfaction_solver(),
             rp_clauses: vec![],
             rp_unit_clauses: HashMap::default(),
             rp_allocated_clauses: HashMap::default(),
@@ -247,12 +241,10 @@ mod tests {
     use crate::engine::variables::DomainId;
     use crate::engine::variables::TransformableVariable;
     use crate::predicate;
-    use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
-    use crate::variables::IntegerVariable;
 
     #[test]
     fn rp_clauses_are_removed_in_reverse_order_of_being_added() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(3).collect();
 
         let c1 = xs.clone();
@@ -271,7 +263,7 @@ mod tests {
 
     #[test]
     fn propositional_unsat_proof() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
         let _ = solver.add_clause(xs.clone());
@@ -299,7 +291,7 @@ mod tests {
 
     #[test]
     fn propositional_unsat_get_propagations() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
         let _ = solver.add_clause(xs.clone());
@@ -348,48 +340,21 @@ mod tests {
         assert_eq!(conflict.len(), 5);
     }
 
-    fn create_3queens() -> (ConstraintSatisfactionSolver, Vec<DomainId>) {
-        // TODO: Use new Solver here
-        fn all_different<Var: IntegerVariable + 'static>(
-            solver: &mut ConstraintSatisfactionSolver,
-            variables: impl Into<Box<[Var]>>,
-        ) -> bool {
-            let variables = variables.into();
-            for i in 0..variables.len() {
-                for j in i + 1..variables.len() {
-                    if !solver
-                        .add_propagator(LinearNotEqualConstructor::new(
-                            [
-                                variables[i].clone().scaled(1),
-                                variables[j].clone().scaled(-1),
-                            ]
-                            .into(),
-                            0,
-                        ))
-                        .is_ok()
-                    {
-                        return false;
-                    }
-                }
-            }
-            true
-        }
-        let mut solver = ConstraintSatisfactionSolver::default();
+    fn create_3queens() -> (Solver, Vec<DomainId>) {
+        let mut solver = Solver::default();
 
         let queens = (0..3)
-            .map(|_| solver.create_new_integer_variable(0, 2, None))
+            .map(|_| solver.new_bounded_integer(0, 2))
             .collect::<Vec<_>>();
-        let _ = all_different(&mut solver, queens.clone());
-        let _ = all_different(
-            &mut solver,
+        let _ = solver.all_different(queens.clone());
+        let _ = solver.all_different(
             queens
                 .iter()
                 .enumerate()
                 .map(|(i, var)| var.offset(i as i32))
                 .collect::<Vec<_>>(),
         );
-        let _ = all_different(
-            &mut solver,
+        let _ = solver.all_different(
             queens
                 .iter()
                 .enumerate()

@@ -1,4 +1,5 @@
 use super::solution::ProblemSolution;
+use super::Solution;
 use crate::basic_types::HashMap;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::WeightedLiteral;
@@ -6,7 +7,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
-use crate::solving::Solver;
+use crate::Solver;
 
 /// A struct which represents a weighted linear function over [`Literal`]s, [`DomainId`]s, and a
 /// constant term.
@@ -90,7 +91,7 @@ impl Function {
         value
     }
 
-    pub fn evaluate_assignment(&self, solution: SolutionReference<'_>) -> u64 {
+    pub fn evaluate_assignment(&self, solution: &Solution) -> u64 {
         let mut value: u64 = self.constant_term;
         // add the contribution of the propositional part
         for term in self.get_weighted_literals() {
@@ -131,7 +132,7 @@ impl Function {
             //  the literals before those contribute to the objective function but not in a way that
             // can be changed
             for i in (lower_bound + 1)..=upper_bound {
-                let literal = solver.get_literal_for_predicate(predicate![domain_id >= i]);
+                let literal = solver.get_literal(predicate![domain_id >= i]);
                 weighted_literals.push(WeightedLiteral {
                     literal,
                     weight,

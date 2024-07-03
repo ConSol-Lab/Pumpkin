@@ -1,8 +1,8 @@
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::Indefinite;
 use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 fn main() {
     let n = std::env::args()
@@ -43,13 +43,11 @@ fn main() {
     match solver.satisfy(&mut brancher, &mut Indefinite) {
         SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
-            let solution_reference = solution.as_solution();
 
             for row in 0..n {
                 println!("{row_separator}");
 
-                let queen_col =
-                    solution_reference.get_integer_value(variables[row as usize]) as u32;
+                let queen_col = solution.get_integer_value(variables[row as usize]) as u32;
 
                 for col in 0..n {
                     let string = if queen_col == col { "| * " } else { "|   " };

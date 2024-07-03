@@ -4,9 +4,9 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::variables::DomainId;
 use pumpkin_lib::variables::Literal;
+use pumpkin_lib::Solver;
 
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;

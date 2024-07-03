@@ -14,12 +14,13 @@ use log::warn;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
-use pumpkin_lib::results::satisfiable::IteratedSolution;
+use pumpkin_lib::results::solution_iterator::IteratedSolution;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::Solution;
 use pumpkin_lib::results::SolutionReference;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TimeBudget;
+use pumpkin_lib::Solver;
 
 use self::instance::FlatZincInstance;
 use self::instance::FlatzincObjective;
@@ -69,9 +70,10 @@ pub(crate) fn solve(
             MinizincOptimisationResult::Optimal {
                 optimal_objective_value,
             } => {
-                let objective_bound_literal = solver.get_literal_for_predicate(
-                    get_bound_predicate(*objective_function, optimal_objective_value as i32),
-                );
+                let objective_bound_literal = solver.get_literal(get_bound_predicate(
+                    *objective_function,
+                    optimal_objective_value as i32,
+                ));
 
                 if solver
                     .conclude_proof_optimal(objective_bound_literal)
@@ -101,37 +103,42 @@ pub(crate) fn solve(
         }
     } else {
         let mut brancher = instance.search.expect("Expected a search to be defined");
-
-        match solver.satisfy(&mut brancher, &mut termination) {
-            SatisfactionResult::Satisfiable(satisfiable) => {
-                print_solution_from_solver(satisfiable.as_solution(), &outputs);
-                if options.all_solutions {
-                    let mut solution_iterator = satisfiable.iterate_solutions();
-                    loop {
-                        match solution_iterator.next_solution() {
-                            IteratedSolution::Solution(solution) => {
-                                print_solution_from_solver(solution.as_reference(), &outputs);
-                            }
-                            IteratedSolution::Finished => {
-                                println!("==========");
-                                break;
-                            }
-                            IteratedSolution::Unknown => {
-                                break;
-                            }
-                        }
+        if options.all_solutions {
+            let mut solution_iterator =
+                solver.get_solution_iterator(&mut brancher, &mut termination);
+            loop {
+                match solution_iterator.next_solution() {
+                    IteratedSolution::Solution(solution) => {
+                        print_solution_reference_from_solver(&solution, &outputs);
+                    }
+                    IteratedSolution::Finished => {
+                        println!("==========");
+                        break;
+                    }
+                    IteratedSolution::Unknown => {
+                        break;
+                    }
+                    IteratedSolution::Unsatisfiable => {
+                        println!("{MSG_UNSATISFIABLE}");
+                        break;
                     }
                 }
             }
-            SatisfactionResult::Unsatisfiable => {
-                if solver.conclude_proof_unsat().is_err() {
-                    warn!("Failed to log solver conclusion");
-                };
+        } else {
+            match solver.satisfy(&mut brancher, &mut termination) {
+                SatisfactionResult::Satisfiable(solution) => {
+                    print_solution_from_solver(&solution, &outputs);
+                }
+                SatisfactionResult::Unsatisfiable => {
+                    if solver.conclude_proof_unsat().is_err() {
+                        warn!("Failed to log solver conclusion");
+                    };
 
-                println!("{MSG_UNSATISFIABLE}");
-            }
-            SatisfactionResult::Unknown => {
-                println!("{MSG_UNKNOWN}");
+                    println!("{MSG_UNSATISFIABLE}");
+                }
+                SatisfactionResult::Unknown => {
+                    println!("{MSG_UNKNOWN}");
+                }
             }
         }
 
@@ -166,7 +173,32 @@ fn parse_and_compile(
 }
 
 /// Prints the current solution.
-fn print_solution_from_solver(solution: SolutionReference<'_>, outputs: &[Output]) {
+fn print_solution_from_solver(solution: &Solution, outputs: &[Output]) {
+    for output_specification in outputs {
+        match output_specification {
+            Output::Bool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
+
+            Output::Int(output) => {
+                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+            }
+
+            Output::ArrayOfBool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
+
+            Output::ArrayOfInt(output) => {
+                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+            }
+        }
+    }
+
+    println!("----------");
+}
+
+/// Prints the current solution.
+fn print_solution_reference_from_solver(solution: &SolutionReference<'_>, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => {

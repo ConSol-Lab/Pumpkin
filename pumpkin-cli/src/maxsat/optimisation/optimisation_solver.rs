@@ -2,8 +2,8 @@ use log::debug;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::encodings::Function;
 use pumpkin_lib::results::SatisfactionResult;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
+use pumpkin_lib::Solver;
 
 use super::linear_search::LinearSearch;
 use super::optimisation_result::MaxSatOptimisationResult;
@@ -44,13 +44,11 @@ impl OptimisationSolver {
         let initial_solve_result = self.solver.satisfy(&mut brancher, termination);
 
         match initial_solve_result {
-            SatisfactionResult::Satisfiable(satisfiable) => {
+            SatisfactionResult::Satisfiable(initial_solution) => {
                 debug!(
                     "Initial solution took {} seconds",
                     process_time.elapsed().as_secs(),
                 );
-
-                let initial_solution = satisfiable.as_solution().into();
 
                 self.linear_search.solve(
                     &mut self.solver,

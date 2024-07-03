@@ -33,9 +33,8 @@ use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTablePerPoint;
 use crate::pumpkin_assert_simple;
-use crate::results::satisfiable::Satisfiable;
+use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::results::SolutionReference;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
@@ -50,7 +49,7 @@ use crate::variables::TransformableVariable;
 /// and integer variables.
 ///
 /// ```rust
-/// # use pumpkin_lib::solving::Solver;
+/// # use pumpkin_lib::Solver;
 /// # use crate::pumpkin_lib::variables::TransformableVariable;
 /// let mut solver = Solver::default();
 ///
@@ -91,7 +90,7 @@ use crate::variables::TransformableVariable;
 /// # Adding Constraints
 /// There are a number of pre-defined constraints which can be added.
 /// ```rust
-/// # use pumpkin_lib::solving::Solver;
+/// # use pumpkin_lib::Solver;
 /// let mut solver = Solver::default();
 ///
 /// // First we create 3 variables
@@ -105,8 +104,85 @@ use crate::variables::TransformableVariable;
 /// assert!(result_of_adding_all_different.is_ok());
 /// ```
 ///
-/// # Solving optimisation problems
-/// TODO
+/// # Solving satisfaction problems
+///  ```rust
+///  # use pumpkin_lib::Solver;
+///  # use pumpkin_lib::results::SatisfactionResult;
+///  # use pumpkin_lib::termination::Indefinite;
+///  # use pumpkin_lib::results::ProblemSolution;
+///  // We create the solver with default options
+///  let mut solver = Solver::default();
+///
+///  // We create 3 variables with domains within the range [0, 10]
+///  let x = solver.new_bounded_integer(0, 2);
+///  let y = solver.new_bounded_integer(0, 2);
+///  let z = solver.new_bounded_integer(0, 2);
+///
+///  // We create the all-different constraint
+///  solver.all_different(vec![x, y, z]);
+///
+///  // We create a termination condition which allows the solver to run indefinitely
+///  let mut termination = Indefinite;
+///  // And we create a search strategy (in this case, simply the default)
+///  let mut brancher = solver.default_brancher_over_all_propositional_variables();
+///
+///  // Then we solve to satisfaction
+///  let result = solver.satisfy(&mut brancher, &mut termination);
+///
+///  if let SatisfactionResult::Satisfiable(solution) = result {
+///      let value_x = solution.get_integer_value(x);
+///      let value_y = solution.get_integer_value(y);
+///      let value_z = solution.get_integer_value(z);
+///
+///      // It should be the case that all of the assigned values are different.
+///      assert!(value_x != value_y && value_x != value_z && value_y != value_z);
+///  } else {
+///      panic!("This problem should be satisfiable")
+///  }
+/// ```
+/// # Solving optimization problems
+///  ```rust
+///  # use pumpkin_lib::Solver;
+///  # use pumpkin_lib::results::OptimisationResult;
+///  # use pumpkin_lib::termination::Indefinite;
+///  # use pumpkin_lib::results::ProblemSolution;
+/// # use std::cmp::max;
+///  // We create the solver with default options
+///  let mut solver = Solver::default();
+///
+///  // We create 3 variables with domains within the range [0, 10]
+///  let x = solver.new_bounded_integer(5, 10);
+///  let y = solver.new_bounded_integer(-3, 15);
+///  let z = solver.new_bounded_integer(7, 25);
+///  let objective = solver.new_bounded_integer(-10, 30);
+///
+///  // We create the constraints:
+///  // - x + y + z = 17
+///  // - maximum(x, y, z) = objective
+///  solver.linear_equals(vec![x, y, z], 17);
+///  solver.maximum(vec![x, y, z], objective);
+///
+///  // We create a termination condition which allows the solver to run indefinitely
+///  let mut termination = Indefinite;
+///  // And we create a search strategy (in this case, simply the default)
+///  let mut brancher = solver.default_brancher_over_all_propositional_variables();
+///
+///  // Then we solve to optimality,
+///  let result = solver.minimise(&mut brancher, &mut termination, objective);
+///
+///  if let OptimisationResult::Optimal(optimal_solution) = result {
+///      let value_x = optimal_solution.get_integer_value(x);
+///      let value_y = optimal_solution.get_integer_value(y);
+///      let value_z = optimal_solution.get_integer_value(z);
+///      // The maximum objective values is 7;
+///      // with one possible solution being: {x = 5, y = 5, z = 7, objective = 7}.
+///      assert!(value_x + value_y + value_z == 17);
+///      assert!(max(value_x, max(value_y, value_z)) == optimal_solution.get_integer_value(objective));
+///      assert_eq!(optimal_solution.get_integer_value(objective), 7);
+///  } else {
+///      panic!("This problem should have an optimal solution")
+///  }
+/// ```
 
 #[derive(Debug, Default)]
 pub struct Solver {
@@ -114,6 +190,7 @@ pub struct Solver {
 }
 
 impl Solver {
+    /// Creates a solver with the provided [`LearningOptions`] and [`SolverOptions`].
     pub fn with_options(learning_options: LearningOptions, solver_options: SolverOptions) -> Self {
         Solver {
             satisfaction_solver: ConstraintSatisfactionSolver::new(
@@ -123,69 +200,52 @@ impl Solver {
         }
     }
 
-    pub fn log_statistics_with_objective(&self, best_objective_value: i64) {
-        log_statistic("objective", best_objective_value);
+    /// Logs the statistics currently present in the solver with the provided objective value.
+    pub fn log_statistics_with_objective(&self, objective_value: i64) {
+        log_statistic("objective", objective_value);
         self.log_statistics();
         log_statistic_postfix();
     }
 
+    /// Logs the statistics currently present in the solver.
     pub fn log_statistics(&self) {
         self.satisfaction_solver.log_statistics();
         log_statistic_postfix();
     }
 }
 
-/// Hidden methods
+/// Methods to retrieve information about variables
 impl Solver {
-    #[doc(hidden)]
-    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
-        self.satisfaction_solver.get_solution_reference()
+    /// Get the literal corresponding to the given predicate. As the literal may need to be
+    /// created, this possibly mutates the solver.
+    pub fn get_literal(&self, predicate: Predicate) -> Literal {
+        self.satisfaction_solver.get_literal(predicate)
     }
 
-    #[doc(hidden)] // Used by the minizinc context
+    /// Get the value of the given [`Literal`] at the root level (after propagation), which could be
+    /// unassigned.
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        self.satisfaction_solver.get_literal_value(literal)
+    }
+
     /// Get a literal which is globally true.
     pub fn get_true_literal(&self) -> Literal {
         self.satisfaction_solver.get_true_literal()
     }
 
-    #[doc(hidden)] // Used by the minizinc context
     /// Get a literal which is globally false.
     pub fn get_false_literal(&self) -> Literal {
         self.satisfaction_solver.get_false_literal()
     }
 
-    /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
-    pub(crate) fn is_at_the_root_level(&self) -> bool {
-        #[allow(deprecated)]
-        self.satisfaction_solver.is_at_the_root_level()
-    }
-}
-
-/// Methods to retrieve information about variables
-impl Solver {
+    /// Get the lower-bound of the given [`IntegerVariable`] at the root level (after propagation).
     pub fn lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_lower_bound(variable)
     }
 
+    /// Get the upper-bound of the given [`IntegerVariable`] at the root level (after propagation).
     pub fn upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_upper_bound(variable)
-    }
-
-    /// Get the literal corresponding to the given predicate. As the literal may need to be
-    /// created, this possibly mutates the solver.
-    pub fn get_literal_for_predicate(&self, predicate: Predicate) -> Literal {
-        self.satisfaction_solver.get_literal(predicate)
-    }
-
-    /// Get the value of the given literal, which could be unassigned.
-    pub(crate) fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        self.satisfaction_solver.get_literal_value(literal)
-    }
-
-    #[doc(hidden)]
-    pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        self.satisfaction_solver.restore_state_at_root(brancher)
     }
 }
 
@@ -196,7 +256,7 @@ impl Solver {
     ///
     /// # Example
     /// ```
-    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::Solver;
     /// # use pumpkin_lib::variables::Literal;
     /// let mut solver = Solver::default();
     /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
@@ -269,50 +329,36 @@ impl Solver {
     }
 }
 
-/// Functions for adding new constraints to the solver.
-impl Solver {
-    /// Creates a clause from `literals` and adds it to the current formula.
-    ///
-    /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
-    /// returned. Subsequent calls to this method will always return an error, and no
-    /// modification of the solver will take place.
-    pub fn add_clause(
-        &mut self,
-        clause: impl IntoIterator<Item = Literal>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_clause(clause)
-    }
-}
-
 /// Functions for solving with the constraints that have been added to the [`Solver`].
 impl Solver {
-    pub fn satisfy<'brancher, 'termination, B: Brancher, T: TerminationCondition>(
+    /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
+    /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
+    /// which can be used to obtain the found solution or find other solutions.
+    pub fn satisfy<B: Brancher, T: TerminationCondition>(
         &mut self,
-        brancher: &'brancher mut B,
-        termination: &'termination mut T,
-    ) -> SatisfactionResult<'_, 'brancher, 'termination, B, T> {
-        // Find solutions to the model currently in the solver.
-        //
-        // The key idea here is that, when the `SolveResult` is dropped, the solver is
-        // automatically reset to the root. This means we need no assertions anywhere
-        // regarding the current decision level in the solver, because other methods in
-        // its public API *cannot* be called unless the solver is at the root.
-
+        brancher: &mut B,
+        termination: &mut T,
+    ) -> SatisfactionResult {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
-                brancher.on_solution(self.satisfaction_solver.get_solution_reference());
-                SatisfactionResult::Satisfiable(Satisfiable::new(
-                    &mut self.satisfaction_solver,
-                    brancher,
-                    termination,
-                ))
+                let solution_reference = self.satisfaction_solver.get_solution_reference();
+                brancher.on_solution(solution_reference);
+                SatisfactionResult::Satisfiable(solution_reference.into())
             }
-            CSPSolverExecutionFlag::Infeasible => SatisfactionResult::Unsatisfiable,
-            CSPSolverExecutionFlag::Timeout => SatisfactionResult::Unknown,
+            CSPSolverExecutionFlag::Infeasible => {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                SatisfactionResult::Unsatisfiable
+            }
+            CSPSolverExecutionFlag::Timeout => {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                SatisfactionResult::Unknown
+            }
         }
     }
 
-    pub fn satisfy_under_assumptions<
+    pub fn get_solution_iterator<
         'this,
         'brancher,
         'termination,
@@ -322,32 +368,66 @@ impl Solver {
         &'this mut self,
         brancher: &'brancher mut B,
         termination: &'termination mut T,
+    ) -> SolutionIterator<'this, 'brancher, 'termination, B, T> {
+        SolutionIterator::new(&mut self.satisfaction_solver, brancher, termination)
+    }
+
+    /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
+    /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
+    /// which can be used to obtain the found solution or find other solutions.
+    ///
+    /// This method takes as input a list of [`Literal`]s which represent so-called assumptions (see
+    /// \[1\] for a more detailed explanation). The [`Literal`]s corresponding to [`Predicate`]s
+    /// over [`IntegerVariable`]s (e.g. lower-bound predicates) can be retrieved from the [`Solver`]
+    /// using [`Solver::get_literal_for_predicate`].
+    ///
+    /// # Bibliography
+    /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
+    /// Notes in Theoretical Computer Science, vol. 89, no. 4, pp. 543–560, 2003.
+    pub fn satisfy_under_assumptions<'this, 'brancher, B: Brancher, T: TerminationCondition>(
+        &'this mut self,
+        brancher: &'brancher mut B,
+        termination: &mut T,
         assumptions: &[Literal],
-    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, 'termination, B, T> {
+    ) -> SatisfactionResultUnderAssumptions<'this, 'brancher, B> {
         match self
             .satisfaction_solver
             .solve_under_assumptions(assumptions, termination, brancher)
         {
-            CSPSolverExecutionFlag::Feasible => SatisfactionResultUnderAssumptions::Satisfiable(
-                Satisfiable::new(&mut self.satisfaction_solver, brancher, termination),
-            ),
+            CSPSolverExecutionFlag::Feasible => {
+                let solution = self.satisfaction_solver.get_solution_reference().into();
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                SatisfactionResultUnderAssumptions::Satisfiable(solution)
+            }
             CSPSolverExecutionFlag::Infeasible => {
                 if self
                     .satisfaction_solver
                     .state
                     .is_infeasible_under_assumptions()
                 {
+                    // The state is automatically reset when we return this result
                     SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
                         UnsatisfiableUnderAssumptions::new(&mut self.satisfaction_solver, brancher),
                     )
                 } else {
+                    // Reset the state whenever we return a result
+                    self.satisfaction_solver.restore_state_at_root(brancher);
                     SatisfactionResultUnderAssumptions::Unsatisfiable
                 }
             }
-            CSPSolverExecutionFlag::Timeout => SatisfactionResultUnderAssumptions::Unknown,
+            CSPSolverExecutionFlag::Timeout => {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                SatisfactionResultUnderAssumptions::Unknown
+            }
         }
     }
 
+    /// Solver the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is minmised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
+    /// retrieve the optimal solution if it exists.
     pub fn minimise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -357,7 +437,6 @@ impl Solver {
         let initial_solve = self.satisfaction_solver.solve(termination, brancher);
         match initial_solve {
             CSPSolverExecutionFlag::Feasible => {
-                #[allow(deprecated)]
                 brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
                 self.log_statistics_with_objective(
@@ -367,8 +446,16 @@ impl Solver {
                         as i64,
                 );
             }
-            CSPSolverExecutionFlag::Infeasible => return OptimisationResult::Unsatisfiable,
-            CSPSolverExecutionFlag::Timeout => return OptimisationResult::Unknown,
+            CSPSolverExecutionFlag::Infeasible => {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                return OptimisationResult::Unsatisfiable;
+            }
+            CSPSolverExecutionFlag::Timeout => {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                return OptimisationResult::Unknown;
+            }
         }
 
         let mut best_objective_value =
@@ -384,6 +471,8 @@ impl Solver {
                 .strengthen(&objective_variable, best_objective_value)
                 .is_err()
             {
+                // Reset the state whenever we return a result
+                self.satisfaction_solver.restore_state_at_root(brancher);
                 return OptimisationResult::Optimal(best_solution);
             }
 
@@ -399,21 +488,30 @@ impl Solver {
                         as i64;
                     best_solution = self.satisfaction_solver.get_solution_reference().into();
 
-                    #[allow(deprecated)]
                     brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
                     self.log_statistics_with_objective(best_objective_value);
                 }
                 CSPSolverExecutionFlag::Infeasible => {
-                    return OptimisationResult::Optimal(best_solution);
+                    {
+                        // Reset the state whenever we return a result
+                        self.satisfaction_solver.restore_state_at_root(brancher);
+                        return OptimisationResult::Optimal(best_solution);
+                    }
                 }
                 CSPSolverExecutionFlag::Timeout => {
-                    return OptimisationResult::Satisfiable(best_solution)
+                    // Reset the state whenever we return a result
+                    self.satisfaction_solver.restore_state_at_root(brancher);
+                    return OptimisationResult::Satisfiable(best_solution);
                 }
             }
         }
     }
 
+    /// Solves the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is maximised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
+    /// retrieve the optimal solution if it exists.
     pub fn maximise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -460,8 +558,20 @@ impl Solver {
     }
 }
 
-/// Functions to add pre-defined constraints
+/// Functions for adding new constraints to the solver.
 impl Solver {
+    /// Creates a clause from `literals` and adds it to the current formula.
+    ///
+    /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
+    /// returned. Subsequent calls to this method will always return an error, and no
+    /// modification of the solver will take place.
+    pub fn add_clause(
+        &mut self,
+        clause: impl IntoIterator<Item = Literal>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver.add_clause(clause)
+    }
+
     /// Adds the constraint `array[index] = rhs`.
     pub fn element<ElementVar: IntegerVariable + 'static>(
         &mut self,
@@ -754,9 +864,8 @@ impl Solver {
     /// // We can infer that Task 0 and Task 1 execute at the same time
     /// // while Task 2 will start after them
     /// # use pumpkin_lib::termination::Indefinite;
-    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::Solver;
     /// # use pumpkin_lib::results::SatisfactionResult;
-    /// # use pumpkin_lib::results::satisfiable::Satisfiable;
     /// # use crate::pumpkin_lib::results::ProblemSolution;
     /// let solver = Solver::default();
     ///
@@ -784,8 +893,7 @@ impl Solver {
     /// let result = solver.satisfy(&mut brancher, &mut termination);
     ///
     /// // We check whether the result was feasible
-    /// if let SatisfactionResult::Satisfiable(satisfiable) = result {
-    ///     let solution = satisfiable.as_solution();
+    /// if let SatisfactionResult::Satisfiable(solution) = result {
     ///     let horizon = durations.iter().sum::<i32>();
     ///     let start_times = [start_0, start_1, start_2];
     ///
@@ -970,12 +1078,10 @@ impl Solver {
             .map(|(index, bool)| {
                 let corresponding_domain_id = self.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let true_literal =
-                    self.get_literal_for_predicate(predicate![corresponding_domain_id >= 1]);
+                let true_literal = self.get_literal(predicate![corresponding_domain_id >= 1]);
                 let _ = self.add_clause([!*bool, true_literal]);
                 // !bool -> [domain = 0]
-                let false_literal =
-                    self.get_literal_for_predicate(predicate![corresponding_domain_id <= 0]);
+                let false_literal = self.get_literal(predicate![corresponding_domain_id <= 0]);
                 let _ = self.add_clause([*bool, false_literal]);
                 corresponding_domain_id.scaled(weights[index])
             })
@@ -996,12 +1102,10 @@ impl Solver {
             .map(|(index, bool)| {
                 let corresponding_domain_id = self.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let true_literal =
-                    self.get_literal_for_predicate(predicate![corresponding_domain_id >= 1]);
+                let true_literal = self.get_literal(predicate![corresponding_domain_id >= 1]);
                 let _ = self.add_clause([!*bool, true_literal]);
                 // !bool -> [domain = 0]
-                let false_literal =
-                    self.get_literal_for_predicate(predicate![corresponding_domain_id <= 0]);
+                let false_literal = self.get_literal(predicate![corresponding_domain_id <= 0]);
                 let _ = self.add_clause([*bool, false_literal]);
                 corresponding_domain_id.scaled(weights[index])
             })
@@ -1039,6 +1143,10 @@ impl Solver {
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
         self.satisfaction_solver.conclude_proof_optimal(bound)
+    }
+
+    pub(crate) fn into_satisfaction_solver(self) -> ConstraintSatisfactionSolver {
+        self.satisfaction_solver
     }
 }
 

@@ -74,10 +74,10 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-use crate::solving::DefaultBrancher;
-#[cfg(doc)]
-use crate::solving::Solver;
 use crate::variable_names::VariableNames;
+use crate::DefaultBrancher;
+#[cfg(doc)]
+use crate::Solver;
 
 pub(crate) type ClausalPropagatorType = BasicClausalPropagator;
 pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
@@ -343,12 +343,6 @@ impl ConstraintSatisfactionSolver {
         SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
     }
 
-    /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
-    pub fn is_at_the_root_level(&self) -> bool {
-        self.assignments_propositional.is_at_the_root_level()
-    }
-
     pub(crate) fn is_conflicting(&self) -> bool {
         self.state.conflicting()
     }
@@ -600,7 +594,7 @@ impl ConstraintSatisfactionSolver {
     /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_lib::solving::Solver;
+    /// # use pumpkin_lib::Solver;
     /// # use pumpkin_lib::variables::PropositionalVariable;
     /// # use pumpkin_lib::variables::Literal;
     /// # use pumpkin_lib::termination::Indefinite;
@@ -783,8 +777,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        self.backtrack(0, brancher);
-        self.state.declare_ready();
+        if !self.assignments_propositional.is_at_the_root_level() {
+            self.backtrack(0, brancher);
+            self.state.declare_ready();
+        }
     }
 
     fn synchronise_propositional_trail_based_on_integer_trail(&mut self) -> Option<ConflictInfo> {

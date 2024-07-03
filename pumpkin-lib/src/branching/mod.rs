@@ -1,5 +1,4 @@
-//! Contains structures and traits to define the decision making procedure of the solver
-//! (e.g. [`Solver`]).
+//! Contains structures and traits to define the decision making procedure of the [`Solver`].
 //!
 //! In general, it provides 3 traits:
 //! - The [`Brancher`] which defines how a branching procedure (which selects an unfixed variable and splits the domain in some way, see [Section 4.3.1 of \[1\]](http://www.cse.unsw.com.au/~tw/brwhkr08.pdf)
@@ -15,7 +14,7 @@
 //! A [`Brancher`] is expected to be passed to [`Solver::satisfy`], [`Solver::maximise`], and
 //! [`Solver::minimise`]:
 //! ```rust
-//! # use pumpkin_lib::solving::Solver;
+//! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::variable_selection::Vsids;
 //! # use pumpkin_lib::branching::value_selection::PhaseSaving;
@@ -34,8 +33,7 @@
 //!     PhaseSaving::new(&variables),
 //! );
 //! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     let solution = satisfiable.as_solution();
+//! if let SatisfactionResult::Satisfiable(solution) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     variables.into_iter().for_each(|variable| {
 //!         solver.get_literal_value(Literal::new(variable, true));
@@ -50,7 +48,7 @@
 //! is provided using the method
 //! [`Solver::default_brancher_over_all_propositional_variables`].
 //! ```rust
-//! # use pumpkin_lib::solving::Solver;
+//! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::variables::Literal;
@@ -64,8 +62,7 @@
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher_over_all_propositional_variables();
 //! let result = solver.satisfy(&mut brancher, &mut termination);
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     let solution = satisfiable.as_solution();
+//! if let SatisfactionResult::Satisfiable(solution) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     literals.into_iter().for_each(|literal| {
 //!         solution.get_literal_value(literal);
@@ -97,4 +94,4 @@ use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 #[cfg(doc)]
-use crate::solving::Solver;
+use crate::Solver;

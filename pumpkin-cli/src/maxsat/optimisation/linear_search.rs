@@ -7,9 +7,9 @@ use pumpkin_lib::encodings::PseudoBooleanEncoding;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
 use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solver;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;
@@ -36,9 +36,7 @@ impl LinearSearch {
         initial_solution: Solution,
     ) -> MaxSatOptimisationResult {
         let mut best_solution: Solution = initial_solution;
-
-        let mut best_objective_value =
-            objective_function.evaluate_assignment(best_solution.as_reference());
+        let mut best_objective_value = objective_function.evaluate_assignment(&best_solution);
 
         println!("o {}", best_objective_value);
         info!(
@@ -62,8 +60,6 @@ impl LinearSearch {
                     solution: best_solution,
                 };
             }
-
-            solver.restore_state_at_root(&mut brancher);
 
             let encoding_status =
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
@@ -90,9 +86,8 @@ impl LinearSearch {
             let result = solver.satisfy(&mut brancher, termination);
 
             match result {
-                SatisfactionResult::Satisfiable(satisfiable) => {
-                    let solution_ref = satisfiable.as_solution();
-                    let new_objective_value = objective_function.evaluate_assignment(solution_ref);
+                SatisfactionResult::Satisfiable(solution) => {
+                    let new_objective_value = objective_function.evaluate_assignment(&solution);
 
                     pumpkin_assert_moderate!(
                         new_objective_value < best_objective_value,
@@ -103,7 +98,7 @@ impl LinearSearch {
                     // returned solution can be trivially improved
 
                     best_objective_value = new_objective_value;
-                    best_solution = solution_ref.into();
+                    best_solution = solution;
 
                     println!("o {}", best_objective_value);
                     info!(

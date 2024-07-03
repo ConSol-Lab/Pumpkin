@@ -61,7 +61,7 @@ impl PredicateConstructor for DomainId {
 ///
 /// # Example
 /// ```rust
-/// # use pumpkin_lib::solving::Solver;
+/// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::predicate;
 /// # use pumpkin_lib::predicates::IntegerPredicate;
 /// let mut solver = Solver::default();

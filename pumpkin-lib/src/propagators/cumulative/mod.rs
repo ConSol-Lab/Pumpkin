@@ -39,12 +39,9 @@
 //! // We can infer that Task 0 and Task 1 execute at the same time
 //! // while Task 2 will start after them
 //! # use pumpkin_lib::termination::Indefinite;
-//! # use pumpkin_lib::solving::Solver;
+//! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::results::SatisfactionResult;
-//! # use pumpkin_lib::results::satisfiable::Satisfiable;
 //! # use crate::pumpkin_lib::results::ProblemSolution;
-//! let solver = Solver::default();
-//!
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
@@ -69,8 +66,7 @@
 //! let result = solver.satisfy(&mut brancher, &mut termination);
 //!
 //! // We check whether the result was feasible
-//! if let SatisfactionResult::Satisfiable(satisfiable) = result {
-//!     let solution = satisfiable.as_solution();
+//! if let SatisfactionResult::Satisfiable(solution) = result {
 //!     let horizon = durations.iter().sum::<i32>();
 //!     let start_times = [start_0, start_1, start_2];
 //!

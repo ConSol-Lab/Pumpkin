@@ -11,7 +11,7 @@ use crate::branching::InDomainRandom;
 use crate::branching::SelectionContext;
 use crate::pumpkin_assert_moderate;
 #[cfg(doc)]
-use crate::solving::Solver;
+use crate::Solver;
 
 /// A trait for generating random values; an example of where this is used is in the
 /// [`InDomainRandom`] value selector where it is used to determine which value in the domain to
@@ -35,7 +35,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_lib::solving::Random;
+    /// # use pumpkin_lib::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we flip a coin with probability 0.5
@@ -58,7 +58,7 @@ pub trait Random: Debug {
     /// ```rust
     /// # use rand::rngs::SmallRng;
     /// # use rand::SeedableRng;
-    /// # use pumpkin_lib::solving::Random;
+    /// # use pumpkin_lib::Random;
     /// // First we create our random object
     /// let mut rng = SmallRng::seed_from_u64(42);
     /// // Then we create the elements to select from

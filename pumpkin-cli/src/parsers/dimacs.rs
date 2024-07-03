@@ -21,10 +21,9 @@ use std::str::FromStr;
 use pumpkin_lib::encodings::Function;
 use pumpkin_lib::options::LearningOptions;
 use pumpkin_lib::options::SolverOptions;
-use pumpkin_lib::results::ProblemSolution;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::variables::Literal;
 use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solver;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -541,11 +540,10 @@ impl DimacsSink for SolverDimacsSink {
         if clause.is_empty() {
             // The soft clause is violated at the root level.
             SoftClauseAddition::RootViolated
-        } else if clause.iter().any(|literal| {
-            self.solver
-                .get_solution_reference()
-                .get_literal_value(*literal)
-        }) {
+        } else if clause
+            .iter()
+            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false))
+        {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {

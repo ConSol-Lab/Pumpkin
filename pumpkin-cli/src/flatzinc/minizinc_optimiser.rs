@@ -1,8 +1,8 @@
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::results::OptimisationResult;
 use pumpkin_lib::results::ProblemSolution;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TerminationCondition;
+use pumpkin_lib::Solver;
 
 use super::instance::FlatzincObjective;
 use super::instance::Output;
@@ -40,7 +40,7 @@ impl<'a> MinizincOptimiser<'a> {
 
         match output {
             OptimisationResult::Optimal(solution) => {
-                print_solution_from_solver(solution.as_reference(), outputs);
+                print_solution_from_solver(&solution, outputs);
                 MinizincOptimisationResult::Optimal {
                     optimal_objective_value: solution
                         .get_integer_value(*self.objective_function.get_domain())
@@ -48,7 +48,7 @@ impl<'a> MinizincOptimiser<'a> {
                 }
             }
             OptimisationResult::Satisfiable(solution) => {
-                print_solution_from_solver(solution.as_reference(), outputs);
+                print_solution_from_solver(&solution, outputs);
                 MinizincOptimisationResult::Satisfiable {
                     best_found_objective_value: solution
                         .get_integer_value(*self.objective_function.get_domain())

@@ -28,9 +28,9 @@ use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
-use pumpkin_lib::solving::Solver;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use result::PumpkinError;
@@ -384,9 +384,7 @@ fn cnf_problem(
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
     match solver.satisfy(&mut brancher, &mut termination) {
-        SatisfactionResult::Satisfiable(state) => {
-            let solution: Solution = state.as_solution().into();
-
+        SatisfactionResult::Satisfiable(solution) => {
             println!("s SATISFIABLE");
             let num_propositional_variables = solution.num_propositional_variables();
             println!(
