@@ -183,7 +183,6 @@ use crate::variables::TransformableVariable;
 ///      panic!("This problem should have an optimal solution")
 ///  }
 /// ```
-
 #[derive(Debug, Default)]
 pub struct Solver {
     satisfaction_solver: ConstraintSatisfactionSolver,
@@ -379,7 +378,7 @@ impl Solver {
     /// This method takes as input a list of [`Literal`]s which represent so-called assumptions (see
     /// \[1\] for a more detailed explanation). The [`Literal`]s corresponding to [`Predicate`]s
     /// over [`IntegerVariable`]s (e.g. lower-bound predicates) can be retrieved from the [`Solver`]
-    /// using [`Solver::get_literal_for_predicate`].
+    /// using [`Solver::get_literal`].
     ///
     /// # Bibliography
     /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
@@ -1151,7 +1150,8 @@ impl Solver {
 }
 
 /// The type of [`Brancher`] which is created by
-/// [`Solver::default_brancher_over_all_propositional_variables`]
+/// [`Solver::default_brancher_over_all_propositional_variables`]. It consists of the value selector
+/// [`Vsids`] in combination with a [`SolutionGuidedValueSelector`] with as backup [`PhaseSaving`].
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,
     Vsids<PropositionalVariable>,

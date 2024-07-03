@@ -12,6 +12,8 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
+#[cfg(doc)]
+use crate::results::solution_iterator::SolutionIterator;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
 /// [`ValueSelector`]).
@@ -68,7 +70,8 @@ pub trait Brancher {
 
     /// This method is called when a solution is found; this will either be called when a new
     /// incumbent solution is found (i.e. a solution with a better objective value than previously
-    /// known) or when a new solution is found when iterating over solutions using [`Satisfiable`].
+    /// known) or when a new solution is found when iterating over solutions using
+    /// [`SolutionIterator`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
     /// This method is called whenever a restart is performed.

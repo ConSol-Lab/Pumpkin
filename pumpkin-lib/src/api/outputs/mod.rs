@@ -14,8 +14,7 @@ use crate::Solver;
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SatisfactionResult {
-    /// Indicates that a solution was found and provides an instance of [`Satisfiable`] which
-    /// allows the retrieval of the solution and allows iterating over multiple solutions.
+    /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),
     /// Indicates that there is no solution to the satisfaction problem.
     Unsatisfiable,
@@ -27,11 +26,11 @@ pub enum SatisfactionResult {
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
 pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
-    /// Indicates that a solution was found and provides an instance of [`Satisfiable`] which
-    /// allows the retrieval of the solution and allows iterating over multiple solutions.
+    /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),
     /// Indicates that there is no solution to the satisfaction problem due to the provided
-    /// assumptions.
+    /// assumptions. It returns an [`UnsatisfiableUnderAssumptions`] which can be used to retrieve
+    /// an unsatisfiable core.
     UnsatisfiableUnderAssumptions(UnsatisfiableUnderAssumptions<'solver, 'brancher, B>),
     /// Indicates that there is no solution to the satisfaction problem.
     Unsatisfiable,

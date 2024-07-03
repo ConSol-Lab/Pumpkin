@@ -1,9 +1,5 @@
 mod outputs;
-
-pub use crate::api::solver::DefaultBrancher;
-pub use crate::api::solver::Solver;
-pub use crate::basic_types::ConstraintOperationError;
-pub use crate::basic_types::Random;
+pub(crate) mod solver;
 
 pub mod results {
     //! Contains the outputs of solving using the [`Solver`].
@@ -30,7 +26,6 @@ pub mod results {
     #[cfg(doc)]
     use crate::Solver;
 }
-mod solver;
 
 pub mod variables {
     //! Contains the variables which are used by the [`Solver`].

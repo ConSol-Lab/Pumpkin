@@ -233,5 +233,7 @@ mod api;
 
 pub use api::*;
 
-#[cfg(doc)]
-use crate::Solver;
+pub use crate::api::solver::DefaultBrancher;
+pub use crate::api::solver::Solver;
+pub use crate::basic_types::ConstraintOperationError;
+pub use crate::basic_types::Random;
