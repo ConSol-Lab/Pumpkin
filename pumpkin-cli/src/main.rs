@@ -189,7 +189,7 @@ fn configure_logging(
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
-        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine | FileFormat::MaxSAT2022 => {
+        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine => {
             configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
         }
         FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
@@ -309,11 +309,6 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::MaxSAT2022 => {
-                return Err(PumpkinError::ProofGenerationNotSupported(
-                    "maxsat".to_owned(),
-                ))
-            }
             FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
         }
     } else {
@@ -353,7 +348,6 @@ fn run() -> PumpkinResult<()> {
             instance_path,
             args.upper_bound_encoding.inner,
         )?,
-        FileFormat::MaxSAT2022 => todo!(),
         FileFormat::FlatZinc => flatzinc::solve(
             Solver::with_options(learning_options, solver_options),
             instance_path,
