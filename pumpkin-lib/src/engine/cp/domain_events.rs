@@ -46,14 +46,16 @@ pub struct DomainEvents {
 }
 
 impl DomainEvents {
-    pub const fn create_with_int_events(int_events: EnumSet<IntDomainEvent>) -> DomainEvents {
+    pub(crate) const fn create_with_int_events(
+        int_events: EnumSet<IntDomainEvent>,
+    ) -> DomainEvents {
         DomainEvents {
             int_events: Some(int_events),
             boolean_events: None,
         }
     }
 
-    pub const fn create_with_bool_events(
+    pub(crate) const fn create_with_bool_events(
         boolean_events: EnumSet<BooleanDomainEvent>,
     ) -> DomainEvents {
         DomainEvents {
@@ -62,12 +64,12 @@ impl DomainEvents {
         }
     }
 
-    pub fn get_int_events(&self) -> EnumSet<IntDomainEvent> {
+    pub(crate) fn get_int_events(&self) -> EnumSet<IntDomainEvent> {
         self.int_events
             .expect("Tried to retrieve int_events when it was not initialized")
     }
 
-    pub fn get_bool_events(&self) -> EnumSet<BooleanDomainEvent> {
+    pub(crate) fn get_bool_events(&self) -> EnumSet<BooleanDomainEvent> {
         self.boolean_events
             .expect("Tried to retrieve boolean_events when it was not initialized")
     }

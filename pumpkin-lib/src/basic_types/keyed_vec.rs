@@ -7,7 +7,7 @@ use std::ops::IndexMut;
 ///
 /// Almost all features of this structure require that `Key` implements the [StorageKey] trait.
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub struct KeyedVec<Key, Value> {
+pub(crate) struct KeyedVec<Key, Value> {
     /// [PhantomData] to ensure that the [KeyedVec] is bound to the structure
     key: PhantomData<Key>,
     /// Storage of the elements of type `Value`
@@ -33,38 +33,30 @@ impl<Key, Value> Default for KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
-    pub fn new(elements: Vec<Value>) -> Self {
+    pub(crate) fn new(elements: Vec<Value>) -> Self {
         KeyedVec {
             key: PhantomData,
             elements,
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn push(&mut self, value: Value) {
+    pub(crate) fn push(&mut self, value: Value) {
         self.elements.push(value)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &'_ Value> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &'_ Value> {
         self.elements.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &'_ mut Value> {
-        self.elements.iter_mut()
-    }
-
-    pub fn swap(&mut self, a: usize, b: usize) {
+    pub(crate) fn swap(&mut self, a: usize, b: usize) {
         self.elements.swap(a, b)
     }
 
-    pub fn into_entries(self) -> impl Iterator<Item = (Key, Value)> {
+    pub(crate) fn into_entries(self) -> impl Iterator<Item = (Key, Value)> {
         self.elements
             .into_iter()
             .enumerate()
@@ -73,13 +65,13 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
-    pub fn resize(&mut self, new_len: usize, value: Value) {
+    pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
         self.elements.resize(new_len, value)
     }
 
     /// Ensure the storage can accomodate the given key. Values for keys that are between the
     /// current last key and the given key will be `default_value`.
-    pub fn accomodate(&mut self, key: Key, default_value: Value) {
+    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
         let idx = key.index();
 
         if idx >= self.elements.len() {

@@ -6,7 +6,7 @@ use crate::pumpkin_assert_simple;
 
 #[allow(clippy::len_without_is_empty)] // The clause will always have at least two literals.
 #[derive(Debug)]
-pub struct ClauseBasic {
+pub(crate) struct ClauseBasic {
     literals: Vec<Literal>,
     is_learned: bool,
     is_deleted: bool,
@@ -16,7 +16,7 @@ pub struct ClauseBasic {
 }
 
 impl ClauseBasic {
-    pub fn new(literals: Vec<Literal>, is_learned: bool) -> ClauseBasic {
+    pub(crate) fn new(literals: Vec<Literal>, is_learned: bool) -> ClauseBasic {
         pumpkin_assert_simple!(literals.len() >= 2);
 
         let num_literals = literals.len() as u32;

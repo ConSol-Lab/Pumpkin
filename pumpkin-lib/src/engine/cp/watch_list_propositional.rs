@@ -6,7 +6,7 @@ use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::Literal;
 
 #[derive(Debug)]
-pub struct WatchListPropositional {
+pub(crate) struct WatchListPropositional {
     watchers: KeyedVec<Literal, WatcherPropositional>, /* contains propagator ids of propagators
                                                         * that watch domain changes of the i-th
                                                         * integer variable */
@@ -35,7 +35,9 @@ pub enum BooleanDomainEvent {
 }
 
 impl BooleanDomainEvent {
-    pub fn get_iterator(literal: Literal) -> impl Iterator<Item = (BooleanDomainEvent, Literal)> {
+    pub(crate) fn get_iterator(
+        literal: Literal,
+    ) -> impl Iterator<Item = (BooleanDomainEvent, Literal)> {
         [
             (BooleanDomainEvent::AssignedTrue, literal),
             (BooleanDomainEvent::AssignedFalse, !literal),
@@ -46,20 +48,16 @@ impl BooleanDomainEvent {
 
 // public functions
 impl WatchListPropositional {
-    pub fn grow(&mut self) {
+    pub(crate) fn grow(&mut self) {
         self.watchers.push(WatcherPropositional::default());
         self.watchers.push(WatcherPropositional::default());
     }
 
-    pub fn num_domains(&self) -> u32 {
-        self.watchers.len() as u32
-    }
-
-    pub fn is_watching_anything(&self) -> bool {
+    pub(crate) fn is_watching_anything(&self) -> bool {
         self.is_watching_anything
     }
 
-    pub fn get_affected_propagators(
+    pub(crate) fn get_affected_propagators(
         &self,
         event: BooleanDomainEvent,
         domain: Literal,
