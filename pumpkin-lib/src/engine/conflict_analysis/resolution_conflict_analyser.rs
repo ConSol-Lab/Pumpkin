@@ -691,6 +691,7 @@ impl ResolutionConflictAnalyser {
     ///
     /// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
     /// to improved propositional proof traces’. SAT'09.
+    ///
     /// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
     pub(crate) fn remove_dominated_literals(&mut self, context: &mut ConflictAnalysisContext) {
         self.num_minimisation_calls += 1;

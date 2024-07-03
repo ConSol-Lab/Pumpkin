@@ -1,9 +1,0 @@
-#!/bin/sh
-
-set -eux
-
-./scripts/fmt.sh --pre-commit
-./scripts/hash.sh --pre-commit
-./scripts/clippy.sh --pre-commit
-./scripts/documentation.sh --pre-commit
-./scripts/deny.sh --pre-commit

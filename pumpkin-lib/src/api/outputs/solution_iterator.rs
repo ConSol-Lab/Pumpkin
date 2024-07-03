@@ -1,4 +1,4 @@
-//! Contains the representation of a satisfiable solution for satisfaction problems.
+//! Contains the structures corresponding to solution iterations.
 
 use super::SolutionReference;
 use crate::basic_types::CSPSolverExecutionFlag;
