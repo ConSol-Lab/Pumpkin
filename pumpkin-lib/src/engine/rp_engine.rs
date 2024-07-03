@@ -1,3 +1,16 @@
+//! Reverse propagation (RP) is a generalization of Reverse Unit Propagation (RUP). In the latter
+//! case, a clause `c` is RUP with respect to a clause database `F` when `¬c ∧ F ⟹ false` and this
+//! conflict can be detected through clausal (aka unit) propagation.
+//! RP generalizes this property by dropping the requirement for `F` to be a
+//! database of clauses. It can be a database of any constraint type.
+//!
+//! This concept is mostly useful when dealing with clausal proofs. In particular, the DRCP format,
+//! which is the format used by Pumpkin to proofs when solving a CP problem.
+//!
+//! Since validating the RP property of a clause of predicates requires a CP propagation engine,
+//! and given that Pumpkin implements such an engine, the [`RpEngine`] exposes an API to verify the
+//! RP property of of clauses.
+
 use log::warn;
 
 use crate::basic_types::ClauseReference;
@@ -13,6 +26,16 @@ use crate::Solver;
 
 /// An API for performing backwards reverse propagation of a clausal proof. The API allows the
 /// reasons for all propagations that are used to derive the RP clause to be accessed.
+///
+/// To use the RpEngine, one can do the following:
+/// 1. Initialise it with a base model against which the individual reverse propagating clauses will
+///    be checked.
+/// 2. Add reverse propagating clauses through [`RpEngine::add_rp_clause`]. The order in which this
+///    happens matters.
+/// 3. Check whether a propagation can derive a conflict under certain assumptions (probably the
+///    negation of a reverse propagating clause which is no-longer in the engine).
+/// 4. Remove the reverse propagating clauses with [`RpEngine::remove_last_rp_clause`] in reverse
+///    order in which they were added.
 #[derive(Debug)]
 pub struct RpEngine {
     solver: ConstraintSatisfactionSolver,
@@ -21,9 +44,13 @@ pub struct RpEngine {
     rp_allocated_clauses: HashMap<ClauseReference, RpClauseHandle>,
 }
 
+/// A handle to a reverse propagating clause. These clauses are added to the [`RpEngine`] through
+/// [`RpEngine::add_rp_clause`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RpClauseHandle(usize);
 
+/// One of the reasons contributing to unsatisfiability when calling
+/// [`RpEngine::propagate_under_assumptions`].
 #[derive(Debug)]
 pub enum ConflictReason {
     Clause(RpClauseHandle),
@@ -34,10 +61,12 @@ pub enum ConflictReason {
     },
 }
 
+/// The reason for a conflict is a list of [`ConflictReason`]s.
 pub type ReversePropagationConflict = Vec<ConflictReason>;
 
 impl RpEngine {
-    /// Create a new checker based on a [`Solver`] initialized with the model of the problem.
+    /// Create a new reverse propagating engine based on a [`Solver`] initialized with the model of
+    /// the problem.
     pub fn new(solver: Solver) -> Self {
         RpEngine {
             solver: solver.into_satisfaction_solver(),
@@ -47,8 +76,12 @@ impl RpEngine {
         }
     }
 
-    /// Add a new reverse propagating clause to the checker. The clause should not be empty, and
-    /// the checker should not be in an conflicting state.
+    /// Add a new reverse propagating clause to the engine. The clause should not be empty, and
+    /// the engine should not be in an conflicting state.
+    ///
+    /// If the new clause causes a conflict under propagation, the engine will be in a conflicting
+    /// state. A call to [`RpEngine::remove_last_rp_clause`] will remove the newly added clause and
+    /// reset the engine to a useable state.
     pub fn add_rp_clause(
         &mut self,
         clause: impl IntoIterator<Item = Literal>,
@@ -141,6 +174,9 @@ impl RpEngine {
     }
 
     /// Perform unit propagation under assumptions.
+    ///
+    /// In case the engine discovers a conflict, the engine will be in a conflicting state. At this
+    /// point, no new clauses can be added before a call to [`RpEngine::remove_last_rp_clause`].
     pub fn propagate_under_assumptions(
         &mut self,
         assumptions: impl IntoIterator<Item = Literal>,

@@ -1,5 +1,3 @@
-//! Contains structures for logging proofs for the [`Solver`].
-
 mod dimacs;
 mod proof_literals;
 
@@ -23,6 +21,8 @@ use crate::Solver;
 /// allow the following types of proofs:
 /// - A CP proof log - This can be created using [`ProofLog::cp`].
 /// - A DIMACS proof log - This can be created using [`ProofLog::dimacs`].
+///
+/// When a proof log should not be generated, use the implementation of [`Default`].
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
