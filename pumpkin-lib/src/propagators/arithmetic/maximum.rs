@@ -9,7 +9,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -50,8 +49,8 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 /// [`MaximumConstructor`].
 #[derive(Debug)]
 pub struct MaximumPropagator<ElementVar, Rhs> {
-    array: Box<[PropagatorVariable<ElementVar>]>,
-    rhs: PropagatorVariable<Rhs>,
+    array: Box<[ElementVar]>,
+    rhs: Rhs,
 }
 
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator

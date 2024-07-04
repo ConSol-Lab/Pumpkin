@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
-use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -16,7 +15,7 @@ use crate::propagators::TimeTablePerPointPropagator;
 #[derive(Debug)]
 pub(crate) struct Task<Var> {
     /// The variable representing the start time of a task
-    pub(crate) start_variable: PropagatorVariable<Var>,
+    pub(crate) start_variable: Var,
     /// The processing time of the `start_variable` (also referred to as duration of a task)
     pub(crate) processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
