@@ -164,7 +164,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Contains events that need to be processe to notify propagators of event occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
 
-    reverse_event_drain: Vec<(BacktrackEvent, DomainId)>,
+    backtrack_event_drain: Vec<(BacktrackEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
     pub(crate) variable_literal_mappings: VariableLiteralMappings,
     /// Used during synchronisation of the propositional and integer trail.
@@ -250,21 +250,21 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    fn process_reverse_domain_events(&mut self) -> bool {
+    fn process_backtrack_events(&mut self) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
-        if self.watch_list_cp.is_watching_anything() {
-            self.reverse_event_drain
-                .extend(self.assignments_integer.drain_reverse_domain_events());
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            self.backtrack_event_drain
+                .extend(self.assignments_integer.drain_backtrack_domain_events());
 
-            if self.reverse_event_drain.is_empty() {
+            if self.backtrack_event_drain.is_empty() {
                 return false;
             }
 
-            for (event, domain) in self.reverse_event_drain.drain(..) {
+            for (event, domain) in self.backtrack_event_drain.drain(..) {
                 for propagator_var in self
                     .watch_list_cp
-                    .get_reverse_affected_propagators(event, domain)
+                    .get_backtrack_affected_propagators(event, domain)
                 {
                     let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
                     let context = PropagationContext::new(
@@ -435,7 +435,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
             event_drain: vec![],
-            reverse_event_drain: vec![],
+            backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
@@ -1244,7 +1244,7 @@ impl ConstraintSatisfactionSolver {
             self.cp_propagators[propagator_id].synchronise(&context);
         }
 
-        let _ = self.process_reverse_domain_events();
+        let _ = self.process_backtrack_events();
     }
 
     /// Main propagation loop.
@@ -1756,6 +1756,7 @@ mod tests {
                             variable.0.get_domain().unwrap(),
                             DomainEvents::BOUNDS,
                             LocalId::from(index as u32),
+                            false,
                         ),
                         variable.0,
                         variable.1.clone(),

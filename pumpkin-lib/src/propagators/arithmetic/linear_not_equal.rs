@@ -64,7 +64,12 @@ where
             .iter()
             .enumerate()
             .map(|(i, x_i)| {
-                context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32))
+                context.register(
+                    x_i.clone(),
+                    DomainEvents::ASSIGN,
+                    LocalId::from(i as u32),
+                    false,
+                )
             })
             .collect();
         LinearNotEqualPropagator {

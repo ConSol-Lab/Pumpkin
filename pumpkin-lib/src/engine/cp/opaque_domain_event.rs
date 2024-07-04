@@ -18,8 +18,8 @@ impl OpaqueDomainEvent {
     }
 }
 
-/// A wrapper for a domain event, which forces the propagator implementation to map the event
-/// through the variable view.
+/// A wrapper for a domain event while backtrcking, which forces the propagator implementation to
+/// map the event through the variable view.
 #[derive(Clone, Debug, Copy)]
 pub struct OpaqueBacktrackDomainEvent(BacktrackEvent);
 

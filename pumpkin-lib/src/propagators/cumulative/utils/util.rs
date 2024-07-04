@@ -59,6 +59,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                         x.start_time.clone(),
                         DomainEvents::BOUNDS,
                         LocalId::from(id),
+                        false,
                     ), // Subscribe to all domain events concerning the current variable
                     processing_time: x.processing_time,
                     resource_usage: x.resource_usage,

@@ -11,6 +11,7 @@ pub(crate) struct WatchListCP {
                                               * watch domain changes of the i-th integer
                                               * variable */
     is_watching_anything: bool,
+    is_watching_any_backtrack_events: bool,
 }
 
 #[derive(Debug)]
@@ -52,6 +53,10 @@ impl WatchListCP {
         self.is_watching_anything
     }
 
+    pub(crate) fn is_watching_any_backtrack_events(&self) -> bool {
+        self.is_watching_any_backtrack_events
+    }
+
     pub(crate) fn get_affected_propagators(
         &self,
         event: IntDomainEvent,
@@ -67,7 +72,7 @@ impl WatchListCP {
         }
     }
 
-    pub(crate) fn get_reverse_affected_propagators(
+    pub(crate) fn get_backtrack_affected_propagators(
         &self,
         event: BacktrackEvent,
         domain: DomainId,
@@ -91,7 +96,13 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
+    pub(crate) fn watch_all(
+        &mut self,
+        domain: DomainId,
+        events: EnumSet<IntDomainEvent>,
+        register_for_backtrack_events: bool,
+    ) {
+        self.watch_list.is_watching_any_backtrack_events |= register_for_backtrack_events;
         self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
@@ -107,15 +118,21 @@ impl<'a> Watchers<'a> {
                 event_watcher.push(self.propagator_var);
             }
 
-            let backtrack_event_watchers = match event {
-                IntDomainEvent::Assign => &mut watcher.backtrack_watcher.unassign_watchers,
-                IntDomainEvent::LowerBound => &mut watcher.backtrack_watcher.lower_bound_watchers,
-                IntDomainEvent::UpperBound => &mut watcher.backtrack_watcher.upper_bound_watchers,
-                IntDomainEvent::Removal => &mut watcher.backtrack_watcher.addition_watchers,
-            };
+            if register_for_backtrack_events {
+                let backtrack_event_watchers = match event {
+                    IntDomainEvent::Assign => &mut watcher.backtrack_watcher.unassign_watchers,
+                    IntDomainEvent::LowerBound => {
+                        &mut watcher.backtrack_watcher.lower_bound_watchers
+                    }
+                    IntDomainEvent::UpperBound => {
+                        &mut watcher.backtrack_watcher.upper_bound_watchers
+                    }
+                    IntDomainEvent::Removal => &mut watcher.backtrack_watcher.addition_watchers,
+                };
 
-            if !backtrack_event_watchers.contains(&self.propagator_var) {
-                backtrack_event_watchers.push(self.propagator_var)
+                if !backtrack_event_watchers.contains(&self.propagator_var) {
+                    backtrack_event_watchers.push(self.propagator_var)
+                }
             }
         }
     }

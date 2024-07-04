@@ -58,6 +58,7 @@ where
                     x_i.clone(),
                     DomainEvents::LOWER_BOUND,
                     LocalId::from(i as u32),
+                    false,
                 )
             })
             .collect();

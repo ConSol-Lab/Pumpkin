@@ -41,16 +41,21 @@ impl PropagatorConstructorContext<'_> {
     /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.
     /// The [`LocalId`] is internal information related to the propagator,
     /// which is used when calling [`Propagator::notify()`] to identify the variable.
+    ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
     ///
     /// Note that the [`LocalId`] is used since internally the propagator variable is a wrapper
     /// around a variable 'view'.
+    ///
+    /// If `register_for_backtrack_events` is set to false then the propagator will not be
+    /// registered for backtrack events. See [`Propagator::notify_backtrack`] for more information.
     pub fn register<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,
         local_id: LocalId,
+        register_for_backtrack_events: bool,
     ) -> PropagatorVariable<Var> {
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
@@ -58,7 +63,11 @@ impl PropagatorConstructorContext<'_> {
         };
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
-        var.watch_all(&mut watchers, domain_events.get_int_events());
+        var.watch_all(
+            &mut watchers,
+            domain_events.get_int_events(),
+            register_for_backtrack_events,
+        );
 
         PropagatorVariable { inner: var }
     }

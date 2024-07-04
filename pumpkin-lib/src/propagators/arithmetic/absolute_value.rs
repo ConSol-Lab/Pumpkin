@@ -25,8 +25,9 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let signed = context.register(self.signed, DomainEvents::BOUNDS, LocalId::from(0));
-        let absolute = context.register(self.absolute, DomainEvents::BOUNDS, LocalId::from(1));
+        let signed = context.register(self.signed, DomainEvents::BOUNDS, LocalId::from(0), false);
+        let absolute =
+            context.register(self.absolute, DomainEvents::BOUNDS, LocalId::from(1), false);
 
         AbsoluteValuePropagator { signed, absolute }
     }

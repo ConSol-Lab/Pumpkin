@@ -62,7 +62,12 @@ pub trait IntegerVariable:
     ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+    fn watch_all(
+        &self,
+        watchers: &mut Watchers<'_>,
+        events: EnumSet<IntDomainEvent>,
+        register_for_backtrack_events: bool,
+    );
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;

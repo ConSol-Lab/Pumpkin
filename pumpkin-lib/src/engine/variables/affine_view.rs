@@ -132,13 +132,19 @@ where
         }
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, mut events: EnumSet<IntDomainEvent>) {
+    fn watch_all(
+        &self,
+        watchers: &mut Watchers<'_>,
+        mut events: EnumSet<IntDomainEvent>,
+        register_for_backtrack_events: bool,
+    ) {
         let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
         let intersection = events.intersection(bound);
         if intersection.len() == 1 && self.scale.is_negative() {
             events = events.symmetrical_difference(bound);
         }
-        self.inner.watch_all(watchers, events);
+        self.inner
+            .watch_all(watchers, events, register_for_backtrack_events);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {

@@ -6,6 +6,8 @@ use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate::Predicate;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -18,9 +20,13 @@ pub struct AssignmentsInteger {
     /// indicates if value j is in the domain of the integer variable
     domains: KeyedVec<DomainId, IntegerDomainExplicit>,
 
+    /// Keeps track of the [`IntDomainEvent`]s which occur while propagating/making decisions, this
+    /// is used to implement [`Propagator::notify`].
     events: EventSink<IntDomainEvent>,
 
-    reverse_events: EventSink<BacktrackEvent>,
+    /// Keeps track of the [`BacktrackEvent`]s which occur while backtracking, this is used to
+    /// implement [`Propagator::notify_backtrack`].
+    backtrack_events: EventSink<BacktrackEvent>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -84,7 +90,7 @@ impl AssignmentsInteger {
             .push(IntegerDomainExplicit::new(lower_bound, upper_bound, id));
 
         self.events.grow();
-        self.reverse_events.grow();
+        self.backtrack_events.grow();
 
         id
     }
@@ -93,16 +99,16 @@ impl AssignmentsInteger {
         self.events.drain()
     }
 
-    pub fn drain_reverse_domain_events(
+    pub fn drain_backtrack_domain_events(
         &mut self,
     ) -> impl Iterator<Item = (BacktrackEvent, DomainId)> + '_ {
-        self.reverse_events.drain()
+        self.backtrack_events.drain()
     }
 
     pub fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
         let event_sink = EventSink::new(domains.len());
-        let reverse_sink = EventSink::new(domains.len());
+        let backtrack_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
             domains[entry.predicate.get_domain()].undo_trail_entry(entry);
         });
@@ -110,7 +116,7 @@ impl AssignmentsInteger {
             trail: Default::default(),
             domains,
             events: event_sink,
-            reverse_events: reverse_sink,
+            backtrack_events: backtrack_sink,
         }
     }
 }
@@ -360,19 +366,22 @@ impl AssignmentsInteger {
                 let value_before = self.domains[domain_id].lower_bound;
                 self.domains[domain_id].undo_trail_entry(&entry);
                 if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
-                    self.reverse_events.event_occurred(BacktrackEvent::Unassign, domain_id);
+                    // This `domain_id` was unassigned while backtracking
+                    self.backtrack_events.event_occurred(BacktrackEvent::Unassign, domain_id);
                     // Variable used to be fixed but is not after backtracking
                     unfixed_variables.push((domain_id, value_before));
                 }
+
+                // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 match entry.predicate {
                     IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
-                        self.reverse_events.event_occurred(BacktrackEvent::LowerBound, domain_id)
+                        self.backtrack_events.event_occurred(BacktrackEvent::LowerBound, domain_id)
                     },
                     IntegerPredicate::UpperBound { domain_id, upper_bound: _ } => {
-                        self.reverse_events.event_occurred(BacktrackEvent::UpperBound, domain_id)
+                        self.backtrack_events.event_occurred(BacktrackEvent::UpperBound, domain_id)
                     },
                     IntegerPredicate::NotEqual { domain_id, not_equal_constant: _ } => {
-                        self.reverse_events.event_occurred(BacktrackEvent::Addition, domain_id)
+                        self.backtrack_events.event_occurred(BacktrackEvent::Addition, domain_id)
                     },
                     IntegerPredicate::Equal { domain_id: _, equality_constant: _ } => {
                         // This case has been handled before this
@@ -589,7 +598,9 @@ mod tests {
 
         let _ = assignment.synchronise(0);
 
-        let events = assignment.drain_reverse_domain_events().collect::<Vec<_>>();
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
         assert_contains_events(&events, d1, [BacktrackEvent::LowerBound]);
@@ -608,7 +619,9 @@ mod tests {
 
         let _ = assignment.synchronise(0);
 
-        let events = assignment.drain_reverse_domain_events().collect::<Vec<_>>();
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
         assert_contains_events(&events, d1, [BacktrackEvent::UpperBound]);
@@ -627,7 +640,9 @@ mod tests {
 
         let _ = assignment.synchronise(0);
 
-        let events = assignment.drain_reverse_domain_events().collect::<Vec<_>>();
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
         assert_contains_events(&events, d1, [BacktrackEvent::Addition]);
@@ -646,7 +661,9 @@ mod tests {
 
         let _ = assignment.synchronise(0);
 
-        let events = assignment.drain_reverse_domain_events().collect::<Vec<_>>();
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
         assert_eq!(events.len(), 3);
 
         assert_contains_events(&events, d1, [BacktrackEvent::Unassign]);
