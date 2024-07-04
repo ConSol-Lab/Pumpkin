@@ -8,7 +8,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
@@ -20,10 +19,11 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::propagators::reset_bounds_clear_updated;
-use crate::propagators::update_bounds_task;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::reset_bounds_clear_updated;
+use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
@@ -33,7 +33,7 @@ use crate::pumpkin_assert_extreme;
 /// different time-points - This method creates a resource profile per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
 /// has a generic argument which represents the type of variable used for modelling the start
-/// variables, this will be an implementation of [`IntVar`].
+/// variables, this will be an implementation of [`IntegerVariable`].
 ///
 /// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
 ///  for more information about time-table reasoning.
@@ -59,17 +59,21 @@ pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>
 
 impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>
 where
-    Var: IntVar + 'static + std::fmt::Debug,
+    Var: IntegerVariable + 'static + std::fmt::Debug,
 {
     type Propagator = TimeTablePerPointPropagator<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
-        TimeTablePerPointPropagator::new(CumulativeParameters::new(tasks, self.capacity))
+        TimeTablePerPointPropagator::new(CumulativeParameters::new(
+            tasks,
+            self.capacity,
+            self.allow_holes_in_domain,
+        ))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     pub(crate) fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
@@ -141,7 +145,7 @@ impl<Var: IntVar + 'static> TimeTablePerPointPropagator<Var> {
     }
 }
 
-impl<Var: IntVar + 'static> Propagator for TimeTablePerPointPropagator<Var> {
+impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context,
@@ -180,6 +184,9 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointPropagator<Var> {
             context,
             self.is_time_table_empty,
         );
+
+        // Note that the non-incremental proapgator does not make use of `result.updated` since it
+        // propagates from scratch anyways
         update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
         result.decision
     }
@@ -219,11 +226,11 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointPropagator<Var> {
 mod tests {
     use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPoint;
 
@@ -250,6 +257,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -280,14 +288,15 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
-                    s1.upper_bound_predicate(1),
-                    s1.lower_bound_predicate(1),
-                    s2.upper_bound_predicate(1),
-                    s2.lower_bound_predicate(1),
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 <= 1),
+                    predicate!(s2 >= 1),
                 ];
                 expected
                     .iter()
@@ -321,6 +330,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -376,6 +386,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -404,6 +415,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -447,6 +459,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         let result = solver.propagate_until_fixed_point(&mut propagator);
@@ -456,12 +469,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(6),
-                s1.lower_bound_predicate(6),
-                s1.upper_bound_predicate(6),
+                predicate!(s2 <= 6),
+                predicate!(s1 >= 6),
+                predicate!(s1 <= 6),
             ]),
             reason
         );
@@ -514,6 +529,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -592,6 +608,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -638,6 +655,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -645,12 +663,16 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(2), /* Note that this not the most general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval */
-                s1.lower_bound_predicate(1),
-                s1.upper_bound_predicate(1),
+                predicate!(s2 >= 2),
+                predicate!(s1 >= 1),
+                predicate!(s1 <= 1), /* Note that this not the most general explanation, if s2
+                                      * could have started at 0 then it would still have
+                                      * overlapped with the current interval */
             ]),
             reason
         );
@@ -685,6 +707,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -694,15 +717,60 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(5),
-                s2.lower_bound_predicate(5),
-                s3.lower_bound_predicate(3), /* Note that s3 would have been able to propagate
-                                              * this bound even if it started at time 0 */
+                predicate!(s2 <= 5),
+                predicate!(s2 >= 5),
+                predicate!(s3 >= 3), /* Note that s3 would have been able to propagate
+                                      * this bound even if it started at time 0 */
             ]),
             reason
         );
+    }
+
+    #[test]
+    fn propagator_propagates_with_holes() {
+        let mut solver = TestSolver::default();
+        let s1 = solver.new_variable(4, 4);
+        let s2 = solver.new_variable(0, 8);
+
+        let _ = solver
+            .new_propagator(TimeTablePerPoint::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                1,
+                true,
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(s2), 0);
+        assert_eq!(solver.upper_bound(s2), 8);
+        assert_eq!(solver.lower_bound(s1), 4);
+        assert_eq!(solver.upper_bound(s1), 4);
+
+        for removed in 2..8 {
+            assert!(!solver.contains(s2, removed));
+            let reason = solver
+                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
+                .clone();
+            assert_eq!(
+                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
+                reason
+            );
+        }
     }
 }

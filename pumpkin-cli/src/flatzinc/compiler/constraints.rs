@@ -1,12 +1,10 @@
-use pumpkin_lib::basic_types::variables::AffineView;
-use pumpkin_lib::basic_types::variables::IntVar;
-use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::basic_types::Literal;
-use pumpkin_lib::basic_types::WeightedLiteral;
 use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::encoders::PseudoBooleanConstraintEncoder;
-use pumpkin_lib::encoders::PseudoBooleanEncoding;
+use pumpkin_lib::engine::variables::AffineView;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::predicate;
 
 pub(crate) fn int_lin_le_reif(
     solver: &mut ConstraintSatisfactionSolver,
@@ -68,12 +66,12 @@ pub(crate) fn array_bool_or(
     // \/clause -> r
     let all_implications = clause
         .iter()
-        .all(|&literal| solver.add_permanent_clause(vec![!literal, reif]).is_ok());
+        .all(|&literal| solver.add_clause([!literal, reif]).is_ok());
 
     // r -> \/clause
     clause.insert(0, !reif);
 
-    all_implications && solver.add_permanent_clause(clause).is_ok()
+    all_implications && solver.add_clause(clause).is_ok()
 }
 
 pub(crate) fn int_ne_reif(
@@ -100,43 +98,51 @@ pub(crate) fn bool_lin_le(
     bools: &[Literal],
     rhs: i32,
 ) -> bool {
-    let terms = weights
+    let domains = bools
         .iter()
-        .copied()
-        .zip(bools.iter().copied())
-        .map(|(weight, literal)| {
-            let weight =
-                u64::try_from(weight).expect("bool_lin_le with negative weights is not supported");
-            WeightedLiteral {
-                literal,
-                weight,
-                bound: None,
-            }
+        .enumerate()
+        .map(|(index, bool)| {
+            let corresponding_domain_id = solver.create_new_integer_variable(0, 1, None);
+            // bool -> [domain = 1]
+            let _ = solver.add_clause([
+                !*bool,
+                solver.get_literal(predicate![corresponding_domain_id >= 1]),
+            ]);
+            // !bool -> [domain = 0]
+            let _ = solver.add_clause([
+                *bool,
+                solver.get_literal(predicate![corresponding_domain_id <= 0]),
+            ]);
+            corresponding_domain_id.scaled(weights[index])
         })
-        .collect();
-
-    let rhs = u64::try_from(rhs)
-        .expect("negative rhs is not supported, since all weights should also be positive");
-
-    let mut encoder = PseudoBooleanConstraintEncoder::new(terms, PseudoBooleanEncoding::GTE);
-    encoder.constrain_at_most_k(rhs, solver).is_ok()
+        .collect::<Vec<_>>();
+    solver.int_lin_le(domains, rhs)
 }
 
 pub(crate) fn bool_lin_eq(
     solver: &mut ConstraintSatisfactionSolver,
     weights: &[i32],
     bools: &[Literal],
-    rhs: i32,
+    rhs: DomainId,
 ) -> bool {
-    if !bool_lin_le(solver, weights, bools, rhs) {
-        return false;
-    }
-
-    let inverted = bools.iter().map(|&literal| !literal).collect::<Box<_>>();
-    bool_lin_le(
-        solver,
-        weights,
-        &inverted,
-        weights.iter().sum::<i32>() - rhs,
-    )
+    let domains = bools
+        .iter()
+        .enumerate()
+        .map(|(index, bool)| {
+            let corresponding_domain_id = solver.create_new_integer_variable(0, 1, None);
+            // bool -> [domain = 1]
+            let _ = solver.add_clause([
+                !*bool,
+                solver.get_literal(predicate![corresponding_domain_id >= 1]),
+            ]);
+            // !bool -> [domain = 0]
+            let _ = solver.add_clause([
+                *bool,
+                solver.get_literal(predicate![corresponding_domain_id <= 0]),
+            ]);
+            corresponding_domain_id.scaled(weights[index])
+        })
+        .chain(std::iter::once(rhs.scaled(-1)))
+        .collect::<Vec<_>>();
+    solver.int_lin_eq(domains, 0)
 }

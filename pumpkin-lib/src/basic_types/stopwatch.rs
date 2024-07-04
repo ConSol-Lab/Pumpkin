@@ -1,33 +1,29 @@
+use std::time::Duration;
 use std::time::Instant;
 
+/// A time keeping utility which keeps track of the elapsed time since creation or
+/// [`Stopwatch::reset()`] was last called.
 #[derive(Debug, Copy, Clone)]
 pub struct Stopwatch {
-    time_limit_in_seconds: i64,
     time_start: Instant,
 }
 
 impl Stopwatch {
-    pub fn new(time_limit_in_seconds: i64) -> Stopwatch {
+    /// Create a new stopwatch which starts keeping track of time immediately.
+    pub fn starting_now() -> Stopwatch {
         Stopwatch {
-            time_limit_in_seconds,
             time_start: Instant::now(),
         }
     }
 
-    pub fn reset(&mut self, time_limit_in_seconds: i64) {
-        self.time_limit_in_seconds = time_limit_in_seconds;
+    /// Reset the stopwatch to start at 0 again.
+    pub fn reset(&mut self) {
         self.time_start = Instant::now();
     }
 
-    pub fn get_elapsed_time(&self) -> u64 {
-        self.time_start.elapsed().as_secs()
-    }
-
-    pub fn get_elapsed_time_millis(&self) -> u128 {
-        self.time_start.elapsed().as_millis()
-    }
-
-    pub fn get_remaining_time_budget(&self) -> i64 {
-        self.time_limit_in_seconds - self.get_elapsed_time() as i64
+    /// Get the duration since the stopwatch was created or since the last call to
+    /// [`Stopwatch::reset()`].
+    pub fn elapsed(&self) -> Duration {
+        self.time_start.elapsed()
     }
 }

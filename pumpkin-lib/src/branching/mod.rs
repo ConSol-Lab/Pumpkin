@@ -17,22 +17,24 @@
 //! [`OptimisationSolver::solve`]:
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-//! # use pumpkin_lib::basic_types::PropositionalVariable;
+//! # use pumpkin_lib::engine::variables::PropositionalVariable;
 //! # use pumpkin_lib::branching::variable_selection::Vsids;
 //! # use pumpkin_lib::branching::value_selection::PhaseSaving;
-//! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+//! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+//! # use pumpkin_lib::engine::variables::Literal;
+//! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
-//! let variables = vec![solver.create_new_propositional_variable()];
+//! let variables = vec![solver.create_new_propositional_variable(None)];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::new(Vsids::new(&variables), PhaseSaving::new(&variables));
-//! let result = solver.solve(i64::MAX, &mut brancher);
+//! let result = solver.solve(&mut Indefinite, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
-//!     .get_propositional_assignments()
-//!     .is_variable_assigned(variable)));
+//!     .get_literal_value(Literal::new(variable, true))
+//!     .is_some()));
 //! ```
 //!
 //!
@@ -41,38 +43,41 @@
 //! [`IndependentVariableValueBrancher::default_over_all_propositional_variables`].
 //! ```rust
 //! # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-//! # use pumpkin_lib::basic_types::PropositionalVariable;
-//! # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+//! # use pumpkin_lib::engine::variables::PropositionalVariable;
+//! # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
+//! # use pumpkin_lib::engine::variables::Literal;
+//! # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 //! let mut solver = ConstraintSatisfactionSolver::default();
 //!
-//! let variables = vec![solver.create_new_propositional_variable()];
+//! let variables = vec![solver.create_new_propositional_variable(None)];
 //!
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-//! let result = solver.solve(i64::MAX, &mut brancher);
+//! let result = solver.solve(&mut Indefinite, &mut brancher);
 //! assert_eq!(result, CSPSolverExecutionFlag::Feasible);
 //! assert!(variables.into_iter().all(|variable| solver
-//!     .get_propositional_assignments()
-//!     .is_variable_assigned(variable)));
+//!     .get_literal_value(Literal::new(variable, true))
+//!     .is_some()));
 //! ```
 //!
 //! \[1\] F. Rossi, P. Van Beek, and T. Walsh, Handbook of constraint programming. Elsevier, 2006.
 
 mod brancher;
-mod independent_variable_value_brancher;
+pub mod branchers;
 mod selection_context;
 pub mod tie_breaking;
 pub mod value_selection;
 pub mod variable_selection;
 
 pub use brancher::Brancher;
-pub use independent_variable_value_brancher::IndependentVariableValueBrancher;
 pub use selection_context::SelectionContext;
 pub use tie_breaking::*;
 pub use value_selection::*;
 pub use variable_selection::*;
 
+#[cfg(doc)]
+use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::SolutionGuidedValueSelector;
 #[cfg(doc)]

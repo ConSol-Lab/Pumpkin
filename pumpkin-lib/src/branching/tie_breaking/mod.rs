@@ -21,7 +21,7 @@
 //!
 //! ```rust
 //! # use pumpkin_lib::branching::InOrderTieBreaker;
-//! # use pumpkin_lib::basic_types::DomainId;
+//! # use pumpkin_lib::engine::variables::DomainId;
 //! # use pumpkin_lib::branching::Direction;
 //! # use pumpkin_lib::branching::TieBreaker;
 //! let mut breaker = InOrderTieBreaker::new(Direction::Minimum);

@@ -43,7 +43,7 @@ impl PseudoBooleanConstraintEncoderInterface for SingleIntegerEncoder {
             {
                 self.index_last_added_weighted_literal = i;
                 if csp_solver
-                    .add_unit_clause(!self.weighted_literals[i].literal)
+                    .add_clause([!self.weighted_literals[i].literal])
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -61,10 +61,11 @@ impl PseudoBooleanConstraintEncoderInterface for SingleIntegerEncoder {
 #[cfg(test)]
 mod tests {
     use super::SingleIntegerEncoder;
-    use crate::basic_types::DomainId;
     use crate::basic_types::WeightedLiteral;
     use crate::encoders::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
+    use crate::engine::variables::DomainId;
     use crate::engine::ConstraintSatisfactionSolver;
+    use crate::predicate;
 
     fn weighted_literals(
         csp_solver: &mut ConstraintSatisfactionSolver,
@@ -75,7 +76,7 @@ mod tests {
     ) -> Vec<WeightedLiteral> {
         ((lower_bound + 1)..=upper_bound)
             .map(|i| {
-                let literal = csp_solver.get_lower_bound_literal(domain, i);
+                let literal = csp_solver.get_literal(predicate![domain >= i]);
                 WeightedLiteral {
                     literal,
                     weight,
@@ -89,7 +90,7 @@ mod tests {
     fn test_valid_encode_at_most_k_returns_encoder() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 5;
@@ -99,10 +100,8 @@ mod tests {
         let result = SingleIntegerEncoder::encode_at_most_k(weighted_literals, k, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_propositional_assignments()
-            .is_literal_assigned_false(
-                csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-            )));
+            .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
+            == Some(false)));
     }
 
     #[test]
@@ -110,9 +109,8 @@ mod tests {
         let (lower_bound, upper_bound) = (0, 10);
         let k: u64 = 5;
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
-        let _ =
-            csp_solver.add_unit_clause(csp_solver.get_lower_bound_literal(domain, k as i32 + 1));
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
+        let _ = csp_solver.add_clause([csp_solver.get_literal(predicate![domain >= k as i32 + 1])]);
 
         let weight = 1;
         let weighted_literals =
@@ -126,7 +124,7 @@ mod tests {
     fn test_encoding_with_k_higher_than_upper_bound_results_in_encoder() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;
@@ -137,10 +135,8 @@ mod tests {
         assert!(result.is_ok());
         assert!(
             ((lower_bound as u64 + 1)..=upper_bound as u64).all(|lower_bound| csp_solver
-                .get_propositional_assignments()
-                .is_literal_unassigned(
-                    csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-                ))
+                .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
+                .is_none())
         );
     }
 
@@ -148,7 +144,7 @@ mod tests {
     fn test_valid_strengthen_at_most_k_returns_ok() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;
@@ -162,17 +158,15 @@ mod tests {
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_ok());
         assert!((k + 1..=upper_bound as u64).all(|lower_bound| csp_solver
-            .get_propositional_assignments()
-            .is_literal_assigned_false(
-                csp_solver.get_lower_bound_literal(domain, lower_bound as i32)
-            )));
+            .get_literal_value(csp_solver.get_literal(predicate![domain >= lower_bound as i32]))
+            == Some(false)));
     }
 
     #[test]
     fn test_invalid_strengthen_at_most_k_returns_err() {
         let (lower_bound, upper_bound) = (0, 10);
         let mut csp_solver = ConstraintSatisfactionSolver::default();
-        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound);
+        let domain = csp_solver.create_new_integer_variable(lower_bound, upper_bound, None);
 
         let weight = 1;
         let k = 15;
@@ -183,7 +177,7 @@ mod tests {
         assert!(result.is_ok());
         let mut encoder = result.unwrap();
         let k = 5;
-        let _ = csp_solver.add_unit_clause(csp_solver.get_lower_bound_literal(domain, k + 1));
+        let _ = csp_solver.add_clause([csp_solver.get_literal(predicate![domain >= k + 1])]);
         let result = encoder.strengthen_at_most_k(5, &mut csp_solver);
         assert!(result.is_err());
     }

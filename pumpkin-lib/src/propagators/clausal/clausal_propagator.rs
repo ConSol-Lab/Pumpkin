@@ -1,10 +1,11 @@
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ExplanationClauseManager;
+use crate::pumpkin_assert_simple;
 
 pub trait ClausalPropagator {
     fn grow(&mut self);
@@ -74,4 +75,36 @@ pub trait ClausalPropagator {
         assignments: &AssignmentsPropositional,
         clause_allocator: &ClauseAllocator,
     ) -> bool;
+}
+
+/// We determine whether the clause is propagating by using the following reasoning:
+///     * the literal at position 0 is set to true. This is the convention with the clausal
+/// propagator.
+///     * the reason for propagation of the literal is the input clause.
+pub fn is_clause_propagating(
+    assignments_propositional: &AssignmentsPropositional,
+    clause_allocator: &ClauseAllocator,
+    clause_reference: ClauseReference,
+) -> bool {
+    pumpkin_assert_simple!(
+        clause_reference.is_allocated_clause(),
+        "Virtual clause support not yet implemented."
+    );
+
+    // the code could be simplified
+
+    let propagated_literal = clause_allocator[clause_reference][0];
+    if assignments_propositional.is_literal_assigned_true(propagated_literal) {
+        let reason_constraint = assignments_propositional
+            .get_variable_reason_constraint(propagated_literal.get_propositional_variable());
+
+        if reason_constraint.is_clause() {
+            let reason_clause: ClauseReference = reason_constraint.into();
+            reason_clause == clause_reference
+        } else {
+            false
+        }
+    } else {
+        false
+    }
 }

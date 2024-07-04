@@ -8,7 +8,6 @@ use crate::basic_types::sequence_generators::GeometricSequence;
 use crate::basic_types::sequence_generators::LubySequence;
 use crate::basic_types::sequence_generators::SequenceGenerator;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
-use crate::engine::constraint_satisfaction_solver::RestartOptions;
 
 /// An implementation of a restart strategy based on the specfication of [Section 4 of \[1\]](https://fmv.jku.at/papers/BiereFroehlich-POS15.pdf)
 /// (for more information about the Glucose restart strategies see [\[2\]](https://www.cril.univ-artois.fr/articles/xxmain.pdf) and
@@ -42,6 +41,58 @@ use crate::engine::constraint_satisfaction_solver::RestartOptions;
 ///
 /// \[5\] M. Luby, A. Sinclair, and D. Zuckerman, ‘Optimal speedup of Las Vegas algorithms’,
 /// Information Processing Letters, vol. 47, no. 4, pp. 173–180, 1993.
+
+/// Parameters related to the restarts as provided to [`RestartStrategy`].
+#[derive(Debug, Clone, Copy)]
+pub struct RestartOptions {
+    /// Decides the sequence based on which the restarts are performed.
+    /// To be used in combination with [`RestartOptions::base_interval`]
+    pub sequence_generator_type: SequenceGeneratorType,
+    /// The base interval length is used as a multiplier to the restart sequence.
+    /// For example, constant restarts with base interval 100 means a retart is triggered every 100
+    /// conflicts.
+    pub base_interval: u64,
+    /// The minimum number of conflicts to be reached before the first restart is considered
+    pub min_num_conflicts_before_first_restart: u64,
+    /// Used to determine if a restart should be forced (part of [`RestartStrategy`]).
+    /// The state is "bad" if the current LBD value (see [`RestartStrategy`] for a
+    /// definition) is much greater than the global LBD average A greater/lower value for
+    /// lbd-coef means a less/more frequent restart policy
+    pub lbd_coef: f64,
+    /// Used to determine if a restart should be blocked (part of [`RestartStrategy`]).
+    /// To be used in combination with
+    /// [`RestartOptions::num_assigned_window`].
+    /// A restart is blocked if the number of assigned propositional variables is must greater than
+    /// the average number of assigned variables in the recent past A greater/lower value for
+    /// [`RestartOptions::num_assigned_coef`] means fewer/more blocked restarts
+    pub num_assigned_coef: f64,
+    /// Used to determine the length of the recent past that should be considered when deciding on
+    /// blocking restarts (part of [`RestartStrategy`]). The solver considers the last
+    /// [`RestartOptions::num_assigned_window`] conflicts as the reference point for the
+    /// number of assigned variables
+    pub num_assigned_window: u64,
+    /// The coefficient in the geometric sequence `x_i = x_{i-1} * geometric-coef` where `x_1 =
+    /// `[`RestartOptions::base_interval`]. Used only if
+    /// [`RestartOptions::sequence_generator_type`] is assigned to
+    /// [`SequenceGeneratorType::Geometric`].
+    pub geometric_coef: Option<f64>,
+}
+
+impl Default for RestartOptions {
+    fn default() -> Self {
+        // The values which are used are based on [Glucose](https://github.com/audemard/glucose).
+        Self {
+            sequence_generator_type: SequenceGeneratorType::Constant,
+            base_interval: 50,
+            min_num_conflicts_before_first_restart: 10000,
+            lbd_coef: 1.25,
+            num_assigned_coef: 1.4,
+            num_assigned_window: 5000,
+            geometric_coef: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RestartStrategy {
     /// A generator for determining how many conflicts should be found before the next restart is

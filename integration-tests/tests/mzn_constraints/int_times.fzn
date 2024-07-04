@@ -1,0 +1,7 @@
+var -3..3: a :: output_var;
+var -3..3: b :: output_var;
+var -3..3: c :: output_var;
+
+constraint int_times(a, b, c);
+
+solve satisfy;

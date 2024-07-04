@@ -26,6 +26,8 @@ pub(crate) enum PumpkinError {
     InvalidDimacs(#[from] DimacsParseError),
     #[error("Failed to run flatzinc model")]
     FlatZinc(#[from] FlatZincError),
+    #[error("Proof generation for {0} is not supported.")]
+    ProofGenerationNotSupported(String),
 }
 
 impl PumpkinError {

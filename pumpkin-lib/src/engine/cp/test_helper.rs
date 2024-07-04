@@ -1,20 +1,16 @@
-#![cfg(test)]
+#![cfg(any(test, doc))]
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::DomainId;
+use super::propagation::EnqueueDecision;
+use super::WatchListPropositional;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::Literal;
-use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::PropositionalVariable;
-use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::EnqueueDecision;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -23,12 +19,16 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
+use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::WatchListCP;
-use crate::engine::WatchListPropositional;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default, Debug)]
@@ -90,10 +90,11 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         ))
     }
 
-    pub fn contains<Var: IntVar>(&self, var: Var, value: i32) -> bool {
+    pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(&self.assignments_integer, value)
     }
 
@@ -116,6 +117,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         propagator.notify(
             &mut context,
@@ -154,6 +156,10 @@ impl TestSolver {
             .is_literal_assigned_false(var)
     }
 
+    pub fn is_literal_assigned(&self, var: Literal) -> bool {
+        self.assignments_propositional.is_literal_assigned(var)
+    }
+
     pub fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignments_integer.get_upper_bound(var)
     }
@@ -168,6 +174,7 @@ impl TestSolver {
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         propagator.propagate(&mut context)
     }
@@ -186,6 +193,7 @@ impl TestSolver {
                     &mut self.assignments_integer,
                     &mut self.reason_store,
                     &mut self.assignments_propositional,
+                    PropagatorId(0),
                 );
                 propagator.propagate(&mut context)?;
                 self.notify_propagator(propagator);
@@ -203,16 +211,15 @@ impl TestSolver {
     }
 
     fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
-        #[allow(clippy::useless_conversion)]
         let events = self
             .assignments_integer
             .drain_domain_events()
-            .into_iter()
             .collect::<Vec<_>>();
         let mut context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
+            PropagatorId(0),
         );
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
@@ -232,6 +239,7 @@ impl TestSolver {
                 &mut self.assignments_integer,
                 &mut self.reason_store,
                 &mut self.assignments_propositional,
+                PropagatorId(0),
             ),
             local_id,
             event,
@@ -256,7 +264,7 @@ impl TestSolver {
         }
     }
 
-    pub fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
+    pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
         let reason_ref = self.assignments_integer.get_reason_for_predicate(predicate);
         let context =
             PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);

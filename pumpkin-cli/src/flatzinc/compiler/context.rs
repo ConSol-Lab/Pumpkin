@@ -1,10 +1,11 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use pumpkin_lib::basic_types::DomainId;
+use log::warn;
 use pumpkin_lib::basic_types::HashMap;
 use pumpkin_lib::basic_types::HashSet;
-use pumpkin_lib::basic_types::Literal;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 use crate::flatzinc::instance::Output;
@@ -65,8 +66,8 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
-        let true_literal = solver.get_propositional_assignments().true_literal;
-        let false_literal = solver.get_propositional_assignments().false_literal;
+        let true_literal = solver.get_true_literal();
+        let false_literal = solver.get_false_literal();
 
         CompilationContext {
             solver,
@@ -91,6 +92,10 @@ impl CompilationContext<'_> {
 
             set_constants: Default::default(),
         }
+    }
+
+    pub(crate) fn is_identifier_parameter(&mut self, identifier: &str) -> bool {
+        self.integer_parameters.contains_key(identifier)
     }
 
     // pub fn resolve_bool_constant(&self, identifier: &str) -> Option<bool> {
@@ -209,6 +214,19 @@ impl CompilationContext<'_> {
         }
     }
 
+    pub(crate) fn resolve_integer_constant_from_id(
+        &mut self,
+        identifier: &str,
+    ) -> Result<DomainId, FlatZincError> {
+        let value = self.resolve_int_expr_to_const(&flatzinc::IntExpr::VarParIdentifier(
+            identifier.to_owned(),
+        ))?;
+        Ok(*self.constant_domain_ids.entry(value).or_insert_with(|| {
+            self.solver
+                .create_new_integer_variable(value, value, Some(identifier.to_owned()))
+        }))
+    }
+
     pub(crate) fn resolve_integer_constant_from_expr(
         &self,
         expr: &flatzinc::Expr,
@@ -253,8 +271,11 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*value as i32)
                 .or_insert_with(|| {
-                    self.solver
-                        .create_new_integer_variable(*value as i32, *value as i32)
+                    self.solver.create_new_integer_variable(
+                        *value as i32,
+                        *value as i32,
+                        Some(value.to_string()),
+                    )
                 })),
             flatzinc::IntExpr::VarParIdentifier(id) => {
                 self.resolve_integer_variable_from_identifier(id)
@@ -274,8 +295,11 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*val as i32)
                 .or_insert_with(|| {
-                    self.solver
-                        .create_new_integer_variable(*val as i32, *val as i32)
+                    self.solver.create_new_integer_variable(
+                        *val as i32,
+                        *val as i32,
+                        Some(val.to_string()),
+                    )
                 })),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
@@ -294,10 +318,13 @@ impl CompilationContext<'_> {
             self.integer_parameters
                 .get(&self.integer_equivalences.representative(identifier))
                 .map(|value| {
-                    *self
-                        .constant_domain_ids
-                        .entry(*value)
-                        .or_insert_with(|| self.solver.create_new_integer_variable(*value, *value))
+                    *self.constant_domain_ids.entry(*value).or_insert_with(|| {
+                        self.solver.create_new_integer_variable(
+                            *value,
+                            *value,
+                            Some(value.to_string()),
+                        )
+                    })
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
                     identifier: identifier.into(),
@@ -322,7 +349,11 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                                        self.solver.create_new_integer_variable(*value, *value)
+                                        self.solver.create_new_integer_variable(
+                                            *value,
+                                            *value,
+                                            Some(value.to_string()),
+                                        )
                                     })
                                 })
                                 .collect()
@@ -466,7 +497,8 @@ impl VariableEquivalences {
             .belongs_to
             .insert(Rc::clone(&representative), self.classes.len());
         self.classes.push([representative].into());
-        self.domains.push(Domain::from(lb, ub));
+        self.domains
+            .push(Domain::from_lower_bound_and_upper_bound(lb, ub));
     }
 
     /// Get the name of the representative variable of the equivalence class the given variable
@@ -483,7 +515,13 @@ impl VariableEquivalences {
     pub(crate) fn domain(&self, variable: &str) -> Domain {
         let equiv_idx = self.belongs_to[variable];
 
-        self.domains[equiv_idx]
+        self.domains[equiv_idx].clone()
+    }
+
+    pub(crate) fn get_mut_domain(&mut self, variable: &str) -> &mut Domain {
+        let equiv_idx = self.belongs_to[variable];
+
+        &mut self.domains[equiv_idx]
     }
 
     pub(crate) fn is_defined(&self, variable: &str) -> bool {
@@ -491,42 +529,126 @@ impl VariableEquivalences {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Domain {
-    pub(crate) lb: i32,
-    pub(crate) ub: i32,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Domain {
+    IntervalDomain { lb: i32, ub: i32 },
+    SparseDomain { values: Vec<i32> },
+}
+
+impl From<Set> for Domain {
+    fn from(value: Set) -> Self {
+        match value {
+            Set::Interval {
+                lower_bound,
+                upper_bound,
+            } => Domain::IntervalDomain {
+                lb: lower_bound,
+                ub: upper_bound,
+            },
+            Set::Sparse { values } => Domain::SparseDomain {
+                values: values.to_vec(),
+            },
+        }
+    }
 }
 
 impl Domain {
     pub(crate) fn merge(&mut self, other: Domain) {
-        let lb = i32::max(self.lb, other.lb);
-        let ub = i32::min(self.ub, other.ub);
+        let domain = match (self.clone(), other) {
+            (
+                Domain::IntervalDomain { lb, ub },
+                Domain::IntervalDomain {
+                    lb: lb_other,
+                    ub: ub_other,
+                },
+            ) => {
+                let lb = i32::max(lb, lb_other);
+                let ub = i32::min(ub, ub_other);
 
-        *self = Domain::from(lb, ub);
+                Domain::from_lower_bound_and_upper_bound(lb, ub)
+            }
+            (Domain::SparseDomain { values }, Domain::IntervalDomain { lb, ub })
+            | (Domain::IntervalDomain { lb, ub }, Domain::SparseDomain { values }) => {
+                warn!("Merging `SparseDomain` with `IntervalDomain`, this could lead to memory issues depending on the implementation");
+                // We take all of the values in the sparse set which lie within the interval; note
+                // that we do not check whether the resulting values represent an interval
+                Domain::SparseDomain {
+                    values: values
+                        .into_iter()
+                        .filter(|value| *value >= lb && *value <= ub)
+                        .collect::<Vec<_>>(),
+                }
+            }
+            (
+                Domain::SparseDomain { values },
+                Domain::SparseDomain {
+                    values: values_other,
+                },
+            ) => {
+                // We simply take the intersection of the two
+                let intersection = values
+                    .into_iter()
+                    .filter(|value| values_other.contains(value))
+                    .collect::<Vec<_>>();
+                Domain::SparseDomain {
+                    values: intersection,
+                }
+            }
+        };
+        *self = domain
     }
 
     pub(crate) fn is_constant(&self) -> bool {
-        self.lb == self.ub
-    }
-
-    pub(crate) fn from(lb: i32, ub: i32) -> Self {
-        Domain { lb, ub }
-    }
-
-    pub(crate) fn into_literal(self, solver: &mut ConstraintSatisfactionSolver) -> Literal {
         match self {
-            Domain { lb, ub } if lb == ub && lb == 1 => {
-                solver.get_propositional_assignments().true_literal
-            }
-            Domain { lb, ub } if lb == ub && lb == 0 => {
-                solver.get_propositional_assignments().false_literal
-            }
-            Domain { .. } => Literal::new(solver.create_new_propositional_variable(), true),
+            Domain::IntervalDomain { lb, ub } => lb == ub,
+            Domain::SparseDomain { values } => values.len() == 1,
         }
     }
 
-    pub(crate) fn into_variable(self, solver: &mut ConstraintSatisfactionSolver) -> DomainId {
-        solver.create_new_integer_variable(self.lb, self.ub)
+    pub(crate) fn from_lower_bound_and_upper_bound(lb: i32, ub: i32) -> Self {
+        Domain::IntervalDomain { lb, ub }
+    }
+
+    pub(crate) fn into_literal(
+        self,
+        solver: &mut ConstraintSatisfactionSolver,
+        name: String,
+    ) -> Literal {
+        match self {
+            Domain::IntervalDomain { lb, ub } => {
+                if lb == ub && lb == 1 {
+                    solver.get_true_literal()
+                } else if lb == ub && lb == 0 {
+                    solver.get_false_literal()
+                } else {
+                    Literal::new(solver.create_new_propositional_variable(Some(name)), true)
+                }
+            }
+            Domain::SparseDomain { values } => {
+                if values.len() == 1 && values[0] == 1 {
+                    solver.get_true_literal()
+                } else if values.len() == 1 && values[0] == 0 {
+                    solver.get_false_literal()
+                } else {
+                    Literal::new(solver.create_new_propositional_variable(Some(name)), true)
+                }
+            }
+        }
+    }
+
+    pub(crate) fn into_variable(
+        self,
+        solver: &mut ConstraintSatisfactionSolver,
+        name: String,
+    ) -> DomainId {
+        match self {
+            Domain::IntervalDomain { lb, ub } => {
+                solver.create_new_integer_variable(lb, ub, Some(name))
+            }
+            Domain::SparseDomain { values } => {
+                solver.create_new_integer_variable_sparse(values, Some(name))
+            }
+        }
     }
 }
 
@@ -543,29 +665,107 @@ mod tests {
         equivs.create_equivalence_class(Rc::clone(&a), 0, 1);
         assert!(equivs.is_defined(&a));
         assert_eq!(equivs.representative(&a), a);
-        assert_eq!(equivs.domain(&a), Domain::from(0, 1));
+        assert_eq!(
+            equivs.domain(&a),
+            Domain::from_lower_bound_and_upper_bound(0, 1)
+        );
 
         equivs.create_equivalence_class(Rc::clone(&b), 1, 3);
         assert!(equivs.is_defined(&b));
         assert_eq!(equivs.representative(&b), b);
-        assert_eq!(equivs.domain(&b), Domain::from(1, 3));
+        assert_eq!(
+            equivs.domain(&b),
+            Domain::from_lower_bound_and_upper_bound(1, 3)
+        );
 
         equivs.create_equivalence_class(Rc::clone(&c), 5, 10);
         assert!(equivs.is_defined(&c));
         assert_eq!(equivs.representative(&c), c);
-        assert_eq!(equivs.domain(&c), Domain::from(5, 10));
+        assert_eq!(
+            equivs.domain(&c),
+            Domain::from_lower_bound_and_upper_bound(5, 10)
+        );
 
         equivs.merge(Rc::clone(&a), Rc::clone(&b));
         assert!(equivs.is_defined(&a));
         assert_eq!(equivs.representative(&a), a);
-        assert_eq!(equivs.domain(&a), Domain::from(1, 1));
+        assert_eq!(
+            equivs.domain(&a),
+            Domain::from_lower_bound_and_upper_bound(1, 1)
+        );
 
         assert!(equivs.is_defined(&b));
         assert_eq!(equivs.representative(&b), a);
-        assert_eq!(equivs.domain(&b), Domain::from(1, 1));
+        assert_eq!(
+            equivs.domain(&b),
+            Domain::from_lower_bound_and_upper_bound(1, 1)
+        );
 
         assert!(equivs.is_defined(&c));
         assert_eq!(equivs.representative(&c), c);
-        assert_eq!(equivs.domain(&c), Domain::from(5, 10));
+        assert_eq!(
+            equivs.domain(&c),
+            Domain::from_lower_bound_and_upper_bound(5, 10)
+        );
+    }
+
+    #[test]
+    fn merge_two_intervals() {
+        let mut interval_1 = Domain::IntervalDomain { lb: -5, ub: 10 };
+        let interval_2 = Domain::IntervalDomain { lb: 0, ub: 20 };
+
+        interval_1.merge(interval_2);
+        assert!(match interval_1 {
+            Domain::IntervalDomain { lb, ub } => lb == 0 && ub == 10,
+            Domain::SparseDomain { values: _ } => false,
+        });
+    }
+
+    #[test]
+    fn merge_sparse_domains() {
+        let mut sparse_domain_1 = Domain::SparseDomain {
+            values: vec![0, 1, 2],
+        };
+
+        let sparse_domain_2 = Domain::SparseDomain {
+            values: vec![2, 3, 4],
+        };
+        sparse_domain_1.merge(sparse_domain_2);
+        assert!(match sparse_domain_1 {
+            Domain::IntervalDomain { lb: _, ub: _ } => false,
+            Domain::SparseDomain { values } => values == vec![2],
+        })
+    }
+
+    #[test]
+    fn merge_sparse_with_interval() {
+        let mut sparse_domain_1 = Domain::SparseDomain {
+            values: vec![2, 3, 4],
+        };
+        let interval = Domain::IntervalDomain { lb: 3, ub: 20 };
+
+        sparse_domain_1.merge(interval);
+        assert!(match sparse_domain_1 {
+            Domain::IntervalDomain { lb: _, ub: _ } => false,
+            Domain::SparseDomain { values } => {
+                values == vec![3, 4]
+            }
+        })
+    }
+
+    #[test]
+    fn merge_interval_with_sparse() {
+        let mut interval = Domain::IntervalDomain { lb: 3, ub: 20 };
+        let sparse_domain_1 = Domain::SparseDomain {
+            values: vec![2, 3, 4],
+        };
+
+        interval.merge(sparse_domain_1);
+        assert!(match interval {
+            Domain::IntervalDomain { lb: _, ub: _ } => false,
+            Domain::SparseDomain { values } => {
+                values == vec![3, 4]
+            }
+        })
     }
 }

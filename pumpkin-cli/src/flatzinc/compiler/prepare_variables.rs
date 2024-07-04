@@ -95,6 +95,7 @@ mod tests {
     use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
     use super::*;
+    use crate::flatzinc::ast::SearchStrategy;
     use crate::flatzinc::ast::SingleVarDecl;
     use crate::flatzinc::compiler::context::Domain;
 
@@ -112,7 +113,7 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         let domain = context.literal_equivalences.domain("SomeVar");
-        assert_eq!(Domain::from(0, 1), domain);
+        assert_eq!(Domain::from_lower_bound_and_upper_bound(0, 1), domain);
     }
 
     #[test]
@@ -136,11 +137,11 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         assert_eq!(
-            Domain::from(0, 0),
+            Domain::from_lower_bound_and_upper_bound(0, 0),
             context.literal_equivalences.domain("SomeVar")
         );
         assert_eq!(
-            Domain::from(1, 1),
+            Domain::from_lower_bound_and_upper_bound(1, 1),
             context.literal_equivalences.domain("OtherVar")
         );
     }
@@ -160,7 +161,7 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         assert_eq!(
-            Domain::from(0, 0),
+            Domain::from_lower_bound_and_upper_bound(0, 0),
             context.literal_equivalences.domain("SomeVar")
         );
     }
@@ -179,7 +180,7 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         assert_eq!(
-            Domain::from(0, 1),
+            Domain::from_lower_bound_and_upper_bound(0, 1),
             context.literal_equivalences.domain("SomeVar")
         );
     }
@@ -200,7 +201,7 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         assert_eq!(
-            Domain::from(3, 3),
+            Domain::from_lower_bound_and_upper_bound(3, 3),
             context.integer_equivalences.domain("SomeVar")
         );
     }
@@ -222,7 +223,7 @@ mod tests {
         run(&ast, &mut context).expect("no errors");
 
         assert_eq!(
-            Domain::from(3, 3),
+            Domain::from_lower_bound_and_upper_bound(3, 3),
             context.integer_equivalences.domain("SomeVar")
         );
     }
@@ -237,6 +238,12 @@ mod tests {
                 goal: flatzinc::Goal::Satisfy,
                 annotations: vec![],
             },
+            search: crate::flatzinc::ast::Search::Int(SearchStrategy {
+                variables: flatzinc::AnnExpr::String("test".to_owned()),
+                variable_selection_strategy:
+                    crate::flatzinc::ast::VariableSelectionStrategy::AntiFirstFail,
+                value_selection_strategy: crate::flatzinc::ast::ValueSelectionStrategy::InDomain,
+            }),
         }
     }
 }

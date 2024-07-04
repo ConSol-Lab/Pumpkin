@@ -1,0 +1,20 @@
+% This is testing the redefinition that we have specified
+% This is the original input before compilation: 
+%   var -3..3: a :: output_var;
+%   var {-3, -2, -1, 1, 2, 3}: b :: output_var;
+%   var -3..3: c :: output_var;
+%
+%   constraint int_mod(a, b, c);
+%
+%   solve satisfy;
+
+array [1..3] of int: X_INTRODUCED_4_ = [1,-1,-1];
+var -3..3: a:: is_defined_var:: output_var;
+var {-3,-2,-1,1,2,3}: b:: output_var;
+var -3..3: c:: output_var;
+var -3..3: X_INTRODUCED_1_ ::var_is_introduced :: is_defined_var;
+var -9..9: X_INTRODUCED_2_ ::var_is_introduced :: is_defined_var;
+constraint int_div(a,b,X_INTRODUCED_1_):: defines_var(X_INTRODUCED_1_);
+constraint int_lin_eq(X_INTRODUCED_4_,[a,X_INTRODUCED_2_,c],0):: defines_var(a);
+constraint int_times(X_INTRODUCED_1_,b,X_INTRODUCED_2_):: defines_var(X_INTRODUCED_2_);
+solve  satisfy;

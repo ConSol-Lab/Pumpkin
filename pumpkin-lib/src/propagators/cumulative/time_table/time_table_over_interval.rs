@@ -3,7 +3,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -15,14 +14,18 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::ReadDomains;
-use crate::propagators::create_inconsistency;
-use crate::propagators::create_tasks;
-use crate::propagators::reset_bounds_clear_updated;
-use crate::propagators::update_bounds_task;
+use crate::engine::variables::IntegerVariable;
+use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::reset_bounds_clear_updated;
+use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
+#[cfg(doc)]
+use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
@@ -40,9 +43,7 @@ pub struct Event<Var> {
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
 /// different time-points - This method creates a resource profile over an interval rather than
-/// creating one per time-point (hence the name). Furthermore, the
-/// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
-/// used for modelling the start variables, this will be an implementation of [`IntVar`].
+/// creating one per time-point (as is done in [`TimeTablePerPointPropagator`]).
 ///
 /// See [Sections 4.2.1, 4.5.2 and 4.6.1-4.6.3 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)
 ///  for more information about time-table reasoning.
@@ -65,17 +66,21 @@ pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
 impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>
 where
-    Var: IntVar + 'static + std::fmt::Debug,
+    Var: IntegerVariable + 'static,
 {
     type Propagator = TimeTableOverIntervalPropagator<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
-        TimeTableOverIntervalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
+        TimeTableOverIntervalPropagator::new(CumulativeParameters::new(
+            tasks,
+            self.capacity,
+            self.allow_holes_in_domain,
+        ))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     pub fn new(parameters: CumulativeParameters<Var>) -> TimeTableOverIntervalPropagator<Var> {
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
@@ -97,18 +102,17 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
         propagate_based_on_timetable(context, time_table.iter(), parameters)
     }
 
-    /// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
-    /// start and end (both inclusive) consisting of tasks with a cumulative height Assumptions:
-    /// The time-table is sorted based on start time and none of the profiles overlap - generally,
-    /// it is assumed that the calculated [`ResourceProfile`]s are maximal
+    /// Creates a list of all the events (for the starts and ends of mandatory parts) of all the
+    /// tasks defined in `parameters`.
     ///
-    /// The result of this method is either the time-table of type
-    /// [`OverIntervalTimeTableType`] or the tasks responsible for the
-    /// conflict in the form of an [`Inconsistency`].
-    pub(crate) fn create_time_table_over_interval_from_scratch(
+    /// The events are returned in chonological order, if a tie between time points occurs then this
+    /// is resolved by placing the events which signify the ends of mandatory parts first (if the
+    /// tie is between events of the same type then the tie-breaking is done on the id in
+    /// non-decreasing order).
+    fn create_events(
         context: &PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
+    ) -> Vec<Event<Var>> {
         // First we create a list of events with which we will create the time-table
         let mut events: Vec<Event<Var>> = Vec::new();
         // Then we go over every task
@@ -141,7 +145,7 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
         events.sort_by(|a, b| {
             match a.time_stamp.cmp(&b.time_stamp) {
                 // If the time_stamps are equal then we first go through the ends of the mandatory
-                // parts This allows us to build smaller explanations by ensuring
+                // parts. This allows us to build smaller explanations by ensuring
                 // that we report an error as soon as it can be found
                 std::cmp::Ordering::Equal => {
                     if a.change_in_resource_usage.signum() != b.change_in_resource_usage.signum() {
@@ -159,6 +163,51 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
             }
         });
 
+        events
+    }
+
+    fn check_starting_new_profile_invariants(
+        event: &Event<Var>,
+        current_resource_usage: i32,
+        current_profile_tasks: &[Rc<Task<Var>>],
+    ) -> bool {
+        if event.change_in_resource_usage <= 0 {
+            eprintln!("The resource usage of an event which causes a new profile to be started should never be negative")
+        }
+        if current_resource_usage != 0 {
+            eprintln!("The resource usage should be 0 when a new profile is started")
+        }
+        if !current_profile_tasks.is_empty() {
+            eprintln!("There should be no contributing tasks when a new profile is started")
+        }
+        event.change_in_resource_usage > 0
+            && current_resource_usage == 0
+            && current_profile_tasks.is_empty()
+    }
+
+    /// Creates a time-table based on the provided `events` (which are assumed to be sorted
+    /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
+    /// are before the starts of mandatory parts).
+    fn create_time_table_from_events(
+        events: Vec<Event<Var>>,
+        context: &PropagationContextMut,
+        parameters: &CumulativeParameters<Var>,
+    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
+        pumpkin_assert_extreme!(
+            events.is_empty()
+                || (0..events.len() - 1)
+                    .all(|index| events[index].time_stamp <= events[index + 1].time_stamp),
+            "Events that were passed were not sorted chronologically"
+        );
+        pumpkin_assert_extreme!(
+            events.is_empty()
+                || (0..events.len() - 1).all(|index| events[index].time_stamp
+                    != events[index + 1].time_stamp
+                    || events[index].change_in_resource_usage.signum()
+                        <= events[index + 1].change_in_resource_usage.signum()),
+            "Events were not ordered in such a way that the ends of mandatory parts occurred first"
+        );
+
         let mut time_table: OverIntervalTimeTableType<Var> = Default::default();
         // The tasks which are contributing to the current profile under consideration
         let mut current_profile_tasks: Vec<Rc<Task<Var>>> = Vec::new();
@@ -169,32 +218,23 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
         let mut start_of_interval: i32 = -1;
 
         // We go over all the events and create the time-table
-        for Event {
-            time_stamp,
-            change_in_resource_usage,
-            task,
-        } in events
-        {
+        for event in events {
             if start_of_interval == -1 {
                 // A new profile needs to be started
-                pumpkin_assert_simple!(
-                    change_in_resource_usage > 0,
-                    "The resource usage of an event which causes a new profile to be started should never be negative"
-                );
-                pumpkin_assert_simple!(
-                    current_resource_usage == 0,
-                    "The resource usage should be 0 when a new profile is started"
-                );
-                pumpkin_assert_simple!(
-                    current_profile_tasks.is_empty(),
-                    "There should be no contributing tasks when a new profile is started"
+                pumpkin_assert_moderate!(
+                    TimeTableOverIntervalPropagator::check_starting_new_profile_invariants(
+                        &event,
+                        current_resource_usage,
+                        &current_profile_tasks
+                    ),
+                    "The invariants for creating a new profile did not hold"
                 );
 
                 // We thus assign the start of the interval to the time_stamp of the event, add its
                 // resource usage and add it to the contributing tasks
-                start_of_interval = time_stamp;
-                current_resource_usage = change_in_resource_usage;
-                current_profile_tasks.push(task);
+                start_of_interval = event.time_stamp;
+                current_resource_usage = event.change_in_resource_usage;
+                current_profile_tasks.push(event.task);
             } else {
                 // A profile is currently being created
 
@@ -207,23 +247,23 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
 
                 // Potentially we need to end the current profile and start a new one due to the
                 // addition/removal of the current task
-                if start_of_interval != time_stamp {
+                if start_of_interval != event.time_stamp {
                     // We end the current profile, creating a profile from [start_of_interval,
                     // time_stamp)
                     time_table.push(ResourceProfile {
                         start: start_of_interval,
-                        end: time_stamp - 1,
+                        end: event.time_stamp - 1,
                         profile_tasks: current_profile_tasks.clone(),
                         height: current_resource_usage,
                     });
                 }
                 // Process the current event, note that `change_in_resource_usage` can be negative
                 pumpkin_assert_simple!(
-                    change_in_resource_usage > 0
-                        || current_resource_usage >= change_in_resource_usage,
+                    event.change_in_resource_usage > 0
+                        || current_resource_usage >= event.change_in_resource_usage,
                     "Processing this task would have caused negative resource usage which should not be possible"
                 );
-                current_resource_usage += change_in_resource_usage;
+                current_resource_usage += event.change_in_resource_usage;
                 if current_resource_usage == 0 {
                     // No tasks have an active mandatory at the current `time_stamp`
                     // We can thus reset the start of the interval and remove all profile tasks
@@ -232,15 +272,15 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
                 } else {
                     // There are still tasks which have a mandatory part at the current time-stamp
                     // We thus need to start a new profile
-                    start_of_interval = time_stamp;
-                    if change_in_resource_usage < 0 {
+                    start_of_interval = event.time_stamp;
+                    if event.change_in_resource_usage < 0 {
                         // The mandatory part of a task has ended, we should thus remove it from the
                         // contributing tasks
                         let _ = current_profile_tasks.remove(
                             current_profile_tasks
                                 .iter()
                                 .position(|current_task| {
-                                    current_task.id.unpack() == task.id.unpack()
+                                    current_task.id.unpack() == event.task.id.unpack()
                                 })
                                 .expect("Task should have been found in `current_profile`"),
                         );
@@ -248,19 +288,40 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalPropagator<Var> {
                         // The mandatory part of a task has started, we should thus add it to the
                         // set of contributing tasks
                         pumpkin_assert_extreme!(
-                            !current_profile_tasks.contains(&task),
+                            !current_profile_tasks.contains(&event.task),
                             "Task is being added to the profile while it is already part of the contributing tasks"
                         );
-                        current_profile_tasks.push(task);
+                        current_profile_tasks.push(event.task);
                     }
                 }
             }
         }
         Ok(time_table)
     }
+
+    /// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
+    /// start and end (both inclusive) consisting of tasks with a cumulative height.
+    ///
+    /// **Assumptions:**
+    /// The time-table is sorted based on start time and none of the profiles overlap - it is
+    /// assumed that the calculated [`ResourceProfile`]s are maximal
+    ///
+    /// The result of this method is either the time-table of type
+    /// [`OverIntervalTimeTableType`] or the tasks responsible for the
+    /// conflict in the form of an [`Inconsistency`].
+    pub(crate) fn create_time_table_over_interval_from_scratch(
+        context: &PropagationContextMut,
+        parameters: &CumulativeParameters<Var>,
+    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
+        // First we create a list of all the events (i.e. start and ends of mandatory parts)
+        let events = TimeTableOverIntervalPropagator::create_events(context, parameters);
+
+        // Then we create a time-table using these events
+        TimeTableOverIntervalPropagator::create_time_table_from_events(events, context, parameters)
+    }
 }
 
-impl<Var: IntVar + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
@@ -337,11 +398,11 @@ impl<Var: IntVar + 'static> Propagator for TimeTableOverIntervalPropagator<Var> 
 mod tests {
     use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTableOverInterval;
 
@@ -368,6 +429,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -398,14 +460,15 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
-                    s1.upper_bound_predicate(1),
-                    s1.lower_bound_predicate(1),
-                    s2.upper_bound_predicate(1),
-                    s2.lower_bound_predicate(1),
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 >= 1),
+                    predicate!(s2 <= 1),
                 ];
                 expected
                     .iter()
@@ -439,6 +502,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -494,6 +558,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -522,6 +587,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -565,6 +631,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -572,12 +639,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(9),
-                s1.lower_bound_predicate(6),
-                s1.upper_bound_predicate(6),
+                predicate!(s2 <= 9),
+                predicate!(s1 >= 6),
+                predicate!(s1 <= 6),
             ]),
             reason
         );
@@ -630,6 +699,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -708,6 +778,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -754,6 +825,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -761,12 +833,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(0),
-                s1.lower_bound_predicate(1),
-                s1.upper_bound_predicate(1),
+                predicate!(s2 >= 0),
+                predicate!(s1 >= 1),
+                predicate!(s1 <= 1),
             ]),
             reason
         );
@@ -801,6 +875,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -810,14 +885,59 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(5),
-                s2.lower_bound_predicate(5),
-                s3.lower_bound_predicate(2),
+                predicate!(s2 <= 5),
+                predicate!(s2 >= 5),
+                predicate!(s3 >= 2),
             ]),
             reason
         );
+    }
+
+    #[test]
+    fn propagator_propagates_with_holes() {
+        let mut solver = TestSolver::default();
+        let s1 = solver.new_variable(4, 4);
+        let s2 = solver.new_variable(0, 8);
+
+        let _ = solver
+            .new_propagator(TimeTableOverInterval::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                1,
+                true,
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(s2), 0);
+        assert_eq!(solver.upper_bound(s2), 8);
+        assert_eq!(solver.lower_bound(s1), 4);
+        assert_eq!(solver.upper_bound(s1), 4);
+
+        for removed in 2..8 {
+            assert!(!solver.contains(s2, removed));
+            let reason = solver
+                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
+                .clone();
+            assert_eq!(
+                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
+                reason
+            );
+        }
     }
 }

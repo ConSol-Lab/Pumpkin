@@ -56,7 +56,7 @@ fn run_wcnf_test(instance_name: &str) {
         "{}/tests/wcnf/{instance_name}.wcnf",
         env!("CARGO_MANIFEST_DIR")
     );
-    let files = run_solver(instance_path);
+    let files = run_solver(instance_path, false);
 
     run_solution_checker::<MaxSATChecker>(files);
 }

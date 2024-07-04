@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 
 use log::warn;
 
-use crate::basic_types::DomainId;
 use crate::branching::Direction;
 #[cfg(doc)]
 use crate::branching::FirstFail;
@@ -10,6 +9,7 @@ use crate::branching::InOrderTieBreaker;
 use crate::branching::SelectionContext;
 use crate::branching::TieBreaker;
 use crate::branching::VariableSelector;
+use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest domain (similar to
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let (mut assignments_integer, assignments_propositional, mediator) =
+        let (mut assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (15, 20)]));
         let mut test_rng = TestRandom::default();
         let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
@@ -108,7 +108,6 @@ mod tests {
             let context = SelectionContext::new(
                 &assignments_integer,
                 &assignments_propositional,
-                &mediator,
                 &mut test_rng,
             );
 
@@ -121,7 +120,6 @@ mod tests {
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let selected = strategy.select_variable(&context);
@@ -131,13 +129,12 @@ mod tests {
 
     #[test]
     fn test_correctly_selected_tie() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (10, 20)]));
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let integer_variables = context.get_domains().collect::<Vec<_>>();
@@ -150,13 +147,12 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(2, 0, Some(vec![(10, 10), (20, 20)]));
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let integer_variables = context.get_domains().collect::<Vec<_>>();

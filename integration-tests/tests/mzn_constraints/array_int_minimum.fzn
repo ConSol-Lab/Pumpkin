@@ -1,0 +1,7 @@
+var 5..10: x1 :: output_var;
+var 5..10: x2 :: output_var;
+var 1..20: x3 :: output_var;
+
+constraint array_int_minimum(x3, [x1, x2]);
+
+solve satisfy;

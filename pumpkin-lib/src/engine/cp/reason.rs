@@ -1,24 +1,27 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use super::propagation::PropagatorId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
+#[cfg(doc)]
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::debug_helper::DebugDyn;
 use crate::engine::propagation::PropagationContext;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default, Debug)]
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 ///   This trail makes is easy to garbage collect reasons by simply synchronising whenever
 ///   the `AssignmentsInteger` and `AssignmentsPropositional` are synchronised.
+#[derive(Default, Debug)]
 pub struct ReasonStore {
-    trail: Trail<Reason>,
+    trail: Trail<(PropagatorId, Reason)>,
 }
 
 impl ReasonStore {
-    pub fn push(&mut self, reason: Reason) -> ReasonRef {
+    pub fn push(&mut self, propagator: PropagatorId, reason: Reason) -> ReasonRef {
         let index = self.trail.len();
-        self.trail.push(reason);
+        self.trail.push((propagator, reason));
         pumpkin_assert_simple!(
             index < (1 << 30),
             "ReasonRef in reason store should fit in ContraintReference, \
@@ -27,14 +30,14 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
-    pub fn get_or_compute(
-        &mut self,
+    pub fn get_or_compute<'this>(
+        &'this mut self,
         reference: ReasonRef,
         context: &PropagationContext,
-    ) -> Option<&PropositionalConjunction> {
+    ) -> Option<&'this PropositionalConjunction> {
         self.trail
             .get_mut(reference.0 as usize)
-            .map(|reason| reason.compute(context))
+            .map(|reason| reason.1.compute(context))
     }
 
     pub fn increase_decision_level(&mut self) {
@@ -50,6 +53,11 @@ impl ReasonStore {
     pub fn len(&self) -> usize {
         self.trail.len()
     }
+
+    /// Get the propagator which generated the given reason.
+    pub fn get_propagator(&self, reason_ref: ReasonRef) -> PropagatorId {
+        self.trail.get(reason_ref.0 as usize).unwrap().0
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -58,12 +66,13 @@ pub struct ReasonRef(pub(crate) u32);
 /// A reason for CP propagator to make a change
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
-    ///   propagated literal itself, which is added by the `SATCPMediator` later on.
+    ///   propagated literal itself, which is added by the
+    /// [`ConflictAnalysisContext`] later on.
     Eager(PropositionalConjunction),
     /// A lazy reason, which contains a closure that computes the reason later. Again, the
-    ///   propagated literal is _not_ part of the reason but added by the `SATCPMediator`.
-    /// Lazy reasons are typically computed only once, then replaced by an Eager version with the
-    ///   result.
+    ///   propagated literal is _not_ part of the reason but added by the
+    /// [`ConflictAnalysisContext`]. Lazy reasons are typically computed
+    /// only once, then replaced by an Eager version with the   result.
     Lazy(Box<dyn LazyReason>),
 }
 
@@ -133,8 +142,8 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::DomainId;
     use crate::conjunction;
+    use crate::engine::variables::DomainId;
     use crate::engine::AssignmentsInteger;
     use crate::engine::AssignmentsPropositional;
 
@@ -180,7 +189,7 @@ mod tests {
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let reason_ref = reason_store.push(Reason::Eager(conjunction.clone()));
+        let reason_ref = reason_store.push(PropagatorId(0), Reason::Eager(conjunction.clone()));
 
         assert_eq!(ReasonRef(0), reason_ref);
 

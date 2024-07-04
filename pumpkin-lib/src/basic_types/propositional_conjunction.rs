@@ -1,20 +1,14 @@
-use super::Literal;
-use super::Predicate;
+use crate::engine::predicates::predicate::Predicate;
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
     predicates_in_conjunction: Box<[Predicate]>,
-    literals_in_conjunction: Box<[Literal]>,
 }
 
 impl PropositionalConjunction {
-    pub fn new(
-        predicates_in_conjunction: Box<[Predicate]>,
-        literals_in_conjunction: Box<[Literal]>,
-    ) -> Self {
+    pub fn new(predicates_in_conjunction: Box<[Predicate]>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
-            literals_in_conjunction,
         }
     }
 
@@ -25,10 +19,6 @@ impl PropositionalConjunction {
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
         self.predicates_in_conjunction.iter()
     }
-
-    pub fn iter_literals(&self) -> std::slice::Iter<'_, Literal> {
-        self.literals_in_conjunction.iter()
-    }
 }
 
 impl FromIterator<Predicate> for PropositionalConjunction {
@@ -36,7 +26,6 @@ impl FromIterator<Predicate> for PropositionalConjunction {
         let vec = iter.into_iter().collect();
         PropositionalConjunction {
             predicates_in_conjunction: vec,
-            literals_in_conjunction: Default::default(),
         }
     }
 }
@@ -45,7 +34,6 @@ impl From<Vec<Predicate>> for PropositionalConjunction {
     fn from(vec: Vec<Predicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: vec.into_boxed_slice(),
-            literals_in_conjunction: Default::default(),
         }
     }
 }
@@ -54,14 +42,13 @@ impl From<Predicate> for PropositionalConjunction {
     fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: Box::new([predicate]),
-            literals_in_conjunction: Default::default(),
         }
     }
 }
 
 impl std::fmt::Display for PropositionalConjunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.predicates_in_conjunction.is_empty() && self.literals_in_conjunction.is_empty() {
+        if self.predicates_in_conjunction.is_empty() {
             write!(f, "{{empty}}")
         } else {
             write!(
@@ -70,7 +57,6 @@ impl std::fmt::Display for PropositionalConjunction {
                 self.predicates_in_conjunction
                     .iter()
                     .map(|p| p.to_string())
-                    .chain(self.literals_in_conjunction.iter().map(|x| x.to_string()))
                     .collect::<Vec<String>>()
                     .join("; ")
             )
@@ -86,19 +72,13 @@ impl std::fmt::Debug for PropositionalConjunction {
 
 impl PartialEq for PropositionalConjunction {
     fn eq(&self, other: &Self) -> bool {
-        if self.predicates_in_conjunction.len() != other.predicates_in_conjunction.len()
-            || self.literals_in_conjunction.len() != other.literals_in_conjunction.len()
-        {
+        if self.predicates_in_conjunction.len() != other.predicates_in_conjunction.len() {
             return false;
         }
 
         self.predicates_in_conjunction
             .iter()
             .all(|predicate| other.predicates_in_conjunction.contains(predicate))
-            && self
-                .literals_in_conjunction
-                .iter()
-                .all(|literal| other.literals_in_conjunction.contains(literal))
     }
 }
 
@@ -132,7 +112,7 @@ macro_rules! conjunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::DomainId;
+    use crate::engine::variables::DomainId;
     use crate::predicate;
 
     #[test]

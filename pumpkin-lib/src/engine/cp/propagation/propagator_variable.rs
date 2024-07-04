@@ -2,20 +2,43 @@
 use super::LocalId;
 #[cfg(doc)]
 use super::PropagatorConstructorContext;
-use crate::basic_types::Literal;
-use crate::basic_types::Predicate;
-use crate::basic_types::PredicateConstructor;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::predicate_constructor::PredicateConstructor;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
+use crate::engine::variables::TransformableVariable;
 
 /// A propagator variable is a handle to a variable for a propagator.
 /// For all practical purposes, this is the variable that propagators operate on.
 /// Propagator variables are obtained through [`PropagatorConstructorContext::register()`].
 
-/// In the backend, ['PropagatorVariable'] is a wrapper around the internal representation
+/// In the backend, [`PropagatorVariable`] is a wrapper around the internal representation
 /// of the variable in the solver, i.e., it keeps track of the [`LocalId`] when modifying the
-/// domain. This is done to seamlessly incorporate 'views' in the solver.
+/// domain. This is done to seamlessly incorporate views \[1\] in the solver.
+///
+/// # Bibliography
+/// \[1\] C. Schulte and G. Tack, ‘Views and iterators for generic constraint implementations’, in
+/// International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
+/// 118–132.
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
     pub(super) inner: Var,
+}
+
+impl<Var: IntegerVariable> TransformableVariable<PropagatorVariable<Var::AffineView>>
+    for PropagatorVariable<Var>
+{
+    fn scaled(&self, scale: i32) -> PropagatorVariable<Var::AffineView> {
+        PropagatorVariable {
+            inner: self.inner.scaled(scale),
+        }
+    }
+
+    fn offset(&self, offset: i32) -> PropagatorVariable<Var::AffineView> {
+        PropagatorVariable {
+            inner: self.inner.offset(offset),
+        }
+    }
 }
 
 impl<Var> PropagatorVariable<Var> {

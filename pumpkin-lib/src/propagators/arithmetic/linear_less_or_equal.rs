@@ -1,5 +1,3 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -11,6 +9,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -20,7 +20,7 @@ pub struct LinearLessOrEqualConstructor<Var> {
     pub reif: Option<Literal>,
 }
 
-impl<Var: IntVar + 'static> LinearLessOrEqualConstructor<Var> {
+impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
     pub fn new(x: Box<[Var]>, c: i32) -> Self {
         LinearLessOrEqualConstructor { x, c, reif: None }
     }
@@ -44,7 +44,7 @@ pub struct LinearLessOrEqualPropagator<Var> {
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
 where
-    Var: IntVar,
+    Var: IntegerVariable,
 {
     type Propagator = LinearLessOrEqualPropagator<Var>;
 
@@ -74,7 +74,7 @@ where
 
 impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
 where
-    Var: IntVar,
+    Var: IntegerVariable,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.x, self.c, &self.reif)
@@ -102,7 +102,7 @@ where
     }
 }
 
-fn perform_propagation<Var: IntVar>(
+fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
     x: &[PropagatorVariable<Var>],
     c: i32,
@@ -118,17 +118,12 @@ fn perform_propagation<Var: IntVar>(
                 .collect();
             context.assign_literal(reif.as_ref().unwrap(), false, reason)?;
         } else if !reified || context.is_literal_true(reif.as_ref().unwrap()) {
-            let reason: Vec<_> = x
+            let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
+                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                 .collect();
-            let conjunction = if reified {
-                let x1 = reif.as_ref().unwrap().get_literal();
-                PropositionalConjunction::new(reason.into_boxed_slice(), Box::new([x1]))
-            } else {
-                reason.into()
-            };
-            return Err(conjunction.into());
+            return Err(reason.into());
         }
     }
 
@@ -143,7 +138,7 @@ fn perform_propagation<Var: IntVar>(
         let bound = c - (lb_lhs - context.lower_bound(x_i));
 
         if context.upper_bound(x_i) > bound {
-            let cp_reason: Vec<_> = x
+            let reason: PropositionalConjunction = x
                 .iter()
                 .enumerate()
                 .filter_map(|(j, x_j)| {
@@ -153,15 +148,8 @@ fn perform_propagation<Var: IntVar>(
                         None
                     }
                 })
+                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                 .collect();
-            let reason = if reified {
-                PropositionalConjunction::new(
-                    cp_reason.into_boxed_slice(),
-                    Box::new([reif.as_ref().unwrap().get_literal()]),
-                )
-            } else {
-                PropositionalConjunction::new(cp_reason.into_boxed_slice(), Default::default())
-            };
 
             context.set_upper_bound(x_i, bound, reason)?;
         }
@@ -204,7 +192,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y <= 6]);
+        let reason = solver.get_reason_int(predicate![y <= 6].try_into().unwrap());
 
         assert_eq!(conjunction!([x >= 1]), *reason);
     }

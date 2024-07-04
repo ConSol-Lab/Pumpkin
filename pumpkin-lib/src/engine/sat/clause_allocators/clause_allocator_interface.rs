@@ -1,6 +1,6 @@
 use super::ClauseInterface;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::Literal;
+use crate::engine::variables::Literal;
 
 // the trait requires the [] operator
 //  and its corresponding Clause must implement the ClauseInterface

@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
 
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
@@ -17,6 +16,7 @@ use crate::engine::propagation::propagator::Propagator;
 use crate::engine::propagation::propagator_constructor::PropagatorConstructor;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::propagation::propagator_variable::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 type DiffLogicVariables<V> = (
@@ -48,10 +48,10 @@ pub(crate) struct DifferenceLogicPropagator<V> {
 
 impl<V> PropagatorConstructor for DifferenceLogicConstructor<V>
 where
-    V: IntVar + Hash + Eq + 'static,
-    <V as IntVar>::AffineView: Hash + Eq,
+    V: IntegerVariable + Hash + Eq + 'static,
+    V::AffineView: IntegerVariable + Hash + Eq,
 {
-    type Propagator = DifferenceLogicPropagator<<V as IntVar>::AffineView>;
+    type Propagator = DifferenceLogicPropagator<V::AffineView>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
@@ -141,7 +141,7 @@ where
 
 impl<V> DifferenceLogicPropagator<V>
 where
-    V: IntVar + Hash + Eq,
+    V: IntegerVariable + Hash + Eq,
 {
     fn local_id_to_var(&self, id: LocalId) -> &PropagatorVariable<V> {
         // This mirrors the local ids computed in `register_vars` in
@@ -163,7 +163,7 @@ where
 
 impl<V> Propagator for DifferenceLogicPropagator<V>
 where
-    V: IntVar + Hash + Eq,
+    V: IntegerVariable + Hash + Eq,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         for &y_start in &self.updated {
@@ -236,7 +236,7 @@ fn propagate_shared<const CYCLE_CHECK: bool, V>(
     worklist: &mut VecDeque<PropagatorVariable<V>>,
 ) -> PropagationStatusCP
 where
-    V: IntVar + Hash + Eq,
+    V: IntegerVariable + Hash + Eq,
 {
     worklist.push_front(y_start.clone());
     let mut cycle_reason = Vec::new();
@@ -274,6 +274,7 @@ mod tests {
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
+    use crate::engine::variables::TransformableVariable;
     use crate::engine::IntDomainEvent::UpperBound;
 
     #[test]
@@ -358,10 +359,10 @@ mod tests {
         assert_eq!(3, solver.upper_bound(x_1)); // by f2
 
         let flipped_x_1 = x_1.scaled(-1);
-        let reason_x_1_lb = solver.get_reason_int(predicate![flipped_x_1 <= 2]);
+        let reason_x_1_lb = solver.get_reason_int(predicate![flipped_x_1 <= 2].try_into().unwrap());
         assert_eq!(conjunction!([x_0 >= -3]), *reason_x_1_lb);
 
-        let reason_x_0_ub = solver.get_reason_int(predicate![x_0 <= 2]);
+        let reason_x_0_ub = solver.get_reason_int(predicate![x_0 <= 2].try_into().unwrap());
         assert_eq!(conjunction!([x_1 <= 3]), *reason_x_0_ub);
     }
 

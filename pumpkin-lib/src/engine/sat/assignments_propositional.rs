@@ -1,12 +1,12 @@
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
-use crate::basic_types::PropositionalVariableGeneratorIterator;
 use crate::basic_types::Trail;
 #[cfg(test)]
 use crate::engine::reason::ReasonRef;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
+use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -238,6 +238,7 @@ impl AssignmentsPropositional {
 
     /// This iterator returns the literals on the trail in _reverse_ order (LIFO)
     pub fn synchronise(&mut self, new_decision_level: usize) -> impl Iterator<Item = Literal> + '_ {
+        pumpkin_assert_simple!(new_decision_level < self.get_decision_level());
         self.trail.synchronise(new_decision_level).inspect(|entry| {
             let variable = entry.get_propositional_variable();
 

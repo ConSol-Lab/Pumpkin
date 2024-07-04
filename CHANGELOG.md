@@ -38,6 +38,8 @@
   * int_eq_reif
   * int_plus
   * int_times
+  * int_div
+  * int_mod
   * int_abs
   * int_max
   * int_min
@@ -99,6 +101,11 @@
     * Out-domain Random
 * Added initial setup for programmable search
 * Add support for optimization functions MiniZinc
+* Add MiniZinc statistic logging
+* Add signal handling for graceful(ish) shutdown
+* Added support for search annotations MiniZinc
+* Add holes in the domain for the cumulative
+* Implemented API for reverse propagation, including deletable clauses.
 
 ## Bugfixes
 

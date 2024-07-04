@@ -1,20 +1,25 @@
 use log::warn;
 
 use super::VariableSelector;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::KeyValueHeap;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which implements [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// which determines which variables should be branched on based on how often it appears in
 /// conflicts.
 ///
-/// Intuitively, the more often a variable appears in conflicts, the more "important" it is during
-/// the search process.
+/// Intuitively, the more often a variable appears in *recent* conflicts, the more "important" it is
+/// during the search process.
+///
+/// VSIDS is originally from the SAT field (see \[1\]) but we adapted it here to work on integer
+/// variables as well. There are some details which do not necessarily translate 1-to-1; for
+/// example, during conflict analysis the activity of an integer variable can be bumped multiple
+/// times if multiple literals related to it are encountered.
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
@@ -152,8 +157,8 @@ impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
     }
 }
 
-impl<Var: IntVar + Copy + StorageKey> VariableSelector<Var> for Vsids<Var> {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<Var> {
+impl VariableSelector<DomainId> for Vsids<DomainId> {
+    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
         loop {
             // We peek the first variable, note that we do not pop since we do not (yet) want to
             // remove the value from the heap
@@ -173,12 +178,12 @@ impl<Var: IntVar + Copy + StorageKey> VariableSelector<Var> for Vsids<Var> {
         self.decay_activities()
     }
 
-    fn on_unassign_literal(&mut self, _literal: Literal) {
-        // TODO: rewrite for the integer case
+    fn on_unassign_integer(&mut self, variable: DomainId, _value: i32) {
+        self.restore(variable)
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, _literal: Literal) {
-        // TODO: rewrite for the integer case
+    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+        self.bump_activity(variable)
     }
 }
 
@@ -232,19 +237,18 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
 mod tests {
     use super::Vsids;
     use crate::basic_types::tests::TestRandom;
-    use crate::basic_types::PropositionalVariable;
     use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
+    use crate::engine::variables::PropositionalVariable;
 
     #[test]
     fn vsids_bumped_var_is_max() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(2, 0, None);
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let domains = context.get_domains().collect::<Vec<_>>();
@@ -262,13 +266,12 @@ mod tests {
     fn vsids_no_variables_will_return_none() {
         let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&Vec::new());
 
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 0, None);
         let mut test_rng = TestRandom::default();
         let context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let chosen = vsids.select_variable(&context);

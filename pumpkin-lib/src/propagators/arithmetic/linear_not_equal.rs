@@ -1,9 +1,5 @@
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::ConflictInfo;
-use crate::basic_types::Inconsistency;
-use crate::basic_types::Literal;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -15,6 +11,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -56,7 +54,7 @@ pub struct LinearNotEqualPropagator<Var> {
 
 impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>
 where
-    Var: IntVar + 'static,
+    Var: IntegerVariable + 'static,
 {
     type Propagator = LinearNotEqualPropagator<Var>;
 
@@ -85,7 +83,7 @@ where
 
 impl<Var> Propagator for LinearNotEqualPropagator<Var>
 where
-    Var: IntVar + 'static,
+    Var: IntegerVariable + 'static,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
@@ -155,14 +153,12 @@ where
                         .enumerate()
                         .filter(|&(i, _)| i != unfixed_x_i)
                         .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                        .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                         .collect::<Vec<_>>();
-                    PropositionalConjunction::new(
-                        predicates.into(),
-                        reif.map(|var| var.get_literal()).iter().copied().collect(),
-                    )
+                    predicates.into()
                 },
             )?;
-        } else if lhs == self.rhs {
+        } else if num_fixed == self.terms.len() && lhs == self.rhs {
             if reified && !context.is_literal_fixed(self.reif.as_ref().unwrap()) {
                 // Conflict was found but we can set the reified literal to false to satisfy the
                 // constraint
@@ -177,23 +173,18 @@ where
                 // Conflict was found, either the constraint is not reified or the reification
                 // variable is already true
 
-                let failure_reason: Vec<_> = self
+                let failure_reason: PropositionalConjunction = self
                     .terms
                     .iter()
                     .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
-                    .collect();
-
-                return Err(Inconsistency::Other(ConflictInfo::Explanation(
-                    PropositionalConjunction::new(
-                        failure_reason.into(),
+                    .chain(
                         self.reif
                             .as_ref()
-                            .map(|var| var.get_literal())
-                            .iter()
-                            .copied()
-                            .collect(),
-                    ),
-                )));
+                            .map(|variable| variable.get_literal().into()),
+                    )
+                    .collect();
+
+                return Err(failure_reason.into());
             }
         }
 
@@ -206,7 +197,9 @@ mod tests {
     use super::*;
     use crate::basic_types::Inconsistency;
     use crate::conjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::test_helper::TestSolver;
+    use crate::engine::variables::TransformableVariable;
 
     #[test]
     fn test_value_is_removed() {
@@ -260,7 +253,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
 
         assert_eq!(conjunction!([x == 2]), *reason);
     }
@@ -325,8 +318,12 @@ mod tests {
             .expect_err("Non empty domain");
 
         let expected: Inconsistency = PropositionalConjunction::new(
-            vec![predicate!(x == 2), predicate!(y == 2)].into(),
-            vec![reif].into(),
+            vec![
+                predicate!(x == 2),
+                predicate!(y == 2),
+                Predicate::Literal(reif),
+            ]
+            .into(),
         )
         .into();
         assert_eq!(expected, err);
@@ -351,10 +348,12 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y != -2]);
+        let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
 
         assert_eq!(
-            PropositionalConjunction::new(vec![predicate!(x == 2)].into(), vec![reif].into()),
+            PropositionalConjunction::new(
+                vec![predicate!(x == 2), Predicate::Literal(reif),].into()
+            ),
             *reason
         );
     }
@@ -377,5 +376,19 @@ mod tests {
         solver.propagate(&mut propagator).expect("non-empty domain");
 
         assert!(solver.contains(y, -2));
+    }
+
+    #[test]
+    fn conflict_not_detected_if_not_all_fixed() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(0, 0);
+        let y = solver.new_variable(-1, 1);
+        let reif = solver.new_literal();
+
+        let _ = solver
+            .new_propagator(LinearNotEqualConstructor::reified([x, y].into(), 0, reif))
+            .expect("non-empty domain");
+
+        assert!(!solver.is_literal_assigned(reif))
     }
 }

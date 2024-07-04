@@ -1,5 +1,4 @@
 mod assignments_integer;
-mod cp_engine_data_structures;
 pub mod domain_events;
 mod event_sink;
 pub mod opaque_domain_event;
@@ -7,15 +6,16 @@ pub mod propagation;
 mod propagator_queue;
 pub mod reason;
 pub mod test_helper;
+mod variable_literal_mappings;
 mod watch_list_cp;
 mod watch_list_propositional;
 
 pub use assignments_integer::AssignmentsInteger;
 pub use assignments_integer::ConstraintProgrammingTrailEntry;
 pub use assignments_integer::EmptyDomain;
-pub use cp_engine_data_structures::CPEngineDataStructures;
 pub use event_sink::*;
 pub use propagator_queue::PropagatorQueue;
+pub use variable_literal_mappings::VariableLiteralMappings;
 pub use watch_list_cp::IntDomainEvent;
 pub use watch_list_cp::WatchListCP;
 pub use watch_list_cp::Watchers;
@@ -25,13 +25,14 @@ pub use watch_list_propositional::*;
 mod tests {
     use assignments_integer::AssignmentsInteger;
 
-    use crate::basic_types::Literal;
-    use crate::basic_types::PropositionalVariable;
     use crate::conjunction;
     use crate::engine::cp::assignments_integer;
     use crate::engine::propagation::PropagationContextMut;
+    use crate::engine::propagation::PropagatorId;
     use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonStore;
+    use crate::engine::variables::Literal;
+    use crate::engine::variables::PropositionalVariable;
     use crate::engine::AssignmentsPropositional;
 
     #[test]
@@ -48,6 +49,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =
@@ -71,6 +73,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =
@@ -94,6 +97,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result = context.remove(&PropagatorVariable::new(domain), 15, conjunction!());
@@ -118,6 +122,7 @@ mod tests {
                 &mut assignments_integer,
                 &mut reason_store,
                 &mut assignments_propositional,
+                PropagatorId(0),
             );
 
             let result =

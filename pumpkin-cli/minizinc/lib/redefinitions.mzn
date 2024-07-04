@@ -36,7 +36,9 @@ predicate bool_xor(var bool: a, var bool: b, var bool: r) = pumpkin_bool_xor_rei
 predicate pumpkin_bool_xor(var bool: a, var bool: b);
 predicate pumpkin_bool_xor_reif(var bool: a, var bool: b, var bool: r);
 
-% Set Constraints
+% Redefinition taken from chuffed:
+% https://github.com/chuffed/chuffed/blob/7b3cd017f17f7a4091a5b2569dc4f1a18f07c121/chuffed/flatzinc/mznlib/redefinitions.mzn#L89C1-L90C19
+predicate int_mod(var int: x, var int: y, var int: z) =
+  x=(x div y)*y+z;
 
-predicate set_in_reif(var int: x, set of int: S, var bool: r) = par_set_in_reif(x, S, r);
-predicate par_set_in_reif(var int: x, set of int: S, var bool: r);
+% Set Constraints

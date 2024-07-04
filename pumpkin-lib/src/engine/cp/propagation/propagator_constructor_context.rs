@@ -1,19 +1,21 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::WatchListCP;
 use crate::engine::WatchListPropositional;
 use crate::engine::Watchers;
 use crate::engine::WatchersPropositional;
 
-/// ['PropagatorConstructorContext'] is used by when adding propagators to the solver.
-/// It represents a communcation point between the solver and the propagator.
-/// Propagators use the ['PropagatorConstructorContext'] to register to domain changes
-/// of variables and obtain ['PropagatorVariables'].
+/// [`PropagatorConstructorContext`] is used by when adding propagators to the solver.
+/// It represents a communication point between the solver and the propagator.
+/// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
+/// of variables and obtain [`PropagatorVariable`]s.
 #[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
@@ -34,7 +36,17 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    pub fn register<Var: IntVar>(
+    /// Creates a [`PropagatorVariable`] based on the input variable
+    /// and subscribes the propagator to the given [`DomainEvents`].
+    /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.
+    /// The [`LocalId`] is internal information related to the propagator,
+    /// which is used when calling [`Propagator::notify()`] to identify the variable.
+    /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
+    /// variable in the internal array of variables.
+    ///
+    /// Note that the [`LocalId`] is used since internally the propagator variable is a wrapper
+    /// around a variable 'view'.
+    pub fn register<Var: IntegerVariable>(
         &mut self,
         var: Var,
         domain_events: DomainEvents,

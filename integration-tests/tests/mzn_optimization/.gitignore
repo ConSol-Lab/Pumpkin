@@ -1,0 +1,4 @@
+*.log
+*.err
+*.proof
+*.lits

@@ -1,7 +1,7 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::branching::SelectionContext;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]

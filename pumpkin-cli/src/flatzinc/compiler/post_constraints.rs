@@ -2,11 +2,11 @@
 
 use std::rc::Rc;
 
-use pumpkin_lib::basic_types::variables::AffineView;
-use pumpkin_lib::basic_types::variables::IntVar;
-use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::basic_types::Literal;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::variables::AffineView;
+use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::predicate;
 
@@ -24,10 +24,12 @@ use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::constraints::array_bool_or;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
+    options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
@@ -130,8 +132,15 @@ pub(crate) fn run(
                 "int_eq_reif",
                 int_eq_reif,
             )?,
-            "int_plus" => compile_int_plus(context, exprs, annos)?,
-            "int_times" => compile_int_times(context, exprs, annos)?,
+            "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
+                solver.int_plus(a, b, c)
+            })?,
+            "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
+                solver.int_times(a, b, c)
+            })?,
+            "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
+                solver.int_div(a, b, c)
+            })?,
             "int_abs" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
                     solver.int_abs(a, b)
@@ -155,11 +164,11 @@ pub(crate) fn run(
             "bool2int" => compile_bool2int(context, exprs)?,
 
             "bool_lin_eq" => {
-                compile_bool_lin_predicate(context, exprs, "bool_lin_eq", bool_lin_eq)?
+                compile_bool_lin_eq_predicate(context, exprs)?
             }
 
             "bool_lin_le" => {
-                compile_bool_lin_predicate(context, exprs, "bool_lin_le", bool_lin_le)?
+                compile_bool_lin_le_predicate(context, exprs)?
             }
 
             "bool_and" => compile_bool_and(context, exprs)?,
@@ -168,9 +177,13 @@ pub(crate) fn run(
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs)?,
             "bool_not" => compile_bool_not(context, exprs)?,
 
-            "par_set_in_reif" => compile_set_in_reif(context, exprs)?,
+            "set_in_reif" => compile_set_in_reif(context, exprs)?,
+            "set_in" => {
+                // We do not do anything further as we handle the domain changes in a pre-processing step (see `handle_set_in.rs`).
+                true
+            },
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
 
             unknown => todo!("unsupported constraint {unknown}"),
@@ -199,6 +212,7 @@ macro_rules! check_parameters {
 fn compile_cumulative(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
+    options: &FlatZincOptions,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, "pumpkin_cumulative");
 
@@ -212,6 +226,7 @@ fn compile_cumulative(
         &durations,
         &resource_requirements,
         resource_capacity,
+        options.cumulative_allow_holes,
     ))
 }
 
@@ -269,7 +284,7 @@ fn compile_set_in_reif(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "par_set_in_reif");
+    check_parameters!(exprs, 3, "set_in_reif");
 
     let variable = context.resolve_integer_variable(&exprs[0])?;
     let set = context.resolve_set_constant(&exprs[1])?;
@@ -280,25 +295,43 @@ fn compile_set_in_reif(
             lower_bound,
             upper_bound,
         } => {
-            let lb_variable = *context
-                .constant_domain_ids
-                .entry(lower_bound)
-                .or_insert_with(|| {
+            // `reif -> x \in S`
+            // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
+            let forward = context
+                .solver
+                .add_clause([
+                    !reif,
                     context
                         .solver
-                        .create_new_integer_variable(lower_bound, lower_bound)
-                });
-            let ub_variable = *context
-                .constant_domain_ids
-                .entry(upper_bound)
-                .or_insert_with(|| {
-                    context
-                        .solver
-                        .create_new_integer_variable(upper_bound, upper_bound)
-                });
+                        .get_literal(predicate![variable >= lower_bound]),
+                ])
+                .is_ok()
+                && context
+                    .solver
+                    .add_clause([
+                        !reif,
+                        !context
+                            .solver
+                            .get_literal(predicate![variable >= upper_bound + 1]),
+                    ])
+                    .is_ok();
 
-            int_le_reif(context.solver, variable, ub_variable, reif)
-                && int_le_reif(context.solver, lb_variable, variable, reif)
+            // `!reif -> x \notin S`
+            // Decomposed to `!reif -> (x < lb \/ x > ub)`
+            let backward = context
+                .solver
+                .add_clause([
+                    reif,
+                    !context
+                        .solver
+                        .get_literal(predicate![variable >= lower_bound]),
+                    context
+                        .solver
+                        .get_literal(predicate![variable >= upper_bound + 1]),
+                ])
+                .is_ok();
+
+            forward && backward
         }
 
         Set::Sparse { values } => {
@@ -336,13 +369,16 @@ fn compile_bool_not(
     // TODO: Take this constraint into account when creating variables, as these can be opposite
     // literals of the same PropositionalVariable. Unsure how often this actually appears in models
     // though.
-    check_parameters!(exprs, 2, "bool_eq");
+    check_parameters!(exprs, 2, "bool_not");
 
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b, !a]).is_ok();
+    // a != b
+    // -> !(a /\ b) /\ !(!a /\ !b)
+    // -> (!a \/ !b) /\ (a \/ b)
+    let c1 = context.solver.add_clause([a, b]).is_ok();
+    let c2 = context.solver.add_clause([!a, !b]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -357,10 +393,10 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b, r]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!a, b, !r]).is_ok();
-    let c3 = context.solver.add_permanent_clause(vec![a, !b, !r]).is_ok();
-    let c4 = context.solver.add_permanent_clause(vec![a, b, r]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b, r]).is_ok();
+    let c2 = context.solver.add_clause([!a, b, !r]).is_ok();
+    let c3 = context.solver.add_clause([a, !b, !r]).is_ok();
+    let c4 = context.solver.add_clause([a, b, r]).is_ok();
 
     Ok(c1 && c2 && c3 && c4)
 }
@@ -376,8 +412,8 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, b]).is_ok();
+    let c2 = context.solver.add_clause([!b, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -391,12 +427,12 @@ fn compile_bool_clause(
     let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
     let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
 
-    let clause = clause_1
+    let clause: Vec<Literal> = clause_1
         .iter()
         .copied()
         .chain(clause_2.iter().map(|&literal| !literal))
         .collect();
-    Ok(context.solver.add_permanent_clause(clause).is_ok())
+    Ok(context.solver.add_clause(clause).is_ok())
 }
 
 fn compile_bool_and(
@@ -409,10 +445,10 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!r, a]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!r, b]).is_ok();
+    let c1 = context.solver.add_clause([!r, a]).is_ok();
+    let c2 = context.solver.add_clause([!r, b]).is_ok();
 
-    let c3 = context.solver.add_permanent_clause(vec![!a, !b, r]).is_ok();
+    let c3 = context.solver.add_clause([!a, !b, r]).is_ok();
 
     Ok(c1 && c2 && c3)
 }
@@ -431,8 +467,8 @@ fn compile_bool2int(
 
     let b_lit = context.solver.get_literal(predicate![b == 1]);
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, b_lit]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!b_lit, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
+    let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -458,8 +494,8 @@ fn compile_bool_xor(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_permanent_clause(vec![!a, !b]).is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![b, a]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b]).is_ok();
+    let c2 = context.solver.add_clause([b, a]).is_ok();
 
     Ok(c1 && c2)
 }
@@ -474,13 +510,10 @@ fn compile_bool_xor_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context
-        .solver
-        .add_permanent_clause(vec![!a, !b, !r])
-        .is_ok();
-    let c2 = context.solver.add_permanent_clause(vec![!a, b, r]).is_ok();
-    let c3 = context.solver.add_permanent_clause(vec![a, !b, r]).is_ok();
-    let c4 = context.solver.add_permanent_clause(vec![a, b, !r]).is_ok();
+    let c1 = context.solver.add_clause([!a, !b, !r]).is_ok();
+    let c2 = context.solver.add_clause([!a, b, r]).is_ok();
+    let c3 = context.solver.add_clause([a, !b, r]).is_ok();
+    let c4 = context.solver.add_clause([a, b, !r]).is_ok();
 
     Ok(c1 && c2 && c3 && c4)
 }
@@ -508,11 +541,11 @@ fn compile_array_var_bool_element(
 
         success &= context
             .solver
-            .add_permanent_clause(vec![!predicate_lit, !rhs, array[i]])
+            .add_clause([!predicate_lit, !rhs, array[i]])
             .is_ok();
         success &= context
             .solver
-            .add_permanent_clause(vec![!predicate_lit, !array[i], rhs])
+            .add_clause([!predicate_lit, !array[i], rhs])
             .is_ok();
     }
 
@@ -529,50 +562,40 @@ fn compile_array_bool_and(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     // /\conjunction -> r
-    let clause = conjunction
+    let clause: Vec<Literal> = conjunction
         .iter()
         .map(|&literal| !literal)
         .chain(std::iter::once(r))
         .collect();
-    let first_implication = context.solver.add_permanent_clause(clause).is_ok();
+    let first_implication = context.solver.add_clause(clause).is_ok();
 
     // r -> /\conjunction
-    let second_implication = conjunction.iter().all(|&literal| {
-        context
-            .solver
-            .add_permanent_clause(vec![!r, literal])
-            .is_ok()
-    });
+    let second_implication = conjunction
+        .iter()
+        .all(|&literal| context.solver.add_clause([!r, literal]).is_ok());
 
     Ok(first_implication && second_implication)
 }
 
-fn compile_int_plus(
+fn compile_ternary_int_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
+    predicate_name: &str,
+    post_constraint: impl FnOnce(
+        &mut ConstraintSatisfactionSolver,
+        DomainId,
+        DomainId,
+        DomainId,
+    ) -> bool,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_plus");
+    check_parameters!(exprs, 3, predicate_name);
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
     let c = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context.solver.int_plus(a, b, c))
-}
-
-fn compile_int_times(
-    context: &mut CompilationContext,
-    exprs: &[flatzinc::Expr],
-    _: &[flatzinc::Annotation],
-) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_times");
-
-    let a = context.resolve_integer_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
-    let c = context.resolve_integer_variable(&exprs[2])?;
-
-    Ok(context.solver.int_times(a, b, c))
+    Ok(post_constraint(context.solver, a, b, c))
 }
 
 fn compile_binary_int_predicate(
@@ -659,19 +682,30 @@ fn compile_reified_int_lin_predicate(
     Ok(post_constraint(context.solver, terms, rhs, reif))
 }
 
-fn compile_bool_lin_predicate(
+fn compile_bool_lin_eq_predicate(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
-    name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, &[i32], &[Literal], i32) -> bool,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, name);
+    check_parameters!(exprs, 3, "bool_lin_eq");
+
+    let weights = context.resolve_array_integer_constants(&exprs[0])?;
+    let bools = context.resolve_bool_variable_array(&exprs[1])?;
+    let rhs = context.resolve_integer_variable(&exprs[2])?;
+
+    Ok(bool_lin_eq(context.solver, &weights, &bools, rhs))
+}
+
+fn compile_bool_lin_le_predicate(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 3, "bool_lin_le");
 
     let weights = context.resolve_array_integer_constants(&exprs[0])?;
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(post_constraint(context.solver, &weights, &bools, rhs))
+    Ok(bool_lin_le(context.solver, &weights, &bools, rhs))
 }
 
 fn compile_all_different(

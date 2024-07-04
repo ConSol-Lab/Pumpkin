@@ -1,0 +1,7 @@
+var 1..5: x :: output_var;
+var 3..5: y :: output_var;
+var 1..10: z :: output_var;
+
+constraint pumpkin_cumulative([x, y, z], [1, 2, 3], [1, 2, 1], 2);
+
+solve satisfy;

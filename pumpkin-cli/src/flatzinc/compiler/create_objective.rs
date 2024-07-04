@@ -24,7 +24,11 @@ pub(crate) fn run(
                     "We do not expect a constant to be present in the objective function!"
                 ),
                 BoolExpr::VarParIdentifier(x) => {
-                    context.resolve_integer_variable_from_identifier(x)?
+                    if context.is_identifier_parameter(x) {
+                        context.resolve_integer_constant_from_id(x)?
+                    } else {
+                        context.resolve_integer_variable_from_identifier(x)?
+                    }
                 }
             };
 

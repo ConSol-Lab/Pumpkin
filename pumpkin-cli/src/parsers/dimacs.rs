@@ -4,7 +4,7 @@
 //!
 //! To invoke the parser, there are two options:
 //!  - For a CNF file, the [`parse_cnf`] function can be called,
-//!  - For a WCNF file, the ['parse_wcnf`] function can be called.
+//!  - For a WCNF file, the [`parse_wcnf`] function can be called.
 //!
 //! Both these functions operate on a type that implements the [`DimacsSink`] trait, which is
 //! serves as an interface between the consumer of the parsed contents of the file.
@@ -19,11 +19,10 @@ use std::num::NonZeroI32;
 use std::str::FromStr;
 
 use pumpkin_lib::basic_types::Function;
-use pumpkin_lib::basic_types::Literal;
-use pumpkin_lib::basic_types::PropositionalVariable;
+use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::PropositionalVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::engine::Preprocessor;
-use pumpkin_lib::engine::SatOptions;
+use pumpkin_lib::engine::LearningOptions;
 use pumpkin_lib::engine::SatisfactionSolverOptions;
 use thiserror::Error;
 
@@ -485,17 +484,17 @@ pub(crate) struct SolverDimacsSink {
 /// [`ConstraintSatisfactionSolver::new()`].
 pub(crate) struct CSPSolverArgs {
     solver_options: SatisfactionSolverOptions,
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
 }
 
 impl CSPSolverArgs {
     pub(crate) fn new(
-        sat_options: SatOptions,
+        learning_options: LearningOptions,
         solver_options: SatisfactionSolverOptions,
     ) -> CSPSolverArgs {
         CSPSolverArgs {
             solver_options,
-            sat_options,
+            learning_options,
         }
     }
 }
@@ -519,7 +518,7 @@ impl DimacsSink for SolverDimacsSink {
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
         let CSPSolverArgs {
             solver_options,
-            sat_options,
+            learning_options: sat_options,
         } = args;
 
         let mut solver = ConstraintSatisfactionSolver::new(sat_options, solver_options);
@@ -534,23 +533,19 @@ impl DimacsSink for SolverDimacsSink {
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
         let mapped = self.mapped_clause(clause);
-        let _ = self.solver.add_permanent_clause(mapped);
+        let _ = self.solver.add_clause(mapped);
     }
 
     fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
-        let mapped = self.mapped_clause(clause);
-
-        let mut clause =
-            Preprocessor::preprocess_clause(mapped, self.solver.get_propositional_assignments());
+        let mut clause = self.mapped_clause(clause);
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
             SoftClauseAddition::RootViolated
-        } else if clause.iter().any(|literal| {
-            self.solver
-                .get_propositional_assignments()
-                .is_literal_assigned_true(*literal)
-        }) {
+        } else if clause
+            .iter()
+            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or_default())
+        {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
@@ -559,9 +554,10 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
-            let soft_literal = Literal::new(self.solver.create_new_propositional_variable(), true);
+            let soft_literal =
+                Literal::new(self.solver.create_new_propositional_variable(None), true);
             clause.push(soft_literal);
-            let _ = self.solver.add_permanent_clause(clause);
+            let _ = self.solver.add_clause(clause);
 
             SoftClauseAddition::Added(soft_literal)
         }

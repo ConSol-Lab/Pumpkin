@@ -1,5 +1,5 @@
 use super::AssignmentsPropositional;
-use crate::basic_types::Literal;
+use crate::engine::variables::Literal;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Preprocessor {}

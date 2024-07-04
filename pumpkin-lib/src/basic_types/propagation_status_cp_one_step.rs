@@ -1,8 +1,8 @@
-use super::ConflictInfo;
+use super::conflict_info::StoredConflictInfo;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum PropagationStatusOneStepCP {
-    ConflictDetected { conflict_info: ConflictInfo },
+    ConflictDetected { conflict_info: StoredConflictInfo },
     PropagationHappened,
     FixedPoint,
 }

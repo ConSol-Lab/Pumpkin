@@ -3,10 +3,11 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
-use pumpkin_lib::basic_types::variables::IntVar;
-use pumpkin_lib::basic_types::Literal;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::termination::indefinite::Indefinite;
+use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {
@@ -33,7 +34,9 @@ fn main() {
     let mut solver = ConstraintSatisfactionSolver::default();
 
     let start_variables = (0..n_tasks)
-        .map(|i| solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32))
+        .map(|i| {
+            solver.create_new_integer_variable(0, (horizon - processing_times[i]) as i32, None)
+        })
         .collect::<Vec<_>>();
 
     // Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x
@@ -41,7 +44,7 @@ fn main() {
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
-                .map(|_| Literal::new(solver.create_new_propositional_variable(), true))
+                .map(|_| Literal::new(solver.create_new_propositional_variable(None), true))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -62,13 +65,13 @@ fn main() {
             let _ = solver.int_lin_le_reif(variables.clone(), processing_times[y] as i32, !literal);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_permanent_clause(vec![literal, precedence_literals[y][x]]);
+            let _ = solver.add_clause([literal, precedence_literals[y][x]]);
         }
     }
 
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    if solver.solve(i64::MAX, &mut brancher)
+    if solver.solve(&mut Indefinite, &mut brancher)
         == pumpkin_lib::basic_types::CSPSolverExecutionFlag::Infeasible
     {
         panic!("Infeasibility Detected")
@@ -79,10 +82,10 @@ fn main() {
         .zip(processing_times)
         .collect::<Vec<_>>();
     start_variables_and_processing_times.sort_by(|(s1, _), (s2, _)| {
-        return solver
-            .get_integer_assignments()
-            .get_assigned_value(**s1)
-            .cmp(&solver.get_integer_assignments().get_assigned_value(**s2));
+        solver
+            .get_assigned_integer_value(*s1)
+            .unwrap()
+            .cmp(&solver.get_assigned_integer_value(*s2).unwrap())
     });
 
     println!(
@@ -91,9 +94,8 @@ fn main() {
             .iter()
             .map(|(var, processing_time)| format!(
                 "[{}, {}]",
-                solver.get_integer_assignments().get_assigned_value(**var),
-                solver.get_integer_assignments().get_assigned_value(**var)
-                    + *processing_time as i32
+                solver.get_assigned_integer_value(*var).unwrap(),
+                solver.get_assigned_integer_value(*var).unwrap() + *processing_time as i32
             ))
             .collect::<Vec<_>>()
             .join(" - ")

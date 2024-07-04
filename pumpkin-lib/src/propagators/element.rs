@@ -3,7 +3,6 @@ use std::cmp::max;
 use std::cmp::min;
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -15,6 +14,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 pub(crate) struct ElementConstructor<VX, VI, VE> {
@@ -38,16 +38,17 @@ const ID_RHS: LocalId = LocalId::from(1);
 // local ids of array vars are shifted by ID_X_OFFSET
 const ID_X_OFFSET: u32 = 2;
 
-/// Iterator through the domain values of an IntVar; keeps a reference to the context
+/// Iterator through the domain values of an IntegerVariable; keeps a reference to the context
 /// Use `for_domain_values!` if you want mutable access to the context while iterating
-fn iter_values<'c, Var: IntVar>(
+fn iter_values<'c, Var: IntegerVariable>(
     context: &'c PropagationContextMut,
     var: &'c PropagatorVariable<Var>,
 ) -> impl Iterator<Item = i32> + 'c {
     (context.lower_bound(var)..=context.upper_bound(var)).filter(|i| context.contains(var, *i))
 }
 
-/// Helper to loop through the domain values of an IntVar without keeping a reference to the context
+/// Helper to loop through the domain values of an IntegerVariable without keeping a reference to
+/// the context
 macro_rules! for_domain_values {
     ($context:expr, $var:expr, |$val:ident| $body:expr) => {
         for $val in ($context.lower_bound($var)..=$context.upper_bound($var)) {
@@ -58,7 +59,7 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> PropagatorConstructor
+impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> PropagatorConstructor
     for ElementConstructor<VX, VI, VE>
 {
     type Propagator = ElementPropagator<VX, VI, VE>;
@@ -85,7 +86,9 @@ impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> PropagatorConstructor
     }
 }
 
-impl<VX: IntVar + 'static, VI: IntVar, VE: IntVar> Propagator for ElementPropagator<VX, VI, VE> {
+impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
+    for ElementPropagator<VX, VI, VE>
+{
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
@@ -294,7 +297,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let index_reason = solver.get_reason_int(predicate![index != 3]);
+        let index_reason = solver.get_reason_int(predicate![index != 3].try_into().unwrap());
         // reason for index removal 3 is that `x_3 != e`
         assert_eq!(
             *index_reason,
@@ -303,7 +306,7 @@ mod tests {
             )
         );
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs != 6]);
+        let rhs_reason = solver.get_reason_int(predicate![rhs != 6].try_into().unwrap());
         // reason for rhs removal 6 is that for all valid indices i `x_i != 6`
         assert_eq!(
             *rhs_reason,
@@ -330,15 +333,15 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9]);
+        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9].try_into().unwrap());
         // reason for x_1 <= 9 is that `x_1 == e` and `e <= 9`
         assert_eq!(*x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
 
-        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8]);
+        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8].try_into().unwrap());
         // reason for x_1 removal 8 is that `x_1 == e` and `e != 8`
         assert_eq!(*x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7]);
+        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7].try_into().unwrap());
         // reason for `rhs >= 7` is that `x_1 >= 7`
         assert_eq!(*rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
     }

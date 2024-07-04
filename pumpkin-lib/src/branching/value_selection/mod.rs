@@ -6,6 +6,7 @@
 //! [`InDomainMin`], [`PhaseSaving`] and [`SolutionGuidedValueSelector`]. Any [`ValueSelector`]
 //! should only select values which are in the domain of the provided variable.
 
+mod dynamic_value_selector;
 mod in_domain_interval;
 mod in_domain_max;
 mod in_domain_median;
@@ -23,6 +24,7 @@ mod reverse_in_domain_split;
 mod solution_guided_value_selector;
 mod value_selector;
 
+pub use dynamic_value_selector::*;
 pub use in_domain_interval::*;
 pub use in_domain_max::*;
 pub use in_domain_median::*;

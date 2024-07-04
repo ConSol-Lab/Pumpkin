@@ -13,9 +13,10 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::basic_types::DomainId;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::termination::indefinite::Indefinite;
+use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -65,7 +66,7 @@ fn create_matrix(solver: &mut ConstraintSatisfactionSolver, bibd: &BIBD) -> Vec<
     (0..bibd.rows)
         .map(|_| {
             (0..bibd.columns)
-                .map(|_| solver.create_new_integer_variable(0, 1))
+                .map(|_| solver.create_new_integer_variable(0, 1, None))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
@@ -124,15 +125,15 @@ fn main() {
 
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    match solver.solve(i64::MAX, &mut brancher) {
+    match solver.solve(&mut Indefinite, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 
             for row in matrix.iter() {
                 let line = row
                     .iter()
-                    .map(|&var| {
-                        if solver.get_integer_assignments().get_assigned_value(var) == 1 {
+                    .map(|var| {
+                        if solver.get_assigned_integer_value(var).unwrap() == 1 {
                             String::from("| * ")
                         } else {
                             String::from("|   ")

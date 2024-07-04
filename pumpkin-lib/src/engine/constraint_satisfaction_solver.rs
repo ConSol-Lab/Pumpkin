@@ -1,57 +1,75 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
 
+use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::fs::File;
-use std::io::Write;
 use std::time::Instant;
 
-use log::info;
 use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
+use super::clause_allocators::ClauseAllocatorInterface;
+use super::clause_allocators::ClauseInterface;
+use super::conflict_analysis::AnalysisStep;
+use super::conflict_analysis::ConflictAnalysisResult;
+use super::conflict_analysis::ResolutionConflictAnalyser;
+use super::termination::TerminationCondition;
+use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
+use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::DomainId;
+use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::Predicate;
 use crate::basic_types::PropagationStatusOneStepCP;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::Random;
-use crate::basic_types::Stopwatch;
-use crate::basic_types::StorageKey;
+use crate::basic_types::SolutionReference;
+use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::clause_allocators::ClauseAllocatorBasic;
-use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::cp::CPEngineDataStructures;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::cp::PropagatorQueue;
+use crate::engine::cp::WatchListCP;
+use crate::engine::cp::WatchListPropositional;
 use crate::engine::debug_helper::DebugDyn;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::proof::ProofLog;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
-use crate::engine::sat::SATEngineDataStructures;
+use crate::engine::reason::ReasonStore;
+use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
+use crate::engine::BooleanDomainEvent;
 use crate::engine::DebugHelper;
+use crate::engine::EmptyDomain;
+use crate::engine::ExplanationClauseManager;
+use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
-use crate::engine::LearnedClauseMinimiser;
+use crate::engine::LearningOptions;
+use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
-use crate::engine::SATCPMediator;
-use crate::engine::SatOptions;
+use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::BasicClausalPropagator;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::variable_names::VariableNames;
 
 pub type ClausalPropagatorType = BasicClausalPropagator;
 pub type ClauseAllocator = ClauseAllocatorBasic;
@@ -70,7 +88,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// # Practical
 /// The [`ConstraintSatisfactionSolver`] makes use of certain options which allow the user to
 /// influence the behaviour of the solver; see for example the [`SatisfactionSolverOptions`] and the
-/// [`SatOptions`].
+/// [`LearningOptions`].
 ///
 /// The solver switches between making decisions using implementations of the [`Brancher`] (which
 /// are passed to the [`ConstraintSatisfactionSolver::solve`] method) and propagation (use
@@ -85,15 +103,17 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// ```
 /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 /// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
-/// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+/// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 /// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-/// # use pumpkin_lib::basic_types::variables::IntVar;
+/// # use pumpkin_lib::engine::variables::IntegerVariable;
+/// # use pumpkin_lib::engine::variables::TransformableVariable;
+/// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
 /// // We create a solver with default options (note that this is only possible in a testing environment)
 /// let mut solver = ConstraintSatisfactionSolver::default();
 ///
 /// // Now we create the two variables for which we want to define the propagator
-/// let x = solver.create_new_integer_variable(0, 10);
-/// let y = solver.create_new_integer_variable(0, 10);
+/// let x = solver.create_new_integer_variable(0, 10, None);
+/// let y = solver.create_new_integer_variable(0, 10, None);
 ///
 /// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
 /// //  'x != y' is represented using the propagator for 'x - y != 0'
@@ -104,11 +124,13 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
 ///
 /// // Then we solve the problem given a time-limit and a branching strategy
-/// let result = solver.solve(i64::MAX, &mut brancher);
+/// let result = solver.solve(&mut Indefinite, &mut brancher);
 ///
 /// // Now we check that the result is feasible and that the chosen values for the two variables are different
 /// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
-/// assert!(solver.get_integer_assignments().get_assigned_value(x) != solver.get_integer_assignments().get_assigned_value(y));
+/// assert!(
+///     solver.get_assigned_integer_value(&x).unwrap() != solver.get_assigned_integer_value(&y).unwrap()
+/// );
 /// ```
 ///
 /// # Bibliography
@@ -121,20 +143,77 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
 /// Intelligence, vol. 3, pp. 181–211, 2008.
 pub struct ConstraintSatisfactionSolver {
-    state: CSPSolverState,
-    sat_data_structures: SATEngineDataStructures,
-    cp_data_structures: CPEngineDataStructures,
+    /// The solver continuously changes states during the search.
+    /// The state helps track additional information and contributes to making the code clearer.
+    pub(crate) state: CSPSolverState,
+    /// Tracks information related to the assignments of propositional variables.
+    pub(crate) assignments_propositional: AssignmentsPropositional,
+    /// Responsible for clausal propagation based on the two-watched scheme.
+    /// Although technically just another propagator, we treat the clausal propagator in a special
+    /// way due to efficiency and conflict analysis.
     clausal_propagator: ClausalPropagatorType,
-    learned_clause_manager: LearnedClauseManager,
-    learned_clause_minimiser: LearnedClauseMinimiser,
-    restart_strategy: RestartStrategy,
+    /// The list of propagators. Propagators live here and are queried when events (domain changes)
+    /// happen. The list is only traversed during synchronisation for now.
     cp_propagators: Vec<Box<dyn Propagator>>,
-    sat_cp_mediator: SATCPMediator,
-    seen: KeyedVec<PropositionalVariable, bool>,
+    /// Tracks information about all allocated clauses. All clause allocaton goes exclusively
+    /// through the clause allocator. There are two notable exceptions:
+    /// - Unit clauses are stored directly on the trail.
+    /// - Binary clauses may be inlined in the watch lists of the clausal propagator.
+    pub(crate) clause_allocator: ClauseAllocator,
+    /// Tracks information about all learned clauses, with the exception of
+    /// unit clauses which are directly stored on the trail.
+    learned_clause_manager: LearnedClauseManager,
+    /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
+    /// and start the search from the root note. Note that learned clauses and other state
+    /// information is kept after a restart.
+    restart_strategy: RestartStrategy,
+    /// Holds the assumptions when the solver is queried to solve under assumptions.
+    assumptions: Vec<Literal>,
+    /// Performs conflict analysis, core extraction, and minimisation.
+    conflict_analyser: ResolutionConflictAnalyser,
+    /// Tracks information related to the assignments of integer variables.
+    pub(crate) assignments_integer: AssignmentsInteger,
+    /// Contains information on which propagator to notify upon
+    /// integer events, e.g., lower or upper bound change of a variable.
+    watch_list_cp: WatchListCP,
+    /// Contains information on which propagator to notify upon
+    /// literal assignment. Not to be confused with the watch list
+    /// of the clausal propagator.
+    watch_list_propositional: WatchListPropositional,
+    /// Used in combination with the propositional watch list
+    /// Indicates the next literal on the propositional trail that need to be inspected to notify
+    /// subscribed propagators.
+    propositional_trail_index: usize,
+    /// Dictates the order in which propagators will be called to propagate.
+    propagator_queue: PropagatorQueue,
+    /// Handles storing information about propagation reasons, which are used later to construct
+    /// explanations during conflict analysis
+    pub(crate) reason_store: ReasonStore,
+    /// Contains events that need to be processe to notify propagators of event occurrences.
+    event_drain: Vec<(IntDomainEvent, DomainId)>,
+    /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
+    pub(crate) variable_literal_mappings: VariableLiteralMappings,
+    /// Used during synchronisation of the propositional and integer trail.
+    /// [`AssignmentsInteger::trail`][`cp_trail_synced_position`] is the next entry
+    /// that needs to be synchronised with [`AssignmentsPropositional::trail`].
+    cp_trail_synced_position: usize,
+    /// This is the SAT equivalent of the above, i.e., [`AssignmentsPropositional::trail`]
+    /// [[`sat_trail_synced_position`]] is the next
+    /// [`Literal`] on the trail that needs to be synchronised with [`AssignmentsInteger::trail`].
+    sat_trail_synced_position: usize,
+    /// Holds information about explanations during conflict analysis.
+    explanation_clause_manager: ExplanationClauseManager,
+    /// Convenience literals used in special cases.
+    true_literal: Literal,
+    false_literal: Literal,
+    /// A set of counters updated during the search.
     counters: Counters,
-    internal_parameters: SatisfactionSolverOptions,
-    stopwatch: Stopwatch,
+    /// Used to store the learned clause.
     analysis_result: ConflictAnalysisResult,
+    /// Miscellaneous constant parameters used by the solver.
+    internal_parameters: SatisfactionSolverOptions,
+    /// The names of the variables in the solver.
+    variable_names: VariableNames,
 }
 
 impl Debug for ConstraintSatisfactionSolver {
@@ -146,20 +225,26 @@ impl Debug for ConstraintSatisfactionSolver {
             .collect();
         f.debug_struct("ConstraintSatisfactionSolver")
             .field("state", &self.state)
-            .field("sat_data_structures", &self.sat_data_structures)
-            .field("cp_data_structures", &self.cp_data_structures)
+            .field("assumptions", &self.assumptions)
+            .field("clausal_allocator", &self.clause_allocator)
+            .field("assignments_propositional", &self.assignments_propositional)
             .field("clausal_propagator", &self.clausal_propagator)
             .field("learned_clause_manager", &self.learned_clause_manager)
-            .field("learned_clause_minimiser", &self.learned_clause_minimiser)
             .field("restart_strategy", &self.restart_strategy)
             .field("cp_propagators", &cp_propagators)
-            .field("sat_cp_mediator", &self.sat_cp_mediator)
-            .field("seen", &self.seen)
             .field("counters", &self.counters)
             .field("internal_parameters", &self.internal_parameters)
-            .field("stopwatch", &self.stopwatch)
             .field("analysis_result", &self.analysis_result)
             .finish()
+    }
+}
+
+impl Default for ConstraintSatisfactionSolver {
+    fn default() -> Self {
+        ConstraintSatisfactionSolver::new(
+            LearningOptions::default(),
+            SatisfactionSolverOptions::default(),
+        )
     }
 }
 
@@ -169,142 +254,341 @@ impl Debug for ConstraintSatisfactionSolver {
 pub struct SatisfactionSolverOptions {
     /// The options used by the [`RestartStrategy`]
     pub restart_options: RestartOptions,
-
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
 
-    /// Certificate output file or [`None`] if certificate output is disabled.
-    pub certificate_file: Option<File>,
+    /// The proof log.
+    pub proof_log: ProofLog,
 
     /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
     /// argument allows seeding based on CLI input.
     pub random_generator: SmallRng,
 }
 
-use crate::basic_types::sequence_generators::SequenceGeneratorType;
-/// Parameters related to the restarts as provided to [`RestartStrategy`].
-#[derive(Debug, Clone, Copy)]
-pub struct RestartOptions {
-    /// Decides the sequence based on which the restarts are performed.
-    /// To be used in combination with [`RestartOptions::base_interval`]
-    pub sequence_generator_type: SequenceGeneratorType,
-    /// The base interval length is used as a multiplier to the restart sequence.
-    /// For example, constant restarts with base interval 100 means a retart is triggered every 100
-    /// conflicts.
-    pub base_interval: u64,
-    /// The minimum number of conflicts to be reached before the first restart is considered
-    pub min_num_conflicts_before_first_restart: u64,
-    /// Used to determine if a restart should be forced (part of [`RestartStrategy`]).
-    /// The state is "bad" if the current LBD value (see [`RestartStrategy`] for a
-    /// definition) is much greater than the global LBD average A greater/lower value for
-    /// lbd-coef means a less/more frequent restart policy
-    pub lbd_coef: f64,
-    /// Used to determine if a restart should be blocked (part of [`RestartStrategy`]).
-    /// To be used in combination with
-    /// [`RestartOptions::num_assigned_window`].
-    /// A restart is blocked if the number of assigned propositional variables is must greater than
-    /// the average number of assigned variables in the recent past A greater/lower value for
-    /// [`RestartOptions::num_assigned_coef`] means fewer/more blocked restarts
-    pub num_assigned_coef: f64,
-    /// Used to determine the length of the recent past that should be considered when deciding on
-    /// blocking restarts (part of [`RestartStrategy`]). The solver considers the last
-    /// [`RestartOptions::num_assigned_window`] conflicts as the reference point for the
-    /// number of assigned variables
-    pub num_assigned_window: u64,
-    /// The coefficient in the geometric sequence `x_i = x_{i-1} * geometric-coef` where `x_1 =
-    /// `[`RestartOptions::base_interval`] Used only if
-    /// [`RestartOptions::sequence_generator_type`] is assigned to
-    /// [`SequenceGeneratorType::Geometric`].
-    pub geometric_coef: Option<f64>,
-}
-
-impl Default for RestartOptions {
+impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
-        // The values which are used are based on [Glucose](https://github.com/audemard/glucose).
-        Self {
-            sequence_generator_type: SequenceGeneratorType::Constant,
-            base_interval: 50,
-            min_num_conflicts_before_first_restart: 10000,
-            lbd_coef: 1.25,
-            num_assigned_coef: 1.4,
-            num_assigned_window: 5000,
-            geometric_coef: None,
+        SatisfactionSolverOptions {
+            restart_options: RestartOptions::default(),
+            proof_log: ProofLog::default(),
+            learning_clause_minimisation: true,
+            random_generator: SmallRng::seed_from_u64(42),
         }
     }
+}
+
+impl ConstraintSatisfactionSolver {
+    /// Process the stored domain events. If no events were present, this returns false. Otherwise,
+    /// true is returned.
+    fn process_domain_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_anything() {
+            self.event_drain
+                .extend(self.assignments_integer.drain_domain_events());
+
+            if self.event_drain.is_empty()
+                && self.propositional_trail_index
+                    == self.assignments_propositional.num_trail_entries()
+            {
+                return false;
+            }
+
+            for (event, domain) in self.event_drain.drain(..) {
+                for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
+                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                    let mut context = PropagationContextMut::new(
+                        &mut self.assignments_integer,
+                        &mut self.reason_store,
+                        &mut self.assignments_propositional,
+                        propagator_var.propagator,
+                    );
+
+                    let enqueue_decision =
+                        propagator.notify(&mut context, propagator_var.variable, event.into());
+
+                    if enqueue_decision == EnqueueDecision::Enqueue {
+                        self.propagator_queue
+                            .enqueue_propagator(propagator_var.propagator, propagator.priority());
+                    }
+                }
+            }
+        }
+        // If there are no literals being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_propositional.is_watching_anything() {
+            for i in
+                self.propositional_trail_index..self.assignments_propositional.num_trail_entries()
+            {
+                let literal = self.assignments_propositional.get_trail_entry(i);
+                for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
+                    for propagator_var in self
+                        .watch_list_propositional
+                        .get_affected_propagators(event, affected_literal)
+                    {
+                        let propagator =
+                            &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                        let mut context = PropagationContextMut::new(
+                            &mut self.assignments_integer,
+                            &mut self.reason_store,
+                            &mut self.assignments_propositional,
+                            propagator_var.propagator,
+                        );
+
+                        let enqueue_decision =
+                            propagator.notify_literal(&mut context, propagator_var.variable, event);
+
+                        if enqueue_decision == EnqueueDecision::Enqueue {
+                            self.propagator_queue.enqueue_propagator(
+                                propagator_var.propagator,
+                                propagator.priority(),
+                            );
+                        }
+                    }
+                }
+            }
+            self.propositional_trail_index = self.assignments_propositional.num_trail_entries();
+        }
+
+        true
+    }
+
+    /// Given a predicate, returns the corresponding literal.
+    pub fn get_literal(&self, predicate: Predicate) -> Literal {
+        match predicate {
+            Predicate::IntegerPredicate(integer_predicate) => {
+                self.variable_literal_mappings.get_literal(
+                    integer_predicate,
+                    &self.assignments_propositional,
+                    &self.assignments_integer,
+                )
+            }
+            bool_predicate => bool_predicate
+                .get_literal_of_bool_predicate(self.assignments_propositional.true_literal)
+                .unwrap(),
+        }
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub fn get_solution_reference(&self) -> SolutionReference<'_> {
+        SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
+    }
+
+    /// This is a temporary accessor to help refactoring.
+    #[deprecated = "will be removed in favor of new state-based api"]
+    pub fn is_at_the_root_level(&self) -> bool {
+        self.assignments_propositional.is_at_the_root_level()
+    }
+
+    pub(crate) fn is_conflicting(&self) -> bool {
+        self.state.conflicting()
+    }
+
+    pub(crate) fn declare_ready(&mut self) {
+        self.state.declare_ready()
+    }
+
+    /// Conclude the proof with the unsatisfiable claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.unsat(&self.variable_names, &self.variable_literal_mappings)
+    }
+
+    /// Conclude the proof with the optimality claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.optimal(bound, &self.variable_names, &self.variable_literal_mappings)
+    }
+
+    // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() as usize
+    // == self.mapping_domain_to_lower_bound_literals.len()
+    // );
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() as usize
+    // == self.mapping_domain_to_equality_literals.len()
+    // );
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() == cp_data_structures.watch_list_cp.num_domains()
+    // );
+    // true
+    // }
 }
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
     pub fn new(
-        sat_options: SatOptions,
+        learning_options: LearningOptions,
         solver_options: SatisfactionSolverOptions,
     ) -> ConstraintSatisfactionSolver {
+        let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
+
         let mut csp_solver = ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
-            sat_data_structures: SATEngineDataStructures::default(),
-            cp_data_structures: CPEngineDataStructures::default(),
+            assumptions: Vec::default(),
+            assignments_propositional: AssignmentsPropositional::default(),
+            clause_allocator: ClauseAllocator::default(),
+            assignments_integer: AssignmentsInteger::default(),
+            watch_list_cp: WatchListCP::default(),
+            watch_list_propositional: WatchListPropositional::default(),
+            propagator_queue: PropagatorQueue::new(5),
+            reason_store: ReasonStore::default(),
+            propositional_trail_index: 0,
+            event_drain: vec![],
+            variable_literal_mappings: VariableLiteralMappings::default(),
+            cp_trail_synced_position: 0,
+            sat_trail_synced_position: 0,
+            explanation_clause_manager: ExplanationClauseManager::default(),
+            true_literal: dummy_literal,
+            false_literal: !dummy_literal,
+            conflict_analyser: ResolutionConflictAnalyser::default(),
             clausal_propagator: ClausalPropagatorType::default(),
-            learned_clause_manager: LearnedClauseManager::new(sat_options),
-            learned_clause_minimiser: LearnedClauseMinimiser::default(),
+            learned_clause_manager: LearnedClauseManager::new(learning_options),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             cp_propagators: vec![],
-            sat_cp_mediator: SATCPMediator::default(),
-            seen: KeyedVec::default(),
             counters: Counters::default(),
             internal_parameters: solver_options,
-            stopwatch: Stopwatch::new(i64::MAX),
             analysis_result: ConflictAnalysisResult::default(),
+            variable_names: VariableNames::default(),
         };
 
         // we introduce a dummy variable set to true at the root level
         //  this is useful for convenience when a fact needs to be expressed that is always true
         //  e.g., this makes writing propagator explanations easier for corner cases
-        let root_variable = csp_solver
-            .sat_cp_mediator
-            .create_new_propositional_variable(
-                &mut csp_solver.cp_data_structures.watch_list_propositional,
-                &mut csp_solver.clausal_propagator,
-                &mut csp_solver.sat_data_structures,
-            );
+        let root_variable = csp_solver.create_new_propositional_variable(Some("true".to_owned()));
         let true_literal = Literal::new(root_variable, true);
 
-        csp_solver
-            .sat_data_structures
-            .assignments_propositional
-            .true_literal = true_literal;
+        csp_solver.assignments_propositional.true_literal = true_literal;
+        csp_solver.assignments_propositional.false_literal = !true_literal;
 
-        csp_solver
-            .sat_data_structures
-            .assignments_propositional
-            .false_literal = !true_literal;
+        csp_solver.true_literal = true_literal;
+        csp_solver.false_literal = !true_literal;
 
-        csp_solver.sat_cp_mediator.true_literal = true_literal;
-        csp_solver.sat_cp_mediator.false_literal = !true_literal;
-
-        let result = csp_solver.add_unit_clause(true_literal);
+        let result = csp_solver.add_clause([true_literal]);
         pumpkin_assert_simple!(result.is_ok());
 
         csp_solver
     }
 
+    pub fn solve(
+        &mut self,
+        termination: &mut impl TerminationCondition,
+        brancher: &mut impl Brancher,
+    ) -> CSPSolverExecutionFlag {
+        let dummy_assumptions: Vec<Literal> = vec![];
+        self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
+    }
+
     pub fn solve_under_assumptions(
         &mut self,
         assumptions: &[Literal],
-        time_limit_in_seconds: i64,
+        termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
-        if self.state.is_infeasible() {
+        if self.state.is_inconsistent() {
             return CSPSolverExecutionFlag::Infeasible;
         }
 
         let start_time = Instant::now();
 
-        self.initialise(assumptions, time_limit_in_seconds);
-        let result = self.solve_internal(brancher);
+        self.initialise(assumptions);
+        let result = self.solve_internal(termination, brancher);
 
         self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
 
         result
+    }
+
+    pub fn get_state(&self) -> &CSPSolverState {
+        &self.state
+    }
+
+    pub fn get_random_generator(&mut self) -> &mut impl Random {
+        &mut self.internal_parameters.random_generator
+    }
+
+    pub fn log_statistics(&self) {
+        self.counters.log_statistics()
+    }
+
+    /// Create a new integer variable. Its domain will have the given lower and upper bounds.
+    pub fn create_new_integer_variable(
+        &mut self,
+        lower_bound: i32,
+        upper_bound: i32,
+        name: Option<String>,
+    ) -> DomainId {
+        assert!(
+            !self.state.is_inconsistent(),
+            "Variables cannot be created in an inconsistent state"
+        );
+
+        let domain = self.variable_literal_mappings.create_new_domain(
+            lower_bound,
+            upper_bound,
+            &mut self.assignments_integer,
+            &mut self.watch_list_cp,
+            &mut self.watch_list_propositional,
+            &mut self.clausal_propagator,
+            &mut self.assignments_propositional,
+            &mut self.clause_allocator,
+        );
+
+        if let Some(name) = name {
+            self.variable_names.add_integer(domain, name);
+        }
+
+        domain
+    }
+
+    /// Creates an integer variable with a domain containing only the values in `values`
+    pub fn create_new_integer_variable_sparse(
+        &mut self,
+        mut values: Vec<i32>,
+        name: Option<String>,
+    ) -> DomainId {
+        assert!(
+            !values.is_empty(),
+            "cannot create a variable with an empty domain"
+        );
+
+        values.sort();
+        values.dedup();
+
+        let lower_bound = values[0];
+        let upper_bound = values[values.len() - 1];
+
+        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound, name);
+
+        let mut next_idx = 0;
+        for value in lower_bound..=upper_bound {
+            if value == values[next_idx] {
+                next_idx += 1;
+            } else {
+                self.assignments_integer
+                    .remove_value_from_domain(domain_id, value, None)
+                    .expect("the domain should not be empty");
+                self.assignments_propositional.enqueue_decision_literal(
+                    self.variable_literal_mappings.get_inequality_literal(
+                        domain_id,
+                        value,
+                        &self.assignments_propositional,
+                        &self.assignments_integer,
+                    ),
+                )
+            }
+        }
+        pumpkin_assert_simple!(
+            next_idx == values.len(),
+            "Expected all values to have been processed"
+        );
+
+        domain_id
     }
 
     /// Returns an unsatisfiable core.
@@ -330,20 +614,22 @@ impl ConstraintSatisfactionSolver {
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::basic_types::{PropositionalVariable, Literal};
-    /// # use pumpkin_lib::branching::IndependentVariableValueBrancher;
+    /// # use pumpkin_lib::engine::variables::PropositionalVariable;
+    /// # use pumpkin_lib::engine::variables::Literal;
+    /// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
+    /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
     ///
     /// let mut solver = ConstraintSatisfactionSolver::default();
     /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
     ///
-    /// solver.add_permanent_clause(vec![x[0], x[1], x[2]]);
-    /// solver.add_permanent_clause(vec![x[0], !x[1], x[2]]);
+    /// solver.add_clause([x[0], x[1], x[2]]);
+    /// solver.add_clause([x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut brancher =
     ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    /// solver.solve_under_assumptions(&assumptions, i64::MAX, &mut brancher);
+    /// solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
     ///
     /// let core = solver
     ///     .extract_clausal_core(&mut brancher)
@@ -364,150 +650,67 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         brancher: &mut impl Brancher,
     ) -> Result<Vec<Literal>, Literal> {
-        pumpkin_assert_simple!(self.debug_check_core_extraction());
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assumptions: &self.assumptions,
+            clausal_propagator: &self.clausal_propagator,
+            variable_literal_mappings: &self.variable_literal_mappings,
+            assignments_integer: &self.assignments_integer,
+            assignments_propositional: &self.assignments_propositional,
+            internal_parameters: &self.internal_parameters,
+            solver_state: &mut self.state,
+            brancher,
+            clause_allocator: &mut self.clause_allocator,
+            explanation_clause_manager: &mut self.explanation_clause_manager,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+            learned_clause_manager: &mut self.learned_clause_manager,
+            restart_strategy: &mut self.restart_strategy,
+        };
 
-        if self.state.is_infeasible() {
-            return Ok(vec![]);
-        }
+        let core = self
+            .conflict_analyser
+            .compute_clausal_core(&mut conflict_analysis_context);
 
-        let violated_assumption = self.state.get_violated_assumption();
-
-        // we consider three cases:
-        //  1. The assumption is falsified at the root level
-        //  2. The assumption is inconsistent with other assumptions, e.g., x and !x given as
-        //     assumptions
-        //  3. Standard case
-
-        // Case one: the assumption is falsified at the root level
-        if self
-            .sat_data_structures
-            .assignments_propositional
-            .is_literal_root_assignment(violated_assumption)
-        {
+        if !self.state.is_infeasible() {
             self.restore_state_at_root(brancher);
-            Ok(vec![violated_assumption])
         }
-        // Case two: the assumption is inconsistent with other assumptions
-        //  i.e., the assumptions contain both literal 'x' and '~x'
-        //  not sure what would be the best output in this case, possibly a special flag?
-        //      for now we return the reason (x && ~x)
-        else if !self
-            .sat_data_structures
-            .assignments_propositional
-            .is_literal_propagated(violated_assumption)
-        {
-            self.restore_state_at_root(brancher);
-            Err(violated_assumption)
-        }
-        // Case three: the standard case, proceed with core extraction
-        // performs resolution on all implied assumptions until only decision assumptions are left
-        //  the violating assumption is used as the starting point
-        //  at this point, any reason clause encountered will contains only assumptions, but some
-        // assumptions might be implied  this corresponds to the all-decision CDCL learning
-        // scheme
-        else {
-            self.compute_all_decision_learning_helper(Some(!violated_assumption), true, brancher);
-            self.analysis_result
-                .learned_literals
-                .push(!violated_assumption);
-            pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption));
-            self.restore_state_at_root(brancher);
-            Ok(self.analysis_result.learned_literals.clone())
-        }
+
+        core
     }
 
-    pub fn solve(
+    pub(crate) fn get_conflict_reasons(
         &mut self,
-        time_limit_in_seconds: i64,
         brancher: &mut impl Brancher,
-    ) -> CSPSolverExecutionFlag {
-        let dummy_assumptions: Vec<Literal> = vec![];
-        self.solve_under_assumptions(&dummy_assumptions, time_limit_in_seconds, brancher)
+        on_analysis_step: impl FnMut(AnalysisStep),
+    ) {
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assumptions: &self.assumptions,
+            clausal_propagator: &self.clausal_propagator,
+            variable_literal_mappings: &self.variable_literal_mappings,
+            assignments_integer: &self.assignments_integer,
+            assignments_propositional: &self.assignments_propositional,
+            internal_parameters: &self.internal_parameters,
+            solver_state: &mut self.state,
+            brancher,
+            clause_allocator: &mut self.clause_allocator,
+            explanation_clause_manager: &mut self.explanation_clause_manager,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+            learned_clause_manager: &mut self.learned_clause_manager,
+            restart_strategy: &mut self.restart_strategy,
+        };
+
+        self.conflict_analyser
+            .get_conflict_reasons(&mut conflict_analysis_context, on_analysis_step);
     }
 
-    pub fn get_state(&self) -> &CSPSolverState {
-        &self.state
-    }
-
-    pub fn get_random_generator(&mut self) -> &mut impl Random {
-        &mut self.internal_parameters.random_generator
-    }
-
-    pub fn log_statistics(&self) {
-        self.counters.log_statistics()
-    }
-
-    pub fn create_new_propositional_variable(&mut self) -> PropositionalVariable {
-        self.sat_cp_mediator.create_new_propositional_variable(
-            &mut self.cp_data_structures.watch_list_propositional,
-            &mut self.clausal_propagator,
-            &mut self.sat_data_structures,
-        )
-    }
-
-    /// Create a new integer variable. Its domain will have the given lower and upper bounds.
-    pub fn create_new_integer_variable(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
-        assert!(
-            !self.is_in_infeasible_state(),
-            "variables cannot be created in an infeasible state"
-        );
-
-        self.sat_cp_mediator.create_new_domain(
-            lower_bound,
-            upper_bound,
-            &mut self.clausal_propagator,
-            &mut self.sat_data_structures,
-            &mut self.cp_data_structures,
-        )
-    }
-
-    /// Creates an integer variable with a domain containing only the values in `values`
-    pub fn create_new_integer_variable_sparse(&mut self, mut values: Vec<i32>) -> DomainId {
-        assert!(
-            !values.is_empty(),
-            "cannot create a variable with an empty domain"
-        );
-
-        values.sort();
-        values.dedup();
-
-        let lower_bound = values[0];
-        let upper_bound = values[values.len() - 1];
-
-        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound);
-
-        let mut next_idx = 0;
-        for value in lower_bound..=upper_bound {
-            if value == values[next_idx] {
-                next_idx += 1;
-            } else {
-                self.cp_data_structures
-                    .assignments_integer
-                    .remove_value_from_domain(domain_id, value, None)
-                    .expect("the domain should not be empty");
-                self.sat_data_structures
-                    .assignments_propositional
-                    .enqueue_decision_literal(self.sat_cp_mediator.get_inequality_literal(
-                        domain_id,
-                        value,
-                        &self.cp_data_structures.assignments_integer,
-                    ))
-            }
-        }
-        pumpkin_assert_simple!(
-            next_idx == values.len(),
-            "Expected all values to have been processed"
-        );
-
-        domain_id
-    }
-
-    /// Returns an infinite iterator of positive literals of new variables.
+    /// Returns an infinite iterator of positive literals of new variables. The new variables will
+    /// be unnamed.
     ///
     /// # Example
     /// ```
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::basic_types::Literal;
+    /// # use pumpkin_lib::engine::variables::Literal;
     /// let mut solver = ConstraintSatisfactionSolver::default();
     /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
     ///
@@ -517,80 +720,235 @@ impl ConstraintSatisfactionSolver {
     ///
     /// Note that this method captures the lifetime of the immutable reference to `self`.
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
-        std::iter::from_fn(|| Some(self.create_new_propositional_variable()))
+        std::iter::from_fn(|| Some(self.create_new_propositional_variable(None)))
             .map(|var| Literal::new(var, true))
     }
 
-    pub fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
-        &self.sat_data_structures.assignments_propositional
+    pub fn create_new_propositional_variable(
+        &mut self,
+        name: Option<String>,
+    ) -> PropositionalVariable {
+        let variable = self
+            .variable_literal_mappings
+            .create_new_propositional_variable(
+                &mut self.watch_list_propositional,
+                &mut self.clausal_propagator,
+                &mut self.assignments_propositional,
+            );
+
+        if let Some(name) = name {
+            self.variable_names.add_propositional(variable, name);
+        }
+
+        variable
     }
 
-    pub fn get_lower_bound_literal(&self, domain: DomainId, lower_bound: i32) -> Literal {
-        self.sat_cp_mediator.get_lower_bound_literal(
-            domain,
-            lower_bound,
-            &self.cp_data_structures.assignments_integer,
-        )
+    /// Get a literal which is globally true.
+    pub fn get_true_literal(&self) -> Literal {
+        self.assignments_propositional.true_literal
     }
 
-    pub fn get_upper_bound_literal(&self, domain: DomainId, upper_bound: i32) -> Literal {
-        self.sat_cp_mediator.get_upper_bound_literal(
-            domain,
-            upper_bound,
-            &self.cp_data_structures.assignments_integer,
-        )
+    /// Get a literal which is globally false.
+    pub fn get_false_literal(&self) -> Literal {
+        self.assignments_propositional.false_literal
     }
 
-    pub fn get_integer_assignments(&self) -> &AssignmentsInteger {
-        &self.cp_data_structures.assignments_integer
+    /// Get the lower bound for the given variable.
+    pub fn get_lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        variable.lower_bound(&self.assignments_integer)
+    }
+
+    /// Get the upper bound for the given variable.
+    pub fn get_upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
+        variable.upper_bound(&self.assignments_integer)
+    }
+
+    /// Determine whether `value` is in the domain of `variable`.
+    pub fn integer_variable_contains(&self, variable: &impl IntegerVariable, value: i32) -> bool {
+        variable.contains(&self.assignments_integer, value)
+    }
+
+    /// Get the assigned integer for the given variable. If it is not assigned, `None` is returned.
+    pub fn get_assigned_integer_value(&self, variable: &impl IntegerVariable) -> Option<i32> {
+        let lb = self.get_lower_bound(variable);
+        let ub = self.get_upper_bound(variable);
+
+        if lb == ub {
+            Some(lb)
+        } else {
+            None
+        }
+    }
+
+    /// Get the value of the given literal, which could be unassigned.
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        if self.assignments_propositional.is_literal_assigned(literal) {
+            Some(
+                self.assignments_propositional
+                    .is_literal_assigned_true(literal),
+            )
+        } else {
+            None
+        }
+    }
+
+    #[deprecated = "users of the solvers should not have to access solver fields"]
+    pub(crate) fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
+        &self.assignments_propositional
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_simple!(
-            self.state.has_solution() && self.get_decision_level() > 0
-                || self.state.is_infeasible_under_assumptions()
-        );
-
         self.backtrack(0, brancher);
         self.state.declare_ready();
     }
 
-    pub fn get_literal(&self, predicate: Predicate) -> Literal {
-        self.sat_cp_mediator
-            .get_predicate_literal(predicate, &self.cp_data_structures.assignments_integer)
+    fn synchronise_propositional_trail_based_on_integer_trail(&mut self) -> Option<ConflictInfo> {
+        // for each entry on the integer trail, we now add the equivalent propositional
+        // representation on the propositional trail  note that only one literal per
+        // predicate will be stored      since the clausal propagator will propagate other
+        // literals to ensure that the meaning of the literal is respected          e.g.,
+        // placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1]
+        // to true
+        for cp_trail_pos in
+            self.cp_trail_synced_position..self.assignments_integer.num_trail_entries()
+        {
+            let entry = self.assignments_integer.get_trail_entry(cp_trail_pos);
+
+            // It could be the case that the reason is `None`
+            // due to a SAT propagation being put on the trail during
+            // `synchronise_integer_trail_based_on_propositional_trail` In that case we
+            // do not synchronise since we assume that the SAT trail is already aware of the
+            // information
+            if let Some(reason_ref) = entry.reason {
+                let literal = self.variable_literal_mappings.get_literal(
+                    entry.predicate,
+                    &self.assignments_propositional,
+                    &self.assignments_integer,
+                );
+
+                let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
+
+                let conflict_info = self
+                    .assignments_propositional
+                    .enqueue_propagated_literal(literal, constraint_reference);
+
+                if conflict_info.is_some() {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return conflict_info;
+                }
+
+                // It could occur that one of these propagations caused a conflict in which case the
+                // SAT-view and the CP-view are unsynchronised We need to ensure
+                // that the views are synchronised up to the CP trail entry which caused the
+                // conflict
+                if let Err(e) = self.clausal_propagator.propagate(
+                    &mut self.assignments_propositional,
+                    &mut self.clause_allocator,
+                ) {
+                    self.cp_trail_synced_position = cp_trail_pos + 1;
+                    return Some(e);
+                }
+            }
+        }
+        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
+        None
+    }
+
+    fn synchronise_integer_trail_based_on_propositional_trail(
+        &mut self,
+    ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_moderate!(
+            self.cp_trail_synced_position == self.assignments_integer.num_trail_entries(),
+            "We can only sychronise the propositional trail if the integer trail is already
+             sychronised."
+        );
+
+        // this could possibly be improved if it shows up as a performance hotspot
+        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the
+        // literals to the propositional stack  and update the next_domain_trail_position
+        // pointer to go pass the entries that surely are not going to lead to any changes
+        //  this would only work if the next_domain_trail pointer is already at the end of the
+        // stack, think about this, could be useful for propagators      and might be useful
+        // for a custom domain propagator  this would also simplify the code below, no
+        // additional checks would be needed? Not sure.
+
+        if self.assignments_integer.num_domains() == 0 {
+            self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
+            return Ok(());
+        }
+
+        for sat_trail_pos in
+            self.sat_trail_synced_position..self.assignments_propositional.num_trail_entries()
+        {
+            let literal = self
+                .assignments_propositional
+                .get_trail_entry(sat_trail_pos);
+            self.synchronise_literal(literal)?;
+        }
+        self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
+        // the newly added entries to the trail do not need to be synchronise with the propositional
+        // trail  this is because the integer trail was already synchronise when this method
+        // was called  and the newly added entries are already present on the propositional
+        // trail
+        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
+
+        let _ = self.process_domain_events();
+
+        Ok(())
+    }
+
+    fn synchronise_literal(&mut self, literal: Literal) -> Result<(), EmptyDomain> {
+        // recall that a literal may be linked to multiple predicates
+        //  e.g., this may happen when in preprocessing two literals are detected to be equal
+        //  so now we loop for each predicate and make necessary updates
+        //  (although currently we do not have any serious preprocessing!)
+        for j in 0..self.variable_literal_mappings.literal_to_predicates[literal].len() {
+            let predicate = self.variable_literal_mappings.literal_to_predicates[literal][j];
+            self.assignments_integer
+                .apply_integer_predicate(predicate, None)?;
+        }
+        Ok(())
+    }
+
+    fn synchronise_assignments(&mut self) {
+        pumpkin_assert_simple!(
+            self.sat_trail_synced_position >= self.assignments_propositional.num_trail_entries()
+        );
+        pumpkin_assert_simple!(
+            self.cp_trail_synced_position >= self.assignments_integer.num_trail_entries()
+        );
+        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
+        self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
     }
 }
 
 // methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
-    fn initialise(&mut self, assumptions: &[Literal], time_limit_in_seconds: i64) {
+    fn initialise(&mut self, assumptions: &[Literal]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
             "Solver is not expected to be in the infeasible under assumptions state when initialising.
              Missed extracting the core?"
         );
-
-        let num_propositional_variables = self
-            .sat_data_structures
-            .assignments_propositional
-            .num_propositional_variables() as usize;
-
         self.state.declare_solving();
-        self.stopwatch.reset(time_limit_in_seconds);
-        self.sat_data_structures.assumptions = assumptions.to_owned();
-        self.seen.resize(num_propositional_variables, false);
+        assumptions.clone_into(&mut self.assumptions);
     }
 
-    fn solve_internal(&mut self, brancher: &mut impl Brancher) -> CSPSolverExecutionFlag {
+    fn solve_internal(
+        &mut self,
+        termination: &mut impl TerminationCondition,
+        brancher: &mut impl Brancher,
+    ) -> CSPSolverExecutionFlag {
         loop {
-            if self.stopwatch.get_remaining_time_budget() <= 0 {
+            if termination.should_stop() {
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }
 
             self.learned_clause_manager
                 .shrink_learned_clause_database_if_needed(
-                    &mut self.sat_data_structures,
+                    &self.assignments_propositional,
+                    &mut self.clause_allocator,
                     &mut self.clausal_propagator,
                 );
 
@@ -616,11 +974,7 @@ impl ConstraintSatisfactionSolver {
             }
             // conflict
             else {
-                if self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .is_at_the_root_level()
-                {
+                if self.assignments_propositional.is_at_the_root_level() {
                     self.state.declare_infeasible();
                     return CSPSolverExecutionFlag::Infeasible;
                 }
@@ -638,24 +992,35 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         brancher: &mut impl Brancher,
     ) -> Result<(), CSPSolverExecutionFlag> {
-        if let Some(assumption_literal) = self.sat_data_structures.peek_next_assumption_literal() {
+        if let Some(assumption_literal) = self.peek_next_assumption_literal() {
             let success = self.enqueue_assumption_literal(assumption_literal);
             if !success {
                 return Err(CSPSolverExecutionFlag::Infeasible);
             }
             Ok(())
         } else {
-            let decided_literal = brancher.next_decision(&mut SelectionContext::new(
-                &self.cp_data_structures.assignments_integer,
-                &self.sat_data_structures.assignments_propositional,
-                &self.sat_cp_mediator,
+            let decided_predicate = brancher.next_decision(&mut SelectionContext::new(
+                &self.assignments_integer,
+                &self.assignments_propositional,
                 &mut self.internal_parameters.random_generator,
             ));
-            if let Some(literal) = decided_literal {
+            if let Some(predicate) = decided_predicate {
                 self.counters.num_decisions += 1;
-                self.sat_data_structures
-                    .assignments_propositional
-                    .enqueue_decision_literal(literal);
+                self.assignments_propositional
+                    .enqueue_decision_literal(match predicate {
+                        Predicate::IntegerPredicate(integer_predicate) => {
+                            self.variable_literal_mappings.get_literal(
+                                integer_predicate,
+                                &self.assignments_propositional,
+                                &self.assignments_integer,
+                            )
+                        }
+                        bool_predicate => bool_predicate
+                            .get_literal_of_bool_predicate(
+                                self.assignments_propositional.true_literal,
+                            )
+                            .unwrap(),
+                    });
                 Ok(())
             } else {
                 self.state.declare_solution_found();
@@ -665,22 +1030,19 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Returns true if the assumption was successfully enqueued, and false otherwise
-    fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
+    pub(crate) fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
         // Case 1: the assumption is unassigned, assign it
         if self
-            .sat_data_structures
             .assignments_propositional
             .is_literal_unassigned(assumption_literal)
         {
-            self.sat_data_structures
-                .assignments_propositional
+            self.assignments_propositional
                 .enqueue_decision_literal(assumption_literal);
             true
         // Case 2: the assumption has already been set to true
         //  this happens when other assumptions propagated the literal
         //  or the assumption is already set to true at the root level
         } else if self
-            .sat_data_structures
             .assignments_propositional
             .is_literal_assigned_true(assumption_literal)
         {
@@ -699,27 +1061,10 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    fn declare_new_decision_level(&mut self) {
-        self.sat_data_structures
-            .assignments_propositional
-            .increase_decision_level();
-        self.cp_data_structures.increase_decision_level();
-    }
-
-    fn write_to_certificate(&mut self) -> std::io::Result<()> {
-        if let Some(cert_file) = &mut self.internal_parameters.certificate_file {
-            for lit in &self.analysis_result.learned_literals {
-                if lit.is_negative() {
-                    cert_file.write_all("-".as_bytes())?;
-                }
-                cert_file.write_all(
-                    format!("{} ", &lit.get_propositional_variable().index().to_string())
-                        .as_bytes(),
-                )?;
-            }
-            cert_file.write_all("0\n".as_bytes())?;
-        }
-        Ok(())
+    pub(crate) fn declare_new_decision_level(&mut self) {
+        self.assignments_propositional.increase_decision_level();
+        self.assignments_integer.increase_decision_level();
+        self.reason_store.increase_decision_level();
     }
 
     /// Changes the state based on the conflict analysis result (stored in
@@ -735,41 +1080,58 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
-        // compute the learned clause
-        //  the result is stored in self.analysis_result
-        self.compute_1uip(brancher);
+        self.analysis_result = self.compute_learned_clause(brancher);
 
         self.process_learned_clause(brancher);
 
         self.state.declare_solving();
     }
 
+    fn compute_learned_clause(&mut self, brancher: &mut impl Brancher) -> ConflictAnalysisResult {
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assumptions: &self.assumptions,
+            clausal_propagator: &self.clausal_propagator,
+            variable_literal_mappings: &self.variable_literal_mappings,
+            assignments_integer: &self.assignments_integer,
+            assignments_propositional: &self.assignments_propositional,
+            internal_parameters: &self.internal_parameters,
+            solver_state: &mut self.state,
+            brancher,
+            clause_allocator: &mut self.clause_allocator,
+            explanation_clause_manager: &mut self.explanation_clause_manager,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+            learned_clause_manager: &mut self.learned_clause_manager,
+            restart_strategy: &mut self.restart_strategy,
+        };
+        self.conflict_analyser
+            .compute_1uip(&mut conflict_analysis_context)
+    }
+
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
-        if let Err(write_error) = self.write_to_certificate() {
+        if let Err(write_error) = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(self.analysis_result.learned_literals.iter().copied())
+        {
             warn!(
                 "Failed to update the certificate file, error message: {}",
                 write_error
             );
         }
 
-        // unit clauses are treated in a special way: they are added as decision literals at
-        // decision level 0
+        // unit clauses are treated in a special way: they are added as root level decisions
         if self.analysis_result.learned_literals.len() == 1 {
             // important to notify about the conflict _before_ backtracking removes literals from
             // the trail
-            self.restart_strategy.notify_conflict(
-                1,
-                self.sat_data_structures
-                    .assignments_propositional
-                    .num_trail_entries(),
-            );
+            self.restart_strategy
+                .notify_conflict(1, self.assignments_propositional.num_trail_entries());
 
             self.backtrack(0, brancher);
 
             let unit_clause = self.analysis_result.learned_literals[0];
 
-            self.sat_data_structures
-                .assignments_propositional
+            self.assignments_propositional
                 .enqueue_decision_literal(unit_clause);
 
             self.counters.num_unit_clauses_learned +=
@@ -780,10 +1142,8 @@ impl ConstraintSatisfactionSolver {
                 .add_term(self.analysis_result.learned_literals.len() as u64);
 
             // important to get trail length before the backtrack
-            let num_variables_assigned_before_conflict = &self
-                .sat_data_structures
-                .assignments_propositional
-                .num_trail_entries();
+            let num_variables_assigned_before_conflict =
+                &self.assignments_propositional.num_trail_entries();
 
             self.counters
                 .average_backtrack_amount
@@ -793,20 +1153,19 @@ impl ConstraintSatisfactionSolver {
             self.learned_clause_manager.add_learned_clause(
                 self.analysis_result.learned_literals.clone(), // todo not ideal with clone
                 &mut self.clausal_propagator,
-                &mut self.sat_data_structures.assignments_propositional,
-                &mut self.sat_data_structures.clause_allocator,
+                &mut self.assignments_propositional,
+                &mut self.clause_allocator,
             );
 
             let lbd = self.learned_clause_manager.compute_lbd_for_literals(
                 &self.analysis_result.learned_literals,
-                &self.sat_data_structures.assignments_propositional,
+                &self.assignments_propositional,
             );
 
             self.restart_strategy
                 .notify_conflict(lbd, *num_variables_assigned_before_conflict);
         }
     }
-
     /// Performs a restart during the search process; it is only called when it has been determined
     /// to be necessary by the [`ConstraintSatisfactionSolver::restart_strategy`]. A 'restart'
     /// differs from backtracking to level zero in that a restart backtracks to decision level
@@ -814,12 +1173,12 @@ impl ConstraintSatisfactionSolver {
     /// restart frequency, etc.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
-            self.sat_data_structures.are_all_assumptions_assigned(),
+            self.are_all_assumptions_assigned(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
         // no point backtracking past the assumption level
-        if self.get_decision_level() <= self.sat_data_structures.assumptions.len() {
+        if self.get_decision_level() <= self.assumptions.len() {
             return;
         }
 
@@ -828,93 +1187,80 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
+    pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        let unassigned_literals = self.sat_data_structures.backtrack(backtrack_level);
+        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
 
         unassigned_literals.for_each(|literal| {
             brancher.on_unassign_literal(literal);
             // TODO: We should also backtrack on the integer variables here
         });
 
-        self.clausal_propagator.synchronise(
-            self.sat_data_structures
-                .assignments_propositional
-                .num_trail_entries(),
-        );
+        self.clausal_propagator
+            .synchronise(self.assignments_propositional.num_trail_entries());
 
-        self.cp_data_structures
-            .backtrack(
-                backtrack_level,
-                &self.sat_data_structures.assignments_propositional,
-            )
+        pumpkin_assert_simple!(
+            self.assignments_propositional.get_decision_level()
+                < self.assignments_integer.get_decision_level(),
+            "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
+        );
+        self.propositional_trail_index = min(
+            self.propositional_trail_index,
+            self.assignments_propositional.num_trail_entries(),
+        );
+        self.assignments_integer
+            .synchronise(backtrack_level)
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
-        //  note that sat_cp_mediator sync should be called after the sat/cp data structures
-        // backtrack
-        self.sat_cp_mediator.synchronise(
-            &self.sat_data_structures.assignments_propositional,
-            &self.cp_data_structures.assignments_integer,
-        );
+
+        self.reason_store.synchronise(backtrack_level);
+        self.propagator_queue.clear();
+        //  note that variable_literal_mappings sync should be called after the sat/cp data
+        // structures backtrack
+        self.synchronise_assignments();
         // for now all propagators are called to synchronise
         //  in the future this will be improved in two ways:
-        //      allow incremental synchronisation
-        //      only call the subset of propagators that were notified since last backtrack
+        //      + allow incremental synchronisation
+        //      + only call the subset of propagators that were notified since last backtrack
         for propagator_id in 0..self.cp_propagators.len() {
-            let context = self
-                .cp_data_structures
-                .create_propagation_context(&self.sat_data_structures.assignments_propositional);
-
+            let context =
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
             self.cp_propagators[propagator_id].synchronise(&context);
         }
     }
 
-    fn propagate_enqueued(&mut self) {
-        let num_assigned_variables_old = self
-            .cp_data_structures
-            .assignments_integer
-            .num_trail_entries();
+    /// Main propagation loop.
+    pub(crate) fn propagate_enqueued(&mut self) {
+        let num_assigned_variables_old = self.assignments_integer.num_trail_entries();
 
         loop {
-            let conflict_info = self
-                .sat_cp_mediator
-                .synchronise_propositional_trail_based_on_integer_trail(
-                    &mut self.sat_data_structures.assignments_propositional,
-                    &self.cp_data_structures.assignments_integer,
-                    &mut self.clausal_propagator,
-                    &mut self.sat_data_structures.clause_allocator,
-                );
+            let conflict_info = self.synchronise_propositional_trail_based_on_integer_trail();
 
             if let Some(conflict_info) = conflict_info {
                 // The previous propagation triggered an empty domain.
-                self.state.declare_conflict(conflict_info);
+                self.state
+                    .declare_conflict(conflict_info.try_into().unwrap());
                 break;
             }
 
             let clausal_propagation_status = self.clausal_propagator.propagate(
-                &mut self.sat_data_structures.assignments_propositional,
-                &mut self.sat_data_structures.clause_allocator,
+                &mut self.assignments_propositional,
+                &mut self.clause_allocator,
             );
 
             if let Err(conflict_info) = clausal_propagation_status {
-                self.state.declare_conflict(conflict_info);
+                self.state
+                    .declare_conflict(conflict_info.try_into().unwrap());
                 break;
             }
 
-            self.sat_cp_mediator
-                .synchronise_integer_trail_based_on_propositional_trail(
-                    &mut self.sat_data_structures.assignments_propositional,
-                    &mut self.cp_data_structures,
-                    &mut self.cp_propagators,
-                )
+            self.synchronise_integer_trail_based_on_propositional_trail()
                 .expect("should not be an error");
 
-            // propagate boolean propagators - todo add these special-case propagators
-
-            // propagate (conventional) CP propagators
+            // ask propagators to propagate
             let propagation_status_one_step_cp = self.propagate_cp_one_step();
 
             match propagation_status_one_step_cp {
@@ -928,15 +1274,21 @@ impl ConstraintSatisfactionSolver {
                     break;
                 }
                 PropagationStatusOneStepCP::ConflictDetected { conflict_info } => {
-                    let _ = self
-                        .sat_cp_mediator
-                        .synchronise_propositional_trail_based_on_integer_trail(
-                            &mut self.sat_data_structures.assignments_propositional,
-                            &self.cp_data_structures.assignments_integer,
-                            &mut self.clausal_propagator,
-                            &mut self.sat_data_structures.clause_allocator,
-                        );
-                    self.state.declare_conflict(conflict_info);
+                    let result = self.synchronise_propositional_trail_based_on_integer_trail();
+
+                    // If the clausal propagator found a conflict during synchronisation then we
+                    // want to use that conflict; if we do not use that conflict then it could be
+                    // the case that there are literals in the conflict_info found by the CP
+                    // propagator which are not assigned in the SAT-view (which leads to an error
+                    // during conflict analysis)
+                    self.state.declare_conflict(
+                        result
+                            .map(|ci| {
+                                ci.try_into()
+                                    .expect("this is not a ConflictInfo::Explanation")
+                            })
+                            .unwrap_or(conflict_info),
+                    );
                     break;
                 }
             } // end match
@@ -944,33 +1296,38 @@ impl ConstraintSatisfactionSolver {
 
         self.counters.num_conflicts += self.state.conflicting() as u64;
 
-        self.counters.num_propagations += self
-            .cp_data_structures
-            .assignments_integer
-            .num_trail_entries() as u64
-            - num_assigned_variables_old as u64;
+        self.counters.num_propagations +=
+            self.assignments_integer.num_trail_entries() as u64 - num_assigned_variables_old as u64;
 
         // Only check fixed point propagation if there was no reported conflict.
         pumpkin_assert_extreme!(
             self.state.conflicting()
                 || DebugHelper::debug_fixed_point_propagation(
                     &self.clausal_propagator,
-                    &self.cp_data_structures.assignments_integer,
-                    &self.sat_data_structures,
+                    &self.assignments_integer,
+                    &self.assignments_propositional,
+                    &self.clause_allocator,
                     &self.cp_propagators,
                 )
         );
     }
 
+    /// Performs propagation using propagators, stops after a propagator propagates at least one
+    /// domain change. The idea is to go to the clausal propagator first before proceeding with
+    /// other propagators, in line with the idea of propagating simpler propagators before more
+    /// complex ones.
     fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
-        if self.cp_data_structures.propagator_queue.is_empty() {
+        if self.propagator_queue.is_empty() {
             return PropagationStatusOneStepCP::FixedPoint;
         }
 
-        let propagator_id = self.cp_data_structures.propagator_queue.pop();
+        let propagator_id = self.propagator_queue.pop();
         let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-        let mut context = self.cp_data_structures.create_propagation_context_mut(
-            &mut self.sat_data_structures.assignments_propositional,
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+            propagator_id,
         );
 
         match propagator.propagate(&mut context) {
@@ -981,32 +1338,74 @@ impl ConstraintSatisfactionSolver {
             Err(Inconsistency::Other(conflict_info)) => {
                 if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info {
                     pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                        &self.cp_data_structures.assignments_integer,
-                        &self.sat_data_structures.assignments_propositional,
-                        &self.sat_cp_mediator,
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
+                        &self.variable_literal_mappings,
                         propositional_conjunction,
                         propagator.as_ref(),
                         propagator_id,
                     ));
                 }
 
-                PropagationStatusOneStepCP::ConflictDetected { conflict_info }
+                PropagationStatusOneStepCP::ConflictDetected {
+                    conflict_info: conflict_info.into_stored(propagator_id),
+                }
             }
 
             Ok(()) => {
-                let _ = self.cp_data_structures.process_domain_events(
-                    &mut self.cp_propagators,
-                    &mut self.sat_data_structures.assignments_propositional,
-                );
-
+                let _ = self.process_domain_events();
                 PropagationStatusOneStepCP::PropagationHappened
             }
+        }
+    }
+
+    fn are_all_assumptions_assigned(&self) -> bool {
+        self.assignments_propositional.get_decision_level() > self.assumptions.len()
+    }
+
+    fn peek_next_assumption_literal(&self) -> Option<Literal> {
+        if self.are_all_assumptions_assigned() {
+            None
+        } else {
+            // the convention is that at decision level i, the (i-1)th assumption is set
+            //  note that the decision level is increased before calling branching hence the minus
+            // one
+            Some(self.assumptions[self.assignments_propositional.get_decision_level() - 1])
         }
     }
 }
 
 // methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
+    /// Add a clause (of at least length 2) which could later be deleted. Be mindful of the effect
+    /// of this on learned clauses etc. if a solve call were to be invoked after adding a clause
+    /// through this function.
+    ///
+    /// The clause is marked as 'learned'.
+    pub(crate) fn add_allocated_deletable_clause(
+        &mut self,
+        clause: Vec<Literal>,
+    ) -> ClauseReference {
+        self.clausal_propagator
+            .add_clause_unchecked(clause, true, &mut self.clause_allocator)
+            .unwrap()
+    }
+
+    /// Delete an allocated clause. Users of this method must ensure the state of the solver stays
+    /// well-defined. In particular, if there are learned clauses derived through this clause, and
+    /// it is removed, those learned clauses may no-longer be valid.
+    pub(crate) fn delete_allocated_clause(&mut self, reference: ClauseReference) -> Vec<Literal> {
+        let clause = self.clause_allocator[reference]
+            .get_literal_slice()
+            .to_vec();
+
+        self.clausal_propagator
+            .remove_clause_from_consideration(&clause, reference);
+        self.clause_allocator.delete_clause(reference);
+
+        clause
+    }
+
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///
@@ -1022,14 +1421,14 @@ impl ConstraintSatisfactionSolver {
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
-        if self.is_in_infeasible_state() {
+        if self.state.is_inconsistent() {
             return false;
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
         let constructor_context = PropagatorConstructorContext::new(
-            &mut self.cp_data_structures.watch_list_cp,
-            &mut self.cp_data_structures.watch_list_propositional,
+            &mut self.watch_list_cp,
+            &mut self.watch_list_propositional,
             new_propagator_id,
         );
 
@@ -1045,9 +1444,13 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let mut context = self.cp_data_structures.create_propagation_context_mut(
-            &mut self.sat_data_structures.assignments_propositional,
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+            new_propagator_id,
         );
+        // let mut context = self.create_propagation_context_mut();
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
             self.state.declare_infeasible();
@@ -1059,20 +1462,14 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    fn is_in_infeasible_state(&mut self) -> bool {
-        self.state.conflicting()
-            || self.state.is_infeasible()
-            || self.state.is_infeasible_under_assumptions()
-    }
-
     /// Creates a clause from `literals` and adds it to the current formula.
     ///
     /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
     /// returned. Subsequent calls to this method will always return an error, and no
     /// modification of the solver will take place.
-    pub fn add_permanent_clause(
+    pub fn add_clause(
         &mut self,
-        literals: Vec<Literal>,
+        literals: impl IntoIterator<Item = Literal>,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         pumpkin_assert_moderate!(self.is_propagation_complete());
@@ -1081,665 +1478,64 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleState);
         }
 
+        let literals: Vec<Literal> = literals.into_iter().collect();
+
         let result = self.clausal_propagator.add_permanent_clause(
             literals,
-            &mut self.sat_data_structures.assignments_propositional,
-            &mut self.sat_data_structures.clause_allocator,
+            &mut self.assignments_propositional,
+            &mut self.clause_allocator,
         );
 
         if result.is_err() {
-            self.state.declare_infeasible()
+            self.state.declare_infeasible();
+            return Err(ConstraintOperationError::InfeasibleClause);
         }
-        result
+
+        self.propagate_enqueued();
+
+        if self.state.is_infeasible() {
+            self.state.declare_infeasible();
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+
+        Ok(())
     }
 
-    pub fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
+    #[deprecated = "use add_clause instead"]
+    pub(crate) fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
         self.clausal_propagator.add_permanent_implication_unchecked(
             lhs,
             rhs,
-            &mut self.sat_data_structures.clause_allocator,
+            &mut self.clause_allocator,
         );
     }
 
-    pub fn add_permanent_ternary_clause_unchecked(&mut self, a: Literal, b: Literal, c: Literal) {
-        self.clausal_propagator
-            .add_permanent_ternary_clause_unchecked(
-                a,
-                b,
-                c,
-                &mut self.sat_data_structures.clause_allocator,
-            );
-    }
-
-    pub fn add_unit_clause(
+    #[deprecated = "use add_clause instead"]
+    pub(crate) fn add_permanent_ternary_clause_unchecked(
         &mut self,
-        unit_clause: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_simple!(self.get_decision_level() == 0);
-        pumpkin_assert_simple!(self.is_propagation_complete());
-
-        // if the literal representing the unit clause is unassigned, assign it
-        if self
-            .sat_data_structures
-            .assignments_propositional
-            .is_literal_unassigned(unit_clause)
-        {
-            self.sat_data_structures
-                .assignments_propositional
-                .enqueue_decision_literal(unit_clause);
-
-            self.propagate_enqueued();
-
-            if self.state.conflicting() {
-                Err(ConstraintOperationError::InfeasibleClause)
-            } else {
-                Ok(())
-            }
-        }
-        // the unit clause is already present, no need to do anything
-        else if self
-            .sat_data_structures
-            .assignments_propositional
-            .is_literal_assigned_true(unit_clause)
-        {
-            Ok(())
-        }
-        // the unit clause is falsified at the root level
-        else {
-            Err(ConstraintOperationError::InfeasibleClause)
-        }
+        a: Literal,
+        b: Literal,
+        c: Literal,
+    ) {
+        self.clausal_propagator
+            .add_permanent_ternary_clause_unchecked(a, b, c, &mut self.clause_allocator);
     }
 }
 
 // methods for getting simple info out of the solver
 impl ConstraintSatisfactionSolver {
     pub fn is_propagation_complete(&self) -> bool {
-        self.clausal_propagator.is_propagation_complete(
-            self.sat_data_structures
-                .assignments_propositional
-                .num_trail_entries(),
-        ) && self.cp_data_structures.propagator_queue.is_empty()
+        self.clausal_propagator
+            .is_propagation_complete(self.assignments_propositional.num_trail_entries())
+            && self.propagator_queue.is_empty()
     }
 
-    fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
-            self.sat_data_structures
-                .assignments_propositional
-                .get_decision_level()
-                == self
-                    .cp_data_structures
-                    .assignments_integer
-                    .get_decision_level()
+            self.assignments_propositional.get_decision_level()
+                == self.assignments_integer.get_decision_level()
         );
-        self.sat_data_structures
-            .assignments_propositional
-            .get_decision_level()
-    }
-}
-
-// methods for conflict analysis
-impl ConstraintSatisfactionSolver {
-    /// Compute the 1-UIP clause based on the current conflict. According to \[1\] a unit
-    /// implication point (UIP), "represents an alternative decision assignment at the current
-    /// decision level that results in the same conflict" (i.e. no matter what the variable at the
-    /// UIP is assigned, the current conflict will be found again given the current decisions). In
-    /// the context of implication graphs used in SAT-solving, a UIP is present at decision
-    /// level `d` when the number of literals in the learned clause assigned at decision level
-    /// `d` is 1.
-    ///
-    /// The learned clause which is created by
-    /// this method contains a single variable at the current decision level (stored at index 0
-    /// of [`ConstraintSatisfactionSolver::analysis_result`]); the variable with the second highest
-    /// decision level is stored at index 1 in [`ConstraintSatisfactionSolver::analysis_result`].
-    /// This [`ConstraintSatisfactionSolver::analysis_result`] is used when backtracking
-    /// ([`ConstraintSatisfactionSolver::backtrack`]).
-    ///
-    /// # Bibliography
-    /// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
-    /// solvers’, in Handbook of satisfiability, IOS press, 2021
-    fn compute_1uip(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_simple!(self.debug_conflict_analysis_proconditions());
-
-        self.analysis_result.learned_literals.resize(
-            1,
-            self.sat_data_structures
-                .assignments_propositional
-                .true_literal, /* dummy literal, the point is that we allocate space for the
-                                * asserting literal, which will by convention be placed at index
-                                * 0 */
-        );
-        self.analysis_result.backjump_level = 0;
-
-        let mut num_current_decision_level_literals_to_inspect = 0;
-        let mut next_trail_index = self
-            .sat_data_structures
-            .assignments_propositional
-            .num_trail_entries()
-            - 1;
-        let mut next_literal: Option<Literal> = None;
-
-        loop {
-            pumpkin_assert_moderate!(Self::debug_1uip_conflict_analysis_check_next_literal(
-                next_literal,
-                &self.sat_data_structures.assignments_propositional
-            ));
-            // note that the 'next_literal' is only None in the first iteration
-            let clause_reference = if let Some(propagated_literal) = next_literal {
-                self.sat_cp_mediator.get_propagation_clause_reference(
-                    propagated_literal,
-                    &self.clausal_propagator,
-                    &mut self.sat_data_structures,
-                    &mut self.cp_data_structures,
-                )
-            } else {
-                let conflict = self.sat_cp_mediator.get_conflict_reason_clause_reference(
-                    self.state.get_conflict_info(),
-                    &mut self.sat_data_structures,
-                    &mut self.cp_data_structures,
-                );
-                self.counters
-                    .average_conflict_size
-                    .add_term(self.sat_data_structures.clause_allocator[conflict].len() as u64);
-                conflict
-            };
-            self.learned_clause_manager
-                .update_clause_lbd_and_bump_activity(
-                    clause_reference,
-                    &self.sat_data_structures.assignments_propositional,
-                    &mut self.sat_data_structures.clause_allocator,
-                );
-
-            // process the reason literal
-            // 	i.e., perform resolution and update other related internal data structures
-
-            // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
-            // in case the clause represents a propagation
-            let start_index = next_literal.is_some() as usize;
-            for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
-                .get_literal_slice()[start_index..]
-            {
-                // only consider non-root assignments that have not been considered before
-                let is_root_assignment = self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .is_literal_root_assignment(reason_literal);
-                let seen = self.seen[reason_literal.get_propositional_variable()];
-
-                if !is_root_assignment && !seen {
-                    // mark the variable as seen so that we do not process it more than once
-                    self.seen[reason_literal.get_propositional_variable()] = true;
-
-                    brancher.on_appearance_in_conflict_literal(reason_literal);
-                    if let Some(reason_domain) =
-                        self.sat_cp_mediator.get_domain_literal(reason_literal)
-                    {
-                        brancher.on_appearance_in_conflict_integer(reason_domain);
-                    }
-
-                    let literal_decision_level = self
-                        .sat_data_structures
-                        .assignments_propositional
-                        .get_literal_assignment_level(reason_literal);
-
-                    let is_current_level_assignment = literal_decision_level
-                        == self
-                            .sat_data_structures
-                            .assignments_propositional
-                            .get_decision_level();
-
-                    num_current_decision_level_literals_to_inspect +=
-                        is_current_level_assignment as usize;
-
-                    // literals from previous decision levels are considered for the learned clause
-                    if !is_current_level_assignment {
-                        self.analysis_result.learned_literals.push(reason_literal);
-                        // the highest decision level literal must be placed at index 1 to prepare
-                        // the clause for propagation
-                        if literal_decision_level > self.analysis_result.backjump_level {
-                            self.analysis_result.backjump_level = literal_decision_level;
-
-                            let last_index = self.analysis_result.learned_literals.len() - 1;
-
-                            self.analysis_result.learned_literals[last_index] =
-                                self.analysis_result.learned_literals[1];
-
-                            self.analysis_result.learned_literals[1] = reason_literal;
-                        }
-                    }
-                }
-            }
-
-            // after resolution took place, find the next literal on the trail that is relevant for
-            // this conflict only literals that have been seen so far are relevant
-            //  note that there may be many literals that are not relevant
-            while !self.seen[self
-                .sat_data_structures
-                .assignments_propositional
-                .get_trail_entry(next_trail_index)
-                .get_propositional_variable()]
-            {
-                next_trail_index -= 1;
-                pumpkin_assert_advanced!(
-                    self.sat_data_structures
-                        .assignments_propositional
-                        .get_literal_assignment_level(
-                            self.sat_data_structures
-                                .assignments_propositional
-                                .get_trail_entry(next_trail_index)
-                        )
-                        == self
-                            .sat_data_structures
-                            .assignments_propositional
-                            .get_decision_level(),
-                    "The current decision level trail has been overrun,
-                     mostly likely caused by an incorrectly implemented cp propagator?"
-                );
-            }
-
-            // make appropriate adjustments to prepare for the next iteration
-            next_literal = Some(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .get_trail_entry(next_trail_index),
-            );
-            // the same literal cannot be encountered more than once on the trail, so we can clear
-            // the flag here
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false;
-            num_current_decision_level_literals_to_inspect -= 1;
-            next_trail_index -= 1;
-
-            // once the counters hits zero we stop, the 1UIP has been found
-            //  the next literal is the asserting literal
-            if num_current_decision_level_literals_to_inspect == 0 {
-                self.analysis_result.learned_literals[0] = !next_literal.unwrap();
-                break;
-            }
-        }
-
-        // clear the seen flags for literals in the learned clause
-        //  note that other flags have already been cleaned above in the previous loop
-        for literal in &self.analysis_result.learned_literals {
-            self.seen[literal.get_propositional_variable()] = false;
-        }
-
-        if self.internal_parameters.learning_clause_minimisation {
-            pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false));
-
-            self.learned_clause_minimiser.remove_dominated_literals(
-                &mut self.analysis_result,
-                &self.clausal_propagator,
-                &mut self.sat_data_structures,
-                &mut self.cp_data_structures,
-                &mut self.sat_cp_mediator,
-            );
-        }
-
-        self.sat_cp_mediator
-            .explanation_clause_manager
-            .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
-
-        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false));
-        // the return value is stored in the input 'analysis_result'
-    }
-
-    // computes the learned clause containing only decision literals and stores it in
-    // 'analysis_result'
-    #[allow(dead_code)]
-    fn compute_all_decision_learning(
-        &mut self,
-        is_extracting_core: bool,
-        brancher: &mut impl Brancher,
-    ) {
-        self.compute_all_decision_learning_helper(None, is_extracting_core, brancher);
-    }
-
-    // the helper is used to facilitate usage when extracting the clausal core
-    //  normal conflict analysis would use 'compute_all_decision_learning'
-    fn compute_all_decision_learning_helper(
-        &mut self,
-        mut next_literal: Option<Literal>,
-        is_extracting_core: bool,
-        brancher: &mut impl Brancher,
-    ) {
-        // the code is similar to 1uip learning with small differences to accomodate the
-        // all-decision learning scheme
-        pumpkin_assert_simple!(
-            next_literal.is_some() || self.debug_conflict_analysis_proconditions()
-        ); // when using this function when extracting the core, no conflict acutally takes place,
-           // but the preconditions expect a conflict clause, so we skip this check
-
-        self.analysis_result.learned_literals.clear();
-        self.analysis_result.backjump_level = 0;
-
-        let mut num_propagated_literals_left_to_inspect = 0;
-        let mut next_trail_index = self
-            .sat_data_structures
-            .assignments_propositional
-            .num_trail_entries()
-            - 1;
-
-        loop {
-            // note that the 'next_literal' is only None in the first iteration
-            let clause_reference = if let Some(propagated_literal) = next_literal {
-                self.sat_cp_mediator.get_propagation_clause_reference(
-                    propagated_literal,
-                    &self.clausal_propagator,
-                    &mut self.sat_data_structures,
-                    &mut self.cp_data_structures,
-                )
-            } else {
-                self.sat_cp_mediator.get_conflict_reason_clause_reference(
-                    self.state.get_conflict_info(),
-                    &mut self.sat_data_structures,
-                    &mut self.cp_data_structures,
-                )
-            };
-            self.learned_clause_manager
-                .update_clause_lbd_and_bump_activity(
-                    clause_reference,
-                    &self.sat_data_structures.assignments_propositional,
-                    &mut self.sat_data_structures.clause_allocator,
-                );
-
-            // process the reason literal
-            // 	i.e., perform resolution and update other related internal data structures
-            let start_index = next_literal.is_some() as usize;
-            // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
-            // in case the clause represents a propagation
-            for &reason_literal in &self.sat_data_structures.clause_allocator[clause_reference]
-                .get_literal_slice()[start_index..]
-            {
-                // only consider non-root assignments that have not been considered before
-                let is_root_assignment = self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .is_literal_root_assignment(reason_literal);
-                let seen = self.seen[reason_literal.get_propositional_variable()];
-
-                if !is_root_assignment && !seen {
-                    // mark the variable as seen so that we do not process it more than once
-                    self.seen[reason_literal.get_propositional_variable()] = true;
-
-                    brancher.on_appearance_in_conflict_literal(reason_literal);
-                    if let Some(reason_domain) =
-                        self.sat_cp_mediator.get_domain_literal(reason_literal)
-                    {
-                        brancher.on_appearance_in_conflict_integer(reason_domain);
-                    }
-
-                    num_propagated_literals_left_to_inspect +=
-                        self.sat_data_structures
-                            .assignments_propositional
-                            .is_literal_propagated(reason_literal) as i32;
-
-                    // only decision literals are kept for the learned clause
-                    if self
-                        .sat_data_structures
-                        .assignments_propositional
-                        .is_literal_decision(reason_literal)
-                    {
-                        self.analysis_result.learned_literals.push(reason_literal);
-                    }
-                }
-            }
-
-            if num_propagated_literals_left_to_inspect == 0 {
-                break;
-            }
-
-            // after resolution took place, find the next literal on the trail that is relevant for
-            // this conflict only literals that have been seen so far are relevant
-            //  note that there may be many literals that are not relevant
-            while !self.seen[self
-                .sat_data_structures
-                .assignments_propositional
-                .get_trail_entry(next_trail_index)
-                .get_propositional_variable()]
-                || self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .is_literal_decision(
-                        self.sat_data_structures
-                            .assignments_propositional
-                            .get_trail_entry(next_trail_index),
-                    )
-            {
-                next_trail_index -= 1;
-            }
-
-            // make appropriate adjustments to prepare for the next iteration
-            next_literal = Some(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .get_trail_entry(next_trail_index),
-            );
-            // the same literal cannot be encountered more than once on the trail, so we can clear
-            // the flag here
-            self.seen[next_literal.unwrap().get_propositional_variable()] = false;
-            next_trail_index -= 1;
-            num_propagated_literals_left_to_inspect -= 1;
-
-            pumpkin_assert_simple!(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .is_literal_propagated(next_literal.unwrap()),
-                "Sanity check: the next literal on the trail select must be a propagated literal."
-            );
-        }
-
-        // clear the seen flags for literals in the learned clause
-        //  note that other flags have already been cleaned above in the previous loop
-        for literal in &self.analysis_result.learned_literals {
-            self.seen[literal.get_propositional_variable()] = false;
-        }
-
-        // set the literals in the learned clause in the expected order
-        //  the propagated literal at index 0
-        //  the second highest decision level literal at index 1
-
-        // the above could have been updated during the analysis
-        //  but instead we do it here using this helper function
-        let place_max_in_front = |lits: &mut [Literal]| {
-            let assignments = &self.sat_data_structures.assignments_propositional;
-            let mut max_index: usize = 0;
-            let mut max_level = assignments.get_literal_assignment_level(lits[max_index]);
-            for i in lits.iter().enumerate() {
-                let new_level = assignments.get_literal_assignment_level(*i.1);
-                if max_level < new_level {
-                    max_index = i.0;
-                    max_level = new_level;
-                }
-            }
-            lits.swap(0, max_index);
-        };
-
-        place_max_in_front(self.analysis_result.learned_literals.as_mut_slice());
-        if self.analysis_result.learned_literals.len() > 2 {
-            place_max_in_front(&mut self.analysis_result.learned_literals[1..]);
-        }
-
-        if self.analysis_result.learned_literals.len() > 1 {
-            self.analysis_result.backjump_level = self
-                .sat_data_structures
-                .assignments_propositional
-                .get_literal_assignment_level(self.analysis_result.learned_literals[1]);
-        }
-
-        self.sat_cp_mediator
-            .explanation_clause_manager
-            .clean_up_explanation_clauses(&mut self.sat_data_structures.clause_allocator);
-
-        pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(is_extracting_core));
-        // the return value is stored in the input 'analysis_result'
-    }
-
-    fn debug_check_conflict_analysis_result(&self, is_extracting_core: bool) -> bool {
-        // debugging method: performs sanity checks on the learned clause
-
-        let assignments = &self.sat_data_structures.assignments_propositional;
-        let learned_lits = &self.analysis_result.learned_literals;
-
-        assert!(
-            self.analysis_result.backjump_level < self.get_decision_level(),
-            "Backjump level must be lower than the current level."
-        );
-
-        assert!(
-            learned_lits
-                .iter()
-                .all(|&literal| !assignments.is_literal_root_assignment(literal)),
-            "No root level literals may be present in a learned clause."
-        );
-
-        if !is_extracting_core {
-            // When this method is called during core extraction, the decision level is not
-            // necessarily the decision level of learned_literals[0].
-            assert_eq!(
-                self.get_decision_level(),
-                assignments.get_literal_assignment_level(self.analysis_result.learned_literals[0]),
-                "The asserting literal must be at the highest level."
-            );
-        }
-
-        assert!(
-            learned_lits[1..].iter().all(|&literal| {
-                assignments.get_literal_assignment_level(literal) != self.get_decision_level()
-            }),
-            "There may be only one literal at the highest decision level"
-        );
-
-        assert!(
-            learned_lits[1..]
-                .iter()
-                .all(|&literal| { assignments.is_literal_assigned_false(literal) }),
-            "All literals apart from the propagating literal are assigned false"
-        );
-
-        if learned_lits.len() >= 2 {
-            assert_eq!(
-                self.analysis_result.backjump_level,
-                assignments.get_literal_assignment_level(learned_lits[1]),
-                "Assertion level seems wrong."
-            );
-
-            let second_max_level = assignments.get_literal_assignment_level(learned_lits[1]);
-
-            assert!(
-                learned_lits[1..].iter().all(|&literal| {
-                    assignments.get_literal_assignment_level(literal) <= second_max_level
-                }),
-                "The literal at position 1 must be at the second highest level"
-            );
-        }
-        true
-    }
-
-    /// In [`ConstraintSatisfactionSolver::compute_1uip`], [`Literal`]s are examined in reverse
-    /// order on the trail. The examined [`Literal`]s are expected to be:
-    ///  1. From the same decision level; i.e. the current (last) decision level
-    ///  2. Propagated, unless the [`Literal`] is the decision [`Literal`] of the current decision
-    ///     level
-    ///  3. Not root assignments
-    /// Failing any of the conditions above means something went wrong with the conflict
-    /// analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
-    ///
-    /// Note that in the first iteration, the `next_literal` will be set to [`None`], so we can skip
-    /// this check
-    fn debug_1uip_conflict_analysis_check_next_literal(
-        next_literal: Option<Literal>,
-        assignments_propositional: &AssignmentsPropositional,
-    ) -> bool {
-        match next_literal {
-            None => true,
-            Some(next_literal) => {
-                if assignments_propositional.is_literal_root_assignment(next_literal) {
-                    return false;
-                }
-
-                let is_propagated = assignments_propositional.is_literal_propagated(next_literal);
-
-                let current_decision_level = assignments_propositional.get_decision_level();
-
-                let is_decision_literal_of_current_level =
-                    assignments_propositional.is_literal_decision(next_literal);
-
-                let is_assigned_at_current_decision_level = assignments_propositional
-                    .get_literal_assignment_level(next_literal)
-                    == current_decision_level;
-
-                (is_propagated || is_decision_literal_of_current_level)
-                    && is_assigned_at_current_decision_level
-            }
-        }
-    }
-
-    fn debug_check_core_extraction(&self) -> bool {
-        if self.state.is_infeasible() {
-            true
-        } else if self.state.is_infeasible_under_assumptions() {
-            pumpkin_assert_simple!(
-                self.sat_data_structures
-                    .assignments_propositional
-                    .is_literal_assigned_false(self.state.get_violated_assumption()),
-                "Violated assumption is expected to be assigned false."
-            );
-
-            pumpkin_assert_moderate!(self
-                .sat_data_structures
-                .assumptions
-                .contains(&self.state.get_violated_assumption()));
-            true
-        } else {
-            panic!(
-                "Cannot extract core unless the solver is either infeasible
-                 or infeasible under assumptions."
-            );
-        }
-    }
-
-    fn debug_conflict_analysis_proconditions(&mut self) -> bool {
-        pumpkin_assert_simple!(self.state.conflicting());
-
-        pumpkin_assert_simple!(
-            self.seen.len() as u32
-                == self
-                    .sat_data_structures
-                    .assignments_propositional
-                    .num_propositional_variables()
-        );
-        pumpkin_assert_simple!(self.sat_cp_mediator.explanation_clause_manager.is_empty());
-        pumpkin_assert_simple!(!self
-            .sat_data_structures
-            .assignments_propositional
-            .is_at_the_root_level());
-        pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
-
-        true
-    }
-
-    fn debug_check_clausal_core(&self, violated_assumption: Literal) -> bool {
-        pumpkin_assert_moderate!(
-            self.analysis_result
-                .learned_literals
-                .iter()
-                .all(|&core_literal| self
-                    .sat_data_structures
-                    .assumptions
-                    .contains(&!core_literal)),
-            "Each core literal must be part of the assumptions."
-        );
-        pumpkin_assert_moderate!(
-            self.analysis_result
-                .learned_literals
-                .iter()
-                .all(|&core_literal| core_literal == !violated_assumption
-                    || self
-                        .sat_data_structures
-                        .assignments_propositional
-                        .is_literal_decision(!core_literal)),
-            "Each core literal (except the violated literal) must be a decision."
-        );
-        true
+        self.assignments_propositional.get_decision_level()
     }
 }
 
@@ -1749,7 +1545,7 @@ impl ConstraintSatisfactionSolver {
 pub struct Counters {
     pub num_decisions: u64,
     pub num_conflicts: u64,
-    average_conflict_size: CumulativeMovingAverage,
+    pub average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
     num_unit_clauses_learned: u64,
     average_learned_clause_length: CumulativeMovingAverage,
@@ -1757,53 +1553,26 @@ pub struct Counters {
     average_backtrack_amount: CumulativeMovingAverage,
 }
 
-const STATISTIC_PREFIX: &str = "x";
-
 impl Counters {
     fn log_statistics(&self) {
-        info!(
-            "{STATISTIC_PREFIX} Number of Decisions: {}",
-            self.num_decisions
+        log_statistic("numberOfDecisions", self.num_decisions);
+        log_statistic("numberOfConflicts", self.num_conflicts);
+        log_statistic(
+            "averageSizeOfConflictExplanation",
+            self.average_conflict_size.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Number of Conflicts: {}",
-            self.num_conflicts
+        log_statistic("numberOfPropagations", self.num_propagations);
+        log_statistic("numberOfLearnedUnitClauses", self.num_unit_clauses_learned);
+        log_statistic(
+            "averageLearnedClauseLength",
+            self.average_learned_clause_length.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Average Size of Conflict Explanation: {}",
-            self.average_conflict_size.value()
+        log_statistic("timeSpentInSolverInMilliseconds", self.time_spent_in_solver);
+        log_statistic(
+            "averageBacktrackAmount",
+            self.average_backtrack_amount.value(),
         );
-        info!(
-            "{STATISTIC_PREFIX} Number of Propagations: {}",
-            self.num_propagations
-        );
-        info!(
-            "{STATISTIC_PREFIX} Number of Learned Unit Clauses: {}",
-            self.num_unit_clauses_learned
-        );
-        info!(
-            "{STATISTIC_PREFIX} Average Learned Clause Length: {}",
-            self.average_learned_clause_length.value()
-        );
-        info!(
-            "{STATISTIC_PREFIX} Time Spent in Solver in ms: {}",
-            self.time_spent_in_solver
-        );
-        info!(
-            "{STATISTIC_PREFIX} Average Backtrack Amount: {}",
-            self.average_backtrack_amount.value()
-        )
     }
-}
-
-#[derive(Clone, Default, Debug)]
-/// The outcome of clause learning.
-pub struct ConflictAnalysisResult {
-    /// The new learned clause with the propagating literal after backjumping at index 0 and the
-    /// literal with the next highest decision level at index 1.
-    pub learned_literals: Vec<Literal>,
-    /// The decision level to backtrack to.
-    pub backjump_level: usize,
 }
 
 #[derive(Default, Debug)]
@@ -1812,14 +1581,8 @@ enum CSPSolverStateInternal {
     Ready,
     Solving,
     ContainsSolution,
-    // ConflictClausal {
-    // conflict_clause: ConflictInfo,
-    // },
-    // ConflictCP {
-    // conflict_reason: PropositionalConjunction,
-    // },
     Conflict {
-        conflict_info: ConflictInfo,
+        conflict_info: StoredConflictInfo,
     },
     Infeasible,
     InfeasibleUnderAssumptions {
@@ -1854,6 +1617,12 @@ impl CSPSolverState {
         matches!(self.internal_state, CSPSolverStateInternal::Infeasible)
     }
 
+    /// Determines whether the current state is inconsistent; i.e. whether it is conflicting,
+    /// infeasible or infeasible under assumptions
+    pub fn is_inconsistent(&self) -> bool {
+        self.conflicting() || self.is_infeasible() || self.is_infeasible_under_assumptions()
+    }
+
     pub fn is_infeasible_under_assumptions(&self) -> bool {
         matches!(
             self.internal_state,
@@ -1877,7 +1646,7 @@ impl CSPSolverState {
         }
     }
 
-    pub fn get_conflict_info(&self) -> &ConflictInfo {
+    pub fn get_conflict_info(&self) -> &StoredConflictInfo {
         if let CSPSolverStateInternal::Conflict { conflict_info } = &self.internal_state {
             conflict_info
         } else {
@@ -1896,14 +1665,11 @@ impl CSPSolverState {
         )
     }
 
-    fn declare_ready(&mut self) {
-        pumpkin_assert_simple!(
-            self.has_solution() && !self.is_infeasible() || self.is_infeasible_under_assumptions()
-        );
+    pub(crate) fn declare_ready(&mut self) {
         self.internal_state = CSPSolverStateInternal::Ready;
     }
 
-    fn declare_solving(&mut self) {
+    pub fn declare_solving(&mut self) {
         pumpkin_assert_simple!((self.is_ready() || self.conflicting()) && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Solving;
     }
@@ -1912,7 +1678,7 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::Infeasible;
     }
 
-    fn declare_conflict(&mut self, conflict_info: ConflictInfo) {
+    fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
         pumpkin_assert_simple!(!self.conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
@@ -1935,34 +1701,174 @@ impl CSPSolverState {
     }
 }
 
-// the defaults below are used only for the tests
-//  could rethink if we can do this a different way, e.g., using cli default values
-impl Default for SatisfactionSolverOptions {
-    fn default() -> Self {
-        SatisfactionSolverOptions {
-            restart_options: RestartOptions::default(),
-            certificate_file: None,
-            learning_clause_minimisation: true,
-            random_generator: SmallRng::seed_from_u64(42),
-        }
-    }
-}
-
-impl Default for ConstraintSatisfactionSolver {
-    fn default() -> Self {
-        ConstraintSatisfactionSolver::new(
-            SatOptions::default(),
-            SatisfactionSolverOptions::default(),
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::basic_types::Literal;
-    use crate::branching::IndependentVariableValueBrancher;
+    use crate::basic_types::PropositionalConjunction;
+    use crate::basic_types::StoredConflictInfo;
+    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+    use crate::conjunction;
+    use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
+    use crate::engine::predicates::integer_predicate::IntegerPredicate;
+    use crate::engine::predicates::predicate::Predicate;
+    use crate::engine::propagation::propagation_context::HasAssignments;
+    use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::Propagator;
+    use crate::engine::propagation::PropagatorConstructor;
+    use crate::engine::propagation::PropagatorId;
+    use crate::engine::propagation::PropagatorVariable;
+    use crate::engine::reason::ReasonRef;
+    use crate::engine::termination::indefinite::Indefinite;
+    use crate::engine::variables::DomainId;
+    use crate::engine::variables::Literal;
+    use crate::engine::DomainEvents;
+    use crate::predicate;
+
+    /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
+    /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),
+    /// and conflicts (also in the form of [`PropositionalConjunction`]s).
+    struct TestPropagatorConstructor {
+        propagations: Vec<(Predicate, PropositionalConjunction)>,
+        conflicts: Vec<PropositionalConjunction>,
+    }
+
+    impl PropagatorConstructor for TestPropagatorConstructor {
+        type Propagator = TestPropagator;
+
+        fn create(
+            self,
+            mut context: crate::engine::propagation::PropagatorConstructorContext<'_>,
+        ) -> Self::Propagator {
+            let propagations: Vec<(
+                PropagatorVariable<DomainId>,
+                Predicate,
+                PropositionalConjunction,
+            )> = self
+                .propagations
+                .iter()
+                .enumerate()
+                .rev()
+                .map(|(index, variable)| {
+                    (
+                        context.register(
+                            variable.0.get_domain().unwrap(),
+                            DomainEvents::BOUNDS,
+                            LocalId::from(index as u32),
+                        ),
+                        variable.0,
+                        variable.1.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            TestPropagator {
+                original_propagations: propagations.clone(),
+                propagations,
+                conflicts: self.conflicts.into_iter().rev().collect::<Vec<_>>(),
+            }
+        }
+    }
+
+    /// A test propagator which propagates the stored propagations and then reports one of the
+    /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
+    /// return the next conflict.
+    ///
+    /// It is assumed that the propagations do not lead to conflict, if the propagations do lead to
+    /// a conflict then this method will panic.
+    struct TestPropagator {
+        original_propagations: Vec<(
+            PropagatorVariable<DomainId>,
+            Predicate,
+            PropositionalConjunction,
+        )>,
+        propagations: Vec<(
+            PropagatorVariable<DomainId>,
+            Predicate,
+            PropositionalConjunction,
+        )>,
+        conflicts: Vec<PropositionalConjunction>,
+    }
+
+    impl Propagator for TestPropagator {
+        fn name(&self) -> &str {
+            "TestPropagator"
+        }
+
+        fn initialise_at_root(
+            &mut self,
+            _context: &mut crate::engine::propagation::PropagationContextMut,
+        ) -> crate::basic_types::PropagationStatusCP {
+            Ok(())
+        }
+
+        fn propagate(
+            &mut self,
+            context: &mut crate::engine::propagation::PropagationContextMut,
+        ) -> crate::basic_types::PropagationStatusCP {
+            while let Some(propagation) = self.propagations.pop() {
+                match propagation.1 {
+                    Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
+                        IntegerPredicate::LowerBound {
+                            domain_id: _,
+                            lower_bound,
+                        } => {
+                            let result =
+                                context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::UpperBound {
+                            domain_id: _,
+                            upper_bound,
+                        } => {
+                            let result =
+                                context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::NotEqual {
+                            domain_id: _,
+                            not_equal_constant,
+                        } => {
+                            let result =
+                                context.remove(&propagation.0, not_equal_constant, propagation.2);
+                            assert!(result.is_ok())
+                        }
+                        IntegerPredicate::Equal {
+                            domain_id: _,
+                            equality_constant: _,
+                        } => todo!(),
+                    },
+                    _ => todo!(),
+                }
+            }
+            if !self.conflicts.is_empty() {
+                let conflict = self.conflicts.pop().unwrap();
+                return Err(conflict.into());
+            }
+            Ok(())
+        }
+
+        fn debug_propagate_from_scratch(
+            &self,
+            context: &mut crate::engine::propagation::PropagationContextMut,
+        ) -> crate::basic_types::PropagationStatusCP {
+            // This method detects when a debug propagation method is called and it attempts to
+            // return the correct result in this case
+            if self.conflicts.is_empty()
+                && self.original_propagations.iter().all(|propagation| {
+                    context.assignments_integer().does_integer_predicate_hold(
+                        propagation
+                            .1
+                            .try_into()
+                            .expect("Expected provided predicate to be integer"),
+                    )
+                })
+            {
+                Err(crate::basic_types::Inconsistency::EmptyDomain)
+            } else {
+                Ok(())
+            }
+        }
+    }
 
     fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1997,14 +1903,17 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: Result<Vec<Literal>, Literal>,
     ) {
-        let mut search =
+        let mut brancher =
             IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-        let flag = solver.solve_under_assumptions(&assumptions, i64::MAX, &mut search);
+        let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 
         if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
             assert!(
-                is_result_the_same(&solver.extract_clausal_core(&mut search), &expected_result),
+                is_result_the_same(
+                    &solver.extract_clausal_core(&mut brancher),
+                    &expected_result
+                ),
                 "The result is not the same"
             );
         }
@@ -2012,13 +1921,78 @@ mod tests {
 
     fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
 
-        let _ = solver.add_permanent_clause(vec![lit1, lit2]);
-        let _ = solver.add_permanent_clause(vec![lit1, !lit2]);
-        let _ = solver.add_permanent_clause(vec![!lit1, lit2]);
+        let _ = solver.add_clause([lit1, lit2]);
+        let _ = solver.add_clause([lit1, !lit2]);
+        let _ = solver.add_clause([!lit1, lit2]);
         (solver, vec![lit1, lit2])
+    }
+
+    /// Warning: This test is potentially flaky due to its dependence on the propagation order of
+    /// the clausal propagator, please treat with caution.
+    #[test]
+    fn test_synchronisation_view() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let variable = solver.create_new_integer_variable(1, 5, None);
+        let other_variable = solver.create_new_integer_variable(3, 5, None);
+
+        // We create a test solver which propagates such that there is a jump across a hole in the
+        // domain and then we report a conflict based on the assigned values.
+        let propagator_constructor = TestPropagatorConstructor {
+            propagations: vec![
+                (predicate!(variable != 2), conjunction!()),
+                (predicate!(variable <= 3), conjunction!()),
+                (predicate!(variable != 3), conjunction!()),
+                (predicate!(other_variable != 4), conjunction!()),
+                (predicate!(other_variable <= 4), conjunction!()),
+            ],
+            conflicts: vec![PropositionalConjunction::from(vec![
+                predicate!(other_variable == 3),
+                predicate!(variable == 1),
+            ])],
+        };
+
+        let result = solver.add_propagator(propagator_constructor);
+        assert!(result);
+
+        // We add the clause that will lead to the conflict in the SAT-solver
+        let result = solver.add_clause([
+            solver.get_literal(predicate![variable == 2]),
+            solver.get_literal(predicate![variable == 3]),
+            solver.get_literal(predicate![variable == 4]),
+            solver.get_literal(predicate![variable == 5]),
+        ]);
+        assert!(result.is_ok());
+
+        solver.declare_new_decision_level();
+
+        // We manually enqueue the propagator to mimic solver behaviour
+        solver
+            .propagator_queue
+            .enqueue_propagator(PropagatorId(0), 0);
+
+        // After propagating we expect that both the CP propagators and the SAT solver have found a
+        // conflict, however, the CP conflict explanation contains variables which are not assigned
+        // in the SAT view due to it finding a conflict. We expect the conflict info in the solver
+        // to contain the conflict found by the clausal propagator.
+        solver.propagate_enqueued();
+
+        assert!(solver.state.is_inconsistent());
+        assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
+
+        // We check whether the conflict which is returned is the conflict found by the SAT-solver
+        // rather than the one found by the CP solver.
+        assert!(matches!(
+            solver.state.internal_state,
+            CSPSolverStateInternal::Conflict {
+                conflict_info: StoredConflictInfo::Propagation {
+                    reference: _,
+                    literal: _,
+                },
+            }
+        ));
     }
 
     #[test]
@@ -2046,7 +2020,7 @@ mod tests {
     #[test]
     fn simple_core_extraction_1_infeasible() {
         let (mut solver, lits) = create_instance1();
-        let _ = solver.add_permanent_clause(vec![!lits[0], !lits[1]]);
+        let _ = solver.add_clause([!lits[0], !lits[1]]);
         run_test(
             solver,
             vec![!lits[1], !lits[0]],
@@ -2068,12 +2042,12 @@ mod tests {
 
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
 
-        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
-        let _ = solver.add_permanent_clause(vec![lit1, !lit2, lit3]);
+        let _ = solver.add_clause([lit1, lit2, lit3]);
+        let _ = solver.add_clause([lit1, !lit2, lit3]);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -2114,10 +2088,10 @@ mod tests {
 
     fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
         let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(), true);
-        let _ = solver.add_permanent_clause(vec![lit1, lit2, lit3]);
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let _ = solver.add_clause([lit1, lit2, lit3]);
         (solver, vec![lit1, lit2, lit3])
     }
 
@@ -2141,5 +2115,143 @@ mod tests {
             CSPSolverExecutionFlag::Feasible,
             Ok(vec![]), // will be ignored in the test
         );
+    }
+
+    #[test]
+    fn negative_upper_bound() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
+
+        let result = solver.get_literal(predicate![domain_id <= -2]);
+        assert_eq!(result, solver.assignments_propositional.false_literal);
+    }
+
+    #[test]
+    fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
+        let result = solver.get_literal(predicate![domain_id >= -2]);
+        assert_eq!(result, solver.assignments_propositional.true_literal);
+    }
+
+    #[test]
+    fn new_domain_with_negative_lower_bound() {
+        let lb = -2;
+        let ub = 2;
+
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let domain_id = solver.create_new_integer_variable(lb, ub, None);
+
+        assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
+
+        assert_eq!(ub, solver.assignments_integer.get_upper_bound(domain_id));
+
+        assert_eq!(
+            solver.assignments_propositional.true_literal,
+            solver.get_literal(predicate![domain_id >= lb])
+        );
+
+        assert_eq!(
+            solver.assignments_propositional.false_literal,
+            solver.get_literal(predicate![domain_id <= lb - 1])
+        );
+
+        assert!(solver
+            .assignments_propositional
+            .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
+
+        assert_eq!(
+            solver.assignments_propositional.false_literal,
+            solver.get_literal(predicate![domain_id == lb - 1])
+        );
+
+        for value in (lb + 1)..ub {
+            let literal = solver.get_literal(predicate![domain_id >= value]);
+
+            assert!(solver
+                .assignments_propositional
+                .is_literal_unassigned(literal));
+
+            assert!(solver
+                .assignments_propositional
+                .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
+        }
+
+        assert_eq!(
+            solver.assignments_propositional.false_literal,
+            solver.get_literal(predicate![domain_id >= ub + 1])
+        );
+        assert_eq!(
+            solver.assignments_propositional.true_literal,
+            solver.get_literal(predicate![domain_id <= ub])
+        );
+        assert!(solver
+            .assignments_propositional
+            .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
+        assert_eq!(
+            solver.assignments_propositional.false_literal,
+            solver.get_literal(predicate![domain_id == ub + 1])
+        );
+    }
+
+    #[test]
+    fn clausal_propagation_is_synced_until_right_before_conflict() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let domain_id = solver.create_new_integer_variable(0, 10, None);
+        let dummy_reason = ReasonRef(0);
+
+        let result =
+            solver
+                .assignments_integer
+                .tighten_lower_bound(domain_id, 2, Some(dummy_reason));
+        assert!(result.is_ok());
+        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 2);
+
+        let result =
+            solver
+                .assignments_integer
+                .tighten_lower_bound(domain_id, 8, Some(dummy_reason));
+        assert!(result.is_ok());
+        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 8);
+
+        let result =
+            solver
+                .assignments_integer
+                .tighten_lower_bound(domain_id, 12, Some(dummy_reason));
+        assert!(result.is_err());
+        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 12);
+
+        let _ = solver.synchronise_propositional_trail_based_on_integer_trail();
+
+        for lower_bound in 0..=8 {
+            let literal = solver.get_literal(predicate!(domain_id >= lower_bound));
+            assert!(
+                solver
+                    .assignments_propositional
+                    .is_literal_assigned_true(literal),
+                "Literal for lower-bound {lower_bound} is not assigned"
+            );
+        }
+    }
+
+    #[test]
+    fn check_correspondence_predicates_creating_new_int_domain() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+
+        let lower_bound = 0;
+        let upper_bound = 10;
+        let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
+
+        for bound in lower_bound + 1..upper_bound {
+            let lower_bound_predicate = predicate![domain_id >= bound];
+            let equality_predicate = predicate![domain_id == bound];
+            for predicate in [lower_bound_predicate, equality_predicate] {
+                let literal = solver.get_literal(predicate);
+                assert!(
+                    solver.variable_literal_mappings.literal_to_predicates[literal]
+                        .contains(&predicate.try_into().unwrap())
+                )
+            }
+        }
     }
 }

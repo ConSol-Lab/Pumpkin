@@ -6,9 +6,9 @@ use bitfield::BitMut;
 use bitfield::BitRange;
 
 use crate::basic_types::ConstraintReference;
-use crate::basic_types::Literal;
 #[cfg(doc)]
 use crate::engine::clause_allocators::clause_allocator_interface::ClauseAllocatorInterface;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_moderate;
 
 /// Opaque clause reference that is used by clause allocators (`ClauseAllocatorInterface`).
@@ -110,7 +110,7 @@ mod tests {
     use bitfield::BitRange;
 
     use crate::basic_types::ClauseReference;
-    use crate::basic_types::Literal;
+    use crate::engine::variables::Literal;
 
     #[test]
     fn test_binary_clause_creation() {

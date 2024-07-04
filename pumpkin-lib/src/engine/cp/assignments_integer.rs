@@ -1,11 +1,12 @@
-use crate::basic_types::DomainId;
-use crate::basic_types::IntegerVariableGeneratorIterator;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Predicate;
 use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::variables::DomainGeneratorIterator;
+use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -13,8 +14,8 @@ use crate::pumpkin_assert_simple;
 #[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
-    domains: KeyedVec<DomainId, IntegerDomainExplicit>, /* indicates if value j is in the domain
-                                                         * of the integer variable */
+    /// indicates if value j is in the domain of the integer variable
+    domains: KeyedVec<DomainId, IntegerDomainExplicit>,
 
     events: EventSink,
 }
@@ -35,8 +36,8 @@ impl AssignmentsInteger {
         self.domains.len() as u32
     }
 
-    pub fn get_domains(&self) -> IntegerVariableGeneratorIterator {
-        IntegerVariableGeneratorIterator::new(0, self.num_domains())
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
+        DomainGeneratorIterator::new(0, self.num_domains())
     }
 
     pub fn num_trail_entries(&self) -> usize {
@@ -54,7 +55,7 @@ impl AssignmentsInteger {
     pub fn get_last_predicates_on_trail(
         &self,
         num_predicates: usize,
-    ) -> impl Iterator<Item = Predicate> + '_ {
+    ) -> impl Iterator<Item = IntegerPredicate> + '_ {
         self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
             .iter()
             .map(|e| e.predicate)
@@ -92,9 +93,7 @@ impl AssignmentsInteger {
         let mut domains = self.domains.clone();
         let event_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
-            if let Some(domain_id) = entry.predicate.get_domain() {
-                domains[domain_id].undo_trail_entry(entry);
-            }
+            domains[entry.predicate.get_domain()].undo_trail_entry(entry);
         });
         AssignmentsInteger {
             trail: Default::default(),
@@ -127,21 +126,6 @@ impl AssignmentsInteger {
         self.domains[domain_id].lower_bound
     }
 
-    pub fn get_lower_bound_predicate(&self, domain_id: DomainId) -> Predicate {
-        Predicate::LowerBound {
-            domain_id,
-            lower_bound: self.get_lower_bound(domain_id),
-        }
-    }
-
-    pub fn get_upper_bound_predicate(&self, domain_id: DomainId) -> Predicate {
-        let upper_bound = self.get_upper_bound(domain_id);
-        Predicate::UpperBound {
-            domain_id,
-            upper_bound,
-        }
-    }
-
     pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
@@ -160,38 +144,6 @@ impl AssignmentsInteger {
             }
         }
         predicates
-    }
-
-    pub fn get_lower_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
-        &self,
-        domain_ids: I,
-    ) -> Vec<Predicate> {
-        domain_ids
-            .map(|i| self.get_lower_bound_predicate(*i))
-            .collect()
-    }
-
-    pub fn get_upper_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
-        &self,
-        domain_ids: I,
-    ) -> Vec<Predicate> {
-        domain_ids
-            .map(|i| self.get_upper_bound_predicate(*i))
-            .collect()
-    }
-
-    pub fn get_bound_predicates<'a, I: Iterator<Item = &'a DomainId>>(
-        &self,
-        domain_ids: I,
-    ) -> Vec<Predicate> {
-        domain_ids
-            .flat_map(|domain_id| {
-                [
-                    self.get_lower_bound_predicate(*domain_id),
-                    self.get_upper_bound_predicate(*domain_id),
-                ]
-            })
-            .collect()
     }
 
     pub fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
@@ -220,7 +172,7 @@ impl AssignmentsInteger {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::LowerBound {
+        let predicate = IntegerPredicate::LowerBound {
             domain_id,
             lower_bound: new_lower_bound,
         };
@@ -251,7 +203,7 @@ impl AssignmentsInteger {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::UpperBound {
+        let predicate = IntegerPredicate::UpperBound {
             domain_id,
             upper_bound: new_upper_bound,
         };
@@ -303,7 +255,7 @@ impl AssignmentsInteger {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = Predicate::NotEqual {
+        let predicate = IntegerPredicate::NotEqual {
             domain_id,
             not_equal_constant: removed_value_from_domain,
         };
@@ -324,71 +276,59 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
-    /// Apply the given predicate to the integer domains.
+    /// Apply the given [`Predicate`] to the integer domains.
     ///
-    /// In case where the predicate is already true, this does nothing. If instead applying the
-    /// predicate leads to an inconsistent domain, the error variant is returned. One special case
-    /// is when `predicate` is `Predicate::False`, which will always trigger the error variant.
-    /// However, since this should never happen in normal operation of the solver, it will cause a
-    /// panic.
-    pub fn apply_predicate(
+    /// In case where the [`Predicate`] is already true, this does nothing. If instead applying the
+    /// [`Predicate`] leads to an [`EmptyDomain`], the error variant is returned.
+    pub fn apply_integer_predicate(
         &mut self,
-        predicate: Predicate,
+        predicate: IntegerPredicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        pumpkin_assert_simple!(
-            predicate != Predicate::False && predicate != Predicate::True,
-            "Trivially false and true predicates should not be applied, but handled elsewhere.",
-        );
-
-        if self.does_predicate_hold(predicate) {
+        if self.does_integer_predicate_hold(predicate) {
             return Ok(());
         }
 
         match predicate {
-            Predicate::LowerBound {
+            IntegerPredicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.tighten_lower_bound(domain_id, lower_bound, reason),
-            Predicate::UpperBound {
+            IntegerPredicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.tighten_upper_bound(domain_id, upper_bound, reason),
-            Predicate::NotEqual {
+            IntegerPredicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => self.remove_value_from_domain(domain_id, not_equal_constant, reason),
-            Predicate::Equal {
+            IntegerPredicate::Equal {
                 domain_id,
                 equality_constant,
             } => self.make_assignment(domain_id, equality_constant, reason),
-
-            Predicate::False => Err(EmptyDomain),
-            Predicate::True => Ok(()),
         }
     }
 
-    pub fn does_predicate_hold(&self, predicate: Predicate) -> bool {
+    /// Determines whether the provided [`Predicate`] holds in the current state of the
+    /// [`AssignmentsInteger`].
+    pub fn does_integer_predicate_hold(&self, predicate: IntegerPredicate) -> bool {
         match predicate {
-            Predicate::LowerBound {
+            IntegerPredicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.get_lower_bound(domain_id) >= lower_bound,
-            Predicate::UpperBound {
+            IntegerPredicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.get_upper_bound(domain_id) <= upper_bound,
-            Predicate::NotEqual {
+            IntegerPredicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => !self.is_value_in_domain(domain_id, not_equal_constant),
-            Predicate::Equal {
+            IntegerPredicate::Equal {
                 domain_id,
                 equality_constant,
             } => self.is_domain_assigned_to_value(domain_id, equality_constant),
-
-            Predicate::True => true,
-            Predicate::False => false,
         }
     }
 
@@ -403,15 +343,14 @@ impl AssignmentsInteger {
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
-            if let Some(domain_id) = entry.predicate.get_domain() {
-                let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
+            let domain_id = entry.predicate.get_domain();
+            let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
                 let value_before = self.domains[domain_id].lower_bound;
                 self.domains[domain_id].undo_trail_entry(&entry);
                 if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
                     // Variable used to be fixed but is not after backtracking
                     unfixed_variables.push((domain_id, value_before));
                 }
-            }
         });
         unfixed_variables
     }
@@ -419,7 +358,7 @@ impl AssignmentsInteger {
 
 #[cfg(test)]
 impl AssignmentsInteger {
-    pub fn get_reason_for_predicate(&self, predicate: Predicate) -> ReasonRef {
+    pub fn get_reason_for_predicate(&self, predicate: IntegerPredicate) -> ReasonRef {
         self.trail
             .iter()
             .find_map(|entry| {
@@ -435,7 +374,7 @@ impl AssignmentsInteger {
 
 #[derive(Clone, Copy, Debug)]
 pub struct ConstraintProgrammingTrailEntry {
-    pub predicate: Predicate,
+    pub predicate: IntegerPredicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
     ///  to update the bounds when backtracking.
     pub old_lower_bound: i32,
@@ -590,7 +529,7 @@ impl IntegerDomainExplicit {
     }
 
     fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
-        if let Predicate::NotEqual {
+        if let IntegerPredicate::NotEqual {
             domain_id: _,
             not_equal_constant,
         } = entry.predicate

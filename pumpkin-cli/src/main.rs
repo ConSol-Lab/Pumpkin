@@ -5,7 +5,6 @@ mod result;
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -23,10 +22,16 @@ use parsers::dimacs::CSPSolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use parsers::dimacs::WcnfInstance;
 use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
+use pumpkin_lib::basic_types::signal_handling::signal_handler;
+use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
 use pumpkin_lib::basic_types::*;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::encoders::PseudoBooleanEncoding;
-use pumpkin_lib::engine::constraint_satisfaction_solver::RestartOptions;
+use pumpkin_lib::engine::proof::Format;
+use pumpkin_lib::engine::proof::ProofLog;
+use pumpkin_lib::engine::termination::time_budget::TimeBudget;
+use pumpkin_lib::engine::variables::PropositionalVariable;
+use pumpkin_lib::engine::RestartOptions;
 use pumpkin_lib::engine::*;
 use pumpkin_lib::optimisation::LinearSearch;
 use pumpkin_lib::optimisation::OptimisationResult;
@@ -36,6 +41,8 @@ use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
+use crate::flatzinc::FlatZincOptions;
+
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -44,10 +51,12 @@ struct Args {
     ///  * '.wcnf' for MaxSAT instances, given in the WDIMACS format.
     instance_path: PathBuf,
 
-    /// The output path for the DRAT certificate file. By default does not output any
-    /// certifying information.
+    /// The output path for the proof file.
+    ///
+    /// When solving a DIMACS instance, a DRAT proof is logged. In case of a FlatZinc model, a DRCP
+    /// proof is logged.
     #[arg(long)]
-    certificate_path: Option<PathBuf>,
+    proof: Option<PathBuf>,
 
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced by Chanseok Oh
@@ -121,17 +130,37 @@ struct Args {
     #[arg(long = "restart-geometric-coef")]
     restart_geometric_coef: Option<f64>,
 
-    /// The time budget for the solver, given in seconds.
+    /// The time budget for the solver, given in milliseconds.
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
     /// The random seed to use for the PRNG. This influences the initial order of the variables.
-    #[arg(long = "random-seed", default_value_t = 42)]
+    #[arg(short = 'r', long = "random-seed", default_value_t = 42)]
     random_seed: u64,
 
     /// Enables log message output from the solver
     #[arg(short = 'v', long = "verbose", default_value_t = false)]
     verbose: bool,
+
+    /// Enables logging of statistics from the solver
+    #[arg(short = 's', long = "log-statistics", default_value_t = false)]
+    log_statistics: bool,
+
+    /// Instructs the solver to perform free search when solving a MiniZinc model; this flag
+    /// indicates that it is allowed to ignore the search annotations specified in the model.
+    /// See the [MiniZinc specification](https://www.minizinc.org/doc-2.6.3/en/fzn-spec.html#cmdoption-f)
+    /// for more information.
+    #[arg(short = 'f', long = "free-search", default_value_t = false)]
+    free_search: bool,
+
+    /// Instructs the solver to report all solutions in the case of satisfaction problems,
+    /// or print intermediate solutions of increasing quality in the case of optimisation
+    /// problems.
+    ///
+    /// See the [MiniZinc specification](https://www.minizinc.org/doc-2.8.2/en/fzn-spec.html#cmdoption-a)
+    /// for more information.
+    #[arg(short = 'a', long = "all-solutions", default_value_t = false)]
+    all_solutions: bool,
 
     /// If `--verbose` is enabled removes the timestamp information from the log messages
     #[arg(long = "omit-timestamp", default_value_t = false)]
@@ -150,6 +179,10 @@ struct Args {
     )]
     upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 
+    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
+    #[arg(long = "cumulative-allow-holes", default_value_t = false)]
+    cumulative_allow_holes: bool,
+
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
     /// that it evaluates to the reported objective value.
     #[arg(long = "verify", default_value_t = false)]
@@ -157,10 +190,57 @@ struct Args {
 }
 
 fn configure_logging(
+    file_format: FileFormat,
     verbose: bool,
+    log_statistics: bool,
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
+    match file_format {
+        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine | FileFormat::MaxSAT2022 => {
+            configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
+        }
+        FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
+    }
+}
+
+fn configure_logging_unknown() -> std::io::Result<()> {
+    env_logger::Builder::new()
+        .format(move |buf, record| writeln!(buf, "{}", record.args()))
+        .filter_level(LevelFilter::Trace)
+        .target(env_logger::Target::Stdout)
+        .init();
+    Ok(())
+}
+
+fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
+    statistic_logger::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    let level_filter = if verbose {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Warn
+    };
+
+    env_logger::Builder::new()
+        .format(move |buf, record| {
+            write!(buf, "% ")?;
+
+            writeln!(buf, "{}", record.args())
+        })
+        .filter_level(level_filter)
+        .target(env_logger::Target::Stdout)
+        .init();
+    info!("Logging successfully configured");
+    Ok(())
+}
+
+fn configure_logging_sat(
+    verbose: bool,
+    log_statistics: bool,
+    omit_timestamp: bool,
+    omit_call_site: bool,
+) -> std::io::Result<()> {
+    statistic_logger::configure(log_statistics, "c STAT", None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -185,6 +265,7 @@ fn configure_logging(
             writeln!(buf, "{}", record.args())
         })
         .filter_level(level_filter)
+        .target(env_logger::Target::Stdout)
         .init();
     info!("Logging successfully configured");
     Ok(())
@@ -194,7 +275,7 @@ fn main() {
     match run() {
         Ok(()) => {}
         Err(e) => {
-            error!("Execution failed, error: {:#?}", e);
+            error!("Execution failed, error: {}", e);
             std::process::exit(1);
         }
     }
@@ -203,36 +284,51 @@ fn main() {
 fn run() -> PumpkinResult<()> {
     pumpkin_lib::print_pumpkin_assert_warning_message!();
 
-    let args = Args::parse();
+    // Register the handling of signals (for example CTRL+C)
+    signal_handler::register_signals()?;
 
-    configure_logging(args.verbose, args.omit_timestamp, args.omit_call_site)?;
+    let args = Args::parse();
 
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
         Some("cnf") => FileFormat::CnfDimacsPLine,
         Some("wcnf") => FileFormat::WcnfDimacsPLine,
         Some("fzn") => FileFormat::FlatZinc,
         _ => {
+            configure_logging_unknown()?;
             return Err(PumpkinError::invalid_instance(args.instance_path.display()));
         }
     };
 
-    let sat_options = SatOptions {
+    configure_logging(
+        file_format,
+        args.verbose,
+        args.log_statistics,
+        args.omit_timestamp,
+        args.omit_call_site,
+    )?;
+
+    let learning_options = LearningOptions {
         num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
         high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy.inner,
         lbd_threshold: args.learning_lbd_threshold,
         ..Default::default()
     };
 
-    let certificate_file = if let Some(path_buf) = args.certificate_path {
-        Some(
-            OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .open(path_buf.as_path())?,
-        )
+    let proof_log = if let Some(path_buf) = args.proof {
+        match file_format {
+            FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+            FileFormat::WcnfDimacsPLine => {
+                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
+            }
+            FileFormat::MaxSAT2022 => {
+                return Err(PumpkinError::ProofGenerationNotSupported(
+                    "maxsat".to_owned(),
+                ))
+            }
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+        }
     } else {
-        None
+        ProofLog::default()
     };
 
     let solver_options = SatisfactionSolverOptions {
@@ -246,12 +342,12 @@ fn run() -> PumpkinResult<()> {
             num_assigned_window: args.restart_num_assigned_window,
             geometric_coef: args.restart_geometric_coef,
         },
-        certificate_file,
+        proof_log,
         learning_clause_minimisation: args.learning_clause_minimisation.inner,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
 
-    let time_limit = args.time_limit.map(Duration::from_secs);
+    let time_limit = args.time_limit.map(Duration::from_millis);
     let instance_path = args
         .instance_path
         .to_str()
@@ -260,14 +356,14 @@ fn run() -> PumpkinResult<()> {
 
     match file_format {
         FileFormat::CnfDimacsPLine => cnf_problem(
-            sat_options,
+            learning_options,
             solver_options,
             time_limit,
             instance_path,
             verify_outcome,
         )?,
         FileFormat::WcnfDimacsPLine => wcnf_problem(
-            sat_options,
+            learning_options,
             solver_options,
             time_limit,
             instance_path,
@@ -276,8 +372,14 @@ fn run() -> PumpkinResult<()> {
         )?,
         FileFormat::MaxSAT2022 => todo!(),
         FileFormat::FlatZinc => flatzinc::solve(
-            ConstraintSatisfactionSolver::new(sat_options, solver_options),
+            ConstraintSatisfactionSolver::new(learning_options, solver_options),
             instance_path,
+            time_limit,
+            FlatZincOptions {
+                free_search: args.free_search,
+                all_solutions: args.all_solutions,
+                cumulative_allow_holes: args.cumulative_allow_holes,
+            },
         )?,
     }
 
@@ -285,7 +387,7 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn wcnf_problem(
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -299,7 +401,7 @@ fn wcnf_problem(
         last_instance_variable,
     } = parse_wcnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(sat_options, solver_options),
+        CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
     let brancher =
@@ -311,7 +413,9 @@ fn wcnf_problem(
         LinearSearch::new(upper_bound_encoding),
     );
 
-    let result = match solver.solve(time_limit, brancher) {
+    let mut termination = time_limit.map(TimeBudget::starting_now);
+
+    let result = match solver.solve(&mut termination, brancher) {
         OptimisationResult::Optimal {
             solution,
             objective_value,
@@ -354,7 +458,7 @@ fn wcnf_problem(
 }
 
 fn cnf_problem(
-    sat_options: SatOptions,
+    learning_options: LearningOptions,
     solver_options: SatisfactionSolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
@@ -363,27 +467,31 @@ fn cnf_problem(
     let instance_file = File::open(instance_path)?;
     let mut csp_solver = parse_cnf::<SolverDimacsSink>(
         instance_file,
-        CSPSolverArgs::new(sat_options, solver_options),
+        CSPSolverArgs::new(learning_options, solver_options),
     )?;
 
+    let mut termination = time_limit.map(TimeBudget::starting_now);
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&csp_solver);
-    let solution = match csp_solver.solve(time_limit_in_secs(time_limit), &mut brancher) {
+    let solution = match csp_solver.solve(&mut termination, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
-            let solution = Solution::new(
-                csp_solver.get_propositional_assignments(),
-                csp_solver.get_integer_assignments(),
-            );
+            #[allow(deprecated)]
+            let solution = csp_solver.get_solution_reference();
 
             println!("s SATISFIABLE");
+            let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(&solution, solution.num_propositional_variables(), true)
+                stringify_solution(&solution.into(), num_propositional_variables, true)
             );
 
             Some(solution)
         }
         CSPSolverExecutionFlag::Infeasible => {
+            if csp_solver.conclude_proof_unsat().is_err() {
+                warn!("Failed to log solver conclusion");
+            };
+
             println!("s UNSATISFIABLE");
             None
         }
@@ -402,12 +510,6 @@ fn cnf_problem(
     Ok(())
 }
 
-fn time_limit_in_secs(time_limit: Option<Duration>) -> i64 {
-    time_limit
-        .map(|limit| limit.as_secs() as i64)
-        .unwrap_or(i64::MAX)
-}
-
 fn stringify_solution(
     solution: &Solution,
     num_variables: usize,
@@ -416,7 +518,7 @@ fn stringify_solution(
     (1..num_variables)
         .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
         .map(|var| {
-            if solution[var] {
+            if solution.get_propositional_variable_value(var) {
                 format!("{} ", var.index())
             } else {
                 format!("-{} ", var.index())
@@ -434,7 +536,7 @@ fn learned_clause_sorting_strategy_parser(
     s: &str,
 ) -> Result<CliArg<LearnedClauseSortingStrategy>, String> {
     match s {
-        "lbd" => Ok(LearnedClauseSortingStrategy::LBD.into()),
+        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd.into()),
         "activity" => Ok(LearnedClauseSortingStrategy::Activity.into()),
         value => Err(format!(
             "'{value}' is not a valid learned clause sorting strategy"

@@ -1,4 +1,3 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -10,19 +9,19 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 
-/// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
-///
-/// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
-/// the propagator will not propagate `[absolute >= 1]`.
-pub(crate) struct AbsoluteValueConstructor<VA, VB> {
+#[derive(Debug)]
+pub struct AbsoluteValueConstructor<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,
     /// The absolute of `signed`.
     pub(crate) absolute: VB,
 }
 
-impl<VA: IntVar, VB: IntVar> PropagatorConstructor for AbsoluteValueConstructor<VA, VB> {
+impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
+    for AbsoluteValueConstructor<VA, VB>
+{
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
     fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -33,12 +32,17 @@ impl<VA: IntVar, VB: IntVar> PropagatorConstructor for AbsoluteValueConstructor<
     }
 }
 
-pub(crate) struct AbsoluteValuePropagator<VA, VB> {
+/// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
+///
+/// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
+/// the propagator will not propagate `[absolute >= 1]`.
+#[derive(Debug)]
+pub struct AbsoluteValuePropagator<VA, VB> {
     signed: PropagatorVariable<VA>,
     absolute: PropagatorVariable<VB>,
 }
 
-impl<VA: IntVar, VB: IntVar> Propagator for AbsoluteValuePropagator<VA, VB> {
+impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }

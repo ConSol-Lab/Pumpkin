@@ -1,4 +1,3 @@
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
@@ -11,6 +10,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`.
@@ -20,7 +20,7 @@ pub struct MaximumConstructor<ElementVar, Rhs> {
     pub rhs: Rhs,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> PropagatorConstructor
+impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
     for MaximumConstructor<ElementVar, Rhs>
 {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
@@ -32,7 +32,7 @@ impl<ElementVar: IntVar, Rhs: IntVar> PropagatorConstructor
             .cloned()
             .enumerate()
             .map(|(idx, var)| {
-                context.register(var, DomainEvents::UPPER_BOUND, LocalId::from(idx as u32))
+                context.register(var, DomainEvents::BOUNDS, LocalId::from(idx as u32))
             })
             .collect::<Box<_>>();
 
@@ -54,7 +54,9 @@ pub struct MaximumPropagator<ElementVar, Rhs> {
     rhs: PropagatorVariable<Rhs>,
 }
 
-impl<ElementVar: IntVar, Rhs: IntVar> Propagator for MaximumPropagator<ElementVar, Rhs> {
+impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
+    for MaximumPropagator<ElementVar, Rhs>
+{
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
@@ -95,12 +97,12 @@ impl<ElementVar: IntVar, Rhs: IntVar> Propagator for MaximumPropagator<ElementVa
         context.set_upper_bound(
             &self.rhs,
             max_ub,
-            PropositionalConjunction::new(ub_reason.into(), [].into()),
+            PropositionalConjunction::new(ub_reason.into()),
         )?;
         context.set_lower_bound(
             &self.rhs,
             max_lb,
-            PropositionalConjunction::new(lb_reason.into(), [].into()),
+            PropositionalConjunction::new(lb_reason.into()),
         )?;
 
         Ok(())
@@ -131,7 +133,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 1, 5);
 
-        let reason = solver.get_reason_int(predicate![rhs <= 5]);
+        let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
         assert_eq!(conjunction!([a <= 3] & [b <= 4] & [c <= 5]), reason.clone());
     }
 
@@ -154,7 +156,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 5, 10);
 
-        let reason = solver.get_reason_int(predicate![rhs >= 5]);
+        let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
         assert_eq!(conjunction!([a >= 3] & [b >= 4] & [c >= 5]), reason.clone());
     }
 
@@ -177,7 +179,7 @@ mod tests {
 
         for var in array.iter() {
             solver.assert_bounds(*var, 1, 3);
-            let reason = solver.get_reason_int(predicate![var <= 3]);
+            let reason = solver.get_reason_int(predicate![var <= 3].try_into().unwrap());
             assert_eq!(conjunction!([rhs <= 3]), reason.clone());
         }
     }

@@ -3,7 +3,7 @@ use super::ClauseAllocatorInterface;
 use super::ClauseInlined;
 use super::ClauseInterface;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::Literal;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_ne_simple;
 

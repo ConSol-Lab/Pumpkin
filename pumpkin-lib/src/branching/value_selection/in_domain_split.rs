@@ -1,7 +1,8 @@
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::Literal;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::variables::IntegerVariable;
+use crate::predicate;
 use crate::pumpkin_assert_advanced;
 
 /// A [`ValueSelector`] which splits the domain in half (based on the lower-bound and upper-bound,
@@ -12,17 +13,21 @@ use crate::pumpkin_assert_advanced;
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainSplit;
 
-impl<Var: IntVar + Copy> ValueSelector<Var> for InDomainSplit {
-    fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var) -> Literal {
-        InDomainSplit::get_literal_excluding_upper_half(context, decision_variable)
+impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainSplit {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: Var,
+    ) -> Predicate {
+        InDomainSplit::get_predicate_excluding_upper_half(context, decision_variable)
     }
 }
 
 impl InDomainSplit {
-    pub fn get_literal_excluding_upper_half<Var: IntVar + Copy>(
+    pub fn get_predicate_excluding_upper_half<Var: IntegerVariable + Copy>(
         context: &SelectionContext,
         decision_variable: Var,
-    ) -> Literal {
+    ) -> Predicate {
         // Note that the domain of the variable should always have at least 2 values in it
         // (otherwise it should have been reported as fixed and not selected)
         let bound = context.lower_bound(decision_variable)
@@ -34,67 +39,53 @@ impl InDomainSplit {
             context.lower_bound(decision_variable),
             context.upper_bound(decision_variable)
         );
-        context.get_literal_for_predicate(decision_variable.upper_bound_predicate(bound))
+        predicate!(decision_variable <= bound)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::basic_types::PredicateConstructor;
     use crate::branching::InDomainSplit;
     use crate::branching::SelectionContext;
     use crate::branching::ValueSelector;
+    use crate::predicate;
 
     #[test]
     fn test_returns_correct_literal() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainSplit;
 
-        let selected_literal = selector.select_value(&mut context, domain_ids[0]);
+        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
 
-        assert_eq!(
-            selected_literal,
-            mediator.get_predicate_literal(
-                domain_ids[0].upper_bound_predicate(5),
-                &assignments_integer
-            )
-        )
+        assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 5))
     }
 
     #[test]
     fn test_domain_of_size_two() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(1, 0, Some(vec![(1, 2)]));
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainSplit;
 
-        let selected_literal = selector.select_value(&mut context, domain_ids[0]);
+        let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
 
-        assert_eq!(
-            selected_literal,
-            mediator.get_predicate_literal(
-                domain_ids[0].upper_bound_predicate(1),
-                &assignments_integer
-            )
-        )
+        assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 1))
     }
 }

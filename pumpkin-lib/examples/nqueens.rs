@@ -1,7 +1,8 @@
-use pumpkin_lib::basic_types::variables::IntVar;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::IndependentVariableValueBrancher;
+use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::constraints::ConstraintsExt;
+use pumpkin_lib::engine::termination::indefinite::Indefinite;
+use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 fn main() {
@@ -18,7 +19,7 @@ fn main() {
 
     let mut solver = ConstraintSatisfactionSolver::default();
     let variables = (0..n)
-        .map(|_| solver.create_new_integer_variable(0, n as i32 - 1))
+        .map(|_| solver.create_new_integer_variable(0, n as i32 - 1, None))
         .collect::<Vec<_>>();
 
     let _ = solver.all_different(variables.clone());
@@ -41,7 +42,7 @@ fn main() {
 
     let mut brancher =
         IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    match solver.solve(i64::MAX, &mut brancher) {
+    match solver.solve(&mut Indefinite, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
 
@@ -49,9 +50,8 @@ fn main() {
                 println!("{row_separator}");
 
                 let queen_col = solver
-                    .get_integer_assignments()
-                    .get_assigned_value(variables[row as usize])
-                    as u32;
+                    .get_assigned_integer_value(&variables[row as usize])
+                    .unwrap() as u32;
 
                 for col in 0..n {
                     let string = if queen_col == col { "| * " } else { "|   " };

@@ -2,10 +2,11 @@ use log::warn;
 
 use super::ValueSelector;
 use crate::basic_types::KeyedVec;
-use crate::basic_types::Literal;
-use crate::basic_types::PropositionalVariable;
 use crate::basic_types::StorageKey;
 use crate::branching::SelectionContext;
+use crate::engine::predicates::predicate::Predicate;
+use crate::engine::variables::Literal;
+use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
 
 /// A [`ValueSelector`] which implements [phase saving \[1\]](https://www.researchgate.net/profile/Thammanit-Pipatsrisawat/publication/220944633_A_Lightweight_Component_Caching_Scheme_for_Satisfiability_Solvers/links/0f31753c48ffead666000000/A-Lightweight-Component-Caching-Scheme-for-Satisfiability-Solvers.pdf).
@@ -118,11 +119,12 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
         &mut self,
         _: &mut SelectionContext,
         decision_variable: PropositionalVariable,
-    ) -> Literal {
+    ) -> Predicate {
         Literal::new(
             decision_variable,
             self.saved_values[decision_variable].get_value(),
         )
+        .into()
     }
 
     fn on_unassign_literal(&mut self, lit: Literal) {
@@ -152,16 +154,16 @@ mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
+    use crate::engine::predicates::predicate::Predicate;
 
     #[test]
     fn saved_value_is_returned_prop() {
-        let (assignments_integer, assignments_propositional, mediator) =
+        let (assignments_integer, assignments_propositional) =
             SelectionContext::create_for_testing(0, 1, None);
         let mut test_rng = TestRandom::default();
         let mut context = SelectionContext::new(
             &assignments_integer,
             &assignments_propositional,
-            &mediator,
             &mut test_rng,
         );
         let propositional_variables = context.get_propositional_variables().collect::<Vec<_>>();
@@ -172,6 +174,10 @@ mod tests {
 
         let chosen = phase_saving.select_value(&mut context, propositional_variables[0]);
 
-        assert!(chosen.is_positive())
+        if let Predicate::Literal(chosen) = chosen {
+            assert!(chosen.is_positive())
+        } else {
+            panic!("Predicate which was not a literal was returned")
+        }
     }
 }

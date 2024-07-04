@@ -4,9 +4,9 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::basic_types::variables::IntVar;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagator_variable::PropagatorVariable;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -26,30 +26,30 @@ pub(crate) struct Task<Var> {
     pub(crate) id: LocalId,
 }
 
-impl<Var: IntVar + 'static> Task<Var> {
+impl<Var: IntegerVariable + 'static> Task<Var> {
     pub(crate) fn get_id(task: &Rc<Task<Var>>) -> usize {
         task.id.unpack() as usize
     }
 }
 
-impl<Var: IntVar + 'static> Hash for Task<Var> {
+impl<Var: IntegerVariable + 'static> Hash for Task<Var> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
-impl<Var: IntVar + 'static> PartialEq for Task<Var> {
+impl<Var: IntegerVariable + 'static> PartialEq for Task<Var> {
     fn eq(&self, other: &Self) -> bool {
         self.id.unpack() == other.id.unpack()
     }
 }
 
-impl<Var: IntVar + 'static> Eq for Task<Var> {}
+impl<Var: IntegerVariable + 'static> Eq for Task<Var> {}
 
 /// The task which is passed as argument
 #[derive(Clone, Debug)]
 pub struct ArgTask<Var> {
-    /// The [`IntVar`] representing the start time of a task
+    /// The [`IntegerVariable`] representing the start time of a task
     pub start_time: Var,
     /// The processing time of the [`start_time`][ArgTask::start_time] (also referred to as
     /// duration of a task)
@@ -69,14 +69,19 @@ pub struct CumulativeConstructor<Var, T> {
     /// without this field we would need to create a new argument struct for each cumulative
     /// propagator
     propagator_type: PhantomData<T>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub allow_holes_in_domain: bool,
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
-    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
+    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32, allow_holes_in_domain: bool) -> Self {
         CumulativeConstructor {
             tasks,
             capacity,
             propagator_type: PhantomData,
+            allow_holes_in_domain,
         }
     }
 }
@@ -144,10 +149,18 @@ pub struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub(crate) allow_holes_in_domain: bool,
 }
 
-impl<Var: IntVar + 'static> CumulativeParameters<Var> {
-    pub(crate) fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
+    pub(crate) fn new(
+        tasks: Vec<Task<Var>>,
+        capacity: i32,
+        allow_holes_in_domain: bool,
+    ) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -157,6 +170,7 @@ impl<Var: IntVar + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
+            allow_holes_in_domain,
         }
     }
 }

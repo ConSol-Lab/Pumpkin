@@ -1,5 +1,7 @@
 //! Crate to run integration tests for the solver.
 
+pub mod flatzinc;
+
 use std::fs::File;
 use std::path::Path;
 use std::path::PathBuf;
@@ -9,6 +11,8 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use wait_timeout::ChildExt;
+
+use crate::flatzinc::Solutions;
 
 #[derive(Debug)]
 pub struct Files {
@@ -21,14 +25,25 @@ pub struct Files {
 impl Files {
     pub fn cleanup(self) -> std::io::Result<()> {
         std::fs::remove_file(self.log_file)?;
-        std::fs::remove_file(self.proof_file)?;
         std::fs::remove_file(self.err_file)?;
+
+        if self.proof_file.is_file() {
+            std::fs::remove_file(self.proof_file)?;
+        }
 
         Ok(())
     }
 }
 
-pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
+pub fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> Files {
+    run_solver_with_options(instance_path, with_proof, std::iter::empty())
+}
+
+pub fn run_solver_with_options<'a>(
+    instance_path: impl AsRef<Path>,
+    with_proof: bool,
+    args: impl IntoIterator<Item = &'a str>,
+) -> Files {
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
     let instance_path = instance_path.as_ref();
@@ -42,9 +57,17 @@ pub fn run_solver(instance_path: impl AsRef<Path>) -> Files {
     let err_file_path = instance_path.with_extension("err");
     let proof_file_path = instance_path.with_extension("proof");
 
-    let mut child = Command::new(solver)
-        .arg("--certificate-path")
-        .arg(&proof_file_path)
+    let mut command = Command::new(solver);
+
+    if with_proof {
+        let _ = command.arg("--proof").arg(&proof_file_path);
+    }
+
+    for arg in args {
+        let _ = command.arg(arg);
+    }
+
+    let mut child = command
         .arg(instance_path)
         .stdout(
             File::create(&log_file_path).expect("Failed to create log file for {instance_name}."),
@@ -165,4 +188,35 @@ pub fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()
     }
 
     files.cleanup()
+}
+
+pub fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
+    ensure_release_binary_built();
+
+    let instance_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let snapshot_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.expected",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let files = run_solver_with_options(instance_path, false, ["-a"]);
+
+    let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
+
+    let expected_file =
+        std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
+
+    let actual_solutions = output
+        .parse::<Solutions<ORDERED>>()
+        .expect("Valid solution");
+
+    let expected_solutions = expected_file
+        .parse::<Solutions<ORDERED>>()
+        .expect("Valid solution");
+
+    assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
 }

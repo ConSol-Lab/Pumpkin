@@ -1,7 +1,7 @@
 use super::clause_allocators::ClauseAllocatorInterface;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::Literal;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
+use crate::engine::variables::Literal;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Default, Debug)]

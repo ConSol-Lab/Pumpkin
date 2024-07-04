@@ -139,7 +139,7 @@ fn run_cnf_test(instance_name: &str) {
         "{}/tests/cnf/{instance_name}.cnf",
         env!("CARGO_MANIFEST_DIR")
     );
-    let files = run_solver(instance_path);
+    let files = run_solver(instance_path, true);
 
     run_solution_checker::<CnfChecker>(files);
 }

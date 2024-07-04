@@ -1,0 +1,7 @@
+var bool: r :: output_var;
+var bool: x :: output_var;
+var bool: y :: output_var;
+
+constraint pumpkin_bool_xor_reif(x, y, r);
+
+solve satisfy;

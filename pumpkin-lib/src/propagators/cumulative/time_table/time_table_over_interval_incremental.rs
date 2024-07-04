@@ -6,8 +6,6 @@ use std::rc::Rc;
 use super::time_table_util::has_overlap_with_interval;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::variables::IntVar;
-use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -18,13 +16,14 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::propagators::check_bounds_equal_at_propagation;
-use crate::propagators::create_inconsistency;
-use crate::propagators::create_tasks;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
-use crate::propagators::reset_bounds_clear_updated;
-use crate::propagators::update_bounds_task;
+use crate::propagators::util::check_bounds_equal_at_propagation;
+use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::reset_bounds_clear_updated;
+use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
@@ -39,7 +38,7 @@ use crate::pumpkin_assert_moderate;
 /// different time-points - This method creates a resource profile over an interval rather than
 /// creating one per time-point (hence the name). Furthermore, the
 /// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
-/// used for modelling the start variables, this will be an implementation of [`IntVar`].
+/// used for modelling the start variables, this will be an implementation of [`IntegerVariable`].
 ///
 /// The difference between the [`TimeTableOverIntervalIncrementalPropagator`] and
 /// [`TimeTableOverIntervalPropagator`] is that the [`TimeTableOverIntervalIncrementalPropagator`]
@@ -75,7 +74,7 @@ pub struct TimeTableOverIntervalIncrementalPropagator<Var> {
 impl<Var> PropagatorConstructor
     for CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
 where
-    Var: IntVar + 'static + std::fmt::Debug,
+    Var: IntegerVariable + 'static + std::fmt::Debug,
 {
     type Propagator = TimeTableOverIntervalIncrementalPropagator<Var>;
 
@@ -84,11 +83,12 @@ where
         TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
             self.capacity,
+            self.allow_holes_in_domain,
         ))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub fn new(
         parameters: CumulativeParameters<Var>,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
@@ -199,107 +199,9 @@ impl<Var: IntVar + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
         }
         Ok((left_most_overlapping_index, right_most_overlapping_index))
     }
-
-    /// Determines whether 2 profiles are mergeable (i.e. they are next to each other, consist of
-    /// the same tasks and have the same height); this method is used when propagating
-    /// incrementally and maintaining maximal profiles.
-    ///
-    /// It is assumed that the profile tasks of both profiles do not contain duplicates
-    fn are_mergeable(
-        first_profile: &ResourceProfile<Var>,
-        second_profile: &ResourceProfile<Var>,
-    ) -> bool {
-        pumpkin_assert_extreme!(
-            first_profile
-                .profile_tasks
-                .iter()
-                .collect::<HashSet<_>>()
-                .len()
-                == first_profile.profile_tasks.len(),
-            "The first provided profile had duplicate profile tasks"
-        );
-        pumpkin_assert_extreme!(
-            second_profile
-                .profile_tasks
-                .iter()
-                .collect::<HashSet<_>>()
-                .len()
-                == second_profile.profile_tasks.len(),
-            "The second provided profile had duplicate profile tasks"
-        );
-        // First we perform the simple checks, determining whether the two profiles are the same
-        // height, whether they are next to one another and whether they contain the same number of
-        // tasks
-        let mergeable = first_profile.height == second_profile.height
-            && first_profile.end == second_profile.start - 1
-            && first_profile.profile_tasks.len() == second_profile.profile_tasks.len();
-        if !mergeable {
-            // The tasks have already been found to be not mergeable so we can avoid checking
-            // equality of the profile tasks
-            mergeable
-        } else {
-            // We check whether the profile tasks of both profiles are the same
-            mergeable
-                && first_profile
-                    .profile_tasks
-                    .iter()
-                    .all(|profile| second_profile.profile_tasks.contains(profile))
-        }
-    }
-
-    /// Merge all mergeable profiles going from start_index to end_index
-    fn merge_profiles(
-        time_table: &mut OverIntervalTimeTableType<Var>,
-        start_index: i32,
-        end_index: i32,
-    ) {
-        let mut current_index = start_index;
-        let mut end = end_index;
-
-        // We go over all pairs of profiles, starting from start index until end index
-        while current_index < end {
-            let first = current_index;
-            while current_index < end
-                && TimeTableOverIntervalIncrementalPropagator::are_mergeable(
-                    &time_table[current_index as usize],
-                    &time_table[(current_index + 1) as usize],
-                )
-            {
-                // We go over all pairs of profiles until we find a profile which cannot be merged
-                // with the current profile
-                current_index += 1;
-            }
-
-            if current_index > first {
-                // We have found at least 2 profiles to merge (but perhaps more)
-                let start_profile = &time_table[first as usize];
-                let end_profile = &time_table[current_index as usize];
-
-                // We create a new profile with the bounds which we have found
-                let new_profile = ResourceProfile {
-                    start: start_profile.start,
-                    end: end_profile.end,
-                    profile_tasks: start_profile.profile_tasks.to_owned(),
-                    height: start_profile.height,
-                };
-                // We replace the previously separate profile with the new profile
-                let _ =
-                    time_table.splice(first as usize..(current_index + 1) as usize, [new_profile]);
-
-                // We have removed profiles from the time-table and we thus need to adjust our
-                // end-index under consideration by the number of profiles which were removed
-                end -= current_index - first;
-
-                // We reset the current index to the index of the new profile and move onto the next
-                // profile
-                current_index = first;
-            }
-            current_index += 1;
-        }
-    }
 }
 
-impl<Var: IntVar + 'static + std::fmt::Debug> Propagator
+impl<Var: IntegerVariable + 'static + std::fmt::Debug> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var>
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
@@ -533,17 +435,6 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Propagator
                     }
                 }
             }
-            if lowest_index != u32::MAX {
-                // We have updated at least 1 of the profiles, we can now merge the profiles which
-                // are adjacent to one another We start at the lowest index which we
-                // have found and continue from there
-                let time_table_len = self.time_table.len();
-                TimeTableOverIntervalIncrementalPropagator::merge_profiles(
-                    &mut self.time_table,
-                    lowest_index as i32,
-                    (time_table_len - 1) as i32,
-                );
-            }
         }
 
         pumpkin_assert_extreme!({
@@ -662,11 +553,11 @@ impl<Var: IntVar + 'static + std::fmt::Debug> Propagator
 mod tests {
     use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTableOverIntervalIncremental;
 
@@ -693,6 +584,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -723,14 +615,15 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
-                    s1.upper_bound_predicate(1),
-                    s1.lower_bound_predicate(1),
-                    s2.upper_bound_predicate(1),
-                    s2.lower_bound_predicate(1),
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 >= 1),
+                    predicate!(s2 <= 1),
                 ];
                 expected
                     .iter()
@@ -764,6 +657,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -819,6 +713,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -847,6 +742,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -890,6 +786,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -897,12 +794,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(9),
-                s1.lower_bound_predicate(6),
-                s1.upper_bound_predicate(6),
+                predicate!(s2 <= 9),
+                predicate!(s1 >= 6),
+                predicate!(s1 <= 6),
             ]),
             reason
         );
@@ -955,6 +854,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1033,6 +933,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1079,6 +980,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -1086,12 +988,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(0),
-                s1.lower_bound_predicate(1),
-                s1.upper_bound_predicate(1),
+                predicate!(s2 >= 0),
+                predicate!(s1 >= 1),
+                predicate!(s1 <= 1),
             ]),
             reason
         );
@@ -1126,6 +1030,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -1135,12 +1040,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(5),
-                s2.lower_bound_predicate(5),
-                s3.lower_bound_predicate(2),
+                predicate!(s2 <= 5),
+                predicate!(s2 >= 5),
+                predicate!(s3 >= 2),
             ]),
             reason
         );

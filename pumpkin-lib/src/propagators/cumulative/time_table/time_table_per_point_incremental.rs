@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use super::time_table_util::should_enqueue;
-use crate::basic_types::variables::IntVar;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -13,21 +12,21 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::propagators::check_bounds_equal_at_propagation;
-use crate::propagators::create_inconsistency;
-use crate::propagators::create_tasks;
+use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
-use crate::propagators::reset_bounds_clear_updated;
-use crate::propagators::update_bounds_task;
+use crate::propagators::util::check_bounds_equal_at_propagation;
+use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_tasks;
+use crate::propagators::util::reset_bounds_clear_updated;
+use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 #[cfg(doc)]
 use crate::propagators::Task;
 use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
@@ -36,7 +35,7 @@ use crate::pumpkin_assert_extreme;
 /// different time-points - This method creates a resource profile per time point rather than
 /// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
 /// has a generic argument which represents the type of variable used for modelling the start
-/// variables, this will be an implementation of [`IntVar`].
+/// variables, this will be an implementation of [`IntegerVariable`].
 ///
 /// The difference between the [`TimeTablePerPointIncrementalPropagator`] and
 /// [`TimeTablePerPointPropagator`] is that the [`TimeTablePerPointIncrementalPropagator`] does not
@@ -72,17 +71,21 @@ pub struct TimeTablePerPointIncrementalPropagator<Var> {
 impl<Var> PropagatorConstructor
     for CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>
 where
-    Var: IntVar + 'static + std::fmt::Debug,
+    Var: IntegerVariable + 'static + std::fmt::Debug,
 {
     type Propagator = TimeTablePerPointIncrementalPropagator<Var>;
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
-        TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
+        TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(
+            tasks,
+            self.capacity,
+            self.allow_holes_in_domain,
+        ))
     }
 }
 
-impl<Var: IntVar + 'static> TimeTablePerPointIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var> {
     pub fn new(
         parameters: CumulativeParameters<Var>,
     ) -> TimeTablePerPointIncrementalPropagator<Var> {
@@ -92,18 +95,13 @@ impl<Var: IntVar + 'static> TimeTablePerPointIncrementalPropagator<Var> {
             time_table_outdated: false,
         }
     }
-}
 
-impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        pumpkin_assert_advanced!(
-            check_bounds_equal_at_propagation(
-                context,
-                &self.parameters.tasks,
-                &self.parameters.bounds,
-            ),
-            "Bound were not equal when propagating"
-        );
+    /// Updates the stored time-table based on the updates stored in
+    /// [`CumulativeParameters::updated`]. If the time-table is outdated then this method will
+    /// simply calculate it from scratch.
+    ///
+    /// An error is returned if an overflow of the resource occurs while updating the time-table.
+    fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if self.time_table_outdated {
             // The time-table needs to be recalculated from scratch anyways so we perform the
             // calculation now
@@ -114,38 +112,33 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagato
                 )?;
             self.time_table_outdated = false;
         } else {
-            for UpdatedTaskInfo {
-                task,
-                old_lower_bound,
-                old_upper_bound,
-                new_lower_bound,
-                new_upper_bound,
-            } in self.parameters.updated.iter()
-            {
+            for updated_task_info in self.parameters.updated.iter() {
                 // Go over all of the updated tasks and calculate the added mandatory part (we know
                 // that for each of these tasks, a mandatory part exists, otherwise it would not
                 // have been added (see [`should_propagate`]))
                 let added_mandatory_consumption = generate_update_range(
-                    task,
-                    *old_lower_bound,
-                    *old_upper_bound,
-                    *new_lower_bound,
-                    *new_upper_bound,
+                    &updated_task_info.task,
+                    updated_task_info.old_lower_bound,
+                    updated_task_info.old_upper_bound,
+                    updated_task_info.new_lower_bound,
+                    updated_task_info.new_upper_bound,
                 );
-                for t in added_mandatory_consumption {
+                for time_point in added_mandatory_consumption {
                     pumpkin_assert_extreme!(
-                        !self.time_table.contains_key(&(t as u32))
-                        || !self.time_table.get(&(t as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
-                        "Attempted to insert mandatory part where it already exists at time point {t} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
+                        !self.time_table.contains_key(&(time_point as u32))
+                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == updated_task_info.task.id.unpack() as usize),
+                        "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator", updated_task_info.task.id.unpack() as usize);
 
                     // Add the updated profile to the ResourceProfile at time t
                     let current_profile: &mut ResourceProfile<Var> = self
                         .time_table
-                        .entry(t as u32)
-                        .or_insert(ResourceProfile::default(t));
+                        .entry(time_point as u32)
+                        .or_insert(ResourceProfile::default(time_point));
 
-                    current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(Rc::clone(task));
+                    current_profile.height += updated_task_info.task.resource_usage;
+                    current_profile
+                        .profile_tasks
+                        .push(Rc::clone(&updated_task_info.task));
 
                     if current_profile.height > self.parameters.capacity {
                         // The newly introduced mandatory part(s) caused an overflow of the resource
@@ -157,8 +150,27 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagato
                 }
             }
         }
+        Ok(())
+    }
+}
+
+impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        pumpkin_assert_advanced!(
+            check_bounds_equal_at_propagation(
+                context,
+                &self.parameters.tasks,
+                &self.parameters.bounds,
+            ),
+            "Bound were not equal when propagating"
+        );
+
+        // We update the time-table based on the stored updates
+        self.update_time_table(context)?;
+
         // We have processed all of the updates, we can clear the structure
         self.parameters.updated.clear();
+
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 ResourceProfile which caused a propagation then this
@@ -199,6 +211,9 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagato
             context,
             self.time_table.is_empty(),
         );
+
+        // If there is a task which now has a mandatory part then we store it and process it when
+        // the `propagate` method is called
         if let Some(update) = result.update {
             self.parameters.updated.push(update)
         }
@@ -249,11 +264,11 @@ impl<Var: IntVar + 'static> Propagator for TimeTablePerPointIncrementalPropagato
 mod tests {
     use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::Predicate;
-    use crate::basic_types::PredicateConstructor;
     use crate::basic_types::PropositionalConjunction;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPointIncremental;
 
@@ -280,6 +295,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -310,14 +326,15 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
-                    s1.upper_bound_predicate(1),
-                    s1.lower_bound_predicate(1),
-                    s2.upper_bound_predicate(1),
-                    s2.lower_bound_predicate(1),
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 <= 1),
+                    predicate!(s2 >= 1),
                 ];
                 expected
                     .iter()
@@ -351,6 +368,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -406,6 +424,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -434,6 +453,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -477,6 +497,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         let result = solver.propagate_until_fixed_point(&mut propagator);
@@ -486,12 +507,14 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(s2.upper_bound_predicate(3)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(6),
-                s1.lower_bound_predicate(6),
-                s1.upper_bound_predicate(6),
+                predicate!(s2 <= 6),
+                predicate!(s1 >= 6),
+                predicate!(s1 <= 6),
             ]),
             reason
         );
@@ -544,6 +567,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -622,6 +646,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -668,6 +693,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -675,12 +701,16 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(s2.lower_bound_predicate(5)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.lower_bound_predicate(2), /* Note that this not the most general explanation, if s2 could have started at 0 then it would still have overlapped with the current interval */
-                s1.lower_bound_predicate(1),
-                s1.upper_bound_predicate(1),
+                predicate!(s2 >= 2),
+                predicate!(s1 >= 1),
+                predicate!(s1 <= 1), /* Note that this not the most general explanation, if s2
+                                      * could have started at 0 then it would still have
+                                      * overlapped with the current interval */
             ]),
             reason
         );
@@ -715,6 +745,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -724,13 +755,15 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason = solver
+            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
+            .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                s2.upper_bound_predicate(5),
-                s2.lower_bound_predicate(5),
-                s3.lower_bound_predicate(3), /* Note that s3 would have been able to propagate
-                                              * this bound even if it started at time 0 */
+                predicate!(s2 <= 5),
+                predicate!(s2 >= 5),
+                predicate!(s3 >= 3), /* Note that s3 would have been able to propagate
+                                      * this bound even if it started at time 0 */
             ]),
             reason
         );
