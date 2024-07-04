@@ -18,6 +18,7 @@ use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
+use super::BacktrackEvent;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
@@ -162,6 +163,8 @@ pub struct ConstraintSatisfactionSolver {
     pub(crate) reason_store: ReasonStore,
     /// Contains events that need to be processe to notify propagators of event occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
+
+    reverse_event_drain: Vec<(BacktrackEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
     pub(crate) variable_literal_mappings: VariableLiteralMappings,
     /// Used during synchronisation of the propositional and integer trail.
@@ -247,6 +250,35 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
+    fn process_reverse_domain_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_anything() {
+            self.reverse_event_drain
+                .extend(self.assignments_integer.drain_reverse_domain_events());
+
+            if self.reverse_event_drain.is_empty() {
+                return false;
+            }
+
+            for (event, domain) in self.reverse_event_drain.drain(..) {
+                for propagator_var in self
+                    .watch_list_cp
+                    .get_reverse_affected_propagators(event, domain)
+                {
+                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                    let context = PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
+                    );
+
+                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                }
+            }
+        }
+        true
+    }
+
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
     /// true is returned.
     fn process_domain_events(&mut self) -> bool {
@@ -403,6 +435,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
             event_drain: vec![],
+            reverse_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
@@ -1210,6 +1243,8 @@ impl ConstraintSatisfactionSolver {
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
             self.cp_propagators[propagator_id].synchronise(&context);
         }
+
+        let _ = self.process_reverse_domain_events();
     }
 
     /// Main propagation loop.

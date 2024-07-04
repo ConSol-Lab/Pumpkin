@@ -2,12 +2,14 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::basic_types::StorageKey;
+use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::AssignmentsInteger;
+use crate::engine::BacktrackEvent;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -76,6 +78,10 @@ impl IntegerVariable for DomainId {
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
+        event.unwrap()
+    }
+
+    fn unpack_backtrack_event(&self, event: OpaqueBacktrackDomainEvent) -> BacktrackEvent {
         event.unwrap()
     }
 }

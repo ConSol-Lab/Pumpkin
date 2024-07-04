@@ -14,6 +14,7 @@ pub(crate) use assignments_integer::AssignmentsInteger;
 pub(crate) use assignments_integer::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use variable_literal_mappings::VariableLiteralMappings;
+pub(crate) use watch_list_cp::BacktrackEvent;
 pub(crate) use watch_list_cp::IntDomainEvent;
 pub(crate) use watch_list_cp::WatchListCP;
 pub(crate) use watch_list_cp::Watchers;

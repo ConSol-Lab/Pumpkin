@@ -1,11 +1,13 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
+use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
+use crate::engine::BacktrackEvent;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -64,4 +66,6 @@ pub trait IntegerVariable:
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
+
+    fn unpack_backtrack_event(&self, event: OpaqueBacktrackDomainEvent) -> BacktrackEvent;
 }

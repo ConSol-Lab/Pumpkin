@@ -1,7 +1,7 @@
 use enumset::EnumSet;
+use enumset::EnumSetType;
 
 use crate::basic_types::KeyedVec;
-use crate::engine::cp::IntDomainEvent;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::DomainEvents;
@@ -15,15 +15,24 @@ use crate::propagators;
 /// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
-#[derive(Default, Clone, Debug)]
-pub(crate) struct EventSink {
-    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
-    events: Vec<(IntDomainEvent, DomainId)>,
+#[derive(Clone, Debug)]
+pub(crate) struct EventSink<EventType: EnumSetType> {
+    present: KeyedVec<DomainId, EnumSet<EventType>>,
+    events: Vec<(EventType, DomainId)>,
 }
 
-impl EventSink {
+impl<EventType: EnumSetType> Default for EventSink<EventType> {
+    fn default() -> Self {
+        Self {
+            present: Default::default(),
+            events: Default::default(),
+        }
+    }
+}
+
+impl<EventType: EnumSetType> EventSink<EventType> {
     pub(crate) fn new(num_domains: usize) -> Self {
-        let mut event_sink: EventSink = Default::default();
+        let mut event_sink: EventSink<EventType> = EventSink::default();
         for _ in 0..num_domains {
             event_sink.grow();
         }
@@ -33,7 +42,7 @@ impl EventSink {
         self.present.push(EnumSet::new());
     }
 
-    pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
+    pub(crate) fn event_occurred(&mut self, event: EventType, domain: DomainId) {
         let elem = &mut self.present[domain];
 
         if elem.insert(event) {
@@ -41,7 +50,7 @@ impl EventSink {
         }
     }
 
-    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (EventType, DomainId)> + '_ {
         self.events.drain(..).inspect(|&(event, domain)| {
             let _ = self.present[domain].remove(event);
         })
@@ -51,10 +60,11 @@ impl EventSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::IntDomainEvent;
 
     #[test]
     fn the_default_sink_is_empty() {
-        let mut sink = EventSink::default();
+        let mut sink: EventSink<IntDomainEvent> = EventSink::default();
 
         let events = sink.drain().collect::<Vec<_>>();
         assert!(events.is_empty());

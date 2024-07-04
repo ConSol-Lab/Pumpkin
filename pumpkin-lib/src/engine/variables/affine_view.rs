@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use enumset::EnumSet;
 
 use super::TransformableVariable;
+use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
@@ -10,6 +11,7 @@ use crate::engine::reason::ReasonRef;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::AssignmentsInteger;
+use crate::engine::BacktrackEvent;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -148,6 +150,18 @@ where
             }
         } else {
             self.inner.unpack_event(event)
+        }
+    }
+
+    fn unpack_backtrack_event(&self, event: OpaqueBacktrackDomainEvent) -> BacktrackEvent {
+        if self.scale.is_negative() {
+            match self.inner.unpack_backtrack_event(event) {
+                BacktrackEvent::LowerBound => BacktrackEvent::UpperBound,
+                BacktrackEvent::UpperBound => BacktrackEvent::LowerBound,
+                event => event,
+            }
+        } else {
+            self.inner.unpack_backtrack_event(event)
         }
     }
 }
