@@ -104,6 +104,7 @@
 * Add MiniZinc statistic logging
 * Add signal handling for graceful(ish) shutdown
 * Added support for search annotations MiniZinc
+* Add holes in the domain for the cumulative
 * Implemented API for reverse propagation, including deletable clauses.
 
 ## Bugfixes

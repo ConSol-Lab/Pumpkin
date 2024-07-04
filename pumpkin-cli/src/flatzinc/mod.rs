@@ -43,6 +43,21 @@ pub(crate) struct FlatZincOptions {
     /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
+
+    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
+    pub(crate) cumulative_allow_holes: bool,
+}
+
+#[cfg(test)]
+#[allow(clippy::derivable_impls)]
+impl Default for FlatZincOptions {
+    fn default() -> Self {
+        Self {
+            free_search: false,
+            all_solutions: false,
+            cumulative_allow_holes: false,
+        }
+    }
 }
 
 pub(crate) fn solve(
@@ -55,7 +70,7 @@ pub(crate) fn solve(
 
     let mut termination = time_limit.map(TimeBudget::starting_now);
 
-    let instance = parse_and_compile(&mut solver, instance)?;
+    let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
@@ -247,9 +262,10 @@ fn add_blocking_clause(
 fn parse_and_compile(
     solver: &mut ConstraintSatisfactionSolver,
     instance: impl Read,
+    options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver)
+    compiler::compile(ast, solver, options)
 }
 
 /// Prints the current solution.
@@ -465,8 +481,9 @@ mod tests {
         "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -486,8 +503,9 @@ mod tests {
         "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -503,8 +521,9 @@ mod tests {
         "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -524,8 +543,9 @@ mod tests {
         "#;
         let mut solver = ConstraintSatisfactionSolver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());

@@ -16,7 +16,7 @@ use crate::propagators::arithmetic::maximum::MaximumConstructor;
 use crate::propagators::division::DivisionConstructor;
 use crate::propagators::element::ElementConstructor;
 use crate::propagators::ArgTask;
-use crate::propagators::TimeTablePerPoint;
+use crate::propagators::TimeTableOverInterval;
 use crate::pumpkin_assert_simple;
 
 /// Provides common constraint implementations. Methods return false if the problem becomes
@@ -263,12 +263,13 @@ pub trait ConstraintsExt {
         durations: &[i32],
         resource_requirements: &[i32],
         resource_capacity: i32,
+        allow_holes_in_domain: bool,
     ) -> bool {
         pumpkin_assert_simple!(
             start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
             "The number of start variables, durations and resource requirements should be the same!car"
         );
-        self.post(TimeTablePerPoint::new(
+        self.post(TimeTableOverInterval::new(
             start_times
                 .iter()
                 .zip(durations)
@@ -280,6 +281,7 @@ pub trait ConstraintsExt {
                 })
                 .collect(),
             resource_capacity,
+            allow_holes_in_domain,
         ))
     }
 

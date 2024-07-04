@@ -63,6 +63,7 @@
 //!     &durations,
 //!     &resource_requirements,
 //!     resource_capacity,
+//!     false,
 //! );
 //! let mut brancher =
 //!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
