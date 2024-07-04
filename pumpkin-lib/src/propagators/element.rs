@@ -64,7 +64,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 {
     type Propagator = ElementPropagator<VX, VI, VE>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         // local ids of array vars are shifted by ID_X_OFFSET
         let array = self
             .array

@@ -17,11 +17,11 @@ pub trait PropagatorConstructor {
 
     /// Creates the corresponding propagator and subscribed it to variables and events.
     /// The subscription is done through [`PropagatorConstructorContext::register()`].
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator;
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator;
 
     /// A handy boxed constructor function.
     /// Invokes [`PropagatorConstructor::create()`] and returns the propagator in a [`Box`].
-    fn create_boxed(self, context: PropagatorConstructorContext<'_>) -> Box<dyn Propagator>
+    fn create_boxed(self, context: &mut PropagatorConstructorContext<'_>) -> Box<dyn Propagator>
     where
         Self: Sized,
         Self::Propagator: 'static,

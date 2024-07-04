@@ -58,7 +58,7 @@ where
 {
     type Propagator = LinearNotEqualPropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let x: Rc<[_]> = self
             .terms
             .iter()
@@ -317,14 +317,11 @@ mod tests {
             ))
             .expect_err("Non empty domain");
 
-        let expected: Inconsistency = PropositionalConjunction::new(
-            vec![
-                predicate!(x == 2),
-                predicate!(y == 2),
-                Predicate::Literal(reif),
-            ]
-            .into(),
-        )
+        let expected: Inconsistency = PropositionalConjunction::new(vec![
+            predicate!(x == 2),
+            predicate!(y == 2),
+            Predicate::Literal(reif),
+        ])
         .into();
         assert_eq!(expected, err);
     }
@@ -351,9 +348,7 @@ mod tests {
         let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
 
         assert_eq!(
-            PropositionalConjunction::new(
-                vec![predicate!(x == 2), Predicate::Literal(reif),].into()
-            ),
+            PropositionalConjunction::new(vec![predicate!(x == 2), Predicate::Literal(reif),]),
             *reason
         );
     }

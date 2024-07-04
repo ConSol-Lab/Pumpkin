@@ -25,7 +25,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let array = self
             .array
             .iter()
@@ -94,16 +94,8 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
             max_lb = i32::max(context.lower_bound(var), max_lb);
         }
 
-        context.set_upper_bound(
-            &self.rhs,
-            max_ub,
-            PropositionalConjunction::new(ub_reason.into()),
-        )?;
-        context.set_lower_bound(
-            &self.rhs,
-            max_lb,
-            PropositionalConjunction::new(lb_reason.into()),
-        )?;
+        context.set_upper_bound(&self.rhs, max_ub, PropositionalConjunction::new(ub_reason))?;
+        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::new(lb_reason))?;
 
         Ok(())
     }

@@ -10,27 +10,17 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
 pub(crate) struct LinearLessOrEqualConstructor<Var> {
     pub(crate) x: Box<[Var]>,
     pub(crate) c: i32,
-    pub(crate) reif: Option<Literal>,
 }
 
 impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
     pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
-        LinearLessOrEqualConstructor { x, c, reif: None }
-    }
-
-    pub(crate) fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
-        LinearLessOrEqualConstructor {
-            x,
-            c,
-            reif: Some(reif),
-        }
+        LinearLessOrEqualConstructor { x, c }
     }
 }
 
@@ -39,7 +29,6 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 pub(crate) struct LinearLessOrEqualPropagator<Var> {
     x: Box<[PropagatorVariable<Var>]>,
     c: i32,
-    pub(crate) reif: Option<PropagatorVariable<Literal>>,
 }
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
@@ -48,7 +37,7 @@ where
 {
     type Propagator = LinearLessOrEqualPropagator<Var>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let x: Box<[_]> = self
             .x
             .iter()
@@ -61,14 +50,7 @@ where
                 )
             })
             .collect();
-        let reif = self.reif.map(|literal| {
-            context.register_literal(
-                literal,
-                DomainEvents::ANY_BOOL,
-                LocalId::from(self.x.len() as u32),
-            )
-        });
-        LinearLessOrEqualPropagator::<Var> { x, c: self.c, reif }
+        LinearLessOrEqualPropagator::<Var> { x, c: self.c }
     }
 }
 
@@ -77,7 +59,7 @@ where
     Var: IntegerVariable,
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.x, self.c, &self.reif)
+        perform_propagation(context, &self.x, self.c)
     }
 
     fn synchronise(&mut self, _context: &PropagationContext) {}
@@ -98,7 +80,7 @@ where
         &self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
-        perform_propagation(context, &self.x, self.c, &self.reif)
+        perform_propagation(context, &self.x, self.c)
     }
 }
 
@@ -106,32 +88,14 @@ fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
     x: &[PropagatorVariable<Var>],
     c: i32,
-    reif: &Option<PropagatorVariable<Literal>>,
 ) -> PropagationStatusCP {
     let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
-    let reified = reif.is_some();
     if c < lb_lhs {
-        if reified && !context.is_literal_fixed(reif.as_ref().unwrap()) {
-            let reason: PropositionalConjunction = x
-                .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .collect();
-            context.assign_literal(reif.as_ref().unwrap(), false, reason)?;
-        } else if !reified || context.is_literal_true(reif.as_ref().unwrap()) {
-            let reason: PropositionalConjunction = x
-                .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
-                .collect();
-            return Err(reason.into());
-        }
-    }
-
-    if reified
-        && (!context.is_literal_fixed(reif.as_ref().unwrap())
-            || context.is_literal_false(reif.as_ref().unwrap()))
-    {
-        return Ok(());
+        let reason: PropositionalConjunction = x
+            .iter()
+            .map(|var| predicate![var >= context.lower_bound(var)])
+            .collect();
+        return Err(reason.into());
     }
 
     for (i, x_i) in x.iter().enumerate() {
@@ -148,7 +112,6 @@ fn perform_propagation<Var: IntegerVariable>(
                         None
                     }
                 })
-                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
                 .collect();
 
             context.set_upper_bound(x_i, bound, reason)?;
@@ -195,73 +158,5 @@ mod tests {
         let reason = solver.get_reason_int(predicate![y <= 6].try_into().unwrap());
 
         assert_eq!(conjunction!([x >= 1]), *reason);
-    }
-
-    #[test]
-    fn test_reified_does_not_propagate() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
-        let reif = solver.new_literal();
-
-        let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::reified(
-                [x, y].into(),
-                7,
-                reif,
-            ))
-            .expect("No conflict");
-
-        solver.set_literal(reif, false);
-
-        solver.propagate(&mut propagator).expect("non-empty domain");
-
-        solver.assert_bounds(x, 1, 5);
-        solver.assert_bounds(y, 0, 10);
-    }
-
-    #[test]
-    fn test_reified_does_propagate() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(1, 5);
-        let y = solver.new_variable(0, 10);
-        let reif = solver.new_literal();
-
-        let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::reified(
-                [x, y].into(),
-                7,
-                reif,
-            ))
-            .expect("No conflict");
-
-        solver.set_literal(reif, true);
-
-        solver.propagate(&mut propagator).expect("non-empty domain");
-
-        solver.assert_bounds(x, 1, 5);
-        solver.assert_bounds(y, 0, 6);
-    }
-
-    #[test]
-    fn test_reified_propagate_literal_reason() {
-        let mut solver = TestSolver::default();
-        let x = solver.new_variable(10, 10);
-        let y = solver.new_variable(10, 10);
-        let reif = solver.new_literal();
-
-        let _ = solver
-            .new_propagator(LinearLessOrEqualConstructor::reified(
-                [x, y].into(),
-                1,
-                reif,
-            ))
-            .expect("No conflict");
-
-        assert!(solver.is_literal_false(reif));
-
-        let reason = solver.get_reason_bool(reif, false);
-
-        assert_eq!(conjunction!([x >= 10] & [y >= 10]), *reason);
     }
 }

@@ -45,7 +45,7 @@ where
 {
     type Propagator = DivisionPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         DivisionPropagator {
             numerator: context.register(self.numerator, DomainEvents::BOUNDS, ID_NUMERATOR),
             denominator: context.register(self.denominator, DomainEvents::BOUNDS, ID_DENOMINATOR),

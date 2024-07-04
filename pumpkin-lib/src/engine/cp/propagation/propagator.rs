@@ -14,6 +14,7 @@ use crate::engine::propagation::PropagatorVariable;
 use crate::engine::BooleanDomainEvent;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::PropositionalConjunction;
 #[cfg(doc)]
 use crate::propagators::clausal::BasicClausalPropagator;
 #[cfg(doc)]
@@ -138,6 +139,19 @@ pub trait Propagator {
     /// By default this function calls [`Propagator::propagate`] at the root level.
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.propagate(context)
+    }
+
+    /// A check whether this propagator can detect an inconsistency.
+    ///
+    /// By implementing this function, if the propagator is reified, it can propagate the
+    /// reification literal based on the detected inconsistency.
+    ///
+    /// Note: [`Propagator::propagate`] should still check for inconsistency as well.
+    fn detect_inconsistency(
+        &self,
+        _context: &PropagationContextMut,
+    ) -> Option<PropositionalConjunction> {
+        None
     }
 }
 

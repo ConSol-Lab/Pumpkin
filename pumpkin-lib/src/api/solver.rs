@@ -31,6 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
+use crate::propagators::ReifiedPropagatorArgs;
 use crate::propagators::TimeTablePerPoint;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
@@ -623,12 +624,12 @@ impl Solver {
         rhs: i32,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(LinearLessOrEqualConstructor::reified(
-                terms.into(),
-                rhs,
-                reif,
-            ))
+        let propagator_args = ReifiedPropagatorArgs {
+            propagator: LinearLessOrEqualConstructor::new(terms.into(), rhs),
+            reification_literal: reif,
+        };
+
+        self.satisfaction_solver.add_propagator(propagator_args)
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.

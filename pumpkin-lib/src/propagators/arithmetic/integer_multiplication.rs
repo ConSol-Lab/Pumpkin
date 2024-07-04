@@ -41,7 +41,7 @@ where
 {
     type Propagator = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         IntegerMultiplicationPropagator {
             a: context.register(self.a, DomainEvents::ANY_INT, ID_A),
             b: context.register(self.b, DomainEvents::ANY_INT, ID_B),

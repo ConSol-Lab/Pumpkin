@@ -42,7 +42,7 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
-    mut context: PropagatorConstructorContext<'_>,
+    context: &mut PropagatorConstructorContext<'_>,
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();

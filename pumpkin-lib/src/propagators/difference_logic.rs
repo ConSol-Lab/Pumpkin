@@ -53,7 +53,7 @@ where
 {
     type Propagator = DifferenceLogicPropagator<V::AffineView>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
         //  x_i >= v -> x_j >= v + \delta
         //  x_j <= v -> x_i <= v - \delta

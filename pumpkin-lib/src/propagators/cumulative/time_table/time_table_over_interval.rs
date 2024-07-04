@@ -70,7 +70,7 @@ where
 {
     type Propagator = TimeTableOverIntervalPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTableOverIntervalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
     }

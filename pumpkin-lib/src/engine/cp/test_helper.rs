@@ -73,7 +73,7 @@ impl TestSolver {
         let id = PropagatorId(self.next_id);
         self.next_id += 1;
 
-        let mut propagator = constructor.create_boxed(PropagatorConstructorContext::new(
+        let mut propagator = constructor.create_boxed(&mut PropagatorConstructorContext::new(
             &mut self.watch_list,
             &mut self.watch_list_propositional,
             id,

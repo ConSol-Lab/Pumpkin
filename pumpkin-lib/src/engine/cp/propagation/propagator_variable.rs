@@ -22,7 +22,7 @@ use crate::engine::variables::TransformableVariable;
 /// 118–132.
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub struct PropagatorVariable<Var> {
-    pub(super) inner: Var,
+    pub(crate) inner: Var,
 }
 
 impl<Var: IntegerVariable> TransformableVariable<PropagatorVariable<Var::AffineView>>

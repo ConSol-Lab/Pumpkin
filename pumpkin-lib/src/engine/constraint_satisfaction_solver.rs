@@ -1409,13 +1409,13 @@ impl ConstraintSatisfactionSolver {
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
-        let constructor_context = PropagatorConstructorContext::new(
+        let mut constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list_cp,
             &mut self.watch_list_propositional,
             new_propagator_id,
         );
 
-        let propagator_to_add = constructor.create_boxed(constructor_context);
+        let propagator_to_add = constructor.create_boxed(&mut constructor_context);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1704,7 +1704,7 @@ mod tests {
 
         fn create(
             self,
-            mut context: crate::engine::propagation::PropagatorConstructorContext<'_>,
+            context: &mut crate::engine::propagation::PropagatorConstructorContext<'_>,
         ) -> Self::Propagator {
             let propagations: Vec<(
                 PropagatorVariable<DomainId>,

@@ -75,7 +75,7 @@ where
 {
     type Propagator = TimeTablePerPointIncrementalPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
     }
