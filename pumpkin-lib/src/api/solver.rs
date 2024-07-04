@@ -603,8 +603,12 @@ impl Solver {
         rhs: i32,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(LinearNotEqualConstructor::reified(terms.into(), rhs, reif))
+        let propagator = ReifiedPropagatorArgs {
+            reification_literal: reif,
+            propagator: LinearNotEqualConstructor::new(terms.into(), rhs),
+        };
+
+        self.satisfaction_solver.add_propagator(propagator)
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.

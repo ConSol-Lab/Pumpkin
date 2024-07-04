@@ -154,10 +154,6 @@ impl TestSolver {
             .is_literal_assigned_false(var)
     }
 
-    pub(crate) fn is_literal_assigned(&self, var: Literal) -> bool {
-        self.assignments_propositional.is_literal_assigned(var)
-    }
-
     pub(crate) fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignments_integer.get_upper_bound(var)
     }
