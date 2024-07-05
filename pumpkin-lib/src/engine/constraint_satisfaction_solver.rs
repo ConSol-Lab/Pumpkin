@@ -1130,6 +1130,9 @@ impl ConstraintSatisfactionSolver {
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
             assignments_integer: &self.assignments_integer,
             counters: &mut self.counters,
+            assignments_propositional: &self.assignments_propositional,
+            solver_state: &mut self.state,
+            reason_store: &mut self.reason_store,
         };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)

@@ -21,3 +21,5 @@
 * get_trail_position
 
 * later on: lazy explanation for current decision level predicates, could try it out!
+
+* remove propositional conjunction? No longer needed, could simply use Vec since there is no more confusion with disjunction.
