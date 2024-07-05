@@ -621,8 +621,8 @@ impl IntegerDomain {
 
         // in case the hole is made at the given trail position or earlier,
         // the value is not in the domain
-        if let Some(p) = self.holes.get(&value) {
-            if p.trail_position <= trail_position {
+        if let Some(hole_info) = self.holes.get(&value) {
+            if hole_info.trail_position <= trail_position {
                 return false;
             }
         }
@@ -908,8 +908,8 @@ impl IntegerDomain {
                 // Check in the explictly stored holes.
                 // If the value has been removed explicitly,
                 // then the stored time is the first time the value was removed.
-                if let Some(p) = self.holes.get(&not_equal_constant) {
-                    Some(p.trail_position)
+                if let Some(hole_info) = self.holes.get(&not_equal_constant) {
+                    Some(hole_info.trail_position)
                 } else {
                     // Otherwise, check the case when the lower/upper bound surpassed the value.
                     // If this never happened, then report that the predicate is not true.
