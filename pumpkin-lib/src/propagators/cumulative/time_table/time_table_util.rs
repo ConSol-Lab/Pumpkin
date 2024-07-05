@@ -4,6 +4,7 @@
 
 use std::cell::OnceCell;
 use std::cmp::max;
+use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -109,15 +110,28 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         });
     }
 
-    // If the time-table is empty and we have not received any updates (e.g. no mandatory parts have
-    // been introduced since the last propagation) then we can determine that no propagation will
-    // take place. It is not sufficient to check whether there have been no updates since it
-    // could be the case that a task which has been updated can now propagate due to an existing
-    // profile (this is due to the fact that we only propagate bounds and (currently) do not create
-    // holes in the domain!).
-    if !empty_time_table || !parameters.updated.is_empty() || result.update.is_some() {
-        result.decision = EnqueueDecision::Enqueue;
-    }
+    result.decision = if parameters.allow_holes_in_domain {
+        // If there are updates then propagations might occur due to new mandatory parts being
+        // added. However, if there are no updates then because we allow holes in the domain, no
+        // updates can occur so we can skip propagation!
+        if !parameters.updated.is_empty() || result.update.is_some() {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
+        }
+    } else {
+        // If the time-table is empty and we have not received any updates (e.g. no mandatory parts
+        // have been introduced since the last propagation) then we can determine that no
+        // propagation will take place. It is not sufficient to check whether there have
+        // been no updates since it could be the case that a task which has been updated can
+        // now propagate due to an existing profile (this is due to the fact that we only
+        // propagate bounds and (currently) do not create holes in the domain!).
+        if !empty_time_table || !parameters.updated.is_empty() || result.update.is_some() {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
+        }
+    };
     result
 }
 
@@ -224,8 +238,8 @@ pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
     has_overlap_with_interval(lower_bound, upper_bound, start, end)
 }
 
-/// Determines whether the interval \[lower_bound, upper_bound\) overlaps with the interval [start,
-/// end]
+/// Determines whether the interval \[lower_bound, upper_bound\) overlaps with the interval \[start,
+/// end\]
 fn has_overlap_with_interval(lower_bound: i32, upper_bound: i32, start: i32, end: i32) -> bool {
     start < upper_bound && lower_bound <= end
 }
@@ -469,6 +483,46 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
         if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
             let explanation = create_profile_explanation(context, profile, profile_explanation);
             propagate_upper_bound_task_by_profile(context, task, parameters, profile, explanation)?;
+        }
+        if parameters.allow_holes_in_domain {
+            // We go through all of the time-points which cause `task` to overlap with the resource
+            // profile
+
+            // There are two options for determining the lowest value to remove from the domain:
+            // - We remove all time-points from `profile.start - duration + 1` (i.e. the earliest
+            //   time-point such that `task` necessarily overlaps with the profile).
+            // - It could be the case that the lower-bound is larger than the previous earliest
+            //   time-point in which case we simply start from the lower-bound of the task.
+
+            let lower_bound_removed_time_points = max(
+                context.lower_bound(&task.start_variable),
+                profile.start - task.processing_time + 1,
+            );
+
+            // There are also two options for determine the highest value to remove from the domain:
+            // - We remove all time-points up-and-until the end of the profile (i.e. the latest
+            //   time-point which would result in the `task` overlapping with the profile)
+            // - It could be the case that the upper-bound is smaller than the previous later
+            //   time-point in case we remove all time-points up-and-until the upper-bound of the
+            //   task.
+            let upper_bound_removed_time_points =
+                min(context.upper_bound(&task.start_variable), profile.end);
+            for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
+                let explanation = create_profile_explanation(context, profile, profile_explanation);
+
+                context.remove(
+                    &task.start_variable,
+                    time_point,
+                    move |_context: &PropagationContext| {
+                        // We clone the underlying Vec in the Rc.
+                        //
+                        // Note that we do not need to include any of the information about `task`
+                        // since the explanation for the removal is valid irregardless of the bounds
+                        // of task.
+                        (*explanation).clone().into()
+                    },
+                )?;
+            }
         }
     }
     Ok(())
