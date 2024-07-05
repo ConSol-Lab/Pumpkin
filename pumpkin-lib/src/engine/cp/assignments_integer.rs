@@ -199,8 +199,16 @@ impl AssignmentsInteger {
     /// Note that it is not necessary for the predicate to be explicitly present on the trail,
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
-    pub fn get_trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
-        self.domains[integer_predicate.get_domain()].trail_position(integer_predicate)
+    pub fn get_trail_position(&self, _integer_predicate: &IntegerPredicate) -> Option<usize> {
+        todo!();
+        // self.domains[integer_predicate.get_domain()].trail_position(integer_predicate)
+    }
+
+    pub fn get_decision_level_for_predicate(
+        &self,
+        _integer_predicate: &IntegerPredicate,
+    ) -> Option<usize> {
+        todo!();
     }
 }
 
@@ -862,6 +870,7 @@ impl IntegerDomain {
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
 
+    #[allow(dead_code)]
     fn trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
         // Perhaps the recursion could be done in a cleaner way,
         // e.g., separate functions dependibng on the type of predicate.

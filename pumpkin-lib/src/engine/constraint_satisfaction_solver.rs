@@ -1127,7 +1127,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn compute_learned_nogood(&mut self, _brancher: &mut impl Brancher) -> LearnedNogood {
-        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {};
+        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
+            assignments_integer: &self.assignments_integer,
+            counters: &mut self.counters,
+        };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)
     }
