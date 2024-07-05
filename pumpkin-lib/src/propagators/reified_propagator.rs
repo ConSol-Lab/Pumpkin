@@ -85,20 +85,12 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         if context.is_literal_true(&self.reification_literal) {
             context.with_reification(&self.reification_literal);
 
-            let mut result = self.propagator.propagate(context);
+            let result = self.propagator.propagate(context);
 
-            if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) =
-                result
-            {
-                conjunction.add(self.reification_literal.get_literal().into());
-            }
-
-            return result;
-        } else if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
-                context.assign_literal(&self.reification_literal, false, conjunction)?;
-            }
+            self.map_propagation_status(result)?;
         }
+
+        self.propagate_reification(context)?;
 
         Ok(())
     }
@@ -114,16 +106,30 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         if context.is_literal_true(&self.reification_literal) {
             context.with_reification(&self.reification_literal);
 
-            let mut result = self.propagator.debug_propagate_from_scratch(context);
+            let result = self.propagator.debug_propagate_from_scratch(context);
 
-            if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) =
-                result
-            {
-                conjunction.add(self.reification_literal.get_literal().into());
-            }
+            self.map_propagation_status(result)?;
+        }
 
-            return result;
-        } else if !context.is_literal_fixed(&self.reification_literal) {
+        self.propagate_reification(context)?;
+
+        Ok(())
+    }
+}
+
+impl<Prop> ReifiedPropagator<Prop> {
+    fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
+        if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) = status {
+            conjunction.add(self.reification_literal.get_literal().into());
+        }
+        status
+    }
+
+    fn propagate_reification(&self, context: &mut PropagationContextMut<'_>) -> PropagationStatusCP
+    where
+        Prop: Propagator,
+    {
+        if !context.is_literal_fixed(&self.reification_literal) {
             if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
                 context.assign_literal(&self.reification_literal, false, conjunction)?;
             }
