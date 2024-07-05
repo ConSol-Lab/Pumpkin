@@ -905,7 +905,7 @@ impl IntegerDomain {
                 domain_id,
                 not_equal_constant,
             } => {
-                // Check in the explictly stored holes.
+                // Check the explictly stored holes.
                 // If the value has been removed explicitly,
                 // then the stored time is the first time the value was removed.
                 if let Some(hole_info) = self.holes.get(&not_equal_constant) {
