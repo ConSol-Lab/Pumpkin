@@ -3,4 +3,10 @@
 * Implementation of the nogood propagator is basic.
 * proof logging is done by the nogood propagator?
 * Nogood propagator could implement the Propagator trait -> could simplify the main propagation loop!
-* Remove allow dead code directives.
+* Remove allow dead code directives
+* Later on remove all SAT code / references / deadcode.
+* Rename the nogood analysers / new structs.
+* Add comments? E.g., the ResolutionNogoodConflictAnalyser uses // but should use ///
+* Improve implementation across the board (propagation of nogood? the way they are passed/stored? conflict analysis algorithm?)
+* Readd clause minimisation?
+* Do proper lazy?
