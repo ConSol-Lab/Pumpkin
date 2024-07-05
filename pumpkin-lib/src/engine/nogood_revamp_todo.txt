@@ -19,3 +19,5 @@
 * semantic minimisation? Not necessary?
 
 * get_trail_position
+
+* later on: lazy explanation for current decision level predicates, could try it out!
