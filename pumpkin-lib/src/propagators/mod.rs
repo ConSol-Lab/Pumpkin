@@ -7,6 +7,8 @@ pub mod clausal;
 mod cumulative;
 mod difference_logic;
 pub(crate) mod element;
+pub mod nogood;
 
 pub use arithmetic::*;
 pub use cumulative::*;
+pub use nogood::NogoodPropagator;

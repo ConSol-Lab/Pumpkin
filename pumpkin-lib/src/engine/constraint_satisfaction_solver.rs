@@ -13,8 +13,11 @@ use rand::SeedableRng;
 use super::clause_allocators::ClauseAllocatorInterface;
 use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
+use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::ConflictAnalysisResult;
+use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::ResolutionConflictAnalyser;
+use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
@@ -65,6 +68,7 @@ use crate::engine::RestartStrategy;
 use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::BasicClausalPropagator;
 use crate::propagators::clausal::ClausalPropagator;
+use crate::propagators::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -142,6 +146,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 ///
 /// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
 /// Intelligence, vol. 3, pp. 181–211, 2008.
+#[allow(dead_code)]
 pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
@@ -152,6 +157,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Although technically just another propagator, we treat the clausal propagator in a special
     /// way due to efficiency and conflict analysis.
     clausal_propagator: ClausalPropagatorType,
+    nogood_propagator: NogoodPropagator,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
     cp_propagators: Vec<Box<dyn Propagator>>,
@@ -171,6 +177,7 @@ pub struct ConstraintSatisfactionSolver {
     assumptions: Vec<Literal>,
     /// Performs conflict analysis, core extraction, and minimisation.
     conflict_analyser: ResolutionConflictAnalyser,
+    conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments_integer: AssignmentsInteger,
     /// Contains information on which propagator to notify upon
@@ -433,6 +440,7 @@ impl ConstraintSatisfactionSolver {
             assumptions: Vec::default(),
             assignments_propositional: AssignmentsPropositional::default(),
             clause_allocator: ClauseAllocator::default(),
+            nogood_propagator: NogoodPropagator::default(),
             assignments_integer: AssignmentsInteger::default(),
             watch_list_cp: WatchListCP::default(),
             watch_list_propositional: WatchListPropositional::default(),
@@ -447,6 +455,7 @@ impl ConstraintSatisfactionSolver {
             true_literal: dummy_literal,
             false_literal: !dummy_literal,
             conflict_analyser: ResolutionConflictAnalyser::default(),
+            conflict_nogood_analyser: ResolutionNogoodConflictAnalyser::default(),
             clausal_propagator: ClausalPropagatorType::default(),
             learned_clause_manager: LearnedClauseManager::new(learning_options),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
@@ -979,7 +988,7 @@ impl ConstraintSatisfactionSolver {
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
-                self.resolve_conflict(brancher);
+                self.resolve_conflict_with_nogood(brancher);
 
                 self.learned_clause_manager.decay_clause_activities();
 
@@ -1077,16 +1086,25 @@ impl ConstraintSatisfactionSolver {
     ///
     /// # Note
     /// This method performs no propagation, this is left up to the solver afterwards
+    #[allow(dead_code)]
     fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.conflicting());
 
         self.analysis_result = self.compute_learned_clause(brancher);
-
         self.process_learned_clause(brancher);
 
         self.state.declare_solving();
     }
 
+    fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
+        pumpkin_assert_moderate!(self.state.conflicting());
+
+        let learned_nogood = self.compute_learned_nogood(brancher);
+        self.process_learned_nogood(learned_nogood, brancher);
+        self.state.declare_solving();
+    }
+
+    #[allow(dead_code)]
     fn compute_learned_clause(&mut self, brancher: &mut impl Brancher) -> ConflictAnalysisResult {
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assumptions: &self.assumptions,
@@ -1106,6 +1124,28 @@ impl ConstraintSatisfactionSolver {
         };
         self.conflict_analyser
             .compute_1uip(&mut conflict_analysis_context)
+    }
+
+    fn compute_learned_nogood(&mut self, _brancher: &mut impl Brancher) -> LearnedNogood {
+        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {};
+        self.conflict_nogood_analyser
+            .compute_1uip(&mut conflict_analysis_context)
+    }
+
+    fn process_learned_nogood(
+        &mut self,
+        _learned_nogood: LearnedNogood,
+        _brancher: &mut impl Brancher,
+    ) {
+        // todo: log the nogood -> I think this is the responsibility of the nogood propagator now
+        // todo: I am not sure we need to treat unit nogoods in a special way? Simply backtrack and
+        // post? The only issue may be that backtracking to 0 is not the same as a restart since
+        // the restart also notifies the restart strategy, but is this a big difference?
+        // Think about this.
+
+        // backjump or restart
+        // ask the nogood propagator to add this nogood and propagate
+        todo!();
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {

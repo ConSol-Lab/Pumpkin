@@ -1,0 +1,6 @@
+* Learned nogood management.
+* Restart policy before took into account number of assigned literals, now it might not?
+* Implementation of the nogood propagator is basic.
+* proof logging is done by the nogood propagator?
+* Nogood propagator could implement the Propagator trait -> could simplify the main propagation loop!
+* Remove allow dead code directives.
