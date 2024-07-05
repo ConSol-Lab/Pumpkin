@@ -89,7 +89,7 @@ pub trait Propagator {
     /// by creating [`PropagatorVariable`]s using [`PropagatorConstructorContext::register()`].
     fn notify(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -103,7 +103,7 @@ pub trait Propagator {
     /// benefit from implementing this, so it is not required to do so.
     fn notify_literal(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         _local_id: LocalId,
         _event: BooleanDomainEvent,
     ) -> EnqueueDecision {
@@ -149,7 +149,7 @@ pub trait Propagator {
     /// Note: [`Propagator::propagate`] should still check for inconsistency as well.
     fn detect_inconsistency(
         &self,
-        _context: &PropagationContextMut,
+        _context: PropagationContext,
     ) -> Option<PropositionalConjunction> {
         None
     }

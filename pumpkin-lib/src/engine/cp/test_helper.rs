@@ -115,14 +115,10 @@ impl TestSolver {
             .assignments_integer
             .tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            PropagatorId(0),
-        );
+        let context =
+            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
         propagator.notify(
-            &mut context,
+            context,
             LocalId::from(id as u32),
             OpaqueDomainEvent::from(
                 DomainEvents::LOWER_BOUND
@@ -209,15 +205,11 @@ impl TestSolver {
             .assignments_integer
             .drain_domain_events()
             .collect::<Vec<_>>();
-        let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            PropagatorId(0),
-        );
+        let context =
+            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                let _ = propagator.notify(&mut context, propagator_var.variable, event.into());
+                let _ = propagator.notify(context, propagator_var.variable, event.into());
             }
         }
     }
@@ -229,12 +221,7 @@ impl TestSolver {
         local_id: LocalId,
     ) -> EnqueueDecision {
         propagator.notify(
-            &mut PropagationContextMut::new(
-                &mut self.assignments_integer,
-                &mut self.reason_store,
-                &mut self.assignments_propositional,
-                PropagatorId(0),
-            ),
+            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
             local_id,
             event,
         )

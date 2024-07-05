@@ -1,6 +1,10 @@
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -11,12 +15,17 @@ use crate::engine::BooleanDomainEvent;
 use crate::engine::DomainEvents;
 use crate::variables::Literal;
 
-pub(crate) struct ReifiedPropagatorArgs<PropArgs> {
+/// Propagator constructor for [`ReifiedPropagator`].
+pub(crate) struct ReifiedPropagatorConstructor<PropArgs> {
+    /// The propagator to reify.
     pub(crate) propagator: PropArgs,
+    /// The reification literal to reify with.
     pub(crate) reification_literal: Literal,
 }
 
-impl<PropArgs: PropagatorConstructor> PropagatorConstructor for ReifiedPropagatorArgs<PropArgs> {
+impl<PropArgs: PropagatorConstructor> PropagatorConstructor
+    for ReifiedPropagatorConstructor<PropArgs>
+{
     type Propagator = ReifiedPropagator<PropArgs::Propagator>;
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
@@ -37,12 +46,63 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor for ReifiedPropagato
     }
 }
 
+/// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
+/// propagator.
+///
+/// When a propagator is reified, it will only propagate whenever `r` is set to true. However, if
+/// the propagator implements [`Propagator::detect_inconsistency`], the result of that method may
+/// be used to propagate `r` to false. If that method is not implemented, `r` will never be
+/// propagated to false.
 pub(crate) struct ReifiedPropagator<Prop> {
     propagator: Prop,
     reification_literal: PropagatorVariable<Literal>,
 }
 
 impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
+    fn notify(
+        &mut self,
+        context: PropagationContext,
+        local_id: LocalId,
+        event: OpaqueDomainEvent,
+    ) -> EnqueueDecision {
+        if context.is_literal_true(&self.reification_literal) {
+            self.propagator.notify(context, local_id, event)
+        } else {
+            EnqueueDecision::Skip
+        }
+    }
+
+    fn notify_literal(
+        &mut self,
+        context: PropagationContext,
+        local_id: LocalId,
+        event: BooleanDomainEvent,
+    ) -> EnqueueDecision {
+        self.propagator.notify_literal(context, local_id, event)
+    }
+
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        if context.is_literal_true(&self.reification_literal) {
+            context.with_reification(&self.reification_literal);
+
+            let mut result = self.propagator.propagate(context);
+
+            if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) =
+                result
+            {
+                conjunction.add(self.reification_literal.get_literal().into());
+            }
+
+            return result;
+        } else if !context.is_literal_fixed(&self.reification_literal) {
+            if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
+                context.assign_literal(&self.reification_literal, false, conjunction)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn name(&self) -> &str {
         todo!("Cannot format name")
     }
@@ -64,7 +124,7 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 
             return result;
         } else if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conjunction) = self.propagator.detect_inconsistency(context) {
+            if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
                 context.assign_literal(&self.reification_literal, false, conjunction)?;
             }
         }
@@ -97,11 +157,11 @@ mod tests {
         let t2 = triggered_conflict.clone();
 
         let _ = solver
-            .new_propagator(ReifiedPropagatorArgs {
+            .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
                     propagation: move |_: &mut PropagationContextMut| Err(t1.clone().into()),
-                    consistency_check: move |_: &PropagationContextMut| Some(t2.clone()),
+                    consistency_check: move |_: PropagationContext| Some(t2.clone()),
                 },
             })
             .expect("no conflict");
@@ -120,14 +180,14 @@ mod tests {
         let var = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator(ReifiedPropagatorArgs {
+            .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
                     propagation: move |ctx: &mut PropagationContextMut| {
                         ctx.set_lower_bound(&PropagatorVariable { inner: var }, 3, conjunction!())?;
                         Ok(())
                     },
-                    consistency_check: |_: &PropagationContextMut| None,
+                    consistency_check: |_: PropagationContext| None,
                 },
             })
             .expect("no conflict");
@@ -155,13 +215,13 @@ mod tests {
         let var = solver.new_variable(1, 1);
 
         let inconsistency = solver
-            .new_propagator(ReifiedPropagatorArgs {
+            .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
                     propagation: move |_: &mut PropagationContextMut| {
                         Err(conjunction!([var >= 1]).into())
                     },
-                    consistency_check: |_: &PropagationContextMut| None,
+                    consistency_check: |_: PropagationContext| None,
                 },
             })
             .expect_err("eagerly triggered the conflict");
@@ -189,7 +249,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(&PropagationContextMut) -> Option<PropositionalConjunction>,
+        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
     {
         fn name(&self) -> &str {
             "Failing Propagator"
@@ -204,7 +264,7 @@ mod tests {
 
         fn detect_inconsistency(
             &self,
-            context: &PropagationContextMut,
+            context: PropagationContext,
         ) -> Option<PropositionalConjunction> {
             (self.consistency_check)(context)
         }
@@ -219,7 +279,7 @@ mod tests {
         for GenericArgs<Propagation, ConsistencyCheck>
     where
         Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(&PropagationContextMut) -> Option<PropositionalConjunction>,
+        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
     {
         type Propagator = GenericPropagator<Propagation, ConsistencyCheck>;
 

@@ -19,7 +19,7 @@ use crate::engine::EmptyDomain;
 ///
 /// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PropagationContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
@@ -84,6 +84,13 @@ impl<'a> PropagationContextMut<'a> {
             }
         } else {
             reason
+        }
+    }
+
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments_integer: self.assignments_integer,
+            assignments_propositional: self.assignments_propositional,
         }
     }
 }

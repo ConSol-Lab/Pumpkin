@@ -31,7 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
-use crate::propagators::ReifiedPropagatorArgs;
+use crate::propagators::ReifiedPropagatorConstructor;
 use crate::propagators::TimeTablePerPoint;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
@@ -603,7 +603,7 @@ impl Solver {
         rhs: i32,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        let propagator = ReifiedPropagatorArgs {
+        let propagator = ReifiedPropagatorConstructor {
             reification_literal: reif,
             propagator: LinearNotEqualConstructor::new(terms.into(), rhs),
         };
@@ -628,7 +628,7 @@ impl Solver {
         rhs: i32,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        let propagator_args = ReifiedPropagatorArgs {
+        let propagator_args = ReifiedPropagatorConstructor {
             propagator: LinearLessOrEqualConstructor::new(terms.into(), rhs),
             reification_literal: reif,
         };

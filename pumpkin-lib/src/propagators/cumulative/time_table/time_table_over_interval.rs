@@ -343,7 +343,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn notify(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

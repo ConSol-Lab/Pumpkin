@@ -180,7 +180,7 @@ where
 
     fn notify(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

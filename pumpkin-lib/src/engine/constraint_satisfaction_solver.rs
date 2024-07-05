@@ -266,15 +266,13 @@ impl ConstraintSatisfactionSolver {
             for (event, domain) in self.event_drain.drain(..) {
                 for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
                     let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                    let mut context = PropagationContextMut::new(
-                        &mut self.assignments_integer,
-                        &mut self.reason_store,
-                        &mut self.assignments_propositional,
-                        propagator_var.propagator,
+                    let context = PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
                     );
 
                     let enqueue_decision =
-                        propagator.notify(&mut context, propagator_var.variable, event.into());
+                        propagator.notify(context, propagator_var.variable, event.into());
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         self.propagator_queue
@@ -297,15 +295,13 @@ impl ConstraintSatisfactionSolver {
                     {
                         let propagator =
                             &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                        let mut context = PropagationContextMut::new(
-                            &mut self.assignments_integer,
-                            &mut self.reason_store,
-                            &mut self.assignments_propositional,
-                            propagator_var.propagator,
+                        let context = PropagationContext::new(
+                            &self.assignments_integer,
+                            &self.assignments_propositional,
                         );
 
                         let enqueue_decision =
-                            propagator.notify_literal(&mut context, propagator_var.variable, event);
+                            propagator.notify_literal(context, propagator_var.variable, event);
 
                         if enqueue_decision == EnqueueDecision::Enqueue {
                             self.propagator_queue.enqueue_propagator(

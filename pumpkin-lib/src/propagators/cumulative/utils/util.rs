@@ -76,7 +76,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
 pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: PropagationContext,
     bounds: &mut [(i32, i32)],
     task: &Rc<Task<Var>>,
 ) {
