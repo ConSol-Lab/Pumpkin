@@ -1041,22 +1041,22 @@ impl ConstraintSatisfactionSolver {
 
             self.propagate_enqueued();
 
-            println!(
-                "after prop. {}",
-                self.assignments_integer.get_decision_level()
-            );
-            for t in self.assignments_integer.trail.iter() {
-                println!("\t{} {}", t.predicate, t.reason.is_none());
-            }
-
-            for d in self.assignments_integer.get_domains() {
-                println!(
-                    "{}: [{}, {}]",
-                    d,
-                    self.assignments_integer.get_lower_bound(d),
-                    self.assignments_integer.get_upper_bound(d)
-                );
-            }
+            // println!(
+            // "after prop. {}",
+            // self.assignments_integer.get_decision_level()
+            // );
+            // for t in self.assignments_integer.trail.iter() {
+            // println!("\t{} {}", t.predicate, t.reason.is_none());
+            // }
+            //
+            // for d in self.assignments_integer.get_domains() {
+            // println!(
+            // "{}: [{}, {}]",
+            // d,
+            // self.assignments_integer.get_lower_bound(d),
+            // self.assignments_integer.get_upper_bound(d)
+            // );
+            // }
 
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
@@ -1073,33 +1073,20 @@ impl ConstraintSatisfactionSolver {
 
                 let branching_result = self.enqueue_next_decision(brancher);
 
-                // let trail: Vec<IntegerPredicate> = self
-                // .assignments_integer
-                // .trail
-                // .iter()
-                // .map(|p| p.predicate)
-                // .collect();
-                // println!("\t trail {:?}", trail);
-
-                // println!("postDec");
-                // for t in self.assignments_integer.trail.iter() {
-                // println!("\t{} {}", t.predicate, t.reason.is_none());
-                // }
-
                 if let Err(flag) = branching_result {
                     return flag;
                 }
             }
             // conflict
             else {
-                println!(
-                    "\tconflict {}",
-                    self.assignments_integer.get_decision_level()
-                );
-
-                for t in self.assignments_integer.trail.iter() {
-                    println!("\t\t{} {}", t.predicate, t.reason.is_none());
-                }
+                // println!(
+                // "\tconflict {}",
+                // self.assignments_integer.get_decision_level()
+                // );
+                //
+                // for t in self.assignments_integer.trail.iter() {
+                // println!("\t\t{} {}", t.predicate, t.reason.is_none());
+                // }
 
                 if self.assignments_propositional.is_at_the_root_level() {
                     self.state.declare_infeasible();
@@ -1325,7 +1312,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
-        println!("NOgood {:?}", learned_nogood);
+        // println!("NOgood {:?}", learned_nogood);
 
         let nogood_propagator_index = self
             .cp_propagators

@@ -207,28 +207,28 @@ impl ResolutionNogoodConflictAnalyser {
         let mut learned_nogood = context.get_conflict_nogood();
         pumpkin_assert_moderate!(!is_nogood_propagating(&learned_nogood));
 
-        println!("Conflict nogood: {:?}", learned_nogood);
+        // println!("Conflict nogood: {:?}", learned_nogood);
 
         learned_nogood = semantic_minimiser_draft(&learned_nogood);
 
-        println!("Conflict nogood minimised: {:?}", learned_nogood);
+        // println!("Conflict nogood minimised: {:?}", learned_nogood);
 
-        println!("num curr: {}", num_pred_cur_dl(&learned_nogood));
+        // println!("num curr: {}", num_pred_cur_dl(&learned_nogood));
 
-        for pred in &learned_nogood {
-            println!(
-                "\t{} {} {}",
-                pred,
-                context
-                    .assignments_integer
-                    .get_decision_level_for_predicate(pred)
-                    .unwrap(),
-                context
-                    .assignments_integer
-                    .get_trail_position(pred)
-                    .unwrap()
-            );
-        }
+        // for pred in &learned_nogood {
+        // println!(
+        // "\t{} {} {}",
+        // pred,
+        // context
+        // .assignments_integer
+        // .get_decision_level_for_predicate(pred)
+        // .unwrap(),
+        // context
+        // .assignments_integer
+        // .get_trail_position(pred)
+        // .unwrap()
+        // );
+        //}
 
         // record the nogood size for statistical purposes
         context
@@ -248,7 +248,7 @@ impl ResolutionNogoodConflictAnalyser {
                         .unwrap()
                 })
                 .expect("Cannot have an empty nogood during analysis.");
-            println!("Next pred: {}", next_predicate);
+            // println!("Next pred: {}", next_predicate);
             // Replace the next_predicate with its reason. This is done in two steps:
             // 1) Remove the predicate from the nogood.
             let next_predicate_index = learned_nogood
@@ -258,16 +258,16 @@ impl ResolutionNogoodConflictAnalyser {
             let _ = learned_nogood.swap_remove(next_predicate_index);
             // 2) Add the reason of the next_predicate to the nogood.
             let reason = context.get_propagation_reason(&next_predicate);
-            println!("Reason: {:?}", reason);
+            // println!("Reason: {:?}", reason);
             for predicate in reason {
                 // todo: do semantic minimisation - not strictly necessary for the first version
                 if !learned_nogood.contains(&predicate) {
                     learned_nogood.push(predicate);
                 }
             }
-            println!("\t resulting nogood: {:?}", learned_nogood);
+            // println!("\t resulting nogood: {:?}", learned_nogood);
             learned_nogood = semantic_minimiser_draft(&learned_nogood);
-            println!("\t after min: {:?}", learned_nogood);
+            // println!("\t after min: {:?}", learned_nogood);
         }
         // todo: clause minimisation?
 
