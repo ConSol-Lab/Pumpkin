@@ -10,7 +10,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::predicate;
@@ -47,9 +46,9 @@ impl<Var> LinearNotEqualConstructor<Var> {
 /// integer variables and `rhs` is an integer constant.
 #[derive(Debug)]
 pub struct LinearNotEqualPropagator<Var> {
-    terms: Rc<[PropagatorVariable<Var>]>,
+    terms: Rc<[Var]>,
     rhs: i32,
-    pub reif: Option<PropagatorVariable<Literal>>,
+    pub reif: Option<Literal>,
 }
 
 impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>
@@ -114,7 +113,7 @@ where
         let num_fixed = self
             .terms
             .iter()
-            .filter(|x_i| context.is_fixed(x_i))
+            .filter(|&x_i| context.is_fixed(x_i))
             .count();
         if num_fixed < self.terms.len() - 1 {
             return Ok(());
@@ -133,7 +132,7 @@ where
             .sum::<i32>();
 
         if num_fixed == self.terms.len() - 1
-            && (!reified || context.is_literal_true(self.reif.as_ref().unwrap()))
+            && (!reified || context.is_literal_true(self.reif.unwrap()))
         {
             let value_to_remove = self.rhs - lhs;
 
@@ -143,7 +142,7 @@ where
                 .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
             let terms = Rc::clone(&self.terms);
-            let reif = self.reif.clone();
+            let reif = self.reif;
             context.remove(
                 &self.terms[unfixed_x_i],
                 value_to_remove,
@@ -153,13 +152,13 @@ where
                         .enumerate()
                         .filter(|&(i, _)| i != unfixed_x_i)
                         .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                        .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
+                        .chain(reif.map(|variable| variable.into()))
                         .collect::<Vec<_>>();
                     predicates.into()
                 },
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
-            if reified && !context.is_literal_fixed(self.reif.as_ref().unwrap()) {
+            if reified && !context.is_literal_fixed(self.reif.unwrap()) {
                 // Conflict was found but we can set the reified literal to false to satisfy the
                 // constraint
                 let reason: PropositionalConjunction = self
@@ -168,8 +167,8 @@ where
                     .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
                     .collect();
 
-                context.assign_literal(self.reif.as_ref().unwrap(), false, reason)?;
-            } else if !reified || context.is_literal_true(self.reif.as_ref().unwrap()) {
+                context.assign_literal(self.reif.unwrap(), false, reason)?;
+            } else if !reified || context.is_literal_true(self.reif.unwrap()) {
                 // Conflict was found, either the constraint is not reified or the reification
                 // variable is already true
 
@@ -177,11 +176,7 @@ where
                     .terms
                     .iter()
                     .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
-                    .chain(
-                        self.reif
-                            .as_ref()
-                            .map(|variable| variable.get_literal().into()),
-                    )
+                    .chain(self.reif.map(|variable| variable.into()))
                     .collect();
 
                 return Err(failure_reason.into());

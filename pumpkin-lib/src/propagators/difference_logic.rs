@@ -15,16 +15,10 @@ use crate::engine::propagation::propagator::EnqueueDecision;
 use crate::engine::propagation::propagator::Propagator;
 use crate::engine::propagation::propagator_constructor::PropagatorConstructor;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
-use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
-type DiffLogicVariables<V> = (
-    PropagatorVariable<V>,
-    PropagatorVariable<V>,
-    PropagatorVariable<V>,
-    PropagatorVariable<V>,
-);
+type DiffLogicVariables<V> = (V, V, V, V);
 
 /// Bounds consistent propagator for a set of constraints `x_i + \delta <= x_j`.
 pub(crate) struct DifferenceLogicConstructor<V> {
@@ -35,7 +29,7 @@ pub(crate) struct DifferenceLogicConstructor<V> {
 pub(crate) struct DifferenceLogicPropagator<V> {
     #[allow(clippy::type_complexity)]
     /// The elementary constraints of the form `(y_1 <= v) => (y_2 <= v + d)`.
-    elementary_constraints: HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
+    elementary_constraints: HashMap<V, Box<[(i32, V)]>>,
     /// The y variables associated with each original difference_constraint;
     ///  used in translating LocalId back to DiffLogicVariable.
     difference_vars: Box<[DiffLogicVariables<V>]>,
@@ -43,7 +37,7 @@ pub(crate) struct DifferenceLogicPropagator<V> {
     // potential optimisation: bitset?
     updated: HashSet<LocalId>,
     /// Worklist used in propagation, kept here to save on allocations.
-    worklist: VecDeque<PropagatorVariable<V>>,
+    worklist: VecDeque<V>,
 }
 
 impl<V> PropagatorConstructor for DifferenceLogicConstructor<V>
@@ -63,9 +57,9 @@ where
         // Now have all implications of the form y1 <= v -> y2 <= v + \delta, these are the
         //  elementary propagators.
 
-        // `register_vars` does the caching logic to make sure we only generate 1
-        //  PropagatorVariable per variable. This is relevant for the propagation algorithm that
-        //  uses the PropagatorVariable to look up affected formulas on change in
+        // `register_vars` does the caching logic to make sure we only register
+        //  each variable once. This is relevant for the propagation algorithm that
+        //  uses the changed variables to look up affected formulas on change in
         //  `elementary_constraints`. If no reuse is required, the `LocalId`s will be from `0` to
         //  `4 * args.difference_constraints.len()`, since each constraint has 2 variables and each
         //  variable is registered twice, in a positive and a negative view.
@@ -143,11 +137,11 @@ impl<V> DifferenceLogicPropagator<V>
 where
     V: IntegerVariable + Hash + Eq,
 {
-    fn local_id_to_var(&self, id: LocalId) -> &PropagatorVariable<V> {
+    fn local_id_to_var(&self, id: LocalId) -> &V {
         // This mirrors the local ids computed in `register_vars` in
         //  `<DiffLogic as PropagatorConstructor>::create`.
         // Note that the caching does not break the mapping of `LocalId`s to difference_vars.
-        //  Whenever cached `PropagatorVariable`s were used in the tuple, their `LocalId`s simply
+        //  Whenever cached variables were used in the tuple, their `LocalId`s simply
         //  map to an earlier offset in the `difference_vars` array.
         let (div, rem) = (id.unpack() / 4, id.unpack() % 4);
         let diff_vars = &self.difference_vars[div as usize];
@@ -230,10 +224,10 @@ where
 
 #[allow(clippy::type_complexity)]
 fn propagate_shared<const CYCLE_CHECK: bool, V>(
-    elementary_constraints: &HashMap<PropagatorVariable<V>, Box<[(i32, PropagatorVariable<V>)]>>,
+    elementary_constraints: &HashMap<V, Box<[(i32, V)]>>,
     context: &mut PropagationContextMut,
-    y_start: &PropagatorVariable<V>,
-    worklist: &mut VecDeque<PropagatorVariable<V>>,
+    y_start: &V,
+    worklist: &mut VecDeque<V>,
 ) -> PropagationStatusCP
 where
     V: IntegerVariable + Hash + Eq,

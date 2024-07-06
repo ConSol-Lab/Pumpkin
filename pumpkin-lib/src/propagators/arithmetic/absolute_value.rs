@@ -8,7 +8,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 
 #[derive(Debug)]
@@ -38,8 +37,8 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
 /// the propagator will not propagate `[absolute >= 1]`.
 #[derive(Debug)]
 pub struct AbsoluteValuePropagator<VA, VB> {
-    signed: PropagatorVariable<VA>,
-    absolute: PropagatorVariable<VB>,
+    signed: VA,
+    absolute: VB,
 }
 
 impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
