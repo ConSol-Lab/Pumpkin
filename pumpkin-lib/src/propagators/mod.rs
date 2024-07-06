@@ -12,3 +12,4 @@ mod nogood;
 pub use arithmetic::*;
 pub use cumulative::*;
 pub use nogood::NogoodPropagator;
+pub use nogood::NogoodPropagatorConstructor;

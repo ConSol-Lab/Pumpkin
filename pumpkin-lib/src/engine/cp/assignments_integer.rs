@@ -14,7 +14,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
-    trail: Trail<ConstraintProgrammingTrailEntry>,
+    pub trail: Trail<ConstraintProgrammingTrailEntry>,
     /// indicates if value j is in the domain of the integer variable
     domains: KeyedVec<DomainId, IntegerDomain>,
 
@@ -207,6 +207,19 @@ impl AssignmentsInteger {
         &self,
         integer_predicate: &IntegerPredicate,
     ) -> Option<usize> {
+        // println!(
+        // "{} {} {:?}",
+        // integer_predicate,
+        // integer_predicate.get_domain(),
+        // self.domains[integer_predicate.get_domain()].upper_bound_updates
+        // );
+        //
+        // let m = self.domains[integer_predicate.get_domain()]
+        // .get_update_info(integer_predicate)
+        // .map(|u| u.decision_level)
+        // .unwrap();
+        // println!("RET VAL {}", m);
+
         self.domains[integer_predicate.get_domain()]
             .get_update_info(integer_predicate)
             .map(|u| u.decision_level)
@@ -910,7 +923,7 @@ impl IntegerDomain {
 
                 // find the update with greatest upper bound
                 // that is smaller than or equal to the input upper bound
-                self.lower_bound_updates
+                self.upper_bound_updates
                     .iter()
                     .find(|u| u.bound <= *upper_bound)
                     .map(|u| PairDecisionLevelTrailPosition {

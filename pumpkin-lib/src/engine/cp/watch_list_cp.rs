@@ -40,6 +40,7 @@ impl WatchListCP {
         self.watchers.push(WatcherCP::default());
     }
 
+    #[allow(dead_code)]
     pub fn is_watching_anything(&self) -> bool {
         self.is_watching_anything
     }

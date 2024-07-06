@@ -4,6 +4,7 @@
 use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Not;
 use std::time::Instant;
 
 use log::warn;
@@ -41,6 +42,7 @@ use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::cp::WatchListPropositional;
 use crate::engine::debug_helper::DebugDyn;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::proof::ProofLog;
 use crate::engine::propagation::EnqueueDecision;
@@ -68,7 +70,7 @@ use crate::engine::RestartStrategy;
 use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::BasicClausalPropagator;
 use crate::propagators::clausal::ClausalPropagator;
-use crate::propagators::NogoodPropagator;
+use crate::propagators::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -157,7 +159,6 @@ pub struct ConstraintSatisfactionSolver {
     /// Although technically just another propagator, we treat the clausal propagator in a special
     /// way due to efficiency and conflict analysis.
     clausal_propagator: ClausalPropagatorType,
-    nogood_propagator: NogoodPropagator,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
     cp_propagators: Vec<Box<dyn Propagator>>,
@@ -289,37 +290,43 @@ impl ConstraintSatisfactionSolver {
     fn process_domain_events(&mut self) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
-        if self.watch_list_cp.is_watching_anything() {
-            self.event_drain
-                .extend(self.assignments_integer.drain_domain_events());
+        // if self.watch_list_cp.is_watching_anything() {
+        // todo: in the current version, we always update due to the nogood propagator
+        self.event_drain
+            .extend(self.assignments_integer.drain_domain_events());
 
-            if self.event_drain.is_empty()
-                && self.propositional_trail_index
-                    == self.assignments_propositional.num_trail_entries()
-            {
-                return false;
-            }
+        if self.event_drain.is_empty()
+            && self.propositional_trail_index == self.assignments_propositional.num_trail_entries()
+        {
+            return false;
+        }
 
-            for (event, domain) in self.event_drain.drain(..) {
-                for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                    let mut context = PropagationContextMut::new(
-                        &mut self.assignments_integer,
-                        &mut self.reason_store,
-                        &mut self.assignments_propositional,
-                        propagator_var.propagator,
-                    );
+        // always enqueue the nogood propagator in the current version!
+        // hack
+        if !self.event_drain.is_empty() {
+            self.hack_enqueue_nogood_propagator();
+        }
 
-                    let enqueue_decision =
-                        propagator.notify(&mut context, propagator_var.variable, event.into());
+        for (event, domain) in self.event_drain.drain(..) {
+            for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
+                let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                let mut context = PropagationContextMut::new(
+                    &mut self.assignments_integer,
+                    &mut self.reason_store,
+                    &mut self.assignments_propositional,
+                    propagator_var.propagator,
+                );
 
-                    if enqueue_decision == EnqueueDecision::Enqueue {
-                        self.propagator_queue
-                            .enqueue_propagator(propagator_var.propagator, propagator.priority());
-                    }
+                let enqueue_decision =
+                    propagator.notify(&mut context, propagator_var.variable, event.into());
+
+                if enqueue_decision == EnqueueDecision::Enqueue {
+                    self.propagator_queue
+                        .enqueue_propagator(propagator_var.propagator, propagator.priority());
                 }
             }
         }
+        //}
         // If there are no literals being watched then there is no reason to perform these
         // operations
         if self.watch_list_propositional.is_watching_anything() {
@@ -357,6 +364,13 @@ impl ConstraintSatisfactionSolver {
         }
 
         true
+    }
+
+    fn hack_enqueue_nogood_propagator(&mut self) {
+        let nogood_propagator_index = self.hack_find_nogood_propagator();
+        let nogood_prio = self.cp_propagators[nogood_propagator_index].priority();
+        self.propagator_queue
+            .enqueue_propagator(PropagatorId(nogood_propagator_index as u32), nogood_prio);
     }
 
     /// Given a predicate, returns the corresponding literal.
@@ -440,7 +454,6 @@ impl ConstraintSatisfactionSolver {
             assumptions: Vec::default(),
             assignments_propositional: AssignmentsPropositional::default(),
             clause_allocator: ClauseAllocator::default(),
-            nogood_propagator: NogoodPropagator::default(),
             assignments_integer: AssignmentsInteger::default(),
             watch_list_cp: WatchListCP::default(),
             watch_list_propositional: WatchListPropositional::default(),
@@ -477,6 +490,8 @@ impl ConstraintSatisfactionSolver {
 
         csp_solver.true_literal = true_literal;
         csp_solver.false_literal = !true_literal;
+
+        csp_solver.hack_add_nogood_propagator();
 
         let result = csp_solver.add_clause([true_literal]);
         pumpkin_assert_simple!(result.is_ok());
@@ -737,13 +752,35 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         name: Option<String>,
     ) -> PropositionalVariable {
+        let domain_id = self.variable_literal_mappings.create_new_domain(
+            0,
+            1,
+            &mut self.assignments_integer,
+            &mut self.watch_list_cp,
+            &mut self.watch_list_propositional,
+            &mut self.clausal_propagator,
+            &mut self.assignments_propositional,
+            &mut self.clause_allocator,
+        );
+
+        // let variable = self
+        // .variable_literal_mappings
+        // .create_new_propositional_variable(
+        // &mut self.watch_list_propositional,
+        // &mut self.clausal_propagator,
+        // &mut self.assignments_propositional,
+        // );
+
+        // todo: is this a good replacement for now?
         let variable = self
             .variable_literal_mappings
-            .create_new_propositional_variable(
-                &mut self.watch_list_propositional,
-                &mut self.clausal_propagator,
-                &mut self.assignments_propositional,
-            );
+            .get_equality_literal(
+                domain_id,
+                1,
+                &self.assignments_propositional,
+                &self.assignments_integer,
+            )
+            .get_propositional_variable();
 
         if let Some(name) = name {
             self.variable_names.add_propositional(variable, name);
@@ -943,6 +980,47 @@ impl ConstraintSatisfactionSolver {
         assumptions.clone_into(&mut self.assumptions);
     }
 
+    fn hack_find_nogood_propagator(&self) -> usize {
+        self.cp_propagators
+            .iter()
+            .position(|p| p.name() == "NogoodPropagator")
+            .unwrap()
+    }
+
+    fn hack_add_nogood_propagator(&mut self) {
+        assert!(self
+            .cp_propagators
+            .iter()
+            .all(|p| p.name() != "NogoodPropagator"));
+
+        let nogood_propagator = NogoodPropagatorConstructor {};
+        let success = self.add_propagator(nogood_propagator);
+        assert!(success);
+    }
+
+    // fn hack_add_nogood_propagator(&mut self) {
+    // let nogood_propagator_index = self
+    // .cp_propagators
+    // .iter()
+    // .position(|p| p.name() == "NogoodPropagator");
+    //
+    // match nogood_propagator_index {
+    // Check if there were some new variable additions in the meantime.
+    // I do not expect any after creation!
+    // Some(index) => {
+    // panic!();
+    // }
+    // Otherwise initialise the nogood propagator
+    // None => {
+    // let domains: Vec<DomainId> = self.assignments_integer.get_domains().collect();
+    // let constructor: NogoodPropagatorConstructor =
+    // NogoodPropagatorConstructor { variables: domains };
+    // let success = self.add_propagator(constructor);
+    // assert!(success);
+    // }
+    // }
+    // }
+
     fn solve_internal(
         &mut self,
         termination: &mut impl TerminationCondition,
@@ -963,6 +1041,23 @@ impl ConstraintSatisfactionSolver {
 
             self.propagate_enqueued();
 
+            println!(
+                "after prop. {}",
+                self.assignments_integer.get_decision_level()
+            );
+            for t in self.assignments_integer.trail.iter() {
+                println!("\t{} {}", t.predicate, t.reason.is_none());
+            }
+
+            for d in self.assignments_integer.get_domains() {
+                println!(
+                    "{}: [{}, {}]",
+                    d,
+                    self.assignments_integer.get_lower_bound(d),
+                    self.assignments_integer.get_upper_bound(d)
+                );
+            }
+
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
 
@@ -977,12 +1072,35 @@ impl ConstraintSatisfactionSolver {
                 }
 
                 let branching_result = self.enqueue_next_decision(brancher);
+
+                // let trail: Vec<IntegerPredicate> = self
+                // .assignments_integer
+                // .trail
+                // .iter()
+                // .map(|p| p.predicate)
+                // .collect();
+                // println!("\t trail {:?}", trail);
+
+                // println!("postDec");
+                // for t in self.assignments_integer.trail.iter() {
+                // println!("\t{} {}", t.predicate, t.reason.is_none());
+                // }
+
                 if let Err(flag) = branching_result {
                     return flag;
                 }
             }
             // conflict
             else {
+                println!(
+                    "\tconflict {}",
+                    self.assignments_integer.get_decision_level()
+                );
+
+                for t in self.assignments_integer.trail.iter() {
+                    println!("\t\t{} {}", t.predicate, t.reason.is_none());
+                }
+
                 if self.assignments_propositional.is_at_the_root_level() {
                     self.state.declare_infeasible();
                     return CSPSolverExecutionFlag::Infeasible;
@@ -1140,18 +1258,82 @@ impl ConstraintSatisfactionSolver {
 
     fn process_learned_nogood(
         &mut self,
-        _learned_nogood: LearnedNogood,
-        _brancher: &mut impl Brancher,
+        learned_nogood: LearnedNogood,
+        brancher: &mut impl Brancher,
     ) {
-        // todo: log the nogood -> I think this is the responsibility of the nogood propagator now
+        // backjump or restart
+        // ask the nogood propagator to add this nogood and propagate
+
+        // todo: log the nogood -> I think this is the responsibility of the nogood propagator now?
+        //  because of the compressed format, but okay to log here too?
+        let learned_clause_equivalent: Vec<Literal> = learned_nogood
+            .predicates
+            .iter()
+            .map(|predicate| {
+                self.variable_literal_mappings.get_literal(
+                    predicate.not(),
+                    &self.assignments_propositional,
+                    &self.assignments_integer,
+                )
+            })
+            .collect();
+
+        if let Err(write_error) = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(learned_clause_equivalent)
+        {
+            warn!(
+                "Failed to update the certificate file, error message: {}",
+                write_error
+            );
+        }
+
         // todo: I am not sure we need to treat unit nogoods in a special way? Simply backtrack and
         // post? The only issue may be that backtracking to 0 is not the same as a restart since
         // the restart also notifies the restart strategy, but is this a big difference?
         // Think about this.
 
-        // backjump or restart
-        // ask the nogood propagator to add this nogood and propagate
-        todo!();
+        // Note that previous version of controlling restarts through number of propositional
+        // variables is no longer applicable.
+        // todo add LBD.
+
+        // For now we do it simple -> log some statistical data before posting.
+
+        self.counters.num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
+        // important to notify about the conflict _before_ backtracking removes literals from
+        // the trail -> although in the current version this does nothing but notify that a conflict
+        // happened
+        self.restart_strategy.notify_conflict(
+            learned_nogood.predicates.len() as u32,
+            self.assignments_propositional.num_trail_entries(),
+        );
+
+        self.counters
+            .average_learned_clause_length
+            .add_term(learned_nogood.predicates.len() as u64);
+
+        if learned_nogood.backjump_level > 0 {
+            self.counters
+                .average_backtrack_amount
+                .add_term((self.get_decision_level() - learned_nogood.backjump_level) as u64);
+        }
+
+        self.backtrack(0, brancher);
+
+        self.add_learned_nogood(learned_nogood);
+    }
+
+    fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
+        println!("NOgood {:?}", learned_nogood);
+
+        let nogood_propagator_index = self
+            .cp_propagators
+            .iter()
+            .position(|propagator| propagator.name() == "NogoodPropagator")
+            .expect("There has to be a nogood propagator!");
+        self.cp_propagators[nogood_propagator_index]
+            .hack_add_asserting_nogood(learned_nogood.predicates);
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
@@ -1281,6 +1463,8 @@ impl ConstraintSatisfactionSolver {
     /// Main propagation loop.
     pub(crate) fn propagate_enqueued(&mut self) {
         let num_assigned_variables_old = self.assignments_integer.num_trail_entries();
+
+        self.hack_enqueue_nogood_propagator();
 
         loop {
             let conflict_info = self.synchronise_propositional_trail_based_on_integer_trail();
@@ -1496,8 +1680,6 @@ impl ConstraintSatisfactionSolver {
             &mut self.assignments_propositional,
             new_propagator_id,
         );
-        // let mut context = self.create_propagation_context_mut();
-
         if new_propagator.initialise_at_root(&mut context).is_err() {
             self.state.declare_infeasible();
             false
@@ -1526,6 +1708,17 @@ impl ConstraintSatisfactionSolver {
 
         let literals: Vec<Literal> = literals.into_iter().collect();
 
+        let nogood: Vec<IntegerPredicate> = literals
+            .iter()
+            .map(|literal| {
+                self.variable_literal_mappings
+                    .get_predicates(*literal)
+                    .next()
+                    .unwrap()
+                    .not()
+            })
+            .collect();
+
         let result = self.clausal_propagator.add_permanent_clause(
             literals,
             &mut self.assignments_propositional,
@@ -1536,6 +1729,12 @@ impl ConstraintSatisfactionSolver {
             self.state.declare_infeasible();
             return Err(ConstraintOperationError::InfeasibleClause);
         }
+
+        // hack: not actually a learned nogood but can work
+        self.add_learned_nogood(LearnedNogood {
+            predicates: nogood,
+            backjump_level: 0,
+        });
 
         self.propagate_enqueued();
 

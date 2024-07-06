@@ -256,6 +256,7 @@ fn add_blocking_clause(
     if clause.is_empty() {
         return false;
     }
+
     solver.add_clause(clause).is_ok()
 }
 

@@ -174,36 +174,37 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn apply_integer_predicate<R: Into<Reason>>(
+    pub fn does_integer_predicate_hold(&self, integer_predicate: IntegerPredicate) -> bool {
+        self.assignments_integer
+            .does_integer_predicate_hold(integer_predicate)
+    }
+
+    pub fn apply_integer_predicate<R: Into<Reason> + Clone>(
         &mut self,
         integer_predicate: IntegerPredicate,
-        _reason: R,
+        reason: R,
     ) -> Result<(), EmptyDomain> {
-        if self
-            .assignments_integer
-            .does_integer_predicate_hold(integer_predicate)
-        {
-            return Ok(());
+        match integer_predicate {
+            IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => self.set_lower_bound(&domain_id, lower_bound, reason),
+            IntegerPredicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => self.set_upper_bound(&domain_id, upper_bound, reason),
+            IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => self.remove(&domain_id, not_equal_constant, reason),
+            IntegerPredicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                self.set_lower_bound(&domain_id, equality_constant, reason.clone())?;
+                self.set_upper_bound(&domain_id, equality_constant, reason)
+            }
         }
-        todo!();
-        // match integer_predicate {
-        // IntegerPredicate::LowerBound {
-        // domain_id,
-        // lower_bound,
-        // } => self.set_lower_bound(domain_id, lower_bound, reason),
-        // IntegerPredicate::UpperBound {
-        // domain_id,
-        // upper_bound,
-        // } => self.tighten_upper_bound(domain_id, upper_bound, reason),
-        // IntegerPredicate::NotEqual {
-        // domain_id,
-        // not_equal_constant,
-        // } => self.remove_value_from_domain(domain_id, not_equal_constant, reason),
-        // IntegerPredicate::Equal {
-        // domain_id,
-        // equality_constant,
-        // } => self.make_assignment(domain_id, equality_constant, reason),
-        // }
     }
 
     pub fn assign_literal<R: Into<Reason>>(

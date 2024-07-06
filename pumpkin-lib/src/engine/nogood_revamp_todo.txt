@@ -1,3 +1,13 @@
+TODOS short-term:
+
+run tests
+run some scheduling problems
+
+Improve the code! Add missing functionality.
+
+
+* The current implementation uses very simple propagation for nogood, so when we add the learned nogood, it does not actually propagate until much later!
+
 * Learned nogood management.
 * Restart policy before took into account number of assigned literals, now it might not?
 * Implementation of the nogood propagator is basic.
@@ -15,13 +25,53 @@
 * Consider special data structures for 0-1 integers (assignments, predicate, compressed predicates)
 
 * get_decision_level for predicate can be done better -> todo!()
-
 * semantic minimisation? Not necessary?
-
 * get_trail_position
-
 * later on: lazy explanation for current decision level predicates, could try it out!
-
 * remove propositional conjunction? No longer needed, could simply use Vec since there is no more confusion with disjunction.
-
 + sometimes &IntegerPredicate, sometimes IntegerPredicate -> perhaps best to decide one or the other
+* make assignment in assignments_integer, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
+* does_integer_predicate_hold in context could be moved to the trait ReadDomains?
+
+* the way the propagator constructed now is that only variables that are present at the time of creation of the propagator are added, probably we want to treat the nogood propagator in a special way afterall?
+
+* add propagator returns bool, should return Result?
+
+* bumped priorities of other propagators, so that nogoods at at level 0? Actually if it is so slow then might as well give large priority? Problem since we do not delete!
+
+* current when creating propositional variable, we also create a 0-1 integer variables, is this enough?
+
+* integration tests are amazing! But it took me a bit to understanding how to navigate the code. It just says test failed.
+
+
+
+How to change Booleans into Integers?
+
+pub fn create_new_propositional_variable(
+add clause should be changed? Or complemented? Not the cleanest now?
+// hack: not actually a learned nogood but can work
+disable clause propagator?
+
+* always enqueuing the nogood propagator -> I guess it is not a regular propagator after all.
+
+* fn debug_check_state for clausal_basic -> effectively deleted
+* is_propagation_complete -> deleted!
+* fn synchronise(&mut self, trail_size: usize) {
+
+* integer_assignment exposes trail
+
+* disabled the clausal propagator from posting permanent clauses
+
+
+* running int_lin_le -> wild variable selection
+starts with x != 9, 8, 7, 6...(note that 10 is skipped), then goes to x != 1, and then decides x <= 9. Funny because 9 is not in the domain, it is effectively saying x = 0. What? Also branching on not_equals...
+
+
+solver, line 1117 -> where are the other match cases?
+
+assignments_integer.rs, line 926, was look at lower bound instead of upper bound
+line 422, for the upper bound reason but not equals trail, used lower instead of upper bound
+
+* need to cache reasons during computation in the analyser
+* need to disallow duplicates during computation in the analyser
+* semantic minimisation during reason extraction

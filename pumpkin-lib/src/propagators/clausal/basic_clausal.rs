@@ -52,51 +52,11 @@ impl ClausalPropagator for BasicClausalPropagator {
 
     fn add_permanent_clause(
         &mut self,
-        literals: Vec<Literal>,
-        assignments: &mut AssignmentsPropositional,
-        clause_allocator: &mut ClauseAllocator,
+        _literals: Vec<Literal>,
+        _assignments: &mut AssignmentsPropositional,
+        _clause_allocator: &mut ClauseAllocator,
     ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_simple!(assignments.is_at_the_root_level());
-
-        if self.is_in_infeasible_state {
-            return Err(ConstraintOperationError::InfeasibleState);
-        }
-
-        if literals.is_empty() {
-            warn!("Adding empty clause, unusual!");
-        }
-
-        let literals = Preprocessor::preprocess_clause(literals, assignments);
-
-        // infeasible at the root? Note that we do not add the original clause to the database in
-        // this case
-        if literals.is_empty() {
-            self.is_in_infeasible_state = true;
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
-        // is unit clause? Unit clauses are added as root assignments, rather than as actual clauses
-        // 	in case the clause is satisfied at the root, the PreprocessClause method will return a
-        // unit clause with a literal that is satisfied at the root
-
-        // add clause unit
-        if literals.len() == 1 {
-            if assignments.is_literal_assigned_false(literals[0]) {
-                self.is_in_infeasible_state = true;
-                return Err(ConstraintOperationError::InfeasibleClause);
-            } else if assignments.is_literal_unassigned(literals[0]) {
-                assignments.enqueue_decision_literal(literals[0]);
-                let outcome = self.propagate(assignments, clause_allocator);
-                if outcome.is_err() {
-                    self.is_in_infeasible_state = true;
-                    return Err(ConstraintOperationError::InfeasibleClause);
-                }
-            }
-        } else {
-            // standard case - the clause has at least two unassigned literals
-            let _ = self.add_clause_unchecked(literals, false, clause_allocator);
-        }
-
+        // self.fun_name3(assignments, literals, clause_allocator)
         Ok(())
     }
 
@@ -158,6 +118,80 @@ impl ClausalPropagator for BasicClausalPropagator {
         &mut self,
         assignments: &mut AssignmentsPropositional,
         clause_manager: &mut ClauseAllocator,
+    ) -> Result<(), ConflictInfo> {
+        self.fun_name(assignments, clause_manager)
+    }
+
+    fn synchronise(&mut self, trail_size: usize) {
+        pumpkin_assert_simple!(self.next_position_on_trail_to_propagate >= trail_size);
+        self.next_position_on_trail_to_propagate = trail_size;
+
+        // super old code
+        // self.next_position_on_trail_to_propagate =
+        //    std::cmp::min(self.next_position_on_trail_to_propagate, trail_size);
+    }
+
+    fn is_propagation_complete(&self, trail_size: usize) -> bool {
+        self.next_position_on_trail_to_propagate == trail_size
+    }
+
+    fn remove_clause_from_consideration(
+        &mut self,
+        clause: &[Literal],
+        clause_reference: ClauseReference,
+    ) {
+        // for now a simple implementation, in the future it could be worthwhile considering lazy
+        // data structure or batch removals
+        let remove_clause_from_watchers =
+            |watchers: &mut Vec<ClauseWatcher>, clause_reference: ClauseReference| {
+                let index = watchers
+                    .iter()
+                    .position(|x| x.clause_reference == clause_reference)
+                    .unwrap();
+                let _ = watchers.swap_remove(index);
+            };
+
+        let watched_literal1 = clause[0];
+        let watched_literal2 = clause[1];
+
+        remove_clause_from_watchers(&mut self.watch_lists[watched_literal1], clause_reference);
+        remove_clause_from_watchers(&mut self.watch_lists[watched_literal2], clause_reference);
+    }
+
+    fn debug_check_state(
+        &self,
+        assignments: &AssignmentsPropositional,
+        clause_allocator: &ClauseAllocator,
+    ) -> bool {
+        self.fun_name2(assignments, clause_allocator);
+        true
+    }
+}
+
+impl BasicClausalPropagator {
+    fn start_watching_clause_unchecked(
+        &mut self,
+        clause: &[Literal],
+        clause_reference: ClauseReference,
+    ) {
+        pumpkin_assert_simple!(clause.len() >= 2);
+
+        self.watch_lists[clause[0]].push(ClauseWatcher {
+            cached_literal: clause[1],
+            clause_reference,
+        });
+
+        self.watch_lists[clause[1]].push(ClauseWatcher {
+            cached_literal: clause[0],
+            clause_reference,
+        });
+    }
+
+    #[allow(dead_code)]
+    fn fun_name(
+        &mut self,
+        assignments: &mut AssignmentsPropositional,
+        clause_manager: &mut crate::engine::clause_allocators::ClauseAllocatorBasic,
     ) -> Result<(), ConflictInfo> {
         pumpkin_assert_simple!(!self.is_in_infeasible_state);
         // this function is implemented as one long function
@@ -292,49 +326,24 @@ impl ClausalPropagator for BasicClausalPropagator {
         Ok(())
     }
 
-    fn synchronise(&mut self, trail_size: usize) {
-        pumpkin_assert_simple!(self.next_position_on_trail_to_propagate >= trail_size);
-        self.next_position_on_trail_to_propagate = trail_size;
-        // self.next_position_on_trail_to_propagate =
-        //    std::cmp::min(self.next_position_on_trail_to_propagate, trail_size);
-    }
-
-    fn is_propagation_complete(&self, trail_size: usize) -> bool {
-        self.next_position_on_trail_to_propagate == trail_size
-    }
-
-    fn remove_clause_from_consideration(
-        &mut self,
-        clause: &[Literal],
-        clause_reference: ClauseReference,
-    ) {
-        // for now a simple implementation, in the future it could be worthwhile considering lazy
-        // data structure or batch removals
-        let remove_clause_from_watchers =
-            |watchers: &mut Vec<ClauseWatcher>, clause_reference: ClauseReference| {
-                let index = watchers
-                    .iter()
-                    .position(|x| x.clause_reference == clause_reference)
-                    .unwrap();
-                let _ = watchers.swap_remove(index);
-            };
-
-        let watched_literal1 = clause[0];
-        let watched_literal2 = clause[1];
-
-        remove_clause_from_watchers(&mut self.watch_lists[watched_literal1], clause_reference);
-        remove_clause_from_watchers(&mut self.watch_lists[watched_literal2], clause_reference);
-    }
-
-    fn debug_check_state(
+    #[allow(dead_code)]
+    fn fun_name2(
         &self,
         assignments: &AssignmentsPropositional,
-        clause_allocator: &ClauseAllocator,
-    ) -> bool {
+        clause_allocator: &crate::engine::clause_allocators::ClauseAllocatorBasic,
+    ) {
         assert!(
             self.watch_lists.len() as u32 == 2 * assignments.num_propositional_variables(),
             "Watch list length is not as expected given the number of propositional variables."
         );
+
+        if !self.is_propagation_complete(assignments.num_trail_entries()) {
+            println!(
+                "{} {}",
+                self.next_position_on_trail_to_propagate,
+                assignments.num_trail_entries()
+            );
+        }
 
         assert!(self.is_propagation_complete(assignments.num_trail_entries()), "Only makes sense to check the propagator state after there is nothing left to propagate.");
 
@@ -468,28 +477,57 @@ impl ClausalPropagator for BasicClausalPropagator {
                 );
             }
         });
-
-        true
     }
-}
 
-impl BasicClausalPropagator {
-    fn start_watching_clause_unchecked(
+    #[allow(dead_code)]
+    fn fun_name3(
         &mut self,
-        clause: &[Literal],
-        clause_reference: ClauseReference,
-    ) {
-        pumpkin_assert_simple!(clause.len() >= 2);
+        assignments: &mut AssignmentsPropositional,
+        literals: Vec<Literal>,
+        clause_allocator: &mut crate::engine::clause_allocators::ClauseAllocatorBasic,
+    ) -> Result<(), ConstraintOperationError> {
+        pumpkin_assert_simple!(assignments.is_at_the_root_level());
 
-        self.watch_lists[clause[0]].push(ClauseWatcher {
-            cached_literal: clause[1],
-            clause_reference,
-        });
+        if self.is_in_infeasible_state {
+            return Err(ConstraintOperationError::InfeasibleState);
+        }
 
-        self.watch_lists[clause[1]].push(ClauseWatcher {
-            cached_literal: clause[0],
-            clause_reference,
-        });
+        if literals.is_empty() {
+            warn!("Adding empty clause, unusual!");
+        }
+
+        let literals = Preprocessor::preprocess_clause(literals, assignments);
+
+        // infeasible at the root? Note that we do not add the original clause to the database in
+        // this case
+        if literals.is_empty() {
+            self.is_in_infeasible_state = true;
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+
+        // is unit clause? Unit clauses are added as root assignments, rather than as actual clauses
+        // 	in case the clause is satisfied at the root, the PreprocessClause method will return a
+        // unit clause with a literal that is satisfied at the root
+
+        // add clause unit
+        if literals.len() == 1 {
+            if assignments.is_literal_assigned_false(literals[0]) {
+                self.is_in_infeasible_state = true;
+                return Err(ConstraintOperationError::InfeasibleClause);
+            } else if assignments.is_literal_unassigned(literals[0]) {
+                assignments.enqueue_decision_literal(literals[0]);
+                let outcome = self.propagate(assignments, clause_allocator);
+                if outcome.is_err() {
+                    self.is_in_infeasible_state = true;
+                    return Err(ConstraintOperationError::InfeasibleClause);
+                }
+            }
+        } else {
+            // standard case - the clause has at least two unassigned literals
+            let _ = self.add_clause_unchecked(literals, false, clause_allocator);
+        }
+
+        Ok(())
     }
 }
 

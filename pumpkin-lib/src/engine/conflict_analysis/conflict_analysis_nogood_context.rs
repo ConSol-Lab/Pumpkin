@@ -62,7 +62,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         let trail_entry = self.assignments_integer.get_trail_entry(trail_position);
 
         if trail_entry.reason.is_none() {
-            pumpkin_assert_simple!(*predicate == trail_entry.predicate);
+            // this assert does not need to hold, can be as a result of a decision!
+            // pumpkin_assert_simple!(*predicate == trail_entry.predicate);
             vec![*predicate]
         } else {
             self.get_propagation_reason(predicate)
@@ -212,7 +213,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 extract_reason_from_trail(&trail_entry)
                             }
                             // 2) The trail lower bound is lower than the not_equals_constant,
-                            //  but because of holes, the bound was raised above the
+                            // but because of holes, the bound was raised above the
                             // not_equals_constant.
                             else {
                                 // Scrap the code below!
@@ -255,6 +256,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // case when the the trail lower bound is lower than the input equality
                             // constant, but due to holes in the domain, the lower bound got raised
                             // to just the value of the equality constant.
+                            // For example, {1, 2, 3, 10}, then posting [x >= 5] will raise the
+                            // lower bound to x >= 10.
 
                             // Note that it could be that one of the two predicates are decision
                             // predicates, so we need to use the substitute functions.
@@ -349,12 +352,38 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         extract_reason_from_trail(&trail_entry)
                     }
                     IntegerPredicate::Equal {
-                        domain_id: _,
-                        equality_constant: _,
+                        domain_id,
+                        equality_constant,
                     } => {
-                        // We never place equality predicates on the trail,
-                        // so we can skip this case.
-                        unreachable!()
+                        // The input predicate is an equality predicate, and the trail predicate
+                        // is an upper bound predicate. This means that the time of posting the
+                        // trail predicate is when the input predicate became true.
+
+                        // Note that the input equality constant does _not_ necessarily equal
+                        // the trail upper bound. This would be the
+                        // case when the the trail upper bound is greater than the input equality
+                        // constant, but due to holes in the domain, the upper bound got lowered
+                        // to just the value of the equality constant.
+                        // For example, x = {1, 2, 3, 8, 15}, setting [x <= 12] would lower the
+                        // upper bound to x <= 8.
+
+                        // Note that it could be that one of the two predicates are decision
+                        // predicates, so we need to use the substitute functions.
+
+                        let predicate_lb = IntegerPredicate::LowerBound {
+                            domain_id: *domain_id,
+                            lower_bound: *equality_constant,
+                        };
+                        let predicate_ub = IntegerPredicate::UpperBound {
+                            domain_id: *domain_id,
+                            upper_bound: *equality_constant,
+                        };
+
+                        let mut reason_lb = self.compute_substitute_for_predicate(&predicate_lb);
+                        let mut reason_ub = self.compute_substitute_for_predicate(&predicate_ub);
+
+                        reason_lb.append(&mut reason_ub);
+                        reason_lb
                     }
                 },
                 IntegerPredicate::NotEqual {
@@ -412,9 +441,9 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                         // The reason for the input predicate [x <= a] is computed recursively as
                         // the reason for [x <= a + 1] & [x != a + 1].
-                        let new_ub_predicate = IntegerPredicate::LowerBound {
+                        let new_ub_predicate = IntegerPredicate::UpperBound {
                             domain_id: *domain_id,
-                            lower_bound: input_upper_bound + 1,
+                            upper_bound: input_upper_bound + 1,
                         };
                         let new_not_equals_predicate = IntegerPredicate::NotEqual {
                             domain_id: *domain_id,

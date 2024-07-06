@@ -2,6 +2,7 @@
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
@@ -135,6 +136,13 @@ pub trait Propagator {
     /// By default this function calls [`Propagator::propagate`] at the root level.
     fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         self.propagate(context)
+    }
+
+    /// Temporary hack, used to add nogoods.
+    /// To add a learned nogood, the solver goes through all of its propagators,
+    /// finds the nogood propagator, and then calls this function.
+    fn hack_add_asserting_nogood(&mut self, _nogood: Vec<IntegerPredicate>) {
+        unreachable!();
     }
 }
 
