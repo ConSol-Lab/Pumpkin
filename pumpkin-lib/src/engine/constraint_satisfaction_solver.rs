@@ -950,8 +950,21 @@ impl ConstraintSatisfactionSolver {
         //  (although currently we do not have any serious preprocessing!)
         for j in 0..self.variable_literal_mappings.literal_to_predicates[literal].len() {
             let predicate = self.variable_literal_mappings.literal_to_predicates[literal][j];
+
+            let reference = self
+                .assignments_propositional
+                .get_literal_reason_constraint(literal);
+
+            // todo check if this makes sense
+            let reason = if reference.is_null() || !reference.is_cp_reason() {
+                None
+            } else {
+                Some(reference.get_reason_ref())
+            };
+
             self.assignments_integer
-                .apply_integer_predicate(predicate, None)?;
+                //.apply_integer_predicate(predicate, None)?;
+                .apply_integer_predicate(predicate, reason)?;
         }
         Ok(())
     }
@@ -1235,9 +1248,11 @@ impl ConstraintSatisfactionSolver {
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
             assignments_integer: &self.assignments_integer,
             counters: &mut self.counters,
+            variable_literal_mappings: &self.variable_literal_mappings,
             assignments_propositional: &self.assignments_propositional,
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
+            clause_allocator: &self.clause_allocator,
         };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -1306,7 +1321,7 @@ impl ConstraintSatisfactionSolver {
                 .add_term((self.get_decision_level() - learned_nogood.backjump_level) as u64);
         }
 
-        self.backtrack(0, brancher);
+        self.backtrack(learned_nogood.backjump_level, brancher);
 
         self.add_learned_nogood(learned_nogood);
     }

@@ -384,6 +384,15 @@ impl DebugHelper {
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) {
+        // The nogood propagator is special, so the code below does not necessarily hold.
+        // This is because the propagator gets updated during solving.
+        // For example, x != y with x,y\in{0,1}, and we ask to enumerate all solutions,
+        // after adding nogoods to forbid the two solutions, the negation of failure
+        // will still be a failure!
+        if propagator.name() == "NogoodPropagator" {
+            return;
+        }
+
         // let the failure be: (p1 && p2 && p3) -> failure
         //  then (!p1 || !p2 || !p3) should not lead to immediate failure
 
@@ -434,6 +443,7 @@ impl DebugHelper {
                 }
             }
         }
+
         if !found_nonconflicting_state_at_root {
             panic!(
                 "Negating the reason for failure was still leading to failure

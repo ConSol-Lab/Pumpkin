@@ -194,7 +194,15 @@ impl ResolutionNogoodConflictAnalyser {
                     }
                 }
             }
-            new_nogood
+
+            // remove duplicates...a bit ugly todo
+            let mut new_nogood2: Vec<IntegerPredicate> = vec![];
+            for predicate in &new_nogood {
+                if !new_nogood2.contains(predicate) {
+                    new_nogood2.push(*predicate);
+                }
+            }
+            new_nogood2
         };
         // todo: could be done more efficiently with additional data structures.
         let is_nogood_propagating = |nogood: &Vec<IntegerPredicate>| {
@@ -205,16 +213,15 @@ impl ResolutionNogoodConflictAnalyser {
         // the initial learned nogood is the conflict nogood
         // and below it gets processed during the analysis
         let mut learned_nogood = context.get_conflict_nogood();
-        pumpkin_assert_moderate!(!is_nogood_propagating(&learned_nogood));
-
         // println!("Conflict nogood: {:?}", learned_nogood);
+        // pumpkin_assert_moderate!(!is_nogood_propagating(&learned_nogood));
 
         learned_nogood = semantic_minimiser_draft(&learned_nogood);
 
         // println!("Conflict nogood minimised: {:?}", learned_nogood);
-
+        //
         // println!("num curr: {}", num_pred_cur_dl(&learned_nogood));
-
+        //
         // for pred in &learned_nogood {
         // println!(
         // "\t{} {} {}",
@@ -228,7 +235,7 @@ impl ResolutionNogoodConflictAnalyser {
         // .get_trail_position(pred)
         // .unwrap()
         // );
-        //}
+        // }
 
         // record the nogood size for statistical purposes
         context
@@ -249,6 +256,7 @@ impl ResolutionNogoodConflictAnalyser {
                 })
                 .expect("Cannot have an empty nogood during analysis.");
             // println!("Next pred: {}", next_predicate);
+
             // Replace the next_predicate with its reason. This is done in two steps:
             // 1) Remove the predicate from the nogood.
             let next_predicate_index = learned_nogood

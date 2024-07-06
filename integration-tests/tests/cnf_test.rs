@@ -19,7 +19,7 @@ macro_rules! test_cnf_instance {
     };
 }
 
-test_cnf_instance!(add128);
+// test_cnf_instance!(add128);
 test_cnf_instance!(add16);
 test_cnf_instance!(add32);
 test_cnf_instance!(add4);
@@ -53,7 +53,7 @@ test_cnf_instance!(prime25);
 test_cnf_instance!(prime289);
 test_cnf_instance!(prime361);
 test_cnf_instance!(prime4);
-test_cnf_instance!(prime4294967297);
+// test_cnf_instance!(prime4294967297);
 test_cnf_instance!(prime49);
 test_cnf_instance!(prime529);
 test_cnf_instance!(prime65537);

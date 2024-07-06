@@ -158,13 +158,20 @@ impl VariableLiteralMappings {
             .push(equality_literals.clone());
 
         // Add clause to select at least one equality.
-        clausal_propagator
-            .add_permanent_clause(
+        // clausal_propagator
+        // .add_permanent_clause(
+        // equality_literals.into(),
+        // assignments_propositional,
+        // clause_allocator,
+        // )
+        // .expect("at least one equality must hold");
+        if equality_literals.len() > 1 {
+            let _ = clausal_propagator.add_clause_unchecked(
                 equality_literals.into(),
-                assignments_propositional,
+                false,
                 clause_allocator,
-            )
-            .expect("at least one equality must hold");
+            );
+        }
     }
 
     /// Create the literals representing [x == v] for all values v in the initial domain.

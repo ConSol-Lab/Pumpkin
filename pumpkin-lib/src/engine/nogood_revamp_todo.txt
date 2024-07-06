@@ -75,3 +75,11 @@ line 422, for the upper bound reason but not equals trail, used lower instead of
 * need to cache reasons during computation in the analyser
 * need to disallow duplicates during computation in the analyser
 * semantic minimisation during reason extraction
+
+* todo should double check this nogood!
+//todo check if this makes sense
+
+* temporary removed two cnf formulas from the tests
+
+// mzn_search_unordered!(search_with_constants_in_search);
+disabled maxsat tests

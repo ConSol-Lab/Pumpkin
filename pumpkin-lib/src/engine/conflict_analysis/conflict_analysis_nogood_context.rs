@@ -1,5 +1,8 @@
+use std::ops::Not;
+
 use crate::basic_types::StoredConflictInfo;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
+use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate::Predicate;
@@ -8,42 +11,102 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintProgrammingTrailEntry;
+use crate::engine::VariableLiteralMappings;
 use crate::pumpkin_assert_simple;
 
 #[derive(Debug)]
 pub struct ConflictAnalysisNogoodContext<'a> {
     pub assignments_integer: &'a AssignmentsInteger,
     pub assignments_propositional: &'a AssignmentsPropositional,
+    pub variable_literal_mappings: &'a VariableLiteralMappings,
+    pub clause_allocator: &'a ClauseAllocator,
     pub solver_state: &'a mut CSPSolverState,
     pub reason_store: &'a mut ReasonStore,
     pub counters: &'a mut Counters,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
-    pub fn get_conflict_nogood(&self) -> Vec<IntegerPredicate> {
+    pub fn get_conflict_nogood(&mut self) -> Vec<IntegerPredicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Explanation {
                 conjunction,
                 propagator: _,
-            } => conjunction
-                .iter()
-                .filter_map(|predicate| {
-                    match predicate {
-                        Predicate::IntegerPredicate(integer_predicate) => Some(*integer_predicate),
-                        Predicate::Literal(_) => unreachable!(),
-                        Predicate::False => unreachable!(),
-                        Predicate::True => {
-                            // skip root level propagations?
-                            None
+            } => {
+                conjunction
+                    .iter()
+                    .filter_map(|predicate| {
+                        match predicate {
+                            Predicate::IntegerPredicate(integer_predicate) => {
+                                Some(*integer_predicate)
+                            }
+                            Predicate::Literal(lit) => Some(
+                                self.variable_literal_mappings
+                                    .get_predicates(*lit)
+                                    .next()
+                                    .unwrap(),
+                            ),
+                            Predicate::False => unreachable!(),
+                            Predicate::True => {
+                                // skip root level propagations?
+                                None
+                            }
                         }
-                    }
-                })
-                .collect(),
+                    })
+                    .collect()
+            }
             StoredConflictInfo::VirtualBinaryClause { lit1: _, lit2: _ } => unreachable!(),
-            StoredConflictInfo::Propagation {
-                reference: _,
-                literal: _,
-            } => unreachable!(),
+            StoredConflictInfo::Propagation { reference, literal } => {
+                assert!(!reference.is_clause());
+                let propagation_context = PropagationContext::new(
+                    self.assignments_integer,
+                    self.assignments_propositional,
+                );
+                let reason_ref = reference.get_reason_ref();
+                // let propagator = self.reason_store.get_propagator(reason_ref);
+                let reason = self
+                    .reason_store
+                    .get_or_compute(reason_ref, &propagation_context)
+                    .expect("reason reference should not be stale");
+
+                let mut hehe: Vec<IntegerPredicate> = reason
+                    .iter()
+                    .filter_map(|predicate| {
+                        match predicate {
+                            Predicate::IntegerPredicate(integer_predicate) => {
+                                Some(*integer_predicate)
+                            }
+                            Predicate::Literal(lit) => Some(
+                                self.variable_literal_mappings
+                                    .get_predicates(*lit)
+                                    .next()
+                                    .unwrap(),
+                            ),
+                            Predicate::False => unreachable!(),
+                            Predicate::True => {
+                                // skip root level propagations?
+                                None
+                            }
+                        }
+                    })
+                    .collect();
+                hehe.push(
+                    self.variable_literal_mappings
+                        .get_predicates(*literal)
+                        .next()
+                        .unwrap()
+                        .not(),
+                );
+                //todo should double check this nogood!
+                /*println!("strange nogood: {:?}", hehe);
+                println!(
+                    "lit: {}",
+                    self.variable_literal_mappings
+                        .get_predicates(*literal)
+                        .next()
+                        .unwrap()
+                );*/
+                hehe
+            }
         }
     }
 
@@ -58,6 +121,12 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .assignments_integer
             .get_trail_position(predicate)
             .expect("The predicate must be true during conflict analysis.");
+
+        // The predicate is true at the root level,
+        // so there is no reason for it, empty!
+        if trail_position == 0 {
+            return vec![];
+        }
 
         let trail_entry = self.assignments_integer.get_trail_entry(trail_position);
 
@@ -108,7 +177,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     .iter()
                     .map(|predicate| match predicate {
                         Predicate::IntegerPredicate(integer_predicate) => *integer_predicate,
-                        Predicate::Literal(_) => unreachable!(),
+                        Predicate::Literal(literal) => self
+                            .variable_literal_mappings
+                            .get_predicates(*literal)
+                            .next()
+                            .unwrap(),
                         Predicate::False => unreachable!(),
                         Predicate::True => unreachable!(),
                     })
@@ -121,6 +194,13 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .expect("The predicate must be true during conflict analysis.");
 
         let trail_entry = self.assignments_integer.get_trail_entry(trail_position);
+
+        // println!("input pred: {}", predicate);
+        // println!("trail pred: {}", trail_entry.predicate);
+        // println!(
+        // "reason in loop: {:?}",
+        // extract_reason_from_trail(&trail_entry)
+        // );
         // We distinguish between two cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == *predicate {
@@ -161,6 +241,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // Note that the bounds cannot be equal.
                                 // If the bound were equal, the predicate would be explicitly on the
                                 // trail, so we would have detected this case earlier.
+                                // println!("{} {}", predicate, trail_entry.predicate);
                                 pumpkin_assert_simple!(trail_lower_bound < *input_lower_bound);
 
                                 // The reason for the propagation of the input predicate [x >= a] is

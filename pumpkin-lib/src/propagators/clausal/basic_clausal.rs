@@ -120,6 +120,7 @@ impl ClausalPropagator for BasicClausalPropagator {
         clause_manager: &mut ClauseAllocator,
     ) -> Result<(), ConflictInfo> {
         self.fun_name(assignments, clause_manager)
+        // Ok(())
     }
 
     fn synchronise(&mut self, trail_size: usize) {
