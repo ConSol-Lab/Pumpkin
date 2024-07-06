@@ -1,5 +1,3 @@
-use std::cmp;
-
 use crate::basic_types::HashMap;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
@@ -199,16 +197,19 @@ impl AssignmentsInteger {
     /// Note that it is not necessary for the predicate to be explicitly present on the trail,
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
-    pub fn get_trail_position(&self, _integer_predicate: &IntegerPredicate) -> Option<usize> {
-        todo!();
-        // self.domains[integer_predicate.get_domain()].trail_position(integer_predicate)
+    pub fn get_trail_position(&self, integer_predicate: &IntegerPredicate) -> Option<usize> {
+        self.domains[integer_predicate.get_domain()]
+            .get_update_info(integer_predicate)
+            .map(|u| u.trail_position)
     }
 
     pub fn get_decision_level_for_predicate(
         &self,
-        _integer_predicate: &IntegerPredicate,
+        integer_predicate: &IntegerPredicate,
     ) -> Option<usize> {
-        todo!();
+        self.domains[integer_predicate.get_domain()]
+            .get_update_info(integer_predicate)
+            .map(|u| u.decision_level)
     }
 }
 
@@ -467,9 +468,8 @@ pub struct ConstraintProgrammingTrailEntry {
     pub reason: Option<ReasonRef>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct PairDecisionLevelTrailPosition {
-    #[allow(dead_code)]
     decision_level: usize,
     trail_position: usize,
 }
@@ -870,8 +870,10 @@ impl IntegerDomain {
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
 
-    #[allow(dead_code)]
-    fn trail_position(&self, integer_predicate: IntegerPredicate) -> Option<usize> {
+    fn get_update_info(
+        &self,
+        integer_predicate: &IntegerPredicate,
+    ) -> Option<PairDecisionLevelTrailPosition> {
         // Perhaps the recursion could be done in a cleaner way,
         // e.g., separate functions dependibng on the type of predicate.
         // For the initial version, the current version is okay.
@@ -890,8 +892,11 @@ impl IntegerDomain {
                 // that is greater than or equal to the input lower bound
                 self.lower_bound_updates
                     .iter()
-                    .find(|u| u.bound >= lower_bound)
-                    .map(|u| u.trail_position)
+                    .find(|u| u.bound >= *lower_bound)
+                    .map(|u| PairDecisionLevelTrailPosition {
+                        decision_level: u.decision_level,
+                        trail_position: u.trail_position,
+                    })
             }
             IntegerPredicate::UpperBound {
                 domain_id: _,
@@ -907,8 +912,11 @@ impl IntegerDomain {
                 // that is smaller than or equal to the input upper bound
                 self.lower_bound_updates
                     .iter()
-                    .find(|u| u.bound <= upper_bound)
-                    .map(|u| u.trail_position)
+                    .find(|u| u.bound <= *upper_bound)
+                    .map(|u| PairDecisionLevelTrailPosition {
+                        decision_level: u.decision_level,
+                        trail_position: u.trail_position,
+                    })
             }
             IntegerPredicate::NotEqual {
                 domain_id,
@@ -917,8 +925,8 @@ impl IntegerDomain {
                 // Check the explictly stored holes.
                 // If the value has been removed explicitly,
                 // then the stored time is the first time the value was removed.
-                if let Some(hole_info) = self.holes.get(&not_equal_constant) {
-                    Some(hole_info.trail_position)
+                if let Some(hole_info) = self.holes.get(not_equal_constant) {
+                    Some(*hole_info)
                 } else {
                     // Otherwise, check the case when the lower/upper bound surpassed the value.
                     // If this never happened, then report that the predicate is not true.
@@ -929,8 +937,8 @@ impl IntegerDomain {
 
                     // Check the lower bound first.
                     if let Some(trail_position) =
-                        self.trail_position(IntegerPredicate::LowerBound {
-                            domain_id,
+                        self.get_update_info(&IntegerPredicate::LowerBound {
+                            domain_id: *domain_id,
                             lower_bound: not_equal_constant + 1,
                         })
                     {
@@ -940,8 +948,8 @@ impl IntegerDomain {
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.trail_position(IntegerPredicate::UpperBound {
-                            domain_id,
+                        self.get_update_info(&IntegerPredicate::UpperBound {
+                            domain_id: *domain_id,
                             upper_bound: not_equal_constant - 1,
                         })
                     }
@@ -953,21 +961,29 @@ impl IntegerDomain {
             } => {
                 // For equality to hold, both the lower and upper bound predicates must hold.
                 // Check lower bound first.
-                if let Some(lb_trail_position) = self.trail_position(IntegerPredicate::LowerBound {
-                    domain_id,
-                    lower_bound: equality_constant,
-                }) {
+                if let Some(lb_trail_position) =
+                    self.get_update_info(&IntegerPredicate::LowerBound {
+                        domain_id: *domain_id,
+                        lower_bound: *equality_constant,
+                    })
+                {
                     // The lower bound found,
                     // now the check depends on the upper bound.
 
                     // If both the lower and upper bounds are present,
                     // report the trail position of the bound that was set last.
                     // Otherwise, return that the predicate is not on the trail.
-                    self.trail_position(IntegerPredicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
+                    self.get_update_info(&IntegerPredicate::UpperBound {
+                        domain_id: *domain_id,
+                        upper_bound: *equality_constant,
                     })
-                    .map(|ub_trail_position| cmp::max(lb_trail_position, ub_trail_position))
+                    .map(|ub_trail_position| {
+                        if lb_trail_position.trail_position > ub_trail_position.trail_position {
+                            lb_trail_position
+                        } else {
+                            ub_trail_position
+                        }
+                    })
                 }
                 // If the lower bound is never reached,
                 // then surely the equality predicate cannot be true.
@@ -1259,11 +1275,14 @@ mod tests {
         let (domain_id, domain, _) = get_domain1();
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound: 12,
-            }),
-            Some(50)
+            domain
+                .get_update_info(&IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound: 12,
+                })
+                .unwrap()
+                .trail_position,
+            50
         );
     }
 
@@ -1272,11 +1291,14 @@ mod tests {
         let (domain_id, domain, _) = get_domain1();
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound: 50,
-            }),
-            Some(70)
+            domain
+                .get_update_info(&IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound: 50,
+                })
+                .unwrap()
+                .trail_position,
+            70
         );
     }
 
@@ -1284,13 +1306,12 @@ mod tests {
     fn lower_bound_trail_position_beyond_value() {
         let (domain_id, domain, _) = get_domain1();
 
-        assert_eq!(
-            domain.trail_position(IntegerPredicate::LowerBound {
+        assert!(domain
+            .get_update_info(&IntegerPredicate::LowerBound {
                 domain_id,
                 lower_bound: 101,
-            }),
-            None
-        );
+            })
+            .is_none());
     }
 
     #[test]
@@ -1298,11 +1319,14 @@ mod tests {
         let (domain_id, domain, _) = get_domain1();
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound: -10,
-            }),
-            Some(0)
+            domain
+                .get_update_info(&IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound: -10,
+                })
+                .unwrap()
+                .trail_position,
+            0
         );
     }
 
@@ -1314,11 +1338,14 @@ mod tests {
         domain.remove_value(52, 11, 80, &mut events);
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound: 52,
-            }),
-            Some(77)
+            domain
+                .get_update_info(&IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound: 52,
+                })
+                .unwrap()
+                .trail_position,
+            77
         );
     }
 
@@ -1330,11 +1357,14 @@ mod tests {
         domain.remove_value(52, 11, 80, &mut events);
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::NotEqual {
-                domain_id,
-                not_equal_constant: 50,
-            }),
-            Some(75)
+            domain
+                .get_update_info(&IntegerPredicate::NotEqual {
+                    domain_id,
+                    not_equal_constant: 50,
+                })
+                .unwrap()
+                .trail_position,
+            75
         );
     }
 
@@ -1347,11 +1377,14 @@ mod tests {
         domain.set_lower_bound(60, 11, 150, &mut events);
 
         assert_eq!(
-            domain.trail_position(IntegerPredicate::NotEqual {
-                domain_id,
-                not_equal_constant: 55,
-            }),
-            Some(150)
+            domain
+                .get_update_info(&IntegerPredicate::NotEqual {
+                    domain_id,
+                    not_equal_constant: 55,
+                })
+                .unwrap()
+                .trail_position,
+            150
         );
     }
 

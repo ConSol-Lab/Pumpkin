@@ -1,6 +1,6 @@
 use super::ConflictAnalysisNogoodContext;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -8,7 +8,7 @@ pub struct ResolutionNogoodConflictAnalyser {}
 
 #[derive(Clone, Debug)]
 pub struct LearnedNogood {
-    pub predicates: Vec<Predicate>,
+    pub predicates: Vec<IntegerPredicate>,
     pub backjump_level: usize,
 }
 
@@ -22,26 +22,14 @@ impl ResolutionNogoodConflictAnalyser {
     // The asserting nogood is at position [0], and the second decision level positioned predicate
     // is at position [1].
     pub fn compute_1uip(&mut self, context: &mut ConflictAnalysisNogoodContext) -> LearnedNogood {
-        // temporary functions that will eventually be removed.
-        // I am using these to not change the structure of the solver too much in the early stages
-        // of this implementation, but hopefully in the near future this would not be needed.
-        let int_pred = |predicate: &Predicate| {
-            match predicate {
-            Predicate::IntegerPredicate(integer_predicate) => *integer_predicate,
-            Predicate::Literal(_) => unreachable!("I think we should never get a literal in the nogood? Unless we use reified literals...ok for now."),
-            Predicate::False => unreachable!(),
-            Predicate::True => unreachable!(),
-        }
-        };
-
         // todo: could be done more efficiently with additional data structures.
-        let is_nogood_propagating = |nogood: &Vec<Predicate>| {
+        let is_nogood_propagating = |nogood: &Vec<IntegerPredicate>| {
             let num_predicates_at_current_decision_level = nogood
                 .iter()
                 .filter(|predicate| {
                     context
                         .assignments_integer
-                        .get_decision_level_for_predicate(&int_pred(predicate))
+                        .get_decision_level_for_predicate(predicate)
                         .expect("Nogood predicate must have a decision level.")
                         == context.assignments_integer.get_decision_level()
                 })
@@ -62,22 +50,20 @@ impl ResolutionNogoodConflictAnalyser {
         // Keep refining the nogood until it propagates!
         while !is_nogood_propagating(&learned_nogood) {
             // take the predicate last assigned on the trail
-            let next_predicate = int_pred(
-                learned_nogood
-                    .iter()
-                    .min_by_key(|predicate| {
-                        context
-                            .assignments_integer
-                            .get_trail_position(&int_pred(predicate))
-                            .unwrap()
-                    })
-                    .expect("Cannot have an empty nogood during analysis."),
-            );
+            let next_predicate = *learned_nogood
+                .iter()
+                .min_by_key(|predicate| {
+                    context
+                        .assignments_integer
+                        .get_trail_position(predicate)
+                        .unwrap()
+                })
+                .expect("Cannot have an empty nogood during analysis.");
             // Replace the next_predicate with its reason. This is done in two steps:
             // 1) Remove the predicate from the nogood.
             let next_predicate_index = learned_nogood
                 .iter()
-                .position(|predicate| int_pred(predicate) == next_predicate)
+                .position(|predicate| *predicate == next_predicate)
                 .expect("Must be able to find the predicate again.");
             let _ = learned_nogood.swap_remove(next_predicate_index);
             // 2) Add the reason of the next_predicate to the nogood.
@@ -92,14 +78,11 @@ impl ResolutionNogoodConflictAnalyser {
         // todo: clause minimisation?
 
         // todo: can be done more efficiently
-        learned_nogood.sort_by_key(|predicate| {
-            context
-                .assignments_integer
-                .get_trail_position(&int_pred(predicate))
-        });
+        learned_nogood
+            .sort_by_key(|predicate| context.assignments_integer.get_trail_position(predicate));
         let backjump_level = context
             .assignments_integer
-            .get_decision_level_for_predicate(&int_pred(&learned_nogood[0]))
+            .get_decision_level_for_predicate(&learned_nogood[0])
             .unwrap();
 
         // sanity check
