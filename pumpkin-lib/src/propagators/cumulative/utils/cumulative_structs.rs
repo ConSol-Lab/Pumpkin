@@ -68,14 +68,19 @@ pub struct CumulativeConstructor<Var, T> {
     /// without this field we would need to create a new argument struct for each cumulative
     /// propagator
     propagator_type: PhantomData<T>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub allow_holes_in_domain: bool,
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
-    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
+    pub fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32, allow_holes_in_domain: bool) -> Self {
         CumulativeConstructor {
             tasks,
             capacity,
             propagator_type: PhantomData,
+            allow_holes_in_domain,
         }
     }
 }
@@ -137,10 +142,18 @@ pub struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub(crate) allow_holes_in_domain: bool,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
-    pub(crate) fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+    pub(crate) fn new(
+        tasks: Vec<Task<Var>>,
+        capacity: i32,
+        allow_holes_in_domain: bool,
+    ) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -150,6 +163,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
+            allow_holes_in_domain,
         }
     }
 }

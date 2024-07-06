@@ -24,10 +24,12 @@ use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::constraints::array_bool_or;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
+    options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
@@ -181,7 +183,7 @@ pub(crate) fn run(
                 true
             },
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
 
             unknown => todo!("unsupported constraint {unknown}"),
@@ -210,6 +212,7 @@ macro_rules! check_parameters {
 fn compile_cumulative(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
+    options: &FlatZincOptions,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, "pumpkin_cumulative");
 
@@ -223,6 +226,7 @@ fn compile_cumulative(
         &durations,
         &resource_requirements,
         resource_capacity,
+        options.cumulative_allow_holes,
     ))
 }
 

@@ -16,10 +16,12 @@ use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use super::ast::FlatZincAst;
 use super::instance::FlatZincInstance;
 use super::FlatZincError;
+use super::FlatZincOptions;
 
 pub(crate) fn compile(
     ast: FlatZincAst,
     solver: &mut ConstraintSatisfactionSolver,
+    options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let mut context = CompilationContext::new(solver);
 
@@ -29,7 +31,7 @@ pub(crate) fn compile(
     handle_set_in::run(&ast, &mut context)?;
     collect_domains::run(&ast, &mut context)?;
     define_variable_arrays::run(&ast, &mut context)?;
-    post_constraints::run(&ast, &mut context)?;
+    post_constraints::run(&ast, &mut context, options)?;
     let objective_function = create_objective::run(&ast, &mut context)?;
     let search = create_search_strategy::run(&ast, &mut context)?;
 
