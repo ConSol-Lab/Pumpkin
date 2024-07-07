@@ -12,8 +12,10 @@ use crate::engine::predicates::integer_predicate::IntegerPredicate;
 ///   next candidate in conflict analysis.
 /// * Reports whether the nogood is propagating, i.e., has only one predicate from the current
 ///   decision level.
-#[allow(dead_code)]
-pub(crate) struct AdvancedNogood {}
+pub(crate) struct AdvancedNogood {
+    // current_decision_level: usize,
+    // predicates: Vec<IntegerPredicate>,
+}
 
 impl AdvancedNogood {
     /// Initialises the inernal data structures for a new nogood. The information about the current
