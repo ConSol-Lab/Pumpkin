@@ -83,3 +83,16 @@ line 422, for the upper bound reason but not equals trail, used lower instead of
 
 // mzn_search_unordered!(search_with_constants_in_search);
 disabled maxsat tests
+
+// process_domain_events returns a boolean but we never make use of it
+// todo rename process_domain_events into Notify propagator about domain events, something like that
+
+TODO -> what happens if a domain is empty? -> no need to handle this explicitly anymore!
+
+NOTIFY THE NOGOOD!
+
+todo: fix Booleans, these could be wrappers around IntegerVariable 0-1. Conceptually different, but under the hood could be the same. Also for notifying propagators?
+
+
+
+look at the Domain representation, and see what was the problem with some hacky thing, like at trail pos 0 we have some bound?

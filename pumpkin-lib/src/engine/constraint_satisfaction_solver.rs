@@ -28,9 +28,7 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
@@ -46,6 +44,7 @@ use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::proof::ProofLog;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -58,9 +57,7 @@ use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::BooleanDomainEvent;
 use crate::engine::DebugHelper;
-use crate::engine::EmptyDomain;
 use crate::engine::ExplanationClauseManager;
 use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
@@ -264,12 +261,10 @@ pub struct SatisfactionSolverOptions {
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
-
     /// The proof log.
     pub proof_log: ProofLog,
-
-    /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
-    /// argument allows seeding based on CLI input.
+    /// A random number generator which is used by the [`ConstraintSatisfactionSolver`],
+    /// passing it as an argument allows seeding based on CLI input.
     pub random_generator: SmallRng,
 }
 
@@ -285,92 +280,98 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
-    /// Process the stored domain events. If no events were present, this returns false. Otherwise,
-    /// true is returned.
-    fn process_domain_events(&mut self) -> bool {
-        // If there are no variables being watched then there is no reason to perform these
-        // operations
-        // if self.watch_list_cp.is_watching_anything() {
-        // todo: in the current version, we always update due to the nogood propagator
+    #[allow(clippy::too_many_arguments)]
+    fn notify_nogood_propagator(
+        event: IntDomainEvent,
+        domain: DomainId,
+        cp_propagators: &mut [Box<dyn Propagator>],
+        propagator_queue: &mut PropagatorQueue,
+        assignments_integer: &mut AssignmentsInteger,
+        reason_store: &mut ReasonStore,
+        assignments_propositional: &mut AssignmentsPropositional,
+    ) {
+        pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
+        // The nogood propagator is the only propagator that is present by default,
+        // so we know it is always going to have id 0.
+        let nogood_propagator_id = PropagatorId(0);
+        // The nogood propagator is implicitly subscribed to every domain event for every variable.
+        // For this reason, its local id matches the domain id.
+        // This is special only for the nogood propagator.
+        let local_id = LocalId::from(domain.id);
+        Self::notify_propagator(
+            nogood_propagator_id,
+            local_id,
+            event,
+            cp_propagators,
+            propagator_queue,
+            assignments_integer,
+            reason_store,
+            assignments_propositional,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn notify_propagator(
+        propagator_id: PropagatorId,
+        local_id: LocalId,
+        event: IntDomainEvent,
+        cp_propagators: &mut [Box<dyn Propagator>],
+        propagator_queue: &mut PropagatorQueue,
+        assignments_integer: &mut AssignmentsInteger,
+        reason_store: &mut ReasonStore,
+        assignments_propositional: &mut AssignmentsPropositional,
+    ) {
+        let mut context = PropagationContextMut::new(
+            assignments_integer,
+            reason_store,
+            assignments_propositional,
+            propagator_id,
+        );
+
+        let enqueue_decision =
+            cp_propagators[propagator_id.0 as usize].notify(&mut context, local_id, event.into());
+
+        if enqueue_decision == EnqueueDecision::Enqueue {
+            propagator_queue.enqueue_propagator(
+                propagator_id,
+                cp_propagators[propagator_id.0 as usize].priority(),
+            );
+        }
+    }
+
+    /// Process the stored domain events that happens as a result of decision/propagation predicates
+    /// to the trail. Propagators are notified and enqueued if needed about the domain events.
+    fn notify_propagators_about_domain_events(&mut self) {
         self.event_drain
             .extend(self.assignments_integer.drain_domain_events());
 
-        if self.event_drain.is_empty()
-            && self.propositional_trail_index == self.assignments_propositional.num_trail_entries()
-        {
-            return false;
-        }
-
-        // always enqueue the nogood propagator in the current version!
-        // hack
-        if !self.event_drain.is_empty() {
-            self.hack_enqueue_nogood_propagator();
-        }
-
         for (event, domain) in self.event_drain.drain(..) {
+            // Special case: the nogood propagator is notified about each event.
+            Self::notify_nogood_propagator(
+                event,
+                domain,
+                &mut self.cp_propagators,
+                &mut self.propagator_queue,
+                &mut self.assignments_integer,
+                &mut self.reason_store,
+                &mut self.assignments_propositional,
+            );
+            // Now notify other propagators subscribed to this event.
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                let mut context = PropagationContextMut::new(
+                let propagator_id = propagator_var.propagator;
+                let local_id = propagator_var.variable;
+                Self::notify_propagator(
+                    propagator_id,
+                    local_id,
+                    event,
+                    &mut self.cp_propagators,
+                    &mut self.propagator_queue,
                     &mut self.assignments_integer,
                     &mut self.reason_store,
                     &mut self.assignments_propositional,
-                    propagator_var.propagator,
                 );
-
-                let enqueue_decision =
-                    propagator.notify(&mut context, propagator_var.variable, event.into());
-
-                if enqueue_decision == EnqueueDecision::Enqueue {
-                    self.propagator_queue
-                        .enqueue_propagator(propagator_var.propagator, propagator.priority());
-                }
             }
         }
-        //}
-        // If there are no literals being watched then there is no reason to perform these
-        // operations
-        if self.watch_list_propositional.is_watching_anything() {
-            for i in
-                self.propositional_trail_index..self.assignments_propositional.num_trail_entries()
-            {
-                let literal = self.assignments_propositional.get_trail_entry(i);
-                for (event, affected_literal) in BooleanDomainEvent::get_iterator(literal) {
-                    for propagator_var in self
-                        .watch_list_propositional
-                        .get_affected_propagators(event, affected_literal)
-                    {
-                        let propagator =
-                            &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                        let mut context = PropagationContextMut::new(
-                            &mut self.assignments_integer,
-                            &mut self.reason_store,
-                            &mut self.assignments_propositional,
-                            propagator_var.propagator,
-                        );
-
-                        let enqueue_decision =
-                            propagator.notify_literal(&mut context, propagator_var.variable, event);
-
-                        if enqueue_decision == EnqueueDecision::Enqueue {
-                            self.propagator_queue.enqueue_propagator(
-                                propagator_var.propagator,
-                                propagator.priority(),
-                            );
-                        }
-                    }
-                }
-            }
-            self.propositional_trail_index = self.assignments_propositional.num_trail_entries();
-        }
-
-        true
-    }
-
-    fn hack_enqueue_nogood_propagator(&mut self) {
-        let nogood_propagator_index = self.hack_find_nogood_propagator();
-        let nogood_prio = self.cp_propagators[nogood_propagator_index].priority();
-        self.propagator_queue
-            .enqueue_propagator(PropagatorId(nogood_propagator_index as u32), nogood_prio);
     }
 
     /// Given a predicate, returns the corresponding literal.
@@ -402,7 +403,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub(crate) fn is_conflicting(&self) -> bool {
-        self.state.conflicting()
+        self.state.is_conflicting()
     }
 
     pub(crate) fn declare_ready(&mut self) {
@@ -424,21 +425,6 @@ impl ConstraintSatisfactionSolver {
         let proof = std::mem::take(&mut self.internal_parameters.proof_log);
         proof.optimal(bound, &self.variable_names, &self.variable_literal_mappings)
     }
-
-    // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() as usize
-    // == self.mapping_domain_to_lower_bound_literals.len()
-    // );
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() as usize
-    // == self.mapping_domain_to_equality_literals.len()
-    // );
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() == cp_data_structures.watch_list_cp.num_domains()
-    // );
-    // true
-    // }
 }
 
 // methods that offer basic functionality
@@ -479,22 +465,7 @@ impl ConstraintSatisfactionSolver {
             variable_names: VariableNames::default(),
         };
 
-        // we introduce a dummy variable set to true at the root level
-        //  this is useful for convenience when a fact needs to be expressed that is always true
-        //  e.g., this makes writing propagator explanations easier for corner cases
-        let root_variable = csp_solver.create_new_propositional_variable(Some("true".to_owned()));
-        let true_literal = Literal::new(root_variable, true);
-
-        csp_solver.assignments_propositional.true_literal = true_literal;
-        csp_solver.assignments_propositional.false_literal = !true_literal;
-
-        csp_solver.true_literal = true_literal;
-        csp_solver.false_literal = !true_literal;
-
-        csp_solver.hack_add_nogood_propagator();
-
-        let result = csp_solver.add_clause([true_literal]);
-        pumpkin_assert_simple!(result.is_ok());
+        let _ = csp_solver.add_propagator(NogoodPropagatorConstructor {});
 
         csp_solver
     }
@@ -848,127 +819,6 @@ impl ConstraintSatisfactionSolver {
         self.state.declare_ready();
     }
 
-    fn synchronise_propositional_trail_based_on_integer_trail(&mut self) -> Option<ConflictInfo> {
-        // for each entry on the integer trail, we now add the equivalent propositional
-        // representation on the propositional trail  note that only one literal per
-        // predicate will be stored      since the clausal propagator will propagate other
-        // literals to ensure that the meaning of the literal is respected          e.g.,
-        // placing [x >= 5] will prompt the clausal propagator to set [x >= 4] [x >= 3] ... [x >= 1]
-        // to true
-        for cp_trail_pos in
-            self.cp_trail_synced_position..self.assignments_integer.num_trail_entries()
-        {
-            let entry = self.assignments_integer.get_trail_entry(cp_trail_pos);
-
-            // It could be the case that the reason is `None`
-            // due to a SAT propagation being put on the trail during
-            // `synchronise_integer_trail_based_on_propositional_trail` In that case we
-            // do not synchronise since we assume that the SAT trail is already aware of the
-            // information
-            if let Some(reason_ref) = entry.reason {
-                let literal = self.variable_literal_mappings.get_literal(
-                    entry.predicate,
-                    &self.assignments_propositional,
-                    &self.assignments_integer,
-                );
-
-                let constraint_reference = ConstraintReference::create_reason_reference(reason_ref);
-
-                let conflict_info = self
-                    .assignments_propositional
-                    .enqueue_propagated_literal(literal, constraint_reference);
-
-                if conflict_info.is_some() {
-                    self.cp_trail_synced_position = cp_trail_pos + 1;
-                    return conflict_info;
-                }
-
-                // It could occur that one of these propagations caused a conflict in which case the
-                // SAT-view and the CP-view are unsynchronised We need to ensure
-                // that the views are synchronised up to the CP trail entry which caused the
-                // conflict
-                if let Err(e) = self.clausal_propagator.propagate(
-                    &mut self.assignments_propositional,
-                    &mut self.clause_allocator,
-                ) {
-                    self.cp_trail_synced_position = cp_trail_pos + 1;
-                    return Some(e);
-                }
-            }
-        }
-        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
-        None
-    }
-
-    fn synchronise_integer_trail_based_on_propositional_trail(
-        &mut self,
-    ) -> Result<(), EmptyDomain> {
-        pumpkin_assert_moderate!(
-            self.cp_trail_synced_position == self.assignments_integer.num_trail_entries(),
-            "We can only sychronise the propositional trail if the integer trail is already
-             sychronised."
-        );
-
-        // this could possibly be improved if it shows up as a performance hotspot
-        //  in some cases when we push e.g., [x >= a] on the stack, then we could also add the
-        // literals to the propositional stack  and update the next_domain_trail_position
-        // pointer to go pass the entries that surely are not going to lead to any changes
-        //  this would only work if the next_domain_trail pointer is already at the end of the
-        // stack, think about this, could be useful for propagators      and might be useful
-        // for a custom domain propagator  this would also simplify the code below, no
-        // additional checks would be needed? Not sure.
-
-        if self.assignments_integer.num_domains() == 0 {
-            self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
-            return Ok(());
-        }
-
-        for sat_trail_pos in
-            self.sat_trail_synced_position..self.assignments_propositional.num_trail_entries()
-        {
-            let literal = self
-                .assignments_propositional
-                .get_trail_entry(sat_trail_pos);
-            self.synchronise_literal(literal)?;
-        }
-        self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
-        // the newly added entries to the trail do not need to be synchronise with the propositional
-        // trail  this is because the integer trail was already synchronise when this method
-        // was called  and the newly added entries are already present on the propositional
-        // trail
-        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
-
-        let _ = self.process_domain_events();
-
-        Ok(())
-    }
-
-    fn synchronise_literal(&mut self, literal: Literal) -> Result<(), EmptyDomain> {
-        // recall that a literal may be linked to multiple predicates
-        //  e.g., this may happen when in preprocessing two literals are detected to be equal
-        //  so now we loop for each predicate and make necessary updates
-        //  (although currently we do not have any serious preprocessing!)
-        for j in 0..self.variable_literal_mappings.literal_to_predicates[literal].len() {
-            let predicate = self.variable_literal_mappings.literal_to_predicates[literal][j];
-
-            let reference = self
-                .assignments_propositional
-                .get_literal_reason_constraint(literal);
-
-            // todo check if this makes sense
-            let reason = if reference.is_null() || !reference.is_cp_reason() {
-                None
-            } else {
-                Some(reference.get_reason_ref())
-            };
-
-            self.assignments_integer
-                //.apply_integer_predicate(predicate, None)?;
-                .apply_integer_predicate(predicate, reason)?;
-        }
-        Ok(())
-    }
-
     fn synchronise_assignments(&mut self) {
         pumpkin_assert_simple!(
             self.sat_trail_synced_position >= self.assignments_propositional.num_trail_entries()
@@ -993,47 +843,6 @@ impl ConstraintSatisfactionSolver {
         assumptions.clone_into(&mut self.assumptions);
     }
 
-    fn hack_find_nogood_propagator(&self) -> usize {
-        self.cp_propagators
-            .iter()
-            .position(|p| p.name() == "NogoodPropagator")
-            .unwrap()
-    }
-
-    fn hack_add_nogood_propagator(&mut self) {
-        assert!(self
-            .cp_propagators
-            .iter()
-            .all(|p| p.name() != "NogoodPropagator"));
-
-        let nogood_propagator = NogoodPropagatorConstructor {};
-        let success = self.add_propagator(nogood_propagator);
-        assert!(success);
-    }
-
-    // fn hack_add_nogood_propagator(&mut self) {
-    // let nogood_propagator_index = self
-    // .cp_propagators
-    // .iter()
-    // .position(|p| p.name() == "NogoodPropagator");
-    //
-    // match nogood_propagator_index {
-    // Check if there were some new variable additions in the meantime.
-    // I do not expect any after creation!
-    // Some(index) => {
-    // panic!();
-    // }
-    // Otherwise initialise the nogood propagator
-    // None => {
-    // let domains: Vec<DomainId> = self.assignments_integer.get_domains().collect();
-    // let constructor: NogoodPropagatorConstructor =
-    // NogoodPropagatorConstructor { variables: domains };
-    // let success = self.add_propagator(constructor);
-    // assert!(success);
-    // }
-    // }
-    // }
-
     fn solve_internal(
         &mut self,
         termination: &mut impl TerminationCondition,
@@ -1052,7 +861,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.clausal_propagator,
                 );
 
-            self.propagate_enqueued();
+            self.propagate();
 
             // println!(
             // "after prop. {}",
@@ -1206,7 +1015,7 @@ impl ConstraintSatisfactionSolver {
     /// This method performs no propagation, this is left up to the solver afterwards
     #[allow(dead_code)]
     fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_moderate!(self.state.conflicting());
+        pumpkin_assert_moderate!(self.state.is_conflicting());
 
         self.analysis_result = self.compute_learned_clause(brancher);
         self.process_learned_clause(brancher);
@@ -1215,7 +1024,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_moderate!(self.state.conflicting());
+        pumpkin_assert_moderate!(self.state.is_conflicting());
 
         let learned_nogood = self.compute_learned_nogood(brancher);
         self.process_learned_nogood(learned_nogood, brancher);
@@ -1463,77 +1272,68 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// Main propagation loop.
-    pub(crate) fn propagate_enqueued(&mut self) {
+    pub(crate) fn propagate(&mut self) {
+        // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments_integer.num_trail_entries();
-
-        self.hack_enqueue_nogood_propagator();
-
-        loop {
-            let conflict_info = self.synchronise_propositional_trail_based_on_integer_trail();
-
-            if let Some(conflict_info) = conflict_info {
-                // The previous propagation triggered an empty domain.
-                self.state
-                    .declare_conflict(conflict_info.try_into().unwrap());
-                break;
-            }
-
-            let clausal_propagation_status = self.clausal_propagator.propagate(
+        // The initial domain events are due to the decision predicate.
+        self.notify_propagators_about_domain_events();
+        // Keep propagating until there are unprocessed propagators, or a conflict is detected.
+        while let Some(propagator_id) = self.propagator_queue.pop_new() {
+            let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+            let mut context = PropagationContextMut::new(
+                &mut self.assignments_integer,
+                &mut self.reason_store,
                 &mut self.assignments_propositional,
-                &mut self.clause_allocator,
+                propagator_id,
             );
 
-            if let Err(conflict_info) = clausal_propagation_status {
-                self.state
-                    .declare_conflict(conflict_info.try_into().unwrap());
-                break;
+            match propagator.propagate(&mut context) {
+                Ok(_) => {
+                    // Notify other propagators of the propagations and continue.
+                    self.notify_propagators_about_domain_events();
+                }
+                Err(inconsistency) => match inconsistency {
+                    Inconsistency::EmptyDomain => {
+                        // todo: remove this from the code, no longer needed in new version.
+                        unreachable!();
+                    }
+                    // A propagator-specific reason for the current conflict.
+                    Inconsistency::Other(conflict_info) => {
+                        // todo: conflict info can be reworked in the new version into a reason.
+                        // the code below will be simplified in the new version.
+                        if let ConflictInfo::Explanation(ref propositional_conjunction) =
+                            conflict_info
+                        {
+                            pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                                &self.assignments_integer,
+                                &self.assignments_propositional,
+                                &self.variable_literal_mappings,
+                                propositional_conjunction,
+                                propagator.as_ref(),
+                                propagator_id,
+                            ));
+
+                            let stored_conflict_info = StoredConflictInfo::Explanation {
+                                conjunction: propositional_conjunction.clone(),
+                                propagator: propagator_id,
+                            };
+                            self.state.declare_conflict(stored_conflict_info);
+                            break;
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                },
             }
-
-            self.synchronise_integer_trail_based_on_propositional_trail()
-                .expect("should not be an error");
-
-            // ask propagators to propagate
-            let propagation_status_one_step_cp = self.propagate_cp_one_step();
-
-            match propagation_status_one_step_cp {
-                PropagationStatusOneStepCP::PropagationHappened => {
-                    // do nothing, the result will be that the clausal propagator will go next
-                    //  recall that the idea is to always propagate simpler propagators before more
-                    // complex ones  after a cp propagation was done one step,
-                    // it is time to go to the clausal propagator
-                }
-                PropagationStatusOneStepCP::FixedPoint => {
-                    break;
-                }
-                PropagationStatusOneStepCP::ConflictDetected { conflict_info } => {
-                    let result = self.synchronise_propositional_trail_based_on_integer_trail();
-
-                    // If the clausal propagator found a conflict during synchronisation then we
-                    // want to use that conflict; if we do not use that conflict then it could be
-                    // the case that there are literals in the conflict_info found by the CP
-                    // propagator which are not assigned in the SAT-view (which leads to an error
-                    // during conflict analysis)
-                    self.state.declare_conflict(
-                        result
-                            .map(|ci| {
-                                ci.try_into()
-                                    .expect("this is not a ConflictInfo::Explanation")
-                            })
-                            .unwrap_or(conflict_info),
-                    );
-                    break;
-                }
-            } // end match
         }
-
-        self.counters.num_conflicts += self.state.conflicting() as u64;
-
+        // Record statistics.
+        self.counters.num_conflicts += self.state.is_conflicting() as u64;
         self.counters.num_propagations +=
             self.assignments_integer.num_trail_entries() as u64 - num_assigned_variables_old as u64;
-
-        // Only check fixed point propagation if there was no reported conflict.
+        // Only check fixed point propagation if there was no reported conflict,
+        // since otherwise the state may be inconsistent.
         pumpkin_assert_extreme!(
-            self.state.conflicting()
+            self.state.is_conflicting()
                 || DebugHelper::debug_fixed_point_propagation(
                     &self.clausal_propagator,
                     &self.assignments_integer,
@@ -1542,53 +1342,6 @@ impl ConstraintSatisfactionSolver {
                     &self.cp_propagators,
                 )
         );
-    }
-
-    /// Performs propagation using propagators, stops after a propagator propagates at least one
-    /// domain change. The idea is to go to the clausal propagator first before proceeding with
-    /// other propagators, in line with the idea of propagating simpler propagators before more
-    /// complex ones.
-    fn propagate_cp_one_step(&mut self) -> PropagationStatusOneStepCP {
-        if self.propagator_queue.is_empty() {
-            return PropagationStatusOneStepCP::FixedPoint;
-        }
-
-        let propagator_id = self.propagator_queue.pop();
-        let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-        let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            propagator_id,
-        );
-
-        match propagator.propagate(&mut context) {
-            // An empty domain conflict will be caught by the clausal propagator.
-            Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
-
-            // A propagator-specific reason for the current conflict.
-            Err(Inconsistency::Other(conflict_info)) => {
-                if let ConflictInfo::Explanation(ref propositional_conjunction) = conflict_info {
-                    pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                        &self.assignments_integer,
-                        &self.assignments_propositional,
-                        &self.variable_literal_mappings,
-                        propositional_conjunction,
-                        propagator.as_ref(),
-                        propagator_id,
-                    ));
-                }
-
-                PropagationStatusOneStepCP::ConflictDetected {
-                    conflict_info: conflict_info.into_stored(propagator_id),
-                }
-            }
-
-            Ok(()) => {
-                let _ = self.process_domain_events();
-                PropagationStatusOneStepCP::PropagationHappened
-            }
-        }
     }
 
     fn are_all_assumptions_assigned(&self) -> bool {
@@ -1686,7 +1439,7 @@ impl ConstraintSatisfactionSolver {
             self.state.declare_infeasible();
             false
         } else {
-            self.propagate_enqueued();
+            self.propagate();
 
             self.state.no_conflict()
         }
@@ -1738,7 +1491,7 @@ impl ConstraintSatisfactionSolver {
             backjump_level: 0,
         });
 
-        self.propagate_enqueued();
+        self.propagate();
 
         if self.state.is_infeasible() {
             self.state.declare_infeasible();
@@ -1849,10 +1602,10 @@ impl CSPSolverState {
     }
 
     pub fn no_conflict(&self) -> bool {
-        !self.conflicting()
+        !self.is_conflicting()
     }
 
-    pub fn conflicting(&self) -> bool {
+    pub fn is_conflicting(&self) -> bool {
         matches!(
             self.internal_state,
             CSPSolverStateInternal::Conflict { conflict_info: _ }
@@ -1867,7 +1620,7 @@ impl CSPSolverState {
     /// Determines whether the current state is inconsistent; i.e. whether it is conflicting,
     /// infeasible or infeasible under assumptions
     pub fn is_inconsistent(&self) -> bool {
-        self.conflicting() || self.is_infeasible() || self.is_infeasible_under_assumptions()
+        self.is_conflicting() || self.is_infeasible() || self.is_infeasible_under_assumptions()
     }
 
     pub fn is_infeasible_under_assumptions(&self) -> bool {
@@ -1917,7 +1670,7 @@ impl CSPSolverState {
     }
 
     pub fn declare_solving(&mut self) {
-        pumpkin_assert_simple!((self.is_ready() || self.conflicting()) && !self.is_infeasible());
+        pumpkin_assert_simple!((self.is_ready() || self.is_conflicting()) && !self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::Solving;
     }
 
@@ -1926,7 +1679,7 @@ impl CSPSolverState {
     }
 
     fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
-        pumpkin_assert_simple!(!self.conflicting());
+        pumpkin_assert_simple!(!self.is_conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
 
@@ -1965,7 +1718,6 @@ mod tests {
     use crate::engine::propagation::PropagatorConstructor;
     use crate::engine::propagation::PropagatorConstructorContext;
     use crate::engine::propagation::PropagatorId;
-    use crate::engine::reason::ReasonRef;
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::Literal;
@@ -2209,7 +1961,7 @@ mod tests {
         // conflict, however, the CP conflict explanation contains variables which are not assigned
         // in the SAT view due to it finding a conflict. We expect the conflict info in the solver
         // to contain the conflict found by the clausal propagator.
-        solver.propagate_enqueued();
+        solver.propagate();
 
         assert!(solver.state.is_inconsistent());
         assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
@@ -2424,46 +2176,6 @@ mod tests {
             solver.assignments_propositional.false_literal,
             solver.get_literal(predicate![domain_id == ub + 1])
         );
-    }
-
-    #[test]
-    fn clausal_propagation_is_synced_until_right_before_conflict() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10, None);
-        let dummy_reason = ReasonRef(0);
-
-        let result =
-            solver
-                .assignments_integer
-                .tighten_lower_bound(domain_id, 2, Some(dummy_reason));
-        assert!(result.is_ok());
-        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 2);
-
-        let result =
-            solver
-                .assignments_integer
-                .tighten_lower_bound(domain_id, 8, Some(dummy_reason));
-        assert!(result.is_ok());
-        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 8);
-
-        let result =
-            solver
-                .assignments_integer
-                .tighten_lower_bound(domain_id, 12, Some(dummy_reason));
-        assert!(result.is_err());
-        assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 12);
-
-        let _ = solver.synchronise_propositional_trail_based_on_integer_trail();
-
-        for lower_bound in 0..=8 {
-            let literal = solver.get_literal(predicate!(domain_id >= lower_bound));
-            assert!(
-                solver
-                    .assignments_propositional
-                    .is_literal_assigned_true(literal),
-                "Literal for lower-bound {lower_bound} is not assigned"
-            );
-        }
     }
 
     #[test]

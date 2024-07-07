@@ -38,7 +38,6 @@ impl ResolutionNogoodConflictAnalyser {
             // println!("Next pred: {}", next_predicate);
             // 2) Add the reason of the next_predicate to the nogood.
             let reason = context.get_propagation_reason(&next_predicate);
-
             nogood.add_predicates(reason, context);
         }
         // todo: clause minimisation?

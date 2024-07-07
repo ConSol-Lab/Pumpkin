@@ -184,7 +184,7 @@ impl RpEngine {
             return Err(self.get_conflict_reasons());
         }
 
-        self.solver.propagate_enqueued();
+        self.solver.propagate();
 
         if self.solver.is_conflicting() {
             Err(self.get_conflict_reasons())

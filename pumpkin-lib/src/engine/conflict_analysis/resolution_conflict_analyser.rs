@@ -610,7 +610,7 @@ impl ResolutionConflictAnalyser {
 
     fn debug_conflict_analysis_proconditions(&mut self, context: &ConflictAnalysisContext) -> bool {
         pumpkin_assert_simple!(
-            context.solver_state.conflicting(),
+            context.solver_state.is_conflicting(),
             "Solver expected to be in conflict state for conflict analysis."
         );
 

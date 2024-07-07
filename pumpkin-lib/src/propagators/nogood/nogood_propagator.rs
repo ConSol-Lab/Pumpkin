@@ -13,6 +13,7 @@ use crate::engine::AssignmentsInteger;
 
 // todo: at the time of creation, the variables get subscribe to the propagator, but later creating
 // new variables does not subscribe them automatically!
+// todo: hardcode the notifications.
 #[derive(Debug, Clone, Copy)]
 pub struct NogoodPropagatorConstructor {}
 

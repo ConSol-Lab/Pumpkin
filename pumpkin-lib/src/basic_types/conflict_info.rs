@@ -37,6 +37,7 @@ pub enum ConflictInfo {
 }
 
 impl ConflictInfo {
+    #[allow(dead_code)]
     pub(crate) fn into_stored(self, propagator: PropagatorId) -> StoredConflictInfo {
         match self {
             ConflictInfo::VirtualBinaryClause { lit1, lit2 } => {
