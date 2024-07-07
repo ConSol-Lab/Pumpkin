@@ -18,14 +18,12 @@ pub(crate) struct AdvancedNogood {}
 impl AdvancedNogood {
     /// Initialises the inernal data structures for a new nogood. The information about the current
     /// decision level is used by other parts.
-    #[allow(dead_code)]
     pub(crate) fn new(_current_decision_level: usize) -> AdvancedNogood {
         todo!();
     }
     /// Adds the predicate to the nogood, and attaches the extra information (decision level and
     /// trail position) to the predicate internally. The extra information is used by other
     /// functions. Note that semantic redundancies is automatically applied.
-    #[allow(dead_code)]
     pub(crate) fn add_predicates(
         &mut self,
         _predicates: Vec<IntegerPredicate>,
@@ -49,7 +47,6 @@ impl AdvancedNogood {
     }
     /// Removes the predicate within the nogood that has the highest trail position.
     /// Returns None if the nogood is empty.
-    #[allow(dead_code)]
     pub(crate) fn pop_highest_trail_predicate(&mut self) -> Option<IntegerPredicate> {
         todo!();
         // let next_predicate = *learned_nogood
@@ -72,7 +69,6 @@ impl AdvancedNogood {
     }
     /// The nogood is considered propagating if it contains only one predicate from the current
     /// decision level.
-    #[allow(dead_code)]
     pub(crate) fn is_nogood_propagating(&self) -> bool {
         todo!();
         // todo: could be done more efficiently with additional data structures.
@@ -97,7 +93,6 @@ impl AdvancedNogood {
     }
     /// Extract the internal nogood and returns it as a learned nogood.
     /// Note that this consumes the nogood.
-    #[allow(dead_code)]
     pub(crate) fn extract_final_learned_nogood(self) -> LearnedNogood {
         todo!();
         // todo: can be done more efficiently
