@@ -4,6 +4,7 @@
 mod conflict_analysis_context;
 mod resolution_conflict_analyser;
 
+mod advanced_nogood;
 mod conflict_analysis_nogood_context;
 mod resolution_nogood_conflict_analyser;
 
