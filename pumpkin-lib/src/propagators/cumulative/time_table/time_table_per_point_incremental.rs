@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use super::create_time_table_per_point_from_scratch;
+use super::debug_propagate_from_scratch_time_table_point;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
@@ -26,6 +28,7 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 #[cfg(doc)]
 use crate::propagators::Task;
+#[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
@@ -105,11 +108,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
         if self.time_table_outdated {
             // The time-table needs to be recalculated from scratch anyways so we perform the
             // calculation now
-            self.time_table =
-                TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-                    context,
-                    &self.parameters,
-                )?;
+            self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
             self.time_table_outdated = false;
         } else {
             for updated_task_info in self.parameters.updated.iter() {
@@ -240,10 +239,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         self.parameters.updated.clear();
 
         // Then we do normal propagation
-        self.time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context,
-            &self.parameters,
-        )?;
+        self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
         self.time_table_outdated = false;
         propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
     }
@@ -253,10 +249,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
-        TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
-            context,
-            &self.parameters,
-        )
+        debug_propagate_from_scratch_time_table_point(context, &self.parameters)
     }
 }
 

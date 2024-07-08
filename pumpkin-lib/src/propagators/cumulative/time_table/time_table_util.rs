@@ -140,7 +140,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 pub(crate) enum AddedMandatoryConsumption {
     /// There was an existing mandatory part but it has been extended by an update; the first
     /// [`Range`] is the added mandatory part due to an update of the upper-bound of the start time
-    /// and the second [`Range`] si the added mandatory part due to an update of the lower-bound of
+    /// and the second [`Range`] is the added mandatory part due to an update of the lower-bound of
     /// the start time.
     AdditionalMandatoryParts(Range<i32>, Range<i32>),
     /// There was no existing mandatory part before the update but there is one now.
@@ -148,6 +148,15 @@ pub(crate) enum AddedMandatoryConsumption {
 }
 
 impl AddedMandatoryConsumption {
+    /// There are two cases:
+    /// - In the case of [`AddedMandatoryConsumption::AdditionalMandatoryParts`] - This function
+    ///   will return first the range which has been added due to an update of the lower-bound and
+    ///   then the range which has bene added due to an update of the uppper-bound.
+    /// - In the case of [`AddedMandatoryConsumption::FullyNewMandatoryPart`] - This function will
+    ///   return the range consisting of the added mandatory part.
+    ///
+    /// This function is used by [`TimeTableOverIntervalIncremental::propagate`] since it needs to
+    /// traverse the second added mandatory part first due to the way it processes indices.
     pub(crate) fn get_reverse_update_ranges(&self) -> Vec<Range<i32>> {
         match self {
             AddedMandatoryConsumption::AdditionalMandatoryParts(
