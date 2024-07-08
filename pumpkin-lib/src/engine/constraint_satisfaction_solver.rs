@@ -280,6 +280,10 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
+    fn get_nogood_propagator_id() -> PropagatorId {
+        PropagatorId(0)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn notify_nogood_propagator(
         event: IntDomainEvent,
@@ -291,9 +295,7 @@ impl ConstraintSatisfactionSolver {
         assignments_propositional: &mut AssignmentsPropositional,
     ) {
         pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
-        // The nogood propagator is the only propagator that is present by default,
-        // so we know it is always going to have id 0.
-        let nogood_propagator_id = PropagatorId(0);
+        let nogood_propagator_id = Self::get_nogood_propagator_id();
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
         // For this reason, its local id matches the domain id.
         // This is special only for the nogood propagator.
@@ -1143,8 +1145,14 @@ impl ConstraintSatisfactionSolver {
             .iter()
             .position(|propagator| propagator.name() == "NogoodPropagator")
             .expect("There has to be a nogood propagator!");
+        let mut context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            &mut self.assignments_propositional,
+            Self::get_nogood_propagator_id(),
+        );
         self.cp_propagators[nogood_propagator_index]
-            .hack_add_asserting_nogood(learned_nogood.predicates);
+            .hack_add_asserting_nogood(learned_nogood.predicates, &mut context);
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {

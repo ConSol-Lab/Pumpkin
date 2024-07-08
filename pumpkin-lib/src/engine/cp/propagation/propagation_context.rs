@@ -42,7 +42,7 @@ pub struct PropagationContextMut<'a> {
     assignments_integer: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
     assignments_propositional: &'a mut AssignmentsPropositional,
-    propagator: PropagatorId,
+    propagator_id: PropagatorId,
 }
 
 impl<'a> PropagationContextMut<'a> {
@@ -56,7 +56,7 @@ impl<'a> PropagationContextMut<'a> {
             assignments_integer,
             reason_store,
             assignments_propositional,
-            propagator,
+            propagator_id: propagator,
         }
     }
 }
@@ -142,7 +142,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if var.contains(self.assignments_integer, value) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
+            let reason = self.reason_store.push(self.propagator_id, reason.into());
             return var.remove(self.assignments_integer, value, Some(reason));
         }
         Ok(())
@@ -155,7 +155,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound < var.upper_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
+            let reason = self.reason_store.push(self.propagator_id, reason.into());
             return var.set_upper_bound(self.assignments_integer, bound, Some(reason));
         }
         Ok(())
@@ -168,7 +168,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound > var.lower_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
+            let reason = self.reason_store.push(self.propagator_id, reason.into());
             return var.set_lower_bound(self.assignments_integer, bound, Some(reason));
         }
         Ok(())
@@ -214,7 +214,7 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), Inconsistency> {
         if !self.assignments_propositional.is_literal_assigned(var) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
+            let reason = self.reason_store.push(self.propagator_id, reason.into());
             let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
                 if bound { var } else { !var },
                 ConstraintReference::create_reason_reference(reason),

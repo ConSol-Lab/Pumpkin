@@ -294,25 +294,27 @@ impl Propagator for NogoodPropagator {
     // Learned nogood during search.
     // Assumption is that it is propagating, and that the propagating predicate is in position [0].
     // Actually the above assumption is not needed in the current version.
-    // #[allow(dead_code)]
-    // fn hack_add_asserting_nogood(
-    // &mut self,
-    // nogood: Vec<IntegerPredicate>,
-    // context: &mut PropagationContextMut,
-    // ) {
-    // self.debug_propagate_nogood_from_scratch(&nogood, context);
-    //
-    // self.nogoods.push(nogood);
-    // let nogood_id = NogoodId {
-    // id: self.nogoods.len() as u32,
-    // };
-    // self.add_watcher(nogood[0], nogood_id);
-    // self.add_watcher(nogood[1], nogood_id);
-    // self.nogoods.push(nogood);
-    //
-    // TODO PROPAGATION
-    // todo!();
-    // }
+    #[allow(dead_code)]
+    fn hack_add_asserting_nogood(
+        &mut self,
+        nogood: Vec<IntegerPredicate>,
+        context: &mut PropagationContextMut,
+    ) {
+        self.debug_propagate_nogood_from_scratch(&nogood, context)
+            .expect("Do not expect to fail propagating learned nogood.");
+        self.nogoods.push(nogood);
+
+        // self.nogoods.push(nogood);
+        // let nogood_id = NogoodId {
+        // id: self.nogoods.len() as u32,
+        // };
+        // self.add_watcher(nogood[0], nogood_id);
+        // self.add_watcher(nogood[1], nogood_id);
+        // self.nogoods.push(nogood);
+        //
+        // TODO PROPAGATION
+        // todo!();
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug)]
