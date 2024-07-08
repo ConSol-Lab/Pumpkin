@@ -90,6 +90,11 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
     for ElementPropagator<VX, VI, VE>
 {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        // Ensure index is non-negative
+        context.set_lower_bound(&self.index, 0, conjunction!())?;
+        // Ensure index <= no. of x_j
+        context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
+
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
             // At this point, we should post x_i = e as a new constraint, but that's not an option
@@ -178,8 +183,6 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         // Priority higher than int_times/linear_eq/not_eq_propagator because it's much more
         //  expensive looping over multiple domains
@@ -190,19 +193,15 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         "Element"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(
+        &self,
+        context: &mut PropagationContextMut,
+    ) -> PropagationStatusCP {
         // Ensure index is non-negative
         context.set_lower_bound(&self.index, 0, conjunction!())?;
         // Ensure index <= no. of x_j
         context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
 
-        self.propagate(context)
-    }
-
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
         // Close to duplicate of `propagate` for now, without saving reason stuff...
         if context.is_fixed(&self.index) {
             let i = context.lower_bound(&self.index);

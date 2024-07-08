@@ -79,21 +79,19 @@ impl TestSolver {
             id,
         ));
 
-        self.initialise_at_root(&mut propagator)?;
+        propagator.initialise_at_root(PropagationContext::new(
+            &self.assignments_integer,
+            &self.assignments_propositional,
+        ))?;
 
-        Ok(propagator)
-    }
-
-    pub(crate) fn initialise_at_root(
-        &mut self,
-        propagator: &mut BoxedPropagator,
-    ) -> PropagationStatusCP {
-        propagator.initialise_at_root(&mut PropagationContextMut::new(
+        propagator.propagate(&mut PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
             PropagatorId(0),
-        ))
+        ))?;
+
+        Ok(propagator)
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {

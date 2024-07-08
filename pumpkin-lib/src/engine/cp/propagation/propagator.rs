@@ -131,14 +131,13 @@ pub trait Propagator {
         3
     }
 
-    /// Initialises the propagator and performs root propagation. This method is called only once by
-    /// the [`ConstraintSatisfactionSolver`] when the propagator is added using
-    /// [`ConstraintSatisfactionSolver::add_propagator`]. The return value is the same as for
-    /// the [`Propagator::propagate`] method.
+    /// Initialises the propagator without performing propagation. This method is called only once
+    /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
+    /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
-    /// By default this function calls [`Propagator::propagate`] at the root level.
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.propagate(context)
+    /// The solver will call this before any call to [`Propagator::propagate`] is made.
+    fn initialise_at_root(&mut self, _: PropagationContext) -> PropagationStatusCP {
+        Ok(())
     }
 
     /// A check whether this propagator can detect an inconsistency.

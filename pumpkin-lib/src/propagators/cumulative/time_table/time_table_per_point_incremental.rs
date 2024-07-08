@@ -103,7 +103,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
             // calculation now
             self.time_table =
                 TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-                    context,
+                    context.as_readonly(),
                     &self.parameters,
                 )?;
             self.time_table_outdated = false;
@@ -139,7 +139,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
                     if current_profile.height > self.parameters.capacity {
                         // The newly introduced mandatory part(s) caused an overflow of the resource
                         return Err(create_inconsistency(
-                            context,
+                            context.as_readonly(),
                             &current_profile.profile_tasks,
                         ));
                     }
@@ -225,7 +225,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -241,7 +241,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
             &self.parameters,
         )?;
         self.time_table_outdated = false;
-        propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(

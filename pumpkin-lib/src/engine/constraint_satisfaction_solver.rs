@@ -1423,15 +1423,22 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            new_propagator_id,
-        );
-        // let mut context = self.create_propagation_context_mut();
+        let initialisation_status = new_propagator
+            .initialise_at_root(PropagationContext::new(
+                &self.assignments_integer,
+                &self.assignments_propositional,
+            ))
+            .and_then(|_| {
+                let mut context = PropagationContextMut::new(
+                    &mut self.assignments_integer,
+                    &mut self.reason_store,
+                    &mut self.assignments_propositional,
+                    new_propagator_id,
+                );
+                new_propagator.propagate(&mut context)
+            });
 
-        if new_propagator.initialise_at_root(&mut context).is_err() {
+        if initialisation_status.is_err() {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
@@ -1668,6 +1675,7 @@ impl CSPSolverState {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::basic_types::PropagationStatusCP;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
     use crate::conjunction;
@@ -1676,6 +1684,7 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::propagation_context::HasAssignments;
     use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorConstructor;
     use crate::engine::propagation::PropagatorId;
@@ -1727,6 +1736,7 @@ mod tests {
                 original_propagations: propagations.clone(),
                 propagations,
                 conflicts: self.conflicts.into_iter().rev().collect::<Vec<_>>(),
+                is_in_root: true,
             }
         }
     }
@@ -1749,6 +1759,7 @@ mod tests {
             PropositionalConjunction,
         )>,
         conflicts: Vec<PropositionalConjunction>,
+        is_in_root: bool,
     }
 
     impl Propagator for TestPropagator {
@@ -1756,17 +1767,12 @@ mod tests {
             "TestPropagator"
         }
 
-        fn initialise_at_root(
-            &mut self,
-            _context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
-            Ok(())
-        }
+        fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+            if self.is_in_root {
+                self.is_in_root = false;
+                return Ok(());
+            }
 
-        fn propagate(
-            &mut self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
             while let Some(propagation) = self.propagations.pop() {
                 match propagation.1 {
                     Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
@@ -1802,17 +1808,18 @@ mod tests {
                     _ => todo!(),
                 }
             }
-            if !self.conflicts.is_empty() {
-                let conflict = self.conflicts.pop().unwrap();
+
+            if let Some(conflict) = self.conflicts.pop() {
                 return Err(conflict.into());
             }
+
             Ok(())
         }
 
         fn debug_propagate_from_scratch(
             &self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
+            context: &mut PropagationContextMut,
+        ) -> PropagationStatusCP {
             // This method detects when a debug propagation method is called and it attempts to
             // return the correct result in this case
             if self.conflicts.is_empty()
@@ -1909,10 +1916,7 @@ mod tests {
                 (predicate!(other_variable != 4), conjunction!()),
                 (predicate!(other_variable <= 4), conjunction!()),
             ],
-            conflicts: vec![PropositionalConjunction::from(vec![
-                predicate!(other_variable == 3),
-                predicate!(variable == 1),
-            ])],
+            conflicts: vec![conjunction!([other_variable == 3] & [variable == 1])],
         };
 
         let result = solver.add_propagator(propagator_constructor);

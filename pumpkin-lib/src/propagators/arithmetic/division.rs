@@ -60,12 +60,6 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -74,14 +68,15 @@ where
         "Division"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
         if context.contains(&self.denominator, 0) {
             pumpkin_assert_simple!(
                 !context.contains(&self.denominator, 0),
                 "Denominator cannot contain 0"
             );
         }
-        self.propagate(context)
+
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(

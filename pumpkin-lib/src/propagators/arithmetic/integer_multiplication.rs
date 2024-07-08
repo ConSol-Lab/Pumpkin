@@ -3,7 +3,6 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -56,22 +55,12 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
 
     fn name(&self) -> &str {
         "IntTimes"
-    }
-
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(

@@ -20,7 +20,7 @@ use crate::propagators::UpdatedTaskInfo;
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
 pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: PropagationContext,
     conflict_tasks: &[Rc<Task<Var>>],
 ) -> Inconsistency {
     let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);

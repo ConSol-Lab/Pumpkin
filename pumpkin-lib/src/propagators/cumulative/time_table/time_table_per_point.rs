@@ -84,7 +84,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         // We first create a time-table per point and return an error if there was
         // an overflow of the resource capacity while building the time-table
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context, parameters,
+            context.as_readonly(),
+            parameters,
         )?;
         // Then we check whether propagation can take place
         propagate_based_on_timetable(context, time_table.values(), parameters)
@@ -99,7 +100,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     /// [`PerPointTimeTableType`] or the tasks responsible for the
     /// conflict in the form of an [`Inconsistency`].
     pub(crate) fn create_time_table_per_point_from_scratch(
-        context: &PropagationContextMut,
+        context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Result<PerPointTimeTableType<Var>, Inconsistency> {
         let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
@@ -144,7 +145,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context,
+            context.as_readonly(),
             &self.parameters,
         )?;
         self.is_time_table_empty = time_table.is_empty();
@@ -195,16 +196,16 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
-            ))
+            ));
         }
 
-        self.propagate(context)
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(

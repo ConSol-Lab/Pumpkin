@@ -94,7 +94,8 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         // an overflow of the resource capacity while building the time-table
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
-                context, parameters,
+                context.as_readonly(),
+                parameters,
             )?;
         // Then we check whether propagation can take place
         propagate_based_on_timetable(context, time_table.iter(), parameters)
@@ -108,7 +109,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     /// tie is between events of the same type then the tie-breaking is done on the id in
     /// non-decreasing order).
     fn create_events(
-        context: &PropagationContextMut,
+        context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Vec<Event<Var>> {
         // First we create a list of events with which we will create the time-table
@@ -188,7 +189,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     /// are before the starts of mandatory parts).
     fn create_time_table_from_events(
         events: Vec<Event<Var>>,
-        context: &PropagationContextMut,
+        context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
         pumpkin_assert_extreme!(
@@ -308,7 +309,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     /// [`OverIntervalTimeTableType`] or the tasks responsible for the
     /// conflict in the form of an [`Inconsistency`].
     pub(crate) fn create_time_table_over_interval_from_scratch(
-        context: &PropagationContextMut,
+        context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
     ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
         // First we create a list of all the events (i.e. start and ends of mandatory parts)
@@ -323,7 +324,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
-                context,
+                context.as_readonly(),
                 &self.parameters,
             )?;
         self.is_time_table_empty = time_table.is_empty();
@@ -371,14 +372,15 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         "CumulativeTimeTableOverInterval"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
-            ))
+            ));
         }
-        self.propagate(context)
+
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(

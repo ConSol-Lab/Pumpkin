@@ -62,22 +62,12 @@ impl<Var> Propagator for LinearNotEqualPropagator<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.debug_propagate_from_scratch(context)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
 
     fn name(&self) -> &str {
         "LinearNe"
-    }
-
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
