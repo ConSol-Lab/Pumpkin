@@ -1,18 +1,17 @@
+//! A [`Brancher`] which simply switches uses a single [`VariableSelector`] and a single
+//! [`ValueSelector`].
+
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
-use crate::branching::PhaseSaving;
 use crate::branching::SelectionContext;
-use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
-use crate::branching::Vsids;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
-use crate::engine::ConstraintSatisfactionSolver;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -24,13 +23,13 @@ where
 {
     /// The [`VariableSelector`] of the [`Brancher`], determines which (unfixed) variable to branch
     /// next on.
-    variable_selector: VariableSelect,
+    pub(crate) variable_selector: VariableSelect,
     /// The [`ValueSelector`] of the [`Brancher`] determines which value in the domain to branch
     /// next on given a variable.
-    value_selector: ValueSelect,
+    pub(crate) value_selector: ValueSelect,
     /// [`PhantomData`] to ensure that the variable type is bound to the
     /// [`IndependentVariableValueBrancher`]
-    variable_type: PhantomData<Var>,
+    pub(crate) variable_type: PhantomData<Var>,
 }
 
 impl<Var, VariableSelect, ValueSelect>
@@ -43,42 +42,6 @@ where
         IndependentVariableValueBrancher {
             variable_selector: var_selector,
             value_selector: val_selector,
-            variable_type: PhantomData,
-        }
-    }
-}
-
-pub type DefaultBrancher = IndependentVariableValueBrancher<
-    PropositionalVariable,
-    Vsids<PropositionalVariable>,
-    SolutionGuidedValueSelector<
-        PropositionalVariable,
-        bool,
-        PhaseSaving<PropositionalVariable, bool>,
-    >,
->;
-
-impl DefaultBrancher {
-    /// Creates a default [`IndependentVariableValueBrancher`] which uses [`Vsids`] as
-    /// [`VariableSelector`] and [`SolutionGuidedValueSelector`] (with [`PhaseSaving`] as its
-    /// back-up selector) as its [`ValueSelector`]; it searches over all
-    /// [`PropositionalVariable`]s defined in the provided `solver`.
-    pub fn default_over_all_propositional_variables(
-        solver: &ConstraintSatisfactionSolver,
-    ) -> DefaultBrancher {
-        #[allow(deprecated)]
-        let variables = solver
-            .get_propositional_assignments()
-            .get_propositional_variables()
-            .collect::<Vec<_>>();
-
-        IndependentVariableValueBrancher {
-            variable_selector: Vsids::new(&variables),
-            value_selector: SolutionGuidedValueSelector::new(
-                &variables,
-                Vec::new(),
-                PhaseSaving::new(&variables),
-            ),
             variable_type: PhantomData,
         }
     }

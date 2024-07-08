@@ -44,7 +44,7 @@ pub trait ProblemSolution: HasAssignments {
             .is_literal_assigned_true(literal)
     }
 
-    /// Returns
+    /// Returns the assigned integer value of the provided [`DomainId`].
     fn get_integer_value(&self, domain: DomainId) -> i32 {
         pumpkin_assert_moderate!(
             self.assignments_integer().is_domain_assigned(domain),
@@ -76,7 +76,7 @@ impl<'a> SolutionReference<'a> {
 impl<'a> ProblemSolution for SolutionReference<'a> {}
 
 /// A solution which takes ownership of its inner structures.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Solution {
     assignments_propositional: AssignmentsPropositional,
     assignments_integer: AssignmentsInteger,
@@ -93,7 +93,7 @@ impl Solution {
         }
     }
 
-    pub(crate) fn as_reference(&self) -> SolutionReference<'_> {
+    pub fn as_reference(&self) -> SolutionReference<'_> {
         SolutionReference {
             assignments_propositional: &self.assignments_propositional,
             assignments_integer: &self.assignments_integer,

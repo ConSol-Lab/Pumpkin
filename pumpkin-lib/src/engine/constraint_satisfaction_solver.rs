@@ -4,6 +4,7 @@
 use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::time::Instant;
 
 use log::warn;
@@ -30,8 +31,12 @@ use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::Brancher;
+use crate::branching::PhaseSaving;
 use crate::branching::SelectionContext;
+use crate::branching::SolutionGuidedValueSelector;
+use crate::branching::Vsids;
 use crate::engine::clause_allocators::ClauseAllocatorBasic;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::cp::PropagatorQueue;
@@ -70,9 +75,12 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variable_names::VariableNames;
+use crate::DefaultBrancher;
+#[cfg(doc)]
+use crate::Solver;
 
-pub type ClausalPropagatorType = BasicClausalPropagator;
-pub type ClauseAllocator = ClauseAllocatorBasic;
+pub(crate) type ClausalPropagatorType = BasicClausalPropagator;
+pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
 /// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
@@ -95,43 +103,6 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// [`ConstraintSatisfactionSolver::add_propagator`] to add a propagator). If a conflict is found by
 /// any of the propagators (including the clausal one) then the solver will analyse the conflict
 /// using 1UIP reasoning and backtrack if possible.
-///
-/// ## Example
-/// This example will show how to set-up the [`ConstraintSatisfactionSolver`] to solve a simple not
-/// equals problem between two variables. Note that any constraint is added in the form of
-/// propagators.
-/// ```
-/// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
-/// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-/// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-/// # use pumpkin_lib::engine::variables::IntegerVariable;
-/// # use pumpkin_lib::engine::variables::TransformableVariable;
-/// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
-/// // We create a solver with default options (note that this is only possible in a testing environment)
-/// let mut solver = ConstraintSatisfactionSolver::default();
-///
-/// // Now we create the two variables for which we want to define the propagator
-/// let x = solver.create_new_integer_variable(0, 10, None);
-/// let y = solver.create_new_integer_variable(0, 10, None);
-///
-/// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
-/// //  'x != y' is represented using the propagator for 'x - y != 0'
-/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualConstructor::new([x.into(), y.scaled(-1)].into(), 0));
-/// assert!(no_root_level_conflict);
-///
-/// // We create a branching strategy, in our case we will simply use the default one
-/// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-///
-/// // Then we solve the problem given a time-limit and a branching strategy
-/// let result = solver.solve(&mut Indefinite, &mut brancher);
-///
-/// // Now we check that the result is feasible and that the chosen values for the two variables are different
-/// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
-/// assert!(
-///     solver.get_assigned_integer_value(&x).unwrap() != solver.get_assigned_integer_value(&y).unwrap()
-/// );
-/// ```
 ///
 /// # Bibliography
 /// \[1\] T. Feydy and P. J. Stuckey, ‘Lazy clause generation reengineered’, in International
@@ -248,11 +219,10 @@ impl Default for ConstraintSatisfactionSolver {
     }
 }
 
-/// Options for the [`ConstraintSatisfactionSolver`], see `main.rs` for more information
-/// on these parameters.
+/// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
-    /// The options used by the [`RestartStrategy`]
+    /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
@@ -260,8 +230,8 @@ pub struct SatisfactionSolverOptions {
     /// The proof log.
     pub proof_log: ProofLog,
 
-    /// A random generator which is used by the [`ConstraintSatisfactionSolver`], passing it as an
-    /// argument allows seeding based on CLI input.
+    /// A random generator which is used by the [`Solver`], passing it as an
+    /// argument allows seeding of the randomization.
     pub random_generator: SmallRng,
 }
 
@@ -369,15 +339,8 @@ impl ConstraintSatisfactionSolver {
     }
 
     /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
         SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
-    }
-
-    /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
-    pub fn is_at_the_root_level(&self) -> bool {
-        self.assignments_propositional.is_at_the_root_level()
     }
 
     pub(crate) fn is_conflicting(&self) -> bool {
@@ -504,6 +467,24 @@ impl ConstraintSatisfactionSolver {
         result
     }
 
+    pub fn default_brancher_over_all_propositional_variables(&self) -> DefaultBrancher {
+        #[allow(deprecated)]
+        let variables = self
+            .get_propositional_assignments()
+            .get_propositional_variables()
+            .collect::<Vec<_>>();
+
+        IndependentVariableValueBrancher {
+            variable_selector: Vsids::new(&variables),
+            value_selector: SolutionGuidedValueSelector::new(
+                &variables,
+                Vec::new(),
+                PhaseSaving::new(&variables),
+            ),
+            variable_type: PhantomData,
+        }
+    }
+
     pub fn get_state(&self) -> &CSPSolverState {
         &self.state
     }
@@ -613,38 +594,48 @@ impl ConstraintSatisfactionSolver {
     /// //   (x0 \/ x1 \/ x2) /\ (x0 \/ !x1 \/ x2)
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
-    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::engine::variables::PropositionalVariable;
-    /// # use pumpkin_lib::engine::variables::Literal;
-    /// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
+    /// # use pumpkin_lib::Solver;
+    /// # use pumpkin_lib::variables::PropositionalVariable;
+    /// # use pumpkin_lib::variables::Literal;
+    /// # use pumpkin_lib::termination::Indefinite;
     /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-    /// let solver = ConstraintSatisfactionSolver::default();
-    ///
-    /// let mut solver = ConstraintSatisfactionSolver::default();
-    /// let x = solver.new_literals().take(3).collect::<Vec<_>>();
+    /// # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
+    /// let mut solver = Solver::default();
+    /// let x = vec![
+    ///     solver.new_literal(),
+    ///     solver.new_literal(),
+    ///     solver.new_literal(),
+    /// ];
     ///
     /// solver.add_clause([x[0], x[1], x[2]]);
     /// solver.add_clause([x[0], !x[1], x[2]]);
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
-    /// let mut brancher =
-    ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    /// solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
+    /// let mut termination = Indefinite;
+    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    /// let result =
+    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
     ///
-    /// let core = solver
-    ///     .extract_clausal_core(&mut brancher)
-    ///     .expect("the instance is unsatisfiable");
+    /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
+    ///     mut unsatisfiable,
+    /// ) = result
+    /// {
+    ///     {
+    ///         let core = unsatisfiable.extract_core();
     ///
-    /// // The order of the literals in the core is undefined, so we check for unordered equality.
-    /// assert_eq!(
-    ///     core.len(),
-    ///     assumptions.len(),
-    ///     "the core has the length of the number of assumptions"
-    /// );
-    /// assert!(
-    ///     core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///     "all literals in the core are negated assumptions"
-    /// );
+    ///         // The order of the literals in the core is undefined, so we check for unordered
+    ///         // equality.
+    ///         assert_eq!(
+    ///             core.len(),
+    ///             assumptions.len(),
+    ///             "the core has the length of the number of assumptions"
+    ///         );
+    ///         assert!(
+    ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
+    ///             "all literals in the core are negated assumptions"
+    ///         );
+    ///     }
+    /// }
     /// ```
     pub fn extract_clausal_core(
         &mut self,
@@ -664,7 +655,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
 
         let core = self
@@ -678,6 +668,7 @@ impl ConstraintSatisfactionSolver {
         core
     }
 
+    #[allow(unused)]
     pub(crate) fn get_conflict_reasons(
         &mut self,
         brancher: &mut impl Brancher,
@@ -697,7 +688,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
 
         self.conflict_analyser
@@ -706,17 +696,6 @@ impl ConstraintSatisfactionSolver {
 
     /// Returns an infinite iterator of positive literals of new variables. The new variables will
     /// be unnamed.
-    ///
-    /// # Example
-    /// ```
-    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::engine::variables::Literal;
-    /// let mut solver = ConstraintSatisfactionSolver::default();
-    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
-    ///
-    /// // `literals` contains 5 positive literals of newly created propositional variables.
-    /// assert_eq!(literals.len(), 5);
-    /// ```
     ///
     /// Note that this method captures the lifetime of the immutable reference to `self`.
     pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
@@ -798,8 +777,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
-        self.backtrack(0, brancher);
-        self.state.declare_ready();
+        if !self.assignments_propositional.is_at_the_root_level() {
+            self.backtrack(0, brancher);
+            self.state.declare_ready();
+        }
     }
 
     fn synchronise_propositional_trail_based_on_integer_trail(&mut self) -> Option<ConflictInfo> {
@@ -1102,7 +1083,6 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
         };
         self.conflict_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -1416,13 +1396,16 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator<Constructor>(&mut self, constructor: Constructor) -> bool
+    pub fn add_propagator<Constructor>(
+        &mut self,
+        constructor: Constructor,
+    ) -> Result<(), ConstraintOperationError>
     where
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
         if self.state.is_inconsistent() {
-            return false;
+            return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
@@ -1454,11 +1437,15 @@ impl ConstraintSatisfactionSolver {
 
         if new_propagator.initialise_at_root(&mut context).is_err() {
             self.state.declare_infeasible();
-            false
+            Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
             self.propagate_enqueued();
 
-            self.state.no_conflict()
+            if self.state.no_conflict() {
+                Ok(())
+            } else {
+                Err(ConstraintOperationError::InfeasiblePropagator)
+            }
         }
     }
 
@@ -1500,26 +1487,6 @@ impl ConstraintSatisfactionSolver {
 
         Ok(())
     }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
-        self.clausal_propagator.add_permanent_implication_unchecked(
-            lhs,
-            rhs,
-            &mut self.clause_allocator,
-        );
-    }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_ternary_clause_unchecked(
-        &mut self,
-        a: Literal,
-        b: Literal,
-        c: Literal,
-    ) {
-        self.clausal_propagator
-            .add_permanent_ternary_clause_unchecked(a, b, c, &mut self.clause_allocator);
-    }
 }
 
 // methods for getting simple info out of the solver
@@ -1542,10 +1509,10 @@ impl ConstraintSatisfactionSolver {
 /// Structure responsible for storing several statistics of the solving process of the
 /// [`ConstraintSatisfactionSolver`].
 #[derive(Default, Debug, Copy, Clone)]
-pub struct Counters {
-    pub num_decisions: u64,
-    pub num_conflicts: u64,
-    pub average_conflict_size: CumulativeMovingAverage,
+pub(crate) struct Counters {
+    pub(crate) num_decisions: u64,
+    pub(crate) num_conflicts: u64,
+    pub(crate) average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
     num_unit_clauses_learned: u64,
     average_learned_clause_length: CumulativeMovingAverage,
@@ -1707,7 +1674,6 @@ mod tests {
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
     use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
     use crate::engine::predicates::integer_predicate::IntegerPredicate;
@@ -1888,8 +1854,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: Result<Vec<Literal>, Literal>,
     ) {
-        let mut brancher =
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+        let mut brancher = solver.default_brancher_over_all_propositional_variables();
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 
@@ -1940,7 +1905,7 @@ mod tests {
         };
 
         let result = solver.add_propagator(propagator_constructor);
-        assert!(result);
+        assert!(result.is_ok());
 
         // We add the clause that will lead to the conflict in the SAT-solver
         let result = solver.add_clause([

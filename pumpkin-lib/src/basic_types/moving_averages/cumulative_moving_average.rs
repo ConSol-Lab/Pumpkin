@@ -1,7 +1,7 @@
 use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
-pub struct CumulativeMovingAverage {
+pub(crate) struct CumulativeMovingAverage {
     sum: u64,
     num_terms: u64,
 }

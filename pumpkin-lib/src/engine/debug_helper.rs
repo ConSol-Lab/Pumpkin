@@ -20,12 +20,12 @@ use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_simple;
 
 #[derive(Copy, Clone)]
-pub struct DebugDyn<'a> {
+pub(crate) struct DebugDyn<'a> {
     trait_name: &'a str,
 }
 
 impl<'a> DebugDyn<'a> {
-    pub fn from(trait_name: &'a str) -> Self {
+    pub(crate) fn from(trait_name: &'a str) -> Self {
         DebugDyn { trait_name }
     }
 }
@@ -37,14 +37,14 @@ impl<'a> Debug for DebugDyn<'a> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct DebugHelper {}
+pub(crate) struct DebugHelper {}
 
 impl DebugHelper {
     // this method is only to be called after the solver completed propagation until a fixed point
     // and no conflict were detected  the point is to check whether there is a propagation that
     // missed a propagation or failure  additionally checks whether the internal data structures
     // of the clausal propagator are okay and consistent with the assignments_propositional
-    pub fn debug_fixed_point_propagation(
+    pub(crate) fn debug_fixed_point_propagation(
         clausal_propagator: &ClausalPropagatorType,
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
@@ -120,7 +120,7 @@ impl DebugHelper {
         true
     }
 
-    pub fn debug_reported_failure(
+    pub(crate) fn debug_reported_failure(
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
         variable_literal_mappings: &VariableLiteralMappings,
@@ -148,7 +148,8 @@ impl DebugHelper {
         true
     }
 
-    pub fn debug_propagator_reason(
+    #[allow(unused)]
+    pub(crate) fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &PropositionalConjunction,
         assignments_integer: &AssignmentsInteger,

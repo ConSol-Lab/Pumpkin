@@ -27,12 +27,11 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
-use crate::engine::IntDomainEvent;
 use crate::engine::WatchListCP;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default, Debug)]
-pub struct TestSolver {
+pub(crate) struct TestSolver {
     assignments_integer: AssignmentsInteger,
     reason_store: ReasonStore,
     assignments_propositional: AssignmentsPropositional,
@@ -50,12 +49,12 @@ impl Debug for BoxedPropagator {
 }
 
 impl TestSolver {
-    pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
+    pub(crate) fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.watch_list.grow();
         self.assignments_integer.grow(lb, ub)
     }
 
-    pub fn new_literal(&mut self) -> Literal {
+    pub(crate) fn new_literal(&mut self) -> Literal {
         let new_variable_index = self.assignments_propositional.num_propositional_variables();
         self.watch_list_propositional.grow();
         self.assignments_propositional.grow();
@@ -63,7 +62,7 @@ impl TestSolver {
         Literal::new(PropositionalVariable::new(new_variable_index), true)
     }
 
-    pub fn new_propagator<Constructor>(
+    pub(crate) fn new_propagator<Constructor>(
         &mut self,
         constructor: Constructor,
     ) -> Result<BoxedPropagator, Inconsistency>
@@ -85,7 +84,10 @@ impl TestSolver {
         Ok(propagator)
     }
 
-    pub fn initialise_at_root(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
+    pub(crate) fn initialise_at_root(
+        &mut self,
+        propagator: &mut BoxedPropagator,
+    ) -> PropagationStatusCP {
         propagator.initialise_at_root(&mut PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
@@ -94,15 +96,15 @@ impl TestSolver {
         ))
     }
 
-    pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
+    pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
         var.contains(&self.assignments_integer, value)
     }
 
-    pub fn lower_bound(&self, var: DomainId) -> i32 {
+    pub(crate) fn lower_bound(&self, var: DomainId) -> i32 {
         self.assignments_integer.get_lower_bound(var)
     }
 
-    pub fn increase_lower_bound_and_notify(
+    pub(crate) fn increase_lower_bound_and_notify(
         &mut self,
         propagator: &mut BoxedPropagator,
         id: i32,
@@ -132,44 +134,40 @@ impl TestSolver {
         )
     }
 
-    pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+    pub(crate) fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
         self.assignments_integer
             .tighten_lower_bound(var, bound, None)
     }
 
-    pub fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+    pub(crate) fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
         self.assignments_integer
             .tighten_upper_bound(var, bound, None)
     }
 
-    pub fn set_literal(&mut self, var: Literal, val: bool) {
+    pub(crate) fn set_literal(&mut self, var: Literal, val: bool) {
         self.assignments_propositional
             .enqueue_decision_literal(if val { var } else { !var });
     }
 
-    pub fn is_literal_true(&self, var: Literal) -> bool {
-        self.assignments_propositional.is_literal_assigned_true(var)
-    }
-
-    pub fn is_literal_false(&self, var: Literal) -> bool {
+    pub(crate) fn is_literal_false(&self, var: Literal) -> bool {
         self.assignments_propositional
             .is_literal_assigned_false(var)
     }
 
-    pub fn is_literal_assigned(&self, var: Literal) -> bool {
+    pub(crate) fn is_literal_assigned(&self, var: Literal) -> bool {
         self.assignments_propositional.is_literal_assigned(var)
     }
 
-    pub fn upper_bound(&self, var: DomainId) -> i32 {
+    pub(crate) fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignments_integer.get_upper_bound(var)
     }
 
-    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
+    pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
         self.assignments_integer
             .remove_value_from_domain(var, value, None)
     }
 
-    pub fn propagate(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
+    pub(crate) fn propagate(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
         let mut context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
@@ -179,7 +177,7 @@ impl TestSolver {
         propagator.propagate(&mut context)
     }
 
-    pub fn propagate_until_fixed_point(
+    pub(crate) fn propagate_until_fixed_point(
         &mut self,
         propagator: &mut BoxedPropagator,
     ) -> PropagationStatusCP {
@@ -228,7 +226,7 @@ impl TestSolver {
         }
     }
 
-    pub fn notify(
+    pub(crate) fn notify(
         &mut self,
         propagator: &mut BoxedPropagator,
         event: OpaqueDomainEvent,
@@ -246,25 +244,10 @@ impl TestSolver {
         )
     }
 
-    pub fn notify_changed(
+    pub(crate) fn get_reason_int(
         &mut self,
-        propagator: &mut BoxedPropagator,
-        id: DomainId,
-        event: IntDomainEvent,
-    ) {
-        let opaque_event: OpaqueDomainEvent = event.into();
-        let propagator_var_ids = self.watch_list.get_affected_propagators(event, id).to_vec();
-        for pvi in propagator_var_ids {
-            assert_eq!(
-                pvi.propagator,
-                PropagatorId(0),
-                "We assume a single propagator per TestSolver in notify_changed"
-            );
-            let _ = self.notify(propagator, opaque_event, pvi.variable);
-        }
-    }
-
-    pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
+        predicate: IntegerPredicate,
+    ) -> &PropositionalConjunction {
         let reason_ref = self.assignments_integer.get_reason_for_predicate(predicate);
         let context =
             PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
@@ -273,7 +256,7 @@ impl TestSolver {
             .expect("reason_ref should not be stale")
     }
 
-    pub fn get_reason_bool(
+    pub(crate) fn get_reason_bool(
         &mut self,
         literal: Literal,
         assignment: bool,
@@ -288,7 +271,7 @@ impl TestSolver {
             .expect("reason_ref should not be stale")
     }
 
-    pub fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {
+    pub(crate) fn assert_bounds(&self, var: DomainId, lb: i32, ub: i32) {
         let actual_lb = self.lower_bound(var);
         let actual_ub = self.upper_bound(var);
 

@@ -11,7 +11,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 
 #[derive(Debug)]
-pub struct AbsoluteValueConstructor<VA, VB> {
+pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,
     /// The absolute of `signed`.
@@ -36,7 +36,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
 #[derive(Debug)]
-pub struct AbsoluteValuePropagator<VA, VB> {
+pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     signed: VA,
     absolute: VB,
 }

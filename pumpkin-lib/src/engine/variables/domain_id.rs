@@ -12,6 +12,8 @@ use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
 
+/// A structure which represents the most basic [`IntegerVariable`]; it is simply the id which links
+/// to a domain (hence the name).
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub struct DomainId {
     pub id: u32,

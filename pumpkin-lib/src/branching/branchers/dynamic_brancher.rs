@@ -1,3 +1,8 @@
+//! A [`Brancher`] which sequentially applies a list of [`Brancher`]s until all of them can not find
+//! another decision.
+//!
+//! Note that this structure should be used if you want to use dynamic [`Brancher`]s but
+//! require a [`Sized`] object (e.g. when a function takes as input `impl Brancher`).
 use std::fmt::Debug;
 
 use crate::basic_types::SolutionReference;

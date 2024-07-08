@@ -16,7 +16,7 @@ pub enum Predicate {
     /// v]`, `[x <= v]`, `[x == v]`, or `[x != v]`).
     IntegerPredicate(IntegerPredicate),
     /// A predicate represented with a [`Literal`]. Oftentimes this [`Literal`] is internally
-    /// linked to an [`IntegerPredicate`] (see [`VariableLiteralMappings`]).
+    /// linked to an [`IntegerPredicate`].
     Literal(Literal),
     /// A predicate which is always false.
     False,

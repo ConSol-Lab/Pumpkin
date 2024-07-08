@@ -12,7 +12,7 @@ use crate::pumpkin_assert_ne_simple;
 //  + garbage collection
 
 #[derive(Debug)]
-pub struct ClauseAllocatorLinear {
+pub(crate) struct ClauseAllocatorLinear {
     data: Vec<u32>, // allocating a fixed block for now
     next_location: u32,
     deleted_clause_space_usage: u32,

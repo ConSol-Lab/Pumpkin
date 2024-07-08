@@ -14,9 +14,9 @@ use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`.
 #[derive(Debug)]
-pub struct MaximumConstructor<ElementVar, Rhs> {
-    pub array: Box<[ElementVar]>,
-    pub rhs: Rhs,
+pub(crate) struct MaximumConstructor<ElementVar, Rhs> {
+    pub(crate) array: Box<[ElementVar]>,
+    pub(crate) rhs: Rhs,
 }
 
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
@@ -48,7 +48,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumConstructor`].
 #[derive(Debug)]
-pub struct MaximumPropagator<ElementVar, Rhs> {
+pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[ElementVar]>,
     rhs: Rhs,
 }

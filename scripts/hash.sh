@@ -2,7 +2,7 @@
 
 set -ux
 
-results=$(grep --recursive --files-with-matches --exclude="hash_structures.rs" --fixed-strings 'std::collections::Hash' ./pumpkin-lib/ ./pumpkin-cli/)
+results=$(grep --recursive --files-with-matches --exclude="hash_structures.rs" --fixed-strings 'std::collections::Hash' ./pumpkin-lib/)
 num_results=$(echo "$results" | wc --lines)
 if [ "$results" != "" ]; then
     echo -e "\033[0;31mHash-based structures from the standard library found in file(s):\n$results\033[0m"

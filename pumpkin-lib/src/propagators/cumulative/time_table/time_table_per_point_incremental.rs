@@ -50,7 +50,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-pub struct TimeTablePerPointIncrementalPropagator<Var> {
+pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
@@ -86,7 +86,7 @@ where
 }
 
 impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var> {
-    pub fn new(
+    pub(crate) fn new(
         parameters: CumulativeParameters<Var>,
     ) -> TimeTablePerPointIncrementalPropagator<Var> {
         TimeTablePerPointIncrementalPropagator {

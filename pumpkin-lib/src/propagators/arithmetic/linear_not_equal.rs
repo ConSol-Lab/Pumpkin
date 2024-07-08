@@ -15,7 +15,7 @@ use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
-pub struct LinearNotEqualConstructor<Var> {
+pub(crate) struct LinearNotEqualConstructor<Var> {
     /// The terms which sum to the left-hand side.
     terms: Box<[Var]>,
     /// The right-hand side.
@@ -25,7 +25,7 @@ pub struct LinearNotEqualConstructor<Var> {
 }
 
 impl<Var> LinearNotEqualConstructor<Var> {
-    pub fn new(terms: Box<[Var]>, rhs: i32) -> Self {
+    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
         LinearNotEqualConstructor {
             terms,
             rhs,
@@ -33,7 +33,7 @@ impl<Var> LinearNotEqualConstructor<Var> {
         }
     }
 
-    pub fn reified(terms: Box<[Var]>, rhs: i32, reif: Literal) -> Self {
+    pub(crate) fn reified(terms: Box<[Var]>, rhs: i32, reif: Literal) -> Self {
         LinearNotEqualConstructor {
             terms,
             rhs,
@@ -45,10 +45,10 @@ impl<Var> LinearNotEqualConstructor<Var> {
 /// Domain consistent propagator for the constraint `reif => \sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
 #[derive(Debug)]
-pub struct LinearNotEqualPropagator<Var> {
+pub(crate) struct LinearNotEqualPropagator<Var> {
     terms: Rc<[Var]>,
     rhs: i32,
-    pub reif: Option<Literal>,
+    pub(crate) reif: Option<Literal>,
 }
 
 impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>

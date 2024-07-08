@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-pub trait MovingAverage: Debug {
+pub(crate) trait MovingAverage: Debug {
     fn add_term(&mut self, new_term: u64);
 
     /// Returns the moving average value; in case there are no terms, the convention is to return 0
