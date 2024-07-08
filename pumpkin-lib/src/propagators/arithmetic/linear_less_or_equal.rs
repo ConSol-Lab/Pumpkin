@@ -8,7 +8,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::predicate;
@@ -37,9 +36,9 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 /// Propagator for the constraint `reif => \sum x_i <= c`.
 #[derive(Debug)]
 pub struct LinearLessOrEqualPropagator<Var> {
-    x: Box<[PropagatorVariable<Var>]>,
+    x: Box<[Var]>,
     c: i32,
-    pub reif: Option<PropagatorVariable<Literal>>,
+    pub reif: Option<Literal>,
 }
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
@@ -104,32 +103,31 @@ where
 
 fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
-    x: &[PropagatorVariable<Var>],
+    x: &[Var],
     c: i32,
-    reif: &Option<PropagatorVariable<Literal>>,
+    reif: &Option<Literal>,
 ) -> PropagationStatusCP {
     let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
     let reified = reif.is_some();
     if c < lb_lhs {
-        if reified && !context.is_literal_fixed(reif.as_ref().unwrap()) {
+        if reified && !context.is_literal_fixed(reif.unwrap()) {
             let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
                 .collect();
-            context.assign_literal(reif.as_ref().unwrap(), false, reason)?;
-        } else if !reified || context.is_literal_true(reif.as_ref().unwrap()) {
+            context.assign_literal(reif.unwrap(), false, reason)?;
+        } else if !reified || context.is_literal_true(reif.unwrap()) {
             let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
-                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
+                .chain(reif.map(|variable| variable.into()))
                 .collect();
             return Err(reason.into());
         }
     }
 
     if reified
-        && (!context.is_literal_fixed(reif.as_ref().unwrap())
-            || context.is_literal_false(reif.as_ref().unwrap()))
+        && (!context.is_literal_fixed(reif.unwrap()) || context.is_literal_false(reif.unwrap()))
     {
         return Ok(());
     }
@@ -148,7 +146,7 @@ fn perform_propagation<Var: IntegerVariable>(
                         None
                     }
                 })
-                .chain(reif.as_ref().map(|variable| variable.get_literal().into()))
+                .chain(reif.map(|variable| variable.into()))
                 .collect();
 
             context.set_upper_bound(x_i, bound, reason)?;
