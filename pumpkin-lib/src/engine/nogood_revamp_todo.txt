@@ -1,11 +1,3 @@
-TODOS short-term:
-
-run tests
-run some scheduling problems
-
-Improve the code! Add missing functionality.
-
-
 * The current implementation uses very simple propagation for nogood, so when we add the learned nogood, it does not actually propagate until much later!
 
 * Learned nogood management.
@@ -96,3 +88,5 @@ todo: fix Booleans, these could be wrappers around IntegerVariable 0-1. Conceptu
 
 
 look at the Domain representation, and see what was the problem with some hacky thing, like at trail pos 0 we have some bound?
+
+Remove PropagationStatusCP, or rename.
