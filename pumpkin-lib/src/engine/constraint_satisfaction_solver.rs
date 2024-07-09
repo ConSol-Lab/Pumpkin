@@ -1428,7 +1428,8 @@ impl ConstraintSatisfactionSolver {
                 &self.assignments_integer,
                 &self.assignments_propositional,
             ))
-            .map(|_| {
+            .map_err(Inconsistency::from)
+            .and_then(|_| {
                 let mut context = PropagationContextMut::new(
                     &mut self.assignments_integer,
                     &mut self.reason_store,
