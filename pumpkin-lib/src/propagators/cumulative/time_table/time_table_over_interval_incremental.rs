@@ -34,7 +34,6 @@ use crate::propagators::Task;
 use crate::propagators::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -151,126 +150,38 @@ impl<Var: IntegerVariable + 'static + std::fmt::Debug> Propagator
             self.time_table_outdated = false;
         } else {
             for update_info in self.parameters.updated.iter() {
-                let UpdatedTaskInfo {
-                    task,
-                    old_lower_bound,
-                    old_upper_bound,
-                    new_lower_bound,
-                    new_upper_bound,
-                } = update_info;
                 let added_mandatory_consumption = generate_update_range(
-                    task,
-                    *old_lower_bound,
-                    *old_upper_bound,
-                    *new_lower_bound,
-                    *new_upper_bound,
+                    &update_info.task,
+                    update_info.old_lower_bound,
+                    update_info.old_upper_bound,
+                    update_info.new_lower_bound,
+                    update_info.new_upper_bound,
                 );
                 // We consider both of the possible update ranges
                 // Note that the upper update range is first considered to avoid any issues with the
                 // indices when processing the other update range
                 for update_range in added_mandatory_consumption.get_reverse_update_ranges() {
-                    // Keep track of the profiles which need to be added
-                    let mut to_add: Vec<ResourceProfile<Var>> = Vec::new();
-
                     // First we attempt to find overlapping profiles
                     match determine_profiles_to_update(&self.time_table, &update_range) {
                         Ok((start_index, end_index)) => {
-                            // Go over all indices of the profiles which overlap with the updated
-                            // one and determine which one need to be updated
-                            for current_index in start_index..=end_index {
-                                let profile = &self.time_table[current_index];
-
-                                // Check whether there is a new profile before the first overlapping
-                                // profile
-                                check_1_new_part_before_first_profile(
-                                    current_index,
-                                    start_index,
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                    task,
-                                );
-
-                                // Check whether there is a new profile between the current profile
-                                // and the previous profile (beginning of profile remains unchanged)
-                                check_2_new_part_between_profiles(
-                                    &self.time_table,
-                                    current_index,
-                                    start_index,
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                    task,
-                                );
-
-                                // Check whether the current profile is split by the added mandatory
-                                // part
-                                check_3_split_profile_added_part_starts_after_profile_start(
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                );
-
-                                // Check whether there is an increased profile due to overlap
-                                // between the current profile and the added mandatory part
-                                //
-                                // The addition of the mandatory part can lead to an overflow
-                                if let Err(tasks_causing_error) = check_4_overlap_updated_profile(
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                    task,
-                                    self.parameters.capacity,
-                                ) {
-                                    return Err(create_inconsistency(
-                                        context,
-                                        &tasks_causing_error,
-                                    ));
-                                }
-
-                                // Check whether the current profile is split by the added mandatory
-                                // part (end of profile remains unchanged)
-                                check_5_split_profile_added_part_ends_before_profile_end(
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                );
-
-                                // Check whether there is a new profile before the last overlapping
-                                // profile
-                                check_6_new_part_after_last_profile(
-                                    current_index,
-                                    end_index,
-                                    &update_range,
-                                    profile,
-                                    &mut to_add,
-                                    task,
-                                );
-                            }
-                            // We now update the time-table to insert the newly created profiles at
-                            // the right place to ensure the ordering invariant
-                            let _ = self.time_table.splice(start_index..end_index + 1, to_add);
+                            insert_profiles_overlapping_with_added_mandatory_part(
+                                &mut self.time_table,
+                                start_index,
+                                end_index,
+                                &update_range,
+                                &update_info.task,
+                                self.parameters.capacity,
+                            )
+                            .map_err(|conflict_tasks| {
+                                create_inconsistency(context, &conflict_tasks)
+                            })?;
                         }
-                        Err(index_to_insert) => {
-                            pumpkin_assert_moderate!(
-                                index_to_insert <= self.time_table.len()
-                                    || index_to_insert >= self.time_table.len()
-                                    || self.time_table[index_to_insert].start
-                                        > update_range.end - 1,
-                                "The index to insert at is incorrect"
-                            );
-
-                            // Insert the new profile at its index
-                            self.time_table.insert(
-                                index_to_insert,
-                                ResourceProfile {
-                                    start: update_range.start,
-                                    end: update_range.end - 1,
-                                    profile_tasks: vec![Rc::clone(task)],
-                                    height: task.resource_usage,
-                                },
-                            );
-                        }
+                        Err(index_to_insert) => insert_profile_new_mandatory_part(
+                            &mut self.time_table,
+                            index_to_insert,
+                            &update_range,
+                            &update_info.task,
+                        ),
                     }
                 }
             }
@@ -358,6 +269,119 @@ impl<Var: IntegerVariable + 'static + std::fmt::Debug> Propagator
         // Use the same debug propagator from `TimeTableOverInterval`
         debug_propagate_from_scratch_time_table_interval(context, &self.parameters)
     }
+}
+
+/// The new mandatory part added by `updated_task` (spanning `update_range`) overlaps with the
+/// profiles in `[start_index, end_index]`. This function calculates the added, and updated profiles
+/// and adds them to the `time-table` at the correct position.
+fn insert_profiles_overlapping_with_added_mandatory_part<Var: IntegerVariable + 'static>(
+    time_table: &mut OverIntervalTimeTableType<Var>,
+    start_index: usize,
+    end_index: usize,
+    update_range: &Range<i32>,
+    updated_task: &Rc<Task<Var>>,
+    capacity: i32,
+) -> Result<(), Vec<Rc<Task<Var>>>> {
+    let mut to_add = Vec::new();
+    // Go over all indices of the profiles which overlap with the updated
+    // one and determine which one need to be updated
+    for current_index in start_index..=end_index {
+        let profile = &time_table[current_index];
+
+        // Check whether there is a new profile before the first overlapping
+        // profile
+        check_1_new_part_before_first_profile(
+            current_index,
+            start_index,
+            update_range,
+            profile,
+            &mut to_add,
+            updated_task,
+        );
+
+        // Check whether there is a new profile between the current profile
+        // and the previous profile (beginning of profile remains unchanged)
+        check_2_new_part_between_profiles(
+            time_table,
+            current_index,
+            start_index,
+            update_range,
+            profile,
+            &mut to_add,
+            updated_task,
+        );
+
+        // Check whether the current profile is split by the added mandatory
+        // part
+        check_3_split_profile_added_part_starts_after_profile_start(
+            update_range,
+            profile,
+            &mut to_add,
+        );
+
+        // Check whether there is an increased profile due to overlap
+        // between the current profile and the added mandatory part
+        //
+        // The addition of the mandatory part can lead to an overflow
+        check_4_overlap_updated_profile(
+            update_range,
+            profile,
+            &mut to_add,
+            updated_task,
+            capacity,
+        )?;
+
+        // Check whether the current profile is split by the added mandatory
+        // part (end of profile remains unchanged)
+        check_5_split_profile_added_part_ends_before_profile_end(
+            update_range,
+            profile,
+            &mut to_add,
+        );
+
+        // Check whether there is a new profile before the last overlapping
+        // profile
+        check_6_new_part_after_last_profile(
+            current_index,
+            end_index,
+            update_range,
+            profile,
+            &mut to_add,
+            updated_task,
+        );
+    }
+    // We now update the time-table to insert the newly created profiles at
+    // the right place to ensure the ordering invariant
+    let _ = time_table.splice(start_index..end_index + 1, to_add);
+    Ok(())
+}
+
+/// The new mandatory part added by `updated_task` (spanning `update_range`) does not overlap with
+/// any existing profile. This method inserts it at the position of `index_to_insert` in the
+/// `time-table`.
+fn insert_profile_new_mandatory_part<Var: IntegerVariable + 'static>(
+    time_table: &mut OverIntervalTimeTableType<Var>,
+    index_to_insert: usize,
+    update_range: &Range<i32>,
+    updated_task: &Rc<Task<Var>>,
+) {
+    pumpkin_assert_moderate!(
+        index_to_insert <= time_table.len()
+            || index_to_insert >= time_table.len()
+            || time_table[index_to_insert].start > update_range.end - 1,
+        "The index to insert at is incorrect"
+    );
+
+    // Insert the new profile at its index
+    time_table.insert(
+        index_to_insert,
+        ResourceProfile {
+            start: update_range.start,
+            end: update_range.end - 1,
+            profile_tasks: vec![Rc::clone(updated_task)],
+            height: updated_task.resource_usage,
+        },
+    );
 }
 
 /// Determines whether the added mandatory part causes a new profile before the first overapping
