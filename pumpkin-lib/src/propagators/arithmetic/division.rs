@@ -81,16 +81,13 @@ where
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
@@ -119,32 +116,32 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 
     // We propagate the domains to their appropriate signs (e.g. if the numerator is negative and
     // the denominator is positive then the rhs should also be negative)
-    propagate_signs(context, numerator, denominator, rhs)?;
+    propagate_signs(&mut context, numerator, denominator, rhs)?;
 
     // If the upper-bound of the numerator is positive and the upper-bound of the rhs is positive
     // then we can simply update the upper-bounds
     if context.upper_bound(numerator) >= 0 && context.upper_bound(rhs) >= 0 {
-        propagate_upper_bounds(context, numerator, denominator, rhs)?;
+        propagate_upper_bounds(&mut context, numerator, denominator, rhs)?;
     }
 
     // If the lower-bound of the numerator is negative and the lower-bound of the rhs is negative
     // then we negate these variables and update the upper-bounds
     if context.upper_bound(negated_numerator) >= 0 && context.upper_bound(negated_rhs) >= 0 {
-        propagate_upper_bounds(context, negated_numerator, denominator, negated_rhs)?;
+        propagate_upper_bounds(&mut context, negated_numerator, denominator, negated_rhs)?;
     }
 
     // If the domain of the numerator is positive and the domain of the rhs is positive (and we know
     // that our denominator is positive) then we can propagate based on the assumption that all the
     // domains are positive
     if context.lower_bound(numerator) >= 0 && context.lower_bound(rhs) >= 0 {
-        propagate_positive_domains(context, numerator, denominator, rhs)?;
+        propagate_positive_domains(&mut context, numerator, denominator, rhs)?;
     }
 
     // If the domain of the numerator is negative and the domain of the rhs is negative (and we know
     // that our denominator is positive) then we propagate based on the views over the numerator and
     // rhs
     if context.lower_bound(negated_numerator) >= 0 && context.lower_bound(negated_rhs) >= 0 {
-        propagate_positive_domains(context, negated_numerator, denominator, negated_rhs)?;
+        propagate_positive_domains(&mut context, negated_numerator, denominator, negated_rhs)?;
     }
 
     Ok(())

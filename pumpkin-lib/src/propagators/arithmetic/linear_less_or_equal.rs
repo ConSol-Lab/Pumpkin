@@ -64,16 +64,13 @@ where
         "LinearLeq"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.x, self.c)
     }
 }
 
 fn perform_propagation<Var: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     x: &[Var],
     c: i32,
 ) -> PropagationStatusCP {

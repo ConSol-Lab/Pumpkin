@@ -62,22 +62,19 @@ where
         "IntTimes"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     a: &VA,
     b: &VB,
     c: &VC,
 ) -> PropagationStatusCP {
     // First we propagate the signs
-    propagate_signs(context, a, b, c)?;
+    propagate_signs(&mut context, a, b, c)?;
 
     // Then we propagate on whether or not the variables are sign fixed
     // For now we only propagate in the case where a, b, c >= 0

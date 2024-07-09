@@ -51,7 +51,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.

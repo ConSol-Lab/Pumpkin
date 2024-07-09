@@ -122,7 +122,7 @@ where
             });
 
         // Determine how many local ids were registered, so we can initialise the `updated` list.
-        let last_local_id_base = context.get_next_local_id().unpack() - 1;
+        let last_local_id_base = context.get_next_local_id().unpack();
 
         DifferenceLogicPropagator {
             elementary_constraints: elementary_constraints
@@ -130,7 +130,7 @@ where
                 .map(|(k, v)| (k, v.into_boxed_slice()))
                 .collect(),
             difference_vars: difference_vars.into_boxed_slice(),
-            updated: (0..=last_local_id_base).map(LocalId::from).collect(),
+            updated: (0..last_local_id_base).map(LocalId::from).collect(),
             worklist: Default::default(),
         }
     }
@@ -162,11 +162,11 @@ impl<V> Propagator for DifferenceLogicPropagator<V>
 where
     V: IntegerVariable + Hash + Eq,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         for &y_start in &self.updated {
             propagate_shared(
                 &self.elementary_constraints,
-                context,
+                &mut context,
                 &self.local_id_to_var(y_start).clone(),
                 &mut self.worklist,
             )?;
@@ -199,12 +199,12 @@ where
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
             propagate_shared(
                 &self.elementary_constraints,
-                context,
+                &mut context,
                 y_start,
                 &mut Default::default(),
             )?;

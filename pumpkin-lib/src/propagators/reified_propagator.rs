@@ -103,10 +103,12 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         Ok(())
     }
 
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conjunction) = self.root_level_inconsistency.take() {
             context.assign_literal(self.reification_literal, false, conjunction)?;
         }
+
+        self.propagate_reification(&mut context)?;
 
         if context.is_literal_true(self.reification_literal) {
             context.with_reification(self.reification_literal);
@@ -115,8 +117,6 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 
             self.map_propagation_status(result)?;
         }
-
-        self.propagate_reification(context)?;
 
         Ok(())
     }
@@ -127,8 +127,10 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
+        self.propagate_reification(&mut context)?;
+
         if context.is_literal_true(self.reification_literal) {
             context.with_reification(self.reification_literal);
 
@@ -136,8 +138,6 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 
             self.map_propagation_status(result)?;
         }
-
-        self.propagate_reification(context)?;
 
         Ok(())
     }
@@ -192,7 +192,7 @@ mod tests {
             .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
-                    propagation: move |_: &mut PropagationContextMut| Err(t1.clone().into()),
+                    propagation: move |_: PropagationContextMut| Err(t1.clone().into()),
                     consistency_check: move |_: PropagationContext| Some(t2.clone()),
                     init: |_: PropagationContext| Ok(()),
                 },
@@ -216,7 +216,7 @@ mod tests {
             .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
-                    propagation: move |ctx: &mut PropagationContextMut| {
+                    propagation: move |mut ctx: PropagationContextMut| {
                         ctx.set_lower_bound(&var, 3, conjunction!())?;
                         Ok(())
                     },
@@ -252,7 +252,7 @@ mod tests {
             .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
-                    propagation: move |_: &mut PropagationContextMut| {
+                    propagation: move |_: PropagationContextMut| {
                         Err(conjunction!([var >= 1]).into())
                     },
                     consistency_check: |_: PropagationContext| None,
@@ -287,7 +287,7 @@ mod tests {
             .new_propagator(ReifiedPropagatorConstructor {
                 reification_literal,
                 propagator: GenericArgs {
-                    propagation: |_: &mut PropagationContextMut| Ok(()),
+                    propagation: |_: PropagationContextMut| Ok(()),
                     consistency_check: |_: PropagationContext| None,
                     init: move |_: PropagationContext| Err(conjunction!([var >= 0])),
                 },
@@ -306,7 +306,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck, Init> Propagator
         for GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
-        Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
         ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
         Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
     {
@@ -316,7 +316,7 @@ mod tests {
 
         fn debug_propagate_from_scratch(
             &self,
-            context: &mut PropagationContextMut,
+            context: PropagationContextMut,
         ) -> PropagationStatusCP {
             (self.propagation)(context)
         }
@@ -345,7 +345,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck, Init> PropagatorConstructor
         for GenericArgs<Propagation, ConsistencyCheck, Init>
     where
-        Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
         ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
         Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
     {

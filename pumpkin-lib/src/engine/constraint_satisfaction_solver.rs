@@ -1299,14 +1299,14 @@ impl ConstraintSatisfactionSolver {
 
         let propagator_id = self.propagator_queue.pop();
         let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-        let mut context = PropagationContextMut::new(
+        let context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
             propagator_id,
         );
 
-        match propagator.propagate(&mut context) {
+        match propagator.propagate(context) {
             // An empty domain conflict will be caught by the clausal propagator.
             Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
 
@@ -1430,13 +1430,13 @@ impl ConstraintSatisfactionSolver {
             ))
             .map_err(Inconsistency::from)
             .and_then(|_| {
-                let mut context = PropagationContextMut::new(
+                let context = PropagationContextMut::new(
                     &mut self.assignments_integer,
                     &mut self.reason_store,
                     &mut self.assignments_propositional,
                     new_propagator_id,
                 );
-                new_propagator.propagate(&mut context)
+                new_propagator.propagate(context)
             });
 
         if initialisation_status.is_err() {
@@ -1753,7 +1753,7 @@ mod tests {
             "TestPropagator"
         }
 
-        fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
             if self.is_in_root {
                 self.is_in_root = false;
                 return Ok(());
@@ -1804,7 +1804,7 @@ mod tests {
 
         fn debug_propagate_from_scratch(
             &self,
-            context: &mut PropagationContextMut,
+            context: PropagationContextMut,
         ) -> PropagationStatusCP {
             // This method detects when a debug propagation method is called and it attempts to
             // return the correct result in this case

@@ -71,7 +71,7 @@ where
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // TODO: This is a great candidate to potentially make incremental. We can only propagate
         //  when there is one unfixed variable.

@@ -325,7 +325,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
             TimeTableOverIntervalPropagator::create_time_table_over_interval_from_scratch(
                 context.as_readonly(),
@@ -334,7 +334,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(context, time_table.iter(), &self.parameters)
+        propagate_based_on_timetable(&mut context, time_table.iter(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -392,10 +392,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         TimeTableOverIntervalPropagator::debug_propagate_from_scratch_time_table_interval(
-            context,
+            &mut context,
             &self.parameters,
         )
     }

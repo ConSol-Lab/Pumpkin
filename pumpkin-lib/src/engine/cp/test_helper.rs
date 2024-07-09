@@ -153,13 +153,13 @@ impl TestSolver {
     }
 
     pub(crate) fn propagate(&mut self, propagator: &mut BoxedPropagator) -> PropagationStatusCP {
-        let mut context = PropagationContextMut::new(
+        let context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
             PropagatorId(0),
         );
-        propagator.propagate(&mut context)
+        propagator.propagate(context)
     }
 
     pub(crate) fn propagate_until_fixed_point(
@@ -172,13 +172,13 @@ impl TestSolver {
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
-                let mut context = PropagationContextMut::new(
+                let context = PropagationContextMut::new(
                     &mut self.assignments_integer,
                     &mut self.reason_store,
                     &mut self.assignments_propositional,
                     PropagatorId(0),
                 );
-                propagator.propagate(&mut context)?;
+                propagator.propagate(context)?;
                 self.notify_propagator(propagator);
             }
             if self.assignments_integer.num_trail_entries()

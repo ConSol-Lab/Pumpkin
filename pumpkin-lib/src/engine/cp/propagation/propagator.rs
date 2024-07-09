@@ -45,10 +45,7 @@ pub trait Propagator {
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called again by
     /// the solver until no further propagations happen.
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP;
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP;
 
     /// Propagate method that will be called during search (e.g. in
     /// [`ConstraintSatisfactionSolver::solve`]).
@@ -68,7 +65,7 @@ pub trait Propagator {
     /// again by the solver until no further propagations happen.
     ///
     /// By default, this function calls [`Propagator::debug_propagate_from_scratch`].
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
 

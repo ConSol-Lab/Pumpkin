@@ -147,7 +147,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context.as_readonly(),
             &self.parameters,
@@ -155,7 +155,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(context, time_table.values(), &self.parameters)
+        propagate_based_on_timetable(&mut context, time_table.values(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -217,10 +217,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
-            context,
+            &mut context,
             &self.parameters,
         )
     }

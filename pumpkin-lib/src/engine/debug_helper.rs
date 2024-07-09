@@ -69,13 +69,13 @@ impl DebugHelper {
                 assignments_propostional_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
-            let mut context = PropagationContextMut::new(
+            let context = PropagationContextMut::new(
                 &mut assignments_integer_clone,
                 &mut reason_store,
                 &mut assignments_propostional_clone,
                 PropagatorId(propagator_id.try_into().unwrap()),
             );
-            let propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
+            let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
                 warn!(
@@ -217,14 +217,13 @@ impl DebugHelper {
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
-                let mut context = PropagationContextMut::new(
+                let context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
                     PropagatorId(propagator_id),
                 );
-                let debug_propagation_status_cp =
-                    propagator.debug_propagate_from_scratch(&mut context);
+                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
                 assert!(
                     debug_propagation_status_cp.is_ok(),
@@ -290,14 +289,13 @@ impl DebugHelper {
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
-                let mut context = PropagationContextMut::new(
+                let context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
                     PropagatorId(propagator_id),
                 );
-                let debug_propagation_status_cp =
-                    propagator.debug_propagate_from_scratch(&mut context);
+                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
                 assert!(
                     debug_propagation_status_cp.is_err(),
@@ -351,13 +349,13 @@ impl DebugHelper {
         if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
-            let mut context = PropagationContextMut::new(
+            let context = PropagationContextMut::new(
                 &mut assignments_integer_clone,
                 &mut reason_store,
                 &mut assignments_propositional_clone,
                 propagator_id,
             );
-            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(&mut context);
+            let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
             assert!(
                 debug_propagation_status_cp.is_err(),
                 "Debug propagation could not reproduce the conflict reported
@@ -420,14 +418,13 @@ impl DebugHelper {
 
             if outcome.is_ok() && adding_propositional_predicates_was_successful {
                 let mut reason_store = Default::default();
-                let mut context = PropagationContextMut::new(
+                let context = PropagationContextMut::new(
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
                     propagator_id,
                 );
-                let debug_propagation_status_cp =
-                    propagator.debug_propagate_from_scratch(&mut context);
+                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
                 if debug_propagation_status_cp.is_ok() {
                     found_nonconflicting_state_at_root = true;

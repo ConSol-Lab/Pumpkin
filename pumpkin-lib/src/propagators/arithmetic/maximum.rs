@@ -65,7 +65,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         let rhs_ub = context.upper_bound(&self.rhs);
         let mut max_ub = i32::MIN;
