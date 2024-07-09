@@ -16,17 +16,17 @@ use crate::predicates::PropositionalConjunction;
 use crate::variables::Literal;
 
 /// Propagator constructor for [`ReifiedPropagator`].
-pub(crate) struct ReifiedPropagatorConstructor<PropArgs> {
+pub(crate) struct ReifiedPropagatorConstructor<WrappedPropagatorConstructor> {
     /// The propagator to reify.
-    pub(crate) propagator: PropArgs,
+    pub(crate) propagator: WrappedPropagatorConstructor,
     /// The reification literal to reify with.
     pub(crate) reification_literal: Literal,
 }
 
-impl<PropArgs: PropagatorConstructor> PropagatorConstructor
-    for ReifiedPropagatorConstructor<PropArgs>
+impl<WrappedPropagatorConstructor: PropagatorConstructor> PropagatorConstructor
+    for ReifiedPropagatorConstructor<WrappedPropagatorConstructor>
 {
-    type Propagator = ReifiedPropagator<PropArgs::Propagator>;
+    type Propagator = ReifiedPropagator<WrappedPropagatorConstructor::Propagator>;
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let propagator = self.propagator.create(context);
@@ -57,8 +57,8 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor
 /// the propagator implements [`Propagator::detect_inconsistency`], the result of that method may
 /// be used to propagate `r` to false. If that method is not implemented, `r` will never be
 /// propagated to false.
-pub(crate) struct ReifiedPropagator<Prop> {
-    propagator: Prop,
+pub(crate) struct ReifiedPropagator<WrappedPropagator> {
+    propagator: WrappedPropagator,
     reification_literal: Literal,
     /// The inconsistency that is identified by `propagator` during initialisation.
     root_level_inconsistency: Option<PropositionalConjunction>,
@@ -66,7 +66,7 @@ pub(crate) struct ReifiedPropagator<Prop> {
     name: String,
 }
 
-impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
+impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
         context: PropagationContext,
@@ -86,7 +86,11 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         local_id: LocalId,
         event: BooleanDomainEvent,
     ) -> EnqueueDecision {
-        self.propagator.notify_literal(context, local_id, event)
+        if context.is_literal_true(self.reification_literal) {
+            self.propagator.notify_literal(context, local_id, event)
+        } else {
+            EnqueueDecision::Skip
+        }
     }
 
     fn initialise_at_root(
