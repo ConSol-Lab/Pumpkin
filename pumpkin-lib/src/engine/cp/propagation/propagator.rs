@@ -132,9 +132,7 @@ pub trait Propagator {
     /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
     /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
-    /// The method can be used to detect root-level inconsistencies. The inconsistencies identified
-    /// here do not need to be handled in [`Propagator::propagate`] if they can never occur if they
-    /// did not occur at the root.
+    /// The method can be used to detect root-level inconsistencies.
     ///
     /// The solver will call this before any call to [`Propagator::propagate`] is made.
     fn initialise_at_root(

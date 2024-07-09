@@ -39,10 +39,13 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor
             reification_literal_id,
         );
 
+        let name = format!("Reified({})", propagator.name());
+
         ReifiedPropagator {
             reification_literal,
             propagator,
             root_level_inconsistency: None,
+            name,
         }
     }
 }
@@ -59,6 +62,8 @@ pub(crate) struct ReifiedPropagator<Prop> {
     reification_literal: Literal,
     /// The inconsistency that is identified by `propagator` during initialisation.
     root_level_inconsistency: Option<PropositionalConjunction>,
+    /// The formatted name of the propagator.
+    name: String,
 }
 
 impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
@@ -117,7 +122,7 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
     }
 
     fn name(&self) -> &str {
-        todo!("Cannot format name")
+        &self.name
     }
 
     fn debug_propagate_from_scratch(
@@ -189,6 +194,7 @@ mod tests {
                 propagator: GenericArgs {
                     propagation: move |_: &mut PropagationContextMut| Err(t1.clone().into()),
                     consistency_check: move |_: PropagationContext| Some(t2.clone()),
+                    init: |_: PropagationContext| Ok(()),
                 },
             })
             .expect("no conflict");
@@ -215,6 +221,7 @@ mod tests {
                         Ok(())
                     },
                     consistency_check: |_: PropagationContext| None,
+                    init: |_: PropagationContext| Ok(()),
                 },
             })
             .expect("no conflict");
@@ -249,6 +256,7 @@ mod tests {
                         Err(conjunction!([var >= 1]).into())
                     },
                     consistency_check: |_: PropagationContext| None,
+                    init: |_: PropagationContext| Ok(()),
                 },
             })
             .expect_err("eagerly triggered the conflict");
@@ -268,15 +276,39 @@ mod tests {
         }
     }
 
-    struct GenericPropagator<Propagation, ConsistencyCheck> {
-        propagation: Propagation,
-        consistency_check: ConsistencyCheck,
+    #[test]
+    fn a_root_level_conflict_propagates_reification_literal() {
+        let mut solver = TestSolver::default();
+
+        let reification_literal = solver.new_literal();
+        let var = solver.new_variable(1, 1);
+
+        let _ = solver
+            .new_propagator(ReifiedPropagatorConstructor {
+                reification_literal,
+                propagator: GenericArgs {
+                    propagation: |_: &mut PropagationContextMut| Ok(()),
+                    consistency_check: |_: PropagationContext| None,
+                    init: move |_: PropagationContext| Err(conjunction!([var >= 0])),
+                },
+            })
+            .expect("eagerly triggered the conflict");
+
+        assert!(solver.is_literal_false(reification_literal));
     }
 
-    impl<Propagation, ConsistencyCheck> Propagator for GenericPropagator<Propagation, ConsistencyCheck>
+    struct GenericPropagator<Propagation, ConsistencyCheck, Init> {
+        propagation: Propagation,
+        consistency_check: ConsistencyCheck,
+        init: Init,
+    }
+
+    impl<Propagation, ConsistencyCheck, Init> Propagator
+        for GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
         Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
         ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
+        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
     {
         fn name(&self) -> &str {
             "Failing Propagator"
@@ -295,25 +327,35 @@ mod tests {
         ) -> Option<PropositionalConjunction> {
             (self.consistency_check)(context)
         }
+
+        fn initialise_at_root(
+            &mut self,
+            context: PropagationContext,
+        ) -> Result<(), PropositionalConjunction> {
+            (self.init)(context)
+        }
     }
 
-    struct GenericArgs<Propagation, ConsistencyCheck> {
+    struct GenericArgs<Propagation, ConsistencyCheck, Init> {
         propagation: Propagation,
         consistency_check: ConsistencyCheck,
+        init: Init,
     }
 
-    impl<Propagation, ConsistencyCheck> PropagatorConstructor
-        for GenericArgs<Propagation, ConsistencyCheck>
+    impl<Propagation, ConsistencyCheck, Init> PropagatorConstructor
+        for GenericArgs<Propagation, ConsistencyCheck, Init>
     where
         Propagation: Fn(&mut PropagationContextMut) -> PropagationStatusCP,
         ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
+        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
     {
-        type Propagator = GenericPropagator<Propagation, ConsistencyCheck>;
+        type Propagator = GenericPropagator<Propagation, ConsistencyCheck, Init>;
 
         fn create(self, _: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
             GenericPropagator {
                 propagation: self.propagation,
                 consistency_check: self.consistency_check,
+                init: self.init,
             }
         }
     }
