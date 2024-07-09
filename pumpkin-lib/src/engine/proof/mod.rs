@@ -1,5 +1,3 @@
-//! Contains structures for logging proofs for the [`Solver`].
-
 mod dimacs;
 mod proof_literals;
 
