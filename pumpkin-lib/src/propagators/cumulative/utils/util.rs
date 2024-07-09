@@ -3,7 +3,6 @@
 //! input parameters.
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -22,7 +21,7 @@ use crate::propagators::UpdatedTaskInfo;
 pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
     context: PropagationContext,
     conflict_tasks: &[Rc<Task<Var>>],
-) -> Inconsistency {
+) -> PropositionalConjunction {
     let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
     for task in conflict_tasks.iter() {
         error_clause.push(predicate!(
@@ -33,7 +32,7 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
         ));
     }
 
-    Inconsistency::from(PropositionalConjunction::from(error_clause))
+    PropositionalConjunction::from(error_clause)
 }
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been

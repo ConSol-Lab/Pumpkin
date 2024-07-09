@@ -8,7 +8,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -20,6 +19,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
@@ -102,7 +102,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     pub(crate) fn create_time_table_per_point_from_scratch(
         context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<PerPointTimeTableType<Var>, Inconsistency> {
+    ) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
         let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
         // First we go over all tasks and determine their mandatory parts
         for task in parameters.tasks.iter() {
@@ -196,7 +196,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((

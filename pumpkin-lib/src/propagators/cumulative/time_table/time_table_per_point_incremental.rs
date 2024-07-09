@@ -13,6 +13,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
@@ -141,7 +142,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
                         return Err(create_inconsistency(
                             context.as_readonly(),
                             &current_profile.profile_tasks,
-                        ));
+                        )
+                        .into());
                     }
                 }
             }
@@ -225,7 +227,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((

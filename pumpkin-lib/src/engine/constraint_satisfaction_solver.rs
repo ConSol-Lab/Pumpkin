@@ -1428,7 +1428,7 @@ impl ConstraintSatisfactionSolver {
                 &self.assignments_integer,
                 &self.assignments_propositional,
             ))
-            .and_then(|_| {
+            .map(|_| {
                 let mut context = PropagationContextMut::new(
                     &mut self.assignments_integer,
                     &mut self.reason_store,

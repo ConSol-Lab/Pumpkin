@@ -11,6 +11,7 @@ use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::TransformableVariable;
 use crate::engine::DomainEvents;
+use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_assert_simple;
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
@@ -68,7 +69,10 @@ where
         "Division"
     }
 
-    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         if context.contains(&self.denominator, 0) {
             pumpkin_assert_simple!(
                 !context.contains(&self.denominator, 0),

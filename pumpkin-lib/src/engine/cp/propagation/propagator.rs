@@ -136,7 +136,10 @@ pub trait Propagator {
     /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
     /// The solver will call this before any call to [`Propagator::propagate`] is made.
-    fn initialise_at_root(&mut self, _: PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        _: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         Ok(())
     }
 

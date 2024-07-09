@@ -13,6 +13,7 @@ use crate::engine::propagation::PropagatorVariable;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::BooleanDomainEvent;
 use crate::engine::DomainEvents;
+use crate::predicates::PropositionalConjunction;
 use crate::variables::Literal;
 
 /// Propagator constructor for [`ReifiedPropagator`].
@@ -42,6 +43,7 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor
         ReifiedPropagator {
             reification_literal,
             propagator,
+            root_level_inconsistency: None,
         }
     }
 }
@@ -56,6 +58,8 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor
 pub(crate) struct ReifiedPropagator<Prop> {
     propagator: Prop,
     reification_literal: PropagatorVariable<Literal>,
+    /// The inconsistency that is identified by `propagator` during initialisation.
+    root_level_inconsistency: Option<PropositionalConjunction>,
 }
 
 impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
@@ -81,7 +85,25 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         self.propagator.notify_literal(context, local_id, event)
     }
 
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        // Since we cannot propagate here, we store a conflict which the wrapped propagator
+        // identifies at the root, and propagate the reification literal to false in the
+        // `propagate` method.
+        if let Err(conjunction) = self.propagator.initialise_at_root(context) {
+            self.root_level_inconsistency = Some(conjunction);
+        }
+
+        Ok(())
+    }
+
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        if let Some(conjunction) = self.root_level_inconsistency.take() {
+            context.assign_literal(&self.reification_literal, false, conjunction)?;
+        }
+
         if context.is_literal_true(&self.reification_literal) {
             context.with_reification(&self.reification_literal);
 

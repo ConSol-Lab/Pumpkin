@@ -3,7 +3,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -15,6 +14,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_inconsistency;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
@@ -191,7 +191,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         events: Vec<Event<Var>>,
         context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
+    ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
         pumpkin_assert_extreme!(
             events.is_empty()
                 || (0..events.len() - 1)
@@ -311,7 +311,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     pub(crate) fn create_time_table_over_interval_from_scratch(
         context: PropagationContext,
         parameters: &CumulativeParameters<Var>,
-    ) -> Result<OverIntervalTimeTableType<Var>, Inconsistency> {
+    ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
         // First we create a list of all the events (i.e. start and ends of mandatory parts)
         let events = TimeTableOverIntervalPropagator::create_events(context, parameters);
 
@@ -372,7 +372,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         "CumulativeTimeTableOverInterval"
     }
 
-    fn initialise_at_root(&mut self, context: PropagationContext) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
                 context.lower_bound(&task.start_variable),
