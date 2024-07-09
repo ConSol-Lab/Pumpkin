@@ -1,19 +1,21 @@
 use super::SequenceGenerator;
 
-// The Luby sequence is a recursive sequence of the form:
-// 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
-//  The above sequence is multiplied with a given constant 'base_value'
-// Generating the next element is computed in constant time using Knuth's 'reluctant doubling'
-// formula Note that overflows are not taken into account
+// /The Luby sequence is a recursive sequence of the form:
+/// 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2....
+///  The above sequence is multiplied with a given constant 'base_value'
+/// Generating the next element is computed in constant time using Knuth's 'reluctant doubling'
+/// formula.
+///
+/// Note that overflows are not taken into account
 #[derive(Debug, Copy, Clone)]
-pub struct LubySequence {
+pub(crate) struct LubySequence {
     u: i64,
     v: i64,
     base_value: i64,
 }
 
 impl LubySequence {
-    pub fn new(base_value: i64) -> LubySequence {
+    pub(crate) fn new(base_value: i64) -> LubySequence {
         LubySequence {
             u: 1,
             v: 1,

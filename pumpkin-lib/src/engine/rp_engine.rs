@@ -1,3 +1,16 @@
+//! Reverse propagation (RP) is a generalization of Reverse Unit Propagation (RUP). In the latter
+//! case, a clause `c` is RUP with respect to a clause database `F` when `¬c ∧ F ⟹ false` and this
+//! conflict can be detected through clausal (aka unit) propagation.
+//! RP generalizes this property by dropping the requirement for `F` to be a
+//! database of clauses. It can be a database of any constraint type.
+//!
+//! This concept is mostly useful when dealing with clausal proofs. In particular, the DRCP format,
+//! which is the format used by Pumpkin to proofs when solving a CP problem.
+//!
+//! Since validating the RP property of a clause of predicates requires a CP propagation engine,
+//! and given that Pumpkin implements such an engine, the [`RpEngine`] exposes an API to verify the
+//! RP property of of clauses.
+
 use log::warn;
 
 use crate::basic_types::ClauseReference;
@@ -9,9 +22,20 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::Solver;
 
 /// An API for performing backwards reverse propagation of a clausal proof. The API allows the
 /// reasons for all propagations that are used to derive the RP clause to be accessed.
+///
+/// To use the RpEngine, one can do the following:
+/// 1. Initialise it with a base model against which the individual reverse propagating clauses will
+///    be checked.
+/// 2. Add reverse propagating clauses through [`RpEngine::add_rp_clause`]. The order in which this
+///    happens matters.
+/// 3. Check whether a propagation can derive a conflict under certain assumptions (probably the
+///    negation of a reverse propagating clause which is no-longer in the engine).
+/// 4. Remove the reverse propagating clauses with [`RpEngine::remove_last_rp_clause`] in reverse
+///    order in which they were added.
 #[derive(Debug)]
 pub struct RpEngine {
     solver: ConstraintSatisfactionSolver,
@@ -20,9 +44,13 @@ pub struct RpEngine {
     rp_allocated_clauses: HashMap<ClauseReference, RpClauseHandle>,
 }
 
+/// A handle to a reverse propagating clause. These clauses are added to the [`RpEngine`] through
+/// [`RpEngine::add_rp_clause`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RpClauseHandle(usize);
 
+/// One of the reasons contributing to unsatisfiability when calling
+/// [`RpEngine::propagate_under_assumptions`].
 #[derive(Debug)]
 pub enum ConflictReason {
     Clause(RpClauseHandle),
@@ -33,28 +61,27 @@ pub enum ConflictReason {
     },
 }
 
+/// The reason for a conflict is a list of [`ConflictReason`]s.
 pub type ReversePropagationConflict = Vec<ConflictReason>;
 
 impl RpEngine {
-    /// Create a new checker based on a `solver` initialized with the model of the problem.
-    /// The `solver` should be at the root.
-    pub fn new(solver: ConstraintSatisfactionSolver) -> Self {
-        assert_eq!(
-            0,
-            solver.get_decision_level(),
-            "the solver given to the checker must be at the root"
-        );
-
+    /// Create a new reverse propagating engine based on a [`Solver`] initialized with the model of
+    /// the problem.
+    pub fn new(solver: Solver) -> Self {
         RpEngine {
-            solver,
+            solver: solver.into_satisfaction_solver(),
             rp_clauses: vec![],
             rp_unit_clauses: HashMap::default(),
             rp_allocated_clauses: HashMap::default(),
         }
     }
 
-    /// Add a new reverse propagating clause to the checker. The clause should not be empty, and
-    /// the checker should not be in an conflicting state.
+    /// Add a new reverse propagating clause to the engine. The clause should not be empty, and
+    /// the engine should not be in an conflicting state.
+    ///
+    /// If the new clause causes a conflict under propagation, the engine will be in a conflicting
+    /// state. A call to [`RpEngine::remove_last_rp_clause`] will remove the newly added clause and
+    /// reset the engine to a useable state.
     pub fn add_rp_clause(
         &mut self,
         clause: impl IntoIterator<Item = Literal>,
@@ -147,6 +174,9 @@ impl RpEngine {
     }
 
     /// Perform unit propagation under assumptions.
+    ///
+    /// In case the engine discovers a conflict, the engine will be in a conflicting state. At this
+    /// point, no new clauses can be added before a call to [`RpEngine::remove_last_rp_clause`].
     pub fn propagate_under_assumptions(
         &mut self,
         assumptions: impl IntoIterator<Item = Literal>,
@@ -244,14 +274,13 @@ impl Brancher for DummyBrancher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraints::ConstraintsExt;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::TransformableVariable;
     use crate::predicate;
 
     #[test]
     fn rp_clauses_are_removed_in_reverse_order_of_being_added() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(3).collect();
 
         let c1 = xs.clone();
@@ -270,7 +299,7 @@ mod tests {
 
     #[test]
     fn propositional_unsat_proof() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
         let _ = solver.add_clause(xs.clone());
@@ -298,7 +327,7 @@ mod tests {
 
     #[test]
     fn propositional_unsat_get_propagations() {
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let xs: Vec<Literal> = solver.new_literals().take(2).collect();
 
         let _ = solver.add_clause(xs.clone());
@@ -347,11 +376,11 @@ mod tests {
         assert_eq!(conflict.len(), 5);
     }
 
-    fn create_3queens() -> (ConstraintSatisfactionSolver, Vec<DomainId>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
+    fn create_3queens() -> (Solver, Vec<DomainId>) {
+        let mut solver = Solver::default();
 
         let queens = (0..3)
-            .map(|_| solver.create_new_integer_variable(0, 2, None))
+            .map(|_| solver.new_bounded_integer(0, 2))
             .collect::<Vec<_>>();
         let _ = solver.all_different(queens.clone());
         let _ = solver.all_different(

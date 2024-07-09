@@ -22,9 +22,9 @@ pub(crate) enum PumpkinError {
     InvalidInstanceFile(String),
     #[error("No file location given")]
     MissingFileError,
-    #[error("The dimacs file was invalid")]
+    #[error("The dimacs file was invalid, more details: {0}")]
     InvalidDimacs(#[from] DimacsParseError),
-    #[error("Failed to run flatzinc model")]
+    #[error("Failed to run flatzinc model, more details: {0}")]
     FlatZinc(#[from] FlatZincError),
     #[error("Proof generation for {0} is not supported.")]
     ProofGenerationNotSupported(String),

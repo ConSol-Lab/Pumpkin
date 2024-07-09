@@ -21,7 +21,7 @@
 //!
 //! ```rust
 //! # use pumpkin_lib::branching::InOrderTieBreaker;
-//! # use pumpkin_lib::engine::variables::DomainId;
+//! # use pumpkin_lib::variables::DomainId;
 //! # use pumpkin_lib::branching::Direction;
 //! # use pumpkin_lib::branching::TieBreaker;
 //! let mut breaker = InOrderTieBreaker::new(Direction::Minimum);
@@ -37,12 +37,6 @@
 //! assert!(selected.is_some());
 //! assert_eq!(selected.unwrap(), DomainId::new(1));
 //! ```
-//!
-//! # Note
-//! Currently, the tie-breaking is only used within variable selection strategies (hence the fact
-//! that it is located in [`crate::branching`]) to determine which variable to select when there are
-//! multiple variables with the same value (for an example, see [`Smallest`]). However, the
-//! structure of the trait ensures that it is generally usable.
 
 mod in_order_tie_breaker;
 mod random_tie_breaker;

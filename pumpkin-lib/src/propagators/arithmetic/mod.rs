@@ -1,6 +1,6 @@
-pub mod absolute_value;
-pub mod division;
-pub mod integer_multiplication;
-pub mod linear_less_or_equal;
-pub mod linear_not_equal;
-pub mod maximum;
+pub(crate) mod absolute_value;
+pub(crate) mod division;
+pub(crate) mod integer_multiplication;
+pub(crate) mod linear_less_or_equal;
+pub(crate) mod linear_not_equal;
+pub(crate) mod maximum;

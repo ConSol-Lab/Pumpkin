@@ -7,7 +7,7 @@ use crate::engine::AssignmentsPropositional;
 use crate::engine::ExplanationClauseManager;
 use crate::pumpkin_assert_simple;
 
-pub trait ClausalPropagator {
+pub(crate) trait ClausalPropagator {
     fn grow(&mut self);
 
     fn get_literal_propagation_clause_reference(
@@ -81,7 +81,7 @@ pub trait ClausalPropagator {
 ///     * the literal at position 0 is set to true. This is the convention with the clausal
 /// propagator.
 ///     * the reason for propagation of the literal is the input clause.
-pub fn is_clause_propagating(
+pub(crate) fn is_clause_propagating(
     assignments_propositional: &AssignmentsPropositional,
     clause_allocator: &ClauseAllocator,
     clause_reference: ClauseReference,

@@ -18,12 +18,12 @@ use std::io::Read;
 use std::num::NonZeroI32;
 use std::str::FromStr;
 
-use pumpkin_lib::basic_types::Function;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::variables::PropositionalVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::engine::LearningOptions;
-use pumpkin_lib::engine::SatisfactionSolverOptions;
+use pumpkin_lib::encodings::Function;
+use pumpkin_lib::options::LearningOptions;
+use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::variables::Literal;
+use pumpkin_lib::variables::PropositionalVariable;
+use pumpkin_lib::Solver;
 use thiserror::Error;
 
 /// A dimacs sink stores a set of clauses and allows for new variables to be created.
@@ -474,25 +474,25 @@ fn next_header_component<'a, Num: FromStr>(
         .map_err(|_| DimacsParseError::InvalidHeader(header.to_owned()))
 }
 
-/// A dimacs sink that creates a fresh [`ConstraintSatisfactionSolver`] when reading DIMACS files.
+/// A dimacs sink that creates a fresh [`Solver`] when reading DIMACS files.
 pub(crate) struct SolverDimacsSink {
-    solver: ConstraintSatisfactionSolver,
+    solver: Solver,
     variables: Vec<PropositionalVariable>,
 }
 
-/// The arguments to construct a [`ConstraintSatisfactionSolver`]. Forwarded to
-/// [`ConstraintSatisfactionSolver::new()`].
-pub(crate) struct CSPSolverArgs {
-    solver_options: SatisfactionSolverOptions,
+/// The arguments to construct a [`Solver`]. Forwarded to
+/// [`Solver::with_options()`].
+pub(crate) struct SolverArgs {
+    solver_options: SolverOptions,
     learning_options: LearningOptions,
 }
 
-impl CSPSolverArgs {
+impl SolverArgs {
     pub(crate) fn new(
         learning_options: LearningOptions,
-        solver_options: SatisfactionSolverOptions,
-    ) -> CSPSolverArgs {
-        CSPSolverArgs {
+        solver_options: SolverOptions,
+    ) -> SolverArgs {
+        SolverArgs {
             solver_options,
             learning_options,
         }
@@ -512,20 +512,18 @@ impl SolverDimacsSink {
 }
 
 impl DimacsSink for SolverDimacsSink {
-    type ConstructorArgs = CSPSolverArgs;
-    type Formula = ConstraintSatisfactionSolver;
+    type ConstructorArgs = SolverArgs;
+    type Formula = Solver;
 
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
-        let CSPSolverArgs {
+        let SolverArgs {
             solver_options,
             learning_options: sat_options,
         } = args;
 
-        let mut solver = ConstraintSatisfactionSolver::new(sat_options, solver_options);
-        let variables = solver
-            .new_literals()
-            .map(|literal| literal.get_propositional_variable())
-            .take(num_variables)
+        let mut solver = Solver::with_options(sat_options, solver_options);
+        let variables = (0..num_variables)
+            .map(|_| solver.new_literal().get_propositional_variable())
             .collect::<Vec<_>>();
 
         SolverDimacsSink { solver, variables }
@@ -544,7 +542,7 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::RootViolated
         } else if clause
             .iter()
-            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or_default())
+            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false))
         {
             // The soft clause is satisfied at the root level and may be ignored.
             SoftClauseAddition::RootSatisfied
@@ -554,8 +552,7 @@ impl DimacsSink for SolverDimacsSink {
             SoftClauseAddition::Added(!clause[0])
         } else {
             // General case, a soft clause with more than one literal.
-            let soft_literal =
-                Literal::new(self.solver.create_new_propositional_variable(None), true);
+            let soft_literal = self.solver.new_literal();
             clause.push(soft_literal);
             let _ = self.solver.add_clause(clause);
 

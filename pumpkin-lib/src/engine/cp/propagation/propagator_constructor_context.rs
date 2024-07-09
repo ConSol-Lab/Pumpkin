@@ -4,7 +4,6 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::WatchListCP;
@@ -15,7 +14,7 @@ use crate::engine::WatchersPropositional;
 /// [`PropagatorConstructorContext`] is used by when adding propagators to the solver.
 /// It represents a communication point between the solver and the propagator.
 /// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
-/// of variables and obtain [`PropagatorVariable`]s.
+/// of variables.
 #[derive(Debug)]
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
@@ -36,8 +35,8 @@ impl PropagatorConstructorContext<'_> {
         }
     }
 
-    /// Creates a [`PropagatorVariable`] based on the input variable
-    /// and subscribes the propagator to the given [`DomainEvents`].
+    /// Subscribes the propagator to the given [`DomainEvents`].
+    ///
     /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.
     /// The [`LocalId`] is internal information related to the propagator,
     /// which is used when calling [`Propagator::notify()`] to identify the variable.
@@ -51,7 +50,7 @@ impl PropagatorConstructorContext<'_> {
         var: Var,
         domain_events: DomainEvents,
         local_id: LocalId,
-    ) -> PropagatorVariable<Var> {
+    ) -> Var {
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -60,7 +59,7 @@ impl PropagatorConstructorContext<'_> {
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all(&mut watchers, domain_events.get_int_events());
 
-        PropagatorVariable { inner: var }
+        var
     }
 
     pub fn register_literal(
@@ -68,7 +67,7 @@ impl PropagatorConstructorContext<'_> {
         var: Literal,
         domain_events: DomainEvents,
         local_id: LocalId,
-    ) -> PropagatorVariable<Literal> {
+    ) -> Literal {
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -78,6 +77,6 @@ impl PropagatorConstructorContext<'_> {
             WatchersPropositional::new(propagator_var, self.watch_list_propositional);
         watchers.watch_all(var, domain_events.get_bool_events());
 
-        PropagatorVariable { inner: var }
+        var
     }
 }

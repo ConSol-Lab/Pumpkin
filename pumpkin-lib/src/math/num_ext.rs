@@ -1,6 +1,6 @@
 //! Extensions for numbers that are not present in the stable standard library.
 
-pub trait NumExt {
+pub(crate) trait NumExt {
     /// Division with rounding up.
     fn div_ceil(self, other: Self) -> Self;
 

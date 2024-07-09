@@ -16,24 +16,24 @@ use crate::propagators;
 ///
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone, Debug)]
-pub struct EventSink {
+pub(crate) struct EventSink {
     present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
     events: Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl EventSink {
-    pub fn new(num_domains: usize) -> Self {
+    pub(crate) fn new(num_domains: usize) -> Self {
         let mut event_sink: EventSink = Default::default();
         for _ in 0..num_domains {
             event_sink.grow();
         }
         event_sink
     }
-    pub fn grow(&mut self) {
+    pub(crate) fn grow(&mut self) {
         self.present.push(EnumSet::new());
     }
 
-    pub fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
+    pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
         if elem.insert(event) {
@@ -41,7 +41,7 @@ impl EventSink {
         }
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain(..).inspect(|&(event, domain)| {
             let _ = self.present[domain].remove(event);
         })

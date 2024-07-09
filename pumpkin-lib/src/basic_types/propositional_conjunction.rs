@@ -1,5 +1,7 @@
 use crate::engine::predicates::predicate::Predicate;
 
+/// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
+/// <= 10]`).
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
     predicates_in_conjunction: Box<[Predicate]>,
@@ -82,10 +84,28 @@ impl PartialEq for PropositionalConjunction {
     }
 }
 
+/// A macro which allows for the creation of a [`PropositionalConjunction`].
+///
+/// # Example
+/// ```rust
+/// # use pumpkin_lib::predicates::PropositionalConjunction;
+/// # use pumpkin_lib::Solver;
+/// # use pumpkin_lib::conjunction;
+/// # use pumpkin_lib::predicate;
+/// let mut solver = Solver::default();
+/// let x = solver.new_bounded_integer(0, 10);
+/// let y = solver.new_bounded_integer(5, 15);
+///
+/// let conjunction = conjunction!([x >= 5] & [y <= 10]);
+/// assert_eq!(
+///     conjunction,
+///     PropositionalConjunction::new(vec![predicate!(x >= 5), predicate!(y <= 10)].into())
+/// );
+/// ```
 #[macro_export]
 macro_rules! conjunction {
     (@to_conjunction $($body:tt)*) => {
-        $crate::basic_types::PropositionalConjunction::from($($body)*)
+        $crate::predicates::PropositionalConjunction::from($($body)*)
     };
 
     (@munch {$($body:tt)*} -> & [$($pred:tt)+] $($rest:tt)*) => {

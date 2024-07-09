@@ -12,12 +12,11 @@
 //! - `l(v - 1) = r(k - 1)`
 //! Hence, the problem is defined in terms of v, k, and l.
 
-use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::engine::termination::indefinite::Indefinite;
-use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::Solver;
 
 #[allow(clippy::upper_case_acronyms)]
 struct BIBD {
@@ -62,11 +61,11 @@ impl BIBD {
     }
 }
 
-fn create_matrix(solver: &mut ConstraintSatisfactionSolver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
+fn create_matrix(solver: &mut Solver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
     (0..bibd.rows)
         .map(|_| {
             (0..bibd.columns)
-                .map(|_| solver.create_new_integer_variable(0, 1, None))
+                .map(|_| solver.new_bounded_integer(0, 1))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
@@ -85,19 +84,19 @@ fn main() {
         bibd.rows, bibd.columns, bibd.row_sum, bibd.column_sum, bibd.max_dot_product
     );
 
-    let mut solver = ConstraintSatisfactionSolver::default();
+    let mut solver = Solver::default();
 
     // Create 0-1 integer variables that make up the matrix.
     let matrix = create_matrix(&mut solver, &bibd);
 
     // Enforce the row sum.
     for row in matrix.iter() {
-        let _ = solver.int_lin_eq(row.clone(), bibd.row_sum as i32);
+        let _ = solver.equals(row.clone(), bibd.row_sum as i32);
     }
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
-        let _ = solver.int_lin_eq(row, bibd.column_sum as i32);
+        let _ = solver.equals(row, bibd.column_sum as i32);
     }
 
     // Enforce the dot product constraint.
@@ -109,31 +108,30 @@ fn main() {
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                let _ = solver.int_times(
+                let _ = solver.times(
                     matrix[r1][col],
                     matrix[r2][col],
                     pairwise_product[r1][r2][col],
                 );
             }
 
-            let _ = solver.int_lin_le(
+            let _ = solver.less_than_or_equals(
                 pairwise_product[r1][r2].clone(),
                 bibd.max_dot_product as i32,
             );
         }
     }
 
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
-    match solver.solve(&mut Indefinite, &mut brancher) {
-        CSPSolverExecutionFlag::Feasible => {
+    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    match solver.satisfy(&mut brancher, &mut Indefinite) {
+        SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));
 
             for row in matrix.iter() {
                 let line = row
                     .iter()
                     .map(|var| {
-                        if solver.get_assigned_integer_value(var).unwrap() == 1 {
+                        if solution.get_integer_value(*var) == 1 {
                             String::from("| * ")
                         } else {
                             String::from("|   ")
@@ -146,9 +144,12 @@ fn main() {
 
             println!("{row_separator}");
         }
-
-        CSPSolverExecutionFlag::Infeasible => println!("UNSATISFIABLE"),
-        CSPSolverExecutionFlag::Timeout => println!("UNKNOWN"),
+        SatisfactionResult::Unsatisfiable => {
+            println!("UNSATISFIABLE")
+        }
+        SatisfactionResult::Unknown => {
+            println!("UNKNOWN")
+        }
     }
 }
 

@@ -26,21 +26,18 @@
 //!
 //! Each concrete propagator is associated with two traits:
 //! - [`Propagator`]: contains the propagator logic.
-//! - [`PropagatorConstructor`]: provides the functionality to create [`PropagatorVariable`]s and
-//!   register their corresponding [`DomainEvents`] with the solver. Note that structs implementing
-//!   this trait do not directly communicate with the solver, but rather use the
-//!   [`PropagatorConstructorContext`] as a communication point during creation to get access to
-//!   variables. *Note that this trait is **not** implemented on the propagator struct itself but
-//!   rather on another struct holding the arguments necessary for creating the propagator; for an
-//!   example, see [`LinearLessOrEqualConstructor`] and [`LinearLessOrEqualPropagator`]!*
+//! - [`PropagatorConstructor`]: provides the functionality to register variables for their
+//!   corresponding [`DomainEvents`] with the solver. Note that structs implementing this trait do
+//!   not directly communicate with the solver, but rather use the [`PropagatorConstructorContext`]
+//!   as a communication point during creation to get access to variables. *Note that this trait is
+//!   **not** implemented on the propagator struct itself but rather on another struct holding the
+//!   arguments necessary for creating the propagator; for an example, see
+//!   [`LinearLessOrEqualConstructor`] and [`LinearLessOrEqualPropagator`]!*
 //!
-//! Propagators use [`PropagatorVariable`]s when performing domain operations over variables,
-//! which is an abstraction over the underlying variable representation in the solver.
-//! For each such variable, the propagator is responsible for tracking its [`LocalId`] within the
-//! propagator, i.e., each [`PropagatorVariable`] must be assigned a unique [`LocalId`]. When domain
-//! changes happen for a variable outside the propagator, the propagator will receive information
-//! that its variable with a specific [`LocalId`] has changed (see [`Propagator::notify`]).
-//! The idea behind using the structs apart from Propagator is to support views \[2\] on variables.
+//! When domain changes happen for a variable outside the propagator, the propagator will receive
+//! information that its variable with a specific [`LocalId`] has changed (see
+//! [`Propagator::notify`]). The idea behind using the structs apart from Propagator is to support
+//! views \[2\] on variables.
 //!
 //! We do not require propagators to be idempotent (see the previous section for a
 //! definition) and it can be assumed that if a propagator is not at fix-point after propagating
@@ -55,15 +52,12 @@
 //!    implement
 //!   the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
 //!   [`Propagator::name`].
-//!     * Note that [`PropagatorVariable`]s are to be used as the variables within the propagator.
 //! 2. Implement a struct that implements the [`PropagatorConstructor`] trait, which contains
 //!   necessary information to create the propagator. It is also responsible for registering the
 //!   variables and corresponding [`DomainEvents`] with the solver, so that the solver can notify
 //!   the propagator once an event happens that relates to one of the variables of the propagator.
 //!     * For example, the struct implementing [`PropagatorConstructor`] may contain an array of raw
 //!       [`IntegerVariable`]s and parameters that will be used to initialise the propagator.
-//!     * Note that [`PropagatorConstructor::create()`] receives [`PropagatorConstructorContext`],
-//!       which is used to retrieve [`PropagatorVariable`]s.
 //! 3. Following the procedure above gives an initial version of the propagator that is likely not
 //!   efficient, but has an important role for testing. Now is a good time to write tests which use
 //!   the [`TestSolver`]. **We strongly discourage skipping this step**.
@@ -97,19 +91,17 @@ pub(crate) mod propagator_constructor;
 pub(crate) mod propagator_constructor_context;
 pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
-pub(crate) mod propagator_variable;
 
-pub use local_id::LocalId;
-pub use propagation_context::PropagationContext;
+pub(crate) use local_id::LocalId;
+pub(crate) use propagation_context::PropagationContext;
 pub(crate) use propagation_context::PropagationContextMut;
 pub(crate) use propagation_context::ReadDomains;
 pub(crate) use propagator::EnqueueDecision;
-pub use propagator::Propagator;
-pub use propagator_constructor::PropagatorConstructor;
-pub use propagator_constructor_context::PropagatorConstructorContext;
+pub(crate) use propagator::Propagator;
+pub(crate) use propagator_constructor::PropagatorConstructor;
+pub(crate) use propagator_constructor_context::PropagatorConstructorContext;
 pub(crate) use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
-pub use propagator_variable::PropagatorVariable;
 
 #[cfg(doc)]
 use crate::engine::test_helper::TestSolver;

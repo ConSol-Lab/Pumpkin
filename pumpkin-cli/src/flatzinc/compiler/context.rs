@@ -1,19 +1,19 @@
 use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use log::warn;
-use pumpkin_lib::basic_types::HashMap;
-use pumpkin_lib::basic_types::HashSet;
-use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
+use pumpkin_lib::Solver;
 
 use crate::flatzinc::instance::Output;
 use crate::flatzinc::FlatZincError;
 
 pub(crate) struct CompilationContext<'a> {
     /// The solver to compile the FlatZinc into.
-    pub(crate) solver: &'a mut ConstraintSatisfactionSolver,
+    pub(crate) solver: &'a mut Solver,
 
     /// All identifiers occuring in the model. The identifiers are interned, to support cheap
     /// cloning.
@@ -65,7 +65,7 @@ pub(crate) enum Set {
 }
 
 impl CompilationContext<'_> {
-    pub(crate) fn new(solver: &mut ConstraintSatisfactionSolver) -> CompilationContext<'_> {
+    pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
         let true_literal = solver.get_true_literal();
         let false_literal = solver.get_false_literal();
 
@@ -223,7 +223,7 @@ impl CompilationContext<'_> {
         ))?;
         Ok(*self.constant_domain_ids.entry(value).or_insert_with(|| {
             self.solver
-                .create_new_integer_variable(value, value, Some(identifier.to_owned()))
+                .new_named_bounded_integer(value, value, identifier.to_owned())
         }))
     }
 
@@ -271,10 +271,10 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*value as i32)
                 .or_insert_with(|| {
-                    self.solver.create_new_integer_variable(
+                    self.solver.new_named_bounded_integer(
                         *value as i32,
                         *value as i32,
-                        Some(value.to_string()),
+                        value.to_string(),
                     )
                 })),
             flatzinc::IntExpr::VarParIdentifier(id) => {
@@ -295,11 +295,8 @@ impl CompilationContext<'_> {
                 .constant_domain_ids
                 .entry(*val as i32)
                 .or_insert_with(|| {
-                    self.solver.create_new_integer_variable(
-                        *val as i32,
-                        *val as i32,
-                        Some(val.to_string()),
-                    )
+                    self.solver
+                        .new_named_bounded_integer(*val as i32, *val as i32, val.to_string())
                 })),
             _ => Err(FlatZincError::UnexpectedExpr),
         }
@@ -319,11 +316,8 @@ impl CompilationContext<'_> {
                 .get(&self.integer_equivalences.representative(identifier))
                 .map(|value| {
                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                        self.solver.create_new_integer_variable(
-                            *value,
-                            *value,
-                            Some(value.to_string()),
-                        )
+                        self.solver
+                            .new_named_bounded_integer(*value, *value, value.to_string())
                     })
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
@@ -349,10 +343,10 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     *self.constant_domain_ids.entry(*value).or_insert_with(|| {
-                                        self.solver.create_new_integer_variable(
+                                        self.solver.new_named_bounded_integer(
                                             *value,
                                             *value,
-                                            Some(value.to_string()),
+                                            value.to_string(),
                                         )
                                     })
                                 })
@@ -609,11 +603,7 @@ impl Domain {
         Domain::IntervalDomain { lb, ub }
     }
 
-    pub(crate) fn into_literal(
-        self,
-        solver: &mut ConstraintSatisfactionSolver,
-        name: String,
-    ) -> Literal {
+    pub(crate) fn into_literal(self, solver: &mut Solver, name: String) -> Literal {
         match self {
             Domain::IntervalDomain { lb, ub } => {
                 if lb == ub && lb == 1 {
@@ -621,7 +611,7 @@ impl Domain {
                 } else if lb == ub && lb == 0 {
                     solver.get_false_literal()
                 } else {
-                    Literal::new(solver.create_new_propositional_variable(Some(name)), true)
+                    solver.new_named_literal(name)
                 }
             }
             Domain::SparseDomain { values } => {
@@ -630,24 +620,16 @@ impl Domain {
                 } else if values.len() == 1 && values[0] == 0 {
                     solver.get_false_literal()
                 } else {
-                    Literal::new(solver.create_new_propositional_variable(Some(name)), true)
+                    solver.new_named_literal(name)
                 }
             }
         }
     }
 
-    pub(crate) fn into_variable(
-        self,
-        solver: &mut ConstraintSatisfactionSolver,
-        name: String,
-    ) -> DomainId {
+    pub(crate) fn into_variable(self, solver: &mut Solver, name: String) -> DomainId {
         match self {
-            Domain::IntervalDomain { lb, ub } => {
-                solver.create_new_integer_variable(lb, ub, Some(name))
-            }
-            Domain::SparseDomain { values } => {
-                solver.create_new_integer_variable_sparse(values, Some(name))
-            }
+            Domain::IntervalDomain { lb, ub } => solver.new_named_bounded_integer(lb, ub, name),
+            Domain::SparseDomain { values } => solver.new_named_sparse_integer(values, name),
         }
     }
 }

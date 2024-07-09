@@ -15,8 +15,8 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 
 /// The context provided to the [`Brancher`],
-/// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods
-/// which might be extended in the future.
+/// it allows the retrieval of domain values of variables and access to methods from a [`Random`]
+/// generator.
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
@@ -82,13 +82,12 @@ impl<'a> SelectionContext<'a> {
             .is_variable_assigned_true(var)
     }
 
-    /// Returns all currently defined [`DomainId`] in the provided [`AssignmentsInteger`].
+    /// Returns all currently defined [`DomainId`]s.
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         self.assignments_integer.get_domains()
     }
 
-    /// Returns all currently defined [`PropositionalVariable`]s in the provided
-    /// [`AssignmentsPropositional`].
+    /// Returns all currently defined [`PropositionalVariable`]s.
     pub fn get_propositional_variables(&self) -> PropositionalVariableGeneratorIterator {
         self.assignments_propositional.get_propositional_variables()
     }

@@ -8,7 +8,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::pumpkin_assert_simple;
 
@@ -16,17 +15,17 @@ use crate::pumpkin_assert_simple;
 /// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
 /// a conflict if the variables are fixed.
 #[derive(Debug)]
-pub struct IntegerMultiplicationPropagator<VA, VB, VC> {
-    a: PropagatorVariable<VA>,
-    b: PropagatorVariable<VB>,
-    c: PropagatorVariable<VC>,
+pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
+    a: VA,
+    b: VB,
+    c: VC,
 }
 
 #[derive(Debug)]
-pub struct IntegerMultiplicationConstructor<VA, VB, VC> {
-    pub a: VA,
-    pub b: VB,
-    pub c: VC,
+pub(crate) struct IntegerMultiplicationConstructor<VA, VB, VC> {
+    pub(crate) a: VA,
+    pub(crate) b: VB,
+    pub(crate) c: VC,
 }
 
 const ID_A: LocalId = LocalId::from(0);
@@ -84,9 +83,9 @@ where
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    a: &PropagatorVariable<VA>,
-    b: &PropagatorVariable<VB>,
-    c: &PropagatorVariable<VC>,
+    a: &VA,
+    b: &VB,
+    c: &VC,
 ) -> PropagationStatusCP {
     // First we propagate the signs
     propagate_signs(context, a, b, c)?;
@@ -214,9 +213,9 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 /// 0 and 0 * 3 = 0 are both equally valid.
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    a: &PropagatorVariable<VA>,
-    b: &PropagatorVariable<VB>,
-    c: &PropagatorVariable<VC>,
+    a: &VA,
+    b: &VB,
+    c: &VC,
 ) -> PropagationStatusCP {
     let a_min = context.lower_bound(a);
     let a_max = context.upper_bound(a);

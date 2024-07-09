@@ -30,7 +30,7 @@ use crate::pumpkin_assert_simple;
 
 /// An event storing the start and end of mandatory parts used for creating the time-table
 #[derive(Debug)]
-pub struct Event<Var> {
+pub(crate) struct Event<Var> {
     /// The time-point at which the [`Event`] took place
     time_stamp: i32,
     /// Change in resource usage at [time_stamp][Event::time_stamp], positive if it is the start of
@@ -51,7 +51,7 @@ pub struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-pub struct TimeTableOverIntervalPropagator<Var> {
+pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
@@ -81,7 +81,9 @@ where
 }
 
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
-    pub fn new(parameters: CumulativeParameters<Var>) -> TimeTableOverIntervalPropagator<Var> {
+    pub(crate) fn new(
+        parameters: CumulativeParameters<Var>,
+    ) -> TimeTableOverIntervalPropagator<Var> {
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
             parameters,

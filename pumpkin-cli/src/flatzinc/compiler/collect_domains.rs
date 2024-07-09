@@ -70,11 +70,9 @@ pub(crate) fn run(
                     let value = i32::try_from(set[0])?;
 
                     *context.constant_domain_ids.entry(value).or_insert_with(|| {
-                        context.solver.create_new_integer_variable(
-                            value,
-                            value,
-                            Some(id.to_string()),
-                        )
+                        context
+                            .solver
+                            .new_named_bounded_integer(value, value, id.to_string())
                     })
                 } else {
                     let values = set
@@ -85,7 +83,7 @@ pub(crate) fn run(
 
                     let domain_id = context
                         .solver
-                        .create_new_integer_variable_sparse(values, Some(id.to_string()));
+                        .new_named_sparse_integer(values, id.to_string());
                     let _ = context
                         .integer_variable_map
                         .insert(Rc::clone(&id), domain_id);

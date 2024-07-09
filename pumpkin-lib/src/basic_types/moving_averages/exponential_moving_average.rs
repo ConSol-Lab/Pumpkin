@@ -21,7 +21,7 @@ use bitfield::BitRange;
 use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
-pub struct ExponentialMovingAverage {
+pub(crate) struct ExponentialMovingAverage {
     x_current: u64,
     current_value: u64,
 }

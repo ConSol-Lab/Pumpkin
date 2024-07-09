@@ -92,7 +92,8 @@ pub(crate) fn run(
 
 #[cfg(test)]
 mod tests {
-    use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+
+    use pumpkin_lib::Solver;
 
     use super::*;
     use crate::flatzinc::ast::SearchStrategy;
@@ -107,7 +108,7 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
 
         run(&ast, &mut context).expect("no errors");
@@ -131,7 +132,7 @@ mod tests {
             },
         ]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
 
         run(&ast, &mut context).expect("no errors");
@@ -154,7 +155,7 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
         let _ = context.boolean_parameters.insert("FalsePar".into(), false);
 
@@ -174,7 +175,7 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
 
         run(&ast, &mut context).expect("no errors");
@@ -195,7 +196,7 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
 
         run(&ast, &mut context).expect("no errors");
@@ -216,7 +217,7 @@ mod tests {
             annos: vec![],
         }]);
 
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
         let mut context = CompilationContext::new(&mut solver);
         let _ = context.integer_parameters.insert("IntPar".into(), 3);
 
