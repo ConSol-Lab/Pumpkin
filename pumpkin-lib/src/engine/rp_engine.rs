@@ -274,6 +274,8 @@ impl Brancher for DummyBrancher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constraints;
+    use crate::constraints::Constraint;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::TransformableVariable;
     use crate::predicate;
@@ -382,21 +384,23 @@ mod tests {
         let queens = (0..3)
             .map(|_| solver.new_bounded_integer(0, 2))
             .collect::<Vec<_>>();
-        let _ = solver.all_different(queens.clone());
-        let _ = solver.all_different(
+        let _ = constraints::all_different(queens.clone()).post(&mut solver);
+        let _ = constraints::all_different(
             queens
                 .iter()
                 .enumerate()
                 .map(|(i, var)| var.offset(i as i32))
                 .collect::<Vec<_>>(),
-        );
-        let _ = solver.all_different(
+        )
+        .post(&mut solver);
+        let _ = constraints::all_different(
             queens
                 .iter()
                 .enumerate()
                 .map(|(i, var)| var.offset(-(i as i32)))
                 .collect::<Vec<_>>(),
-        );
+        )
+        .post(&mut solver);
 
         (solver, queens)
     }

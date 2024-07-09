@@ -1,0 +1,7 @@
+predicate fzn_all_different_int(array [int] of var int: vars);
+
+array [1..4] of var 1..4: xs :: output_array([1..4]);
+
+constraint fzn_all_different_int(xs);
+
+solve satisfy;

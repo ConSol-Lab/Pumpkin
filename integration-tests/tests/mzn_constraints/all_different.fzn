@@ -1,0 +1,5 @@
+array [1..4] of var 1..4: xs :: output_array(1..4);
+
+constraint pumpkin_all_different(xs);
+
+solve satisfy;
