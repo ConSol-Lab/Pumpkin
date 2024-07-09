@@ -63,6 +63,7 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
+    /// Apply a reification literal to all the explanations that are passed to the context.
     pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
         pumpkin_assert_simple!(
             self.reification_literal.is_none(),

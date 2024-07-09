@@ -132,6 +132,10 @@ pub trait Propagator {
     /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
     /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
+    /// The method can be used to detect root-level inconsistencies. The inconsistencies identified
+    /// here do not need to be handled in [`Propagator::propagate`] if they can never occur if they
+    /// did not occur at the root.
+    ///
     /// The solver will call this before any call to [`Propagator::propagate`] is made.
     fn initialise_at_root(
         &mut self,
@@ -143,9 +147,9 @@ pub trait Propagator {
     /// A check whether this propagator can detect an inconsistency.
     ///
     /// By implementing this function, if the propagator is reified, it can propagate the
-    /// reification literal based on the detected inconsistency.
-    ///
-    /// Note: [`Propagator::propagate`] should still check for inconsistency as well.
+    /// reification literal based on the detected inconsistency. Yet, an implementation is not
+    /// needed for correctness, as [`Propagator::propagate`] should still check for
+    /// inconsistency as well.
     fn detect_inconsistency(
         &self,
         _context: PropagationContext,
