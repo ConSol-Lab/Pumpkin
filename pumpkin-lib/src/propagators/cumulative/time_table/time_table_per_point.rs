@@ -9,7 +9,6 @@ use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -84,7 +83,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     pub(crate) fn debug_propagate_from_scratch_time_table_point(
         context: &mut PropagationContextMut,
         parameters: &CumulativeParameters<Var>,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         // We first create a time-table per point and return an error if there was
         // an overflow of the resource capacity while building the time-table
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
@@ -146,7 +145,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
             context,
             &self.parameters,
@@ -199,7 +198,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -214,7 +216,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
             context,
             &self.parameters,
@@ -224,12 +226,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::ConflictInfo;
+
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
-    use crate::engine::predicates::predicate::Predicate;
+    use crate::engine::predicates::integer_predicate::IntegerPredicate;
     use crate::engine::propagation::EnqueueDecision;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPoint;
@@ -291,19 +293,23 @@ mod tests {
             false,
         ));
         assert!(match result {
-            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 <= 1),
-                    predicate!(s2 >= 1),
-                ];
-                expected
-                    .iter()
-                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                    && x.iter().all(|y| expected.contains(y))
-            }
-            _ => false,
+            Err(e) => match e {
+                Inconsistency::EmptyDomain => false,
+                Inconsistency::Conflict { conflict_nogood: x } => {
+                    let expected = [
+                        predicate!(s1 <= 1),
+                        predicate!(s1 >= 1),
+                        predicate!(s2 <= 1),
+                        predicate!(s2 >= 1),
+                    ];
+                    expected
+                        .iter()
+                        .all(|y| x.iter().collect::<Vec<&IntegerPredicate>>().contains(&y))
+                        && x.iter().all(|y| expected.contains(y))
+                }
+            },
+
+            Ok(_) => false,
         });
     }
 
@@ -469,9 +475,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 6),
@@ -663,9 +667,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 >= 2),
@@ -717,9 +719,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
@@ -764,9 +764,7 @@ mod tests {
 
         for removed in 2..8 {
             assert!(!solver.contains(s2, removed));
-            let reason = solver
-                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
-                .clone();
+            let reason = solver.get_reason_int(predicate!(s2 != removed)).clone();
             assert_eq!(
                 PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
                 reason

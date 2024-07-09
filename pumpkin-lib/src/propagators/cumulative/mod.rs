@@ -66,7 +66,7 @@
 //!     false,
 //! );
 //! let mut brancher =
-//!     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+//!     IndependentVariableValueBrancher::default_over_all_variables(&solver);
 //!
 //! let result = solver.solve(&mut Indefinite, &mut brancher);
 //!

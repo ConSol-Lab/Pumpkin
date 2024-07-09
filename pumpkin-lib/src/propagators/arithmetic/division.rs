@@ -1,4 +1,4 @@
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::conjunction;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::LocalId;
@@ -58,7 +58,7 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
     }
 
@@ -72,7 +72,10 @@ where
         "Division"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         if context.contains(&self.denominator, 0) {
             pumpkin_assert_simple!(
                 !context.contains(&self.denominator, 0),
@@ -85,7 +88,7 @@ where
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
     }
 }
@@ -95,7 +98,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     if context.lower_bound(denominator) < 0 && context.upper_bound(denominator) > 0 {
         // For now we don't do anything in this case, note that this will not lead to incorrect
         // behaviour since any solution to this constraint will necessarily have to fix the
@@ -166,7 +169,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
     let numerator_min = context.lower_bound(numerator);
@@ -255,7 +258,7 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     let rhs_max = context.upper_bound(rhs);
     let numerator_max = context.upper_bound(numerator);
     let denominator_min = context.lower_bound(denominator);
@@ -300,7 +303,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
     let numerator_min = context.lower_bound(numerator);
@@ -337,7 +340,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn detects_conflicts() {

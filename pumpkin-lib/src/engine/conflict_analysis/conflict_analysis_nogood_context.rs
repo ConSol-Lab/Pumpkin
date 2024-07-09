@@ -1,25 +1,15 @@
-use std::ops::Not;
-
-use crate::basic_types::StoredConflictInfo;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
 use crate::engine::ConstraintProgrammingTrailEntry;
-use crate::engine::VariableLiteralMappings;
 use crate::pumpkin_assert_simple;
 
 #[derive(Debug)]
 pub struct ConflictAnalysisNogoodContext<'a> {
     pub assignments_integer: &'a AssignmentsInteger,
-    pub assignments_propositional: &'a AssignmentsPropositional,
-    pub variable_literal_mappings: &'a VariableLiteralMappings,
-    pub clause_allocator: &'a ClauseAllocator,
     pub solver_state: &'a mut CSPSolverState,
     pub reason_store: &'a mut ReasonStore,
     pub counters: &'a mut Counters,
@@ -27,87 +17,12 @@ pub struct ConflictAnalysisNogoodContext<'a> {
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
     pub fn get_conflict_nogood(&mut self) -> Vec<IntegerPredicate> {
-        match self.solver_state.get_conflict_info() {
-            StoredConflictInfo::Explanation {
-                conjunction,
-                propagator: _,
-            } => {
-                conjunction
-                    .iter()
-                    .filter_map(|predicate| {
-                        match predicate {
-                            Predicate::IntegerPredicate(integer_predicate) => {
-                                Some(*integer_predicate)
-                            }
-                            Predicate::Literal(lit) => Some(
-                                self.variable_literal_mappings
-                                    .get_predicates(*lit)
-                                    .next()
-                                    .unwrap(),
-                            ),
-                            Predicate::False => unreachable!(),
-                            Predicate::True => {
-                                // skip root level propagations?
-                                None
-                            }
-                        }
-                    })
-                    .collect()
-            }
-            StoredConflictInfo::VirtualBinaryClause { lit1: _, lit2: _ } => unreachable!(),
-            StoredConflictInfo::Propagation { reference, literal } => {
-                assert!(!reference.is_clause());
-                let propagation_context = PropagationContext::new(
-                    self.assignments_integer,
-                    self.assignments_propositional,
-                );
-                let reason_ref = reference.get_reason_ref();
-                // let propagator = self.reason_store.get_propagator(reason_ref);
-                let reason = self
-                    .reason_store
-                    .get_or_compute(reason_ref, &propagation_context)
-                    .expect("reason reference should not be stale");
-
-                let mut hehe: Vec<IntegerPredicate> = reason
-                    .iter()
-                    .filter_map(|predicate| {
-                        match predicate {
-                            Predicate::IntegerPredicate(integer_predicate) => {
-                                Some(*integer_predicate)
-                            }
-                            Predicate::Literal(lit) => Some(
-                                self.variable_literal_mappings
-                                    .get_predicates(*lit)
-                                    .next()
-                                    .unwrap(),
-                            ),
-                            Predicate::False => unreachable!(),
-                            Predicate::True => {
-                                // skip root level propagations?
-                                None
-                            }
-                        }
-                    })
-                    .collect();
-                hehe.push(
-                    self.variable_literal_mappings
-                        .get_predicates(*literal)
-                        .next()
-                        .unwrap()
-                        .not(),
-                );
-                //todo should double check this nogood!
-                /*println!("strange nogood: {:?}", hehe);
-                println!(
-                    "lit: {}",
-                    self.variable_literal_mappings
-                        .get_predicates(*literal)
-                        .next()
-                        .unwrap()
-                );*/
-                hehe
-            }
-        }
+        self.solver_state
+            .get_conflict_info()
+            .conflict_nogood
+            .iter()
+            .copied()
+            .collect()
     }
 
     // Replaces the input predicate with its reason. In case the predicate was a result of a
@@ -159,10 +74,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // We assume that the predicate is indeed propagated, and not a decision.
         let mut extract_reason_from_trail =
             |trail_entry: &ConstraintProgrammingTrailEntry| -> Vec<IntegerPredicate> {
-                let propagation_context = PropagationContext::new(
-                    self.assignments_integer,
-                    self.assignments_propositional,
-                );
+                let propagation_context = PropagationContext::new(self.assignments_integer);
 
                 let reason_ref = trail_entry
                     .reason
@@ -173,19 +85,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     .get_or_compute(reason_ref, &propagation_context)
                     .expect("reason reference should not be stale");
                 // todo avoid excessive copying in the future
-                reason
-                    .iter()
-                    .map(|predicate| match predicate {
-                        Predicate::IntegerPredicate(integer_predicate) => *integer_predicate,
-                        Predicate::Literal(literal) => self
-                            .variable_literal_mappings
-                            .get_predicates(*literal)
-                            .next()
-                            .unwrap(),
-                        Predicate::False => unreachable!(),
-                        Predicate::True => unreachable!(),
-                    })
-                    .collect()
+                reason.iter().copied().collect()
             };
 
         let trail_position = self

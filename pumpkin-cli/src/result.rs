@@ -3,7 +3,6 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::flatzinc::error::FlatZincError;
-use crate::parsers::dimacs::DimacsParseError;
 
 pub(crate) type PumpkinResult<T> = Result<T, PumpkinError>;
 
@@ -22,8 +21,6 @@ pub(crate) enum PumpkinError {
     InvalidInstanceFile(String),
     #[error("No file location given")]
     MissingFileError,
-    #[error("The dimacs file was invalid")]
-    InvalidDimacs(#[from] DimacsParseError),
     #[error("Failed to run flatzinc model")]
     FlatZinc(#[from] FlatZincError),
     #[error("Proof generation for {0} is not supported.")]

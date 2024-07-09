@@ -1,12 +1,12 @@
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Box<[Predicate]>,
+    predicates_in_conjunction: Box<[IntegerPredicate]>,
 }
 
 impl PropositionalConjunction {
-    pub fn new(predicates_in_conjunction: Box<[Predicate]>) -> Self {
+    pub fn new(predicates_in_conjunction: Box<[IntegerPredicate]>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
         }
@@ -16,13 +16,13 @@ impl PropositionalConjunction {
         self.predicates_in_conjunction.len() as u32
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
+    pub fn iter(&self) -> std::slice::Iter<'_, IntegerPredicate> {
         self.predicates_in_conjunction.iter()
     }
 }
 
-impl FromIterator<Predicate> for PropositionalConjunction {
-    fn from_iter<T: IntoIterator<Item = Predicate>>(iter: T) -> Self {
+impl FromIterator<IntegerPredicate> for PropositionalConjunction {
+    fn from_iter<T: IntoIterator<Item = IntegerPredicate>>(iter: T) -> Self {
         let vec = iter.into_iter().collect();
         PropositionalConjunction {
             predicates_in_conjunction: vec,
@@ -30,16 +30,16 @@ impl FromIterator<Predicate> for PropositionalConjunction {
     }
 }
 
-impl From<Vec<Predicate>> for PropositionalConjunction {
-    fn from(vec: Vec<Predicate>) -> Self {
+impl From<Vec<IntegerPredicate>> for PropositionalConjunction {
+    fn from(vec: Vec<IntegerPredicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: vec.into_boxed_slice(),
         }
     }
 }
 
-impl From<Predicate> for PropositionalConjunction {
-    fn from(predicate: Predicate) -> Self {
+impl From<IntegerPredicate> for PropositionalConjunction {
+    fn from(predicate: IntegerPredicate) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: Box::new([predicate]),
         }

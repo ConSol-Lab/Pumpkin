@@ -1,17 +1,16 @@
-use crate::basic_types::ConflictInfo;
 use crate::basic_types::PropositionalConjunction;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::EmptyDomain;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
-/// or identify a conflict. The necessary conditions for the conflict must be captured in the error
-/// variant, i.e. a propositional conjunction.
-pub type PropagationStatusCP = Result<(), Inconsistency>;
+/// or identify a conflict. The necessary conditions for the conflict must be captured in the
+/// conflict nogood.
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Inconsistency {
     EmptyDomain,
-    Other(ConflictInfo),
+    Conflict {
+        conflict_nogood: PropositionalConjunction,
+    },
 }
 
 impl From<EmptyDomain> for Inconsistency {
@@ -21,17 +20,18 @@ impl From<EmptyDomain> for Inconsistency {
 }
 
 impl From<PropositionalConjunction> for Inconsistency {
-    fn from(value: PropositionalConjunction) -> Self {
-        Inconsistency::Other(ConflictInfo::Explanation(value))
+    fn from(conflict_nogood: PropositionalConjunction) -> Self {
+        Inconsistency::Conflict { conflict_nogood }
     }
 }
 
-impl<Slice> From<Slice> for Inconsistency
-where
-    Slice: AsRef<[Predicate]>,
-{
-    fn from(value: Slice) -> Self {
-        let conjunction: PropositionalConjunction = value.as_ref().to_vec().into();
-        conjunction.into()
-    }
-}
+// Todo? Uncomment?
+// impl<Slice> From<Slice> for Inconsistency
+// where
+// Slice: AsRef<[IntegerPredicate]>,
+// {
+// fn from(value: Slice) -> Self {
+// let conflict_nogood: PropositionalConjunction = value.as_ref().to_vec().into();
+// Inconsistency::Conflict { conflict_nogood }
+// }
+// }

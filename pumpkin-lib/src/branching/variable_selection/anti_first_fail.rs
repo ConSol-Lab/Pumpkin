@@ -83,18 +83,13 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (5, 20)]));
+        let mut assignments_integer = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
         let mut test_rng = TestRandom::default();
         let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
         let mut strategy = AntiFirstFail::new(&integer_variables);
 
         {
-            let context = SelectionContext::new(
-                &assignments_integer,
-                &assignments_propositional,
-                &mut test_rng,
-            );
+            let context = SelectionContext::new(&assignments_integer, &mut test_rng);
 
             let selected = strategy.select_variable(&context);
             assert!(selected.is_some());
@@ -103,11 +98,7 @@ mod tests {
 
         let _ = assignments_integer.tighten_lower_bound(integer_variables[1], 15, None);
 
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let context = SelectionContext::new(&assignments_integer, &mut test_rng);
 
         let selected = strategy.select_variable(&context);
         assert!(selected.is_some());
@@ -116,14 +107,9 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(10, 10), (20, 20)]));
+        let assignments_integer = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let context = SelectionContext::new(&assignments_integer, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = AntiFirstFail::new(&integer_variables);

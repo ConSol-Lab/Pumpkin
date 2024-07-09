@@ -1,14 +1,11 @@
 use super::PropagatorId;
-use crate::basic_types::ConstraintReference;
-use crate::basic_types::Inconsistency;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
+use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
 use crate::engine::EmptyDomain;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
@@ -22,17 +19,12 @@ use crate::engine::EmptyDomain;
 #[derive(Debug)]
 pub struct PropagationContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
-    assignments_propositional: &'a AssignmentsPropositional,
 }
 
 impl<'a> PropagationContext<'a> {
-    pub fn new(
-        assignments_integer: &'a AssignmentsInteger,
-        assignments_propositional: &'a AssignmentsPropositional,
-    ) -> Self {
+    pub fn new(assignments_integer: &'a AssignmentsInteger) -> Self {
         PropagationContext {
             assignments_integer,
-            assignments_propositional,
         }
     }
 }
@@ -41,7 +33,7 @@ impl<'a> PropagationContext<'a> {
 pub struct PropagationContextMut<'a> {
     assignments_integer: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
-    assignments_propositional: &'a mut AssignmentsPropositional,
+
     propagator_id: PropagatorId,
 }
 
@@ -49,13 +41,12 @@ impl<'a> PropagationContextMut<'a> {
     pub fn new(
         assignments_integer: &'a mut AssignmentsInteger,
         reason_store: &'a mut ReasonStore,
-        assignments_propositional: &'a mut AssignmentsPropositional,
         propagator: PropagatorId,
     ) -> Self {
         PropagationContextMut {
             assignments_integer,
             reason_store,
-            assignments_propositional,
+
             propagator_id: propagator,
         }
     }
@@ -66,9 +57,6 @@ impl<'a> PropagationContextMut<'a> {
 pub trait HasAssignments {
     /// Returns the stored [`AssignmentsInteger`].
     fn assignments_integer(&self) -> &AssignmentsInteger;
-
-    /// Returns the stored [`AssignmentsPropositional`].
-    fn assignments_propositional(&self) -> &AssignmentsPropositional;
 }
 
 mod private {
@@ -78,36 +66,26 @@ mod private {
         fn assignments_integer(&self) -> &AssignmentsInteger {
             self.assignments_integer
         }
-
-        fn assignments_propositional(&self) -> &AssignmentsPropositional {
-            self.assignments_propositional
-        }
     }
 
     impl HasAssignments for PropagationContextMut<'_> {
         fn assignments_integer(&self) -> &AssignmentsInteger {
             self.assignments_integer
         }
-
-        fn assignments_propositional(&self) -> &AssignmentsPropositional {
-            self.assignments_propositional
-        }
     }
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_literal_fixed(&self, var: Literal) -> bool {
-        self.assignments_propositional().is_literal_assigned(var)
+    fn is_boolean_true(&self, boolean: BooleanDomainId) -> bool {
+        self.lower_bound(&DomainId::from(boolean)) == 1
     }
 
-    fn is_literal_true(&self, var: Literal) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned_true(var)
+    fn is_boolean_false(&self, boolean: BooleanDomainId) -> bool {
+        self.upper_bound(&DomainId::from(boolean)) == 0
     }
 
-    fn is_literal_false(&self, var: Literal) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned_false(var)
+    fn is_boolean_fixed(&self, boolean: BooleanDomainId) -> bool {
+        self.is_fixed(&DomainId::from(boolean))
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -127,7 +105,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.contains(self.assignments_integer(), value)
     }
 
-    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<Predicate> {
+    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<IntegerPredicate> {
         var.describe_domain(self.assignments_integer())
     }
 }
@@ -174,12 +152,12 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn does_integer_predicate_hold(&self, integer_predicate: IntegerPredicate) -> bool {
+    pub fn evaluate_predicate(&self, integer_predicate: IntegerPredicate) -> Option<bool> {
         self.assignments_integer
-            .does_integer_predicate_hold(integer_predicate)
+            .evaluate_predicate(integer_predicate)
     }
 
-    pub fn apply_integer_predicate<R: Into<Reason> + Clone>(
+    pub fn post_predicate<R: Into<Reason> + Clone>(
         &mut self,
         integer_predicate: IntegerPredicate,
         reason: R,
@@ -207,23 +185,16 @@ impl PropagationContextMut<'_> {
         }
     }
 
-    pub fn assign_literal<R: Into<Reason>>(
+    pub fn assign_boolean<R: Into<Reason> + Clone>(
         &mut self,
-        var: Literal,
-        bound: bool,
+        boolean: BooleanDomainId,
+        truth_value: bool,
         reason: R,
-    ) -> Result<(), Inconsistency> {
-        if !self.assignments_propositional.is_literal_assigned(var) {
-            let reason = self.reason_store.push(self.propagator_id, reason.into());
-            let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
-                if bound { var } else { !var },
-                ConstraintReference::create_reason_reference(reason),
-            );
-            if let Some(conflict_info) = enqueue_result {
-                return Err(Inconsistency::Other(conflict_info));
-            }
+    ) -> Result<(), EmptyDomain> {
+        let domain_id = DomainId::from(boolean);
+        match truth_value {
+            true => self.set_lower_bound(&domain_id, 1, reason),
+            false => self.set_upper_bound(&domain_id, 0, reason),
         }
-
-        Ok(())
     }
 }

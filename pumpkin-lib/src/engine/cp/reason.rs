@@ -4,10 +4,8 @@ use std::fmt::Formatter;
 use super::propagation::PropagatorId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
-#[cfg(doc)]
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
-use crate::engine::debug_helper::DebugDyn;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::DebugDyn;
 use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
@@ -66,13 +64,12 @@ pub struct ReasonRef(pub(crate) u32);
 /// A reason for CP propagator to make a change
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
-    ///   propagated literal itself, which is added by the
-    /// [`ConflictAnalysisContext`] later on.
+    ///   propagated predicate.
     Eager(PropositionalConjunction),
     /// A lazy reason, which contains a closure that computes the reason later. Again, the
-    ///   propagated literal is _not_ part of the reason but added by the
-    /// [`ConflictAnalysisContext`]. Lazy reasons are typically computed
-    /// only once, then replaced by an Eager version with the   result.
+    /// propagated predicate is _not_ part of the reason. Lazy reasons are typically computed
+    /// only once, then replaced by an Eager version with the result.
+    /// Todo: we need to rework the lazy explanation mechanism.
     Lazy(Box<dyn LazyReason>),
 }
 
@@ -145,13 +142,11 @@ mod tests {
     use crate::conjunction;
     use crate::engine::variables::DomainId;
     use crate::engine::AssignmentsInteger;
-    use crate::engine::AssignmentsPropositional;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
         let integers = AssignmentsInteger::default();
-        let booleans = AssignmentsPropositional::default();
-        let context = PropagationContext::new(&integers, &booleans);
+        let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
@@ -165,8 +160,7 @@ mod tests {
     #[test]
     fn computing_a_lazy_reason_evaluates_the_reason_and_returns_a_reference() {
         let integers = AssignmentsInteger::default();
-        let booleans = AssignmentsPropositional::default();
-        let context = PropagationContext::new(&integers, &booleans);
+        let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
@@ -182,8 +176,7 @@ mod tests {
     fn pushing_a_reason_gives_a_reason_ref_that_can_be_computed() {
         let mut reason_store = ReasonStore::default();
         let integers = AssignmentsInteger::default();
-        let booleans = AssignmentsPropositional::default();
-        let context = PropagationContext::new(&integers, &booleans);
+        let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);

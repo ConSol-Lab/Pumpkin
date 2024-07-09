@@ -1,32 +1,23 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
 
-use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Not;
 use std::time::Instant;
 
-use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
-use super::clause_allocators::ClauseAllocatorInterface;
-use super::clause_allocators::ClauseInterface;
-use super::conflict_analysis::AnalysisStep;
 use super::conflict_analysis::ConflictAnalysisNogoodContext;
-use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::LearnedNogood;
-use super::conflict_analysis::ResolutionConflictAnalyser;
 use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
 use super::termination::TerminationCondition;
+use super::variables::BooleanDomainId;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
-use crate::basic_types::ClauseReference;
-use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::Random;
@@ -34,15 +25,10 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::clause_allocators::ClauseAllocatorBasic;
-use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
-use crate::engine::cp::WatchListPropositional;
 use crate::engine::debug_helper::DebugDyn;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::predicates::predicate::Predicate;
-use crate::engine::proof::ProofLog;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -53,29 +39,17 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
 use crate::engine::DebugHelper;
-use crate::engine::ExplanationClauseManager;
 use crate::engine::IntDomainEvent;
-use crate::engine::LearnedClauseManager;
-use crate::engine::LearningOptions;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
-use crate::engine::VariableLiteralMappings;
-use crate::propagators::clausal::BasicClausalPropagator;
-use crate::propagators::clausal::ClausalPropagator;
 use crate::propagators::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::variable_names::VariableNames;
-
-pub type ClausalPropagatorType = BasicClausalPropagator;
-pub type ClauseAllocator = ClauseAllocatorBasic;
 
 /// A solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP) using
 /// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
@@ -90,8 +64,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 ///
 /// # Practical
 /// The [`ConstraintSatisfactionSolver`] makes use of certain options which allow the user to
-/// influence the behaviour of the solver; see for example the [`SatisfactionSolverOptions`] and the
-/// [`LearningOptions`].
+/// influence the behaviour of the solver; see the [`SatisfactionSolverOptions`].
 ///
 /// The solver switches between making decisions using implementations of the [`Brancher`] (which
 /// are passed to the [`ConstraintSatisfactionSolver::solve`] method) and propagation (use
@@ -124,7 +97,7 @@ pub type ClauseAllocator = ClauseAllocatorBasic;
 /// assert!(no_root_level_conflict);
 ///
 /// // We create a branching strategy, in our case we will simply use the default one
-/// let mut brancher = IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+/// let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
 ///
 /// // Then we solve the problem given a time-limit and a branching strategy
 /// let result = solver.solve(&mut Indefinite, &mut brancher);
@@ -150,71 +123,32 @@ pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
     pub(crate) state: CSPSolverState,
-    /// Tracks information related to the assignments of propositional variables.
-    pub(crate) assignments_propositional: AssignmentsPropositional,
-    /// Responsible for clausal propagation based on the two-watched scheme.
-    /// Although technically just another propagator, we treat the clausal propagator in a special
-    /// way due to efficiency and conflict analysis.
-    clausal_propagator: ClausalPropagatorType,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
-    cp_propagators: Vec<Box<dyn Propagator>>,
-    /// Tracks information about all allocated clauses. All clause allocaton goes exclusively
-    /// through the clause allocator. There are two notable exceptions:
-    /// - Unit clauses are stored directly on the trail.
-    /// - Binary clauses may be inlined in the watch lists of the clausal propagator.
-    pub(crate) clause_allocator: ClauseAllocator,
-    /// Tracks information about all learned clauses, with the exception of
-    /// unit clauses which are directly stored on the trail.
-    learned_clause_manager: LearnedClauseManager,
+    propagators: Vec<Box<dyn Propagator>>,
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
     restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
-    assumptions: Vec<Literal>,
+    assumptions: Vec<IntegerPredicate>,
     /// Performs conflict analysis, core extraction, and minimisation.
-    conflict_analyser: ResolutionConflictAnalyser,
     conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments_integer: AssignmentsInteger,
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_cp: WatchListCP,
-    /// Contains information on which propagator to notify upon
-    /// literal assignment. Not to be confused with the watch list
-    /// of the clausal propagator.
-    watch_list_propositional: WatchListPropositional,
-    /// Used in combination with the propositional watch list
-    /// Indicates the next literal on the propositional trail that need to be inspected to notify
-    /// subscribed propagators.
-    propositional_trail_index: usize,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis
     pub(crate) reason_store: ReasonStore,
-    /// Contains events that need to be processe to notify propagators of event occurrences.
+    /// Contains events that need to be processed to notify propagators of event occurrences.
+    /// Used as a helper storage vector to avoid reallocation.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
-    /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
-    pub(crate) variable_literal_mappings: VariableLiteralMappings,
-    /// Used during synchronisation of the propositional and integer trail.
-    /// [`AssignmentsInteger::trail`][`cp_trail_synced_position`] is the next entry
-    /// that needs to be synchronised with [`AssignmentsPropositional::trail`].
-    cp_trail_synced_position: usize,
-    /// This is the SAT equivalent of the above, i.e., [`AssignmentsPropositional::trail`]
-    /// [[`sat_trail_synced_position`]] is the next
-    /// [`Literal`] on the trail that needs to be synchronised with [`AssignmentsInteger::trail`].
-    sat_trail_synced_position: usize,
-    /// Holds information about explanations during conflict analysis.
-    explanation_clause_manager: ExplanationClauseManager,
-    /// Convenience literals used in special cases.
-    true_literal: Literal,
-    false_literal: Literal,
     /// A set of counters updated during the search.
     counters: Counters,
-    /// Used to store the learned clause.
-    analysis_result: ConflictAnalysisResult,
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
@@ -224,32 +158,24 @@ pub struct ConstraintSatisfactionSolver {
 impl Debug for ConstraintSatisfactionSolver {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let cp_propagators: Vec<_> = self
-            .cp_propagators
+            .propagators
             .iter()
             .map(|_| DebugDyn::from("Propagator"))
             .collect();
         f.debug_struct("ConstraintSatisfactionSolver")
             .field("state", &self.state)
             .field("assumptions", &self.assumptions)
-            .field("clausal_allocator", &self.clause_allocator)
-            .field("assignments_propositional", &self.assignments_propositional)
-            .field("clausal_propagator", &self.clausal_propagator)
-            .field("learned_clause_manager", &self.learned_clause_manager)
             .field("restart_strategy", &self.restart_strategy)
             .field("cp_propagators", &cp_propagators)
             .field("counters", &self.counters)
             .field("internal_parameters", &self.internal_parameters)
-            .field("analysis_result", &self.analysis_result)
             .finish()
     }
 }
 
 impl Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
-        ConstraintSatisfactionSolver::new(
-            LearningOptions::default(),
-            SatisfactionSolverOptions::default(),
-        )
+        ConstraintSatisfactionSolver::new(SatisfactionSolverOptions::default())
     }
 }
 
@@ -261,8 +187,6 @@ pub struct SatisfactionSolverOptions {
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
-    /// The proof log.
-    pub proof_log: ProofLog,
     /// A random number generator which is used by the [`ConstraintSatisfactionSolver`],
     /// passing it as an argument allows seeding based on CLI input.
     pub random_generator: SmallRng,
@@ -272,7 +196,6 @@ impl Default for SatisfactionSolverOptions {
     fn default() -> Self {
         SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
-            proof_log: ProofLog::default(),
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
         }
@@ -284,7 +207,6 @@ impl ConstraintSatisfactionSolver {
         PropagatorId(0)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn notify_nogood_propagator(
         event: IntDomainEvent,
         domain: DomainId,
@@ -292,7 +214,6 @@ impl ConstraintSatisfactionSolver {
         propagator_queue: &mut PropagatorQueue,
         assignments_integer: &mut AssignmentsInteger,
         reason_store: &mut ReasonStore,
-        assignments_propositional: &mut AssignmentsPropositional,
     ) {
         pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
         let nogood_propagator_id = Self::get_nogood_propagator_id();
@@ -308,7 +229,6 @@ impl ConstraintSatisfactionSolver {
             propagator_queue,
             assignments_integer,
             reason_store,
-            assignments_propositional,
         );
     }
 
@@ -321,14 +241,9 @@ impl ConstraintSatisfactionSolver {
         propagator_queue: &mut PropagatorQueue,
         assignments_integer: &mut AssignmentsInteger,
         reason_store: &mut ReasonStore,
-        assignments_propositional: &mut AssignmentsPropositional,
     ) {
-        let mut context = PropagationContextMut::new(
-            assignments_integer,
-            reason_store,
-            assignments_propositional,
-            propagator_id,
-        );
+        let mut context =
+            PropagationContextMut::new(assignments_integer, reason_store, propagator_id);
 
         let enqueue_decision =
             cp_propagators[propagator_id.0 as usize].notify(&mut context, local_id, event.into());
@@ -352,11 +267,10 @@ impl ConstraintSatisfactionSolver {
             Self::notify_nogood_propagator(
                 event,
                 domain,
-                &mut self.cp_propagators,
+                &mut self.propagators,
                 &mut self.propagator_queue,
                 &mut self.assignments_integer,
                 &mut self.reason_store,
-                &mut self.assignments_propositional,
             );
             // Now notify other propagators subscribed to this event.
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
@@ -366,104 +280,48 @@ impl ConstraintSatisfactionSolver {
                     propagator_id,
                     local_id,
                     event,
-                    &mut self.cp_propagators,
+                    &mut self.propagators,
                     &mut self.propagator_queue,
                     &mut self.assignments_integer,
                     &mut self.reason_store,
-                    &mut self.assignments_propositional,
                 );
             }
-        }
-    }
-
-    /// Given a predicate, returns the corresponding literal.
-    pub fn get_literal(&self, predicate: Predicate) -> Literal {
-        match predicate {
-            Predicate::IntegerPredicate(integer_predicate) => {
-                self.variable_literal_mappings.get_literal(
-                    integer_predicate,
-                    &self.assignments_propositional,
-                    &self.assignments_integer,
-                )
-            }
-            bool_predicate => bool_predicate
-                .get_literal_of_bool_predicate(self.assignments_propositional.true_literal)
-                .unwrap(),
         }
     }
 
     /// This is a temporary accessor to help refactoring.
     #[deprecated = "will be removed in favor of new state-based api"]
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
-        SolutionReference::new(&self.assignments_propositional, &self.assignments_integer)
+        SolutionReference::new(&self.assignments_integer)
     }
 
-    /// This is a temporary accessor to help refactoring.
-    #[deprecated = "will be removed in favor of new state-based api"]
-    pub fn is_at_the_root_level(&self) -> bool {
-        self.assignments_propositional.is_at_the_root_level()
-    }
-
+    #[allow(dead_code)]
     pub(crate) fn is_conflicting(&self) -> bool {
         self.state.is_conflicting()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn declare_ready(&mut self) {
         self.state.declare_ready()
-    }
-
-    /// Conclude the proof with the unsatisfiable claim.
-    ///
-    /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-        proof.unsat(&self.variable_names, &self.variable_literal_mappings)
-    }
-
-    /// Conclude the proof with the optimality claim.
-    ///
-    /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-        proof.optimal(bound, &self.variable_names, &self.variable_literal_mappings)
     }
 }
 
 // methods that offer basic functionality
 impl ConstraintSatisfactionSolver {
-    pub fn new(
-        learning_options: LearningOptions,
-        solver_options: SatisfactionSolverOptions,
-    ) -> ConstraintSatisfactionSolver {
-        let dummy_literal = Literal::new(PropositionalVariable::new(0), true);
-
+    pub fn new(solver_options: SatisfactionSolverOptions) -> ConstraintSatisfactionSolver {
         let mut csp_solver = ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
-            assignments_propositional: AssignmentsPropositional::default(),
-            clause_allocator: ClauseAllocator::default(),
             assignments_integer: AssignmentsInteger::default(),
             watch_list_cp: WatchListCP::default(),
-            watch_list_propositional: WatchListPropositional::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
-            propositional_trail_index: 0,
             event_drain: vec![],
-            variable_literal_mappings: VariableLiteralMappings::default(),
-            cp_trail_synced_position: 0,
-            sat_trail_synced_position: 0,
-            explanation_clause_manager: ExplanationClauseManager::default(),
-            true_literal: dummy_literal,
-            false_literal: !dummy_literal,
-            conflict_analyser: ResolutionConflictAnalyser::default(),
             conflict_nogood_analyser: ResolutionNogoodConflictAnalyser::default(),
-            clausal_propagator: ClausalPropagatorType::default(),
-            learned_clause_manager: LearnedClauseManager::new(learning_options),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
-            cp_propagators: vec![],
+            propagators: vec![],
             counters: Counters::default(),
             internal_parameters: solver_options,
-            analysis_result: ConflictAnalysisResult::default(),
             variable_names: VariableNames::default(),
         };
 
@@ -477,13 +335,13 @@ impl ConstraintSatisfactionSolver {
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
-        let dummy_assumptions: Vec<Literal> = vec![];
+        let dummy_assumptions: Vec<IntegerPredicate> = vec![];
         self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
     }
 
     pub fn solve_under_assumptions(
         &mut self,
-        assumptions: &[Literal],
+        assumptions: &[IntegerPredicate],
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
@@ -513,6 +371,11 @@ impl ConstraintSatisfactionSolver {
         self.counters.log_statistics()
     }
 
+    pub fn create_new_boolean_variable(&mut self, name: Option<String>) -> BooleanDomainId {
+        let domain_id = self.create_new_integer_variable(0, 1, name);
+        BooleanDomainId::new(domain_id)
+    }
+
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(
         &mut self,
@@ -525,22 +388,14 @@ impl ConstraintSatisfactionSolver {
             "Variables cannot be created in an inconsistent state"
         );
 
-        let domain = self.variable_literal_mappings.create_new_domain(
-            lower_bound,
-            upper_bound,
-            &mut self.assignments_integer,
-            &mut self.watch_list_cp,
-            &mut self.watch_list_propositional,
-            &mut self.clausal_propagator,
-            &mut self.assignments_propositional,
-            &mut self.clause_allocator,
-        );
+        let domain_id = self.assignments_integer.grow(lower_bound, upper_bound);
+        self.watch_list_cp.grow();
 
         if let Some(name) = name {
-            self.variable_names.add_integer(domain, name);
+            self.variable_names.add_integer(domain_id, name);
         }
 
-        domain
+        domain_id
     }
 
     /// Creates an integer variable with a domain containing only the values in `values`
@@ -570,14 +425,6 @@ impl ConstraintSatisfactionSolver {
                 self.assignments_integer
                     .remove_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
-                self.assignments_propositional.enqueue_decision_literal(
-                    self.variable_literal_mappings.get_inequality_literal(
-                        domain_id,
-                        value,
-                        &self.assignments_propositional,
-                        &self.assignments_integer,
-                    ),
-                )
             }
         }
         pumpkin_assert_simple!(
@@ -612,7 +459,7 @@ impl ConstraintSatisfactionSolver {
     /// //   !x0 /\ x1 /\ !x2
     /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
     /// # use pumpkin_lib::engine::variables::PropositionalVariable;
-    /// # use pumpkin_lib::engine::variables::Literal;
+    /// #
     /// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
     /// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     /// let solver = ConstraintSatisfactionSolver::default();
@@ -625,7 +472,7 @@ impl ConstraintSatisfactionSolver {
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut brancher =
-    ///     IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    ///     IndependentVariableValueBrancher::default_over_all_variables(&solver);
     /// solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
     ///
     /// let core = solver
@@ -645,131 +492,34 @@ impl ConstraintSatisfactionSolver {
     /// ```
     pub fn extract_clausal_core(
         &mut self,
-        brancher: &mut impl Brancher,
-    ) -> Result<Vec<Literal>, Literal> {
-        let mut conflict_analysis_context = ConflictAnalysisContext {
-            assumptions: &self.assumptions,
-            clausal_propagator: &self.clausal_propagator,
-            variable_literal_mappings: &self.variable_literal_mappings,
-            assignments_integer: &self.assignments_integer,
-            assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
-            solver_state: &mut self.state,
-            brancher,
-            clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
-            reason_store: &mut self.reason_store,
-            counters: &mut self.counters,
-            learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
-        };
-
-        let core = self
-            .conflict_analyser
-            .compute_clausal_core(&mut conflict_analysis_context);
-
-        if !self.state.is_infeasible() {
-            self.restore_state_at_root(brancher);
-        }
-
-        core
-    }
-
-    pub(crate) fn get_conflict_reasons(
-        &mut self,
-        brancher: &mut impl Brancher,
-        on_analysis_step: impl FnMut(AnalysisStep),
-    ) {
-        let mut conflict_analysis_context = ConflictAnalysisContext {
-            assumptions: &self.assumptions,
-            clausal_propagator: &self.clausal_propagator,
-            variable_literal_mappings: &self.variable_literal_mappings,
-            assignments_integer: &self.assignments_integer,
-            assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
-            solver_state: &mut self.state,
-            brancher,
-            clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
-            reason_store: &mut self.reason_store,
-            counters: &mut self.counters,
-            learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
-        };
-
-        self.conflict_analyser
-            .get_conflict_reasons(&mut conflict_analysis_context, on_analysis_step);
-    }
-
-    /// Returns an infinite iterator of positive literals of new variables. The new variables will
-    /// be unnamed.
-    ///
-    /// # Example
-    /// ```
-    /// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-    /// # use pumpkin_lib::engine::variables::Literal;
-    /// let mut solver = ConstraintSatisfactionSolver::default();
-    /// let literals: Vec<Literal> = solver.new_literals().take(5).collect();
-    ///
-    /// // `literals` contains 5 positive literals of newly created propositional variables.
-    /// assert_eq!(literals.len(), 5);
-    /// ```
-    ///
-    /// Note that this method captures the lifetime of the immutable reference to `self`.
-    pub fn new_literals(&mut self) -> impl Iterator<Item = Literal> + '_ {
-        std::iter::from_fn(|| Some(self.create_new_propositional_variable(None)))
-            .map(|var| Literal::new(var, true))
-    }
-
-    pub fn create_new_propositional_variable(
-        &mut self,
-        name: Option<String>,
-    ) -> PropositionalVariable {
-        let domain_id = self.variable_literal_mappings.create_new_domain(
-            0,
-            1,
-            &mut self.assignments_integer,
-            &mut self.watch_list_cp,
-            &mut self.watch_list_propositional,
-            &mut self.clausal_propagator,
-            &mut self.assignments_propositional,
-            &mut self.clause_allocator,
-        );
-
-        // let variable = self
-        // .variable_literal_mappings
-        // .create_new_propositional_variable(
-        // &mut self.watch_list_propositional,
-        // &mut self.clausal_propagator,
-        // &mut self.assignments_propositional,
-        // );
-
-        // todo: is this a good replacement for now?
-        let variable = self
-            .variable_literal_mappings
-            .get_equality_literal(
-                domain_id,
-                1,
-                &self.assignments_propositional,
-                &self.assignments_integer,
-            )
-            .get_propositional_variable();
-
-        if let Some(name) = name {
-            self.variable_names.add_propositional(variable, name);
-        }
-
-        variable
-    }
-
-    /// Get a literal which is globally true.
-    pub fn get_true_literal(&self) -> Literal {
-        self.assignments_propositional.true_literal
-    }
-
-    /// Get a literal which is globally false.
-    pub fn get_false_literal(&self) -> Literal {
-        self.assignments_propositional.false_literal
+        _brancher: &mut impl Brancher,
+    ) -> Result<Vec<IntegerPredicate>, IntegerPredicate> {
+        todo!();
+        // let mut conflict_analysis_context = ConflictAnalysisContext {
+        // assumptions: &self.assumptions,
+        // clausal_propagator: &self.clausal_propagator,
+        // assignments_integer: &self.assignments_integer,
+        // assignments_propositional: &self.assignments_propositional,
+        // internal_parameters: &self.internal_parameters,
+        // solver_state: &mut self.state,
+        // brancher,
+        // clause_allocator: &mut self.clause_allocator,
+        // explanation_clause_manager: &mut self.explanation_clause_manager,
+        // reason_store: &mut self.reason_store,
+        // counters: &mut self.counters,
+        // learned_clause_manager: &mut self.learned_clause_manager,
+        // restart_strategy: &mut self.restart_strategy,
+        // };
+        //
+        // let core = self
+        // .conflict_analyser
+        // .compute_clausal_core(&mut conflict_analysis_context);
+        //
+        // if !self.state.is_infeasible() {
+        // self.restore_state_at_root(brancher);
+        // }
+        //
+        // core
     }
 
     /// Get the lower bound for the given variable.
@@ -799,43 +549,15 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    /// Get the value of the given literal, which could be unassigned.
-    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        if self.assignments_propositional.is_literal_assigned(literal) {
-            Some(
-                self.assignments_propositional
-                    .is_literal_assigned_true(literal),
-            )
-        } else {
-            None
-        }
-    }
-
-    #[deprecated = "users of the solvers should not have to access solver fields"]
-    pub(crate) fn get_propositional_assignments(&self) -> &AssignmentsPropositional {
-        &self.assignments_propositional
-    }
-
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         self.backtrack(0, brancher);
         self.state.declare_ready();
-    }
-
-    fn synchronise_assignments(&mut self) {
-        pumpkin_assert_simple!(
-            self.sat_trail_synced_position >= self.assignments_propositional.num_trail_entries()
-        );
-        pumpkin_assert_simple!(
-            self.cp_trail_synced_position >= self.assignments_integer.num_trail_entries()
-        );
-        self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
-        self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
     }
 }
 
 // methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
-    fn initialise(&mut self, assumptions: &[Literal]) {
+    fn initialise(&mut self, assumptions: &[IntegerPredicate]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
             "Solver is not expected to be in the infeasible under assumptions state when initialising.
@@ -855,13 +577,6 @@ impl ConstraintSatisfactionSolver {
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }
-
-            self.learned_clause_manager
-                .shrink_learned_clause_database_if_needed(
-                    &self.assignments_propositional,
-                    &mut self.clause_allocator,
-                    &mut self.clausal_propagator,
-                );
 
             self.propagate();
 
@@ -895,7 +610,7 @@ impl ConstraintSatisfactionSolver {
                     self.declare_new_decision_level();
                 }
 
-                let branching_result = self.enqueue_next_decision(brancher);
+                let branching_result = self.make_next_decision(brancher);
 
                 if let Err(flag) = branching_result {
                     return flag;
@@ -912,119 +627,94 @@ impl ConstraintSatisfactionSolver {
                 // println!("\t\t{} {}", t.predicate, t.reason.is_none());
                 // }
 
-                if self.assignments_propositional.is_at_the_root_level() {
+                if self.get_decision_level() == 0 {
                     self.state.declare_infeasible();
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
                 self.resolve_conflict_with_nogood(brancher);
 
-                self.learned_clause_manager.decay_clause_activities();
-
                 brancher.on_conflict()
             }
         }
     }
 
-    fn enqueue_next_decision(
+    fn make_next_decision(
         &mut self,
         brancher: &mut impl Brancher,
     ) -> Result<(), CSPSolverExecutionFlag> {
-        if let Some(assumption_literal) = self.peek_next_assumption_literal() {
-            let success = self.enqueue_assumption_literal(assumption_literal);
-            if !success {
-                return Err(CSPSolverExecutionFlag::Infeasible);
-            }
-            Ok(())
-        } else {
-            let decided_predicate = brancher.next_decision(&mut SelectionContext::new(
+        // Set the next decision to be an assumption, if there are assumptions left.
+        // Currently assumptions are implemented by adding an assumption predicate
+        // at separate decision levels.
+        if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
+            self.enqueue_assumption_predicate(assumption_literal)
+        }
+        // Otherwise proceed with standard branching.
+        else {
+            let context = &mut SelectionContext::new(
                 &self.assignments_integer,
-                &self.assignments_propositional,
                 &mut self.internal_parameters.random_generator,
-            ));
-            if let Some(predicate) = decided_predicate {
+            );
+            // If there is a next decision, make the decision.
+            if let Some(decision_predicate) = brancher.next_decision(context) {
                 self.counters.num_decisions += 1;
-                self.assignments_propositional
-                    .enqueue_decision_literal(match predicate {
-                        Predicate::IntegerPredicate(integer_predicate) => {
-                            self.variable_literal_mappings.get_literal(
-                                integer_predicate,
-                                &self.assignments_propositional,
-                                &self.assignments_integer,
-                            )
-                        }
-                        bool_predicate => bool_predicate
-                            .get_literal_of_bool_predicate(
-                                self.assignments_propositional.true_literal,
-                            )
-                            .unwrap(),
-                    });
+                self.assignments_integer
+                    .post_integer_predicate(decision_predicate, None)
+                    .expect("Decisions are expected not to fail.");
                 Ok(())
-            } else {
+            }
+            // Otherwise there are no more decisions to be made,
+            // all predicates have been applied without a conflict,
+            // meaning the problem is feasible.
+            else {
                 self.state.declare_solution_found();
                 Err(CSPSolverExecutionFlag::Feasible)
             }
         }
     }
 
-    /// Returns true if the assumption was successfully enqueued, and false otherwise
-    pub(crate) fn enqueue_assumption_literal(&mut self, assumption_literal: Literal) -> bool {
-        // Case 1: the assumption is unassigned, assign it
-        if self
-            .assignments_propositional
-            .is_literal_unassigned(assumption_literal)
+    /// Posts the assumption predicate.
+    /// If the predicate is already true, nothing happens to the state.
+    /// If the predicate is neither true nor false, and the state is set such that the
+    /// predicate is now true.
+    /// If the predicate is false, returns an Err(CSPSolverExecutionFlag::Infeasible).
+    pub(crate) fn enqueue_assumption_predicate(
+        &mut self,
+        assumption_predicate: IntegerPredicate,
+    ) -> Result<(), CSPSolverExecutionFlag> {
+        match self
+            .assignments_integer
+            .post_integer_predicate(assumption_predicate, None)
         {
-            self.assignments_propositional
-                .enqueue_decision_literal(assumption_literal);
-            true
-        // Case 2: the assumption has already been set to true
-        //  this happens when other assumptions propagated the literal
-        //  or the assumption is already set to true at the root level
-        } else if self
-            .assignments_propositional
-            .is_literal_assigned_true(assumption_literal)
-        {
-            // in this case, do nothing
-            //  note that the solver will then increase the decision level without enqueuing a
-            // decision literal  this is necessary because by convention the solver will
-            // try to assign the i-th assumption literal at decision level i+1
-            true
-        }
-        // Case 3: the assumption literal is in conflict with the input assumption
-        //  which means the instance is infeasible under the current assumptions
-        else {
-            self.state
-                .declare_infeasible_under_assumptions(assumption_literal);
-            false
+            // The assumption is set to true. Note that the predicate may have been already true.
+            // This could happen when other assumptions propagated the predicate
+            // or the assumption is already set to true at the root level.
+            Ok(_) => Ok(()),
+            // The assumption predicate is in conflict with the input assumptions,
+            // which means the instance is infeasible under the current assumptions.
+            Err(_) => {
+                self.state
+                    .declare_infeasible_under_assumptions(assumption_predicate);
+                Err(CSPSolverExecutionFlag::Infeasible)
+            }
         }
     }
 
     pub(crate) fn declare_new_decision_level(&mut self) {
-        self.assignments_propositional.increase_decision_level();
         self.assignments_integer.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
 
-    /// Changes the state based on the conflict analysis result (stored in
-    /// [`ConstraintSatisfactionSolver::analysis_result`]). It performs the following:
-    /// - Adds the learned clause to the database
-    /// - Performs backtracking
-    /// - Enqueues the propagated [`Literal`] of the learned clause
-    /// - Updates the internal data structures (e.g. for the restart strategy or the learned clause
-    ///   manager)
+    /// Changes the state based on the conflict analysis. It performs the following:
+    /// - Derives a nogood using our CP version of the 1UIP scheme.
+    /// - Adds the learned nogood to the database.
+    /// - Performs backtracking.
+    /// - Enqueues the propagated [`IntegerPredicate`] of the learned nogood.
+    /// - Todo: Updates the internal data structures (e.g. for the restart strategy or the learned
+    ///   clause manager)
     ///
     /// # Note
-    /// This method performs no propagation, this is left up to the solver afterwards
-    #[allow(dead_code)]
-    fn resolve_conflict(&mut self, brancher: &mut impl Brancher) {
-        pumpkin_assert_moderate!(self.state.is_conflicting());
-
-        self.analysis_result = self.compute_learned_clause(brancher);
-        self.process_learned_clause(brancher);
-
-        self.state.declare_solving();
-    }
-
+    /// This method performs no propagation, this is left up to the solver afterwards.
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
@@ -1033,37 +723,12 @@ impl ConstraintSatisfactionSolver {
         self.state.declare_solving();
     }
 
-    #[allow(dead_code)]
-    fn compute_learned_clause(&mut self, brancher: &mut impl Brancher) -> ConflictAnalysisResult {
-        let mut conflict_analysis_context = ConflictAnalysisContext {
-            assumptions: &self.assumptions,
-            clausal_propagator: &self.clausal_propagator,
-            variable_literal_mappings: &self.variable_literal_mappings,
-            assignments_integer: &self.assignments_integer,
-            assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
-            solver_state: &mut self.state,
-            brancher,
-            clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
-            reason_store: &mut self.reason_store,
-            counters: &mut self.counters,
-            learned_clause_manager: &mut self.learned_clause_manager,
-            restart_strategy: &mut self.restart_strategy,
-        };
-        self.conflict_analyser
-            .compute_1uip(&mut conflict_analysis_context)
-    }
-
     fn compute_learned_nogood(&mut self, _brancher: &mut impl Brancher) -> LearnedNogood {
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
             assignments_integer: &self.assignments_integer,
             counters: &mut self.counters,
-            variable_literal_mappings: &self.variable_literal_mappings,
-            assignments_propositional: &self.assignments_propositional,
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
-            clause_allocator: &self.clause_allocator,
         };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -1077,30 +742,17 @@ impl ConstraintSatisfactionSolver {
         // backjump or restart
         // ask the nogood propagator to add this nogood and propagate
 
-        // todo: log the nogood -> I think this is the responsibility of the nogood propagator now?
-        //  because of the compressed format, but okay to log here too?
-        let learned_clause_equivalent: Vec<Literal> = learned_nogood
-            .predicates
-            .iter()
-            .map(|predicate| {
-                self.variable_literal_mappings.get_literal(
-                    predicate.not(),
-                    &self.assignments_propositional,
-                    &self.assignments_integer,
-                )
-            })
-            .collect();
-
-        if let Err(write_error) = self
-            .internal_parameters
-            .proof_log
-            .log_learned_clause(learned_clause_equivalent)
-        {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
+        // todo: log the nogood
+        // if let Err(write_error) = self
+        // .internal_parameters
+        // .proof_log
+        // .log_learned_clause(learned_clause_equivalent)
+        // {
+        // warn!(
+        // "Failed to update the certificate file, error message: {}",
+        // write_error
+        // );
+        // }
 
         // todo: I am not sure we need to treat unit nogoods in a special way? Simply backtrack and
         // post? The only issue may be that backtracking to 0 is not the same as a restart since
@@ -1119,7 +771,7 @@ impl ConstraintSatisfactionSolver {
         // happened
         self.restart_strategy.notify_conflict(
             learned_nogood.predicates.len() as u32,
-            self.assignments_propositional.num_trail_entries(),
+            self.assignments_integer.num_trail_entries(),
         );
 
         self.counters
@@ -1141,86 +793,26 @@ impl ConstraintSatisfactionSolver {
         // println!("NOgood {:?}", learned_nogood);
 
         let nogood_propagator_index = self
-            .cp_propagators
+            .propagators
             .iter()
             .position(|propagator| propagator.name() == "NogoodPropagator")
             .expect("There has to be a nogood propagator!");
         let mut context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
-            &mut self.assignments_propositional,
             Self::get_nogood_propagator_id(),
         );
-        self.cp_propagators[nogood_propagator_index]
+        self.propagators[nogood_propagator_index]
             .hack_add_asserting_nogood(learned_nogood.predicates, &mut context);
     }
 
-    fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
-        if let Err(write_error) = self
-            .internal_parameters
-            .proof_log
-            .log_learned_clause(self.analysis_result.learned_literals.iter().copied())
-        {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
-
-        // unit clauses are treated in a special way: they are added as root level decisions
-        if self.analysis_result.learned_literals.len() == 1 {
-            // important to notify about the conflict _before_ backtracking removes literals from
-            // the trail
-            self.restart_strategy
-                .notify_conflict(1, self.assignments_propositional.num_trail_entries());
-
-            self.backtrack(0, brancher);
-
-            let unit_clause = self.analysis_result.learned_literals[0];
-
-            self.assignments_propositional
-                .enqueue_decision_literal(unit_clause);
-
-            self.counters.num_unit_clauses_learned +=
-                (self.analysis_result.learned_literals.len() == 1) as u64;
-        } else {
-            self.counters
-                .average_learned_clause_length
-                .add_term(self.analysis_result.learned_literals.len() as u64);
-
-            // important to get trail length before the backtrack
-            let num_variables_assigned_before_conflict =
-                &self.assignments_propositional.num_trail_entries();
-
-            self.counters
-                .average_backtrack_amount
-                .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
-            self.backtrack(self.analysis_result.backjump_level, brancher);
-
-            self.learned_clause_manager.add_learned_clause(
-                self.analysis_result.learned_literals.clone(), // todo not ideal with clone
-                &mut self.clausal_propagator,
-                &mut self.assignments_propositional,
-                &mut self.clause_allocator,
-            );
-
-            let lbd = self.learned_clause_manager.compute_lbd_for_literals(
-                &self.analysis_result.learned_literals,
-                &self.assignments_propositional,
-            );
-
-            self.restart_strategy
-                .notify_conflict(lbd, *num_variables_assigned_before_conflict);
-        }
-    }
     /// Performs a restart during the search process; it is only called when it has been determined
     /// to be necessary by the [`ConstraintSatisfactionSolver::restart_strategy`]. A 'restart'
     /// differs from backtracking to level zero in that a restart backtracks to decision level
-    /// zero and then performs additional operations, e.g., clean up learned clauses, adjust
-    /// restart frequency, etc.
+    /// zero, cleans up nogoods, and notifies the restart strategy.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
-            self.are_all_assumptions_assigned(),
+            self.get_decision_level() > self.assumptions.len(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
@@ -1237,25 +829,6 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
-
-        unassigned_literals.for_each(|literal| {
-            brancher.on_unassign_literal(literal);
-            // TODO: We should also backtrack on the integer variables here
-        });
-
-        self.clausal_propagator
-            .synchronise(self.assignments_propositional.num_trail_entries());
-
-        pumpkin_assert_simple!(
-            self.assignments_propositional.get_decision_level()
-                < self.assignments_integer.get_decision_level(),
-            "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
-        );
-        self.propositional_trail_index = min(
-            self.propositional_trail_index,
-            self.assignments_propositional.num_trail_entries(),
-        );
         self.assignments_integer
             .synchronise(backtrack_level)
             .iter()
@@ -1265,17 +838,13 @@ impl ConstraintSatisfactionSolver {
 
         self.reason_store.synchronise(backtrack_level);
         self.propagator_queue.clear();
-        //  note that variable_literal_mappings sync should be called after the sat/cp data
-        // structures backtrack
-        self.synchronise_assignments();
-        // for now all propagators are called to synchronise
-        //  in the future this will be improved in two ways:
+        // For now all propagators are called to synchronise, in the future this will be improved in
+        // two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for propagator_id in 0..self.cp_propagators.len() {
-            let context =
-                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
-            self.cp_propagators[propagator_id].synchronise(&context);
+        for propagator_id in 0..self.propagators.len() {
+            let context = PropagationContext::new(&self.assignments_integer);
+            self.propagators[propagator_id].synchronise(&context);
         }
     }
 
@@ -1287,11 +856,10 @@ impl ConstraintSatisfactionSolver {
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop_new() {
-            let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+            let propagator = &mut self.propagators[propagator_id.0 as usize];
             let mut context = PropagationContextMut::new(
                 &mut self.assignments_integer,
                 &mut self.reason_store,
-                &mut self.assignments_propositional,
                 propagator_id,
             );
 
@@ -1302,34 +870,26 @@ impl ConstraintSatisfactionSolver {
                 }
                 Err(inconsistency) => match inconsistency {
                     Inconsistency::EmptyDomain => {
-                        // todo: remove this from the code, no longer needed in new version.
-                        unreachable!();
+                        // todo: handle this properly, >= and <= reasons?
+                        todo!();
                     }
                     // A propagator-specific reason for the current conflict.
-                    Inconsistency::Other(conflict_info) => {
+                    Inconsistency::Conflict { conflict_nogood } => {
                         // todo: conflict info can be reworked in the new version into a reason.
                         // the code below will be simplified in the new version.
-                        if let ConflictInfo::Explanation(ref propositional_conjunction) =
-                            conflict_info
-                        {
-                            pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                                &self.assignments_integer,
-                                &self.assignments_propositional,
-                                &self.variable_literal_mappings,
-                                propositional_conjunction,
-                                propagator.as_ref(),
-                                propagator_id,
-                            ));
+                        pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                            &self.assignments_integer,
+                            &conflict_nogood,
+                            propagator.as_ref(),
+                            propagator_id,
+                        ));
 
-                            let stored_conflict_info = StoredConflictInfo::Explanation {
-                                conjunction: propositional_conjunction.clone(),
-                                propagator: propagator_id,
-                            };
-                            self.state.declare_conflict(stored_conflict_info);
-                            break;
-                        } else {
-                            unreachable!()
-                        }
+                        let stored_conflict_info = StoredConflictInfo {
+                            conflict_nogood,
+                            propagator: propagator_id,
+                        };
+                        self.state.declare_conflict(stored_conflict_info);
+                        break;
                     }
                 },
             }
@@ -1343,62 +903,22 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_extreme!(
             self.state.is_conflicting()
                 || DebugHelper::debug_fixed_point_propagation(
-                    &self.clausal_propagator,
                     &self.assignments_integer,
-                    &self.assignments_propositional,
-                    &self.clause_allocator,
-                    &self.cp_propagators,
+                    &self.propagators,
                 )
         );
     }
 
-    fn are_all_assumptions_assigned(&self) -> bool {
-        self.assignments_propositional.get_decision_level() > self.assumptions.len()
-    }
-
-    fn peek_next_assumption_literal(&self) -> Option<Literal> {
-        if self.are_all_assumptions_assigned() {
-            None
-        } else {
-            // the convention is that at decision level i, the (i-1)th assumption is set
-            //  note that the decision level is increased before calling branching hence the minus
-            // one
-            Some(self.assumptions[self.assignments_propositional.get_decision_level() - 1])
-        }
+    fn peek_next_assumption_predicate(&self) -> Option<IntegerPredicate> {
+        // The convention is that at decision level i, the (i-1)th assumption is posted.
+        // Note that decisions start being posted start at 1, hence the minus one.
+        let next_assumption_index = self.get_decision_level() - 1;
+        self.assumptions.get(next_assumption_index).copied()
     }
 }
 
 // methods for adding constraints (propagators and clauses)
 impl ConstraintSatisfactionSolver {
-    /// Add a clause (of at least length 2) which could later be deleted. Be mindful of the effect
-    /// of this on learned clauses etc. if a solve call were to be invoked after adding a clause
-    /// through this function.
-    ///
-    /// The clause is marked as 'learned'.
-    pub(crate) fn add_allocated_deletable_clause(
-        &mut self,
-        clause: Vec<Literal>,
-    ) -> ClauseReference {
-        self.clausal_propagator
-            .add_clause_unchecked(clause, true, &mut self.clause_allocator)
-            .unwrap()
-    }
-
-    /// Delete an allocated clause. Users of this method must ensure the state of the solver stays
-    /// well-defined. In particular, if there are learned clauses derived through this clause, and
-    /// it is removed, those learned clauses may no-longer be valid.
-    pub(crate) fn delete_allocated_clause(&mut self, reference: ClauseReference) -> Vec<Literal> {
-        let clause = self.clause_allocator[reference]
-            .get_literal_slice()
-            .to_vec();
-
-        self.clausal_propagator
-            .remove_clause_from_consideration(&clause, reference);
-        self.clause_allocator.delete_clause(reference);
-
-        clause
-    }
-
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///
@@ -1418,12 +938,9 @@ impl ConstraintSatisfactionSolver {
             return false;
         }
 
-        let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
-        let constructor_context = PropagatorConstructorContext::new(
-            &mut self.watch_list_cp,
-            &mut self.watch_list_propositional,
-            new_propagator_id,
-        );
+        let new_propagator_id = PropagatorId(self.propagators.len() as u32);
+        let constructor_context =
+            PropagatorConstructorContext::new(&mut self.watch_list_cp, new_propagator_id);
 
         let propagator_to_add = constructor.create_boxed(constructor_context);
 
@@ -1434,13 +951,12 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.cp_propagators.push(propagator_to_add);
+        self.propagators.push(propagator_to_add);
 
-        let new_propagator = &mut self.cp_propagators[new_propagator_id];
+        let new_propagator = &mut self.propagators[new_propagator_id];
         let mut context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
-            &mut self.assignments_propositional,
             new_propagator_id,
         );
         if new_propagator.initialise_at_root(&mut context).is_err() {
@@ -1453,97 +969,101 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    pub fn post_predicate(
+        &mut self,
+        predicate: IntegerPredicate,
+    ) -> Result<(), ConstraintOperationError> {
+        assert!(
+            self.get_decision_level() == 0,
+            "Can only post predicates at the root level."
+        );
+
+        if self.state.is_infeasible() {
+            Err(ConstraintOperationError::InfeasibleState)
+        } else {
+            match self
+                .assignments_integer
+                .post_integer_predicate(predicate, None)
+            {
+                Ok(_) => Ok(()),
+                Err(_) => Err(ConstraintOperationError::InfeasiblePredicate),
+            }
+        }
+    }
+
+    pub fn add_nogood(
+        &mut self,
+        _nogood: Vec<IntegerPredicate>,
+    ) -> Result<(), ConstraintOperationError> {
+        todo!();
+    }
+
+    // #[error("Adding the clause failed because it is infeasible at the root")]
+    // InfeasibleClause,
+    // #[error("Adding constraint failed because the solver is in an infeasible state")]
+    // InfeasibleState,
+
     /// Creates a clause from `literals` and adds it to the current formula.
     ///
     /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
-    /// returned. Subsequent calls to this method will always return an error, and no
+    /// returned. Subsequent calls to this m\Zethod will always return an error, and no
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        literals: impl IntoIterator<Item = Literal>,
+        _literals: impl IntoIterator<Item = IntegerPredicate>,
     ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
-        pumpkin_assert_moderate!(self.is_propagation_complete());
-
-        if self.state.is_infeasible() {
-            return Err(ConstraintOperationError::InfeasibleState);
-        }
-
-        let literals: Vec<Literal> = literals.into_iter().collect();
-
-        let nogood: Vec<IntegerPredicate> = literals
-            .iter()
-            .map(|literal| {
-                self.variable_literal_mappings
-                    .get_predicates(*literal)
-                    .next()
-                    .unwrap()
-                    .not()
-            })
-            .collect();
-
-        let result = self.clausal_propagator.add_permanent_clause(
-            literals,
-            &mut self.assignments_propositional,
-            &mut self.clause_allocator,
-        );
-
-        if result.is_err() {
-            self.state.declare_infeasible();
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
+        // todo: took as input literals, but now we have nogoods?
+        // also remove the add_clause with add_nogood
+        todo!();
+        // pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
+        // pumpkin_assert_moderate!(self.is_propagation_complete());
+        //
+        // if self.state.is_infeasible() {
+        // return Err(ConstraintOperationError::InfeasibleState);
+        // }
+        //
+        // let literals: Vec<Literal> = literals.into_iter().collect();
+        //
+        // let nogood: Vec<IntegerPredicate> = literals
+        // .iter()
+        // .map(|literal| {
+        // self.variable_literal_mappings
+        // .get_predicates(*literal)
+        // .next()
+        // .unwrap()
+        // .not()
+        // })
+        // .collect();
+        //
+        // let result = self.clausal_propagator.add_permanent_clause(
+        // literals,
+        // &mut self.assignments_propositional,
+        // &mut self.clause_allocator,
+        // );
+        //
+        // if result.is_err() {
+        // self.state.declare_infeasible();
+        // return Err(ConstraintOperationError::InfeasibleClause);
+        // }
+        //
         // hack: not actually a learned nogood but can work
-        self.add_learned_nogood(LearnedNogood {
-            predicates: nogood,
-            backjump_level: 0,
-        });
-
-        self.propagate();
-
-        if self.state.is_infeasible() {
-            self.state.declare_infeasible();
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
-        Ok(())
-    }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_implication_unchecked(&mut self, lhs: Literal, rhs: Literal) {
-        self.clausal_propagator.add_permanent_implication_unchecked(
-            lhs,
-            rhs,
-            &mut self.clause_allocator,
-        );
-    }
-
-    #[deprecated = "use add_clause instead"]
-    pub(crate) fn add_permanent_ternary_clause_unchecked(
-        &mut self,
-        a: Literal,
-        b: Literal,
-        c: Literal,
-    ) {
-        self.clausal_propagator
-            .add_permanent_ternary_clause_unchecked(a, b, c, &mut self.clause_allocator);
-    }
-}
-
-// methods for getting simple info out of the solver
-impl ConstraintSatisfactionSolver {
-    pub fn is_propagation_complete(&self) -> bool {
-        self.clausal_propagator
-            .is_propagation_complete(self.assignments_propositional.num_trail_entries())
-            && self.propagator_queue.is_empty()
+        // self.add_learned_nogood(LearnedNogood {
+        // predicates: nogood,
+        // backjump_level: 0,
+        // });
+        //
+        // self.propagate();
+        //
+        // if self.state.is_infeasible() {
+        // self.state.declare_infeasible();
+        // return Err(ConstraintOperationError::InfeasibleClause);
+        // }
+        //
+        // Ok(())
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {
-        pumpkin_assert_moderate!(
-            self.assignments_propositional.get_decision_level()
-                == self.assignments_integer.get_decision_level()
-        );
-        self.assignments_propositional.get_decision_level()
+        self.assignments_integer.get_decision_level()
     }
 }
 
@@ -1594,7 +1114,7 @@ enum CSPSolverStateInternal {
     },
     Infeasible,
     InfeasibleUnderAssumptions {
-        violated_assumption: Literal,
+        violated_assumption: IntegerPredicate,
     },
     Timeout,
 }
@@ -1640,7 +1160,7 @@ impl CSPSolverState {
         )
     }
 
-    pub fn get_violated_assumption(&self) -> Literal {
+    pub fn get_violated_assumption(&self) -> IntegerPredicate {
         if let CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         } = self.internal_state
@@ -1701,7 +1221,7 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::Timeout;
     }
 
-    fn declare_infeasible_under_assumptions(&mut self, violated_assumption: Literal) {
+    fn declare_infeasible_under_assumptions(&mut self, violated_assumption: IntegerPredicate) {
         pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
@@ -1713,30 +1233,28 @@ impl CSPSolverState {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
-    use crate::basic_types::StoredConflictInfo;
     use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
-    use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
     use crate::engine::predicates::integer_predicate::IntegerPredicate;
-    use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::propagation_context::HasAssignments;
     use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorConstructor;
     use crate::engine::propagation::PropagatorConstructorContext;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
-    use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
     use crate::predicate;
 
     /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
-    /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),
-    /// and conflicts (also in the form of [`PropositionalConjunction`]s).
+    /// explanations (in the forms of tuples of [`IntegerPredicate`]s and
+    /// [`PropositionalConjunction`]s), and conflicts (also in the form of
+    /// [`PropositionalConjunction`]s).
     struct TestPropagatorConstructor {
-        propagations: Vec<(Predicate, PropositionalConjunction)>,
+        propagations: Vec<(IntegerPredicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
     }
 
@@ -1744,7 +1262,7 @@ mod tests {
         type Propagator = TestPropagator;
 
         fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
+            let propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)> = self
                 .propagations
                 .iter()
                 .enumerate()
@@ -1752,7 +1270,7 @@ mod tests {
                 .map(|(index, variable)| {
                     (
                         context.register(
-                            variable.0.get_domain().unwrap(),
+                            variable.0.get_domain(),
                             DomainEvents::BOUNDS,
                             LocalId::from(index as u32),
                         ),
@@ -1769,6 +1287,7 @@ mod tests {
         }
     }
 
+    /// Todo: this comment is conflicting. Better explain what is going on.
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
     /// return the next conflict.
@@ -1776,8 +1295,9 @@ mod tests {
     /// It is assumed that the propagations do not lead to conflict, if the propagations do lead to
     /// a conflict then this method will panic.
     struct TestPropagator {
-        original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
-        propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
+        #[allow(dead_code)]
+        original_propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)>,
+        propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
     }
 
@@ -1788,48 +1308,43 @@ mod tests {
 
         fn initialise_at_root(
             &mut self,
-            _context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
+            _context: &mut PropagationContextMut,
+        ) -> Result<(), Inconsistency> {
             Ok(())
         }
 
-        fn propagate(
-            &mut self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
+        fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
             while let Some(propagation) = self.propagations.pop() {
-                match propagation.1 {
-                    Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
-                        IntegerPredicate::LowerBound {
-                            domain_id: _,
-                            lower_bound,
-                        } => {
-                            let result =
-                                context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::UpperBound {
-                            domain_id: _,
-                            upper_bound,
-                        } => {
-                            let result =
-                                context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::NotEqual {
-                            domain_id: _,
-                            not_equal_constant,
-                        } => {
-                            let result =
-                                context.remove(&propagation.0, not_equal_constant, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::Equal {
-                            domain_id: _,
-                            equality_constant: _,
-                        } => todo!(),
-                    },
-                    _ => todo!(),
+                let integer_predicate = propagation.1;
+                match integer_predicate {
+                    IntegerPredicate::LowerBound {
+                        domain_id: _,
+                        lower_bound,
+                    } => {
+                        let result =
+                            context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
+                        assert!(result.is_ok())
+                    }
+                    IntegerPredicate::UpperBound {
+                        domain_id: _,
+                        upper_bound,
+                    } => {
+                        let result =
+                            context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
+                        assert!(result.is_ok())
+                    }
+                    IntegerPredicate::NotEqual {
+                        domain_id: _,
+                        not_equal_constant,
+                    } => {
+                        let result =
+                            context.remove(&propagation.0, not_equal_constant, propagation.2);
+                        assert!(result.is_ok())
+                    }
+                    IntegerPredicate::Equal {
+                        domain_id: _,
+                        equality_constant: _,
+                    } => todo!(),
                 }
             }
             if !self.conflicts.is_empty() {
@@ -1841,34 +1356,38 @@ mod tests {
 
         fn debug_propagate_from_scratch(
             &self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
+            _context: &mut PropagationContextMut,
+        ) -> Result<(), Inconsistency> {
+            todo!();
+            // todo: fix this comment
             // This method detects when a debug propagation method is called and it attempts to
             // return the correct result in this case
-            if self.conflicts.is_empty()
-                && self.original_propagations.iter().all(|propagation| {
-                    context.assignments_integer().does_integer_predicate_hold(
-                        propagation
-                            .1
-                            .try_into()
-                            .expect("Expected provided predicate to be integer"),
-                    )
-                })
-            {
-                Err(crate::basic_types::Inconsistency::EmptyDomain)
-            } else {
-                Ok(())
-            }
+            // if self.conflicts.is_empty()
+            // && self.original_propagations.iter().all(|propagation| {
+            // context.assignments_integer().evaluate_predicate(
+            // propagation
+            // .1
+            // .try_into()
+            // .expect("Expected provided predicate to be integer"),
+            // )
+            // })
+            // {
+            // Err(crate::basic_types::Inconsistency::EmptyDomain)
+            // } else {
+            // Ok(())
+            // }
         }
     }
 
-    fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
+    #[allow(dead_code)]
+    fn is_same_core(core1: &[IntegerPredicate], core2: &[IntegerPredicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
+    #[allow(dead_code)]
     fn is_result_the_same(
-        res1: &Result<Vec<Literal>, Literal>,
-        res2: &Result<Vec<Literal>, Literal>,
+        res1: &Result<Vec<IntegerPredicate>, IntegerPredicate>,
+        res2: &Result<Vec<IntegerPredicate>, IntegerPredicate>,
     ) -> bool {
         // if the two results disagree on the outcome, can already return false
         if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
@@ -1879,8 +1398,7 @@ mod tests {
         // if both results are errors, check if the two errors are the same
         else if res1.is_err() {
             println!("err");
-            res1.clone().unwrap_err().get_propositional_variable()
-                == res2.clone().unwrap_err().get_propositional_variable()
+            res1.clone().unwrap_err() == res2.clone().unwrap_err()
         }
         // otherwise the two results are both ok
         else {
@@ -1889,14 +1407,14 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn run_test(
         mut solver: ConstraintSatisfactionSolver,
-        assumptions: Vec<Literal>,
+        assumptions: Vec<IntegerPredicate>,
         expected_flag: CSPSolverExecutionFlag,
-        expected_result: Result<Vec<Literal>, Literal>,
+        expected_result: Result<Vec<IntegerPredicate>, IntegerPredicate>,
     ) {
-        let mut brancher =
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+        let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 
@@ -1911,16 +1429,17 @@ mod tests {
         }
     }
 
-    fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
-
-        let _ = solver.add_clause([lit1, lit2]);
-        let _ = solver.add_clause([lit1, !lit2]);
-        let _ = solver.add_clause([!lit1, lit2]);
-        (solver, vec![lit1, lit2])
-    }
+    // TODO: readd this
+    // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<IntegerPredicate>) {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //
+    // let _ = solver.add_clause([lit1, lit2]);
+    // let _ = solver.add_clause([lit1, !lit2]);
+    // let _ = solver.add_clause([!lit1, lit2]);
+    // (solver, vec![lit1, lit2])
+    // }
 
     /// Warning: This test is potentially flaky due to its dependence on the propagation order of
     /// the clausal propagator, please treat with caution.
@@ -1951,10 +1470,10 @@ mod tests {
 
         // We add the clause that will lead to the conflict in the SAT-solver
         let result = solver.add_clause([
-            solver.get_literal(predicate![variable == 2]),
-            solver.get_literal(predicate![variable == 3]),
-            solver.get_literal(predicate![variable == 4]),
-            solver.get_literal(predicate![variable == 5]),
+            predicate![variable == 2],
+            predicate![variable == 3],
+            predicate![variable == 4],
+            predicate![variable == 5],
         ]);
         assert!(result.is_ok());
 
@@ -1973,237 +1492,225 @@ mod tests {
 
         assert!(solver.state.is_inconsistent());
         assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
-
-        // We check whether the conflict which is returned is the conflict found by the SAT-solver
-        // rather than the one found by the CP solver.
-        assert!(matches!(
-            solver.state.internal_state,
-            CSPSolverStateInternal::Conflict {
-                conflict_info: StoredConflictInfo::Propagation {
-                    reference: _,
-                    literal: _,
-                },
-            }
-        ));
     }
 
-    #[test]
-    fn simple_core_extraction_1_1() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0]]),
-        )
-    }
-
-    #[test]
-    fn simple_core_extraction_1_2() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[1], !lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_1_infeasible() {
-        let (mut solver, lits) = create_instance1();
-        let _ = solver.add_clause([!lits[0], !lits[1]]);
-        run_test(
-            solver,
-            vec![!lits[1], !lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_1_core_before_inconsistency() {
-        let (solver, lits) = create_instance1();
-        run_test(
-            solver,
-            vec![!lits[1], lits[1]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
-        );
-    }
-
-    fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
-
-        let _ = solver.add_clause([lit1, lit2, lit3]);
-        let _ = solver.add_clause([lit1, !lit2, lit3]);
-        (solver, vec![lit1, lit2, lit3])
-    }
-
-    #[test]
-    fn simple_core_extraction_2_1() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], lits[1], !lits[2]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], lits[1], !lits[2], lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
-                                                   * however inconsistency will not be detected
-                                                   * given the order of the assumptions */
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_2_inconsistent_long_assumptions() {
-        let (solver, lits) = create_instance2();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
-            CSPSolverExecutionFlag::Infeasible,
-            Err(lits[0]),
-        );
-    }
-
-    fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
-        let _ = solver.add_clause([lit1, lit2, lit3]);
-        (solver, vec![lit1, lit2, lit3])
-    }
-
-    #[test]
-    fn simple_core_extraction_3_1() {
-        let (solver, lits) = create_instance3();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1], !lits[2]],
-            CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], lits[1], lits[2]]),
-        );
-    }
-
-    #[test]
-    fn simple_core_extraction_3_2() {
-        let (solver, lits) = create_instance3();
-        run_test(
-            solver,
-            vec![!lits[0], !lits[1]],
-            CSPSolverExecutionFlag::Feasible,
-            Ok(vec![]), // will be ignored in the test
-        );
-    }
-
-    #[test]
-    fn negative_upper_bound() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10, None);
-
-        let result = solver.get_literal(predicate![domain_id <= -2]);
-        assert_eq!(result, solver.assignments_propositional.false_literal);
-    }
-
-    #[test]
-    fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(0, 10, None);
-        let result = solver.get_literal(predicate![domain_id >= -2]);
-        assert_eq!(result, solver.assignments_propositional.true_literal);
-    }
-
-    #[test]
-    fn new_domain_with_negative_lower_bound() {
-        let lb = -2;
-        let ub = 2;
-
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let domain_id = solver.create_new_integer_variable(lb, ub, None);
-
-        assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
-
-        assert_eq!(ub, solver.assignments_integer.get_upper_bound(domain_id));
-
-        assert_eq!(
-            solver.assignments_propositional.true_literal,
-            solver.get_literal(predicate![domain_id >= lb])
-        );
-
-        assert_eq!(
-            solver.assignments_propositional.false_literal,
-            solver.get_literal(predicate![domain_id <= lb - 1])
-        );
-
-        assert!(solver
-            .assignments_propositional
-            .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
-
-        assert_eq!(
-            solver.assignments_propositional.false_literal,
-            solver.get_literal(predicate![domain_id == lb - 1])
-        );
-
-        for value in (lb + 1)..ub {
-            let literal = solver.get_literal(predicate![domain_id >= value]);
-
-            assert!(solver
-                .assignments_propositional
-                .is_literal_unassigned(literal));
-
-            assert!(solver
-                .assignments_propositional
-                .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
-        }
-
-        assert_eq!(
-            solver.assignments_propositional.false_literal,
-            solver.get_literal(predicate![domain_id >= ub + 1])
-        );
-        assert_eq!(
-            solver.assignments_propositional.true_literal,
-            solver.get_literal(predicate![domain_id <= ub])
-        );
-        assert!(solver
-            .assignments_propositional
-            .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
-        assert_eq!(
-            solver.assignments_propositional.false_literal,
-            solver.get_literal(predicate![domain_id == ub + 1])
-        );
-    }
-
-    #[test]
-    fn check_correspondence_predicates_creating_new_int_domain() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-
-        let lower_bound = 0;
-        let upper_bound = 10;
-        let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
-
-        for bound in lower_bound + 1..upper_bound {
-            let lower_bound_predicate = predicate![domain_id >= bound];
-            let equality_predicate = predicate![domain_id == bound];
-            for predicate in [lower_bound_predicate, equality_predicate] {
-                let literal = solver.get_literal(predicate);
-                assert!(
-                    solver.variable_literal_mappings.literal_to_predicates[literal]
-                        .contains(&predicate.try_into().unwrap())
-                )
-            }
-        }
-    }
+    // #[test]
+    // fn simple_core_extraction_1_1() {
+    // let (solver, lits) = create_instance1();
+    // run_test(
+    // solver,
+    // vec![!lits[0], !lits[1]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![!lits[0]]),
+    // )
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_1_2() {
+    // let (solver, lits) = create_instance1();
+    // run_test(
+    // solver,
+    // vec![!lits[1], !lits[0]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![!lits[1]]),
+    // );
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_1_infeasible() {
+    // let (mut solver, lits) = create_instance1();
+    // let _ = solver.add_clause([!lits[0], !lits[1]]);
+    // run_test(
+    // solver,
+    // vec![!lits[1], !lits[0]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![]),
+    // );
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_1_core_before_inconsistency() {
+    // let (solver, lits) = create_instance1();
+    // run_test(
+    // solver,
+    // vec![!lits[1], lits[1]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
+    // );
+    // }
+    //
+    // fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //
+    // let _ = solver.add_clause([lit1, lit2, lit3]);
+    // let _ = solver.add_clause([lit1, !lit2, lit3]);
+    // (solver, vec![lit1, lit2, lit3])
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_2_1() {
+    // let (solver, lits) = create_instance2();
+    // run_test(
+    // solver,
+    // vec![!lits[0], lits[1], !lits[2]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![lits[0], !lits[1], lits[2]]),
+    // );
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
+    // let (solver, lits) = create_instance2();
+    // run_test(
+    // solver,
+    // vec![!lits[0], lits[1], !lits[2], lits[0]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
+    // however inconsistency will not be detected
+    // given the order of the assumptions */
+    // );
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_2_inconsistent_long_assumptions() {
+    // let (solver, lits) = create_instance2();
+    // run_test(
+    // solver,
+    // vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Err(lits[0]),
+    // );
+    // }
+    //
+    // fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // let _ = solver.add_clause([lit1, lit2, lit3]);
+    // (solver, vec![lit1, lit2, lit3])
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_3_1() {
+    // let (solver, lits) = create_instance3();
+    // run_test(
+    // solver,
+    // vec![!lits[0], !lits[1], !lits[2]],
+    // CSPSolverExecutionFlag::Infeasible,
+    // Ok(vec![lits[0], lits[1], lits[2]]),
+    // );
+    // }
+    //
+    // #[test]
+    // fn simple_core_extraction_3_2() {
+    // let (solver, lits) = create_instance3();
+    // run_test(
+    // solver,
+    // vec![!lits[0], !lits[1]],
+    // CSPSolverExecutionFlag::Feasible,
+    // Ok(vec![]), // will be ignored in the test
+    // );
+    // }
+    //
+    // #[test]
+    // fn negative_upper_bound() {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let domain_id = solver.create_new_integer_variable(0, 10, None);
+    //
+    // let result = solver.get_literal(predicate![domain_id <= -2]);
+    // assert_eq!(result, solver.assignments_propositional.false_literal);
+    // }
+    //
+    // #[test]
+    // fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let domain_id = solver.create_new_integer_variable(0, 10, None);
+    // let result = solver.get_literal(predicate![domain_id >= -2]);
+    // assert_eq!(result, solver.assignments_propositional.true_literal);
+    // }
+    //
+    // #[test]
+    // fn new_domain_with_negative_lower_bound() {
+    // let lb = -2;
+    // let ub = 2;
+    //
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    // let domain_id = solver.create_new_integer_variable(lb, ub, None);
+    //
+    // assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
+    //
+    // assert_eq!(ub, solver.assignments_integer.get_upper_bound(domain_id));
+    //
+    // assert_eq!(
+    // solver.assignments_propositional.true_literal,
+    // solver.get_literal(predicate![domain_id >= lb])
+    // );
+    //
+    // assert_eq!(
+    // solver.assignments_propositional.false_literal,
+    // solver.get_literal(predicate![domain_id <= lb - 1])
+    // );
+    //
+    // assert!(solver
+    // .assignments_propositional
+    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
+    //
+    // assert_eq!(
+    // solver.assignments_propositional.false_literal,
+    // solver.get_literal(predicate![domain_id == lb - 1])
+    // );
+    //
+    // for value in (lb + 1)..ub {
+    // let literal = solver.get_literal(predicate![domain_id >= value]);
+    //
+    // assert!(solver
+    // .assignments_propositional
+    // .is_literal_unassigned(literal));
+    //
+    // assert!(solver
+    // .assignments_propositional
+    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
+    // }
+    //
+    // assert_eq!(
+    // solver.assignments_propositional.false_literal,
+    // solver.get_literal(predicate![domain_id >= ub + 1])
+    // );
+    // assert_eq!(
+    // solver.assignments_propositional.true_literal,
+    // solver.get_literal(predicate![domain_id <= ub])
+    // );
+    // assert!(solver
+    // .assignments_propositional
+    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
+    // assert_eq!(
+    // solver.assignments_propositional.false_literal,
+    // solver.get_literal(predicate![domain_id == ub + 1])
+    // );
+    // }
+    //
+    // #[test]
+    // fn check_correspondence_predicates_creating_new_int_domain() {
+    // let mut solver = ConstraintSatisfactionSolver::default();
+    //
+    // let lower_bound = 0;
+    // let upper_bound = 10;
+    // let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
+    //
+    // for bound in lower_bound + 1..upper_bound {
+    // let lower_bound_predicate = predicate![domain_id >= bound];
+    // let equality_predicate = predicate![domain_id == bound];
+    // for predicate in [lower_bound_predicate, equality_predicate] {
+    // let literal = solver.get_literal(predicate);
+    // assert!(
+    // solver.variable_literal_mappings.literal_to_predicates[literal]
+    // .contains(&predicate)
+    // )
+    // }
+    // }
+    // }
 }

@@ -3,7 +3,7 @@ use std::cmp::max;
 use std::cmp::min;
 use std::rc::Rc;
 
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -88,7 +88,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
     for ElementPropagator<VX, VI, VE>
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
             // At this point, we should post x_i = e as a new constraint, but that's not an option
@@ -189,7 +189,10 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         "Element"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         // Ensure index is non-negative
         context.set_lower_bound(&self.index, 0, conjunction!())?;
         // Ensure index <= no. of x_j
@@ -201,7 +204,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         // Close to duplicate of `propagate` for now, without saving reason stuff...
         if context.is_fixed(&self.index) {
             let i = context.lower_bound(&self.index);
@@ -251,7 +254,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn cocp_m4co_example() {
@@ -296,7 +299,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let index_reason = solver.get_reason_int(predicate![index != 3].try_into().unwrap());
+        let index_reason = solver.get_reason_int(predicate![index != 3]);
         // reason for index removal 3 is that `x_3 != e`
         assert_eq!(
             *index_reason,
@@ -305,7 +308,7 @@ mod tests {
             )
         );
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs != 6].try_into().unwrap());
+        let rhs_reason = solver.get_reason_int(predicate![rhs != 6]);
         // reason for rhs removal 6 is that for all valid indices i `x_i != 6`
         assert_eq!(
             *rhs_reason,
@@ -332,15 +335,15 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("no empty domains");
 
-        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9].try_into().unwrap());
+        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9]);
         // reason for x_1 <= 9 is that `x_1 == e` and `e <= 9`
         assert_eq!(*x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
 
-        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8].try_into().unwrap());
+        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8]);
         // reason for x_1 removal 8 is that `x_1 == e` and `e != 8`
         assert_eq!(*x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7].try_into().unwrap());
+        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7]);
         // reason for `rhs >= 7` is that `x_1 >= 7`
         assert_eq!(*rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
     }

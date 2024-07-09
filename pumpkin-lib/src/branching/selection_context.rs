@@ -9,10 +9,7 @@ use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::PropositionalVariable;
-use crate::engine::variables::PropositionalVariableGeneratorIterator;
 use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
 
 /// The context provided to the [`Brancher`],
 /// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods
@@ -20,19 +17,13 @@ use crate::engine::AssignmentsPropositional;
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
-    assignments_propositional: &'a AssignmentsPropositional,
     random_generator: &'a mut dyn Random,
 }
 
 impl<'a> SelectionContext<'a> {
-    pub fn new(
-        assignments_integer: &'a AssignmentsInteger,
-        assignments_propositional: &'a AssignmentsPropositional,
-        rng: &'a mut dyn Random,
-    ) -> Self {
+    pub fn new(assignments_integer: &'a AssignmentsInteger, rng: &'a mut dyn Random) -> Self {
         SelectionContext {
             assignments_integer,
-            assignments_propositional,
             random_generator: rng,
         }
     }
@@ -71,112 +62,20 @@ impl<'a> SelectionContext<'a> {
         self.lower_bound(var.clone()) == self.upper_bound(var)
     }
 
-    /// Determines whether the provided [`PropositionalVariable`] is assigned.
-    pub fn is_propositional_variable_fixed(&self, var: PropositionalVariable) -> bool {
-        self.assignments_propositional.is_variable_assigned(var)
-    }
-
-    /// Returns whether the provided [`PropositionalVariable`] is assigned to true.
-    pub fn is_propositional_variable_true(&self, var: PropositionalVariable) -> bool {
-        self.assignments_propositional
-            .is_variable_assigned_true(var)
-    }
-
     /// Returns all currently defined [`DomainId`] in the provided [`AssignmentsInteger`].
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         self.assignments_integer.get_domains()
     }
 
-    /// Returns all currently defined [`PropositionalVariable`]s in the provided
-    /// [`AssignmentsPropositional`].
-    pub fn get_propositional_variables(&self) -> PropositionalVariableGeneratorIterator {
-        self.assignments_propositional.get_propositional_variables()
-    }
-
     #[cfg(test)]
-    /// A method for creating and returning `num_integer_variables` [`DomainId`]s and
-    /// `num_prop_variables` [`PropositionalVariable`]s in addition to initialising (and
-    /// returning) the corresponding [`AssignmentsInteger`] and [`AssignmentsPropositional`].
-    pub fn create_for_testing(
-        num_integer_variables: usize,
-        num_propositional_variables: usize,
-        domains: Option<Vec<(i32, i32)>>,
-    ) -> (AssignmentsInteger, AssignmentsPropositional) {
-        use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
-        use crate::engine::variables::Literal;
-        use crate::engine::VariableLiteralMappings;
-        use crate::engine::WatchListCP;
-        use crate::engine::WatchListPropositional;
-        use crate::propagators::clausal::BasicClausalPropagator;
-        use crate::pumpkin_assert_simple;
-
-        pumpkin_assert_simple!({
-            if let Some(domains) = domains.as_ref() {
-                num_integer_variables == domains.len()
-            } else {
-                true
-            }
-        });
-
-        let mut mediator = VariableLiteralMappings::default();
-        let mut clausal_propagator = BasicClausalPropagator::default();
-        let mut assignments_propositional = AssignmentsPropositional::default();
+    /// Create an ['AssignmentsInteger'] with the variables having the input bounds.
+    pub fn create_for_testing(domains: Vec<(i32, i32)>) -> AssignmentsInteger {
         let mut assignments_integer = AssignmentsInteger::default();
-        let mut clause_allocator = ClauseAllocator::default();
-        let mut watch_list_propositional = WatchListPropositional::default();
-        let mut watch_list_cp = WatchListCP::default();
 
-        let root_variable = mediator.create_new_propositional_variable(
-            &mut watch_list_propositional,
-            &mut clausal_propagator,
-            &mut assignments_propositional,
-        );
-        let true_literal = Literal::new(root_variable, true);
-
-        assignments_propositional.true_literal = true_literal;
-
-        assignments_propositional.false_literal = !true_literal;
-
-        assignments_propositional.enqueue_decision_literal(true_literal);
-
-        if let Some(domains) = domains.as_ref() {
-            for (_, (lower_bound, upper_bound)) in (0..num_integer_variables).zip(domains) {
-                let _ = mediator.create_new_domain(
-                    *lower_bound,
-                    *upper_bound,
-                    &mut assignments_integer,
-                    &mut watch_list_cp,
-                    &mut watch_list_propositional,
-                    &mut clausal_propagator,
-                    &mut assignments_propositional,
-                    &mut clause_allocator,
-                );
-            }
-        } else {
-            for _ in 0..num_integer_variables {
-                let _ = mediator.create_new_domain(
-                    0,
-                    10,
-                    &mut assignments_integer,
-                    &mut watch_list_cp,
-                    &mut watch_list_propositional,
-                    &mut clausal_propagator,
-                    &mut assignments_propositional,
-                    &mut clause_allocator,
-                );
-            }
+        for (lower_bound, upper_bound) in domains {
+            _ = assignments_integer.grow(lower_bound, upper_bound);
         }
 
-        for _ in 0..(num_propositional_variables + 1) {
-            // We create an additional variable to ensure that the generator returns the correct
-            // variables
-            let _ = mediator.create_new_propositional_variable(
-                &mut watch_list_propositional,
-                &mut clausal_propagator,
-                &mut assignments_propositional,
-            );
-        }
-
-        (assignments_integer, assignments_propositional)
+        assignments_integer
     }
 }

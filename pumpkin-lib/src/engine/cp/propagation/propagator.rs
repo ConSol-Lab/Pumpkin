@@ -1,6 +1,4 @@
-#[cfg(doc)]
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::local_id::LocalId;
@@ -10,11 +8,8 @@ use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::PropagatorConstructor;
 #[cfg(doc)]
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::BooleanDomainEvent;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::propagators::clausal::BasicClausalPropagator;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
@@ -48,7 +43,7 @@ pub trait Propagator {
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP;
+    ) -> Result<(), Inconsistency>;
 
     /// Propagate method that will be called during search (e.g. in
     /// [`ConstraintSatisfactionSolver::solve`]).
@@ -59,7 +54,7 @@ pub trait Propagator {
     /// [`Result::Ok`], otherwise it should return a [`Result::Err`] with an [`Inconsistency`] which
     /// contains the reason for the failure; either because a propagation caused an
     /// an empty domain ([`Inconsistency::EmptyDomain`]) or because the logic of the propagator
-    /// found the current state to be inconsistent ([`Inconsistency::Other`]).
+    /// found the current state to be inconsistent ([`Inconsistency::Conflict`]).
     ///
     /// Note that the failure (explanation) is given as a conjunction of predicates that lead to the
     /// failure
@@ -68,7 +63,7 @@ pub trait Propagator {
     /// again by the solver until no further propagations happen.
     ///
     /// By default, this function calls [`Propagator::debug_propagate_from_scratch`].
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         self.debug_propagate_from_scratch(context)
     }
 
@@ -93,20 +88,6 @@ pub trait Propagator {
         EnqueueDecision::Enqueue
     }
 
-    /// Notifies the propagator when the domain of a literal has changed (i.e. it is assigned). See
-    /// [`Propagator::notify`] for a more general explanation.
-    ///
-    /// By default the propagator is always enqueued for every event. Not all propagators will
-    /// benefit from implementing this, so it is not required to do so.
-    fn notify_literal(
-        &mut self,
-        _context: &mut PropagationContextMut,
-        _local_id: LocalId,
-        _event: BooleanDomainEvent,
-    ) -> EnqueueDecision {
-        EnqueueDecision::Enqueue
-    }
-
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.
     ///
@@ -115,11 +96,7 @@ pub trait Propagator {
 
     /// Returns the priority of the propagator represented as an integer. Lower values mean higher
     /// priority and the priority determines the order in which propagators will be asked to
-    /// propagate.
-    ///
-    /// In other words, after the [`BasicClausalPropagator`] has propagated, propagators
-    /// with lower priority values are called before those with higher priority. It is custom
-    /// for simpler propagators to have lower priority values
+    /// propagate. It is custom for simpler propagators to have lower priority values.
     ///
     /// By default the priority is set to 3. It is expected that propagator implementations would
     /// set this value to some appropriate value.
@@ -134,7 +111,10 @@ pub trait Propagator {
     /// the [`Propagator::propagate`] method.
     ///
     /// By default this function calls [`Propagator::propagate`] at the root level.
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         self.propagate(context)
     }
 

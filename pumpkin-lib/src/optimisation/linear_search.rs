@@ -6,24 +6,19 @@ use crate::basic_types::Function;
 use crate::basic_types::Solution;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
-use crate::encoders::PseudoBooleanConstraintEncoder;
-use crate::encoders::PseudoBooleanEncoding;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::optimisation::log_statistics_with_objective;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Debug, Copy, Clone)]
-pub struct LinearSearch {
-    upper_bound_encoding: PseudoBooleanEncoding,
-}
+#[derive(Debug, Copy, Clone, Default)]
+pub struct LinearSearch {}
 
 impl LinearSearch {
-    pub fn new(upper_bound_encoding: PseudoBooleanEncoding) -> LinearSearch {
-        LinearSearch {
-            upper_bound_encoding,
-        }
+    pub fn new() -> LinearSearch {
+        LinearSearch {}
     }
 
     pub fn solve(
@@ -39,6 +34,11 @@ impl LinearSearch {
             "Linear search assumes the solver contains a feasible solution."
         );
 
+        pumpkin_assert_simple!(
+            objective_function.get_terms().len() == 1,
+            "Currently we assume the objective is composed of a single integer."
+        );
+
         #[allow(deprecated)]
         let mut best_solution: Solution = csp_solver.get_solution_reference().into();
 
@@ -52,13 +52,6 @@ impl LinearSearch {
             process_time.elapsed().as_secs(),
             process_time.elapsed().as_millis(),
         );
-        let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
-            objective_function,
-            csp_solver,
-            self.upper_bound_encoding,
-        );
-
-        let mut first_iteration = true;
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
@@ -69,26 +62,29 @@ impl LinearSearch {
                 };
             }
 
+            // Record the internal value of the objective.
+            // Important to do this before restoring at the root.
+            assert!(objective_function.get_terms().len() == 1);
+            let objective_variable = *objective_function.get_terms().next().unwrap().0;
+            let internal_objective_value = csp_solver
+                .get_assigned_integer_value(&objective_variable)
+                .expect("The objective must be assigned.");
+
             csp_solver.restore_state_at_root(&mut brancher);
 
-            let encoding_status =
-                upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, csp_solver);
+            // Add constraint on the upper bound of the objective function.
+            // todo: check if this is okay, or whether it should go through the view!
+            let objective_predicate = IntegerPredicate::UpperBound {
+                domain_id: objective_variable,
+                upper_bound: internal_objective_value - 1,
+            };
+            let obj_status = csp_solver
+                .assignments_integer
+                .post_integer_predicate(objective_predicate, None);
 
-            if first_iteration {
-                #[allow(deprecated)]
-                brancher.on_encoding_objective_function(
-                    &csp_solver
-                        .get_propositional_assignments()
-                        .get_propositional_variables()
-                        .collect::<Vec<_>>(),
-                );
-
-                first_iteration = false;
-            }
-
-            // in case some cases infeasibility can be detected while constraining the upper bound
-            //  meaning the current best solution is optimal
-            if encoding_status.is_err() {
+            // In case some cases, infeasibility can be detected while constraining the upper bound,
+            // meaning the current best solution is optimal.
+            if obj_status.is_err() {
                 log_statistics_with_objective(csp_solver, best_objective_value as i64);
                 return OptimisationResult::Optimal {
                     solution: best_solution,
@@ -96,6 +92,8 @@ impl LinearSearch {
                 };
             }
 
+            // todo: double check this, it seems that it does not get the full solution,
+            // but only root level values.
             #[allow(deprecated)]
             brancher.on_solution(csp_solver.get_solution_reference());
 

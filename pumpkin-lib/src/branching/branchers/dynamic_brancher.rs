@@ -3,10 +3,8 @@ use std::fmt::Debug;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
 /// sequentially applies [`Brancher::next_decision`] until all of them return [`None`] in which case
@@ -47,7 +45,7 @@ impl DynamicBrancher {
 }
 
 impl Brancher for DynamicBrancher {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
         loop {
             if self.brancher_index >= self.branchers.len() {
                 return None;
@@ -70,34 +68,16 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_conflict());
     }
 
-    fn on_unassign_literal(&mut self, literal: Literal) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_unassign_literal(literal));
-    }
-
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_unassign_integer(variable, value));
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_appearance_in_conflict_literal(literal));
-    }
-
     fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_appearance_in_conflict_integer(variable));
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_encoding_objective_function(all_variables));
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

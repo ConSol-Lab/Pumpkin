@@ -40,8 +40,7 @@ fn main() {
     let _ = solver.all_different(diag1);
     let _ = solver.all_different(diag2);
 
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
     match solver.solve(&mut Indefinite, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));

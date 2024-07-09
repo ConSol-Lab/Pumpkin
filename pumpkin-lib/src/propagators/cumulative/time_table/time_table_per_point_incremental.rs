@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use super::time_table_util::should_enqueue;
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -101,7 +101,10 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
     /// simply calculate it from scratch.
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
-    fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn update_time_table(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         if self.time_table_outdated {
             // The time-table needs to be recalculated from scratch anyways so we perform the
             // calculation now
@@ -155,7 +158,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
                 context,
@@ -229,7 +232,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -251,7 +257,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         // Use the same debug propagator from `TimeTablePerPoint`
         TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
             context,
@@ -262,12 +268,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
-    use crate::engine::predicates::predicate::Predicate;
+    use crate::engine::predicates::integer_predicate::IntegerPredicate;
     use crate::engine::propagation::EnqueueDecision;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::TimeTablePerPointIncremental;
@@ -328,18 +333,24 @@ mod tests {
             1,
             false,
         ));
+
         assert!(match result {
-            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 <= 1),
-                    predicate!(s2 >= 1),
-                ];
-                expected
-                    .iter()
-                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                    && x.iter().all(|y| expected.contains(y))
+            Err(e) => {
+                match e {
+                    Inconsistency::EmptyDomain => false,
+                    Inconsistency::Conflict { conflict_nogood: x } => {
+                        let expected = [
+                            predicate!(s1 <= 1),
+                            predicate!(s1 >= 1),
+                            predicate!(s2 <= 1),
+                            predicate!(s2 >= 1),
+                        ];
+                        expected
+                            .iter()
+                            .all(|y| x.iter().collect::<Vec<&IntegerPredicate>>().contains(&y))
+                            && x.iter().all(|y| expected.contains(y))
+                    }
+                }
             }
             _ => false,
         });
@@ -507,9 +518,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 6),
@@ -701,9 +710,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 >= 2),
@@ -755,9 +762,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),

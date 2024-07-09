@@ -1,4 +1,4 @@
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -55,7 +55,7 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         perform_propagation(context, &self.a, &self.b, &self.c)
     }
 
@@ -69,14 +69,17 @@ where
         "IntTimes"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         perform_propagation(context, &self.a, &self.b, &self.c)
     }
 }
@@ -86,7 +89,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     a: &VA,
     b: &VB,
     c: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     // First we propagate the signs
     propagate_signs(context, a, b, c)?;
 
@@ -216,7 +219,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     a: &VA,
     b: &VB,
     c: &VC,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     let a_min = context.lower_bound(a);
     let a_max = context.upper_bound(a);
     let b_min = context.lower_bound(b);
@@ -306,7 +309,7 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::predicate;
 
     #[test]
@@ -329,10 +332,10 @@ mod tests {
         assert_eq!(0, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![c >= 0].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![c >= 0]);
         assert_eq!(conjunction!([a >= 0] & [b >= 0]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![c <= 12].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![c <= 12]);
         assert_eq!(
             conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
             *reason_ub
@@ -359,10 +362,10 @@ mod tests {
         assert_eq!(2, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![b >= 1].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![b >= 1]);
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![b <= 6].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![b <= 6]);
         assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 
@@ -386,10 +389,10 @@ mod tests {
         assert_eq!(3, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![a >= 1].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![a >= 1]);
         assert_eq!(conjunction!([b >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![a <= 4].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![a <= 4]);
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 }

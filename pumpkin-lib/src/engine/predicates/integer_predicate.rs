@@ -1,6 +1,3 @@
-use thiserror::Error;
-
-use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
 /// Representation of a domain operation, it can either be in the form of atomic constraints over
@@ -113,21 +110,6 @@ impl std::ops::Not for IntegerPredicate {
                 domain_id,
                 not_equal_constant: equality_constant,
             },
-        }
-    }
-}
-
-#[derive(Debug, Error, Copy, Clone)]
-#[error("Attempt to transform non-integer predicate to integer predicate")]
-pub struct IntegerPredicateConversionError;
-
-impl TryFrom<Predicate> for IntegerPredicate {
-    type Error = IntegerPredicateConversionError;
-
-    fn try_from(value: Predicate) -> Result<Self, Self::Error> {
-        match value {
-            Predicate::IntegerPredicate(integer_predicate) => Ok(integer_predicate),
-            _ => Err(IntegerPredicateConversionError),
         }
     }
 }

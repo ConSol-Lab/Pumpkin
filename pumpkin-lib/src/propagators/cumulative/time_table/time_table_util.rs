@@ -8,10 +8,8 @@ use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
-#[cfg(doc)]
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropagationStatusCP;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -291,7 +289,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
-) -> PropagationStatusCP {
+) -> Result<(), Inconsistency> {
     pumpkin_assert_extreme!(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
         "The provided time-table did not adhere to the invariants"
@@ -378,7 +376,7 @@ fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
-    explanation: Rc<Vec<Predicate>>,
+    explanation: Rc<Vec<IntegerPredicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
@@ -417,7 +415,7 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
-    explanation: Rc<Vec<Predicate>>,
+    explanation: Rc<Vec<IntegerPredicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
         upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
@@ -465,7 +463,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
-    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
+    profile_explanation: &mut OnceCell<Rc<Vec<IntegerPredicate>>>,
 ) -> Result<(), EmptyDomain> {
     if profile.height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
@@ -545,8 +543,8 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
 fn create_profile_explanation<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     profile: &ResourceProfile<Var>,
-    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
-) -> Rc<Vec<Predicate>> {
+    profile_explanation: &mut OnceCell<Rc<Vec<IntegerPredicate>>>,
+) -> Rc<Vec<IntegerPredicate>> {
     Rc::clone(profile_explanation.get_or_init(|| {
         Rc::new(
             profile
@@ -564,7 +562,7 @@ fn create_profile_explanation<Var: IntegerVariable + 'static>(
                         ),
                     ]
                 })
-                .collect::<Vec<Predicate>>(),
+                .collect::<Vec<IntegerPredicate>>(),
         )
     }))
 }

@@ -1,4 +1,4 @@
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -42,7 +42,7 @@ pub struct AbsoluteValuePropagator<VA, VB> {
 }
 
 impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         self.debug_propagate_from_scratch(context)
     }
 
@@ -56,7 +56,10 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
         "IntAbs"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.set_lower_bound(&self.absolute, 0, conjunction!())?;
@@ -66,7 +69,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
         //   the bounds of `signed` can be propagated to `absolute` (taking care of swapping bounds
@@ -133,7 +136,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn absolute_bounds_are_propagated_at_initialise() {

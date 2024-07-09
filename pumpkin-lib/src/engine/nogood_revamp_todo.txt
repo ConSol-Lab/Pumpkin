@@ -85,8 +85,123 @@ NOTIFY THE NOGOOD!
 
 todo: fix Booleans, these could be wrappers around IntegerVariable 0-1. Conceptually different, but under the hood could be the same. Also for notifying propagators?
 
-
-
 look at the Domain representation, and see what was the problem with some hacky thing, like at trail pos 0 we have some bound?
 
 Remove PropagationStatusCP, or rename.
+
+* What is the point of the OpaqueDomainEvent?
+
+++
+
+self.is_domain_assigned(domain_id)
+
+dismantling the solver:
+
++ Removed the propositional representation
+
+[need to make sure to only use a CP representation for the branchers]
+
+rename watch_list_cp, propagator_cp...remove 'cp'. Also watch_list within the nogood is called watch_list, could distinguish the two watch lists by name.
+
+    fn peek_next_assumption_predicate(&self) -> Option<IntegerPredicate> { -> can be done in a single line!!
+
+
+  making a decision returns a CSPSolverExecutionFlag -> this also has a timeout??
+
+  removed virtual binary clauses -> we actually never got to use it.
+
+  PropositionalConjunction -> Vec<IntegerPredicate>, there is a partialEq, do we want this? Or do we just make a new nogood vector? Instead of "PropositionalConjunction", we call it nogood?
+
+  log nogoods?
+
+  check process_learned_clause, and see if I am missing something
+
+  predicates folder, look at mod, maybe we can remove, not sure
+
+  StoredConflictInfo -> rename into conflict info?
+
+  debug_propagator_reason -> not used anywhere?
+
+  HasAssignments -> assignments_integer, can rename? Do we need this anymore?
+
+LearningOptions? I removed it.
+
+  in general need to go through code and fix things. E.g., debug_helper, propagator code.
+
+  is a nogood actually a propositional conjunction?
+
+  pub type PropagationStatusCP = Result<(), Inconsistency>;
+
+  could have special functions for BooleanDomainId? Probably need to...?
+
+
+
+
+  #[derive(Debug, Error, Copy, Clone)]
+#[error("Attempt to transform non-integer predicate to integer predicate")]
+pub struct IntegerPredicateConversionError;
+
+
+Removed RPEngine and proof related things from the solve
+
+removed VSIDS
+removed solution guided search
+phase saving
+
+
+removed domain events boolean, can think about this
+
+
+removed maxsat? There was an Instance in basic_types with a checker with functions that are allow dead code.
+
+removed difference logic
+
+Notify for BooleanDomain -> any, will notify for ==, and >=?
+
+self.assignments_integer.num_trail_entries() -> this is used for the restart strategy, but this makes no sense.
+
+check the impl blocks in the CSP solver, see if they still make sense
+
+SAT options are not used anymore?
+
+revisit encodings, not sure if it is done properly?
+
+single_integer_encoding -> readd tests
+
+
+disabled MaxSAT reading -> need to rethink how to do this, for example, if a literal is in the objective with both positive and negative polarity
+
+Removed encoders!!
+
+strenthen upper bound in linear search, do we need to go through the view to place an upper bound on the objective?
+
+
+#[derive(Clone, Copy, Debug)]
+/// A struct containing a literal, weight and (optionally) the bound which the literal represents
+pub struct WeightedLiteral {
+    pub variable: BooleanDomainId,
+    pub weight: u64,
+    /// The bound which the [`WeightedLiteral::literal`] represents (e.g. [x >= 5] would
+    /// have bound Some(5))
+    pub bound: Option<i32>,
+}
+
+todo: in the compile context, I replaced Literals with BooleanDomainId -> this assumes that the literals are all positive!
+
+deleted dimacs parsing
+
+post constraints...
+
+constant_bool_true
+
+Register returns a variable -> why have a return variable? I suppose we can remove the return value now.
+search for "propagator variable", fix comment
+
+linear_less_or_equal -> when registering, it does not take into account the return value! It still uses its own variable. Which is okay now but may change later. Same with linear_not_equal.
+
+removed disjunctive scheduling example
+
+branching.mod example ruined
+predicates.mod ruined
+
+//! Structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)). -> fix this.

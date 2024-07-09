@@ -62,9 +62,8 @@
 //!   efficient, but has an important role for testing. Now is a good time to write tests which use
 //!   the [`TestSolver`]. **We strongly discourage skipping this step**.
 //!     * For example, see the tests in [`crate::propagators::arithmetic::absolute_value`].
-//! 4. Implement [`Propagator::notify`] and [`Propagator::notify_literal`]. Depending on the
-//!    concrete
-//!   propagator, this may only make sense when done together with the next step.
+//! 4. Implement [`Propagator::notify`]. Depending on the concrete propagator, this may only make
+//!    sense when done together with the next step.
 //! 5. Implement the remaining functions, i.e., [`Propagator::propagate`],
 //!   [`Propagator::synchronise`], and [`Propagator::initialise_at_root`]. These are all
 //!   interdependent.
@@ -104,7 +103,7 @@ pub(crate) use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 
 #[cfg(doc)]
-use crate::engine::test_helper::TestSolver;
+use crate::engine::test_solver::TestSolver;
 #[cfg(doc)]
 use crate::engine::variables::IntegerVariable;
 #[cfg(doc)]

@@ -5,7 +5,6 @@ use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -138,16 +137,19 @@ impl AssignmentsInteger {
         self.domains[domain_id].initial_upper_bound()
     }
 
-    pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
-        pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
-        self.domains[domain_id].lower_bound()
+    pub fn get_assigned_value(&self, domain_id: DomainId) -> Option<i32> {
+        if self.is_domain_assigned(domain_id) {
+            Some(self.domains[domain_id].lower_bound())
+        } else {
+            None
+        }
     }
 
     pub fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
         self.domains[domain_id].domain_iterator()
     }
 
-    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
+    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<IntegerPredicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
         // if fixed, this is just one predicate
@@ -372,19 +374,16 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
-    /// Apply the given [`Predicate`] to the integer domains.
+    /// Apply the given [`IntegerPredicate`] to the integer domains.
     ///
-    /// In case where the [`Predicate`] is already true, this does nothing. If instead applying the
-    /// [`Predicate`] leads to an [`EmptyDomain`], the error variant is returned.
-    pub fn apply_integer_predicate(
+    /// In case where the [`IntegerPredicate`] is already true, this does nothing. If instead
+    /// applying the [`IntegerPredicate`] leads to an [`EmptyDomain`], the error variant is
+    /// returned.
+    pub fn post_integer_predicate(
         &mut self,
         predicate: IntegerPredicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        if self.does_integer_predicate_hold(predicate) {
-            return Ok(());
-        }
-
         match predicate {
             IntegerPredicate::LowerBound {
                 domain_id,
@@ -405,26 +404,56 @@ impl AssignmentsInteger {
         }
     }
 
-    /// Determines whether the provided [`Predicate`] holds in the current state of the
-    /// [`AssignmentsInteger`].
-    pub fn does_integer_predicate_hold(&self, predicate: IntegerPredicate) -> bool {
+    /// Determines whether the provided [`IntegerPredicate`] holds in the current state of the
+    /// [`AssignmentsInteger`]. In case the predicate is not assigned yet (neither true nor false),
+    /// returns None.
+    pub fn evaluate_predicate(&self, predicate: IntegerPredicate) -> Option<bool> {
         match predicate {
             IntegerPredicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => self.get_lower_bound(domain_id) >= lower_bound,
+            } => {
+                if self.get_lower_bound(domain_id) >= lower_bound {
+                    Some(true)
+                } else if self.get_upper_bound(domain_id) < lower_bound {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
             IntegerPredicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => self.get_upper_bound(domain_id) <= upper_bound,
+            } => {
+                if self.get_upper_bound(domain_id) <= upper_bound {
+                    Some(true)
+                } else if self.get_lower_bound(domain_id) > upper_bound {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
             IntegerPredicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => !self.is_value_in_domain(domain_id, not_equal_constant),
+            } => {
+                if !self.is_value_in_domain(domain_id, not_equal_constant) {
+                    Some(true)
+                } else if let Some(assigned_value) = self.get_assigned_value(domain_id) {
+                    // Previous branch concluded the value is not in the domain, so if the variable
+                    // is assigned, then it is assigned to the not equals value.
+                    pumpkin_assert_simple!(assigned_value == not_equal_constant);
+                    Some(false)
+                } else {
+                    None
+                }
+            }
             IntegerPredicate::Equal {
                 domain_id,
                 equality_constant,
-            } => self.is_domain_assigned_to_value(domain_id, equality_constant),
+            } => self
+                .get_assigned_value(domain_id)
+                .map(|assigned_value| assigned_value == equality_constant),
         }
     }
 
@@ -1178,7 +1207,7 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, 0, 1, &mut events);
+        domain.remove_value(1, 1, 2, &mut events);
 
         assert!(!domain.contains(2));
     }
@@ -1189,8 +1218,8 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, 0, 1, &mut events);
-        domain.remove_value(1, 0, 2, &mut events);
+        domain.remove_value(1, 1, 1, &mut events);
+        domain.remove_value(1, 1, 2, &mut events);
 
         assert_eq!(3, domain.lower_bound());
     }
@@ -1224,8 +1253,8 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
-        domain.remove_value(2, 0, 1, &mut events);
-        domain.set_lower_bound(2, 0, 2, &mut events);
+        domain.remove_value(1, 1, 1, &mut events);
+        domain.set_lower_bound(2, 1, 2, &mut events);
 
         assert_eq!(3, domain.lower_bound());
     }
@@ -1274,7 +1303,7 @@ mod tests {
 
         let domain_id = DomainId::new(0);
         let mut domain = IntegerDomain::new(0, 100, domain_id);
-        domain.set_lower_bound(2, 0, 1, &mut events);
+        domain.set_lower_bound(1, 0, 1, &mut events);
         domain.set_lower_bound(5, 1, 2, &mut events);
         domain.set_lower_bound(10, 2, 10, &mut events);
         domain.set_lower_bound(20, 5, 50, &mut events);
@@ -1410,7 +1439,7 @@ mod tests {
         // decision level 1
         assignment.increase_decision_level();
         assignment
-            .apply_integer_predicate(
+            .post_integer_predicate(
                 IntegerPredicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 2,
@@ -1419,7 +1448,7 @@ mod tests {
             )
             .expect("");
         assignment
-            .apply_integer_predicate(
+            .post_integer_predicate(
                 IntegerPredicate::LowerBound {
                     domain_id: domain_id2,
                     lower_bound: 25,
@@ -1431,7 +1460,7 @@ mod tests {
         // decision level 2
         assignment.increase_decision_level();
         assignment
-            .apply_integer_predicate(
+            .post_integer_predicate(
                 IntegerPredicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 5,
@@ -1443,7 +1472,7 @@ mod tests {
         // decision level 3
         assignment.increase_decision_level();
         assignment
-            .apply_integer_predicate(
+            .post_integer_predicate(
                 IntegerPredicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 7,
@@ -1543,7 +1572,7 @@ mod tests {
         events.grow();
         let domain_id = DomainId::new(0);
         let mut domain = IntegerDomain::new(0, 5, domain_id);
-        domain.remove_value(2, 0, 1, &mut events);
+        domain.remove_value(1, 0, 5, &mut events);
         domain.remove_value(4, 0, 10, &mut events);
 
         let mut iter = domain.domain_iterator();
@@ -1579,7 +1608,7 @@ mod tests {
         let mut domain = IntegerDomain::new(0, 10, domain_id);
         domain.remove_value(7, 0, 1, &mut events);
         domain.remove_value(9, 0, 5, &mut events);
-        domain.remove_value(2, 0, 7, &mut events);
+        domain.remove_value(7, 0, 10, &mut events);
         domain.set_upper_bound(6, 1, 10, &mut events);
 
         let mut iter = domain.domain_iterator();
@@ -1590,5 +1619,147 @@ mod tests {
         assert_eq!(iter.next(), Some(5));
         assert_eq!(iter.next(), Some(6));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn various_tests_evaluate_predicate() {
+        let mut assignments = AssignmentsInteger::default();
+        // Create the domain {0, 1, 3, 4, 5, 6}
+        let domain_id = assignments.grow(0, 10);
+        let _ = assignments.remove_value_from_domain(domain_id, 7, None);
+        let _ = assignments.remove_value_from_domain(domain_id, 9, None);
+        let _ = assignments.remove_value_from_domain(domain_id, 2, None);
+        let _ = assignments.tighten_upper_bound(domain_id, 6, None);
+
+        let lb_predicate = |lower_bound: i32| -> IntegerPredicate {
+            IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound,
+            }
+        };
+
+        let ub_predicate = |upper_bound: i32| -> IntegerPredicate {
+            IntegerPredicate::UpperBound {
+                domain_id,
+                upper_bound,
+            }
+        };
+
+        let eq_predicate = |equality_constant: i32| -> IntegerPredicate {
+            IntegerPredicate::Equal {
+                domain_id,
+                equality_constant,
+            }
+        };
+
+        let neq_predicate = |not_equal_constant: i32| -> IntegerPredicate {
+            IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            }
+        };
+
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(0))
+            .is_some_and(|x| x));
+        assert!(assignments.evaluate_predicate(lb_predicate(1)).is_none());
+        assert!(assignments.evaluate_predicate(lb_predicate(2)).is_none());
+        assert!(assignments.evaluate_predicate(lb_predicate(3)).is_none());
+        assert!(assignments.evaluate_predicate(lb_predicate(4)).is_none());
+        assert!(assignments.evaluate_predicate(lb_predicate(5)).is_none());
+        assert!(assignments.evaluate_predicate(lb_predicate(6)).is_none());
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(7))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(8))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(9))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(10))
+            .is_some_and(|x| !x));
+
+        assert!(assignments.evaluate_predicate(ub_predicate(0)).is_none());
+        assert!(assignments.evaluate_predicate(ub_predicate(1)).is_none());
+        assert!(assignments.evaluate_predicate(ub_predicate(2)).is_none());
+        assert!(assignments.evaluate_predicate(ub_predicate(3)).is_none());
+        assert!(assignments.evaluate_predicate(ub_predicate(4)).is_none());
+        assert!(assignments.evaluate_predicate(ub_predicate(5)).is_none());
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(6))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(7))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(8))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(9))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(10))
+            .is_some_and(|x| x));
+
+        assert!(assignments.evaluate_predicate(neq_predicate(0)).is_none());
+        assert!(assignments.evaluate_predicate(neq_predicate(1)).is_none());
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(2))
+            .is_some_and(|x| x));
+        assert!(assignments.evaluate_predicate(neq_predicate(3)).is_none());
+        assert!(assignments.evaluate_predicate(neq_predicate(4)).is_none());
+        assert!(assignments.evaluate_predicate(neq_predicate(5)).is_none());
+        assert!(assignments.evaluate_predicate(neq_predicate(6)).is_none());
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(7))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(8))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(9))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(10))
+            .is_some_and(|x| x));
+
+        assert!(assignments.evaluate_predicate(eq_predicate(0)).is_none());
+        assert!(assignments.evaluate_predicate(eq_predicate(1)).is_none());
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(2))
+            .is_some_and(|x| !x));
+        assert!(assignments.evaluate_predicate(eq_predicate(3)).is_none());
+        assert!(assignments.evaluate_predicate(eq_predicate(4)).is_none());
+        assert!(assignments.evaluate_predicate(eq_predicate(5)).is_none());
+        assert!(assignments.evaluate_predicate(eq_predicate(6)).is_none());
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(7))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(8))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(9))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(10))
+            .is_some_and(|x| !x));
+
+        let _ = assignments.tighten_lower_bound(domain_id, 6, None);
+
+        assert!(assignments
+            .evaluate_predicate(neq_predicate(6))
+            .is_some_and(|x| !x));
+        assert!(assignments
+            .evaluate_predicate(eq_predicate(6))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(lb_predicate(6))
+            .is_some_and(|x| x));
+        assert!(assignments
+            .evaluate_predicate(ub_predicate(6))
+            .is_some_and(|x| x));
     }
 }

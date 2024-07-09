@@ -123,8 +123,7 @@ fn main() {
         }
     }
 
-    let mut brancher =
-        IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver);
+    let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
     match solver.solve(&mut Indefinite, &mut brancher) {
         CSPSolverExecutionFlag::Feasible => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));

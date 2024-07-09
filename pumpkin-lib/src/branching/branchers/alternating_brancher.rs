@@ -3,12 +3,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-#[cfg(doc)]
-use crate::branching::SolutionGuidedValueSelector;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 use crate::engine::ConstraintSatisfactionSolver;
 
 /// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
@@ -62,8 +58,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             even_number_of_solutions: true,
             is_using_default_brancher: false,
             other_brancher,
-            default_brancher:
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(solver),
+            default_brancher: IndependentVariableValueBrancher::default_over_all_variables(solver),
             strategy,
         }
     }
@@ -75,7 +70,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
 }
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
         if self.is_using_default_brancher {
             self.default_brancher.next_decision(context)
         } else {
@@ -88,23 +83,9 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
             .on_appearance_in_conflict_integer(variable)
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
-        self.other_brancher
-            .on_appearance_in_conflict_literal(literal);
-        self.default_brancher
-            .on_appearance_in_conflict_literal(literal)
-    }
-
     fn on_conflict(&mut self) {
         self.other_brancher.on_conflict();
         self.default_brancher.on_conflict()
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.other_brancher
-            .on_encoding_objective_function(all_variables);
-        self.default_brancher
-            .on_encoding_objective_function(all_variables)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
@@ -139,11 +120,6 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         self.other_brancher.on_unassign_integer(variable, value)
     }
 
-    fn on_unassign_literal(&mut self, literal: Literal) {
-        self.other_brancher.on_unassign_literal(literal);
-        self.default_brancher.on_unassign_literal(literal)
-    }
-
     fn on_restart(&mut self) {
         if let AlternatingStrategy::EveryRestart = self.strategy {
             // Switch whenever a restart occurs
@@ -165,7 +141,7 @@ mod tests {
         let solver = ConstraintSatisfactionSolver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            IndependentVariableValueBrancher::default_over_all_variables(&solver),
             AlternatingStrategy::EverySolution,
         );
 
@@ -183,7 +159,7 @@ mod tests {
         let solver = ConstraintSatisfactionSolver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            IndependentVariableValueBrancher::default_over_all_variables(&solver),
             AlternatingStrategy::EveryOtherSolution,
         );
 
@@ -207,7 +183,7 @@ mod tests {
         let solver = ConstraintSatisfactionSolver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            IndependentVariableValueBrancher::default_over_all_variables(&solver),
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
@@ -228,7 +204,7 @@ mod tests {
         let solver = ConstraintSatisfactionSolver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+            IndependentVariableValueBrancher::default_over_all_variables(&solver),
             AlternatingStrategy::EveryRestart,
         );
 

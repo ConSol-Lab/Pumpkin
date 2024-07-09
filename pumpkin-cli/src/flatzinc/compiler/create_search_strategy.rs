@@ -4,7 +4,6 @@ use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::PropositionalVariable;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -27,11 +26,11 @@ fn create_from_search_strategy(
 ) -> Result<DynamicBrancher, FlatZincError> {
     match strategy {
         Search::Bool(SearchStrategy {
-            variables,
-            variable_selection_strategy,
-            value_selection_strategy,
+            variables: _,
+            variable_selection_strategy: _,
+            value_selection_strategy: _,
         }) => {
-            let search_variables = match variables {
+            /*let search_variables = match variables {
                 flatzinc::AnnExpr::String(identifier) => {
                     // TODO: unnecessary to create Rc here, for now it's just for the return type
                     vec![context
@@ -54,12 +53,11 @@ fn create_from_search_strategy(
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
             brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(
-                    context.solver,
-                ),
+                IndependentVariableValueBrancher::default_over_all_variables(context.solver),
             ));
 
-            Ok(brancher)
+            Ok(brancher)*/
+            todo!();
         }
         Search::Int(SearchStrategy {
             variables,
@@ -84,9 +82,7 @@ fn create_from_search_strategy(
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
             brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(
-                    context.solver,
-                ),
+                IndependentVariableValueBrancher::default_over_all_variables(context.solver),
             ));
             Ok(brancher)
         }
@@ -95,9 +91,7 @@ fn create_from_search_strategy(
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
             let brancher_over_all_variables: Box<dyn Brancher> = Box::new(
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(
-                    context.solver,
-                ),
+                IndependentVariableValueBrancher::default_over_all_variables(context.solver),
             );
             let brancher = DynamicBrancher::new(
                 search_strategies
@@ -115,22 +109,9 @@ fn create_from_search_strategy(
             Ok(brancher)
         }
         Search::Unspecified => Ok(DynamicBrancher::new(vec![Box::new(
-            IndependentVariableValueBrancher::default_over_all_propositional_variables(
-                context.solver,
-            ),
+            IndependentVariableValueBrancher::default_over_all_variables(context.solver),
         )])),
     }
-}
-
-fn create_search_over_propositional_variables(
-    search_variables: &[PropositionalVariable],
-    variable_selection_strategy: &VariableSelectionStrategy,
-    value_selection_strategy: &ValueSelectionStrategy,
-) -> DynamicBrancher {
-    DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
-        variable_selection_strategy.create_from_propositional_variables(search_variables),
-        value_selection_strategy.create_for_propositional_variables(),
-    ))])
 }
 
 fn create_search_over_domains(

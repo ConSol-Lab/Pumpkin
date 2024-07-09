@@ -5,21 +5,17 @@ pub mod opaque_domain_event;
 pub mod propagation;
 mod propagator_queue;
 pub mod reason;
-pub mod test_helper;
-mod variable_literal_mappings;
+pub mod test_solver;
 mod watch_list_cp;
-mod watch_list_propositional;
 
 pub use assignments_integer::AssignmentsInteger;
 pub use assignments_integer::ConstraintProgrammingTrailEntry;
 pub use assignments_integer::EmptyDomain;
 pub use event_sink::*;
 pub use propagator_queue::PropagatorQueue;
-pub use variable_literal_mappings::VariableLiteralMappings;
 pub use watch_list_cp::IntDomainEvent;
 pub use watch_list_cp::WatchListCP;
 pub use watch_list_cp::Watchers;
-pub use watch_list_propositional::*;
 
 #[cfg(test)]
 mod tests {
@@ -30,9 +26,6 @@ mod tests {
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::variables::Literal;
-    use crate::engine::variables::PropositionalVariable;
-    use crate::engine::AssignmentsPropositional;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {
@@ -40,14 +33,11 @@ mod tests {
         let domain = assignments_integer.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
-        let mut assignments_propositional = AssignmentsPropositional::default();
-
         assert_eq!(reason_store.len(), 0);
         {
             let mut context = PropagationContextMut::new(
                 &mut assignments_integer,
                 &mut reason_store,
-                &mut assignments_propositional,
                 PropagatorId(0),
             );
 
@@ -63,14 +53,12 @@ mod tests {
         let domain = assignments_integer.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
-        let mut assignments_propositional = AssignmentsPropositional::default();
 
         assert_eq!(reason_store.len(), 0);
         {
             let mut context = PropagationContextMut::new(
                 &mut assignments_integer,
                 &mut reason_store,
-                &mut assignments_propositional,
                 PropagatorId(0),
             );
 
@@ -86,14 +74,12 @@ mod tests {
         let domain = assignments_integer.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
-        let mut assignments_propositional = AssignmentsPropositional::default();
 
         assert_eq!(reason_store.len(), 0);
         {
             let mut context = PropagationContextMut::new(
                 &mut assignments_integer,
                 &mut reason_store,
-                &mut assignments_propositional,
                 PropagatorId(0),
             );
 
@@ -103,28 +89,28 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
     }
 
-    #[test]
-    fn test_no_update_reason_store_if_fixed_literal() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let mut reason_store = ReasonStore::default();
-        let mut assignments_propositional = AssignmentsPropositional::default();
-        assignments_propositional.grow();
-        let literal = Literal::new(PropositionalVariable::new(0), true);
-        assignments_propositional.enqueue_decision_literal(literal);
-
-        assert!(assignments_propositional.is_literal_assigned_true(literal));
-        assert_eq!(reason_store.len(), 0);
-        {
-            let mut context = PropagationContextMut::new(
-                &mut assignments_integer,
-                &mut reason_store,
-                &mut assignments_propositional,
-                PropagatorId(0),
-            );
-
-            let result = context.assign_literal(literal, false, conjunction!());
-            assert!(result.is_ok());
-        }
-        assert_eq!(reason_store.len(), 0);
-    }
+    // todo: restore test
+    // #[test]
+    // fn test_no_update_reason_store_if_fixed_literal() {
+    // let mut assignments_integer = AssignmentsInteger::default();
+    // let mut reason_store = ReasonStore::default();
+    //
+    // let literal = Literal::new(PropositionalVariable::new(0), true);
+    // assignments_propositional.enqueue_decision_literal(literal);
+    //
+    // assert!(assignments_propositional.is_literal_assigned_true(literal));
+    // assert_eq!(reason_store.len(), 0);
+    // {
+    // let mut context = PropagationContextMut::new(
+    // &mut assignments_integer,
+    // &mut reason_store,
+    // &mut assignments_propositional,
+    // PropagatorId(0),
+    // );
+    //
+    // let result = context.assign_boolean(literal, false, conjunction!());
+    // assert!(result.is_ok());
+    // }
+    // assert_eq!(reason_store.len(), 0);
+    // }
 }

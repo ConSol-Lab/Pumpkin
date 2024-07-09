@@ -1,7 +1,6 @@
 pub mod basic_types;
 pub mod branching;
 pub mod constraints;
-pub mod encoders;
 pub mod engine;
 pub mod math;
 pub mod optimisation;

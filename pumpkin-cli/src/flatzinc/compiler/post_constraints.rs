@@ -4,11 +4,10 @@ use std::rc::Rc;
 
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::AffineView;
+use pumpkin_lib::engine::variables::BooleanDomainId;
 use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::predicate;
 
 use super::constraints::bool_lin_eq;
 use super::constraints::bool_lin_le;
@@ -22,7 +21,6 @@ use super::constraints::int_ne_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::constraints::array_bool_or;
-use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 
@@ -281,70 +279,71 @@ fn compile_int_min(
 }
 
 fn compile_set_in_reif(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "set_in_reif");
-
-    let variable = context.resolve_integer_variable(&exprs[0])?;
-    let set = context.resolve_set_constant(&exprs[1])?;
-    let reif = context.resolve_bool_variable(&exprs[2])?;
-
-    let success = match set {
-        Set::Interval {
-            lower_bound,
-            upper_bound,
-        } => {
-            // `reif -> x \in S`
-            // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
-            let forward = context
-                .solver
-                .add_clause([
-                    !reif,
-                    context
-                        .solver
-                        .get_literal(predicate![variable >= lower_bound]),
-                ])
-                .is_ok()
-                && context
-                    .solver
-                    .add_clause([
-                        !reif,
-                        !context
-                            .solver
-                            .get_literal(predicate![variable >= upper_bound + 1]),
-                    ])
-                    .is_ok();
-
-            // `!reif -> x \notin S`
-            // Decomposed to `!reif -> (x < lb \/ x > ub)`
-            let backward = context
-                .solver
-                .add_clause([
-                    reif,
-                    !context
-                        .solver
-                        .get_literal(predicate![variable >= lower_bound]),
-                    context
-                        .solver
-                        .get_literal(predicate![variable >= upper_bound + 1]),
-                ])
-                .is_ok();
-
-            forward && backward
-        }
-
-        Set::Sparse { values } => {
-            let clause = values
-                .iter()
-                .map(|&value| context.solver.get_literal(predicate![variable == value]))
-                .collect::<Vec<_>>();
-
-            array_bool_or(context.solver, clause, reif)
-        }
-    };
-
-    Ok(success)
+    todo!();
+    // check_parameters!(exprs, 3, "set_in_reif");
+    //
+    // let variable = context.resolve_integer_variable(&exprs[0])?;
+    // let set = context.resolve_set_constant(&exprs[1])?;
+    // let reif = context.resolve_bool_variable(&exprs[2])?;
+    //
+    // let success = match set {
+    // Set::Interval {
+    // lower_bound,
+    // upper_bound,
+    // } => {
+    // `reif -> x \in S`
+    // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
+    // let forward = context
+    // .solver
+    // .add_clause([
+    // !reif,
+    // context
+    // .solver
+    // .get_literal(predicate![variable >= lower_bound]),
+    // ])
+    // .is_ok()
+    // && context
+    // .solver
+    // .add_clause([
+    // !reif,
+    // !context
+    // .solver
+    // .get_literal(predicate![variable >= upper_bound + 1]),
+    // ])
+    // .is_ok();
+    //
+    // `!reif -> x \notin S`
+    // Decomposed to `!reif -> (x < lb \/ x > ub)`
+    // let backward = context
+    // .solver
+    // .add_clause([
+    // reif,
+    // !context
+    // .solver
+    // .get_literal(predicate![variable >= lower_bound]),
+    // context
+    // .solver
+    // .get_literal(predicate![variable >= upper_bound + 1]),
+    // ])
+    // .is_ok();
+    //
+    // forward && backward
+    // }
+    //
+    // Set::Sparse { values } => {
+    // let clause = values
+    // .iter()
+    // .map(|&value| predicate![variable == value])
+    // .collect::<Vec<_>>();
+    //
+    // array_bool_or(context.solver, clause, reif)
+    // }
+    // };
+    //
+    // Ok(success)
 }
 
 fn compile_array_var_int_element(
@@ -363,114 +362,121 @@ fn compile_array_var_int_element(
 }
 
 fn compile_bool_not(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
+    todo!();
+
     // TODO: Take this constraint into account when creating variables, as these can be opposite
     // literals of the same PropositionalVariable. Unsure how often this actually appears in models
     // though.
-    check_parameters!(exprs, 2, "bool_not");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-
+    // check_parameters!(exprs, 2, "bool_not");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    //
     // a != b
     // -> !(a /\ b) /\ !(!a /\ !b)
     // -> (!a \/ !b) /\ (a \/ b)
-    let c1 = context.solver.add_clause([a, b]).is_ok();
-    let c2 = context.solver.add_clause([!a, !b]).is_ok();
-
-    Ok(c1 && c2)
+    // let c1 = context.solver.add_clause([a, b]).is_ok();
+    // let c2 = context.solver.add_clause([!a, !b]).is_ok();
+    //
+    // Ok(c1 && c2)
 }
 
 fn compile_bool_eq_reif(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "bool_eq_reif");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-    let r = context.resolve_bool_variable(&exprs[2])?;
-
-    let c1 = context.solver.add_clause([!a, !b, r]).is_ok();
-    let c2 = context.solver.add_clause([!a, b, !r]).is_ok();
-    let c3 = context.solver.add_clause([a, !b, !r]).is_ok();
-    let c4 = context.solver.add_clause([a, b, r]).is_ok();
-
-    Ok(c1 && c2 && c3 && c4)
+    todo!();
+    // check_parameters!(exprs, 3, "bool_eq_reif");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    // let r = context.resolve_bool_variable(&exprs[2])?;
+    //
+    // let c1 = context.solver.add_clause([!a, !b, r]).is_ok();
+    // let c2 = context.solver.add_clause([!a, b, !r]).is_ok();
+    // let c3 = context.solver.add_clause([a, !b, !r]).is_ok();
+    // let c4 = context.solver.add_clause([a, b, r]).is_ok();
+    //
+    // Ok(c1 && c2 && c3 && c4)
 }
 
 fn compile_bool_eq(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
+    todo!();
     // TODO: Take this constraint into account when merging equivalence classes. Unsure how often
     // this actually appears in models though.
-    check_parameters!(exprs, 2, "bool_eq");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-
-    let c1 = context.solver.add_clause([!a, b]).is_ok();
-    let c2 = context.solver.add_clause([!b, a]).is_ok();
-
-    Ok(c1 && c2)
+    // check_parameters!(exprs, 2, "bool_eq");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    //
+    // let c1 = context.solver.add_clause([!a, b]).is_ok();
+    // let c2 = context.solver.add_clause([!b, a]).is_ok();
+    //
+    // Ok(c1 && c2)
 }
 
 fn compile_bool_clause(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 2, "bool_clause");
-
-    let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
-    let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
-
-    let clause: Vec<Literal> = clause_1
-        .iter()
-        .copied()
-        .chain(clause_2.iter().map(|&literal| !literal))
-        .collect();
-    Ok(context.solver.add_clause(clause).is_ok())
+    todo!();
+    // check_parameters!(exprs, 2, "bool_clause");
+    //
+    // let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
+    // let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
+    //
+    // let clause: Vec<IntegerPredicate> = clause_1
+    // .iter()
+    // .copied()
+    // .chain(clause_2.iter().map(|&literal| !literal))
+    // .collect();
+    // Ok(context.solver.add_clause(clause).is_ok())
 }
 
 fn compile_bool_and(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 2, "bool_and");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-    let r = context.resolve_bool_variable(&exprs[2])?;
-
-    let c1 = context.solver.add_clause([!r, a]).is_ok();
-    let c2 = context.solver.add_clause([!r, b]).is_ok();
-
-    let c3 = context.solver.add_clause([!a, !b, r]).is_ok();
-
-    Ok(c1 && c2 && c3)
+    todo!();
+    // check_parameters!(exprs, 2, "bool_and");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    // let r = context.resolve_bool_variable(&exprs[2])?;
+    //
+    // let c1 = context.solver.add_clause([!r, a]).is_ok();
+    // let c2 = context.solver.add_clause([!r, b]).is_ok();
+    //
+    // let c3 = context.solver.add_clause([!a, !b, r]).is_ok();
+    //
+    // Ok(c1 && c2 && c3)
 }
 
 fn compile_bool2int(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
+    todo!();
     // TODO: Perhaps we want to add a phase in the compiler that directly uses the literal
     // corresponding to the predicate [b = 1] for the boolean parameter in this constraint.
     // See https://emir-demirovic.atlassian.net/browse/PUM-89
-    check_parameters!(exprs, 2, "bool2int");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
-
-    let b_lit = context.solver.get_literal(predicate![b == 1]);
-
-    let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
-    let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
-
-    Ok(c1 && c2)
+    // check_parameters!(exprs, 2, "bool2int");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_integer_variable(&exprs[1])?;
+    //
+    // let b_lit = predicate![b == 1];
+    //
+    // let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
+    // let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
+    //
+    // Ok(c1 && c2)
 }
 
 fn compile_bool_or(
@@ -486,95 +492,99 @@ fn compile_bool_or(
 }
 
 fn compile_bool_xor(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 2, "pumpkin_bool_xor");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-
-    let c1 = context.solver.add_clause([!a, !b]).is_ok();
-    let c2 = context.solver.add_clause([b, a]).is_ok();
-
-    Ok(c1 && c2)
+    todo!();
+    // check_parameters!(exprs, 2, "pumpkin_bool_xor");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    //
+    // let c1 = context.solver.add_clause([!a, !b]).is_ok();
+    // let c2 = context.solver.add_clause([b, a]).is_ok();
+    //
+    // Ok(c1 && c2)
 }
 
 fn compile_bool_xor_reif(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "pumpkin_bool_xor_reif");
-
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
-    let r = context.resolve_bool_variable(&exprs[2])?;
-
-    let c1 = context.solver.add_clause([!a, !b, !r]).is_ok();
-    let c2 = context.solver.add_clause([!a, b, r]).is_ok();
-    let c3 = context.solver.add_clause([a, !b, r]).is_ok();
-    let c4 = context.solver.add_clause([a, b, !r]).is_ok();
-
-    Ok(c1 && c2 && c3 && c4)
+    todo!();
+    // check_parameters!(exprs, 3, "pumpkin_bool_xor_reif");
+    //
+    // let a = context.resolve_bool_variable(&exprs[0])?;
+    // let b = context.resolve_bool_variable(&exprs[1])?;
+    // let r = context.resolve_bool_variable(&exprs[2])?;
+    //
+    // let c1 = context.solver.add_clause([!a, !b, !r]).is_ok();
+    // let c2 = context.solver.add_clause([!a, b, r]).is_ok();
+    // let c3 = context.solver.add_clause([a, !b, r]).is_ok();
+    // let c4 = context.solver.add_clause([a, b, !r]).is_ok();
+    //
+    // Ok(c1 && c2 && c3 && c4)
 }
 
 fn compile_array_var_bool_element(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
-    name: &str,
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
+    _name: &str,
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, name);
-
-    let index = context.resolve_integer_variable(&exprs[0])?;
-    let array = context.resolve_bool_variable_array(&exprs[1])?;
-    let rhs = context.resolve_bool_variable(&exprs[2])?;
-
-    let mut success = true;
-
-    for i in 0..array.len() {
-        // Note: minizinc arrays are 1-indexed.
-        let mzn_index = i as i32 + 1;
-
-        // [index = mzn_index] -> (rhs <-> array[i])
-
-        let predicate_lit = context.solver.get_literal(predicate![index == mzn_index]);
-
-        success &= context
-            .solver
-            .add_clause([!predicate_lit, !rhs, array[i]])
-            .is_ok();
-        success &= context
-            .solver
-            .add_clause([!predicate_lit, !array[i], rhs])
-            .is_ok();
-    }
-
-    Ok(success)
+    todo!();
+    // check_parameters!(exprs, 3, name);
+    //
+    // let index = context.resolve_integer_variable(&exprs[0])?;
+    // let array = context.resolve_bool_variable_array(&exprs[1])?;
+    // let rhs = context.resolve_bool_variable(&exprs[2])?;
+    //
+    // let mut success = true;
+    //
+    // for i in 0..array.len() {
+    // Note: minizinc arrays are 1-indexed.
+    // let mzn_index = i as i32 + 1;
+    //
+    // [index = mzn_index] -> (rhs <-> array[i])
+    //
+    // let predicate_lit = predicate![index == mzn_index];
+    //
+    // success &= context
+    // .solver
+    // .add_clause([!predicate_lit, !rhs, array[i]])
+    // .is_ok();
+    // success &= context
+    // .solver
+    // .add_clause([!predicate_lit, !array[i], rhs])
+    // .is_ok();
+    // }
+    //
+    // Ok(success)
 }
 
 fn compile_array_bool_and(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
+    _context: &mut CompilationContext<'_>,
+    _exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 2, "array_bool_and");
-
-    let conjunction = context.resolve_bool_variable_array(&exprs[0])?;
-    let r = context.resolve_bool_variable(&exprs[1])?;
-
+    todo!();
+    // check_parameters!(exprs, 2, "array_bool_and");
+    //
+    // let conjunction = context.resolve_bool_variable_array(&exprs[0])?;
+    // let r = context.resolve_bool_variable(&exprs[1])?;
+    //
     // /\conjunction -> r
-    let clause: Vec<Literal> = conjunction
-        .iter()
-        .map(|&literal| !literal)
-        .chain(std::iter::once(r))
-        .collect();
-    let first_implication = context.solver.add_clause(clause).is_ok();
-
+    // let clause: Vec<IntegerPredicate> = conjunction
+    // .iter()
+    // .map(|&literal| !literal)
+    // .chain(std::iter::once(r))
+    // .collect();
+    // let first_implication = context.solver.add_clause(clause).is_ok();
+    //
     // r -> /\conjunction
-    let second_implication = conjunction
-        .iter()
-        .all(|&literal| context.solver.add_clause([!r, literal]).is_ok());
-
-    Ok(first_implication && second_implication)
+    // let second_implication = conjunction
+    // .iter()
+    // .all(|&literal| context.solver.add_clause([!r, literal]).is_ok());
+    //
+    // Ok(first_implication && second_implication)
 }
 
 fn compile_ternary_int_predicate(
@@ -618,7 +628,12 @@ fn compile_reified_binary_int_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId, Literal) -> bool,
+    post_constraint: impl FnOnce(
+        &mut ConstraintSatisfactionSolver,
+        DomainId,
+        DomainId,
+        BooleanDomainId,
+    ) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -667,7 +682,7 @@ fn compile_reified_int_lin_predicate(
         &mut ConstraintSatisfactionSolver,
         Box<[AffineView<DomainId>]>,
         i32,
-        Literal,
+        BooleanDomainId,
     ) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);

@@ -1,11 +1,10 @@
 use std::ops::Not;
 
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::StorageKey;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -112,13 +111,13 @@ impl NogoodPropagator {
         &self,
         nogood: &[IntegerPredicate],
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         // Inefficient way of propagating, but okay for testing purposes
         // Explicitly goes through each predicate, and does multiple passes.
 
         let num_falsified_predicates = nogood
             .iter()
-            .filter(|predicate| context.does_integer_predicate_hold(predicate.not()))
+            .filter(|predicate| context.evaluate_predicate(**predicate).is_some_and(|x| !x))
             .count();
 
         // if at least one predicate is false, then the nogood can be skipped
@@ -128,18 +127,16 @@ impl NogoodPropagator {
 
         let num_satisfied_predicates = nogood
             .iter()
-            .filter(|predicate| context.does_integer_predicate_hold(**predicate))
+            .filter(|predicate| context.evaluate_predicate(**predicate).is_some_and(|x| x))
             .count();
 
         assert!(num_satisfied_predicates + num_falsified_predicates <= nogood.len());
 
         // If all predicates in the nogood are satisfied, there is a conflict.
         if num_satisfied_predicates == nogood.len() {
-            let conjunction: PropositionalConjunction = nogood
-                .iter()
-                .map(|integer_predicate| Predicate::IntegerPredicate(*integer_predicate))
-                .collect();
-            return Err(conjunction.into());
+            return Err(Inconsistency::Conflict {
+                conflict_nogood: nogood.iter().copied().collect(),
+            });
         }
         // If all but one predicate are satisfied, then we can propagate.
         // Note that this only makes sense since we know that there are no falsifying predicates at
@@ -148,22 +145,13 @@ impl NogoodPropagator {
             // Note that we negate the remaining unassigned predicate!
             let propagated_predicate = nogood
                 .iter()
-                .find(|predicate| !context.does_integer_predicate_hold(**predicate))
+                .find(|predicate| context.evaluate_predicate(**predicate).is_none())
                 .unwrap()
                 .not();
             assert!(nogood.iter().any(|p| *p == propagated_predicate.not()));
 
-            let reason: PropositionalConjunction = nogood
-                .iter()
-                .filter_map(|predicate| {
-                    if context.does_integer_predicate_hold(*predicate) {
-                        Some(Predicate::IntegerPredicate(*predicate))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            context.apply_integer_predicate(propagated_predicate, reason)?;
+            let reason: PropositionalConjunction = nogood.iter().copied().collect();
+            context.post_predicate(propagated_predicate, reason)?;
         }
         Ok(())
     }
@@ -214,7 +202,7 @@ impl Propagator for NogoodPropagator {
         0
     }
 
-    // fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    // fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
     // todo: do incrementally, two levels:
     // 1. Skip looking at nogoods that are for sure not changing their watched predicate.
     // For this need to take into account the trail position and when the updates took place.
@@ -278,17 +266,16 @@ impl Propagator for NogoodPropagator {
 
     fn debug_propagate_from_scratch(
         &self,
-        _context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         // Very inefficient version!
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
-        // for nogood in self.nogoods.iter() {
-        //    self.debug_propagate_nogood_from_scratch(nogood, context)?;
-        //}
-        todo!();
-        // Ok(())
+        for nogood in self.nogoods.iter() {
+            self.debug_propagate_nogood_from_scratch(nogood, context)?;
+        }
+        Ok(())
     }
 
     // Learned nogood during search.
@@ -368,10 +355,10 @@ mod tests {
         // assert_eq!(0, solver.lower_bound(c));
         // assert_eq!(12, solver.upper_bound(c));
         //
-        // let reason_lb = solver.get_reason_int(predicate![c >= 0].try_into().unwrap());
+        // let reason_lb = solver.get_reason_int(predicate![c >= 0]);
         // assert_eq!(conjunction!([a >= 0] & [b >= 0]), *reason_lb);
         //
-        // let reason_ub = solver.get_reason_int(predicate![c <= 12].try_into().unwrap());
+        // let reason_ub = solver.get_reason_int(predicate![c <= 12]);
         // assert_eq!(
         // conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
         // reason_ub

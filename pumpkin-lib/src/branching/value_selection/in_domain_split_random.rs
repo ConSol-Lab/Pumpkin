@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
@@ -15,7 +15,7 @@ impl ValueSelector<DomainId> for InDomainSplitRandom {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: DomainId,
-    ) -> Predicate {
+    ) -> IntegerPredicate {
         let bound = context.lower_bound(decision_variable)
             + (context.get_size_of_domain(decision_variable) as f64 / 2.0).floor() as i32;
 
@@ -38,17 +38,12 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
+        let assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_random = TestRandom {
             usizes: vec![5],
             bools: vec![true],
         };
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_random,
-        );
+        let mut context = SelectionContext::new(&assignments_integer, &mut test_random);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainSplitRandom;

@@ -4,7 +4,7 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::DomainId;
@@ -80,7 +80,7 @@ where
         }
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
+    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
         // The description should not actually change. It is a description of the domain as seen by
         // the solver, not as seen by the user of this view.
         self.inner.describe_domain(assignment)
@@ -193,7 +193,7 @@ impl<Var: std::fmt::Debug> std::fmt::Debug for AffineView<Var> {
 impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView<Var> {
     type Value = Var::Value;
 
-    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+    fn lower_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
         let inverted_bound = self.invert(bound, Rounding::Up);
 
         if self.scale < 0 {
@@ -203,7 +203,7 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
         }
     }
 
-    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+    fn upper_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
         let inverted_bound = self.invert(bound, Rounding::Down);
 
         if self.scale < 0 {
@@ -213,22 +213,22 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
         }
     }
 
-    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        if (bound - self.offset) % self.scale == 0 {
-            let inverted_bound = self.invert(bound, Rounding::Up);
-            self.inner.equality_predicate(inverted_bound)
-        } else {
-            Predicate::False
-        }
+    fn equality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+        // if (bound - self.offset) % self.scale == 0 {
+        let inverted_bound = self.invert(bound, Rounding::Up);
+        self.inner.equality_predicate(inverted_bound)
+        //} else {
+        //    Predicate::False
+        //}
     }
 
-    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        if (bound - self.offset) % self.scale == 0 {
-            let inverted_bound = self.invert(bound, Rounding::Up);
-            self.inner.disequality_predicate(inverted_bound)
-        } else {
-            Predicate::True
-        }
+    fn disequality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+        // if (bound - self.offset) % self.scale == 0 {
+        let inverted_bound = self.invert(bound, Rounding::Up);
+        self.inner.disequality_predicate(inverted_bound)
+        //} else {
+        //    Predicate::True
+        //}
     }
 }
 

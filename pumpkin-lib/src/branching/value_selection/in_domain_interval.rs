@@ -1,7 +1,7 @@
 use super::InDomainSplit;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
@@ -18,7 +18,7 @@ impl ValueSelector<DomainId> for InDomainInterval {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: DomainId,
-    ) -> Predicate {
+    ) -> IntegerPredicate {
         // We attempt to find the first hole in the domain (i.e. the value is not in the domain of
         // `decision_variable`) Note that the lower-bound and upper-bound are guaranteed to
         // be in the domain
@@ -47,8 +47,7 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
+        let mut assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
         let domain_ids = assignments_integer.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainInterval;
@@ -57,11 +56,7 @@ mod tests {
             let _ = assignments_integer.remove_value_from_domain(domain_ids[0], to_remove, None);
         }
 
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 1))
@@ -69,14 +64,9 @@ mod tests {
 
     #[test]
     fn test_no_holes_in_domain_bisects_domain() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
+        let assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;
@@ -88,14 +78,9 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(1, 2)]));
+        let assignments_integer = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;

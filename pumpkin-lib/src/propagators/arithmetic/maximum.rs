@@ -1,4 +1,4 @@
-use crate::basic_types::PropagationStatusCP;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -56,7 +56,7 @@ pub struct MaximumPropagator<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
         self.debug_propagate_from_scratch(context)
     }
 
@@ -70,14 +70,17 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         "Maximum"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), Inconsistency> {
         self.propagate(context)
     }
 
     fn debug_propagate_from_scratch(
         &self,
         context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    ) -> Result<(), Inconsistency> {
         let rhs_ub = context.upper_bound(&self.rhs);
         let mut max_ub = i32::MIN;
         let mut max_lb = i32::MIN;
@@ -111,7 +114,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
@@ -132,7 +135,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 1, 5);
 
-        let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![rhs <= 5]);
         assert_eq!(conjunction!([a <= 3] & [b <= 4] & [c <= 5]), reason.clone());
     }
 
@@ -155,7 +158,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 5, 10);
 
-        let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![rhs >= 5]);
         assert_eq!(conjunction!([a >= 3] & [b >= 4] & [c >= 5]), reason.clone());
     }
 
@@ -178,7 +181,7 @@ mod tests {
 
         for var in array.iter() {
             solver.assert_bounds(*var, 1, 3);
-            let reason = solver.get_reason_int(predicate![var <= 3].try_into().unwrap());
+            let reason = solver.get_reason_int(predicate![var <= 3]);
             assert_eq!(conjunction!([rhs <= 3]), reason.clone());
         }
     }

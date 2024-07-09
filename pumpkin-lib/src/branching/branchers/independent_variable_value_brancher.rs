@@ -2,16 +2,13 @@ use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
-use crate::branching::PhaseSaving;
+use crate::branching::InDomainMin;
+use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
-use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
-use crate::branching::Vsids;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 use crate::engine::ConstraintSatisfactionSolver;
 
 /// An implementation of a [`Brancher`] which simply uses a single
@@ -48,37 +45,17 @@ where
     }
 }
 
-pub type DefaultBrancher = IndependentVariableValueBrancher<
-    PropositionalVariable,
-    Vsids<PropositionalVariable>,
-    SolutionGuidedValueSelector<
-        PropositionalVariable,
-        bool,
-        PhaseSaving<PropositionalVariable, bool>,
-    >,
->;
+pub type DefaultBrancher =
+    IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>;
 
 impl DefaultBrancher {
-    /// Creates a default [`IndependentVariableValueBrancher`] which uses [`Vsids`] as
-    /// [`VariableSelector`] and [`SolutionGuidedValueSelector`] (with [`PhaseSaving`] as its
-    /// back-up selector) as its [`ValueSelector`]; it searches over all
-    /// [`PropositionalVariable`]s defined in the provided `solver`.
-    pub fn default_over_all_propositional_variables(
-        solver: &ConstraintSatisfactionSolver,
-    ) -> DefaultBrancher {
+    pub fn default_over_all_variables(solver: &ConstraintSatisfactionSolver) -> DefaultBrancher {
         #[allow(deprecated)]
-        let variables = solver
-            .get_propositional_assignments()
-            .get_propositional_variables()
-            .collect::<Vec<_>>();
+        let variables: Vec<DomainId> = solver.assignments_integer.get_domains().collect::<Vec<_>>();
 
         IndependentVariableValueBrancher {
-            variable_selector: Vsids::new(&variables),
-            value_selector: SolutionGuidedValueSelector::new(
-                &variables,
-                Vec::new(),
-                PhaseSaving::new(&variables),
-            ),
+            variable_selector: InputOrder::new(&variables),
+            value_selector: InDomainMin {},
             variable_type: PhantomData,
         }
     }
@@ -94,7 +71,7 @@ where
     ///  - If all variables under consideration are fixed (i.e. `select_variable` return None) then
     ///    we simply return None
     ///  - Otherwise we select a value and return the corresponding literal
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
         self.variable_selector
             .select_variable(context)
             .map(|selected_variable| {
@@ -107,31 +84,14 @@ where
         self.variable_selector.on_conflict()
     }
 
-    fn on_unassign_literal(&mut self, lit: Literal) {
-        self.variable_selector.on_unassign_literal(lit);
-        self.value_selector.on_unassign_literal(lit);
-    }
-
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.variable_selector.on_unassign_integer(variable, value);
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, lit: Literal) {
-        self.variable_selector
-            .on_appearance_in_conflict_literal(lit)
-    }
-
     fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
         self.variable_selector
             .on_appearance_in_conflict_integer(variable)
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.variable_selector
-            .on_encoding_objective_function(all_variables);
-        self.value_selector
-            .on_encoding_objective_function(all_variables);
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

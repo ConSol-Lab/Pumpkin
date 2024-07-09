@@ -10,16 +10,15 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use log::warn;
 use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
 use pumpkin_lib::basic_types::ProblemSolution;
 use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::engine::predicates::predicate::Predicate;
+use pumpkin_lib::engine::predicates::integer_predicate::IntegerPredicate;
 use pumpkin_lib::engine::termination::time_budget::TimeBudget;
-use pumpkin_lib::engine::variables::Literal;
+use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
@@ -77,7 +76,7 @@ pub(crate) fn solve(
         let brancher = if options.free_search {
             // The free search flag is active, we just use the default brancher
             DynamicBrancher::new(vec![Box::new(
-                IndependentVariableValueBrancher::default_over_all_propositional_variables(&solver),
+                IndependentVariableValueBrancher::default_over_all_variables(&solver),
             )])
         } else {
             instance.search.expect("Expected a search to be defined")
@@ -88,17 +87,18 @@ pub(crate) fn solve(
             MinizincOptimisationResult::Optimal {
                 optimal_objective_value,
             } => {
-                let objective_bound_literal = solver.get_literal(get_bound_predicate(
-                    *objective_function,
-                    optimal_objective_value as i32,
-                ));
-
-                if solver
-                    .conclude_proof_optimal(objective_bound_literal)
-                    .is_err()
-                {
-                    warn!("Failed to log solver conclusion");
-                };
+                // todo: add proof logging
+                // let objective_bound_literal = solver.get_literal(get_bound_predicate(
+                // objective_function,
+                // optimal_objective_value as i32,
+                // ));
+                //
+                // if solver
+                // .conclude_proof_optimal(objective_bound_literal)
+                // .is_err()
+                // {
+                // warn!("Failed to log solver conclusion");
+                // };
 
                 println!("==========");
                 Some(optimal_objective_value)
@@ -107,9 +107,10 @@ pub(crate) fn solve(
                 best_found_objective_value,
             } => Some(best_found_objective_value),
             MinizincOptimisationResult::Infeasible => {
-                if solver.conclude_proof_unsat().is_err() {
-                    warn!("Failed to log solver conclusion");
-                };
+                // todo: readd proof logging
+                // if solver.conclude_proof_unsat().is_err() {
+                // warn!("Failed to log solver conclusion");
+                // };
 
                 println!("{MSG_UNSATISFIABLE}");
                 None
@@ -136,7 +137,7 @@ pub(crate) fn solve(
                     brancher.on_solution(solver.get_solution_reference());
 
                     let could_find_another_solution =
-                        add_blocking_clause(&mut solver, &outputs, &mut brancher);
+                        add_blocking_nogood(&mut solver, &outputs, &mut brancher);
 
                     if !could_find_another_solution {
                         println!("==========");
@@ -144,9 +145,10 @@ pub(crate) fn solve(
                     }
                 }
                 CSPSolverExecutionFlag::Infeasible if !found_solution => {
-                    if solver.conclude_proof_unsat().is_err() {
-                        warn!("Failed to log solver conclusion");
-                    };
+                    // todo: readd proof logging
+                    // if solver.conclude_proof_unsat().is_err() {
+                    // warn!("Failed to log solver conclusion");
+                    // };
 
                     println!("{MSG_UNSATISFIABLE}");
                     break;
@@ -181,10 +183,11 @@ pub(crate) fn solve(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn get_bound_predicate(
     objective_function: FlatzincObjective,
     optimal_objective_value: i32,
-) -> Predicate {
+) -> IntegerPredicate {
     match objective_function {
         FlatzincObjective::Maximize(domain) => predicate![domain <= optimal_objective_value],
         FlatzincObjective::Minimize(domain) => predicate![domain >= optimal_objective_value],
@@ -200,7 +203,7 @@ fn get_bound_predicate(
 /// was successful (i.e. it is possible that there could be another solution) and returns false
 /// otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
 /// solutions).
-fn add_blocking_clause(
+fn add_blocking_nogood(
     solver: &mut ConstraintSatisfactionSolver,
     outputs: &[Output],
     brancher: &mut impl Brancher,
@@ -208,56 +211,56 @@ fn add_blocking_clause(
     #[allow(deprecated)]
     let solution = solver.get_solution_reference();
 
-    let clause = outputs
+    let nogood = outputs
         .iter()
         .flat_map(|output| match output {
-            Output::Bool(bool) => {
-                let literal = *bool.get_variable();
-
-                let literal = if solution.get_literal_value(literal) {
-                    literal
-                } else {
-                    !literal
-                };
-
-                Box::new(std::iter::once(literal))
+            Output::Bool(_bool) => {
+                todo!();
+                // let literal = *bool.get_variable();
+                //
+                // let literal = if solution.get_literal_value(literal) {
+                // literal
+                // } else {
+                // !literal
+                // };
+                //
+                // Box::new(std::iter::once(literal))
             }
 
             Output::Int(int) => {
                 let domain = *int.get_variable();
                 let value = solution.get_integer_value(domain);
-                Box::new(std::iter::once(
-                    solver.get_literal(predicate![domain == value]),
-                ))
+                Box::new(std::iter::once(predicate![domain == value]))
             }
 
             #[allow(trivial_casts)]
-            Output::ArrayOfBool(array_of_bool) => {
-                Box::new(array_of_bool.get_contents().map(|&literal| {
-                    if solution.get_literal_value(literal) {
-                        literal
-                    } else {
-                        !literal
-                    }
-                })) as Box<dyn Iterator<Item = Literal>>
+            Output::ArrayOfBool(_array_of_bool) => {
+                todo!();
+                // Box::new(array_of_bool.get_contents().map(|&literal| {
+                // if solution.get_literal_value(literal) {
+                // literal
+                // } else {
+                // !literal
+                // }
+                // })) as Box<dyn Iterator<Item = BooleanDomainId>>
             }
 
             #[allow(trivial_casts)]
             Output::ArrayOfInt(array_of_ints) => {
                 Box::new(array_of_ints.get_contents().map(|&domain| {
                     let value = solution.get_integer_value(domain);
-                    solver.get_literal(predicate![domain == value])
-                })) as Box<dyn Iterator<Item = Literal>>
+                    predicate![domain == value]
+                })) as Box<dyn Iterator<Item = IntegerPredicate>>
             }
         })
-        .map(|literal| !literal)
         .collect::<Vec<_>>();
+
     solver.restore_state_at_root(brancher);
-    if clause.is_empty() {
+    if nogood.is_empty() {
         return false;
     }
 
-    solver.add_clause(clause).is_ok()
+    solver.add_nogood(nogood).is_ok()
 }
 
 fn parse_and_compile(
@@ -273,17 +276,15 @@ fn parse_and_compile(
 fn print_solution_from_solver(solution: SolutionReference<'_>, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
-            Output::Bool(output) => {
-                output.print_value(|literal| solution.get_literal_value(*literal))
-            }
+            Output::Bool(output) => output
+                .print_value(|boolean| solution.get_integer_value(DomainId::from(*boolean)) == 1),
 
             Output::Int(output) => {
                 output.print_value(|domain_id| solution.get_integer_value(*domain_id))
             }
 
-            Output::ArrayOfBool(output) => {
-                output.print_value(|literal| solution.get_literal_value(*literal))
-            }
+            Output::ArrayOfBool(output) => output
+                .print_value(|boolean| solution.get_integer_value(DomainId::from(*boolean)) == 1),
 
             Output::ArrayOfInt(output) => {
                 output.print_value(|domain_id| solution.get_integer_value(*domain_id))

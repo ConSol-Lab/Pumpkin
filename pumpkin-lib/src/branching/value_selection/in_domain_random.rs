@@ -1,9 +1,7 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 use crate::predicate;
 
 /// A [`ValueSelector`] which assigns to a random value in the domain.
@@ -15,7 +13,7 @@ impl ValueSelector<DomainId> for InDomainRandom {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: DomainId,
-    ) -> Predicate {
+    ) -> IntegerPredicate {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))
             .filter(|bound| context.contains(decision_variable, *bound))
@@ -24,16 +22,6 @@ impl ValueSelector<DomainId> for InDomainRandom {
             .random()
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable == values_in_domain[random_index])
-    }
-}
-
-impl ValueSelector<PropositionalVariable> for InDomainRandom {
-    fn select_value(
-        &mut self,
-        context: &mut SelectionContext,
-        decision_variable: PropositionalVariable,
-    ) -> Predicate {
-        Literal::new(decision_variable, context.random().generate_bool(0.5)).into()
     }
 }
 
@@ -47,17 +35,12 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
+        let assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_random = TestRandom {
             usizes: vec![3],
             bools: vec![],
         };
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_random,
-        );
+        let mut context = SelectionContext::new(&assignments_integer, &mut test_random);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainRandom;

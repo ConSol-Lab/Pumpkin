@@ -3,7 +3,7 @@ use enumset::EnumSet;
 use super::TransformableVariable;
 use crate::basic_types::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
+use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
@@ -38,7 +38,7 @@ impl IntegerVariable for DomainId {
         assignment.is_value_in_domain(*self, value)
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
+    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
         assignment.get_domain_description(*self)
     }
 
