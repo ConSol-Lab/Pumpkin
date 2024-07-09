@@ -23,10 +23,7 @@ pub(crate) struct LinearNotEqualConstructor<Var> {
 
 impl<Var> LinearNotEqualConstructor<Var> {
     pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNotEqualConstructor {
-            terms,
-            rhs,
-        }
+        LinearNotEqualConstructor { terms, rhs }
     }
 }
 
@@ -100,8 +97,7 @@ where
             })
             .sum::<i32>();
 
-        if num_fixed == self.terms.len() - 1
-        {
+        if num_fixed == self.terms.len() - 1 {
             let value_to_remove = self.rhs - lhs;
 
             let unfixed_x_i = self

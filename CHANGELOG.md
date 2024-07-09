@@ -106,6 +106,7 @@
 * Added support for search annotations MiniZinc
 * Add holes in the domain for the cumulative
 * Implemented API for reverse propagation, including deletable clauses.
+* Added support for half-reification of arbitrary propagators.
 
 ## Bugfixes
 

@@ -672,7 +672,10 @@ impl Solver {
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
-            .add_propagator(ReifiedPropagatorConstructor { propagator: LinearNotEqualConstructor::new(terms.into(), rhs), reification_literal: reif})
+            .add_propagator(ReifiedPropagatorConstructor {
+                propagator: LinearNotEqualConstructor::new(terms.into(), rhs),
+                reification_literal: reif,
+            })
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
@@ -709,10 +712,9 @@ impl Solver {
     ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
             .add_propagator(ReifiedPropagatorConstructor {
-                propagator: LinearLessOrEqualConstructor::new(
-                terms.into(),
-                rhs,
-            ), reification_literal: reif })
+                propagator: LinearLessOrEqualConstructor::new(terms.into(), rhs),
+                reification_literal: reif,
+            })
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
