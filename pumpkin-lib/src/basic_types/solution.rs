@@ -76,7 +76,7 @@ impl<'a> SolutionReference<'a> {
 impl<'a> ProblemSolution for SolutionReference<'a> {}
 
 /// A solution which takes ownership of its inner structures.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Solution {
     assignments_propositional: AssignmentsPropositional,
     assignments_integer: AssignmentsInteger,

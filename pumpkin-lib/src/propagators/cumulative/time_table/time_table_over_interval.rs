@@ -72,7 +72,11 @@ where
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
-        TimeTableOverIntervalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
+        TimeTableOverIntervalPropagator::new(CumulativeParameters::new(
+            tasks,
+            self.capacity,
+            self.allow_holes_in_domain,
+        ))
     }
 }
 
@@ -427,6 +431,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -457,6 +462,7 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
@@ -498,6 +504,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -553,6 +560,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -581,6 +589,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -624,6 +633,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -691,6 +701,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -769,6 +780,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -815,6 +827,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -864,6 +877,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -884,5 +898,48 @@ mod tests {
             ]),
             reason
         );
+    }
+
+    #[test]
+    fn propagator_propagates_with_holes() {
+        let mut solver = TestSolver::default();
+        let s1 = solver.new_variable(4, 4);
+        let s2 = solver.new_variable(0, 8);
+
+        let _ = solver
+            .new_propagator(TimeTableOverInterval::new(
+                [
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+                1,
+                true,
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(s2), 0);
+        assert_eq!(solver.upper_bound(s2), 8);
+        assert_eq!(solver.lower_bound(s1), 4);
+        assert_eq!(solver.upper_bound(s1), 4);
+
+        for removed in 2..8 {
+            assert!(!solver.contains(s2, removed));
+            let reason = solver
+                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
+                .clone();
+            assert_eq!(
+                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
+                reason
+            );
+        }
     }
 }

@@ -1,54 +1,27 @@
 //! # Pumpkin
-//! Pumpkin is a CP-SAT solver which aims to be well-documented and extensible.
+//! Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU Delft. It is
+//! based on the (lazy clause generation) constraint programming paradigm.
 //!
-//! Pumpkin implements a variety of (Max)SAT and Constraint Programming (CP) techniques to create a
-//! solver which is both understandable and efficient. The main implementation relies on the LCG
-//! framework as introduced in \[1\] while utilising the 1-UIP conflict analysis scheme as
-//! introduced in \[2\].
+//! Our goal is to keep the solver efficient, easy to use, and well-documented. The solver is
+//! written in pure Rust and follows Rust best practices.
 //!
-//!  # Using Pumpkin to solve a satisfaction problem
-//! Pumpkin can be used to solve satisfaction problems. It contains an API for adding a set of
-//! pre-defined constraints to the solver.
+//! A unique feature of Pumpkin is that it can produce a _certificate of unsatisfiability_. See our
+//! CP'24 paper for more details.
 //!
-//!  ```rust
-//!  # use pumpkin_lib::Solver;
-//!  # use pumpkin_lib::results::SatisfactionResult;
-//!  # use pumpkin_lib::termination::Indefinite;
-//!  # use pumpkin_lib::results::ProblemSolution;
-//!  // We create the solver with default options
-//!  let mut solver = Solver::default();
+//! The solver currently supports integer variables and a number of (global) constraints:
+//! * [Cumulative global constraint][Solver::cumulative].
+//! * [Element global constraint][Solver::element].
+//! * Arithmetic constraints: [linear integer (in)equalities][Solver::less_than_or_equals], [integer
+//!   division][Solver::division], [integer multiplication][Solver::times],
+//!   [maximum][Solver::maximum], [absolute value][Solver::absolute].
+//! * [Clausal constraints][Solver::add_clause].
 //!
-//!  // We create 3 variables with domains within the range [0, 10]
-//!  let x = solver.new_bounded_integer(0, 2);
-//!  let y = solver.new_bounded_integer(0, 2);
-//!  let z = solver.new_bounded_integer(0, 2);
+//! We are actively developing Pumpkin and would be happy to hear from you should you have any
+//! questions or feature requests!
 //!
-//!  // We create the all-different constraint
-//!  solver.all_different(vec![x, y, z]);
-//!
-//!  // We create a termination condition which allows the solver to run indefinitely
-//!  let mut termination = Indefinite;
-//!  // And we create a search strategy (in this case, simply the default)
-//!  let mut brancher = solver.default_brancher_over_all_propositional_variables();
-//!
-//!  // Then we solve to satisfaction
-//!  let result = solver.satisfy(&mut brancher, &mut termination);
-//!
-//!  if let SatisfactionResult::Satisfiable(solution) = result {
-//!      let value_x = solution.get_integer_value(x);
-//!      let value_y = solution.get_integer_value(y);
-//!      let value_z = solution.get_integer_value(z);
-//!
-//!      // It should be the case that all of the assigned values are different.
-//!      assert!(value_x != value_y && value_x != value_z && value_y != value_z);
-//!  } else {
-//!      panic!("This problem should be satisfiable")
-//!  }
-//!  ```
-//!
-//! # Using Pumpkin to solve an optimization problem
-//! Pumpkin can be used to solve optimization problems. It expects the objective to be provided in
-//! the form of a single integer variable.
+//!  # Using Pumpkin
+//! Pumpkin can be used to solve a variety of problems. The first step to solving a problem is
+//! **adding variables**:
 //! ```rust
 //!  # use pumpkin_lib::Solver;
 //!  # use pumpkin_lib::results::OptimisationResult;
@@ -62,20 +35,99 @@
 //! let x = solver.new_bounded_integer(5, 10);
 //! let y = solver.new_bounded_integer(-3, 15);
 //! let z = solver.new_bounded_integer(7, 25);
-//! let objective = solver.new_bounded_integer(-10, 30);
+//! ```
 //!
-//! // We create the constraints:
+//! Then we can **add constraints** supported by the [`Solver`]:
+//! ```rust
+//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::results::OptimisationResult;
+//!  # use pumpkin_lib::termination::Indefinite;
+//!  # use pumpkin_lib::results::ProblemSolution;
+//! # use std::cmp::max;
+//! # let mut solver = Solver::default();
+//! # let x = solver.new_bounded_integer(5, 10);
+//! # let y = solver.new_bounded_integer(-3, 15);
+//! # let z = solver.new_bounded_integer(7, 25);
+//! // We create the constraint:
 //! // - x + y + z = 17
-//! // - maximum(x, y, z) = objective
-//! solver.linear_equals(vec![x, y, z], 17);
-//! solver.maximum(vec![x, y, z], objective);
+//! solver.equals(vec![x, y, z], 17);
+//! ```
 //!
+//! For finding a solution, a [`TerminationCondition`] and a [`Brancher`] should be specified, which
+//! determine when the solver should stop searching and the variable/value selection strategy which
+//! should be used:
+//! ```rust
+//! # use pumpkin_lib::Solver;
+//! # use pumpkin_lib::termination::Indefinite;
+//! # let mut solver = Solver::default();
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
 //! // And we create a search strategy (in this case, simply the default)
 //! let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//! ```
 //!
-//! // Then we solve to optimality,
+//!
+//! **Finding a solution** to this problem can be done by using [`Solver::satisfy`]:
+//! ```rust
+//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::results::SatisfactionResult;
+//!  # use pumpkin_lib::termination::Indefinite;
+//!  # use pumpkin_lib::results::ProblemSolution;
+//! # use std::cmp::max;
+//! # let mut solver = Solver::default();
+//! # let x = solver.new_bounded_integer(5, 10);
+//! # let y = solver.new_bounded_integer(-3, 15);
+//! # let z = solver.new_bounded_integer(7, 25);
+//! # solver.equals(vec![x, y, z], 17);
+//! # let mut termination = Indefinite;
+//! # let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//! // Then we find a solution to the problem
+//! let result = solver.satisfy(&mut brancher, &mut termination);
+//!
+//! if let SatisfactionResult::Satisfiable(solution) = result {
+//!     let value_x = solution.get_integer_value(x);
+//!     let value_y = solution.get_integer_value(y);
+//!     let value_z = solution.get_integer_value(z);
+//!
+//!     // The constraint should hold for this solution
+//!     assert!(value_x + value_y + value_z == 17);
+//! } else {
+//!     panic!("This problem should have a solution")
+//! }
+//! ```
+//!
+//! **Optimizing an objective** can be done in a similar way using [`Solver::maximise`] or
+//! [`Solver::minimise`]; first the objective variable and a constraint over this value are added:
+//! ```rust
+//!  # use pumpkin_lib::Solver;
+//! # let mut solver = Solver::default();
+//! # let x = solver.new_bounded_integer(5, 10);
+//! # let y = solver.new_bounded_integer(-3, 15);
+//! # let z = solver.new_bounded_integer(7, 25);
+//! // We add another variable, the objective
+//! let objective = solver.new_bounded_integer(-10, 30);
+//!
+//! // We add a constraint which specifies the value of the objective
+//! solver.maximum(vec![x, y, z], objective);
+//! ```
+//!
+//! Then we can find the optimal solution using [`Solver::minimise`] or [`Solver::maximise`]:
+//! ```rust
+//!  # use pumpkin_lib::Solver;
+//!  # use pumpkin_lib::results::OptimisationResult;
+//!  # use pumpkin_lib::termination::Indefinite;
+//!  # use pumpkin_lib::results::ProblemSolution;
+//! # use std::cmp::max;
+//! # let mut solver = Solver::default();
+//! # let x = solver.new_bounded_integer(5, 10);
+//! # let y = solver.new_bounded_integer(-3, 15);
+//! # let z = solver.new_bounded_integer(7, 25);
+//! # let objective = solver.new_bounded_integer(-10, 30);
+//! # solver.equals(vec![x, y, z], 17);
+//! # solver.maximum(vec![x, y, z], objective);
+//! # let mut termination = Indefinite;
+//! # let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//! // Then we solve to optimality
 //! let result = solver.minimise(&mut brancher, &mut termination, objective);
 //!
 //! if let OptimisationResult::Optimal(optimal_solution) = result {
@@ -84,10 +136,14 @@
 //!     let value_z = optimal_solution.get_integer_value(z);
 //!     // The maximum objective values is 7;
 //!     // with one possible solution being: {x = 5, y = 5, z = 7, objective = 7}.
+//!
+//!     // We check whether the constraint holds again
 //!     assert!(value_x + value_y + value_z == 17);
+//!     // We check whether the newly added constraint for the objective value holds
 //!     assert!(
 //!         max(value_x, max(value_y, value_z)) == optimal_solution.get_integer_value(objective)
 //!     );
+//!     // We check whether this is actually an optimal solution
 //!     assert_eq!(optimal_solution.get_integer_value(objective), 7);
 //! } else {
 //!     panic!("This problem should have an optimal solution")
@@ -162,7 +218,7 @@
 //!
 //! # Obtaining an unsatisfiable core
 //! Pumpkin allows the user to specify assumptions which can then be used to extract an
-//! unsatisfiable core.
+//! unsatisfiable core (see [`UnsatisfiableUnderAssumptions::extract_core`]).
 //! ```rust
 //!  # use pumpkin_lib::Solver;
 //!  # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
@@ -208,12 +264,8 @@
 //!     }
 //! }
 //!  ```
-//! # Bibliography
-//! \[1\] T. Feydy and P. J. Stuckey, ‘Lazy clause generation reengineered’, in International
-//! Conference on Principles and Practice of Constraint Programming, 2009, pp. 352–366.
-//!
-//!  \[2\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
-//!  solvers’, in Handbook of satisfiability, IOS press, 2021
+#[cfg(doc)]
+use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub(crate) mod basic_types;
 pub mod branching;
 pub(crate) mod encoders;
@@ -222,6 +274,10 @@ pub(crate) mod math;
 pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
 pub(crate) mod variable_names;
+#[cfg(doc)]
+use crate::branching::Brancher;
+#[cfg(doc)]
+use crate::termination::TerminationCondition;
 
 // We declare a private module with public use, so that all exports from API are exports directly
 // from the crate.

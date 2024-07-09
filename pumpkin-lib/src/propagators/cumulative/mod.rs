@@ -58,6 +58,7 @@
 //!     &durations,
 //!     &resource_requirements,
 //!     resource_capacity,
+//!     false,
 //! );
 //!
 //! let mut termination = Indefinite;

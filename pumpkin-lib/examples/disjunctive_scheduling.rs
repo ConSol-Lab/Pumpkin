@@ -54,7 +54,7 @@ fn main() {
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
             // literal => s_y - s_x <= -p_y)
-            let _ = solver.half_reified_linear_less_than_or_equal(
+            let _ = solver.half_reified_less_than_or_equals(
                 variables.clone(),
                 -(processing_times[y] as i32),
                 literal,
@@ -62,7 +62,7 @@ fn main() {
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = solver.half_reified_linear_less_than_or_equal(
+            let _ = solver.half_reified_less_than_or_equals(
                 variables.clone(),
                 processing_times[y] as i32,
                 !literal,

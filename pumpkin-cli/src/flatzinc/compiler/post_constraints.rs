@@ -13,10 +13,12 @@ use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
 use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
+use crate::flatzinc::FlatZincOptions;
 
 pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
+    options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
@@ -34,46 +36,46 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_ne",
-                |solver, terms, rhs| solver.linear_not_equals(terms, rhs).is_ok(),
+                |solver, terms, rhs| solver.not_equals(terms, rhs).is_ok(),
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_ne_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_not_equals(terms, rhs, reif).is_ok(),
+                |solver, terms, rhs, reif| solver.reified_not_equals(terms, rhs, reif).is_ok(),
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le",
-                |solver, terms, rhs| solver.linear_less_than_or_equal(terms, rhs).is_ok(),
+                |solver, terms, rhs| solver.less_than_or_equals(terms, rhs).is_ok(),
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_less_than_or_equal(terms, rhs, reif).is_ok(),
+                |solver, terms, rhs, reif| solver.reified_less_than_or_equals(terms, rhs, reif).is_ok(),
             )?,
             "int_lin_eq" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq",
-                |solver, terms, rhs| solver.linear_equals(terms, rhs).is_ok(),
+                |solver, terms, rhs| solver.equals(terms, rhs).is_ok(),
             )?,
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                |solver, terms, rhs, reif| solver.reified_linear_equals(terms, rhs, reif).is_ok(),
+                |solver, terms, rhs, reif| solver.reified_equals(terms, rhs, reif).is_ok(),
             )?,
             "int_ne" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
-                    solver.binary_not_equal(a, b).is_ok()
+                    solver.binary_not_equals(a, b).is_ok()
                 })?
             }
             "int_ne_reif" => compile_reified_binary_int_predicate(
@@ -85,7 +87,7 @@ pub(crate) fn run(
             )?,
             "int_le" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
-                    solver.binary_less_than_or_equal(a, b).is_ok()
+                    solver.binary_less_than_or_equals(a, b).is_ok()
                 })?
             }
             "int_le_reif" => compile_reified_binary_int_predicate(
@@ -93,7 +95,7 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_le_reif",
-                |solver, a, b, reif| solver.reified_binary_less_than_or_equal(a, b, reif).is_ok(),
+                |solver, a, b, reif| solver.reified_binary_less_than_or_equals(a, b, reif).is_ok(),
             )?,
             "int_lt" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
@@ -117,20 +119,20 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_eq_reif",
-                |solver, a,b, reif| solver.reified_binary_equals(a, b, reif).is_ok(),
+                |solver, a, b, reif| solver.reified_binary_equals(a, b, reif).is_ok(),
             )?,
             "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
-                solver.integer_plus(a, b, c).is_ok()
+                solver.plus(a, b, c).is_ok()
             })?,
             "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
-                solver.integer_multiplication(a, b, c).is_ok()
+                solver.times(a, b, c).is_ok()
             })?,
             "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
-                solver.integer_division(a, b, c).is_ok()
+                solver.division(a, b, c).is_ok()
             })?,
             "int_abs" => {
                 compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
-                    solver.integer_absolute(a, b).is_ok()
+                    solver.absolute(a, b).is_ok()
                 })?
             }
             "int_max" => compile_int_max(context, exprs)?,
@@ -170,7 +172,7 @@ pub(crate) fn run(
                 true
             },
 
-            "pumpkin_cumulative" => compile_cumulative(context, exprs)?,
+            "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
 
             unknown => todo!("unsupported constraint {unknown}"),
@@ -199,6 +201,7 @@ macro_rules! check_parameters {
 fn compile_cumulative(
     context: &mut CompilationContext<'_>,
     exprs: &[flatzinc::Expr],
+    options: &FlatZincOptions,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, "pumpkin_cumulative");
 
@@ -214,6 +217,7 @@ fn compile_cumulative(
             &durations,
             &resource_requirements,
             resource_capacity,
+            options.cumulative_allow_holes,
         )
         .is_ok())
 }
@@ -328,7 +332,7 @@ fn compile_set_in_reif(
                 .map(|&value| context.solver.get_literal(predicate![variable == value]))
                 .collect::<Vec<_>>();
 
-            context.solver.array_bool_or(clause, reif).is_ok()
+            context.solver.reified_clause(clause, reif).is_ok()
         }
     };
 
@@ -468,7 +472,7 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(context.solver.array_bool_or(clause.as_ref(), r).is_ok())
+    Ok(context.solver.reified_clause(clause.as_ref(), r).is_ok())
 }
 
 fn compile_bool_xor(
@@ -547,20 +551,7 @@ fn compile_array_bool_and(
     let conjunction = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    // /\conjunction -> r
-    let clause: Vec<Literal> = conjunction
-        .iter()
-        .map(|&literal| !literal)
-        .chain(std::iter::once(r))
-        .collect();
-    let first_implication = context.solver.add_clause(clause).is_ok();
-
-    // r -> /\conjunction
-    let second_implication = conjunction
-        .iter()
-        .all(|&literal| context.solver.add_clause([!r, literal]).is_ok());
-
-    Ok(first_implication && second_implication)
+    Ok(context.solver.reified_conjunction(&conjunction, r).is_ok())
 }
 
 fn compile_ternary_int_predicate(
@@ -664,10 +655,7 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context
-        .solver
-        .linear_boolean_equals(&weights, &bools, rhs)
-        .is_ok())
+    Ok(context.solver.boolean_equals(&weights, &bools, rhs).is_ok())
 }
 
 fn compile_bool_lin_le_predicate(
@@ -682,7 +670,7 @@ fn compile_bool_lin_le_predicate(
 
     Ok(context
         .solver
-        .linear_boolean_less_than_or_equal(&weights, &bools, rhs)
+        .boolean_less_than_or_equals(&weights, &bools, rhs)
         .is_ok())
 }
 

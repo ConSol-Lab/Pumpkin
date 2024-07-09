@@ -175,6 +175,10 @@ struct Args {
     )]
     upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 
+    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
+    #[arg(long = "cumulative-allow-holes", default_value_t = false)]
+    cumulative_allow_holes: bool,
+
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
     /// that it evaluates to the reported objective value.
     #[arg(long = "verify", default_value_t = false)]
@@ -355,6 +359,7 @@ fn run() -> PumpkinResult<()> {
             FlatZincOptions {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
+                cumulative_allow_holes: args.cumulative_allow_holes,
             },
         )?,
     }

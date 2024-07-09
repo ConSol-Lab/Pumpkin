@@ -31,7 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
-use crate::propagators::TimeTablePerPoint;
+use crate::propagators::TimeTableOverInterval;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
@@ -58,13 +58,13 @@ use crate::variables::TransformableVariable;
 /// // We can create an integer variable with a domain in the range [0, 10]
 /// let integer_between_bounds = solver.new_bounded_integer(0, 10);
 ///
-/// // For proof logging purposes, we can also create such a variable with a name
+/// // We can also create such a variable with a name
 /// let named_integer_between_bounds = solver.new_named_bounded_integer(0, 10, "x");
 ///
 /// // We can also create an integer variable with a non-continuous domain in the follow way
 /// let mut sparse_integer = solver.new_sparse_integer(vec![0, 3, 5]);
 ///
-/// // For proof logging purposes, we can also create such a variable with a name
+/// // We can also create such a variable with a name
 /// let named_sparse_integer = solver.new_named_sparse_integer(vec![0, 3, 5], "y");
 ///
 /// // Additionally, we can also create an affine view over a variable with both a scale and an offset (or either)
@@ -76,7 +76,7 @@ use crate::variables::TransformableVariable;
 /// // We can create a literal
 /// let literal = solver.new_literal();
 ///
-/// // For proof logging purposes, we can also create such a variable with a name
+/// // We can also create such a variable with a name
 /// let named_literal = solver.new_named_literal("z");
 ///
 /// // We can also get the propositional variable from the literal
@@ -90,9 +90,34 @@ use crate::variables::TransformableVariable;
 /// # Using the Solver
 /// For examples on how to use the solver, see the [root-level crate documentation](crate) or the
 /// examples in the repository at `pumpkin-lib/examples`.
-#[derive(Debug, Default)]
 pub struct Solver {
+    /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     satisfaction_solver: ConstraintSatisfactionSolver,
+    /// The function is called whenever an optimisation function finds a solution; see
+    /// [`Solver::with_solution_callback`].
+    solution_callback: Box<dyn Fn(&Solution)>,
+}
+
+impl Default for Solver {
+    fn default() -> Self {
+        Self {
+            satisfaction_solver: Default::default(),
+            solution_callback: create_empty_function(),
+        }
+    }
+}
+
+/// Creates a place-holder empty function which does not do anything when a solution is found.
+fn create_empty_function() -> Box<dyn Fn(&Solution)> {
+    Box::new(|_| {})
+}
+
+impl std::fmt::Debug for Solver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Solver")
+            .field("satisfaction_solver", &self.satisfaction_solver)
+            .finish()
+    }
 }
 
 impl Solver {
@@ -103,14 +128,24 @@ impl Solver {
                 learning_options,
                 solver_options,
             ),
+            solution_callback: create_empty_function(),
         }
+    }
+
+    /// Adds a call-back to the [`Solver`] which is called every time that a solution is found when
+    /// optimising using [`Solver::maximise`] or [`Solver::minimise`].
+    ///
+    /// Note that this will also
+    /// perform the call-back on the optimal solution which is returned in
+    /// [`OptimisationResult::Optimal`].
+    pub fn with_solution_callback(&mut self, solution_callback: impl Fn(&Solution) + 'static) {
+        self.solution_callback = Box::new(solution_callback);
     }
 
     /// Logs the statistics currently present in the solver with the provided objective value.
     pub fn log_statistics_with_objective(&self, objective_value: i64) {
         log_statistic("objective", objective_value);
         self.log_statistics();
-        log_statistic_postfix();
     }
 
     /// Logs the statistics currently present in the solver.
@@ -124,6 +159,22 @@ impl Solver {
 impl Solver {
     /// Get the literal corresponding to the given predicate. As the literal may need to be
     /// created, this possibly mutates the solver.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// # use pumpkin_lib::predicate;
+    /// let mut solver = Solver::default();
+    ///
+    /// let x = solver.new_bounded_integer(0, 10);
+    ///
+    /// // We can get the literal representing the predicate `[x >= 3]` via the Solver
+    /// let literal = solver.get_literal(predicate!(x >= 3));
+    ///
+    /// // Note that we can also get a literal which is always true
+    /// let true_lower_bound_literal = solver.get_literal(predicate!(x >= 0));
+    /// assert_eq!(true_lower_bound_literal, solver.get_true_literal());
+    /// ```
     pub fn get_literal(&self, predicate: Predicate) -> Literal {
         self.satisfaction_solver.get_literal(predicate)
     }
@@ -177,6 +228,15 @@ impl Solver {
     }
 
     /// Create a fresh propositional variable and return the literal with positive polarity.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can create a literal
+    /// let literal = solver.new_literal();
+    /// ```
     pub fn new_literal(&mut self) -> Literal {
         Literal::new(
             self.satisfaction_solver
@@ -187,6 +247,15 @@ impl Solver {
 
     /// Create a fresh propositional variable with a given name and return the literal with positive
     /// polarity.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can also create such a variable with a name
+    /// let named_literal = solver.new_named_literal("z");
+    /// ```
     pub fn new_named_literal(&mut self, name: impl Into<String>) -> Literal {
         Literal::new(
             self.satisfaction_solver
@@ -196,12 +265,30 @@ impl Solver {
     }
 
     /// Create a new integer variable with the given bounds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can create an integer variable with a domain in the range [0, 10]
+    /// let integer_between_bounds = solver.new_bounded_integer(0, 10);
+    /// ```
     pub fn new_bounded_integer(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         self.satisfaction_solver
             .create_new_integer_variable(lower_bound, upper_bound, None)
     }
 
     /// Create a new named integer variable with the given bounds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can also create such a variable with a name
+    /// let named_integer_between_bounds = solver.new_named_bounded_integer(0, 10, "x");
+    /// ```
     pub fn new_named_bounded_integer(
         &mut self,
         lower_bound: i32,
@@ -217,6 +304,15 @@ impl Solver {
 
     /// Create a new integer variable which has a domain of predefined values. We remove duplicates
     /// by converting to a hash set
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can also create an integer variable with a non-continuous domain in the follow way
+    /// let mut sparse_integer = solver.new_sparse_integer(vec![0, 3, 5]);
+    /// ```
     pub fn new_sparse_integer(&mut self, values: impl Into<Vec<i32>>) -> DomainId {
         let values: HashSet<i32> = values.into().into_iter().collect();
 
@@ -225,6 +321,15 @@ impl Solver {
     }
 
     /// Create a new named integer variable which has a domain of predefined values.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// // We can also create such a variable with a name
+    /// let named_sparse_integer = solver.new_named_sparse_integer(vec![0, 3, 5], "y");
+    /// ```
     pub fn new_named_sparse_integer(
         &mut self,
         values: impl Into<Vec<i32>>,
@@ -340,18 +445,44 @@ impl Solver {
         termination: &mut impl TerminationCondition,
         objective_variable: impl IntegerVariable,
     ) -> OptimisationResult {
+        self.minimise_internal(brancher, termination, objective_variable, false)
+    }
+
+    /// Solves the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is maximised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
+    /// retrieve the optimal solution if it exists.
+    pub fn maximise(
+        &mut self,
+        brancher: &mut impl Brancher,
+        termination: &mut impl TerminationCondition,
+        objective_variable: impl IntegerVariable,
+    ) -> OptimisationResult {
+        self.minimise_internal(brancher, termination, objective_variable.scaled(-1), true)
+    }
+
+    /// The internal method which optimizes the objective function, this function takes an extra
+    /// argument (`is_maximising`) as compared to [`Solver::maximise`] and [`Solver::minimise`]
+    /// which determines whether the logged objective value should be scaled by `-1` or not.
+    ///
+    /// This is necessary due to the fact that [`Solver::maximise`] simply calls minimise with
+    /// the objective variable scaled with `-1` which would lead to incorrect statistic if not
+    /// scaled back.
+    fn minimise_internal(
+        &mut self,
+        brancher: &mut impl Brancher,
+        termination: &mut impl TerminationCondition,
+        objective_variable: impl IntegerVariable,
+        is_maximising: bool,
+    ) -> OptimisationResult {
+        // If we are maximising then when we simply scale the variable by -1, however, this will
+        // lead to the printed objective value in the statistics to be multiplied by -1; this
+        // objective_multiplier ensures that the objective is correctly logged.
+        let objective_multiplier = if is_maximising { -1 } else { 1 };
+
         let initial_solve = self.satisfaction_solver.solve(termination, brancher);
         match initial_solve {
-            CSPSolverExecutionFlag::Feasible => {
-                brancher.on_solution(self.satisfaction_solver.get_solution_reference());
-
-                self.log_statistics_with_objective(
-                    self.satisfaction_solver
-                        .get_assigned_integer_value(&objective_variable)
-                        .expect("Expected objective variable to be assigned")
-                        as i64,
-                );
-            }
+            CSPSolverExecutionFlag::Feasible => {}
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
@@ -363,18 +494,24 @@ impl Solver {
                 return OptimisationResult::Unknown;
             }
         }
+        let mut best_objective_value = Default::default();
+        let mut best_solution = Solution::default();
 
-        let mut best_objective_value =
-            self.satisfaction_solver
-                .get_assigned_integer_value(&objective_variable)
-                .expect("expected variable to be assigned") as i64;
-        let mut best_solution: Solution = self.satisfaction_solver.get_solution_reference().into();
-
+        self.process_solution(
+            objective_multiplier,
+            &objective_variable,
+            &mut best_objective_value,
+            &mut best_solution,
+            brancher,
+        );
         loop {
             self.satisfaction_solver.restore_state_at_root(brancher);
 
             if self
-                .strengthen(&objective_variable, best_objective_value)
+                .strengthen(
+                    &objective_variable,
+                    best_objective_value * objective_multiplier as i64,
+                )
                 .is_err()
             {
                 // Reset the state whenever we return a result
@@ -385,18 +522,17 @@ impl Solver {
             let solve_result = self.satisfaction_solver.solve(termination, brancher);
             match solve_result {
                 CSPSolverExecutionFlag::Feasible => {
-                    self.debug_bound_change(&objective_variable, best_objective_value);
-
-                    best_objective_value = self
-                        .satisfaction_solver
-                        .get_assigned_integer_value(&objective_variable)
-                        .expect("expected variable to be assigned")
-                        as i64;
-                    best_solution = self.satisfaction_solver.get_solution_reference().into();
-
-                    brancher.on_solution(self.satisfaction_solver.get_solution_reference());
-
-                    self.log_statistics_with_objective(best_objective_value);
+                    self.debug_bound_change(
+                        &objective_variable,
+                        best_objective_value * objective_multiplier as i64,
+                    );
+                    self.process_solution(
+                        objective_multiplier,
+                        &objective_variable,
+                        &mut best_objective_value,
+                        &mut best_solution,
+                        brancher,
+                    );
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     {
@@ -414,17 +550,31 @@ impl Solver {
         }
     }
 
-    /// Solves the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
-    pub fn maximise(
-        &mut self,
+    /// Processes a solution when it is found, it consists of the following procedure:
+    /// - Assigning `best_objective_value` the value assigned to `objective_variable` (multiplied by
+    ///   `objective_multiplier`).
+    /// - Storing the new best solution in `best_solution`.
+    /// - Calling [`Brancher::on_solution`] on the provided `brancher`.
+    /// - Logging the statistics using [`Solver::log_statistics_with_objective`].
+    /// - Calling the solution callback stored in [`Solver::solution_callback`].
+    fn process_solution(
+        &self,
+        objective_multiplier: i32,
+        objective_variable: &impl IntegerVariable,
+        best_objective_value: &mut i64,
+        best_solution: &mut Solution,
         brancher: &mut impl Brancher,
-        termination: &mut impl TerminationCondition,
-        objective_variable: impl IntegerVariable,
-    ) -> OptimisationResult {
-        self.minimise(brancher, termination, objective_variable.scaled(-1))
+    ) {
+        *best_objective_value = (objective_multiplier
+            * self
+                .satisfaction_solver
+                .get_assigned_integer_value(objective_variable)
+                .expect("expected variable to be assigned")) as i64;
+        *best_solution = self.satisfaction_solver.get_solution_reference().into();
+
+        self.log_statistics_with_objective(*best_objective_value);
+        brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+        (self.solution_callback)(best_solution);
     }
 
     /// Given the current objective value `best_objective_value`, it adds a constraint specifying
@@ -478,7 +628,7 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
-    /// Adds the constraint `array[index] = rhs`.
+    /// Adds the [element](https://sofdem.github.io/gccat/gccat/Celement.html) constraint which states that `array[index] = rhs`.
     pub fn element<ElementVar: IntegerVariable + 'static>(
         &mut self,
         index: impl IntegerVariable + 'static,
@@ -493,7 +643,7 @@ impl Solver {
     }
 
     /// Adds the constraint `\sum terms_i != rhs`.
-    pub fn linear_not_equals<Var: IntegerVariable + 'static>(
+    pub fn not_equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -502,8 +652,19 @@ impl Solver {
             .add_propagator(LinearNotEqualConstructor::new(terms.into(), rhs))
     }
 
+    /// Adds the constraint `reif <-> \sum terms_i != rhs`.
+    pub fn reified_not_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        terms: Box<[Var]>,
+        rhs: i32,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_not_equals(terms.clone(), rhs, reif)?;
+        self.half_reified_equals(terms, rhs, !reif)
+    }
+
     /// Adds the constraint `reif -> \sum terms_i != rhs`.
-    pub fn half_reified_linear_not_equals<Var: IntegerVariable + 'static>(
+    pub fn half_reified_not_equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -514,7 +675,7 @@ impl Solver {
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
-    pub fn linear_less_than_or_equal<Var: IntegerVariable + 'static>(
+    pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -523,8 +684,23 @@ impl Solver {
             .add_propagator(LinearLessOrEqualConstructor::new(terms.into(), rhs))
     }
 
+    /// Adds the constraint `reif <-> (\sum terms_i <= rhs)`.
+    pub fn reified_less_than_or_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        terms: Box<[Var]>,
+        rhs: i32,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_less_than_or_equals(terms.clone(), rhs, reif)?;
+        self.half_reified_less_than_or_equals(
+            terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
+            -rhs - 1,
+            !reif,
+        )
+    }
+
     /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
-    pub fn half_reified_linear_less_than_or_equal<Var: IntegerVariable + 'static>(
+    pub fn half_reified_less_than_or_equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -539,21 +715,32 @@ impl Solver {
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.
-    pub fn linear_equals<Var: IntegerVariable + 'static>(
+    pub fn equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
     ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
 
-        self.linear_less_than_or_equal(terms.clone(), rhs)?;
+        self.less_than_or_equals(terms.clone(), rhs)?;
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.linear_less_than_or_equal(negated, -rhs)
+        self.less_than_or_equals(negated, -rhs)
+    }
+
+    /// Adds the constraint `reif <-> (\sum terms_i = rhs)`.
+    pub fn reified_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        terms: Box<[Var]>,
+        rhs: i32,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_equals(terms.clone(), rhs, reif)?;
+        self.half_reified_not_equals(terms, rhs, !reif)
     }
 
     /// Adds the constraint `reif -> (\sum terms_i = rhs)`.
-    pub fn half_reified_linear_equals<Var: IntegerVariable + 'static>(
+    pub fn half_reified_equals<Var: IntegerVariable + 'static>(
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
@@ -561,58 +748,69 @@ impl Solver {
     ) -> Result<(), ConstraintOperationError> {
         let terms = terms.into();
 
-        self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)?;
+        self.half_reified_less_than_or_equals(terms.clone(), rhs, reif)?;
 
         let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.half_reified_linear_less_than_or_equal(negated, -rhs, reif)
+        self.half_reified_less_than_or_equals(negated, -rhs, reif)
     }
 
     /// Adds the constraint `lhs != rhs`.
-    pub fn binary_not_equal<Var: IntegerVariable + 'static>(
+    pub fn binary_not_equals<Var: IntegerVariable + 'static>(
         &mut self,
         lhs: Var,
         rhs: Var,
     ) -> Result<(), ConstraintOperationError> {
-        self.linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+        self.not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+    }
+
+    /// Adds the constraint `reif <-> lhs != rhs`.
+    pub fn reified_binary_not_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        a: Var,
+        b: Var,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.half_reified_binary_not_equals(a.clone(), b.clone(), reif)?;
+        self.half_reified_binary_equals(a, b, !reif)
     }
 
     /// Adds the constraint `reif -> lhs != rhs`.
-    pub fn half_reified_binary_not_equal<Var: IntegerVariable + 'static>(
+    pub fn half_reified_binary_not_equals<Var: IntegerVariable + 'static>(
         &mut self,
         lhs: Var,
         rhs: Var,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+        self.half_reified_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs <= rhs`.
-    pub fn binary_less_than_or_equal<Var: IntegerVariable + 'static>(
+    pub fn binary_less_than_or_equals<Var: IntegerVariable + 'static>(
         &mut self,
         lhs: Var,
         rhs: Var,
     ) -> Result<(), ConstraintOperationError> {
-        self.linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0)
-    }
-
-    /// Adds the constraint `reif -> (lhs <= rhs)`.
-    pub fn half_reified_binary_less_than_or_equal<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+        self.less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
     }
 
     /// Adds the constraint `reif <-> (lhs <= rhs)`.
-    pub fn reified_binary_less_than_or_equal<Var: IntegerVariable + 'static>(
+    pub fn reified_binary_less_than_or_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        a: Var,
+        b: Var,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.reified_less_than_or_equals(vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
+    }
+
+    /// Adds the constraint `reif -> (lhs <= rhs)`.
+    pub fn half_reified_binary_less_than_or_equals<Var: IntegerVariable + 'static>(
         &mut self,
         lhs: Var,
         rhs: Var,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.reified_linear_less_than_or_equal([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
+        self.half_reified_less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `lhs < rhs`.
@@ -621,7 +819,16 @@ impl Solver {
         lhs: Var,
         rhs: Var,
     ) -> Result<(), ConstraintOperationError> {
-        self.binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1))
+        self.binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1))
+    }
+
+    pub fn reified_binary_less_than<Var: IntegerVariable + 'static>(
+        &mut self,
+        a: Var,
+        b: Var,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.reified_less_than_or_equals(vec![a.scaled(1), b.scaled(-1)].into(), -1, reif)
     }
 
     /// Adds the constraint `reif -> (lhs < rhs)`.
@@ -631,17 +838,7 @@ impl Solver {
         rhs: Var,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
-    }
-
-    /// Adds the constraint `reif <-> (lhs < rhs)`.
-    pub fn reified_binary_less_than<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.reified_binary_less_than_or_equal(lhs.scaled(1), rhs.offset(-1), reif)
+        self.half_reified_binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1), reif)
     }
 
     /// Adds the constraint `lhs = rhs`.
@@ -650,7 +847,17 @@ impl Solver {
         lhs: Var,
         rhs: Var,
     ) -> Result<(), ConstraintOperationError> {
-        self.linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+        self.equals([lhs.scaled(1), rhs.scaled(-1)], 0)
+    }
+
+    /// Adds the constraint `reif <-> (lhs = rhs)`.
+    pub fn reified_binary_equals<Var: IntegerVariable + 'static>(
+        &mut self,
+        a: Var,
+        b: Var,
+        reif: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        self.reified_equals(vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
     }
 
     /// Adds the constraint `reif -> (lhs = rhs)`.
@@ -660,32 +867,21 @@ impl Solver {
         rhs: Var,
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
-    }
-
-    /// Adds the constraint `reif <-> (lhs = rhs)`.
-    pub fn reified_binary_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_linear_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)?;
-        self.half_reified_linear_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, !reif)
+        self.half_reified_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
 
     /// Adds the constraint `a + b = c`.
-    pub fn integer_plus<Var: IntegerVariable + 'static>(
+    pub fn plus<Var: IntegerVariable + 'static>(
         &mut self,
         a: Var,
         b: Var,
         c: Var,
     ) -> Result<(), ConstraintOperationError> {
-        self.linear_equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
+        self.equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
     }
 
     /// Adds the constraint `a * b = c`.
-    pub fn integer_multiplication(
+    pub fn times(
         &mut self,
         a: impl IntegerVariable + 'static,
         b: impl IntegerVariable + 'static,
@@ -701,7 +897,7 @@ impl Solver {
     /// The propagator assumes that the `denominator` is a non-zero integer.
     ///
     /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
-    pub fn integer_division(
+    pub fn division(
         &mut self,
         numerator: impl IntegerVariable + 'static,
         denominator: impl IntegerVariable + 'static,
@@ -710,12 +906,6 @@ impl Solver {
     where
         Self: Sized,
     {
-        pumpkin_assert_simple!(
-            !self
-                .satisfaction_solver
-                .integer_variable_contains(&denominator, 0),
-            "We do not support a value of 0 in the domain of the denominator of `int_div`"
-        );
         self.satisfaction_solver
             .add_propagator(DivisionConstructor {
                 numerator,
@@ -725,7 +915,7 @@ impl Solver {
     }
 
     /// Adds the constraint `|signed| = absolute`.
-    pub fn integer_absolute(
+    pub fn absolute(
         &mut self,
         signed: impl IntegerVariable + 'static,
         absolute: impl IntegerVariable + 'static,
@@ -743,7 +933,7 @@ impl Solver {
 
         for i in 0..variables.len() {
             for j in i + 1..variables.len() {
-                self.binary_not_equal(variables[i].clone(), variables[j].clone())?;
+                self.binary_not_equals(variables[i].clone(), variables[j].clone())?;
             }
         }
 
@@ -791,6 +981,7 @@ impl Solver {
     ///     &durations,
     ///     &resource_requirements,
     ///     resource_capacity,
+    ///     false,
     /// );
     ///
     /// let mut termination = Indefinite;
@@ -852,13 +1043,14 @@ impl Solver {
         durations: &[i32],
         resource_requirements: &[i32],
         resource_capacity: i32,
+        allow_holes_in_domain: bool,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
             "The number of start variables, durations and resource requirements should be the same!car"
         );
         self.satisfaction_solver
-            .add_propagator(TimeTablePerPoint::new(
+            .add_propagator(TimeTableOverInterval::new(
                 start_times
                     .iter()
                     .zip(durations)
@@ -870,6 +1062,7 @@ impl Solver {
                     })
                     .collect(),
                 resource_capacity,
+                allow_holes_in_domain,
             ))
     }
 
@@ -898,36 +1091,8 @@ impl Solver {
         self.maximum(array, rhs.scaled(-1))
     }
 
-    /// Adds the constraint `reif <-> \sum terms_i <= rhs`.
-    pub fn reified_linear_less_than_or_equal<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let terms = terms.into();
-        self.half_reified_linear_less_than_or_equal(terms.clone(), rhs, reif)?;
-        self.half_reified_linear_less_than_or_equal(
-            terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
-            -rhs - 1,
-            !reif,
-        )
-    }
-
-    /// Adds the constraint `reif <-> \sum terms_i = rhs`.
-    pub fn reified_linear_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let terms = terms.into();
-        self.half_reified_linear_equals(terms.clone(), rhs, reif)?;
-        self.half_reified_linear_not_equals(terms, rhs, !reif)
-    }
-
-    /// Adds the constraint `reif <-> clause`.
-    pub fn array_bool_or(
+    /// Posts the constraint `reif <-> \/ clause`
+    pub fn reified_clause(
         &mut self,
         clause: impl Into<Vec<Literal>>,
         reif: Literal,
@@ -935,44 +1100,39 @@ impl Solver {
         let mut clause = clause.into();
 
         // \/clause -> r
-        let all_implications = clause
+        clause
             .iter()
-            .all(|&literal| self.add_clause([!literal, reif]).is_ok());
+            .try_for_each(|&literal| self.add_clause([!literal, reif]))?;
 
         // r -> \/clause
         clause.insert(0, !reif);
 
-        if !all_implications {
-            return Err(ConstraintOperationError::InfeasiblePropagator);
-        }
         self.add_clause(clause)
     }
 
-    /// Adds the constraint `reif <-> lhs != rhs`.
-    pub fn reified_binary_not_equals<Var: IntegerVariable + 'static>(
+    /// Posts the constraint `reif <-> /\ literal_i`
+    pub fn reified_conjunction(
         &mut self,
-        lhs: Var,
-        rhs: Var,
+        conjunction: &[Literal],
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_binary_not_equal(lhs.clone(), rhs.clone(), reif)?;
-        self.half_reified_binary_equals(lhs, rhs, reif)
+        // /\conjunction -> r
+        let clause: Vec<Literal> = conjunction
+            .iter()
+            .map(|&literal| !literal)
+            .chain(std::iter::once(reif))
+            .collect();
+        self.add_clause(clause)?;
+
+        // r -> /\conjunction
+        conjunction
+            .iter()
+            .try_for_each(|&literal| self.add_clause([!reif, literal]))?;
+        Ok(())
     }
 
-    /// Adds the constraint `reif <-> \sum terms_i != rhs`.
-    pub fn reified_linear_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let terms = terms.into();
-        self.half_reified_linear_not_equals(terms.clone(), rhs, reif)?;
-        self.half_reified_linear_equals(terms, rhs, !reif)
-    }
-
-    /// Adds the constraint `\sum weights_i * bools_i <= rhs`.
-    pub fn linear_boolean_less_than_or_equal(
+    /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
+    pub fn boolean_less_than_or_equals(
         &mut self,
         weights: &[i32],
         bools: &[Literal],
@@ -984,19 +1144,23 @@ impl Solver {
             .map(|(index, bool)| {
                 let corresponding_domain_id = self.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let true_literal = self.get_literal(predicate![corresponding_domain_id >= 1]);
-                let _ = self.add_clause([!*bool, true_literal]);
+                let _ = self.add_clause([
+                    !*bool,
+                    self.get_literal(predicate![corresponding_domain_id >= 1]),
+                ]);
                 // !bool -> [domain = 0]
-                let false_literal = self.get_literal(predicate![corresponding_domain_id <= 0]);
-                let _ = self.add_clause([*bool, false_literal]);
+                let _ = self.add_clause([
+                    *bool,
+                    self.get_literal(predicate![corresponding_domain_id <= 0]),
+                ]);
                 corresponding_domain_id.scaled(weights[index])
             })
             .collect::<Vec<_>>();
-        self.linear_less_than_or_equal(domains, rhs)
+        self.less_than_or_equals(domains, rhs)
     }
 
-    /// Adds the constraint `\sum weights_i * bools_i = rhs`.
-    pub fn linear_boolean_equals(
+    /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
+    pub fn boolean_equals(
         &mut self,
         weights: &[i32],
         bools: &[Literal],
@@ -1008,16 +1172,20 @@ impl Solver {
             .map(|(index, bool)| {
                 let corresponding_domain_id = self.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let true_literal = self.get_literal(predicate![corresponding_domain_id >= 1]);
-                let _ = self.add_clause([!*bool, true_literal]);
+                let _ = self.add_clause([
+                    !*bool,
+                    self.get_literal(predicate![corresponding_domain_id >= 1]),
+                ]);
                 // !bool -> [domain = 0]
-                let false_literal = self.get_literal(predicate![corresponding_domain_id <= 0]);
-                let _ = self.add_clause([*bool, false_literal]);
+                let _ = self.add_clause([
+                    *bool,
+                    self.get_literal(predicate![corresponding_domain_id <= 0]),
+                ]);
                 corresponding_domain_id.scaled(weights[index])
             })
             .chain(std::iter::once(rhs.scaled(-1)))
             .collect::<Vec<_>>();
-        self.linear_equals(domains, 0)
+        self.equals(domains, 0)
     }
 }
 

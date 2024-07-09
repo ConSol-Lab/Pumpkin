@@ -7,9 +7,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::TransformableVariable;
 use crate::engine::DomainEvents;
 use crate::pumpkin_assert_simple;
 
@@ -21,9 +19,9 @@ use crate::pumpkin_assert_simple;
 /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
 #[derive(Debug)]
 pub(crate) struct DivisionPropagator<VA, VB, VC> {
-    numerator: PropagatorVariable<VA>,
-    denominator: PropagatorVariable<VB>,
-    rhs: PropagatorVariable<VC>,
+    numerator: VA,
+    denominator: VB,
+    rhs: VC,
 }
 
 #[derive(Debug)]
@@ -99,9 +97,9 @@ where
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    numerator: &PropagatorVariable<VA>,
-    denominator: &PropagatorVariable<VB>,
-    rhs: &PropagatorVariable<VC>,
+    numerator: &VA,
+    denominator: &VB,
+    rhs: &VC,
 ) -> PropagationStatusCP {
     if context.lower_bound(denominator) < 0 && context.upper_bound(denominator) > 0 {
         // For now we don't do anything in this case, note that this will not lead to incorrect
@@ -170,9 +168,9 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 ///   `numerator + 1` and `rhs + 1`
 fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    numerator: &PropagatorVariable<VA>,
-    denominator: &PropagatorVariable<VB>,
-    rhs: &PropagatorVariable<VC>,
+    numerator: &VA,
+    denominator: &VB,
+    rhs: &VC,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
@@ -259,9 +257,9 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
 ///   that this might not be the most constrictive bound
 fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    numerator: &PropagatorVariable<VA>,
-    denominator: &PropagatorVariable<VB>,
-    rhs: &PropagatorVariable<VC>,
+    numerator: &VA,
+    denominator: &VB,
+    rhs: &VC,
 ) -> PropagationStatusCP {
     let rhs_max = context.upper_bound(rhs);
     let numerator_max = context.upper_bound(numerator);
@@ -304,9 +302,9 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
 /// - If the right-hand is negative then the numerator must be negative as well
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
-    numerator: &PropagatorVariable<VA>,
-    denominator: &PropagatorVariable<VB>,
-    rhs: &PropagatorVariable<VC>,
+    numerator: &VA,
+    denominator: &VB,
+    rhs: &VC,
 ) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);

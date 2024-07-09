@@ -2,7 +2,6 @@ mod ast;
 mod compiler;
 pub(crate) mod error;
 mod instance;
-mod minizinc_optimiser;
 mod parser;
 
 use std::fs::File;
@@ -15,18 +14,19 @@ use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
 use pumpkin_lib::results::solution_iterator::IteratedSolution;
+use pumpkin_lib::results::OptimisationResult;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
 use pumpkin_lib::results::SolutionReference;
+use pumpkin_lib::termination::Combinator;
+use pumpkin_lib::termination::OsSignal;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::Solver;
 
 use self::instance::FlatZincInstance;
 use self::instance::FlatzincObjective;
 use self::instance::Output;
-use self::minizinc_optimiser::MinizincOptimisationResult;
-use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::error::FlatZincError;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
@@ -40,6 +40,21 @@ pub(crate) struct FlatZincOptions {
     /// For satisfaction problems, print all solutions. For optimisation problems, this instructs
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
+
+    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
+    pub(crate) cumulative_allow_holes: bool,
+}
+
+#[cfg(test)]
+#[allow(clippy::derivable_impls)]
+impl Default for FlatZincOptions {
+    fn default() -> Self {
+        Self {
+            free_search: false,
+            all_solutions: false,
+            cumulative_allow_holes: false,
+        }
+    }
 }
 
 pub(crate) fn solve(
@@ -50,13 +65,16 @@ pub(crate) fn solve(
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
-    let mut termination = time_limit.map(TimeBudget::starting_now);
+    let mut termination = Combinator::new(
+        OsSignal::install(),
+        time_limit.map(TimeBudget::starting_now),
+    );
 
-    let instance = parse_and_compile(&mut solver, instance)?;
+    let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
-        let brancher = if options.free_search {
+        let mut brancher = if options.free_search {
             // The free search flag is active, we just use the default brancher
             DynamicBrancher::new(vec![Box::new(
                 solver.default_brancher_over_all_propositional_variables(),
@@ -65,14 +83,28 @@ pub(crate) fn solve(
             instance.search.expect("Expected a search to be defined")
         };
 
-        let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
-        match optimisation_solver.solve(&mut termination, brancher, &instance.outputs) {
-            MinizincOptimisationResult::Optimal {
-                optimal_objective_value,
-            } => {
+        if options.all_solutions {
+            solver.with_solution_callback(move |solution| {
+                print_solution_from_solver(solution, &outputs)
+            })
+        }
+
+        let result = match objective_function {
+            FlatzincObjective::Maximize(domain_id) => {
+                solver.maximise(&mut brancher, &mut termination, *domain_id)
+            }
+            FlatzincObjective::Minimize(domain_id) => {
+                solver.minimise(&mut brancher, &mut termination, *domain_id)
+            }
+        };
+
+        match result {
+            OptimisationResult::Optimal(optimal_solution) => {
+                let optimal_objective_value =
+                    optimal_solution.get_integer_value(*objective_function.get_domain());
                 let objective_bound_literal = solver.get_literal(get_bound_predicate(
                     *objective_function,
-                    optimal_objective_value as i32,
+                    optimal_objective_value,
                 ));
 
                 if solver
@@ -82,13 +114,20 @@ pub(crate) fn solve(
                     warn!("Failed to log solver conclusion");
                 };
 
+                // If `all_solutions` is not turned on then we have not printed the solution yet and
+                // need to print it!
+                if !options.all_solutions {
+                    print_solution_from_solver(&optimal_solution, &instance.outputs)
+                }
                 println!("==========");
                 Some(optimal_objective_value)
             }
-            MinizincOptimisationResult::Satisfiable {
-                best_found_objective_value,
-            } => Some(best_found_objective_value),
-            MinizincOptimisationResult::Infeasible => {
+            OptimisationResult::Satisfiable(solution) => {
+                let best_found_objective_value =
+                    solution.get_integer_value(*objective_function.get_domain());
+                Some(best_found_objective_value)
+            }
+            OptimisationResult::Unsatisfiable => {
                 if solver.conclude_proof_unsat().is_err() {
                     warn!("Failed to log solver conclusion");
                 };
@@ -96,7 +135,7 @@ pub(crate) fn solve(
                 println!("{MSG_UNSATISFIABLE}");
                 None
             }
-            MinizincOptimisationResult::Unknown => {
+            OptimisationResult::Unknown => {
                 println!("{MSG_UNKNOWN}");
                 None
             }
@@ -146,7 +185,7 @@ pub(crate) fn solve(
     };
 
     if let Some(value) = value {
-        solver.log_statistics_with_objective(value)
+        solver.log_statistics_with_objective(value as i64)
     } else {
         solver.log_statistics()
     }
@@ -167,9 +206,10 @@ fn get_bound_predicate(
 fn parse_and_compile(
     solver: &mut Solver,
     instance: impl Read,
+    options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
     let ast = parser::parse(instance)?;
-    compiler::compile(ast, solver)
+    compiler::compile(ast, solver, options)
 }
 
 /// Prints the current solution.
@@ -410,8 +450,9 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -431,8 +472,9 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -448,8 +490,9 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());
@@ -469,8 +512,9 @@ mod tests {
         "#;
         let mut solver = Solver::default();
 
-        let instance = parse_and_compile(&mut solver, instance.as_bytes())
-            .expect("compilation should succeed");
+        let instance =
+            parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
+                .expect("compilation should succeed");
 
         let outputs = instance.outputs().collect::<Vec<_>>();
         assert_eq!(1, outputs.len());

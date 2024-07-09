@@ -77,7 +77,11 @@ where
 
     fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
-        TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(tasks, self.capacity))
+        TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(
+            tasks,
+            self.capacity,
+            self.allow_holes_in_domain,
+        ))
     }
 }
 
@@ -291,6 +295,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -321,6 +326,7 @@ mod tests {
             .into_iter()
             .collect(),
             1,
+            false,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
@@ -362,6 +368,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -417,6 +424,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -445,6 +453,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -488,6 +497,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         let result = solver.propagate_until_fixed_point(&mut propagator);
@@ -557,6 +567,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -635,6 +646,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -681,6 +693,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -732,6 +745,7 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
+                false,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
