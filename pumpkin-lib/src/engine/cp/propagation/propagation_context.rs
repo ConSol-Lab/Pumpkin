@@ -9,6 +9,7 @@ use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::EmptyDomain;
+use crate::pumpkin_assert_simple;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -63,6 +64,11 @@ impl<'a> PropagationContextMut<'a> {
     }
 
     pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "cannot reify an already reified propagation context"
+        );
+
         self.reification_literal = Some(reification_literal);
     }
 
