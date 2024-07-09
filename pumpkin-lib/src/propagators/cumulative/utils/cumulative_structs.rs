@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
-use crate::engine::propagation::propagator_variable::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -16,7 +15,7 @@ use crate::propagators::TimeTablePerPointPropagator;
 #[derive(Debug)]
 pub(crate) struct Task<Var> {
     /// The variable representing the start time of a task
-    pub(crate) start_variable: PropagatorVariable<Var>,
+    pub(crate) start_variable: Var,
     /// The processing time of the `start_variable` (also referred to as duration of a task)
     pub(crate) processing_time: i32,
     /// How much of the resource the given task uses during its non-preemptive execution
@@ -68,14 +67,23 @@ pub(crate) struct CumulativeConstructor<Var, T> {
     /// without this field we would need to create a new argument struct for each cumulative
     /// propagator
     propagator_type: PhantomData<T>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub(crate) allow_holes_in_domain: bool,
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
-    pub(crate) fn new(tasks: Box<[ArgTask<Var>]>, capacity: i32) -> Self {
+    pub(crate) fn new(
+        tasks: Box<[ArgTask<Var>]>,
+        capacity: i32,
+        allow_holes_in_domain: bool,
+    ) -> Self {
         CumulativeConstructor {
             tasks,
             capacity,
             propagator_type: PhantomData,
+            allow_holes_in_domain,
         }
     }
 }
@@ -83,6 +91,7 @@ impl<Var, T> CumulativeConstructor<Var, T> {
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
 /// method for each type `T`
+#[allow(dead_code)] // Temporary until the structure is used
 pub(crate) type TimeTablePerPoint<Var> =
     CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
@@ -140,10 +149,18 @@ pub(crate) struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
+    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
+    /// false then it will only adjust the bounds when appropriate rather than removing values from
+    /// the domain
+    pub(crate) allow_holes_in_domain: bool,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
-    pub(crate) fn new(tasks: Vec<Task<Var>>, capacity: i32) -> CumulativeParameters<Var> {
+    pub(crate) fn new(
+        tasks: Vec<Task<Var>>,
+        capacity: i32,
+        allow_holes_in_domain: bool,
+    ) -> CumulativeParameters<Var> {
         CumulativeParameters {
             tasks: tasks
                 .into_iter()
@@ -153,6 +170,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
+            allow_holes_in_domain,
         }
     }
 }

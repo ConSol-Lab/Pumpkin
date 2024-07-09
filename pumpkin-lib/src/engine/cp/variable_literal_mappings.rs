@@ -22,21 +22,21 @@ use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_simple;
 
 #[derive(Debug, Default)]
-pub struct VariableLiteralMappings {
+pub(crate) struct VariableLiteralMappings {
     /// `domain_to_equality_literals[DomainId x][i]` is the [`Literal`]
     /// that represents `[x == i + initial_lb(x)]`, where `initial_lb(x)` is
     /// the lower bound of [`DomainId`] `x` at the time of its creation.
-    pub domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    pub(crate) domain_to_equality_literals: KeyedVec<DomainId, Box<[Literal]>>,
     /// `domain_to_lower_bound_literals[DomainId x][i]` is the [`Literal`]
     /// that represents `[x >= i + initial_lb(x)]`, where `initial_lb(x)` is
     /// the lower bound of [`DomainId`] `x` at the time of its creation.
     /// Note that the [`Literal`]s representing `[x <= k]` are obtained by negating `[x >= k+1]`.
-    pub domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
+    pub(crate) domain_to_lower_bound_literals: KeyedVec<DomainId, Box<[Literal]>>,
     /// `literal_to_predicates[literal]` is the vector of [`IntegerPredicate`]s associated with
     /// the `literal`. Usually there are one or two [`IntegerPredicate`]s associated with a
     /// [`Literal`], but due to preprocessing (not currently implemented), it could be that one
     /// [`Literal`] is associated with three or more [`IntegerPredicate`]s.
-    pub literal_to_predicates: KeyedVec<Literal, Vec<IntegerPredicate>>,
+    pub(crate) literal_to_predicates: KeyedVec<Literal, Vec<IntegerPredicate>>,
 }
 
 // methods for creating new variables
@@ -65,7 +65,7 @@ impl VariableLiteralMappings {
     /// Creates a new propositional variables.
     ///
     /// Note that the variable is not registered with any predicate.
-    pub fn create_new_propositional_variable(
+    pub(crate) fn create_new_propositional_variable(
         &mut self,
         watch_list_propositional: &mut WatchListPropositional,
         clausal_propagator: &mut ClausalPropagatorType,
@@ -90,7 +90,7 @@ impl VariableLiteralMappings {
     /// clausal propagator will be responsible for keeping the propositional representation
     /// consistent.
     #[allow(clippy::too_many_arguments)]
-    pub fn create_new_domain(
+    pub(crate) fn create_new_domain(
         &mut self,
         lower_bound: i32,
         upper_bound: i32,
@@ -381,14 +381,14 @@ impl VariableLiteralMappings {
 impl VariableLiteralMappings {
     /// Returns the [`DomainId`] of the first [`IntegerPredicate`] which the provided `literal` is
     /// linked to or [`None`] if no such [`DomainId`] exists.
-    pub fn get_domain_literal(&self, literal: Literal) -> Option<DomainId> {
+    pub(crate) fn get_domain_literal(&self, literal: Literal) -> Option<DomainId> {
         self.literal_to_predicates[literal]
             .first()
             .map(|predicate| predicate.get_domain())
     }
 
     ///  Returns a literal which corresponds to the provided [`IntegerPredicate`].
-    pub fn get_literal(
+    pub(crate) fn get_literal(
         &self,
         predicate: IntegerPredicate,
         assignments_propositional: &AssignmentsPropositional,
@@ -434,7 +434,7 @@ impl VariableLiteralMappings {
         }
     }
 
-    pub fn get_lower_bound_literal(
+    pub(crate) fn get_lower_bound_literal(
         &self,
         domain: DomainId,
         lower_bound: i32,
@@ -456,7 +456,7 @@ impl VariableLiteralMappings {
         self.domain_to_lower_bound_literals[domain][literal_idx]
     }
 
-    pub fn get_upper_bound_literal(
+    pub(crate) fn get_upper_bound_literal(
         &self,
         domain: DomainId,
         upper_bound: i32,
@@ -471,7 +471,7 @@ impl VariableLiteralMappings {
         )
     }
 
-    pub fn get_equality_literal(
+    pub(crate) fn get_equality_literal(
         &self,
         domain: DomainId,
         equality_constant: i32,
@@ -489,7 +489,7 @@ impl VariableLiteralMappings {
         self.domain_to_equality_literals[domain][literal_idx]
     }
 
-    pub fn get_inequality_literal(
+    pub(crate) fn get_inequality_literal(
         &self,
         domain: DomainId,
         not_equal_constant: i32,

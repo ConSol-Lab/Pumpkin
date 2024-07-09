@@ -7,7 +7,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -26,7 +25,7 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 /// Propagator for the constraint `reif => \sum x_i <= c`.
 #[derive(Debug)]
 pub(crate) struct LinearLessOrEqualPropagator<Var> {
-    x: Box<[PropagatorVariable<Var>]>,
+    x: Box<[Var]>,
     c: i32,
 }
 
@@ -75,7 +74,7 @@ where
 
 fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
-    x: &[PropagatorVariable<Var>],
+    x: &[Var],
     c: i32,
 ) -> PropagationStatusCP {
     let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();

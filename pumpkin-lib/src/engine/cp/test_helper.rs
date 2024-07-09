@@ -84,12 +84,7 @@ impl TestSolver {
             &self.assignments_propositional,
         ))?;
 
-        propagator.propagate(&mut PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            PropagatorId(0),
-        ))?;
+        self.propagate(&mut propagator)?;
 
         Ok(propagator)
     }

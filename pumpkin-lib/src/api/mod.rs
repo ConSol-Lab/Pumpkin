@@ -6,8 +6,9 @@ pub mod results {
     //!
     //! We differentiate between 3 different types of results:
     //! - For a **satisfaction** problem ([`SatisfactionResult`])
-    //! - For a **satisfaction** problem using assumptions ([`SatisfactionResultUnderAssumptions`])
-    //! - For an optimisation problem ([`OptimisationResult`])
+    //! - For a **satisfaction** problem using **assumptions**
+    //!   ([`SatisfactionResultUnderAssumptions`])
+    //! - For an **optimisation** problem ([`OptimisationResult`])
     //! On these results, different methods can be called which ensure that the solver is in the
     //! right state for these operations. For example,
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract
@@ -97,7 +98,15 @@ pub mod statistics {
 }
 
 pub mod proof {
-    //! Contains structures for logging proofs for the [`Solver`].
+    //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
+    //! [`ProofLog`], which is a list of deductions made by the solver.
+    //!
+    //! Proof logging for CP is supported in the DRCP format. This format explicitly supports usage
+    //! where the solver logs a proof scaffold which later processed into a full proof after search
+    //! has completed. Proof processing is very close to solving, and the
+    //! [`rp_engine::RpEngine`] exposes an API that can be used to process a proof scaffold into
+    //! a full CP proof.
+
     pub use crate::engine::proof::Format;
     pub use crate::engine::proof::ProofLog;
     pub use crate::engine::rp_engine;

@@ -1687,8 +1687,8 @@ mod tests {
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorConstructor;
+    use crate::engine::propagation::PropagatorConstructorContext;
     use crate::engine::propagation::PropagatorId;
-    use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonRef;
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
@@ -1707,15 +1707,8 @@ mod tests {
     impl PropagatorConstructor for TestPropagatorConstructor {
         type Propagator = TestPropagator;
 
-        fn create(
-            self,
-            context: &mut crate::engine::propagation::PropagatorConstructorContext<'_>,
-        ) -> Self::Propagator {
-            let propagations: Vec<(
-                PropagatorVariable<DomainId>,
-                Predicate,
-                PropositionalConjunction,
-            )> = self
+        fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
+            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
                 .propagations
                 .iter()
                 .enumerate()
@@ -1748,16 +1741,8 @@ mod tests {
     /// It is assumed that the propagations do not lead to conflict, if the propagations do lead to
     /// a conflict then this method will panic.
     struct TestPropagator {
-        original_propagations: Vec<(
-            PropagatorVariable<DomainId>,
-            Predicate,
-            PropositionalConjunction,
-        )>,
-        propagations: Vec<(
-            PropagatorVariable<DomainId>,
-            Predicate,
-            PropositionalConjunction,
-        )>,
+        original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
+        propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
         is_in_root: bool,
     }

@@ -13,7 +13,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -28,9 +27,9 @@ pub(crate) struct ElementConstructor<VX, VI, VE> {
 ///
 /// Note that this propagator is 0-indexed
 pub(crate) struct ElementPropagator<VX, VI, VE> {
-    array: Rc<[PropagatorVariable<VX>]>,
-    index: PropagatorVariable<VI>,
-    rhs: PropagatorVariable<VE>,
+    array: Rc<[VX]>,
+    index: VI,
+    rhs: VE,
 }
 
 const ID_INDEX: LocalId = LocalId::from(0);
@@ -42,7 +41,7 @@ const ID_X_OFFSET: u32 = 2;
 /// Use `for_domain_values!` if you want mutable access to the context while iterating
 fn iter_values<'c, Var: IntegerVariable>(
     context: &'c PropagationContextMut,
-    var: &'c PropagatorVariable<Var>,
+    var: &'c Var,
 ) -> impl Iterator<Item = i32> + 'c {
     (context.lower_bound(var)..=context.upper_bound(var)).filter(|i| context.contains(var, *i))
 }

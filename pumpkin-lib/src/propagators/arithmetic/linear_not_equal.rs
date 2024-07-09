@@ -10,7 +10,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -24,7 +23,10 @@ pub(crate) struct LinearNotEqualConstructor<Var> {
 
 impl<Var> LinearNotEqualConstructor<Var> {
     pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNotEqualConstructor { terms, rhs }
+        LinearNotEqualConstructor {
+            terms,
+            rhs,
+        }
     }
 }
 
@@ -32,7 +34,7 @@ impl<Var> LinearNotEqualConstructor<Var> {
 /// integer variables and `rhs` is an integer constant.
 #[derive(Debug)]
 pub(crate) struct LinearNotEqualPropagator<Var> {
-    terms: Rc<[PropagatorVariable<Var>]>,
+    terms: Rc<[Var]>,
     rhs: i32,
 }
 
@@ -80,7 +82,7 @@ where
         let num_fixed = self
             .terms
             .iter()
-            .filter(|x_i| context.is_fixed(x_i))
+            .filter(|&x_i| context.is_fixed(x_i))
             .count();
         if num_fixed < self.terms.len() - 1 {
             return Ok(());
@@ -98,7 +100,8 @@ where
             })
             .sum::<i32>();
 
-        if num_fixed == self.terms.len() - 1 {
+        if num_fixed == self.terms.len() - 1
+        {
             let value_to_remove = self.rhs - lhs;
 
             let unfixed_x_i = self
@@ -121,6 +124,9 @@ where
                 },
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
+            // Conflict was found, either the constraint is not reified or the reification
+            // variable is already true
+
             let failure_reason: PropositionalConjunction = self
                 .terms
                 .iter()

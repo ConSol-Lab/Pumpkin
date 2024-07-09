@@ -2,7 +2,6 @@ use super::PropagatorId;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
@@ -63,8 +62,8 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub(crate) fn with_reification(&mut self, reification_literal: &PropagatorVariable<Literal>) {
-        self.reification_literal = Some(reification_literal.get_literal());
+    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+        self.reification_literal = Some(reification_literal);
     }
 
     fn build_reason(&self, reason: Reason) -> Reason {
@@ -130,38 +129,34 @@ mod private {
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_literal_fixed(&self, var: &PropagatorVariable<Literal>) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned(var.inner)
+    fn is_literal_fixed(&self, var: Literal) -> bool {
+        self.assignments_propositional().is_literal_assigned(var)
     }
 
-    fn is_literal_true(&self, var: &PropagatorVariable<Literal>) -> bool {
+    fn is_literal_true(&self, var: Literal) -> bool {
         self.assignments_propositional()
-            .is_literal_assigned_true(var.inner)
+            .is_literal_assigned_true(var)
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
-    fn is_fixed<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> bool {
+    fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool {
         self.lower_bound(var) == self.upper_bound(var)
     }
 
-    fn lower_bound<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.lower_bound(self.assignments_integer())
+    fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
+        var.lower_bound(self.assignments_integer())
     }
 
-    fn upper_bound<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>) -> i32 {
-        var.inner.upper_bound(self.assignments_integer())
+    fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
+        var.upper_bound(self.assignments_integer())
     }
 
-    fn contains<Var: IntegerVariable>(&self, var: &PropagatorVariable<Var>, value: i32) -> bool {
-        var.inner.contains(self.assignments_integer(), value)
+    fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {
+        var.contains(self.assignments_integer(), value)
     }
 
-    fn describe_domain<Var: IntegerVariable>(
-        &self,
-        var: &PropagatorVariable<Var>,
-    ) -> Vec<Predicate> {
-        var.inner.describe_domain(self.assignments_integer())
+    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<Predicate> {
+        var.describe_domain(self.assignments_integer())
     }
 }
 
@@ -170,66 +165,57 @@ impl<T: HasAssignments> ReadDomains for T {}
 impl PropagationContextMut<'_> {
     pub fn remove<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
-        var: &PropagatorVariable<Var>,
+        var: &Var,
         value: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if var.inner.contains(self.assignments_integer, value) {
+        if var.contains(self.assignments_integer, value) {
             let reason = self.build_reason(reason.into());
             let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var
-                .inner
-                .remove(self.assignments_integer, value, Some(reason_ref));
+            return var.remove(self.assignments_integer, value, Some(reason_ref));
         }
         Ok(())
     }
 
     pub fn set_upper_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
-        var: &PropagatorVariable<Var>,
+        var: &Var,
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound < var.inner.upper_bound(self.assignments_integer) {
+        if bound < var.upper_bound(self.assignments_integer) {
             let reason = self.build_reason(reason.into());
             let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var
-                .inner
-                .set_upper_bound(self.assignments_integer, bound, Some(reason_ref));
+            return var.set_upper_bound(self.assignments_integer, bound, Some(reason_ref));
         }
         Ok(())
     }
 
     pub fn set_lower_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
-        var: &PropagatorVariable<Var>,
+        var: &Var,
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound > var.inner.lower_bound(self.assignments_integer) {
+        if bound > var.lower_bound(self.assignments_integer) {
             let reason = self.build_reason(reason.into());
             let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var
-                .inner
-                .set_lower_bound(self.assignments_integer, bound, Some(reason_ref));
+            return var.set_lower_bound(self.assignments_integer, bound, Some(reason_ref));
         }
         Ok(())
     }
 
     pub fn assign_literal<R: Into<Reason>>(
         &mut self,
-        var: &PropagatorVariable<Literal>,
+        var: Literal,
         bound: bool,
         reason: R,
     ) -> Result<(), Inconsistency> {
-        if !self
-            .assignments_propositional
-            .is_literal_assigned(var.inner)
-        {
+        if !self.assignments_propositional.is_literal_assigned(var) {
             let reason = self.build_reason(reason.into());
             let reason_ref = self.reason_store.push(self.propagator, reason);
             let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
-                if bound { var.inner } else { !var.inner },
+                if bound { var } else { !var },
                 ConstraintReference::create_reason_reference(reason_ref),
             );
             if let Some(conflict_info) = enqueue_result {

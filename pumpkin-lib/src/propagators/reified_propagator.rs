@@ -9,7 +9,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::propagation::PropagatorVariable;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::BooleanDomainEvent;
 use crate::engine::DomainEvents;
@@ -57,7 +56,7 @@ impl<PropArgs: PropagatorConstructor> PropagatorConstructor
 /// propagated to false.
 pub(crate) struct ReifiedPropagator<Prop> {
     propagator: Prop,
-    reification_literal: PropagatorVariable<Literal>,
+    reification_literal: Literal,
     /// The inconsistency that is identified by `propagator` during initialisation.
     root_level_inconsistency: Option<PropositionalConjunction>,
 }
@@ -69,7 +68,7 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        if context.is_literal_true(&self.reification_literal) {
+        if context.is_literal_true(self.reification_literal) {
             self.propagator.notify(context, local_id, event)
         } else {
             EnqueueDecision::Skip
@@ -101,11 +100,11 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 
     fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if let Some(conjunction) = self.root_level_inconsistency.take() {
-            context.assign_literal(&self.reification_literal, false, conjunction)?;
+            context.assign_literal(self.reification_literal, false, conjunction)?;
         }
 
-        if context.is_literal_true(&self.reification_literal) {
-            context.with_reification(&self.reification_literal);
+        if context.is_literal_true(self.reification_literal) {
+            context.with_reification(self.reification_literal);
 
             let result = self.propagator.propagate(context);
 
@@ -125,8 +124,8 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
         &self,
         context: &mut PropagationContextMut,
     ) -> PropagationStatusCP {
-        if context.is_literal_true(&self.reification_literal) {
-            context.with_reification(&self.reification_literal);
+        if context.is_literal_true(self.reification_literal) {
+            context.with_reification(self.reification_literal);
 
             let result = self.propagator.debug_propagate_from_scratch(context);
 
@@ -142,7 +141,7 @@ impl<Prop: Propagator> Propagator for ReifiedPropagator<Prop> {
 impl<Prop> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
         if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) = status {
-            conjunction.add(self.reification_literal.get_literal().into());
+            conjunction.add(self.reification_literal.into());
         }
         status
     }
@@ -151,9 +150,9 @@ impl<Prop> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if !context.is_literal_fixed(&self.reification_literal) {
+        if !context.is_literal_fixed(self.reification_literal) {
             if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
-                context.assign_literal(&self.reification_literal, false, conjunction)?;
+                context.assign_literal(self.reification_literal, false, conjunction)?;
             }
         }
 
@@ -212,7 +211,7 @@ mod tests {
                 reification_literal,
                 propagator: GenericArgs {
                     propagation: move |ctx: &mut PropagationContextMut| {
-                        ctx.set_lower_bound(&PropagatorVariable { inner: var }, 3, conjunction!())?;
+                        ctx.set_lower_bound(&var, 3, conjunction!())?;
                         Ok(())
                     },
                     consistency_check: |_: PropagationContext| None,

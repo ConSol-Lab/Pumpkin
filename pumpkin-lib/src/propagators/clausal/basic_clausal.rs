@@ -17,10 +17,10 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 #[derive(Default, Debug)]
-pub struct BasicClausalPropagator {
-    pub watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
-    pub next_position_on_trail_to_propagate: usize,
-    pub permanent_clauses: Vec<ClauseReference>,
+pub(crate) struct BasicClausalPropagator {
+    pub(crate) watch_lists: KeyedVec<Literal, Vec<ClauseWatcher>>,
+    pub(crate) next_position_on_trail_to_propagate: usize,
+    pub(crate) permanent_clauses: Vec<ClauseReference>,
     is_in_infeasible_state: bool,
 }
 
@@ -494,13 +494,7 @@ impl BasicClausalPropagator {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ClauseWatcher {
+pub(crate) struct ClauseWatcher {
     cached_literal: Literal,
     clause_reference: ClauseReference,
 }
-// pub enum ClausePreprocessingOutcome {
-// SatisfiedAtRoot,
-// FalsifiedAtRoot,
-// UnitClause { literal: Literal },
-// PreprocessedClause { clause: Vec<Literal> },
-// }

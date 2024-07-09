@@ -27,7 +27,6 @@ mod tests {
     use crate::engine::cp::assignments_integer;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
-    use crate::engine::propagation::PropagatorVariable;
     use crate::engine::reason::ReasonStore;
     use crate::engine::variables::Literal;
     use crate::engine::variables::PropositionalVariable;
@@ -50,8 +49,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result =
-                context.set_lower_bound(&PropagatorVariable::new(domain), 2, conjunction!());
+            let result = context.set_lower_bound(&domain, 2, conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);
@@ -74,8 +72,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result =
-                context.set_upper_bound(&PropagatorVariable::new(domain), 15, conjunction!());
+            let result = context.set_upper_bound(&domain, 15, conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);
@@ -98,7 +95,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result = context.remove(&PropagatorVariable::new(domain), 15, conjunction!());
+            let result = context.remove(&domain, 15, conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);
@@ -123,8 +120,7 @@ mod tests {
                 PropagatorId(0),
             );
 
-            let result =
-                context.assign_literal(&PropagatorVariable::new(literal), false, conjunction!());
+            let result = context.assign_literal(literal, false, conjunction!());
             assert!(result.is_ok());
         }
         assert_eq!(reason_store.len(), 0);

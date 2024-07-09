@@ -23,6 +23,8 @@ use crate::Solver;
 /// allow the following types of proofs:
 /// - A CP proof log - This can be created using [`ProofLog::cp`].
 /// - A DIMACS proof log - This can be created using [`ProofLog::dimacs`].
+///
+/// When a proof log should not be generated, use the implementation of [`Default`].
 #[derive(Debug, Default)]
 pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
@@ -53,7 +55,7 @@ impl ProofLog {
     }
 
     /// Log a learned clause to the proof.
-    pub fn log_learned_clause(
+    pub(crate) fn log_learned_clause(
         &mut self,
         literals: impl IntoIterator<Item = Literal>,
     ) -> std::io::Result<NonZeroU64> {
@@ -70,7 +72,7 @@ impl ProofLog {
         }
     }
 
-    pub fn unsat(
+    pub(crate) fn unsat(
         self,
         variable_names: &VariableNames,
         variable_literal_mapping: &VariableLiteralMappings,
@@ -91,7 +93,7 @@ impl ProofLog {
         }
     }
 
-    pub fn optimal(
+    pub(crate) fn optimal(
         self,
         objective_bound: Literal,
         variable_names: &VariableNames,
