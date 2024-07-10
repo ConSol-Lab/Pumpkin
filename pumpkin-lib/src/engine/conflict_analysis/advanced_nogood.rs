@@ -1,6 +1,11 @@
 use super::ConflictAnalysisNogoodContext;
 use super::LearnedNogood;
+use crate::basic_types::HashMap;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::variables::DomainId;
+use crate::engine::AssignmentsInteger;
+use crate::predicate;
+use crate::pumpkin_assert_moderate;
 /// The struct represents a nogood that does additional bookkeeping. The nogood is used during
 /// conflict analysis as the learned nogood. The core functionality is as follows:
 /// * Stores predicates, as expected from a nogood.
@@ -13,113 +18,489 @@ use crate::engine::predicates::integer_predicate::IntegerPredicate;
 /// * Reports whether the nogood is propagating, i.e., has only one predicate from the current
 ///   decision level.
 pub(crate) struct AdvancedNogood {
-    // current_decision_level: usize,
-    // predicates: Vec<IntegerPredicate>,
+    current_decision_level: usize,
+    pub(crate) predicates: Vec<PredicateWithInfo>,
+    /// Used to do semantic minimisation.
+    internal_assignments: AssignmentsInteger,
+    /// Incoming predicate domain ids are mapped to an internal representation, which is used in
+    /// the internal assignments data structure.
+    internal_ids: HashMap<DomainId, DomainId>,
+    // note to self: could optimise by separately tracking predicates from the current decision
+    // level and those at lower levels. This is because we only need consider the ones at the
+    // current decision level when replacing predicates with their reason.
 }
 
 impl AdvancedNogood {
-    /// Initialises the inernal data structures for a new nogood. The information about the current
-    /// decision level is used by other parts.
-    pub(crate) fn new(_current_decision_level: usize) -> AdvancedNogood {
-        todo!();
+    /// Initialises the internal data structures for a new nogood.
+    /// The information about the current decision level is used by other parts.
+    pub(crate) fn new(current_decision_level: usize) -> AdvancedNogood {
+        AdvancedNogood {
+            current_decision_level,
+            predicates: vec![],
+            internal_assignments: AssignmentsInteger::default(),
+            internal_ids: HashMap::default(),
+        }
     }
+
+    fn register_id_internally(
+        &mut self,
+        domain_id: DomainId,
+        context: &ConflictAnalysisNogoodContext,
+    ) {
+        // Only register if the domain is not yet registered.
+        // I am disabling the clippy warning temporarily.
+        #[allow(clippy::map_entry)]
+        if !self.internal_ids.contains_key(&domain_id) {
+            let lower_bound = context
+                .assignments_integer
+                .get_initial_lower_bound(domain_id);
+            let upper_bound = context
+                .assignments_integer
+                .get_initial_upper_bound(domain_id);
+            // Replicate the domain but with a new internal id.
+            let internal_domain_id = self.internal_assignments.grow(lower_bound, upper_bound);
+            let _ = self.internal_ids.insert(domain_id, internal_domain_id);
+        }
+    }
+
+    fn get_internal_id(&self, domain_id: DomainId) -> DomainId {
+        *self.internal_ids.get(&domain_id).unwrap()
+    }
+
+    fn convert_into_internal_predicate(
+        &mut self,
+        predicate: IntegerPredicate,
+        context: &ConflictAnalysisNogoodContext,
+    ) -> IntegerPredicate {
+        self.register_id_internally(predicate.get_domain(), context);
+        let internal_id = self.get_internal_id(predicate.get_domain());
+        // The code below is cumbersome, but this is the idea:
+        // The internal predicate is the same as the input predicate,
+        // but swapping out the domain id for the internal domain id.
+        match predicate {
+            IntegerPredicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => predicate![internal_id >= lower_bound],
+            IntegerPredicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => predicate![internal_id <= upper_bound],
+            IntegerPredicate::NotEqual {
+                domain_id: _,
+                not_equal_constant,
+            } => predicate![internal_id != not_equal_constant],
+            IntegerPredicate::Equal {
+                domain_id: _,
+                equality_constant,
+            } => predicate![internal_id == equality_constant],
+        }
+    }
+
+    fn debug_check_duplicates(&self) -> bool {
+        for entry in &self.predicates {
+            assert!(
+                self.predicates
+                    .iter()
+                    .filter(|p| p.predicate == entry.predicate)
+                    .count()
+                    == 1,
+                "There cannot be duplicate predicates."
+            );
+        }
+        true
+    }
+
+    fn add_predicate(
+        &mut self,
+        predicate: IntegerPredicate,
+        context: &mut ConflictAnalysisNogoodContext,
+    ) {
+        let internal_predicate = self.convert_into_internal_predicate(predicate, context);
+
+        match self
+            .internal_assignments
+            .evaluate_predicate(internal_predicate)
+        {
+            Some(truth_value) => match truth_value {
+                true => {
+                    // The predicate already satisfied, so it can be ignored.
+                }
+                false => {
+                    // The predicate is falsified, which cannot happen during conflict analysis.
+                    unreachable!();
+                }
+            },
+            None => {
+                // The predicate is undecided, so we can post it.
+                self.internal_assignments
+                    .post_integer_predicate(internal_predicate, None)
+                    .expect("Previous code asserted this will be a success.");
+
+                // Add the predicate to the list of predicates in the nogood.
+                let decision_level = context
+                    .assignments_integer
+                    .get_decision_level_for_predicate(&predicate)
+                    .unwrap();
+
+                let trail_position = context
+                    .assignments_integer
+                    .get_trail_position(&predicate)
+                    .unwrap();
+
+                self.predicates.push(PredicateWithInfo {
+                    predicate,
+                    decision_level,
+                    trail_position,
+                });
+                pumpkin_assert_moderate!(self.debug_check_duplicates());
+                // Note that the added predicate may make some of the already present predicates
+                // redundant. We do not remove redundant predicates now, but leave this for the end.
+            }
+        }
+    }
+
     /// Adds the predicate to the nogood, and attaches the extra information (decision level and
     /// trail position) to the predicate internally. The extra information is used by other
     /// functions. Note that semantic redundancies is automatically applied.
     pub(crate) fn add_predicates(
         &mut self,
-        _predicates: Vec<IntegerPredicate>,
-        _context: &mut ConflictAnalysisNogoodContext,
+        predicates: Vec<IntegerPredicate>,
+        context: &mut ConflictAnalysisNogoodContext,
     ) {
-        // for predicate in predicates {
-        // let decision_level = context
-        // .assignments_integer
-        // .get_decision_level_for_predicate(&predicate)
-        // .expect("Predicates expected to be true during conflict analysis.");
-        // let trail_position = context
-        // .assignments_integer
-        // .get_trail_position(&predicate)
-        // .expect("Predicates expected to be true during conflict analysis.");
-        // nogood.push(predicate, decision_level, trail_position);
-        // }
-        todo!();
-        // println!("\t resulting nogood: {:?}", learned_nogood);
+        for predicate in predicates {
+            if !context
+                .assignments_integer
+                .evaluate_predicate(predicate)
+                .is_some_and(|x| x)
+            {
+                println!("\tNot ok: {:?}", predicate);
+            }
 
+            assert!(
+                context
+                    .assignments_integer
+                    .evaluate_predicate(predicate)
+                    .is_some_and(|x| x),
+                "Predicates must be true during conflict analysis."
+            );
+            self.add_predicate(predicate, context);
+        }
+        self.simplify_predicates()
+        // println!("\t resulting nogood: {:?}", learned_nogood);
         // println!("\t after min: {:?}", learned_nogood);
     }
-    /// Removes the predicate within the nogood that has the highest trail position.
+    /// Removes the predicate that has the highest trail position.
     /// Returns None if the nogood is empty.
     pub(crate) fn pop_highest_trail_predicate(&mut self) -> Option<IntegerPredicate> {
-        todo!();
-        // let next_predicate = *learned_nogood
-        // .iter()
-        // .max_by_key(|predicate| {
-        // context
-        // .assignments_integer
-        // .get_trail_position(predicate)
-        // .unwrap()
-        // })
-        // .expect("Cannot have an empty nogood during analysis.");
+        assert!(
+            !self.predicates.is_empty(),
+            "Do not expect to see an empty nogood during conflict analysis!"
+        );
+        // For now we do this using several linear passes.
+        // In the future could consider doing this more efficiently,
+        // a single linear scan or using a heap-like structure.
 
-        // Replace the next_predicate with its reason. This is done in two steps:
-        // 1) Remove the predicate from the nogood.
-        // let next_predicate_index = learned_nogood
-        // .iter()
-        // .position(|predicate| *predicate == next_predicate)
-        // .expect("Must be able to find the predicate again.");
-        // let _ = learned_nogood.swap_remove(next_predicate_index);
+        // If there is at least one element left.
+        if let Some(next_predicate) = self.predicates.iter().max_by_key(|p| p.trail_position) {
+            // Find the position of the next predicate.
+            // This is a bit non-elegant but okay for now.
+            let position = self
+                .predicates
+                .iter()
+                .position(|p| p.trail_position == next_predicate.trail_position)
+                .unwrap();
+            assert!(
+                self.predicates[position].predicate == next_predicate.predicate,
+                "Sanity check that the trail positions are unique."
+            );
+            let removed_predicate = self.predicates.swap_remove(position);
+            Some(removed_predicate.predicate)
+        } else {
+            None
+        }
     }
     /// The nogood is considered propagating if it contains only one predicate from the current
     /// decision level.
     pub(crate) fn is_nogood_propagating(&self) -> bool {
-        todo!();
-        // todo: could be done more efficiently with additional data structures.
-        // let is_nogood_propagating = |nogood: &Vec<IntegerPredicate>| {
-        // let num_predicates_at_current_decision_level = num_pred_cur_dl(nogood);
-        // assert!(num_predicates_at_current_decision_level > 0);
-        // num_predicates_at_current_decision_level == 1
-        // };
+        // Could be done more efficiently with additional data structures.
+        let num_predicates_at_current_decision_level = self
+            .predicates
+            .iter()
+            .filter(|p| p.decision_level == self.current_decision_level)
+            .count();
 
-        // let num_pred_cur_dl = |nogood: &Vec<IntegerPredicate>| {
-        // nogood
-        // .iter()
-        // .filter(|predicate| {
-        // context
-        // .assignments_integer
-        // .get_decision_level_for_predicate(predicate)
-        // .expect("Nogood predicate must have a decision level.")
-        // == context.assignments_integer.get_decision_level()
-        // })
-        // .count()
-        // };
+        assert!(
+            num_predicates_at_current_decision_level > 0,
+            "Sanity check."
+        );
+
+        num_predicates_at_current_decision_level == 1
     }
+
     /// Extract the internal nogood and returns it as a learned nogood.
-    /// Note that this consumes the nogood.
-    pub(crate) fn extract_final_learned_nogood(self) -> LearnedNogood {
-        todo!();
-        // todo: can be done more efficiently
-        // learned_nogood
-        // .sort_by_key(|predicate| context.assignments_integer.get_trail_position(predicate));
-        // learned_nogood.reverse();
-        //
-        // sanity check
-        // pumpkin_assert_moderate!(
-        // context.assignments_integer.get_decision_level()
-        // == context
-        // .assignments_integer
-        // .get_decision_level_for_predicate(&learned_nogood[0])
-        // .unwrap()
-        // );
-        //
-        // let backjump_level = if learned_nogood.len() > 1 {
-        // context
-        // .assignments_integer
-        // .get_decision_level_for_predicate(&learned_nogood[1])
-        // .unwrap()
-        // } else {
-        // 0
-        // };
+    /// The predicates in the nogood are sorted according to trail position.
+    /// It is guaranteed that the predicates in position zero is the propagating predicate,
+    /// and the position one contains the predicate with the second highest decision level.
+    /// This is needed when adding the learned nogood.
+    pub(crate) fn extract_final_learned_nogood(&self) -> LearnedNogood {
+        // Ideally we would use the retain function of the vector, however we cannot due to borrow
+        // checker rules. So we do a manual non-inplace version.
+        Self::prepare_learned_nogood(self.predicates.clone(), self.current_decision_level)
     }
+
+    fn simplify_predicates(&mut self) {
+        // I think this is correct, todo double check.
+
+        // The predicates are determined based on the assignments.
+        // There may be more efficient ways to implement this.
+        // Linearly go through the predicates, and check whether the predicate should be kept.
+        // Determining if it should be kept is done as follows.
+        // 1) [x == k] and not already kept: keep.
+        // 2) [x != k] and within bounds of assignment: keep.
+        // 3) [x >= k] _and_ not root predicate _and_ variable x not assigned: keep.
+        // 4) [x <= k] _and_ not root predicate _and_ variable x not assigned: keep.
+        // 5) [x <= k] _and_ not root predicate _and_ variable x _is_ assigned: add [x == k] if it
+        //    is not already present. Do not add the bound predicate.
+        // 6) [x >= k] _and not root predicate _and_ variable x _is_ assigned: add [x == k] if it is
+        //    not already present. Do not add the bound predicate.
+
+        // Only consider the ids that appear in the predicates.
+        // The reason for not consider all internal ids is that the conflict
+        // analysis may have determined that some of the predicates are redundant, so we only look
+        // at predicates that remain in the list.
+
+        // Note that the self.predicates and self.assignments have different ids, that need to be
+        // converted via self.internal_ids.
+
+        let mut simplified_predicates: Vec<PredicateWithInfo> = vec![];
+        for p in &self.predicates {
+            let internal_id = self.get_internal_id(p.predicate.get_domain());
+            match p.predicate {
+                IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => {
+                    // 3) [x >= k] _and_ not root predicate _and_ variable x not assigned: keep.
+                    // 6) [x >= k] _and not root predicate _and_ variable x _is_ assigned: add [x ==
+                    //    k] if it is not already present. Do not add the bound predicate.
+
+                    // first check that it is not a root predicate
+                    if self
+                        .internal_assignments
+                        .get_initial_lower_bound(internal_id)
+                        < lower_bound
+                    {
+                        match self.internal_assignments.is_domain_assigned(internal_id) {
+                            true => {
+                                // Important to note that the assigned value may be different than
+                                // the one given by the lower bound (due to holes).
+                                let assigned_value = self
+                                    .internal_assignments
+                                    .get_assigned_value(internal_id)
+                                    .unwrap();
+                                if simplified_predicates.iter().all(|simplified_entry| {
+                                    simplified_entry.predicate
+                                        != predicate![domain_id == assigned_value]
+                                }) {
+                                    // Be careful not to mixed up internal_domain_id and domain_id.
+                                    let decision_level = self
+                                        .internal_assignments
+                                        .get_decision_level_for_predicate(&predicate![
+                                            internal_id == assigned_value
+                                        ])
+                                        .unwrap();
+                                    let trail_position = self
+                                        .internal_assignments
+                                        .get_trail_position(&predicate![
+                                            internal_id == assigned_value
+                                        ])
+                                        .unwrap();
+                                    // Add the predicate to the simplified list.
+                                    simplified_predicates.push(PredicateWithInfo {
+                                        predicate: predicate![domain_id == assigned_value],
+                                        decision_level,
+                                        trail_position,
+                                    });
+                                }
+                            }
+                            false => {
+                                // Here it is important to note that even though this predicate is a
+                                // lower bound, due to holes, the
+                                // lower bound value given by the predicate may not be the stronger
+                                // lower bound value, so we need to query it from the assignments.
+                                // Add the predicate to the simplified list.
+                                let strongest_lower_bound =
+                                    self.internal_assignments.get_lower_bound(internal_id);
+                                let decision_level = self
+                                    .internal_assignments
+                                    .get_decision_level_for_predicate(&predicate![
+                                        internal_id >= strongest_lower_bound
+                                    ])
+                                    .unwrap();
+                                let trail_position = self
+                                    .internal_assignments
+                                    .get_trail_position(&predicate![
+                                        internal_id >= strongest_lower_bound
+                                    ])
+                                    .unwrap();
+                                simplified_predicates.push(PredicateWithInfo {
+                                    predicate: predicate![domain_id >= strongest_lower_bound],
+                                    decision_level,
+                                    trail_position,
+                                });
+                            }
+                        }
+                    }
+                }
+                IntegerPredicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => {
+                    // 4) [x <= k] _and_ not root predicate _and_ variable x not assigned: keep.
+                    // 5) [x <= k] _and_ not root predicate _and_ variable x _is_ assigned:
+                    // add [x == k] if it is not already present. Do not add the bound predicate.
+
+                    // first check that it is not a root predicate
+                    if self
+                        .internal_assignments
+                        .get_initial_upper_bound(internal_id)
+                        < upper_bound
+                    {
+                        match self.internal_assignments.is_domain_assigned(internal_id) {
+                            true => {
+                                // Important to note that the assigned value may be different than
+                                // the one given by the lower bound (due to holes).
+                                let assigned_value = self
+                                    .internal_assignments
+                                    .get_assigned_value(internal_id)
+                                    .unwrap();
+                                if simplified_predicates.iter().all(|simplified_entry| {
+                                    simplified_entry.predicate
+                                        != predicate![domain_id == assigned_value]
+                                }) {
+                                    // Be careful not to mixed up internal_domain_id and domain_id.
+                                    let decision_level = self
+                                        .internal_assignments
+                                        .get_decision_level_for_predicate(&predicate![
+                                            internal_id == assigned_value
+                                        ])
+                                        .unwrap();
+                                    let trail_position = self
+                                        .internal_assignments
+                                        .get_trail_position(&predicate![
+                                            internal_id == assigned_value
+                                        ])
+                                        .unwrap();
+                                    // Add the predicate to the simplified list.
+                                    simplified_predicates.push(PredicateWithInfo {
+                                        predicate: predicate![domain_id == assigned_value],
+                                        decision_level,
+                                        trail_position,
+                                    });
+                                }
+                            }
+                            false => {
+                                // Here it is important to note that even though this predicate is a
+                                // upper bound, due to holes, the
+                                // upper bound value given by the predicate may not be the strongest
+                                // upper bound value, so we need to query it from the assignments.
+                                // Add the predicate to the simplified list.
+                                let strongest_upper_bound =
+                                    self.internal_assignments.get_upper_bound(internal_id);
+                                let decision_level = self
+                                    .internal_assignments
+                                    .get_decision_level_for_predicate(&predicate![
+                                        internal_id <= strongest_upper_bound
+                                    ])
+                                    .unwrap();
+                                let trail_position = self
+                                    .internal_assignments
+                                    .get_trail_position(&predicate![
+                                        internal_id <= strongest_upper_bound
+                                    ])
+                                    .unwrap();
+                                simplified_predicates.push(PredicateWithInfo {
+                                    predicate: predicate![domain_id <= strongest_upper_bound],
+                                    decision_level,
+                                    trail_position,
+                                });
+                            }
+                        }
+                    }
+                }
+                IntegerPredicate::NotEqual {
+                    domain_id: _,
+                    not_equal_constant,
+                } => {
+                    // 2) [x != k] and within bounds of assignment: keep.
+                    if self.internal_assignments.get_lower_bound(internal_id) < not_equal_constant
+                        && not_equal_constant
+                            < self.internal_assignments.get_upper_bound(internal_id)
+                    {
+                        simplified_predicates.push(*p);
+                    }
+                }
+                IntegerPredicate::Equal {
+                    domain_id: _,
+                    equality_constant: _,
+                } => {
+                    // 1) [x == k] and not already kept: keep.
+                    // Note that in this case, the equality constant is the right value to search
+                    // for, since contrary to the case for lower and upper bounds, holes cannot
+                    // influence this value.
+                    if simplified_predicates
+                        .iter()
+                        .all(|simplified_entry| *simplified_entry != *p)
+                    {
+                        simplified_predicates.push(*p);
+                    }
+                }
+            }
+        }
+        self.predicates = simplified_predicates;
+    }
+
+    /// Orders the predicates in correct position and compute the backjump level.
+    fn prepare_learned_nogood(
+        mut nogood: Vec<PredicateWithInfo>,
+        current_decision_level: usize,
+    ) -> LearnedNogood {
+        // Sorting does the trick with placing the correct predicates at the first two positions,
+        // however this can be done more efficiently.
+        nogood.sort_by_key(|p| p.trail_position);
+        nogood.reverse();
+
+        // sanity check
+        pumpkin_assert_moderate!(
+            current_decision_level == nogood[0].decision_level,
+            "Sanity check."
+        );
+
+        // The second highest decision level predicate is at position one.
+        // This is the backjump level.
+        let backjump_level = if nogood.len() > 1 {
+            nogood[1].decision_level
+        }
+        // For unit nogoods, the solver backtracks to the root level.
+        else {
+            0
+        };
+
+        let predicates = nogood.iter().map(|p| p.predicate).collect();
+
+        LearnedNogood {
+            predicates,
+            backjump_level,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+pub(crate) struct PredicateWithInfo {
+    predicate: IntegerPredicate,
+    decision_level: usize,
+    trail_position: usize,
 }
 
 // println!("Conflict nogood: {:?}", learned_nogood);
@@ -296,17 +677,3 @@ impl AdvancedNogood {
 // if !already_added_equality.contains(domain_id) {
 // new_nogood.push(*predicate);
 // let _ = already_added_equality.insert(*domain_id);
-// }
-// }
-// }
-// }
-//
-// remove duplicates...a bit ugly todo
-// let mut new_nogood2: Vec<IntegerPredicate> = vec![];
-// for predicate in &new_nogood {
-// if !new_nogood2.contains(predicate) {
-// new_nogood2.push(*predicate);
-// }
-// }
-// new_nogood2
-// };

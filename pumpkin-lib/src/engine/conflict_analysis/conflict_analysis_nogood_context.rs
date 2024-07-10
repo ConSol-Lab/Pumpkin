@@ -499,10 +499,17 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         self.helper_propagation_reason(predicate)
             .iter()
             .filter(|predicate| {
-                self.assignments_integer
+                // We want to skip root level predicates, and keep everything else.
+                if let Some(decision_level) = self
+                    .assignments_integer
                     .get_decision_level_for_predicate(predicate)
-                    .unwrap()
-                    > 0
+                {
+                    // Only keep if it is not a root predicate.
+                    decision_level > 0
+                } else {
+                    // Decision predicates are kept.
+                    true
+                }
             })
             .copied()
             .collect()

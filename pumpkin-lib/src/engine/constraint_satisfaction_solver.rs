@@ -993,15 +993,19 @@ impl ConstraintSatisfactionSolver {
 
     pub fn add_nogood(
         &mut self,
-        _nogood: Vec<IntegerPredicate>,
+        nogood: Vec<IntegerPredicate>,
     ) -> Result<(), ConstraintOperationError> {
-        todo!();
+        let nogood_propagator_id = Self::get_nogood_propagator_id();
+        self.propagators[nogood_propagator_id].hack_add_nogood(nogood);
+        // temporary hack for the nogood propagator that does propagation from scratch
+        self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
+        self.propagate();
+        if self.state.is_infeasible() {
+            Err(ConstraintOperationError::InfeasibleState)
+        } else {
+            Ok(())
+        }
     }
-
-    // #[error("Adding the clause failed because it is infeasible at the root")]
-    // InfeasibleClause,
-    // #[error("Adding constraint failed because the solver is in an infeasible state")]
-    // InfeasibleState,
 
     /// Creates a clause from `literals` and adds it to the current formula.
     ///

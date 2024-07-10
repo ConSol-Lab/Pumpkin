@@ -29,16 +29,36 @@ impl ResolutionNogoodConflictAnalyser {
         // Initialise the nogood with the conflict nogood.
         nogood.add_predicates(conflict_nogood, context);
 
+        // println!("VARIABLE DOMAINS");
+        // for d in context.assignments_integer.get_domains() {
+        // println!(
+        // "{}: [{}, {}]",
+        // d,
+        // context.assignments_integer.get_lower_bound(d),
+        // context.assignments_integer.get_upper_bound(d)
+        // );
+        // }
+
+        // println!("TRAIL");
+        // for t in context.assignments_integer.trail.iter() {
+        //    println!("\t{} {}", t.predicate, t.reason.is_none());
+        //}
+
+        // println!("conflict: {:?}", nogood.predicates);
+
         // Keep refining the nogood until it propagates.
         while !nogood.is_nogood_propagating() {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             // This is done in two steps:
             // 1) Pop the predicate last assigned on the trail from the nogood.
             let next_predicate = nogood.pop_highest_trail_predicate().unwrap();
+            // println!("next pred: {}", next_predicate);
             // println!("Next pred: {}", next_predicate);
             // 2) Add the reason of the next_predicate to the nogood.
             let reason = context.get_propagation_reason(&next_predicate);
+            // println!("reason: {:?}", reason);
             nogood.add_predicates(reason, context);
+            // println!("nogood: {:?}", nogood.predicates);
         }
         // todo: clause minimisation?
         nogood.extract_final_learned_nogood()

@@ -150,7 +150,11 @@ impl NogoodPropagator {
                 .not();
             assert!(nogood.iter().any(|p| *p == propagated_predicate.not()));
 
-            let reason: PropositionalConjunction = nogood.iter().copied().collect();
+            let reason: PropositionalConjunction = nogood
+                .iter()
+                .filter(|p| **p != propagated_predicate.not())
+                .copied()
+                .collect();
             context.post_predicate(propagated_predicate, reason)?;
         }
         Ok(())
@@ -301,6 +305,11 @@ impl Propagator for NogoodPropagator {
         //
         // TODO PROPAGATION
         // todo!();
+    }
+
+    /// Temporary hack, used to add nogoods. Will be replaced later.
+    fn hack_add_nogood(&mut self, nogood: Vec<IntegerPredicate>) {
+        self.nogoods.push(nogood);
     }
 }
 

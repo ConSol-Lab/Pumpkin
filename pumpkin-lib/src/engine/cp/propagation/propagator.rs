@@ -120,12 +120,17 @@ pub trait Propagator {
 
     /// Temporary hack, used to add nogoods.
     /// To add a learned nogood, the solver goes through all of its propagators,
-    /// finds the nogood propagator, and then calls this function.
+    /// finds the nogood propagator, and then calls this function. Will be replaced later.
     fn hack_add_asserting_nogood(
         &mut self,
         _nogood: Vec<IntegerPredicate>,
         _context: &mut PropagationContextMut,
     ) {
+        unreachable!();
+    }
+
+    /// Temporary hack, used to add nogoods. Will be replaced later.
+    fn hack_add_nogood(&mut self, _nogood: Vec<IntegerPredicate>) {
         unreachable!();
     }
 }
