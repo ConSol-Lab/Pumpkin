@@ -1,7 +1,10 @@
 predicate fzn_all_different_int(array [int] of var int: vars);
 
-array [1..4] of var 1..4: xs :: output_array([1..4]);
+var 1..4: x1;
+var 1..4: x2;
+var 1..4: x3;
+var 1..4: x4;
 
-constraint fzn_all_different_int(xs);
+constraint fzn_all_different_int([x1, x2, x3, x4]);
 
 solve satisfy;

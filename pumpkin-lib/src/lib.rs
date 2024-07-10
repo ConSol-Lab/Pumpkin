@@ -9,11 +9,12 @@
 //! CP'24 paper for more details.
 //!
 //! The solver currently supports integer variables and a number of (global) constraints:
-//! * [Cumulative global constraint][Solver::cumulative].
-//! * [Element global constraint][Solver::element].
-//! * Arithmetic constraints: [linear integer (in)equalities][Solver::less_than_or_equals], [integer
-//!   division][Solver::division], [integer multiplication][Solver::times],
-//!   [maximum][Solver::maximum], [absolute value][Solver::absolute].
+//! * [Cumulative global constraint][crate::constraints::cumulative].
+//! * [Element global constraint][crate::constraints::element].
+//! * Arithmetic constraints: [linear integer
+//!   (in)equalities][crate::constraints::less_than_or_equals], [integer
+//!   division][crate::constraints::division], [integer multiplication][crate::constraints::times],
+//!   [maximum][crate::constraints::maximum], [absolute value][crate::constraints::absolute].
 //! * [Clausal constraints][Solver::add_clause].
 //!
 //! We are actively developing Pumpkin and would be happy to hear from you should you have any

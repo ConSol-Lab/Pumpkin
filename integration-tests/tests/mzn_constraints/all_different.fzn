@@ -1,5 +1,8 @@
-array [1..4] of var 1..4: xs :: output_array(1..4);
+var 1..4: x1;
+var 1..4: x2;
+var 1..4: x3;
+var 1..4: x4;
 
-constraint pumpkin_all_different(xs);
+constraint pumpkin_all_different([x1, x2, x3, x4]);
 
 solve satisfy;

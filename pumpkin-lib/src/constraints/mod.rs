@@ -1,3 +1,5 @@
+//! Defines the constraints which Pumpkin provides out of the box.
+//!
 //! A constraint is a relation over variables. In the solver, constraints are enforced through
 //! propagators, and therefore constraints can be viewed as a collection of propagators.
 //!
@@ -15,7 +17,7 @@ mod cumulative;
 
 pub use all_different::*;
 pub use arithmetic::*;
-// pub use boolean::*;
+pub use boolean::*;
 pub use clause::*;
 pub use cumulative::*;
 
@@ -77,6 +79,8 @@ impl<C: Constraint> Constraint for Vec<C> {
     }
 }
 
+/// A [`Constraint`] which has a well-defined negation. Having a negation means the constraint can
+/// be fully reified. I.e., a constraint `C` can be turned into `r <-> C` for a Boolean `r`.
 pub trait NegatableConstraint: Constraint {
     type NegatedConstraint: NegatableConstraint + 'static;
 
@@ -99,7 +103,7 @@ pub trait NegatableConstraint: Constraint {
     }
 }
 
-/// Adds the [element](https://sofdem.github.io/gccat/gccat/Celement.html) constraint which states that `array[index] = rhs`.
+/// Creates the [element](https://sofdem.github.io/gccat/gccat/Celement.html) constraint which states that `array[index] = rhs`.
 pub fn element<ElementVar: IntegerVariable + 'static>(
     index: impl IntegerVariable + 'static,
     array: impl Into<Box<[ElementVar]>>,
@@ -111,60 +115,3 @@ pub fn element<ElementVar: IntegerVariable + 'static>(
         rhs,
     }
 }
-
-// /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
-// pub fn boolean_less_than_or_equals(
-//     &mut self,
-//     weights: &[i32],
-//     bools: &[Literal],
-//     rhs: i32,
-// ) -> impl Constraint {
-//     let domains = bools
-//         .iter()
-//         .enumerate()
-//         .map(|(index, bool)| {
-//             let corresponding_domain_id = self.new_bounded_integer(0, 1);
-//             // bool -> [domain = 1]
-//             let _ = self.add_clause([
-//                 !*bool,
-//                 self.get_literal(predicate![corresponding_domain_id >= 1]),
-//             ]);
-//             // !bool -> [domain = 0]
-//             let _ = self.add_clause([
-//                 *bool,
-//                 self.get_literal(predicate![corresponding_domain_id <= 0]),
-//             ]);
-//             corresponding_domain_id.scaled(weights[index])
-//         })
-//         .collect::<Vec<_>>();
-//     self.less_than_or_equals(domains, rhs)
-// }
-//
-// /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
-// pub fn boolean_equals(
-//     &mut self,
-//     weights: &[i32],
-//     bools: &[Literal],
-//     rhs: DomainId,
-// ) -> impl Constraint {
-//     let domains = bools
-//         .iter()
-//         .enumerate()
-//         .map(|(index, bool)| {
-//             let corresponding_domain_id = self.new_bounded_integer(0, 1);
-//             // bool -> [domain = 1]
-//             let _ = self.add_clause([
-//                 !*bool,
-//                 self.get_literal(predicate![corresponding_domain_id >= 1]),
-//             ]);
-//             // !bool -> [domain = 0]
-//             let _ = self.add_clause([
-//                 *bool,
-//                 self.get_literal(predicate![corresponding_domain_id <= 0]),
-//             ]);
-//             corresponding_domain_id.scaled(weights[index])
-//         })
-//         .chain(std::iter::once(rhs.scaled(-1)))
-//         .collect::<Vec<_>>();
-//     self.equals(domains, 0)
-// }

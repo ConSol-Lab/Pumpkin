@@ -4,7 +4,7 @@ use crate::propagators::TimeTableOverInterval;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
-/// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
+/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
 /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
 /// exceeds `bound`.
 ///

@@ -164,7 +164,7 @@ pub(crate) fn run(
                 constraints::absolute,
             )?,
 
-            "fzn_all_different_int" => compile_all_different(context, exprs, annos)?,
+            "pumpkin_all_different" => compile_all_different(context, exprs, annos)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs)?,
             "array_bool_element" => {
@@ -194,7 +194,9 @@ pub(crate) fn run(
             "bool_not" => compile_bool_not(context, exprs)?,
             "set_in_reif" => compile_set_in_reif(context, exprs)?,
             "set_in" => {
-                unreachable!("'set_in' constraints are handled in a pre-processing step")
+                // 'set_in' constraints are handled in pre-processing steps.
+                // TODO: remove it from the AST, so it does not need to be matched here
+                true
             }
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
@@ -669,11 +671,11 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    todo!()
-
-    // Ok(constraints::boolean_equals(&weights, &bools, rhs)
-    //    .post(context.solver)
-    //    .is_ok())
+    Ok(
+        constraints::boolean_equals(weights.as_ref(), bools.as_ref(), rhs)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_bool_lin_le_predicate(
@@ -686,12 +688,11 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    todo!()
-
-    // Ok(context
-    //    .solver
-    //    .boolean_less_than_or_equals(&weights, &bools, rhs)
-    //    .is_ok())
+    Ok(
+        constraints::boolean_less_than_or_equals(weights.as_ref(), bools.as_ref(), rhs)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_all_different(
