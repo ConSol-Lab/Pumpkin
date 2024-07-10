@@ -595,7 +595,7 @@ fn compile_binary_int_predicate<C: Constraint>(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     let constraint = create_constraint(a, b);
-    Ok(constraint.post(context.solver).is_err())
+    Ok(constraint.post(context.solver).is_ok())
 }
 
 fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
@@ -612,7 +612,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b);
-    Ok(constraint.reify(context.solver, reif).is_err())
+    Ok(constraint.reify(context.solver, reif).is_ok())
 }
 
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
@@ -638,7 +638,7 @@ fn compile_int_lin_predicate<C: Constraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs);
-    Ok(constraint.post(context.solver).is_err())
+    Ok(constraint.post(context.solver).is_ok())
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
@@ -658,7 +658,7 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs);
-    Ok(constraint.reify(context.solver, reif).is_err())
+    Ok(constraint.reify(context.solver, reif).is_ok())
 }
 
 fn compile_bool_lin_eq_predicate(
