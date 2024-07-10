@@ -1,9 +1,6 @@
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::absolute_value::AbsoluteValueConstructor;
-use crate::propagators::division::DivisionConstructor;
-use crate::propagators::integer_multiplication::IntegerMultiplicationConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;

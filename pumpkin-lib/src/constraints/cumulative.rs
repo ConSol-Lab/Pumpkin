@@ -121,7 +121,7 @@ same!car"
             .zip(resource_requirements)
             .map(|((start_time, duration), resource_requirement)| ArgTask {
                 start_time: start_time.clone(),
-                processing_time: duration.clone(),
+                processing_time: *duration,
                 resource_usage: *resource_requirement,
             })
             .collect(),

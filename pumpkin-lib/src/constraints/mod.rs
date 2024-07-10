@@ -11,12 +11,11 @@ mod all_different;
 mod arithmetic;
 mod boolean;
 mod clause;
-mod constraint_propagator_chain;
 mod cumulative;
 
 pub use all_different::*;
 pub use arithmetic::*;
-pub use boolean::*;
+// pub use boolean::*;
 pub use clause::*;
 pub use cumulative::*;
 
@@ -65,7 +64,7 @@ where
 
 impl<C: Constraint> Constraint for Vec<C> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.into_iter().map(|c| c.post(solver)).collect()
+        self.into_iter().try_for_each(|c| c.post(solver))
     }
 
     fn implied_by(
@@ -74,8 +73,7 @@ impl<C: Constraint> Constraint for Vec<C> {
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
         self.into_iter()
-            .map(|c| c.implied_by(solver, reification_literal))
-            .collect()
+            .try_for_each(|c| c.implied_by(solver, reification_literal))
     }
 }
 

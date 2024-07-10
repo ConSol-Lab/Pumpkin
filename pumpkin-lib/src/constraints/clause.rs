@@ -48,8 +48,7 @@ impl Constraint for Conjunction {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         self.0
             .into_iter()
-            .map(|lit| solver.add_clause([lit]))
-            .collect()
+            .try_for_each(|lit| solver.add_clause([lit]))
     }
 
     fn implied_by(
@@ -59,8 +58,7 @@ impl Constraint for Conjunction {
     ) -> Result<(), ConstraintOperationError> {
         self.0
             .into_iter()
-            .map(|lit| solver.add_clause([!reification_literal, lit]))
-            .collect()
+            .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
     }
 }
 
