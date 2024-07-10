@@ -110,8 +110,9 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
             // calculation now
             self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
             self.time_table_outdated = false;
+            self.parameters.updated.clear();
         } else {
-            for updated_task_info in self.parameters.updated.iter() {
+            for updated_task_info in self.parameters.updated.drain(..) {
                 // Go over all of the updated tasks and calculate the added mandatory part (we know
                 // that for each of these tasks, a mandatory part exists, otherwise it would not
                 // have been added (see [`should_propagate`]))
@@ -166,9 +167,6 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
         // We update the time-table based on the stored updates
         self.update_time_table(context)?;
-
-        // We have processed all of the updates, we can clear the structure
-        self.parameters.updated.clear();
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
