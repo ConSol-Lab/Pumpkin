@@ -31,6 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
+use crate::propagators::ReifiedPropagatorConstructor;
 use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
@@ -671,7 +672,10 @@ impl Solver {
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
-            .add_propagator(LinearNotEqualConstructor::reified(terms.into(), rhs, reif))
+            .add_propagator(ReifiedPropagatorConstructor {
+                propagator: LinearNotEqualConstructor::new(terms.into(), rhs),
+                reification_literal: reif,
+            })
     }
 
     /// Adds the constraint `\sum terms_i <= rhs`.
@@ -707,11 +711,10 @@ impl Solver {
         reif: Literal,
     ) -> Result<(), ConstraintOperationError> {
         self.satisfaction_solver
-            .add_propagator(LinearLessOrEqualConstructor::reified(
-                terms.into(),
-                rhs,
-                reif,
-            ))
+            .add_propagator(ReifiedPropagatorConstructor {
+                propagator: LinearLessOrEqualConstructor::new(terms.into(), rhs),
+                reification_literal: reif,
+            })
     }
 
     /// Adds the constraint `\sum terms_i = rhs`.

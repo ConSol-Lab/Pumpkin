@@ -3,7 +3,6 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -40,7 +39,7 @@ where
 {
     type Propagator = IntegerMultiplicationPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         IntegerMultiplicationPropagator {
             a: context.register(self.a, DomainEvents::ANY_INT, ID_A),
             b: context.register(self.b, DomainEvents::ANY_INT, ID_B),
@@ -55,12 +54,6 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        perform_propagation(context, &self.a, &self.b, &self.c)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -69,26 +62,19 @@ where
         "IntTimes"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.propagate(context)
-    }
-
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.a, &self.b, &self.c)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     a: &VA,
     b: &VB,
     c: &VC,
 ) -> PropagationStatusCP {
     // First we propagate the signs
-    propagate_signs(context, a, b, c)?;
+    propagate_signs(&mut context, a, b, c)?;
 
     // Then we propagate on whether or not the variables are sign fixed
     // For now we only propagate in the case where a, b, c >= 0

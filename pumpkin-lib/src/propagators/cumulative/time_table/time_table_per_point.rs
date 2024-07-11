@@ -8,7 +8,6 @@ use std::rc::Rc;
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use super::time_table_util::ResourceProfile;
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -20,7 +19,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
-use crate::propagators::util::create_inconsistency;
+use crate::predicates::PropositionalConjunction;
+use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -63,7 +63,7 @@ where
 {
     type Propagator = TimeTablePerPointPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTablePerPointPropagator::new(CumulativeParameters::new(
             tasks,
@@ -83,12 +83,13 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        let time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        let time_table =
+            create_time_table_per_point_from_scratch(&context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(context, time_table.values(), &self.parameters)
+        propagate_based_on_timetable(&mut context, time_table.values(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -102,7 +103,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn notify(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -115,13 +116,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
-        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
         result.decision
     }
 
@@ -133,22 +134,22 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         "CumulativeTimeTablePerPoint"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
-            ))
+            ));
         }
 
-        self.propagate(context)
+        Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         debug_propagate_from_scratch_time_table_point(context, &self.parameters)
     }
 }
@@ -162,9 +163,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// [`PerPointTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     parameters: &CumulativeParameters<Var>,
-) -> Result<PerPointTimeTableType<Var>, Inconsistency> {
+) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
     let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
     // First we go over all tasks and determine their mandatory parts
     for task in parameters.tasks.iter() {
@@ -186,7 +187,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 's
                 if current_profile.height > parameters.capacity {
                     // The addition of the current task to the resource profile has caused an
                     // overflow
-                    return Err(create_inconsistency(
+                    return Err(create_propositional_conjunction(
                         context,
                         &current_profile.profile_tasks,
                     ));
@@ -204,14 +205,14 @@ pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 's
 }
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(context, parameters)?;
+    let time_table = create_time_table_per_point_from_scratch(&context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
-    propagate_based_on_timetable(context, time_table.values(), parameters)
+    propagate_based_on_timetable(&mut context, time_table.values(), parameters)
 }
 
 #[cfg(test)]

@@ -266,15 +266,13 @@ impl ConstraintSatisfactionSolver {
             for (event, domain) in self.event_drain.drain(..) {
                 for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
                     let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                    let mut context = PropagationContextMut::new(
-                        &mut self.assignments_integer,
-                        &mut self.reason_store,
-                        &mut self.assignments_propositional,
-                        propagator_var.propagator,
+                    let context = PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
                     );
 
                     let enqueue_decision =
-                        propagator.notify(&mut context, propagator_var.variable, event.into());
+                        propagator.notify(context, propagator_var.variable, event.into());
 
                     if enqueue_decision == EnqueueDecision::Enqueue {
                         self.propagator_queue
@@ -297,15 +295,13 @@ impl ConstraintSatisfactionSolver {
                     {
                         let propagator =
                             &mut self.cp_propagators[propagator_var.propagator.0 as usize];
-                        let mut context = PropagationContextMut::new(
-                            &mut self.assignments_integer,
-                            &mut self.reason_store,
-                            &mut self.assignments_propositional,
-                            propagator_var.propagator,
+                        let context = PropagationContext::new(
+                            &self.assignments_integer,
+                            &self.assignments_propositional,
                         );
 
                         let enqueue_decision =
-                            propagator.notify_literal(&mut context, propagator_var.variable, event);
+                            propagator.notify_literal(context, propagator_var.variable, event);
 
                         if enqueue_decision == EnqueueDecision::Enqueue {
                             self.propagator_queue.enqueue_propagator(
@@ -1303,14 +1299,14 @@ impl ConstraintSatisfactionSolver {
 
         let propagator_id = self.propagator_queue.pop();
         let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
-        let mut context = PropagationContextMut::new(
+        let context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
             &mut self.assignments_propositional,
             propagator_id,
         );
 
-        match propagator.propagate(&mut context) {
+        match propagator.propagate(context) {
             // An empty domain conflict will be caught by the clausal propagator.
             Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
 
@@ -1409,13 +1405,13 @@ impl ConstraintSatisfactionSolver {
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
-        let constructor_context = PropagatorConstructorContext::new(
+        let mut constructor_context = PropagatorConstructorContext::new(
             &mut self.watch_list_cp,
             &mut self.watch_list_propositional,
             new_propagator_id,
         );
 
-        let propagator_to_add = constructor.create_boxed(constructor_context);
+        let propagator_to_add = constructor.create_boxed(&mut constructor_context);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1427,18 +1423,18 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            new_propagator_id,
-        );
-        // let mut context = self.create_propagation_context_mut();
+        let initialisation_status = new_propagator.initialise_at_root(PropagationContext::new(
+            &self.assignments_integer,
+            &self.assignments_propositional,
+        ));
 
-        if new_propagator.initialise_at_root(&mut context).is_err() {
+        if initialisation_status.is_err() {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
+            self.propagator_queue
+                .enqueue_propagator(new_propagator_id, new_propagator.priority());
+
             self.propagate_enqueued();
 
             if self.state.no_conflict() {
@@ -1672,6 +1668,7 @@ impl CSPSolverState {
 mod tests {
     use super::ConstraintSatisfactionSolver;
     use crate::basic_types::CSPSolverExecutionFlag;
+    use crate::basic_types::PropagationStatusCP;
     use crate::basic_types::PropositionalConjunction;
     use crate::basic_types::StoredConflictInfo;
     use crate::conjunction;
@@ -1680,6 +1677,7 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::propagation_context::HasAssignments;
     use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorConstructor;
     use crate::engine::propagation::PropagatorConstructorContext;
@@ -1702,7 +1700,7 @@ mod tests {
     impl PropagatorConstructor for TestPropagatorConstructor {
         type Propagator = TestPropagator;
 
-        fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+        fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
             let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
                 .propagations
                 .iter()
@@ -1724,6 +1722,7 @@ mod tests {
                 original_propagations: propagations.clone(),
                 propagations,
                 conflicts: self.conflicts.into_iter().rev().collect::<Vec<_>>(),
+                is_in_root: true,
             }
         }
     }
@@ -1738,6 +1737,7 @@ mod tests {
         original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
         propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
+        is_in_root: bool,
     }
 
     impl Propagator for TestPropagator {
@@ -1745,17 +1745,12 @@ mod tests {
             "TestPropagator"
         }
 
-        fn initialise_at_root(
-            &mut self,
-            _context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
-            Ok(())
-        }
+        fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+            if self.is_in_root {
+                self.is_in_root = false;
+                return Ok(());
+            }
 
-        fn propagate(
-            &mut self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
             while let Some(propagation) = self.propagations.pop() {
                 match propagation.1 {
                     Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
@@ -1791,17 +1786,18 @@ mod tests {
                     _ => todo!(),
                 }
             }
-            if !self.conflicts.is_empty() {
-                let conflict = self.conflicts.pop().unwrap();
+
+            if let Some(conflict) = self.conflicts.pop() {
                 return Err(conflict.into());
             }
+
             Ok(())
         }
 
         fn debug_propagate_from_scratch(
             &self,
-            context: &mut crate::engine::propagation::PropagationContextMut,
-        ) -> crate::basic_types::PropagationStatusCP {
+            context: PropagationContextMut,
+        ) -> PropagationStatusCP {
             // This method detects when a debug propagation method is called and it attempts to
             // return the correct result in this case
             if self.conflicts.is_empty()
@@ -1898,10 +1894,7 @@ mod tests {
                 (predicate!(other_variable != 4), conjunction!()),
                 (predicate!(other_variable <= 4), conjunction!()),
             ],
-            conflicts: vec![PropositionalConjunction::from(vec![
-                predicate!(other_variable == 3),
-                predicate!(variable == 1),
-            ])],
+            conflicts: vec![conjunction!([other_variable == 3] & [variable == 1])],
         };
 
         let result = solver.add_propagator(propagator_constructor);

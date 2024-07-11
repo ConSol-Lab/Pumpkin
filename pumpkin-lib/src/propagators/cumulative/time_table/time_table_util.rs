@@ -77,7 +77,7 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(

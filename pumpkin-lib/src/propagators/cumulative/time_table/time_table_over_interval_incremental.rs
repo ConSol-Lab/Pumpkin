@@ -16,11 +16,12 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -79,7 +80,7 @@ where
 {
     type Propagator = TimeTableOverIntervalIncrementalPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
@@ -104,10 +105,10 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
 impl<Var: IntegerVariable + 'static + Debug> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var>
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                context,
+                &context.as_readonly(),
                 &self.parameters.tasks,
                 &self.parameters.bounds,
             ),
@@ -116,8 +117,10 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         if self.time_table_outdated {
             // The time-table needs to be recalculated from scratch anyways so we perform the
             // calculation now
-            self.time_table =
-                create_time_table_over_interval_from_scratch(context, &self.parameters)?;
+            self.time_table = create_time_table_over_interval_from_scratch(
+                &context.as_readonly(),
+                &self.parameters,
+            )?;
             self.time_table_outdated = false;
             self.parameters.updated.clear();
         } else {
@@ -145,7 +148,10 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
                                 self.parameters.capacity,
                             )
                             .map_err(|conflict_tasks| {
-                                create_inconsistency(context, &conflict_tasks)
+                                create_propositional_conjunction(
+                                    &context.as_readonly(),
+                                    &conflict_tasks,
+                                )
                             })?;
                         }
                         Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
@@ -159,13 +165,13 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             }
         }
 
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_interval(context, &self.time_table, &self.parameters), "The profiles were not the same between the incremental and the non-incremental version");
+        pumpkin_assert_extreme!(debug::time_tables_are_the_same_interval(&context.as_readonly(), &self.time_table, &self.parameters), "The profiles were not the same between the incremental and the non-incremental version");
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 resource profile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(context, self.time_table.iter(), &self.parameters)
+        propagate_based_on_timetable(&mut context, self.time_table.iter(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -183,7 +189,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
     fn notify(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -198,13 +204,13 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.time_table.is_empty(),
         );
         if let Some(update) = result.update {
             self.parameters.updated.push(update)
         }
-        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
         result.decision
     }
 
@@ -216,7 +222,10 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         "CumulativeTimeTableOverIntervalIncremental"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -227,17 +236,17 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         self.parameters.updated.clear();
 
         // Then we do normal propagation
-        self.time_table = create_time_table_over_interval_from_scratch(context, &self.parameters)?;
+        self.time_table = create_time_table_over_interval_from_scratch(&context, &self.parameters)?;
         self.time_table_outdated = false;
-        propagate_based_on_timetable(context, self.time_table.iter(), &self.parameters)
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTableOverInterval`
-        debug_propagate_from_scratch_time_table_interval(context, &self.parameters)
+        debug_propagate_from_scratch_time_table_interval(&mut context, &self.parameters)
     }
 }
 
@@ -680,7 +689,7 @@ mod checks {
 /// Contains functions related to debugging
 mod debug {
     use crate::basic_types::HashSet;
-    use crate::engine::propagation::PropagationContextMut;
+    use crate::engine::propagation::PropagationContext;
     use crate::propagators::create_time_table_over_interval_from_scratch;
     use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
     use crate::propagators::CumulativeParameters;
@@ -699,7 +708,7 @@ mod debug {
     ///      - The profile tasks should be the same; note that we do not check whether the order is
     ///        the same!
     pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
-        context: &PropagationContextMut,
+        context: &PropagationContext,
         time_table: &OverIntervalTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
     ) -> bool {

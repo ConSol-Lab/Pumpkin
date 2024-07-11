@@ -40,10 +40,10 @@ const ID_X_OFFSET: u32 = 2;
 /// Iterator through the domain values of an IntegerVariable; keeps a reference to the context
 /// Use `for_domain_values!` if you want mutable access to the context while iterating
 fn iter_values<'c, Var: IntegerVariable>(
-    context: &'c PropagationContextMut,
+    context: PropagationContext<'c>,
     var: &'c Var,
 ) -> impl Iterator<Item = i32> + 'c {
-    (context.lower_bound(var)..=context.upper_bound(var)).filter(|i| context.contains(var, *i))
+    (context.lower_bound(var)..=context.upper_bound(var)).filter(move |i| context.contains(var, *i))
 }
 
 /// Helper to loop through the domain values of an IntegerVariable without keeping a reference to
@@ -63,7 +63,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 {
     type Propagator = ElementPropagator<VX, VI, VE>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         // local ids of array vars are shifted by ID_X_OFFSET
         let array = self
             .array
@@ -88,7 +88,12 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
     for ElementPropagator<VX, VI, VE>
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        // Ensure index is non-negative
+        context.set_lower_bound(&self.index, 0, conjunction!())?;
+        // Ensure index <= no. of x_j
+        context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
+
         // For incremental solving: use the doubly linked list data-structure
         if context.is_fixed(&self.index) {
             // At this point, we should post x_i = e as a new constraint, but that's not an option
@@ -128,12 +133,13 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
             let index_reason = OnceCell::new();
             for_domain_values!(context, &self.index, |i| {
                 let x_i = &self.array[i as usize];
-                if !iter_values(context, &self.rhs).any(|e| context.contains(x_i, e)) {
+                if !iter_values(context.as_readonly(), &self.rhs).any(|e| context.contains(x_i, e))
+                {
                     // N.B. index_reason is loop-independent
                     let reason_info = Rc::clone(index_reason.get_or_init(|| {
                         Rc::new((
                             context.describe_domain(&self.rhs),
-                            iter_values(context, &self.rhs).collect::<Vec<_>>(),
+                            iter_values(context.as_readonly(), &self.rhs).collect::<Vec<_>>(),
                         ))
                     }));
                     let x_i = (*x_i).clone();
@@ -151,7 +157,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
             // Remove values from e when for no values of i: x_i = e
             let rhs_reason = OnceCell::new();
             for_domain_values!(context, &self.rhs, |e| {
-                if !iter_values(context, &self.index)
+                if !iter_values(context.as_readonly(), &self.index)
                     .map(|i| &self.array[i as usize])
                     .any(|x_i| context.contains(x_i, e))
                 {
@@ -159,7 +165,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
                     let reason_info = Rc::clone(rhs_reason.get_or_init(|| {
                         Rc::new((
                             context.describe_domain(&self.index),
-                            iter_values(context, &self.index).collect::<Vec<_>>(),
+                            iter_values(context.as_readonly(), &self.index).collect::<Vec<_>>(),
                         ))
                     }));
                     let array = Rc::clone(&self.array);
@@ -177,8 +183,6 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         Ok(())
     }
 
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         // Priority higher than int_times/linear_eq/not_eq_propagator because it's much more
         //  expensive looping over multiple domains
@@ -189,19 +193,15 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         "Element"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
         // Ensure index is non-negative
         context.set_lower_bound(&self.index, 0, conjunction!())?;
         // Ensure index <= no. of x_j
         context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
 
-        self.propagate(context)
-    }
-
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
         // Close to duplicate of `propagate` for now, without saving reason stuff...
         if context.is_fixed(&self.index) {
             let i = context.lower_bound(&self.index);
@@ -229,13 +229,14 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
             // Remove values from i when for no values of e: x_i = e
             for_domain_values!(context, &self.index, |i| {
                 let x_i = &self.array[i as usize];
-                if !iter_values(context, &self.rhs).any(|e| context.contains(x_i, e)) {
+                if !iter_values(context.as_readonly(), &self.rhs).any(|e| context.contains(x_i, e))
+                {
                     context.remove(&self.index, i, conjunction!())?;
                 }
             });
             // Remove values from e when for no values of i: x_i = e
             for_domain_values!(context, &self.rhs, |e| {
-                if !iter_values(context, &self.index)
+                if !iter_values(context.as_readonly(), &self.index)
                     .map(|i| &self.array[i as usize])
                     .any(|x_i| context.contains(x_i, e))
                 {
