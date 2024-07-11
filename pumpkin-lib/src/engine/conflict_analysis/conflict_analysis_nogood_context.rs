@@ -22,9 +22,27 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
                 propagator_id: _,
-            } => conflict_nogood.iter().copied().collect(),
+            } => conflict_nogood
+                .iter()
+                .filter(|p| {
+                    // filter out root predicates
+                    self.assignments_integer
+                        .get_decision_level_for_predicate(p)
+                        .is_some_and(|dl| dl > 0)
+                })
+                .copied()
+                .collect(),
             StoredConflictInfo::EmptyDomain { conflict_nogood } => {
-                conflict_nogood.iter().copied().collect()
+                conflict_nogood
+                    .iter()
+                    .filter(|p| {
+                        // filter out root predicates
+                        self.assignments_integer
+                            .get_decision_level_for_predicate(p)
+                            .is_some_and(|dl| dl > 0)
+                    })
+                    .copied()
+                    .collect()
             }
         }
     }
@@ -201,6 +219,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // but because of holes, the bound was raised above the
                             // not_equals_constant.
                             else {
+                                unreachable!();
                                 // Scrap the code below!
                                 // I now think this branch is unreachable.
                                 // The only scenario were a lower bound predicate on the trail can
@@ -209,8 +228,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // we increase the lower bound past the not equals value,
                                 // since in that case, we would have removed the not equals
                                 // due to other reasons, and would have found it on the trail explicitly.
-                                unreachable!();
-
+                                
                                 // I think the values cannot be the same, since the then the trail
                                 // position is not the right moment when the input predicate became
                                 // true.

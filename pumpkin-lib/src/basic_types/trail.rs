@@ -12,6 +12,8 @@ pub struct Trail<T> {
     trail: Vec<T>,
 }
 
+// We explicitly implement the Default and not as a macro, because we want to avoid imposing Default
+// on the generic type T.
 impl<T> Default for Trail<T> {
     fn default() -> Self {
         Trail {
@@ -44,6 +46,13 @@ impl<T> Trail<T> {
 
     pub fn push(&mut self, elem: T) {
         self.trail.push(elem)
+    }
+
+    /// todo: this is a temporary hack, because we do not check whether the current decision
+    /// level needs updating. For now this is okay since we never pop the decision predicate, but
+    /// in general this could be an issue.
+    pub fn pop(&mut self) -> Option<T> {
+        self.trail.pop()
     }
 
     /// Only used in `crate::engine::cp::reason::ReasonStore` to replace a lazy reason with its

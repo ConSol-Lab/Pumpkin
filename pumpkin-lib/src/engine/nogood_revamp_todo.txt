@@ -211,3 +211,11 @@ predicates.mod ruined
 Maybe BooleanVariable -> Literal? , struct Literal(IntegerPredicate)
 
 initial_holes returns a vector? Could be an iterator, or a reference?
+
+IntegerPredicate -> Predicate
+
+When we add the blocking solution nogood, only consider predicates that are assigned as a result of a decision! Say max(a, b) = c, then if 'a' and 'b' are a result of a decision, then there is no need to add the value of 'c' to the nogood.
+
+Assignments should never get into inconsistent state, make the check before getting inconsistent, this impact how we handle the EmptyDomain.
+
+Trail does not properly handle the case when decisions are popped.

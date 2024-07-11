@@ -30,6 +30,7 @@ fn create_from_search_strategy(
             variable_selection_strategy: _,
             value_selection_strategy: _,
         }) => {
+            todo!();
             /*let search_variables = match variables {
                 flatzinc::AnnExpr::String(identifier) => {
                     // TODO: unnecessary to create Rc here, for now it's just for the return type
@@ -56,8 +57,7 @@ fn create_from_search_strategy(
                 IndependentVariableValueBrancher::default_over_all_variables(context.solver),
             ));
 
-            Ok(brancher)*/
-            todo!();
+            Ok(brancher)*/            
         }
         Search::Int(SearchStrategy {
             variables,

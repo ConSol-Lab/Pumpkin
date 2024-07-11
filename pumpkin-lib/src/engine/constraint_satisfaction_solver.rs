@@ -916,6 +916,8 @@ impl ConstraintSatisfactionSolver {
         else {
             temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
         }
+        // let m: Vec<IntegerPredicate> = temp.to_vec();
+        // println!("Reason for empty domain of {}: {:?}", conflict_domain, m);
         temp.into()
     }
 
@@ -944,6 +946,12 @@ impl ConstraintSatisfactionSolver {
                     Inconsistency::EmptyDomain => {
                         let empty_domain_reason = self.compute_reason_for_empty_domain();
 
+                        // todo: As a temporary solution, we remove the last trail element.
+                        // This way we guarantee that the assignment is consistent, which is needed
+                        // for the conflict analysis data structures. The proper alternative would
+                        // be to forbid the assignments from getting into an inconsistent state.
+                        self.assignments_integer.remove_last_trail_element();
+
                         let stored_conflict_info = StoredConflictInfo::EmptyDomain {
                             conflict_nogood: empty_domain_reason,
                         };
@@ -958,6 +966,8 @@ impl ConstraintSatisfactionSolver {
                             propagator.as_ref(),
                             propagator_id,
                         ));
+
+                        // println!("{:?}\n{}", conflict_nogood, propagator_id.0);
 
                         let stored_conflict_info = StoredConflictInfo::Propagator {
                             conflict_nogood,

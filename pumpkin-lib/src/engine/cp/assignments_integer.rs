@@ -491,6 +491,13 @@ impl AssignmentsInteger {
         });
         unfixed_variables
     }
+
+    /// todo: This is a temporary hack, not to be used in general.
+    pub fn remove_last_trail_element(&mut self) {
+        let entry = self.trail.pop().unwrap();
+        let domain_id = entry.predicate.get_domain();
+        self.domains[domain_id].undo_trail_entry(&entry);
+    }
 }
 
 #[cfg(test)]
@@ -718,14 +725,14 @@ impl IntegerDomain {
         });
         // Note that it is important to remove the hole now,
         // because the later if statements may use the holes.
-        let old_entry = self.holes.insert(
+        let old_none_entry = self.holes.insert(
             removed_value,
             PairDecisionLevelTrailPosition {
                 decision_level,
                 trail_position,
             },
         );
-        pumpkin_assert_moderate!(old_entry.is_none());
+        pumpkin_assert_moderate!(old_none_entry.is_none());
 
         // Check if removing a value triggers a lower bound update.
         if self.lower_bound() == removed_value {
@@ -789,7 +796,9 @@ impl IntegerDomain {
     }
 
     fn update_upper_bound_with_respect_to_holes(&mut self) {
-        while self.holes.contains_key(&self.upper_bound()) {
+        while self.holes.contains_key(&self.upper_bound())
+            && self.lower_bound() <= self.upper_bound()
+        {
             self.upper_bound_updates.last_mut().unwrap().bound -= 1;
         }
     }
@@ -834,7 +843,9 @@ impl IntegerDomain {
     }
 
     fn update_lower_bound_with_respect_to_holes(&mut self) {
-        while self.holes.contains_key(&self.lower_bound()) {
+        while self.holes.contains_key(&self.lower_bound())
+            && self.lower_bound() <= self.upper_bound()
+        {
             self.lower_bound_updates.last_mut().unwrap().bound += 1;
         }
     }
