@@ -1423,26 +1423,18 @@ impl ConstraintSatisfactionSolver {
         self.cp_propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let initialisation_status = new_propagator
-            .initialise_at_root(PropagationContext::new(
-                &self.assignments_integer,
-                &self.assignments_propositional,
-            ))
-            .map_err(Inconsistency::from)
-            .and_then(|_| {
-                let context = PropagationContextMut::new(
-                    &mut self.assignments_integer,
-                    &mut self.reason_store,
-                    &mut self.assignments_propositional,
-                    new_propagator_id,
-                );
-                new_propagator.propagate(context)
-            });
+        let initialisation_status = new_propagator.initialise_at_root(PropagationContext::new(
+            &self.assignments_integer,
+            &self.assignments_propositional,
+        ));
 
         if initialisation_status.is_err() {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
+            self.propagator_queue
+                .enqueue_propagator(new_propagator_id, new_propagator.priority());
+
             self.propagate_enqueued();
 
             if self.state.no_conflict() {
