@@ -4,7 +4,6 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -24,7 +23,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let array = self
             .array
             .iter()
@@ -57,12 +56,6 @@ pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.debug_propagate_from_scratch(context)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -71,13 +64,9 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         "Maximum"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.propagate(context)
-    }
-
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         let rhs_ub = context.upper_bound(&self.rhs);
         let mut max_ub = i32::MIN;
@@ -94,16 +83,8 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
             max_lb = i32::max(context.lower_bound(var), max_lb);
         }
 
-        context.set_upper_bound(
-            &self.rhs,
-            max_ub,
-            PropositionalConjunction::new(ub_reason.into()),
-        )?;
-        context.set_lower_bound(
-            &self.rhs,
-            max_lb,
-            PropositionalConjunction::new(lb_reason.into()),
-        )?;
+        context.set_upper_bound(&self.rhs, max_ub, PropositionalConjunction::new(ub_reason))?;
+        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::new(lb_reason))?;
 
         Ok(())
     }

@@ -9,6 +9,7 @@ use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::EmptyDomain;
+use crate::pumpkin_assert_simple;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -18,7 +19,7 @@ use crate::engine::EmptyDomain;
 ///
 /// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PropagationContext<'a> {
     assignments_integer: &'a AssignmentsInteger,
     assignments_propositional: &'a AssignmentsPropositional,
@@ -42,6 +43,8 @@ pub struct PropagationContextMut<'a> {
     reason_store: &'a mut ReasonStore,
     assignments_propositional: &'a mut AssignmentsPropositional,
     propagator: PropagatorId,
+
+    reification_literal: Option<Literal>,
 }
 
 impl<'a> PropagationContextMut<'a> {
@@ -56,6 +59,44 @@ impl<'a> PropagationContextMut<'a> {
             reason_store,
             assignments_propositional,
             propagator,
+            reification_literal: None,
+        }
+    }
+
+    /// Apply a reification literal to all the explanations that are passed to the context.
+    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "cannot reify an already reified propagation context"
+        );
+
+        self.reification_literal = Some(reification_literal);
+    }
+
+    fn build_reason(&self, reason: Reason) -> Reason {
+        if let Some(reification_literal) = self.reification_literal {
+            match reason {
+                Reason::Eager(mut conjunction) => {
+                    conjunction.add(reification_literal.into());
+                    Reason::Eager(conjunction)
+                }
+                Reason::Lazy(callback) => {
+                    Reason::Lazy(Box::new(move |context: &PropagationContext| {
+                        let mut conjunction = callback.compute(context);
+                        conjunction.add(reification_literal.into());
+                        conjunction
+                    }))
+                }
+            }
+        } else {
+            reason
+        }
+    }
+
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments_integer: self.assignments_integer,
+            assignments_propositional: self.assignments_propositional,
         }
     }
 }
@@ -104,11 +145,6 @@ pub(crate) trait ReadDomains: HasAssignments {
             .is_literal_assigned_true(var)
     }
 
-    fn is_literal_false(&self, var: Literal) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned_false(var)
-    }
-
     /// Returns `true` if the domain of the given variable is singleton.
     fn is_fixed<Var: IntegerVariable>(&self, var: &Var) -> bool {
         self.lower_bound(var) == self.upper_bound(var)
@@ -141,8 +177,9 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if var.contains(self.assignments_integer, value) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
-            return var.remove(self.assignments_integer, value, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator, reason);
+            return var.remove(self.assignments_integer, value, Some(reason_ref));
         }
         Ok(())
     }
@@ -154,8 +191,9 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound < var.upper_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
-            return var.set_upper_bound(self.assignments_integer, bound, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator, reason);
+            return var.set_upper_bound(self.assignments_integer, bound, Some(reason_ref));
         }
         Ok(())
     }
@@ -167,8 +205,9 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound > var.lower_bound(self.assignments_integer) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
-            return var.set_lower_bound(self.assignments_integer, bound, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator, reason);
+            return var.set_lower_bound(self.assignments_integer, bound, Some(reason_ref));
         }
         Ok(())
     }
@@ -180,10 +219,11 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), Inconsistency> {
         if !self.assignments_propositional.is_literal_assigned(var) {
-            let reason = self.reason_store.push(self.propagator, reason.into());
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator, reason);
             let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
                 if bound { var } else { !var },
-                ConstraintReference::create_reason_reference(reason),
+                ConstraintReference::create_reason_reference(reason_ref),
             );
             if let Some(conflict_info) = enqueue_result {
                 return Err(Inconsistency::Other(conflict_info));

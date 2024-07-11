@@ -3,7 +3,6 @@ use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -23,7 +22,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
 {
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let signed = context.register(self.signed, DomainEvents::BOUNDS, LocalId::from(0), false);
         let absolute =
             context.register(self.absolute, DomainEvents::BOUNDS, LocalId::from(1), false);
@@ -43,12 +42,6 @@ pub(crate) struct AbsoluteValuePropagator<VA, VB> {
 }
 
 impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        self.debug_propagate_from_scratch(context)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -57,17 +50,14 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
         "IntAbs"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.set_lower_bound(&self.absolute, 0, conjunction!())?;
-        self.propagate(context)
-    }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> PropagationStatusCP {
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
         //   the bounds of `signed` can be propagated to `absolute` (taking care of swapping bounds
