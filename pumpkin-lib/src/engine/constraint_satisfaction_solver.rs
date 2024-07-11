@@ -883,7 +883,7 @@ impl ConstraintSatisfactionSolver {
         let conflict_domain = entry.predicate.get_domain();
         assert!(
             entry.old_lower_bound != self.assignments_integer.get_lower_bound(conflict_domain)
-                && entry.old_upper_bound
+                || entry.old_upper_bound
                     != self.assignments_integer.get_upper_bound(conflict_domain),
             "One of the two bounds had to change."
         );
@@ -894,7 +894,6 @@ impl ConstraintSatisfactionSolver {
         // since we use this below.
         let upper_bound_changed =
             entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain);
-        let lower_bound_changed = !upper_bound_changed;
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
@@ -904,78 +903,20 @@ impl ConstraintSatisfactionSolver {
             .unwrap()
             .clone();
 
-        let conflict_context = ConflictAnalysisNogoodContext {
-            assignments_integer: &self.assignments_integer,
-            solver_state: &mut self.state,
-            reason_store: &mut self.reason_store,
-            counters: &mut self.counters,
-        };
-
-        let is_lower_bound_decision = conflict_context
-            .is_decision_predicate(&predicate![conflict_domain >= entry.old_lower_bound]);
-        let is_upper_bound_decision = conflict_context
-            .is_decision_predicate(&predicate![conflict_domain <= entry.old_upper_bound]);
-        // We first process the case when one of the two bounds is as a result of a decision.
-        if upper_bound_changed && is_lower_bound_decision {
-            // We need to add the lower bound predicate to the reasons of the changing upper bound.
-            // PropositionalConjunction does not have a push function, so we create a new
-            // conjunction, which adds the lower bound predicate to the reasons.
-
-            // Todo: rewrite using 'once'
-            let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
+        // We need to append one of the two bounds to the reason. However PropositionalConjunction
+        // does not have a push function, so we create a new PropositionalConjunction from scratch.
+        // Perhaps this can be addressed better some time in the future.
+        let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
+        // Add the other bound.
+        // If the upper bound changed, then add the lower bound predicate to the reason.
+        if upper_bound_changed {
             temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
-            return temp.into();
-        } else if lower_bound_changed && is_upper_bound_decision {
-            // We need to add the upper bound predicate to the reasons of the changing lower bound.
-            // PropositionalConjunction does not have a push function, so we create a new
-            // conjunction, which adds the lower bound predicate to the reasons.
-
-            // Todo: rewrite using 'once'
-            let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
-            temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
-            return temp.into();
         }
-
-        // The code below may safely assume that both bounds are a result of propagation.
-        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
-            assignments_integer: &self.assignments_integer,
-            solver_state: &mut self.state,
-            reason_store: &mut self.reason_store,
-            counters: &mut self.counters,
-        };
-        // If the upper bound got decreased past the lower bound,
-        // then we know that the last predicate on the trail caused this change,
-        // so we can use the reason given on the trail for the lower bound change in combination
-        // with reason for the changing upper bound.
-        if entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain) {
-            assert!(
-                self.assignments_integer.get_lower_bound(conflict_domain) == entry.old_lower_bound,
-                "The lower bound does not change in this case."
-            );
-            // todo: messy mixture of propositional conjunction and vector of predicates.
-            let mut reason_for_lower_bound = conflict_analysis_context
-                .get_propagation_reason(&predicate![conflict_domain >= entry.old_lower_bound]);
-
-            let mut conflict_nogood: Vec<IntegerPredicate> =
-                reason_changing_bound.iter().copied().collect();
-            conflict_nogood.append(&mut reason_for_lower_bound);
-            conflict_nogood.into()
-        }
-        // Otherwise the lower bound got increased past the upper bound.
+        // If the lower bound changed, then add the lower bound predicate to the reason.
         else {
-            assert!(
-                self.assignments_integer.get_upper_bound(conflict_domain) == entry.old_upper_bound,
-                "The upper bound does not change in this case."
-            );
-            // todo: messy mixture of propositional conjunction and vector of predicates.
-            let mut reason_for_upper_bound = conflict_analysis_context
-                .get_propagation_reason(&predicate![conflict_domain <= entry.old_upper_bound]);
-
-            let mut conflict_nogood: Vec<IntegerPredicate> =
-                reason_changing_bound.iter().copied().collect();
-            conflict_nogood.append(&mut reason_for_upper_bound);
-            conflict_nogood.into()
+            temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
         }
+        temp.into()
     }
 
     /// Main propagation loop.
