@@ -850,12 +850,18 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    /// This code is probably wrong.
     fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
-        // todo: handle this properly,
-        // >= and <= reasons?
-
         // The empty domain was caused by the last predicate on the trail.
-        // Conceptually the reason for the empty domain is [x >= k] & and [x <= k - 1].
+        // Conceptually the reason for the empty domain is [x >= k] & [x <= k - 1].
+        // However we cannot simply use that as a conflict nogood, since our conflict analysis
+        // procedure has issues when initialising the starting nogood containing inconsistent
+        // bounds. To address this corner case:
+        // Manually do the first step of the analysis
+        // procedure below before saving the nogood for further conflict analysis. Specifically, we
+        // conceptually start from [x >= k] & [x <= k - 1], and replace the last bound with its
+        // reason. More details below.
+
         // To compute this reason in the solver, we do the following.
         // Record the reason for the last predicate. This is explicitly given on the trail.
         // Note that out of the two bounds, only one of them changed and surpassed the other.
@@ -863,7 +869,7 @@ impl ConstraintSatisfactionSolver {
         // Find the reason for that bound.
         // The conjunction the bound reason is the conflict nogood.
 
-        // Note that the last predicate on the trail is _not_ necessarily a bound predicate!
+        // Recall that the last predicate on the trail is _not_ necessarily a bound predicate!
         // It could be for instance that the variable x was assigned to a value k, and then a
         // propagator posted [x != k]. The above description handles also these cases.
 
@@ -884,13 +890,14 @@ impl ConstraintSatisfactionSolver {
 
         let propagation_context = PropagationContext::new(&self.assignments_integer);
         // Recall that only one of the two bounds changed.
-        // Here we compute whether it was the lower bound or upper bound that changed.
+        // Here we compute whether it was the lower bound or upper bound that changed,
+        // since we use this below.
         let upper_bound_changed =
             entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain);
+        let lower_bound_changed = !upper_bound_changed;
 
         // Look up the reason for the bound that changed.
-        // Note that the reason for changing the bound cannot be a decision,
-        // so we can safely unwrap.
+        // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let reason_changing_bound = self
             .reason_store
             .get_or_compute(entry.reason.unwrap(), &propagation_context)
@@ -903,12 +910,13 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
         };
-        // If the lower bound was the non-changing bound, and it was a result of a decision,
-        // we can conclude here.
-        if upper_bound_changed
-            && conflict_context
-                .is_decision_predicate(&predicate![conflict_domain >= entry.old_lower_bound])
-        {
+
+        let is_lower_bound_decision = conflict_context
+            .is_decision_predicate(&predicate![conflict_domain >= entry.old_lower_bound]);
+        let is_upper_bound_decision = conflict_context
+            .is_decision_predicate(&predicate![conflict_domain <= entry.old_upper_bound]);
+        // We first process the case when one of the two bounds is as a result of a decision.
+        if upper_bound_changed && is_lower_bound_decision {
             // We need to add the lower bound predicate to the reasons of the changing upper bound.
             // PropositionalConjunction does not have a push function, so we create a new
             // conjunction, which adds the lower bound predicate to the reasons.
@@ -917,13 +925,7 @@ impl ConstraintSatisfactionSolver {
             let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
             temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
             return temp.into();
-        }
-        // If the upper bound was the non-changing bound, and it was a result of a decision,
-        // we can conclude here.
-        else if entry.old_upper_bound == self.assignments_integer.get_upper_bound(conflict_domain)
-            && conflict_context
-                .is_decision_predicate(&predicate![conflict_domain <= entry.old_upper_bound])
-        {
+        } else if lower_bound_changed && is_upper_bound_decision {
             // We need to add the upper bound predicate to the reasons of the changing lower bound.
             // PropositionalConjunction does not have a push function, so we create a new
             // conjunction, which adds the lower bound predicate to the reasons.
@@ -934,17 +936,14 @@ impl ConstraintSatisfactionSolver {
             return temp.into();
         }
 
-        // The code below may safely assume that the fixed bound is due to a propagation,
-        // since the case when it is a decision was just handled above.
-
+        // The code below may safely assume that both bounds are a result of propagation.
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
             assignments_integer: &self.assignments_integer,
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
         };
-
-        // If the upper bound got decreased past the upper bound,
+        // If the upper bound got decreased past the lower bound,
         // then we know that the last predicate on the trail caused this change,
         // so we can use the reason given on the trail for the lower bound change in combination
         // with reason for the changing upper bound.
@@ -1003,6 +1002,7 @@ impl ConstraintSatisfactionSolver {
                     // A propagator did a change that resulted in an empty domain.
                     Inconsistency::EmptyDomain => {
                         let empty_domain_reason = self.compute_reason_for_empty_domain();
+
                         let stored_conflict_info = StoredConflictInfo::EmptyDomain {
                             conflict_nogood: empty_domain_reason,
                         };
