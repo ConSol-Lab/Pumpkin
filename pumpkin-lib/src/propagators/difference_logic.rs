@@ -4,7 +4,7 @@ use std::hash::Hash;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::basic_types::PropagationStatusCP;
-use crate::basic_types::PropositionalConjunction;
+use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -16,7 +16,6 @@ use crate::engine::propagation::propagator::Propagator;
 use crate::engine::propagation::propagator_constructor::PropagatorConstructor;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
-use crate::predicate;
 
 type DiffLogicVariables<V> = (V, V, V, V);
 
@@ -47,7 +46,7 @@ where
 {
     type Propagator = DifferenceLogicPropagator<V::AffineView>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         // To keep x_i + \delta <= x_j bound consistent, we do:
         //  x_i >= v -> x_j >= v + \delta
         //  x_j <= v -> x_i <= v - \delta
@@ -121,13 +120,17 @@ where
                     .push((delta, y_i_pos.clone()));
                 difference_vars.push((y_i_pos, y_i_neg, y_j_pos, y_j_neg));
             });
+
+        // Determine how many local ids were registered, so we can initialise the `updated` list.
+        let last_local_id_base = context.get_next_local_id().unpack();
+
         DifferenceLogicPropagator {
             elementary_constraints: elementary_constraints
                 .into_iter()
                 .map(|(k, v)| (k, v.into_boxed_slice()))
                 .collect(),
             difference_vars: difference_vars.into_boxed_slice(),
-            updated: Default::default(),
+            updated: (0..last_local_id_base).map(LocalId::from).collect(),
             worklist: Default::default(),
         }
     }
@@ -159,11 +162,11 @@ impl<V> Propagator for DifferenceLogicPropagator<V>
 where
     V: IntegerVariable + Hash + Eq,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         for &y_start in &self.updated {
-            propagate_shared::<false, V>(
+            propagate_shared(
                 &self.elementary_constraints,
-                context,
+                &mut context,
                 &self.local_id_to_var(y_start).clone(),
                 &mut self.worklist,
             )?;
@@ -174,7 +177,7 @@ where
 
     fn notify(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -194,26 +197,14 @@ where
         "DiffLogic"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
-        for y_start in self.elementary_constraints.keys() {
-            propagate_shared::<true, V>(
-                &self.elementary_constraints,
-                context,
-                y_start,
-                &mut self.worklist,
-            )?;
-        }
-        Ok(())
-    }
-
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         for y_start in self.elementary_constraints.keys() {
-            propagate_shared::<false, V>(
+            propagate_shared(
                 &self.elementary_constraints,
-                context,
+                &mut context,
                 y_start,
                 &mut Default::default(),
             )?;
@@ -223,7 +214,7 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-fn propagate_shared<const CYCLE_CHECK: bool, V>(
+fn propagate_shared<V>(
     elementary_constraints: &HashMap<V, Box<[(i32, V)]>>,
     context: &mut PropagationContextMut,
     y_start: &V,
@@ -233,7 +224,6 @@ where
     V: IntegerVariable + Hash + Eq,
 {
     worklist.push_front(y_start.clone());
-    let mut cycle_reason = Vec::new();
     while let Some(y1) = worklist.pop_front() {
         let y1_y2_edges = elementary_constraints
             .get(&y1)
@@ -243,16 +233,7 @@ where
             let y1_ub = context.upper_bound(&y1);
             let y2_ub_max = y1_ub + delta;
             if y2_ub_max < context.upper_bound(y2) {
-                let reason = predicate![y1 <= y1_ub];
-                if CYCLE_CHECK {
-                    cycle_reason.push(reason);
-                    if y2 == y_start {
-                        // return Inconsistency::Other without a reason, since this check happens
-                        // only  at the root.
-                        return Err(cycle_reason.into());
-                    }
-                }
-                let reason: PropositionalConjunction = reason.into();
+                let reason = conjunction!([y1 <= y1_ub]);
                 context.set_upper_bound(y2, y2_ub_max, reason)?;
                 worklist.push_back(y2.clone());
             }
@@ -264,12 +245,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::basic_types::ConflictInfo;
-    use crate::basic_types::Inconsistency;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
     use crate::engine::variables::TransformableVariable;
     use crate::engine::IntDomainEvent::UpperBound;
+    use crate::predicate;
 
     #[test]
     fn initialisation_and_propagation() {
@@ -369,29 +349,10 @@ mod tests {
         // f1   x_0 + 1 <= x_1
         // f2   x_1 + 1 <= x_0
 
-        let inconsistency = solver
+        let _ = solver
             .new_propagator(DifferenceLogicConstructor {
                 difference_constraints: vec![(x_0, 1, x_1), (x_1, 1, x_0)].into_boxed_slice(),
             })
             .expect_err("cycle detected");
-
-        // inconsistency found as soon as first propagation is done
-        assert!(matches!(
-            inconsistency,
-            Inconsistency::Other(ConflictInfo::Explanation(_))
-        ));
-
-        let Inconsistency::Other(ConflictInfo::Explanation(cycle)) = inconsistency else {
-            unreachable!()
-        };
-        assert!(
-            cycle.eq(&conjunction!([x_0 >= -10] & [x_1 >= -9]))
-                || cycle.eq(&conjunction!([x_0 >= -9] & [x_1 >= -10]))
-                || cycle.eq(&conjunction!([x_0 <= 9] & [x_1 <= 10]))
-                || cycle.eq(&conjunction!([x_0 <= 10] & [x_1 <= 9])),
-            "Cycle is not based on first propagation of either upper or lower bounds,
-             but instead has: {}",
-            cycle,
-        );
     }
 }

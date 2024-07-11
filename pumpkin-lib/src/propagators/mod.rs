@@ -7,6 +7,8 @@ pub(crate) mod clausal;
 mod cumulative;
 mod difference_logic;
 pub(crate) mod element;
+mod reified_propagator;
 
 pub(crate) use arithmetic::*;
 pub(crate) use cumulative::*;
+pub(crate) use reified_propagator::*;

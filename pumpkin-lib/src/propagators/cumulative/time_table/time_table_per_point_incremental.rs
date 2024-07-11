@@ -13,6 +13,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
@@ -75,7 +76,7 @@ where
 {
     type Propagator = TimeTablePerPointIncrementalPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
@@ -107,7 +108,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
             // calculation now
             self.time_table =
                 TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-                    context,
+                    context.as_readonly(),
                     &self.parameters,
                 )?;
             self.time_table_outdated = false;
@@ -143,9 +144,10 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
                     if current_profile.height > self.parameters.capacity {
                         // The newly introduced mandatory part(s) caused an overflow of the resource
                         return Err(create_inconsistency(
-                            context,
+                            context.as_readonly(),
                             &current_profile.profile_tasks,
-                        ));
+                        )
+                        .into());
                     }
                 }
             }
@@ -155,10 +157,10 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                context,
+                &mut context,
                 &self.parameters.tasks,
                 &self.parameters.bounds,
             ),
@@ -166,7 +168,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         );
 
         // We update the time-table based on the stored updates
-        self.update_time_table(context)?;
+        self.update_time_table(&mut context)?;
 
         // We have processed all of the updates, we can clear the structure
         self.parameters.updated.clear();
@@ -175,7 +177,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 ResourceProfile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
+        propagate_based_on_timetable(&mut context, self.time_table.values(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -193,7 +195,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
     fn notify(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -229,7 +231,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         "CumulativeTimeTablePerPointIncremental"
     }
 
-    fn initialise_at_root(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+    fn initialise_at_root(
+        &mut self,
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -245,16 +250,16 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
             &self.parameters,
         )?;
         self.time_table_outdated = false;
-        propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
+        Ok(())
     }
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
         TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
-            context,
+            &mut context,
             &self.parameters,
         )
     }

@@ -1,0 +1,7 @@
+var 0..10: x1 :: output_var;
+var 0..10: x2 :: output_var;
+var bool: r :: output_var;
+
+constraint int_lin_le_reif([1, -1], [x1, x2], 0, r);
+
+solve satisfy;

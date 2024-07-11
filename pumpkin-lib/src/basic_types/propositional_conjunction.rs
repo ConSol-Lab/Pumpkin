@@ -4,11 +4,11 @@ use crate::engine::predicates::predicate::Predicate;
 /// <= 10]`).
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Box<[Predicate]>,
+    predicates_in_conjunction: Vec<Predicate>,
 }
 
 impl PropositionalConjunction {
-    pub fn new(predicates_in_conjunction: Box<[Predicate]>) -> Self {
+    pub fn new(predicates_in_conjunction: Vec<Predicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
         }
@@ -16,6 +16,10 @@ impl PropositionalConjunction {
 
     pub fn num_predicates(&self) -> u32 {
         self.predicates_in_conjunction.len() as u32
+    }
+
+    pub fn add(&mut self, predicate: Predicate) {
+        self.predicates_in_conjunction.push(predicate);
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
@@ -34,16 +38,14 @@ impl FromIterator<Predicate> for PropositionalConjunction {
 
 impl From<Vec<Predicate>> for PropositionalConjunction {
     fn from(vec: Vec<Predicate>) -> Self {
-        PropositionalConjunction {
-            predicates_in_conjunction: vec.into_boxed_slice(),
-        }
+        PropositionalConjunction::new(vec)
     }
 }
 
 impl From<Predicate> for PropositionalConjunction {
     fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
-            predicates_in_conjunction: Box::new([predicate]),
+            predicates_in_conjunction: vec![predicate],
         }
     }
 }
