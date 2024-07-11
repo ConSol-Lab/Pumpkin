@@ -863,6 +863,10 @@ impl ConstraintSatisfactionSolver {
         // Find the reason for that bound.
         // The conjunction the bound reason is the conflict nogood.
 
+        // Note that the last predicate on the trail is _not_ necessarily a bound predicate!
+        // It could be for instance that the variable x was assigned to a value k, and then a
+        // propagator posted [x != k]. The above description handles also these cases.
+
         // The last predicate on the trail reveals the domain id that has resulted
         // in an empty domain.
         let entry = self.assignments_integer.get_last_entry_on_trail();
@@ -871,17 +875,27 @@ impl ConstraintSatisfactionSolver {
             "Cannot cause an empty domain using a decision."
         );
         let conflict_domain = entry.predicate.get_domain();
+        assert!(
+            entry.old_lower_bound != self.assignments_integer.get_lower_bound(conflict_domain)
+                && entry.old_upper_bound
+                    != self.assignments_integer.get_upper_bound(conflict_domain),
+            "One of the two bounds had to change."
+        );
+
         let propagation_context = PropagationContext::new(&self.assignments_integer);
-        // Recall that only one of the two bounds changed. Here we look up the reason for the bound
-        // that changed.
-        let reason_changing_bound = if let Some(reason) = entry.reason {
-            self.reason_store
-                .get_or_compute(reason, &propagation_context)
-                .unwrap()
-                .clone()
-        } else {
-            PropositionalConjunction::default()
-        };
+        // Recall that only one of the two bounds changed.
+        // Here we compute whether it was the lower bound or upper bound that changed.
+        let upper_bound_changed =
+            entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain);
+
+        // Look up the reason for the bound that changed.
+        // Note that the reason for changing the bound cannot be a decision,
+        // so we can safely unwrap.
+        let reason_changing_bound = self
+            .reason_store
+            .get_or_compute(entry.reason.unwrap(), &propagation_context)
+            .unwrap()
+            .clone();
 
         let conflict_context = ConflictAnalysisNogoodContext {
             assignments_integer: &self.assignments_integer,
@@ -889,10 +903,9 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
         };
-
         // If the lower bound was the non-changing bound, and it was a result of a decision,
         // we can conclude here.
-        if entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain)
+        if upper_bound_changed
             && conflict_context
                 .is_decision_predicate(&predicate![conflict_domain >= entry.old_lower_bound])
         {
