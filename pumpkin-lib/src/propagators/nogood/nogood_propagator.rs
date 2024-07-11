@@ -83,6 +83,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 pub struct NogoodPropagator {
     #[allow(dead_code)]
     nogoods: Vec<Vec<IntegerPredicate>>,
+    // nogoods: Vec<Rc<RefCell<[IntegerPredicate]>>>,
     // nogoods: KeyedVec<NogoodId, Vec<IntegerPredicate>>,
     // Watch lists for the nogood propagator.
     // todo: could improve the data structure for watching.

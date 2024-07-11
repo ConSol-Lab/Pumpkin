@@ -3,6 +3,7 @@ use super::LearnedNogood;
 use crate::basic_types::HashMap;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
+use crate::engine::variables::IntegerVariable;
 use crate::engine::AssignmentsInteger;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
@@ -51,14 +52,25 @@ impl AdvancedNogood {
         // I am disabling the clippy warning temporarily.
         #[allow(clippy::map_entry)]
         if !self.internal_ids.contains_key(&domain_id) {
+            // Internally the domain_id is replicated but with an internal id.
+
+            // Collect root level state of the domain_id
             let lower_bound = context
                 .assignments_integer
                 .get_initial_lower_bound(domain_id);
             let upper_bound = context
                 .assignments_integer
                 .get_initial_upper_bound(domain_id);
-            // Replicate the domain but with a new internal id.
+            let holes = context.assignments_integer.get_initial_holes(domain_id);
+
+            // Replicate the domain with the new internal id
             let internal_domain_id = self.internal_assignments.grow(lower_bound, upper_bound);
+            for hole in holes {
+                internal_domain_id
+                    .remove(&mut self.internal_assignments, hole, None)
+                    .expect("Cannot fail with root removals.");
+            }
+
             let _ = self.internal_ids.insert(domain_id, internal_domain_id);
         }
     }
@@ -186,7 +198,7 @@ impl AdvancedNogood {
             );
             self.add_predicate(predicate, context);
         }
-        self.simplify_predicates()
+        self.simplify_predicates();
         // println!("\t resulting nogood: {:?}", learned_nogood);
         // println!("\t after min: {:?}", learned_nogood);
     }
@@ -211,7 +223,13 @@ impl AdvancedNogood {
                 .position(|p| p.trail_position == next_predicate.trail_position)
                 .unwrap();
             assert!(
-                self.predicates[position].predicate == next_predicate.predicate,
+                self.predicates[position].predicate == next_predicate.predicate
+                    && self
+                        .predicates
+                        .iter()
+                        .filter(|p| p.trail_position == next_predicate.trail_position)
+                        .count()
+                        == 1,
                 "Sanity check that the trail positions are unique."
             );
             let removed_predicate = self.predicates.swap_remove(position);
@@ -234,16 +252,19 @@ impl AdvancedNogood {
             num_predicates_at_current_decision_level > 0,
             "Sanity check."
         );
-
+        // The nogood is propagating if it has exactly one predicate from the current decision
+        // level.
         num_predicates_at_current_decision_level == 1
     }
 
     /// Extract the internal nogood and returns it as a learned nogood.
-    /// The predicates in the nogood are sorted according to trail position.
     /// It is guaranteed that the predicates in position zero is the propagating predicate,
     /// and the position one contains the predicate with the second highest decision level.
     /// This is needed when adding the learned nogood.
     pub(crate) fn extract_final_learned_nogood(&self) -> LearnedNogood {
+        // The predicates in the nogood are sorted according to trail position.
+        // This is too strong and could be relaxed later.
+
         // Ideally we would use the retain function of the vector, however we cannot due to borrow
         // checker rules. So we do a manual non-inplace version.
         Self::prepare_learned_nogood(self.predicates.clone(), self.current_decision_level)
@@ -327,7 +348,7 @@ impl AdvancedNogood {
                             false => {
                                 // Here it is important to note that even though this predicate is a
                                 // lower bound, due to holes, the
-                                // lower bound value given by the predicate may not be the stronger
+                                // lower bound value given by the predicate may not be the strongest
                                 // lower bound value, so we need to query it from the assignments.
                                 // Add the predicate to the simplified list.
                                 let strongest_lower_bound =

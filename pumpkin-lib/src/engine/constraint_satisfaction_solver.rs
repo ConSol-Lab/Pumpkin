@@ -20,6 +20,7 @@ use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
@@ -44,6 +45,7 @@ use crate::engine::DebugHelper;
 use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
+use crate::predicate;
 use crate::propagators::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
@@ -848,6 +850,122 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
+        // todo: handle this properly,
+        // >= and <= reasons?
+
+        // The empty domain was caused by the last predicate on the trail.
+        // Conceptually the reason for the empty domain is [x >= k] & and [x <= k - 1].
+        // To compute this reason in the solver, we do the following.
+        // Record the reason for the last predicate. This is explicitly given on the trail.
+        // Note that out of the two bounds, only one of them changed and surpassed the other.
+        // Determine which of the other two bounds was the one that remained fixed.
+        // Find the reason for that bound.
+        // The conjunction the bound reason is the conflict nogood.
+
+        // The last predicate on the trail reveals the domain id that has resulted
+        // in an empty domain.
+        let entry = self.assignments_integer.get_last_entry_on_trail();
+        assert!(
+            entry.reason.is_some(),
+            "Cannot cause an empty domain using a decision."
+        );
+        let conflict_domain = entry.predicate.get_domain();
+        let propagation_context = PropagationContext::new(&self.assignments_integer);
+        // Recall that only one of the two bounds changed. Here we look up the reason for the bound
+        // that changed.
+        let reason_changing_bound = if let Some(reason) = entry.reason {
+            self.reason_store
+                .get_or_compute(reason, &propagation_context)
+                .unwrap()
+                .clone()
+        } else {
+            PropositionalConjunction::default()
+        };
+
+        let conflict_context = ConflictAnalysisNogoodContext {
+            assignments_integer: &self.assignments_integer,
+            solver_state: &mut self.state,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+        };
+
+        // If the lower bound was the non-changing bound, and it was a result of a decision,
+        // we can conclude here.
+        if entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain)
+            && conflict_context
+                .is_decision_predicate(&predicate![conflict_domain >= entry.old_lower_bound])
+        {
+            // We need to add the lower bound predicate to the reasons of the changing upper bound.
+            // PropositionalConjunction does not have a push function, so we create a new
+            // conjunction, which adds the lower bound predicate to the reasons.
+
+            // Todo: rewrite using 'once'
+            let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
+            temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
+            return temp.into();
+        }
+        // If the upper bound was the non-changing bound, and it was a result of a decision,
+        // we can conclude here.
+        else if entry.old_upper_bound == self.assignments_integer.get_upper_bound(conflict_domain)
+            && conflict_context
+                .is_decision_predicate(&predicate![conflict_domain <= entry.old_upper_bound])
+        {
+            // We need to add the upper bound predicate to the reasons of the changing lower bound.
+            // PropositionalConjunction does not have a push function, so we create a new
+            // conjunction, which adds the lower bound predicate to the reasons.
+
+            // Todo: rewrite using 'once'
+            let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
+            temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
+            return temp.into();
+        }
+
+        // The code below may safely assume that the fixed bound is due to a propagation,
+        // since the case when it is a decision was just handled above.
+
+        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
+            assignments_integer: &self.assignments_integer,
+            solver_state: &mut self.state,
+            reason_store: &mut self.reason_store,
+            counters: &mut self.counters,
+        };
+
+        // If the upper bound got decreased past the upper bound,
+        // then we know that the last predicate on the trail caused this change,
+        // so we can use the reason given on the trail for the lower bound change in combination
+        // with reason for the changing upper bound.
+        if entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain) {
+            assert!(
+                self.assignments_integer.get_lower_bound(conflict_domain) == entry.old_lower_bound,
+                "The lower bound does not change in this case."
+            );
+            // todo: messy mixture of propositional conjunction and vector of predicates.
+            let mut reason_for_lower_bound = conflict_analysis_context
+                .get_propagation_reason(&predicate![conflict_domain >= entry.old_lower_bound]);
+
+            let mut conflict_nogood: Vec<IntegerPredicate> =
+                reason_changing_bound.iter().copied().collect();
+            conflict_nogood.append(&mut reason_for_lower_bound);
+            conflict_nogood.into()
+        }
+        // Otherwise the lower bound got increased past the upper bound.
+        else {
+            assert!(
+                self.assignments_integer.get_upper_bound(conflict_domain) == entry.old_upper_bound,
+                "The upper bound does not change in this case."
+            );
+            // todo: messy mixture of propositional conjunction and vector of predicates.
+            let mut reason_for_upper_bound = conflict_analysis_context
+                .get_propagation_reason(&predicate![conflict_domain <= entry.old_upper_bound]);
+
+            let mut conflict_nogood: Vec<IntegerPredicate> =
+                reason_changing_bound.iter().copied().collect();
+            conflict_nogood.append(&mut reason_for_upper_bound);
+            conflict_nogood.into()
+        }
+    }
+
     /// Main propagation loop.
     pub(crate) fn propagate(&mut self) {
         // Record the number of predicates on the trail for statistics purposes.
@@ -869,14 +987,17 @@ impl ConstraintSatisfactionSolver {
                     self.notify_propagators_about_domain_events();
                 }
                 Err(inconsistency) => match inconsistency {
+                    // A propagator did a change that resulted in an empty domain.
                     Inconsistency::EmptyDomain => {
-                        // todo: handle this properly, >= and <= reasons?
-                        todo!();
+                        let empty_domain_reason = self.compute_reason_for_empty_domain();
+                        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
+                            conflict_nogood: empty_domain_reason,
+                        };
+                        self.state.declare_conflict(stored_conflict_info);
+                        break;
                     }
                     // A propagator-specific reason for the current conflict.
                     Inconsistency::Conflict { conflict_nogood } => {
-                        // todo: conflict info can be reworked in the new version into a reason.
-                        // the code below will be simplified in the new version.
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                             &self.assignments_integer,
                             &conflict_nogood,
@@ -884,9 +1005,9 @@ impl ConstraintSatisfactionSolver {
                             propagator_id,
                         ));
 
-                        let stored_conflict_info = StoredConflictInfo {
+                        let stored_conflict_info = StoredConflictInfo::Propagator {
                             conflict_nogood,
-                            propagator: propagator_id,
+                            propagator_id,
                         };
                         self.state.declare_conflict(stored_conflict_info);
                         break;

@@ -20,7 +20,9 @@
 * semantic minimisation? Not necessary?
 * get_trail_position
 * later on: lazy explanation for current decision level predicates, could try it out!
-* remove propositional conjunction? No longer needed, could simply use Vec since there is no more confusion with disjunction.
+
+* remove propositional conjunction? No longer needed, could simply use Vec since there is no more confusion with disjunction. -> or there may be confusion, so keep it!
+
 + sometimes &IntegerPredicate, sometimes IntegerPredicate -> perhaps best to decide one or the other
 * make assignment in assignments_integer, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
 * does_integer_predicate_hold in context could be moved to the trait ReadDomains?
@@ -205,3 +207,7 @@ branching.mod example ruined
 predicates.mod ruined
 
 //! Structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)). -> fix this.
+
+Maybe BooleanVariable -> Literal? , struct Literal(IntegerPredicate)
+
+initial_holes returns a vector? Could be an iterator, or a reference?

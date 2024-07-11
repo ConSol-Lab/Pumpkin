@@ -1,3 +1,4 @@
+use crate::basic_types::StoredConflictInfo;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
@@ -17,12 +18,15 @@ pub struct ConflictAnalysisNogoodContext<'a> {
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
     pub fn get_conflict_nogood(&mut self) -> Vec<IntegerPredicate> {
-        self.solver_state
-            .get_conflict_info()
-            .conflict_nogood
-            .iter()
-            .copied()
-            .collect()
+        match self.solver_state.get_conflict_info() {
+            StoredConflictInfo::Propagator {
+                conflict_nogood,
+                propagator_id: _,
+            } => conflict_nogood.iter().copied().collect(),
+            StoredConflictInfo::EmptyDomain { conflict_nogood } => {
+                conflict_nogood.iter().copied().collect()
+            }
+        }
     }
 
     // Replaces the input predicate with its reason. In case the predicate was a result of a
@@ -513,5 +517,15 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             })
             .copied()
             .collect()
+    }
+
+    pub fn is_decision_predicate(&self, predicate: &IntegerPredicate) -> bool {
+        if let Some(trail_position) = self.assignments_integer.get_trail_position(predicate) {
+            self.assignments_integer.trail[trail_position]
+                .reason
+                .is_none()
+        } else {
+            false
+        }
     }
 }

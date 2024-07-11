@@ -101,15 +101,15 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction> LazyReason for 
 }
 
 impl Reason {
-    /// Compute the reason for a propagation, replacing the original reason with an `Eager` one if
-    ///   it's `Lazy`.
+    /// Compute the reason for a propagation.
+    /// If the reason is 'Lazy', this computes the reason and replaces the lazy explanation with an
+    /// eager one that was just computed.
     pub fn compute(&mut self, context: &PropagationContext) -> &PropositionalConjunction {
-        // You can't just (1) match on the reason to see if it's Lazy, (2) use it to compute a new
-        //   result, and (3) then change the Lazy into an Eager, because you'll still be borrowing
-        //   the closure.
-        //   Instead, we first unconditionally mem::replace the reason with an eager one, so the
-        //   original is moved to a local variable, then match on that original, and put the result
-        //   into the eager one.
+        // It is not possible to (1) match on the reason to see if it is Lazy, (2) use it to compute
+        // a new result, and (3) then change the Lazy into an Eager, because the closure is
+        // borrowed. instead, we first unconditionally mem::replace the reason with an
+        // eager one, so the original is moved to a local variable, then match on that
+        // original, and put the result into the eager one.
         let reason = std::mem::replace(self, Reason::Eager(Default::default()));
         // Get a &mut to the field in Eager to put the result there.
         let Reason::Eager(result) = self else {

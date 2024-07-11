@@ -137,6 +137,15 @@ impl AssignmentsInteger {
         self.domains[domain_id].initial_upper_bound()
     }
 
+    pub fn get_initial_holes(&self, domain_id: DomainId) -> Vec<i32> {
+        self.domains[domain_id]
+            .hole_updates
+            .iter()
+            .take_while(|h| h.decision_level == 0)
+            .map(|h| h.removed_value)
+            .collect()
+    }
+
     pub fn get_assigned_value(&self, domain_id: DomainId) -> Option<i32> {
         if self.is_domain_assigned(domain_id) {
             Some(self.domains[domain_id].lower_bound())
@@ -236,6 +245,7 @@ impl AssignmentsInteger {
         new_lower_bound: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        // No need to do any changes if the new lower bound is weaker.
         if new_lower_bound <= self.get_lower_bound(domain_id) {
             return self.domains[domain_id].verify_consistency();
         }
@@ -277,6 +287,7 @@ impl AssignmentsInteger {
         new_upper_bound: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        // No need to do any changes if the new upper bound is weaker.
         if new_upper_bound >= self.get_upper_bound(domain_id) {
             return self.domains[domain_id].verify_consistency();
         }
@@ -339,6 +350,7 @@ impl AssignmentsInteger {
         removed_value_from_domain: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        // No need to do any changes if the value is not present anyway.
         if !self.domains[domain_id].contains(removed_value_from_domain) {
             return self.domains[domain_id].verify_consistency();
         }
@@ -647,7 +659,7 @@ impl IntegerDomain {
     }
 
     fn domain_iterator(&self) -> IntegerDomainIterator {
-        // ideally we use into_iter but I did not manage to get it to work,
+        // Ideally we use into_iter but I did not manage to get it to work,
         // because the iterator takes a lifelines
         // (the iterator takes a reference to the domain).
         // So this will do for now.
@@ -661,22 +673,23 @@ impl IntegerDomain {
     }
 
     fn contains_at_trail_position(&self, value: i32, trail_position: usize) -> bool {
-        // if the value is out of bounds, then we can safety say that the value is not in the domain
+        // If the value is out of bounds,
+        // then we can safety say that the value is not in the domain.
         if self.lower_bound_at_trail_position(trail_position) > value
             || self.upper_bound_at_trail_position(trail_position) < value
         {
             return false;
         }
-        // otherwise we need to check if there is a hole with that specific value
+        // Otherwise we need to check if there is a hole with that specific value.
 
-        // in case the hole is made at the given trail position or earlier,
-        // the value is not in the domain
+        // In case the hole is made at the given trail position or earlier,
+        // the value is not in the domain.
         if let Some(hole_info) = self.holes.get(&value) {
             if hole_info.trail_position <= trail_position {
                 return false;
             }
         }
-        // since none of the previous checks triggered, the value is in the domain
+        // Since none of the previous checks triggered, the value is in the domain.
         true
     }
 
@@ -703,8 +716,8 @@ impl IntegerDomain {
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
-        // note that it is important to remove the hole now,
-        // because the later if statements may use the holes
+        // Note that it is important to remove the hole now,
+        // because the later if statements may use the holes.
         let old_entry = self.holes.insert(
             removed_value,
             PairDecisionLevelTrailPosition {
@@ -714,7 +727,7 @@ impl IntegerDomain {
         );
         pumpkin_assert_moderate!(old_entry.is_none());
 
-        // check if removing a value triggers a lower bound update
+        // Check if removing a value triggers a lower bound update.
         if self.lower_bound() == removed_value {
             self.set_lower_bound(removed_value + 1, decision_level, trail_position, events);
             self.hole_updates
@@ -722,7 +735,7 @@ impl IntegerDomain {
                 .expect("we just pushed a value, so must be present")
                 .triggered_lower_bound_update = true;
         }
-        // check if removing the value triggers an upper bound update
+        // Check if removing the value triggers an upper bound update.
         if self.upper_bound() == removed_value {
             self.set_upper_bound(removed_value - 1, decision_level, trail_position, events);
             self.hole_updates
