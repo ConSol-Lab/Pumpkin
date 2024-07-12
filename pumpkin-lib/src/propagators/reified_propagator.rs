@@ -46,6 +46,7 @@ impl<WrappedPropagatorConstructor: PropagatorConstructor> PropagatorConstructor
             propagator,
             root_level_inconsistency: None,
             name,
+            reification_literal_id,
         }
     }
 }
@@ -64,6 +65,9 @@ pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     root_level_inconsistency: Option<PropositionalConjunction>,
     /// The formatted name of the propagator.
     name: String,
+    /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
+    /// registered ids of the wrapped propagator.
+    reification_literal_id: LocalId,
 }
 
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
@@ -73,10 +77,11 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        if context.is_literal_true(self.reification_literal) {
-            self.propagator.notify(context, local_id, event)
+        if local_id < self.reification_literal_id {
+            let decision = self.propagator.notify(context, local_id, event);
+            self.filter_enqueue_decision(context, decision)
         } else {
-            EnqueueDecision::Skip
+            panic!("no integer variables are registered beyond those from the wrapped propagator")
         }
     }
 
@@ -86,10 +91,11 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         local_id: LocalId,
         event: BooleanDomainEvent,
     ) -> EnqueueDecision {
-        if context.is_literal_true(self.reification_literal) {
-            self.propagator.notify_literal(context, local_id, event)
+        if local_id < self.reification_literal_id {
+            let decision = self.propagator.notify_literal(context, local_id, event);
+            self.filter_enqueue_decision(context, decision)
         } else {
-            EnqueueDecision::Skip
+            EnqueueDecision::Enqueue
         }
     }
 
@@ -166,6 +172,19 @@ impl<Prop> ReifiedPropagator<Prop> {
         }
 
         Ok(())
+    }
+
+    fn filter_enqueue_decision(
+        &self,
+        context: PropagationContext<'_>,
+        decision: EnqueueDecision,
+    ) -> EnqueueDecision {
+        if decision == EnqueueDecision::Enqueue && context.is_literal_true(self.reification_literal)
+        {
+            EnqueueDecision::Enqueue
+        } else {
+            EnqueueDecision::Skip
+        }
     }
 }
 
