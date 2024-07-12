@@ -141,7 +141,7 @@ mod tests {
     use super::*;
     use crate::conjunction;
     use crate::engine::variables::DomainId;
-    use AssignmentsInteger;
+    use crate::engine::AssignmentsInteger;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {

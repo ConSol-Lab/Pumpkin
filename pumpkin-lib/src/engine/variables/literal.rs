@@ -36,6 +36,12 @@ impl Not for Literal {
     }
 }
 
+impl From<Literal> for IntegerPredicate {
+    fn from(value: Literal) -> Self {
+        value.predicate
+    }
+}
+
 impl IntegerVariable for Literal {
     type AffineView = AffineView<Self>;
 
@@ -86,7 +92,7 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
+    fn describe_domain(&self, _assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
         unimplemented!();
     }
 
@@ -135,7 +141,7 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+    fn watch_all(&self, _watchers: &mut Watchers<'_>, _events: EnumSet<IntDomainEvent>) {
         unimplemented!()
         // watchers.watch_all(*self, events);
     }
@@ -158,8 +164,7 @@ impl PredicateConstructor for Literal {
                 // such a predicate, but it seems correct.
                 let domain_id = self.predicate.get_domain();
                 let infinity = i32::MIN;
-                let trivially_true_predicate = predicate![domain_id >= infinity];
-                trivially_true_predicate
+                predicate![domain_id >= infinity]
             }
             1 => self.predicate,
             _ => {
@@ -181,8 +186,7 @@ impl PredicateConstructor for Literal {
                 // such a predicate, but it seems correct.
                 let domain_id = self.predicate.get_domain();
                 let infinity = i32::MIN;
-                let trivially_true_predicate = predicate![domain_id >= infinity];
-                trivially_true_predicate
+                predicate![domain_id >= infinity]
             }
             _ => {
                 panic!(

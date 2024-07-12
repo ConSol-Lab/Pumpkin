@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
-use AssignmentsInteger;
 
 use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
@@ -41,6 +40,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
+use crate::engine::AssignmentsInteger;
 use crate::engine::DebugHelper;
 use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
@@ -373,9 +373,9 @@ impl ConstraintSatisfactionSolver {
         self.counters.log_statistics()
     }
 
-    pub fn create_new_boolean_variable(&mut self, name: Option<String>) -> Literal {
+    pub fn create_new_literal(&mut self, name: Option<String>) -> Literal {
         let domain_id = self.create_new_integer_variable(0, 1, name);
-        Literal::new(domain_id)
+        Literal::new(predicate![domain_id == 1])
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.

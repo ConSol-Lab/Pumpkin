@@ -4,7 +4,7 @@ use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonStore;
-use AssignmentsInteger;
+use crate::engine::AssignmentsInteger;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::pumpkin_assert_simple;
 

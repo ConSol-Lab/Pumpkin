@@ -2,10 +2,9 @@ use super::PropagatorId;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::Literal;
-use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use AssignmentsInteger;
+use crate::engine::variables::Literal;
+use crate::engine::AssignmentsInteger;
 use crate::engine::EmptyDomain;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
@@ -76,16 +75,16 @@ mod private {
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_boolean_true(&self, boolean: Literal) -> bool {
-        self.lower_bound(&DomainId::from(boolean)) == 1
+    fn is_literal_true(&self, literal: Literal) -> bool {
+        self.lower_bound(&literal) == 1
     }
 
-    fn is_boolean_false(&self, boolean: Literal) -> bool {
-        self.upper_bound(&DomainId::from(boolean)) == 0
+    fn is_literal_false(&self, literal: Literal) -> bool {
+        self.upper_bound(&literal) == 0
     }
 
-    fn is_boolean_fixed(&self, boolean: Literal) -> bool {
-        self.is_fixed(&DomainId::from(boolean))
+    fn is_literal_fixed(&self, literal: Literal) -> bool {
+        self.is_fixed(&literal)
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -185,16 +184,15 @@ impl PropagationContextMut<'_> {
         }
     }
 
-    pub fn assign_boolean<R: Into<Reason> + Clone>(
+    pub fn assign_literal<R: Into<Reason> + Clone>(
         &mut self,
         boolean: Literal,
         truth_value: bool,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        let domain_id = DomainId::from(boolean);
         match truth_value {
-            true => self.set_lower_bound(&domain_id, 1, reason),
-            false => self.set_upper_bound(&domain_id, 0, reason),
+            true => self.set_lower_bound(&boolean, 1, reason),
+            false => self.set_upper_bound(&boolean, 0, reason),
         }
     }
 }

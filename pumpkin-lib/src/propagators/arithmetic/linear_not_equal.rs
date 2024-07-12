@@ -10,9 +10,8 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::variables::Literal;
-use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -68,9 +67,9 @@ where
             })
             .collect();
 
-        if let Some(boolean_domain_id) = self.reif {
+        if let Some(literal) = self.reif {
             let _ = context.register(
-                DomainId::from(boolean_domain_id),
+                literal,
                 DomainEvents::ASSIGN,
                 LocalId::from(self.terms.len() as u32),
             );
@@ -139,7 +138,7 @@ where
             .sum::<i32>();
 
         if num_fixed == self.terms.len() - 1
-            && (!reified || context.is_boolean_true(self.reif.unwrap()))
+            && (!reified || context.is_literal_true(self.reif.unwrap()))
         {
             let value_to_remove = self.rhs - lhs;
 
@@ -165,7 +164,7 @@ where
                 },
             )?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
-            if reified && !context.is_boolean_fixed(self.reif.unwrap()) {
+            if reified && !context.is_literal_fixed(self.reif.unwrap()) {
                 // Conflict was found but we can set the reified literal to false to satisfy the
                 // constraint
                 let reason: PropositionalConjunction = self
@@ -174,8 +173,8 @@ where
                     .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
                     .collect();
 
-                context.assign_boolean(self.reif.unwrap(), false, reason)?;
-            } else if !reified || context.is_boolean_true(self.reif.unwrap()) {
+                context.assign_literal(self.reif.unwrap(), false, reason)?;
+            } else if !reified || context.is_literal_true(self.reif.unwrap()) {
                 // Conflict was found, either the constraint is not reified or the reification
                 // variable is already true
 
@@ -318,14 +317,8 @@ mod tests {
             ))
             .expect_err("Non empty domain");
 
-        let reif_domain_id = DomainId::from(reif);
         let expected: Inconsistency = PropositionalConjunction::new(
-            vec![
-                predicate!(x == 2),
-                predicate!(y == 2),
-                predicate!(reif_domain_id == 1),
-            ]
-            .into(),
+            vec![predicate!(x == 2), predicate!(y == 2), reif.into()].into(),
         )
         .into();
         assert_eq!(expected, err);
@@ -352,11 +345,8 @@ mod tests {
 
         let reason = solver.get_reason_int(predicate![y != -2]);
 
-        let reif_domain_id = DomainId::from(reif);
         assert_eq!(
-            PropositionalConjunction::new(
-                vec![predicate!(x == 2), predicate!(reif_domain_id == 1)].into()
-            ),
+            PropositionalConjunction::new(vec![predicate!(x == 2), reif.into()].into()),
             *reason
         );
     }

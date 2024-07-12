@@ -18,7 +18,6 @@ use pumpkin_lib::branching::branchers::independent_variable_value_brancher::Inde
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::engine::predicates::integer_predicate::IntegerPredicate;
 use pumpkin_lib::engine::termination::time_budget::TimeBudget;
-use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
 use pumpkin_lib::optimisation::log_statistics_with_objective;
@@ -276,15 +275,17 @@ fn parse_and_compile(
 fn print_solution_from_solver(solution: SolutionReference<'_>, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
-            Output::Bool(output) => output
-                .print_value(|boolean| solution.get_integer_value(DomainId::from(*boolean)) == 1),
+            Output::Bool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
 
             Output::Int(output) => {
                 output.print_value(|domain_id| solution.get_integer_value(*domain_id))
             }
 
-            Output::ArrayOfBool(output) => output
-                .print_value(|boolean| solution.get_integer_value(DomainId::from(*boolean)) == 1),
+            Output::ArrayOfBool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
 
             Output::ArrayOfInt(output) => {
                 output.print_value(|domain_id| solution.get_integer_value(*domain_id))

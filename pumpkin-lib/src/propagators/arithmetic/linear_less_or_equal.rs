@@ -8,9 +8,8 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::variables::Literal;
-use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::predicate;
 
 #[derive(Debug)]
@@ -62,9 +61,9 @@ where
             })
             .collect();
 
-        if let Some(boolean_domain_id) = self.reif {
+        if let Some(literal) = self.reif {
             let _ = context.register(
-                DomainId::from(boolean_domain_id),
+                literal,
                 DomainEvents::ASSIGN,
                 LocalId::from(self.x.len() as u32),
             );
@@ -120,13 +119,13 @@ fn perform_propagation<Var: IntegerVariable>(
     let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
     let reified = reif.is_some();
     if c < lb_lhs {
-        if reified && !context.is_boolean_fixed(reif.unwrap()) {
+        if reified && !context.is_literal_fixed(reif.unwrap()) {
             let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
                 .collect();
-            context.assign_boolean(reif.unwrap(), false, reason)?;
-        } else if !reified || context.is_boolean_true(reif.unwrap()) {
+            context.assign_literal(reif.unwrap(), false, reason)?;
+        } else if !reified || context.is_literal_true(reif.unwrap()) {
             let reason: PropositionalConjunction = x
                 .iter()
                 .map(|var| predicate![var >= context.lower_bound(var)])
@@ -137,7 +136,7 @@ fn perform_propagation<Var: IntegerVariable>(
     }
 
     if reified
-        && (!context.is_boolean_fixed(reif.unwrap()) || context.is_boolean_false(reif.unwrap()))
+        && (!context.is_literal_fixed(reif.unwrap()) || context.is_literal_false(reif.unwrap()))
     {
         return Ok(());
     }

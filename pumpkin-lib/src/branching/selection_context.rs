@@ -9,7 +9,7 @@ use crate::engine::variables::DomainGeneratorIterator;
 #[cfg(doc)]
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use AssignmentsInteger;
+use crate::engine::AssignmentsInteger;
 
 /// The context provided to the [`Brancher`],
 /// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods

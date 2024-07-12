@@ -1,6 +1,7 @@
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::variables::DomainId;
-use AssignmentsInteger;
+use crate::engine::variables::Literal;
+use crate::engine::AssignmentsInteger;
 
 /// A trait which specifies the common behaviours of [`Solution`] and [`SolutionReference`].
 pub trait ProblemSolution: HasAssignments {
@@ -13,6 +14,12 @@ pub trait ProblemSolution: HasAssignments {
         self.assignments_integer()
             .get_assigned_value(domain)
             .expect("Expected retrieved integer variable from solution to be assigned")
+    }
+
+    fn get_literal_value(&self, literal: Literal) -> bool {
+        self.assignments_integer()
+            .evaluate_predicate(literal.into())
+            .expect("Expected to retrieve concrete truth value from solution to be assigned.")
     }
 }
 

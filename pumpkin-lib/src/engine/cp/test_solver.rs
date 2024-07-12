@@ -20,7 +20,7 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use AssignmentsInteger;
+use crate::engine::AssignmentsInteger;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;

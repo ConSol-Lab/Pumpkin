@@ -9,7 +9,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use AssignmentsInteger;
+use crate::engine::AssignmentsInteger;
 
 // TODO:
 // Define data structures.
