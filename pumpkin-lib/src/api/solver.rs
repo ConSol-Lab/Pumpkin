@@ -31,6 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
+use crate::propagators::ExplanationType;
 use crate::propagators::ReifiedPropagatorConstructor;
 use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
@@ -985,6 +986,7 @@ impl Solver {
     ///     &resource_requirements,
     ///     resource_capacity,
     ///     false,
+    ///     ExplanationType::default(),
     /// );
     ///
     /// let mut termination = Indefinite;
@@ -1047,6 +1049,7 @@ impl Solver {
         resource_requirements: &[i32],
         resource_capacity: i32,
         allow_holes_in_domain: bool,
+        explanation_type: ExplanationType,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
@@ -1066,6 +1069,7 @@ impl Solver {
                     .collect(),
                 resource_capacity,
                 allow_holes_in_domain,
+                explanation_type,
             ))
     }
 

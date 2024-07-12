@@ -3,36 +3,15 @@
 //! input parameters.
 use std::rc::Rc;
 
-use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
-use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
-
-/// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
-/// [`Task`]s
-pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
-    conflict_tasks: &[Rc<Task<Var>>],
-) -> PropositionalConjunction {
-    let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
-    for task in conflict_tasks.iter() {
-        error_clause.push(predicate!(
-            task.start_variable <= context.upper_bound(&task.start_variable)
-        ));
-        error_clause.push(predicate!(
-            task.start_variable >= context.lower_bound(&task.start_variable)
-        ));
-    }
-
-    PropositionalConjunction::from(error_clause)
-}
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
 /// registered for [`DomainEvents`].

@@ -218,6 +218,7 @@ fn compile_cumulative(
             &resource_requirements,
             resource_capacity,
             options.cumulative_allow_holes,
+            options.cumulative_explanation_type,
         )
         .is_ok())
 }

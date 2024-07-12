@@ -109,6 +109,7 @@
 //! }
 //! ```
 mod time_table;
+pub use time_table::ExplanationType;
 pub(crate) use time_table::*;
 
 mod utils;

@@ -8,6 +8,8 @@ use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
+use super::create_profile_explanation;
+use super::ExplanationType;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -20,7 +22,8 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
-use crate::predicate;
+use crate::propagators::create_right_hand_side_lower_bound_propagation;
+use crate::propagators::create_right_hand_side_upper_bound_propagation;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
@@ -28,6 +31,7 @@ use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 /// Structures used for storing the data related to resource profiles;
 /// A [`ResourceProfile`] represents a rectangle where the height is the cumulative mandatory
@@ -77,7 +81,7 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: &PropagationContext,
+    context: PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -140,7 +144,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 pub(crate) enum AddedMandatoryConsumption {
     /// There was an existing mandatory part but it has been extended by an update; the first
     /// [`Range`] is the added mandatory part due to an update of the upper-bound of the start time
-    /// and the second [`Range`] is the added mandatory part due to an update of the lower-bound of
+    /// and the second [`Range`] si the added mandatory part due to an update of the lower-bound of
     /// the start time.
     AdditionalMandatoryParts(Range<i32>, Range<i32>),
     /// There was no existing mandatory part before the update but there is one now.
@@ -162,8 +166,16 @@ impl AddedMandatoryConsumption {
             AddedMandatoryConsumption::AdditionalMandatoryParts(
                 first_added_part,
                 second_added_part,
-            ) => vec![second_added_part.clone(), first_added_part.clone()],
+            ) => {
+                // First return the second part and then return the first part, filtering out the
+                // empty mandatory parts
+                [second_added_part.clone(), first_added_part.clone()]
+                    .into_iter()
+                    .filter(|added_part| !added_part.is_empty())
+                    .collect()
+            }
             AddedMandatoryConsumption::FullyNewMandatoryPart(added_mandatory_part) => {
+                pumpkin_assert_simple!(!added_mandatory_part.is_empty());
                 vec![added_mandatory_part.clone()]
             }
         }
@@ -232,7 +244,7 @@ pub(crate) fn generate_update_range<Var: IntegerVariable + 'static>(
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
 pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -249,7 +261,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
 pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -308,7 +320,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
     sorted_profiles && non_overlapping_profiles
 }
 
-/// Checks whether propagations should occur based on the current state of the time-table
+/// Checks whether propagations should occur based on the current state of the time-table.
 ///
 /// It goes over all profiles and all tasks and determines which ones should be propagated;
 /// Note that this method is not idempotent and that it assumes that the [`ResourceProfile`]s are
@@ -353,6 +365,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
                 profile,
                 parameters,
                 &mut profile_explanation,
+                parameters.explanation_type,
             )?;
         }
     }
@@ -368,7 +381,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -388,7 +401,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
 fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -409,18 +422,24 @@ fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
     explanation: Rc<Vec<Predicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
-        lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
+        lower_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity
+        ),
         "Lower-bound of task is being propagated by profile while the conditions do not hold"
     );
     // The new value to which the lower-bound of `task` will be propagated
     let new_lower_bound_value = profile.end + 1;
 
     // Create the predicate which is used in the "lazy" explanation
-    // Note that this is not the value to which the lower-bound is propagated but rather the
-    // predicate which ensures that `task` has the most general bound possible such that
-    // this propagation would have taken place.
-    let general_explanation_lower_bound_predicate =
-        predicate!(task.start_variable >= max(0, profile.start - task.processing_time + 1));
+    let general_explanation_lower_bound_predicate = create_right_hand_side_lower_bound_propagation(
+        &context.as_readonly(),
+        task,
+        profile,
+        parameters.explanation_type,
+    );
     // Then we perform the actual propagation using this bound and the responsible tasks
     // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
     // scratch but we only clone the underlying structure when it is used in an explanation; this
@@ -448,7 +467,12 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     explanation: Rc<Vec<Predicate>>,
 ) -> Result<(), EmptyDomain> {
     pumpkin_assert_advanced!(
-        upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
+        upper_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity
+        ),
         "Upper-bound of task is being propagated by profile while the conditions do not hold"
     );
     // The new value to which the upper-bound of `task` will be propagated.
@@ -457,11 +481,11 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
     let new_upper_bound_value = profile.start - task.processing_time;
 
     // Create the predicate which is used in the "lazy" explanation
-    // Note that this is not the value to which the upper-bound is propagated but rather the
-    // predicate which ensures that `task` has the most general bound possible such that
-    // this propagation would have taken place.
-    let general_explanation_upper_bound_predicate = predicate!(
-        task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end)
+    let general_explanation_upper_bound_predicate = create_right_hand_side_upper_bound_propagation(
+        &context.as_readonly(),
+        task,
+        profile,
+        parameters.explanation_type,
     );
 
     // Then we perform the actual propagation using this bound and the responsible tasks
@@ -494,22 +518,48 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
     profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
+    explanation_type: ExplanationType,
 ) -> Result<(), EmptyDomain> {
     if profile.height + task.resource_usage <= parameters.capacity
-        || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
+        || has_mandatory_part_in_interval(&context.as_readonly(), task, profile.start, profile.end)
     {
         // The task cannot be propagated due to its resource usage being too low or it is part of
         // the interval which means that it cannot be updated at all
         return Ok(());
-    } else if task_has_overlap_with_interval(context, task, profile.start, profile.end) {
+    } else if task_has_overlap_with_interval(
+        &context.as_readonly(),
+        task,
+        profile.start,
+        profile.end,
+    ) {
         // The current task has an overlap with the current resource profile (i.e. it could be
         // propagated by the current profile)
-        if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            let explanation = create_profile_explanation(context, profile, profile_explanation);
+        if lower_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity,
+        ) {
+            let explanation = create_profile_explanation(
+                &context.as_readonly(),
+                profile,
+                profile_explanation,
+                explanation_type,
+            );
             propagate_lower_bound_task_by_profile(context, task, parameters, profile, explanation)?;
         }
-        if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            let explanation = create_profile_explanation(context, profile, profile_explanation);
+        if upper_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity,
+        ) {
+            let explanation = create_profile_explanation(
+                &context.as_readonly(),
+                profile,
+                profile_explanation,
+                explanation_type,
+            );
             propagate_upper_bound_task_by_profile(context, task, parameters, profile, explanation)?;
         }
         if parameters.allow_holes_in_domain {
@@ -536,7 +586,12 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             let upper_bound_removed_time_points =
                 min(context.upper_bound(&task.start_variable), profile.end);
             for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
-                let explanation = create_profile_explanation(context, profile, profile_explanation);
+                let explanation = create_profile_explanation(
+                    &context.as_readonly(),
+                    profile,
+                    profile_explanation,
+                    explanation_type,
+                );
 
                 context.remove(
                     &task.start_variable,
@@ -554,45 +609,4 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
         }
     }
     Ok(())
-}
-
-/// Initialises the `profile_explanation` structure with the [`Predicate::lower_bound_predicate`]
-/// and [`Predicate::upper_bound_predicate`] of all of the [`ResourceProfile::profile_tasks`] of the
-/// provided `profile`.
-///
-/// Creates an explanation consisting of all bounds of the variables causing a propagation (See [Section 4.5 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)).
-/// Note that this is not necessarily a minimal explanation, it could be the case that some of the
-/// tasks can be removed from the explanation depending on which task is propagated.
-///
-/// Note that this method stores an [`Rc`] in `profile_explanations` and then clones it, this means
-/// that the [`Rc`] is created only once for each profile.
-///
-/// # Bibliography
-/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
-/// Computer Science and Software Engineering, 2011.
-fn create_profile_explanation<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
-    profile: &ResourceProfile<Var>,
-    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
-) -> Rc<Vec<Predicate>> {
-    Rc::clone(profile_explanation.get_or_init(|| {
-        Rc::new(
-            profile
-                .profile_tasks
-                .iter()
-                .flat_map(|profile_task| {
-                    [
-                        predicate!(
-                            profile_task.start_variable
-                                >= context.lower_bound(&profile_task.start_variable)
-                        ),
-                        predicate!(
-                            profile_task.start_variable
-                                <= context.upper_bound(&profile_task.start_variable)
-                        ),
-                    ]
-                })
-                .collect::<Vec<Predicate>>(),
-        )
-    }))
 }

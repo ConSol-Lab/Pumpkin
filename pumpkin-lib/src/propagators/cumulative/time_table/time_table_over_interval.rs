@@ -15,7 +15,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::util::create_propositional_conjunction;
+use crate::propagators::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -76,6 +76,7 @@ where
             tasks,
             self.capacity,
             self.allow_holes_in_domain,
+            self.explanation_type,
         ))
     }
 }
@@ -125,7 +126,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            &context,
+            context,
             self.is_time_table_empty,
         );
         update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
@@ -278,6 +279,8 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static>(
     let mut current_resource_usage: i32 = 0;
     // The beginning of the current interval under consideration
     let mut start_of_interval: i32 = -1;
+    // Determines whether a conflict has occurred
+    let mut is_conflicting = false;
 
     // We go over all the events and create the time-table
     for event in events {
@@ -303,24 +306,41 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static>(
             // We have first traversed all of the ends of mandatory parts, meaning that any
             // overflow will persist after processing all events at this time-point
             if current_resource_usage > parameters.capacity {
-                // An overflow has occurred due to mandatory parts
-                return Err(create_propositional_conjunction(
-                    context,
-                    &current_profile_tasks,
-                ));
+                is_conflicting = true;
             }
 
             // Potentially we need to end the current profile and start a new one due to the
             // addition/removal of the current task
             if start_of_interval != event.time_stamp {
-                // We end the current profile, creating a profile from [start_of_interval,
-                // time_stamp)
-                time_table.push(ResourceProfile {
+                let new_profile = ResourceProfile {
                     start: start_of_interval,
                     end: event.time_stamp - 1,
                     profile_tasks: current_profile_tasks.clone(),
                     height: current_resource_usage,
-                });
+                };
+                if is_conflicting {
+                    println!(
+                        "Conflict -> {:?} - Capacity: {}",
+                        new_profile
+                            .profile_tasks
+                            .iter()
+                            .map(|current| format!(
+                                "Duration: {}, Usage: {}",
+                                current.processing_time, current.resource_usage
+                            ))
+                            .collect::<Vec<_>>(),
+                        parameters.capacity
+                    );
+                    return Err(create_conflict_explanation(
+                        context,
+                        &new_profile,
+                        parameters.explanation_type,
+                    ));
+                } else {
+                    // We end the current profile, creating a profile from [start_of_interval,
+                    // time_stamp)
+                    time_table.push(new_profile);
+                }
             }
             // Process the current event, note that `change_in_resource_usage` can be negative
             pumpkin_assert_simple!(
@@ -339,6 +359,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static>(
                 // We thus need to start a new profile
                 start_of_interval = event.time_stamp;
                 if event.change_in_resource_usage < 0 {
+                    pumpkin_assert_simple!(!is_conflicting);
                     // The mandatory part of a task has ended, we should thus remove it from the
                     // contributing tasks
                     let _ = current_profile_tasks.remove(
@@ -356,11 +377,17 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static>(
                             !current_profile_tasks.contains(&event.task),
                             "Task is being added to the profile while it is already part of the contributing tasks"
                         );
-                    current_profile_tasks.push(event.task);
+                    if !is_conflicting {
+                        // If the profile is already conflicting then we shouldn't add more tasks.
+                        // This could be changed in the future so that we can pick the tasks which
+                        // are used for the conflict explanation
+                        current_profile_tasks.push(event.task);
+                    }
                 }
             }
         }
     }
+    pumpkin_assert_simple!(!is_conflicting);
     Ok(time_table)
 }
 
@@ -405,6 +432,7 @@ mod tests {
     use crate::engine::test_helper::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
+    use crate::propagators::ExplanationType;
     use crate::propagators::TimeTableOverInterval;
 
     #[test]
@@ -431,6 +459,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -462,6 +491,7 @@ mod tests {
             .collect(),
             1,
             false,
+            ExplanationType::Naive,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
@@ -504,6 +534,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -560,6 +591,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -589,6 +621,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -633,6 +666,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -645,7 +679,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 <= 9),
+                predicate!(s2 <= 8),
                 predicate!(s1 >= 6),
                 predicate!(s1 <= 6),
             ]),
@@ -701,6 +735,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -780,6 +815,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -827,6 +863,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -839,7 +876,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 >= 0),
+                predicate!(s2 >= 1),
                 predicate!(s1 >= 1),
                 predicate!(s1 <= 1),
             ]),
@@ -877,6 +914,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -893,7 +931,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
                 predicate!(s2 >= 5),
-                predicate!(s3 >= 2),
+                predicate!(s3 >= 5),
             ]),
             reason
         );
@@ -923,6 +961,7 @@ mod tests {
                 .collect(),
                 1,
                 true,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);

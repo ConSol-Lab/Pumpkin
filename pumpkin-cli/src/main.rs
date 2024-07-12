@@ -179,6 +179,9 @@ struct Args {
     #[arg(long = "cumulative-allow-holes", default_value_t = false)]
     cumulative_allow_holes: bool,
 
+    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = ExplanationType::default().into())]
+    cumulative_explanation_type: CliArg<ExplanationType>,
+
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
     /// that it evaluates to the reported objective value.
     #[arg(long = "verify", default_value_t = false)]
@@ -360,6 +363,7 @@ fn run() -> PumpkinResult<()> {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
                 cumulative_allow_holes: args.cumulative_allow_holes,
+                cumulative_explanation_type: args.cumulative_explanation_type.inner,
             },
         )?,
     }
@@ -448,6 +452,17 @@ fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>,
     }
 }
 
+fn cumulative_explanation_type_parser(s: &str) -> Result<CliArg<ExplanationType>, String> {
+    match s {
+        "naive" => Ok(ExplanationType::Naive.into()),
+        "big-step" => Ok(ExplanationType::BigStep.into()),
+        "pointwise" => Ok(ExplanationType::PointWise.into()),
+        value => Err(format!(
+            "'{value}' is not a valid cumulative explanation type"
+        )),
+    }
+}
+
 fn learned_clause_minimisation_parser(s: &str) -> Result<CliArg<bool>, String> {
     if s == "1" || s.to_lowercase() == "true" {
         Ok(true.into())
@@ -477,6 +492,12 @@ struct CliArg<T> {
 impl<T> From<T> for CliArg<T> {
     fn from(value: T) -> Self {
         CliArg { inner: value }
+    }
+}
+
+impl std::fmt::Display for CliArg<ExplanationType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.inner, f)
     }
 }
 

@@ -17,11 +17,11 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::create_conflict_explanation;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -86,6 +86,7 @@ where
             tasks,
             self.capacity,
             self.allow_holes_in_domain,
+            self.explanation_type,
         ))
     }
 }
@@ -147,10 +148,11 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
                                 &update_info.task,
                                 self.parameters.capacity,
                             )
-                            .map_err(|conflict_tasks| {
-                                create_propositional_conjunction(
+                            .map_err(|conflict_profile| {
+                                create_conflict_explanation(
                                     &context.as_readonly(),
-                                    &conflict_tasks,
+                                    &conflict_profile,
+                                    self.parameters.explanation_type,
                                 )
                             })?;
                         }
@@ -204,7 +206,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            &context,
+            context,
             self.time_table.is_empty(),
         );
         if let Some(update) = result.update {
@@ -372,7 +374,7 @@ mod insertion {
         update_range: &Range<i32>,
         updated_task: &Rc<Task<Var>>,
         capacity: i32,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), ResourceProfile<Var>> {
         let mut to_add = Vec::new();
         // Go over all indices of the profiles which overlap with the updated
         // one and determine which one need to be updated
@@ -591,7 +593,7 @@ mod checks {
         to_add: &mut Vec<ResourceProfile<Var>>,
         task: &Rc<Task<Var>>,
         capacity: i32,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), ResourceProfile<Var>> {
         // Now we create a new profile which consists of the part of the
         // profile covered by the update range
         // This means that we are adding the contribution of the updated
@@ -613,22 +615,23 @@ mod checks {
         let mut new_profile_tasks = profile.profile_tasks.clone();
         new_profile_tasks.push(Rc::clone(task));
         if new_profile_upper_bound >= new_profile_lower_bound {
-            // A sanity check, there is a new profile to create consisting
-            // of a combination of the previous profile and the updated task
-            if profile.height + task.resource_usage > capacity {
-                // The addition of the new mandatory part to the profile
-                // caused an overflow of the resource
-                return Err(new_profile_tasks);
-            }
-
-            // We thus create a new profile consisting of the combination of
-            // the previous profile and the updated task under consideration
-            to_add.push(ResourceProfile {
+            let updated_profile = ResourceProfile {
                 start: new_profile_lower_bound,
                 end: new_profile_upper_bound,
                 profile_tasks: new_profile_tasks,
                 height: profile.height + task.resource_usage,
-            })
+            };
+            // A sanity check, there is a new profile to create consisting
+            // of a combination of the previous profile and the updated task
+            if updated_profile.height > capacity {
+                // The addition of the new mandatory part to the profile
+                // caused an overflow of the resource
+                return Err(updated_profile);
+            }
+
+            // We thus create a new profile consisting of the combination of
+            // the previous profile and the updated task under consideration
+            to_add.push(updated_profile)
         }
         Ok(())
     }
@@ -688,6 +691,8 @@ mod checks {
 
 /// Contains functions related to debugging
 mod debug {
+    use std::fmt::Debug;
+
     use crate::basic_types::HashSet;
     use crate::engine::propagation::PropagationContext;
     use crate::propagators::create_time_table_over_interval_from_scratch;
@@ -707,7 +712,7 @@ mod debug {
     ///      - The heights are the same
     ///      - The profile tasks should be the same; note that we do not check whether the order is
     ///        the same!
-    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
+    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static + Debug>(
         context: &PropagationContext,
         time_table: &OverIntervalTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
@@ -715,10 +720,15 @@ mod debug {
         let time_table_scratch = create_time_table_over_interval_from_scratch(context, parameters)
             .expect("Expected no error");
 
+        if time_table.is_empty() {
+            return time_table_scratch.is_empty();
+        }
+
         // First we merge all of the split profiles to ensure that it is the same as the
         // non-incremental time-table
         let mut time_table = time_table.clone();
         let time_table_len = time_table.len();
+
         merge_profiles(&mut time_table, 0, time_table_len - 1);
 
         // Then we compare whether the time-tables are the same with the following checks:
@@ -729,10 +739,10 @@ mod debug {
         //      - The heights are the same
         //      - The profile tasks of the profiles should be the same; note that we do not check
         //        whether the order is the same!
-        time_table.len() == time_table_scratch.len()
+        let result = time_table.len() == time_table_scratch.len()
             && time_table
                 .iter()
-                .zip(time_table_scratch)
+                .zip(time_table_scratch.clone())
                 .all(|(actual, expected)| {
                     actual.height == expected.height
                         && actual.start == expected.start
@@ -742,7 +752,14 @@ mod debug {
                             .profile_tasks
                             .iter()
                             .all(|task| expected.profile_tasks.contains(task))
-                })
+                });
+        if !result {
+            let time_table_scratch =
+                create_time_table_over_interval_from_scratch(context, parameters)
+                    .expect("Expected no error");
+            println!("{time_table:?}\n{time_table_scratch:?}");
+        }
+        result
     }
 
     /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
@@ -857,6 +874,7 @@ mod tests {
     use crate::engine::test_helper::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
+    use crate::propagators::ExplanationType;
     use crate::propagators::TimeTableOverIntervalIncremental;
 
     #[test]
@@ -883,6 +901,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -914,7 +933,9 @@ mod tests {
             .collect(),
             1,
             false,
+            ExplanationType::Naive,
         ));
+        assert!(matches!(result, Err(Inconsistency::Other(_))));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
@@ -956,6 +977,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -1012,6 +1034,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -1041,6 +1064,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -1085,6 +1109,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -1097,7 +1122,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 <= 9),
+                predicate!(s2 <= 8),
                 predicate!(s1 >= 6),
                 predicate!(s1 <= 6),
             ]),
@@ -1153,6 +1178,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1232,6 +1258,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
+                ExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1279,6 +1306,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -1291,7 +1319,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 >= 0),
+                predicate!(s2 >= 1),
                 predicate!(s1 >= 1),
                 predicate!(s1 <= 1),
             ]),
@@ -1329,6 +1357,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
+                ExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -1345,7 +1374,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
                 predicate!(s2 >= 5),
-                predicate!(s3 >= 2),
+                predicate!(s3 >= 5),
             ]),
             reason
         );
