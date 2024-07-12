@@ -7,13 +7,14 @@ use std::time::Instant;
 
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
+use AssignmentsInteger;
 
 use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
 use super::termination::TerminationCondition;
-use super::variables::BooleanDomainId;
 use super::variables::IntegerVariable;
+use super::variables::Literal;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
@@ -40,7 +41,6 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::engine::AssignmentsInteger;
 use crate::engine::DebugHelper;
 use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
@@ -373,9 +373,9 @@ impl ConstraintSatisfactionSolver {
         self.counters.log_statistics()
     }
 
-    pub fn create_new_boolean_variable(&mut self, name: Option<String>) -> BooleanDomainId {
+    pub fn create_new_boolean_variable(&mut self, name: Option<String>) -> Literal {
         let domain_id = self.create_new_integer_variable(0, 1, name);
-        BooleanDomainId::new(domain_id)
+        Literal::new(domain_id)
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.

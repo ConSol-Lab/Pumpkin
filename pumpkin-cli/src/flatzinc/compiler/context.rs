@@ -4,7 +4,7 @@ use std::rc::Rc;
 use log::warn;
 use pumpkin_lib::basic_types::HashMap;
 use pumpkin_lib::basic_types::HashSet;
-use pumpkin_lib::engine::variables::BooleanDomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -27,9 +27,9 @@ pub(crate) struct CompilationContext<'a> {
     /// All boolean array parameters.
     pub(crate) boolean_array_parameters: HashMap<Rc<str>, Rc<[bool]>>,
     /// A mapping from boolean model variables to solver literals.
-    pub(crate) boolean_variable_map: HashMap<Rc<str>, BooleanDomainId>,
+    pub(crate) boolean_variable_map: HashMap<Rc<str>, Literal>,
     /// A mapping from boolean variable array identifiers to slices of literals.
-    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[BooleanDomainId]>>,
+    pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub(crate) literal_equivalences: VariableEquivalences,
     // A literal which is always true, can be used when using bool constants in the solver
@@ -105,7 +105,7 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable(
         &mut self,
         _expr: &flatzinc::Expr,
-    ) -> Result<BooleanDomainId, FlatZincError> {
+    ) -> Result<Literal, FlatZincError> {
         todo!();
         // match expr {
         // flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
@@ -124,7 +124,7 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
         _identifier: &str,
-    ) -> Result<BooleanDomainId, FlatZincError> {
+    ) -> Result<Literal, FlatZincError> {
         todo!();
         // if let Some(literal) = self
         // .boolean_variable_map
@@ -151,7 +151,7 @@ impl CompilationContext<'_> {
     pub(crate) fn resolve_bool_variable_array(
         &self,
         _expr: &flatzinc::Expr,
-    ) -> Result<Rc<[BooleanDomainId]>, FlatZincError> {
+    ) -> Result<Rc<[Literal]>, FlatZincError> {
         todo!();
         // match expr {
         // flatzinc::Expr::VarParIdentifier(id) => {
@@ -613,7 +613,7 @@ impl Domain {
         self,
         _solver: &mut ConstraintSatisfactionSolver,
         _name: String,
-    ) -> BooleanDomainId {
+    ) -> Literal {
         todo!();
         // match self {
         // Domain::IntervalDomain { lb, ub } => {

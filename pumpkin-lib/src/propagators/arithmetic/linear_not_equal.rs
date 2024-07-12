@@ -10,7 +10,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -22,7 +22,7 @@ pub struct LinearNotEqualConstructor<Var> {
     /// The right-hand side.
     rhs: i32,
     /// The reification variable
-    reif: Option<BooleanDomainId>,
+    reif: Option<Literal>,
 }
 
 impl<Var> LinearNotEqualConstructor<Var> {
@@ -34,7 +34,7 @@ impl<Var> LinearNotEqualConstructor<Var> {
         }
     }
 
-    pub fn reified(terms: Box<[Var]>, rhs: i32, reif: BooleanDomainId) -> Self {
+    pub fn reified(terms: Box<[Var]>, rhs: i32, reif: Literal) -> Self {
         LinearNotEqualConstructor {
             terms,
             rhs,
@@ -49,7 +49,7 @@ impl<Var> LinearNotEqualConstructor<Var> {
 pub struct LinearNotEqualPropagator<Var> {
     terms: Rc<[Var]>,
     rhs: i32,
-    pub reif: Option<BooleanDomainId>,
+    pub reif: Option<Literal>,
 }
 
 impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>

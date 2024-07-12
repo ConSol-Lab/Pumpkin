@@ -1,6 +1,6 @@
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::variables::DomainId;
-use crate::engine::AssignmentsInteger;
+use AssignmentsInteger;
 
 /// A trait which specifies the common behaviours of [`Solution`] and [`SolutionReference`].
 pub trait ProblemSolution: HasAssignments {

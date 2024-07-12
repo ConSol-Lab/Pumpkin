@@ -4,7 +4,7 @@ use crate::basic_types::HashMap;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use AssignmentsInteger;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 /// The struct represents a nogood that does additional bookkeeping. The nogood is used during

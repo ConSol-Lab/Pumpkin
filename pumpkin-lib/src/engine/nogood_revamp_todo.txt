@@ -219,3 +219,8 @@ When we add the blocking solution nogood, only consider predicates that are assi
 Assignments should never get into inconsistent state, make the check before getting inconsistent, this impact how we handle the EmptyDomain.
 
 Trail does not properly handle the case when decisions are popped.
+
+
+Where do we keep implementation of traits? For example, DomainId has IntegerVariable in its file, but the PredicateConstructor is in the predicate constructor file.
+
+Do we want to have trivially true predicates? Hard without it I guess? For example AffineView, equality_predicate returns IntegerPredicate...

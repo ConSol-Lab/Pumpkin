@@ -8,7 +8,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -17,7 +17,7 @@ use crate::predicate;
 pub struct LinearLessOrEqualConstructor<Var> {
     pub x: Box<[Var]>,
     pub c: i32,
-    pub reif: Option<BooleanDomainId>,
+    pub reif: Option<Literal>,
 }
 
 impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
@@ -25,7 +25,7 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
         LinearLessOrEqualConstructor { x, c, reif: None }
     }
 
-    pub fn reified(x: Box<[Var]>, c: i32, reif: BooleanDomainId) -> Self {
+    pub fn reified(x: Box<[Var]>, c: i32, reif: Literal) -> Self {
         LinearLessOrEqualConstructor {
             x,
             c,
@@ -39,7 +39,7 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 pub struct LinearLessOrEqualPropagator<Var> {
     x: Box<[Var]>,
     c: i32,
-    pub reif: Option<BooleanDomainId>,
+    pub reif: Option<Literal>,
 }
 
 impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
@@ -115,7 +115,7 @@ fn perform_propagation<Var: IntegerVariable>(
     context: &mut PropagationContextMut,
     x: &[Var],
     c: i32,
-    reif: &Option<BooleanDomainId>,
+    reif: &Option<Literal>,
 ) -> Result<(), Inconsistency> {
     let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
     let reified = reif.is_some();

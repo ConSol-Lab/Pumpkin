@@ -5,7 +5,7 @@
 //! The naming of the constraints follows the MiniZinc standard library where possible.
 
 use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::Literal;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::propagators::arithmetic::absolute_value::AbsoluteValueConstructor;
@@ -60,7 +60,7 @@ pub trait ConstraintsExt {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.post(LinearNotEqualConstructor::reified(terms.into(), rhs, reif))
     }
@@ -79,7 +79,7 @@ pub trait ConstraintsExt {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.post(LinearLessOrEqualConstructor::reified(
             terms.into(),
@@ -109,7 +109,7 @@ pub trait ConstraintsExt {
         &mut self,
         terms: impl Into<Box<[Var]>>,
         rhs: i32,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         let terms = terms.into();
 
@@ -131,7 +131,7 @@ pub trait ConstraintsExt {
         &mut self,
         lhs: Var,
         rhs: Var,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.int_lin_ne_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
@@ -146,7 +146,7 @@ pub trait ConstraintsExt {
         &mut self,
         lhs: Var,
         rhs: Var,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.int_lin_le_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }
@@ -161,7 +161,7 @@ pub trait ConstraintsExt {
         &mut self,
         lhs: Var,
         rhs: Var,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.int_le_reif(lhs.scaled(1), rhs.offset(-1), reif)
     }
@@ -176,7 +176,7 @@ pub trait ConstraintsExt {
         &mut self,
         lhs: Var,
         rhs: Var,
-        reif: BooleanDomainId,
+        reif: Literal,
     ) -> bool {
         self.int_lin_eq_reif([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
     }

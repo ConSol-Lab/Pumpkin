@@ -3,7 +3,7 @@ use std::fmt::Write;
 use std::rc::Rc;
 
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::engine::variables::BooleanDomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
 
 /// The objective function of a FlatZinc model,
@@ -41,14 +41,14 @@ impl FlatZincInstance {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Output {
-    Bool(VariableOutput<BooleanDomainId>),
+    Bool(VariableOutput<Literal>),
     Int(VariableOutput<DomainId>),
-    ArrayOfBool(ArrayOutput<BooleanDomainId>),
+    ArrayOfBool(ArrayOutput<Literal>),
     ArrayOfInt(ArrayOutput<DomainId>),
 }
 
 impl Output {
-    pub(crate) fn bool(id: Rc<str>, boolean: BooleanDomainId) -> Output {
+    pub(crate) fn bool(id: Rc<str>, boolean: Literal) -> Output {
         Output::Bool(VariableOutput {
             id,
             variable: boolean,
@@ -58,7 +58,7 @@ impl Output {
     pub(crate) fn array_of_bool(
         id: Rc<str>,
         shape: Box<[(i32, i32)]>,
-        contents: Rc<[BooleanDomainId]>,
+        contents: Rc<[Literal]>,
     ) -> Output {
         Output::ArrayOfBool(ArrayOutput {
             id,

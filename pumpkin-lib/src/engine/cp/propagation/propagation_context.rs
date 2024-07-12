@@ -2,10 +2,10 @@ use super::PropagatorId;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use AssignmentsInteger;
 use crate::engine::EmptyDomain;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
@@ -76,15 +76,15 @@ mod private {
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_boolean_true(&self, boolean: BooleanDomainId) -> bool {
+    fn is_boolean_true(&self, boolean: Literal) -> bool {
         self.lower_bound(&DomainId::from(boolean)) == 1
     }
 
-    fn is_boolean_false(&self, boolean: BooleanDomainId) -> bool {
+    fn is_boolean_false(&self, boolean: Literal) -> bool {
         self.upper_bound(&DomainId::from(boolean)) == 0
     }
 
-    fn is_boolean_fixed(&self, boolean: BooleanDomainId) -> bool {
+    fn is_boolean_fixed(&self, boolean: Literal) -> bool {
         self.is_fixed(&DomainId::from(boolean))
     }
 
@@ -187,7 +187,7 @@ impl PropagationContextMut<'_> {
 
     pub fn assign_boolean<R: Into<Reason> + Clone>(
         &mut self,
-        boolean: BooleanDomainId,
+        boolean: Literal,
         truth_value: bool,
         reason: R,
     ) -> Result<(), EmptyDomain> {

@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::BooleanDomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -632,7 +632,7 @@ fn compile_reified_binary_int_predicate(
         &mut ConstraintSatisfactionSolver,
         DomainId,
         DomainId,
-        BooleanDomainId,
+        Literal,
     ) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
@@ -682,7 +682,7 @@ fn compile_reified_int_lin_predicate(
         &mut ConstraintSatisfactionSolver,
         Box<[AffineView<DomainId>]>,
         i32,
-        BooleanDomainId,
+        Literal,
     ) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);

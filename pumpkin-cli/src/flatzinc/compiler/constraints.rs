@@ -1,5 +1,5 @@
 use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::BooleanDomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
@@ -9,7 +9,7 @@ pub(crate) fn int_lin_le_reif(
     _solver: &mut ConstraintSatisfactionSolver,
     _terms: Box<[AffineView<DomainId>]>,
     _rhs: i32,
-    _reif: BooleanDomainId,
+    _reif: Literal,
 ) -> bool {
     todo!();
     // solver.int_lin_le_reif(terms.clone(), rhs, reif)
@@ -25,7 +25,7 @@ pub(crate) fn int_lin_eq_reif(
     _solver: &mut ConstraintSatisfactionSolver,
     _terms: Box<[AffineView<DomainId>]>,
     _rhs: i32,
-    _reif: BooleanDomainId,
+    _reif: Literal,
 ) -> bool {
     todo!();
     // negating a boolean domain is not yet supported!
@@ -36,7 +36,7 @@ pub(crate) fn int_le_reif(
     solver: &mut ConstraintSatisfactionSolver,
     a: DomainId,
     b: DomainId,
-    reif: BooleanDomainId,
+    reif: Literal,
 ) -> bool {
     int_lin_le_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
 }
@@ -45,7 +45,7 @@ pub(crate) fn int_lt_reif(
     solver: &mut ConstraintSatisfactionSolver,
     a: DomainId,
     b: DomainId,
-    reif: BooleanDomainId,
+    reif: Literal,
 ) -> bool {
     int_lin_le_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), -1, reif)
 }
@@ -54,15 +54,15 @@ pub(crate) fn int_eq_reif(
     solver: &mut ConstraintSatisfactionSolver,
     a: DomainId,
     b: DomainId,
-    reif: BooleanDomainId,
+    reif: Literal,
 ) -> bool {
     int_lin_eq_reif(solver, vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
 }
 
 pub(crate) fn array_bool_or(
     _solver: &mut ConstraintSatisfactionSolver,
-    _clause: impl Into<Vec<BooleanDomainId>>,
-    _reif: BooleanDomainId,
+    _clause: impl Into<Vec<Literal>>,
+    _reif: Literal,
 ) -> bool {
     // let mut clause = clause.into();
 
@@ -83,7 +83,7 @@ pub(crate) fn int_ne_reif(
     _solver: &mut ConstraintSatisfactionSolver,
     _a: DomainId,
     _b: DomainId,
-    _reif: BooleanDomainId,
+    _reif: Literal,
 ) -> bool {
     todo!();
     // solver.int_ne_reif(a, b, reif) && solver.int_eq_reif(a, b, !reif)
@@ -94,7 +94,7 @@ pub(crate) fn int_lin_ne_reif(
     _solver: &mut ConstraintSatisfactionSolver,
     _terms: Box<[AffineView<DomainId>]>,
     _rhs: i32,
-    _reif: BooleanDomainId,
+    _reif: Literal,
 ) -> bool {
     todo!();
     // solver.int_lin_ne_reif(terms.clone(), rhs, reif) && solver.int_lin_eq_reif(terms, rhs, !reif)
@@ -103,7 +103,7 @@ pub(crate) fn int_lin_ne_reif(
 pub(crate) fn bool_lin_le(
     _solver: &mut ConstraintSatisfactionSolver,
     _weights: &[i32],
-    _bools: &[BooleanDomainId],
+    _bools: &[Literal],
     _rhs: i32,
 ) -> bool {
     todo!();
@@ -125,7 +125,7 @@ pub(crate) fn bool_lin_le(
 pub(crate) fn bool_lin_eq(
     _solver: &mut ConstraintSatisfactionSolver,
     _weights: &[i32],
-    _bools: &[BooleanDomainId],
+    _bools: &[Literal],
     _rhs: DomainId,
 ) -> bool {
     todo!();

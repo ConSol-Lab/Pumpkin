@@ -17,10 +17,10 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::BooleanDomainId;
+use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use AssignmentsInteger;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
@@ -49,8 +49,8 @@ impl TestSolver {
         self.assignments_integer.grow(lb, ub)
     }
 
-    pub fn new_boolean(&mut self) -> BooleanDomainId {
-        BooleanDomainId::new(self.new_variable(0, 1))
+    pub fn new_boolean(&mut self) -> Literal {
+        Literal::new(self.new_variable(0, 1))
     }
 
     pub fn new_propagator<Constructor>(
@@ -120,12 +120,12 @@ impl TestSolver {
         )
     }
 
-    pub fn is_boolean_assigned(&self, boolean: BooleanDomainId) -> bool {
+    pub fn is_boolean_assigned(&self, boolean: Literal) -> bool {
         let domain_id = DomainId::from(boolean);
         self.lower_bound(domain_id) == self.upper_bound(domain_id)
     }
 
-    pub fn is_boolean_false(&self, boolean: BooleanDomainId) -> bool {
+    pub fn is_boolean_false(&self, boolean: Literal) -> bool {
         let domain_id = DomainId::from(boolean);
         self.upper_bound(domain_id) == 0
     }
@@ -151,7 +151,7 @@ impl TestSolver {
 
     pub fn set_boolean(
         &mut self,
-        boolean_domain_id: BooleanDomainId,
+        boolean_domain_id: Literal,
         truth_value: bool,
     ) -> Result<(), EmptyDomain> {
         let domain_id = DomainId::from(boolean_domain_id);
@@ -257,7 +257,7 @@ impl TestSolver {
 
     pub fn get_reason_bool(
         &mut self,
-        boolean: BooleanDomainId,
+        boolean: Literal,
         truth_value: bool,
     ) -> &PropositionalConjunction {
         let domain_id = DomainId::from(boolean);
