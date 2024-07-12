@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use pumpkin_lib::constraints::ConstraintsExt;
 use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
@@ -628,12 +628,7 @@ fn compile_reified_binary_int_predicate(
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        DomainId,
-        DomainId,
-        Literal,
-    ) -> bool,
+    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId, Literal) -> bool,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 

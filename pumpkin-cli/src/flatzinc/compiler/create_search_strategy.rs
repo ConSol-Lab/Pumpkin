@@ -31,33 +31,33 @@ fn create_from_search_strategy(
             value_selection_strategy: _,
         }) => {
             todo!();
-            /*let search_variables = match variables {
-                flatzinc::AnnExpr::String(identifier) => {
-                    // TODO: unnecessary to create Rc here, for now it's just for the return type
-                    vec![context
-                        .resolve_bool_variable_from_identifier(identifier)?
-                        .get_propositional_variable()]
-                }
-                flatzinc::AnnExpr::Expr(expr) => context
-                    .resolve_bool_variable_array(expr)?
-                    .iter()
-                    .map(|literal| literal.get_propositional_variable())
-                    .collect::<Vec<_>>(),
-                other => panic!("Expected string or expression but got {other:?}"),
-            };
-            let mut brancher = create_search_over_propositional_variables(
-                &search_variables,
-                variable_selection_strategy,
-                value_selection_strategy,
-            );
+            // let search_variables = match variables {
+            //    flatzinc::AnnExpr::String(identifier) => {
+            //        // TODO: unnecessary to create Rc here, for now it's just for the return type
+            //        vec![context
+            //            .resolve_bool_variable_from_identifier(identifier)?
+            //            .get_propositional_variable()]
+            //    }
+            //    flatzinc::AnnExpr::Expr(expr) => context
+            //        .resolve_bool_variable_array(expr)?
+            //        .iter()
+            //        .map(|literal| literal.get_propositional_variable())
+            //       .collect::<Vec<_>>(),
+            //   other => panic!("Expected string or expression but got {other:?}"),
+            //};
+            // let mut brancher = create_search_over_propositional_variables(
+            //    &search_variables,
+            //    variable_selection_strategy,
+            //    value_selection_strategy,
+            //);
             // MiniZinc specification specifies that we need to ensure that all variables are fixed;
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
-            brancher.add_brancher(Box::new(
-                IndependentVariableValueBrancher::default_over_all_variables(context.solver),
-            ));
+            // brancher.add_brancher(Box::new(
+            //    IndependentVariableValueBrancher::default_over_all_variables(context.solver),
+            // ));
 
-            Ok(brancher)*/            
+            // Ok(brancher)
         }
         Search::Int(SearchStrategy {
             variables,

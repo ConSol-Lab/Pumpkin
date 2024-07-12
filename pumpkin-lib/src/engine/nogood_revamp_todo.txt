@@ -224,3 +224,9 @@ Trail does not properly handle the case when decisions are popped.
 Where do we keep implementation of traits? For example, DomainId has IntegerVariable in its file, but the PredicateConstructor is in the predicate constructor file.
 
 Do we want to have trivially true predicates? Hard without it I guess? For example AffineView, equality_predicate returns IntegerPredicate...
+
+What do we watch for literals? How to implement it correctly? Does it make sense to implement Scaled literal for instance.... 
+
+feature/revamp_skeleton4_removing_literals
+
+Observation: clauses of literals that were propagated at a higher decision level do not get bumped! Nor their LBDs updated! Seems counter-intuitive to only look at current decision level.

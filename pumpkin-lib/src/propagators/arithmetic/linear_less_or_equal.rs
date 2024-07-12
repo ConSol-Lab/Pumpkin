@@ -209,7 +209,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let mut propagator = solver
             .new_propagator(LinearLessOrEqualConstructor::reified(
@@ -219,7 +219,7 @@ mod tests {
             ))
             .expect("No conflict");
 
-        let _ = solver.set_boolean(reif, false);
+        let _ = solver.set_literal(reif, false);
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
@@ -232,7 +232,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let mut propagator = solver
             .new_propagator(LinearLessOrEqualConstructor::reified(
@@ -242,7 +242,7 @@ mod tests {
             ))
             .expect("No conflict");
 
-        let _ = solver.set_boolean(reif, true);
+        let _ = solver.set_literal(reif, true);
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
@@ -255,7 +255,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(10, 10);
         let y = solver.new_variable(10, 10);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let _ = solver
             .new_propagator(LinearLessOrEqualConstructor::reified(
@@ -265,7 +265,7 @@ mod tests {
             ))
             .expect("No conflict");
 
-        assert!(solver.is_boolean_false(reif));
+        assert!(solver.is_literal_false(reif));
 
         let reason = solver.get_reason_bool(reif, false);
 

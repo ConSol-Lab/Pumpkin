@@ -287,7 +287,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(2, 2);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let _ = solver
             .new_propagator(LinearNotEqualConstructor::reified(
@@ -297,7 +297,7 @@ mod tests {
             ))
             .expect("Non empty domain");
 
-        assert!(solver.is_boolean_false(reif));
+        assert!(solver.is_literal_false(reif));
     }
 
     #[test]
@@ -305,9 +305,9 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(2, 2);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
-        let _ = solver.set_boolean(reif, true);
+        let _ = solver.set_literal(reif, true);
 
         let err = solver
             .new_propagator(LinearNotEqualConstructor::reified(
@@ -329,9 +329,9 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(2, 2).scaled(1);
         let y = solver.new_variable(1, 5).scaled(-1);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
-        let _ = solver.set_boolean(reif, true);
+        let _ = solver.set_literal(reif, true);
 
         let mut propagator = solver
             .new_propagator(LinearNotEqualConstructor::reified(
@@ -356,7 +356,7 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(2, 2).scaled(1);
         let y = solver.new_variable(1, 5).scaled(-1);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let mut propagator = solver
             .new_propagator(LinearNotEqualConstructor::reified(
@@ -376,12 +376,12 @@ mod tests {
         let mut solver = TestSolver::default();
         let x = solver.new_variable(0, 0);
         let y = solver.new_variable(-1, 1);
-        let reif = solver.new_boolean();
+        let reif = solver.new_literal();
 
         let _ = solver
             .new_propagator(LinearNotEqualConstructor::reified([x, y].into(), 0, reif))
             .expect("non-empty domain");
 
-        assert!(!solver.is_boolean_assigned(reif))
+        assert!(!solver.is_literal_assigned(reif))
     }
 }

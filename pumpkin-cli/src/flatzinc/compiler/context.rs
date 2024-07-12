@@ -4,8 +4,8 @@ use std::rc::Rc;
 use log::warn;
 use pumpkin_lib::basic_types::HashMap;
 use pumpkin_lib::basic_types::HashSet;
-use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
 use crate::flatzinc::instance::Output;

@@ -1,6 +1,6 @@
 use crate::basic_types::HashMap;
-use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
+use crate::engine::variables::Literal;
 
 #[derive(Debug, Default)]
 pub struct VariableNames {

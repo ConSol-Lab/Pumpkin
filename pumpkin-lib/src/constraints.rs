@@ -5,8 +5,8 @@
 //! The naming of the constraints follows the MiniZinc standard library where possible.
 
 use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::variables::Literal;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::propagators::arithmetic::absolute_value::AbsoluteValueConstructor;
 use crate::propagators::arithmetic::integer_multiplication::IntegerMultiplicationConstructor;

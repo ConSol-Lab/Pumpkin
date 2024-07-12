@@ -17,14 +17,15 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::Literal;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::WatchListCP;
+use crate::predicate;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default, Debug)]
@@ -49,8 +50,9 @@ impl TestSolver {
         self.assignments_integer.grow(lb, ub)
     }
 
-    pub fn new_boolean(&mut self) -> Literal {
-        Literal::new(self.new_variable(0, 1))
+    pub fn new_literal(&mut self) -> Literal {
+        let domain_id = self.new_variable(0, 1);
+        Literal::new(predicate!(domain_id == 1))
     }
 
     pub fn new_propagator<Constructor>(
@@ -120,14 +122,16 @@ impl TestSolver {
         )
     }
 
-    pub fn is_boolean_assigned(&self, boolean: Literal) -> bool {
-        let domain_id = DomainId::from(boolean);
-        self.lower_bound(domain_id) == self.upper_bound(domain_id)
+    pub fn is_literal_assigned(&self, literal: Literal) -> bool {
+        self.assignments_integer
+            .evaluate_predicate(literal.into())
+            .is_some()
     }
 
-    pub fn is_boolean_false(&self, boolean: Literal) -> bool {
-        let domain_id = DomainId::from(boolean);
-        self.upper_bound(domain_id) == 0
+    pub fn is_literal_false(&self, literal: Literal) -> bool {
+        self.assignments_integer
+            .evaluate_predicate(literal.into())
+            .is_some_and(|truth_value| !truth_value)
     }
 
     pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
@@ -149,15 +153,14 @@ impl TestSolver {
             .remove_value_from_domain(var, value, None)
     }
 
-    pub fn set_boolean(
-        &mut self,
-        boolean_domain_id: Literal,
-        truth_value: bool,
-    ) -> Result<(), EmptyDomain> {
-        let domain_id = DomainId::from(boolean_domain_id);
+    pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
         match truth_value {
-            true => self.set_lower_bound(domain_id, 1),
-            false => self.set_upper_bound(domain_id, 0),
+            true => self
+                .assignments_integer
+                .post_integer_predicate(literal.into(), None),
+            false => self
+                .assignments_integer
+                .post_integer_predicate((!literal).into(), None),
         }
     }
 
@@ -257,19 +260,12 @@ impl TestSolver {
 
     pub fn get_reason_bool(
         &mut self,
-        boolean: Literal,
+        literal: Literal,
         truth_value: bool,
     ) -> &PropositionalConjunction {
-        let domain_id = DomainId::from(boolean);
         let predicate = match truth_value {
-            true => IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound: 1,
-            },
-            false => IntegerPredicate::UpperBound {
-                domain_id,
-                upper_bound: 0,
-            },
+            true => literal.into(),
+            false => (!literal).into(),
         };
         self.get_reason_int(predicate)
     }

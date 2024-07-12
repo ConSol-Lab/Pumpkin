@@ -227,23 +227,24 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // not equals value. It cannot be that because of other holes,
                                 // we increase the lower bound past the not equals value,
                                 // since in that case, we would have removed the not equals
-                                // due to other reasons, and would have found it on the trail explicitly.
-                                
+                                // due to other reasons, and would have found it on the trail
+                                // explicitly.
+
                                 // I think the values cannot be the same, since the then the trail
                                 // position is not the right moment when the input predicate became
                                 // true.
-                                /*pumpkin_assert_simple!(trail_lower_bound != *not_equal_constant);
+                                // pumpkin_assert_simple!(trail_lower_bound != *not_equal_constant);
 
-                                let predicate_reason = IntegerPredicate::LowerBound {
-                                    domain_id: *domain_id,
-                                    lower_bound: *not_equal_constant + 1,
-                                };
+                                // let predicate_reason = IntegerPredicate::LowerBound {
+                                //     domain_id: *domain_id,
+                                //    lower_bound: *not_equal_constant + 1,
+                                //};
                                 // here it is safe to use get_propagation_reason over the substitute
                                 // function,  because the
                                 // predicate_reason must be propagated and not as a result of a
                                 // decision,  otherwise it would be
                                 // explicitly on the trail.
-                                self.get_propagation_reason(&predicate_reason)*/
+                                // self.get_propagation_reason(&predicate_reason)
                             }
                         }
                         IntegerPredicate::Equal {

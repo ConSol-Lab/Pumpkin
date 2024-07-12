@@ -1,6 +1,6 @@
 use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::DomainId;
+use pumpkin_lib::engine::variables::Literal;
 use pumpkin_lib::engine::variables::TransformableVariable;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 
