@@ -89,9 +89,9 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
         self.variable_selector
-            .on_appearance_in_conflict_integer(variable)
+            .on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

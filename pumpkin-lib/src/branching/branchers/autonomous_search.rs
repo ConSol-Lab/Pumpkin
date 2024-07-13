@@ -1,5 +1,3 @@
-use std::default;
-
 use crate::basic_types::KeyValueHeap;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::PredicateId;

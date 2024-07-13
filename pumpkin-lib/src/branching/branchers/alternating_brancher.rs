@@ -78,9 +78,9 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
         self.other_brancher
-            .on_appearance_in_conflict_integer(variable)
+            .on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_conflict(&mut self) {

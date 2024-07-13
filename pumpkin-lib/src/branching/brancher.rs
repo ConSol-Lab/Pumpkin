@@ -46,6 +46,12 @@ pub trait Brancher {
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
+    /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
+    /// it was fixed but is no longer), specifically, it provides `variable` which is the
+    /// [`DomainId`] which has been reset. This method could thus be called multiple times in a
+    /// single backtracking operation by the solver.
+    fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
+
     /// A function which is called when an integer variable appears in a conflict during conflict
     /// analysis (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: IntegerPredicate) {}

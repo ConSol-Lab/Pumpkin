@@ -74,10 +74,10 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_unassign_integer(variable, value));
     }
 
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
         self.branchers
             .iter_mut()
-            .for_each(|brancher| brancher.on_appearance_in_conflict_integer(variable));
+            .for_each(|brancher| brancher.on_appearance_in_conflict_predicate(predicate));
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
