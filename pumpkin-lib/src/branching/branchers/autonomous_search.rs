@@ -138,7 +138,10 @@ impl AutonomousSearch {
             // We peek the next variable, since we do not pop since we do not (yet) want to
             // remove the value from the heap.
             if let Some((candidate, _)) = self.heap.peek_max() {
-                let predicate = self.predicate_id_info.get_predicate(*candidate);
+                let predicate = self
+                    .predicate_id_info
+                    .get_predicate(*candidate)
+                    .expect("We expected present predicates to be registered.");
                 if context.is_predicate_assigned(predicate) {
                     let _ = self.heap.pop_max();
                 } else {

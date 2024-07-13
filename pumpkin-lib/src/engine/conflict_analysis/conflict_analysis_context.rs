@@ -1,4 +1,5 @@
 use crate::basic_types::StoredConflictInfo;
+use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
@@ -8,12 +9,14 @@ use crate::engine::AssignmentsInteger;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::pumpkin_assert_simple;
 
-#[derive(Debug)]
+// Does not have debug because of the brancher does not support it. Could be thought through later.
+#[allow(missing_debug_implementations)]
 pub struct ConflictAnalysisNogoodContext<'a> {
     pub assignments_integer: &'a AssignmentsInteger,
     pub solver_state: &'a mut CSPSolverState,
     pub reason_store: &'a mut ReasonStore,
     pub counters: &'a mut Counters,
+    pub brancher: &'a mut dyn Brancher,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {

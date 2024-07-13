@@ -199,6 +199,13 @@ impl AdvancedNogood {
                 "Predicates must be true during conflict analysis."
             );
             self.add_predicate(predicate, context);
+
+            // Currently we notify of every predicate. It may be better to only do so if the
+            // predicate is not subsumed.
+            context
+                .brancher
+                .on_appearance_in_conflict_predicate(predicate);
+
             // println!("\tafter add: {:?}", self.predicates);
         }
         self.simplify_predicates(context);
