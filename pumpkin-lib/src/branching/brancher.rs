@@ -10,7 +10,7 @@ use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
@@ -62,5 +62,5 @@ pub trait Brancher {
 
     /// Called after backtracking.
     /// Used to reset internal data structures to account for the backtrack.
-    fn synchronise(&mut self, _assignments: &AssignmentsInteger) {}
+    fn synchronise(&mut self, _assignments: &Assignments) {}
 }

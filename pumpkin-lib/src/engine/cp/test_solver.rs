@@ -20,7 +20,7 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
@@ -30,7 +30,7 @@ use crate::predicate;
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Default, Debug)]
 pub struct TestSolver {
-    assignments_integer: AssignmentsInteger,
+    assignments: Assignments,
     reason_store: ReasonStore,
     watch_list: WatchListCP,
     next_id: u32,
@@ -47,7 +47,7 @@ impl Debug for BoxedPropagator {
 impl TestSolver {
     pub fn new_variable(&mut self, lb: i32, ub: i32) -> DomainId {
         self.watch_list.grow();
-        self.assignments_integer.grow(lb, ub)
+        self.assignments.grow(lb, ub)
     }
 
     pub fn new_literal(&mut self) -> Literal {
@@ -79,18 +79,18 @@ impl TestSolver {
         propagator: &mut BoxedPropagator,
     ) -> Result<(), Inconsistency> {
         propagator.initialise_at_root(&mut PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             PropagatorId(0),
         ))
     }
 
     pub fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
-        var.contains(&self.assignments_integer, value)
+        var.contains(&self.assignments, value)
     }
 
     pub fn lower_bound(&self, var: DomainId) -> i32 {
-        self.assignments_integer.get_lower_bound(var)
+        self.assignments.get_lower_bound(var)
     }
 
     pub fn increase_lower_bound_and_notify(
@@ -100,12 +100,10 @@ impl TestSolver {
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
-        let result = self
-            .assignments_integer
-            .tighten_lower_bound(var, value, None);
+        let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             PropagatorId(0),
         );
@@ -123,50 +121,47 @@ impl TestSolver {
     }
 
     pub fn is_literal_assigned(&self, literal: Literal) -> bool {
-        self.assignments_integer
+        self.assignments
             .evaluate_predicate(literal.into())
             .is_some()
     }
 
     pub fn is_literal_false(&self, literal: Literal) -> bool {
-        self.assignments_integer
+        self.assignments
             .evaluate_predicate(literal.into())
             .is_some_and(|truth_value| !truth_value)
     }
 
     pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments_integer
-            .tighten_lower_bound(var, bound, None)
+        self.assignments.tighten_lower_bound(var, bound, None)
     }
 
     pub fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments_integer
-            .tighten_upper_bound(var, bound, None)
+        self.assignments.tighten_upper_bound(var, bound, None)
     }
 
     pub fn upper_bound(&self, var: DomainId) -> i32 {
-        self.assignments_integer.get_upper_bound(var)
+        self.assignments.get_upper_bound(var)
     }
 
     pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
-        self.assignments_integer
-            .remove_value_from_domain(var, value, None)
+        self.assignments.remove_value_from_domain(var, value, None)
     }
 
     pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
         match truth_value {
             true => self
-                .assignments_integer
+                .assignments
                 .post_integer_predicate(literal.into(), None),
             false => self
-                .assignments_integer
+                .assignments
                 .post_integer_predicate((!literal).into(), None),
         }
     }
 
     pub fn propagate(&mut self, propagator: &mut BoxedPropagator) -> Result<(), Inconsistency> {
         let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             PropagatorId(0),
         );
@@ -177,34 +172,31 @@ impl TestSolver {
         &mut self,
         propagator: &mut BoxedPropagator,
     ) -> Result<(), Inconsistency> {
-        let mut num_trail_entries = self.assignments_integer.num_trail_entries();
+        let mut num_trail_entries = self.assignments.num_trail_entries();
         self.notify_propagator(propagator);
         loop {
             {
                 // Specify the life-times to be able to retrieve the trail entries
                 let mut context = PropagationContextMut::new(
-                    &mut self.assignments_integer,
+                    &mut self.assignments,
                     &mut self.reason_store,
                     PropagatorId(0),
                 );
                 propagator.propagate(&mut context)?;
                 self.notify_propagator(propagator);
             }
-            if self.assignments_integer.num_trail_entries() == num_trail_entries {
+            if self.assignments.num_trail_entries() == num_trail_entries {
                 break;
             }
-            num_trail_entries = self.assignments_integer.num_trail_entries();
+            num_trail_entries = self.assignments.num_trail_entries();
         }
         Ok(())
     }
 
     fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
-        let events = self
-            .assignments_integer
-            .drain_domain_events()
-            .collect::<Vec<_>>();
+        let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
         let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             PropagatorId(0),
         );
@@ -223,7 +215,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         propagator.notify(
             &mut PropagationContextMut::new(
-                &mut self.assignments_integer,
+                &mut self.assignments,
                 &mut self.reason_store,
                 PropagatorId(0),
             ),
@@ -251,8 +243,8 @@ impl TestSolver {
     }
 
     pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
-        let reason_ref = self.assignments_integer.get_reason_for_predicate(predicate);
-        let context = PropagationContext::new(&self.assignments_integer);
+        let reason_ref = self.assignments.get_reason_for_predicate(predicate);
+        let context = PropagationContext::new(&self.assignments);
         self.reason_store
             .get_or_compute(reason_ref, &context)
             .expect("reason_ref should not be stale")

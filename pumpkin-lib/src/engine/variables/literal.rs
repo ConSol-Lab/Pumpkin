@@ -9,7 +9,7 @@ use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -49,7 +49,7 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to true have a lower bound of 1.
     /// Literal that evaluate to false have a lower bound of 0.
     /// Unassigned literals have a lower bound of 0.
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound(&self, assignment: &Assignments) -> i32 {
         match assignment.evaluate_predicate(self.predicate) {
             Some(truth_value) => truth_value as i32,
             None => 0,
@@ -60,7 +60,7 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to true have an upper bound of 1.
     /// Literal that evaluate to false have a upper bound of 0.
     /// Unassigned literals have a upper bound of 1.
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn upper_bound(&self, assignment: &Assignments) -> i32 {
         match assignment.evaluate_predicate(self.predicate) {
             Some(truth_value) => truth_value as i32,
             None => 1,
@@ -73,7 +73,7 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to false only contain value 0.
     /// Unassigned literals contain both values 0 and 1.
     /// For other values, the function will panic.
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
+    fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         assert!(
             value == 0 || value == 1,
             "Literals can only be asked whether they contain zero or one values."
@@ -92,13 +92,13 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn describe_domain(&self, _assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
+    fn describe_domain(&self, _assignment: &Assignments) -> Vec<IntegerPredicate> {
         unimplemented!();
     }
 
     fn remove(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -111,7 +111,7 @@ impl IntegerVariable for Literal {
 
     fn set_lower_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -127,7 +127,7 @@ impl IntegerVariable for Literal {
 
     fn set_upper_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {

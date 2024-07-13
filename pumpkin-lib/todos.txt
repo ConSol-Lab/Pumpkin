@@ -9,7 +9,7 @@ have a way to track number of clauses added at any point, useful when dealing wi
 
 add a method to create n literals, should be easier to use than the current new_literals() iterator 
 
-only allow the assignments_integer to create predicates
+only allow the assignments to create predicates
 
 lifting can be problematic given the updates of literals wrt to the domains
 

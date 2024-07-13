@@ -79,7 +79,7 @@ impl LinearSearch {
                 upper_bound: internal_objective_value - 1,
             };
             let obj_status = csp_solver
-                .assignments_integer
+                .assignments
                 .post_integer_predicate(objective_predicate, None);
 
             // In case some cases, infeasibility can be detected while constraining the upper bound,

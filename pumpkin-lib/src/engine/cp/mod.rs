@@ -1,4 +1,4 @@
-mod assignments_integer;
+mod assignments;
 pub mod domain_events;
 mod event_sink;
 pub mod opaque_domain_event;
@@ -8,9 +8,9 @@ pub mod reason;
 pub mod test_solver;
 mod watch_list_cp;
 
-pub use assignments_integer::AssignmentsInteger;
-pub use assignments_integer::ConstraintProgrammingTrailEntry;
-pub use assignments_integer::EmptyDomain;
+pub use assignments::Assignments;
+pub use assignments::ConstraintProgrammingTrailEntry;
+pub use assignments::EmptyDomain;
 pub use event_sink::*;
 pub use propagator_queue::PropagatorQueue;
 pub use watch_list_cp::IntDomainEvent;
@@ -19,27 +19,24 @@ pub use watch_list_cp::Watchers;
 
 #[cfg(test)]
 mod tests {
-    use assignments_integer::AssignmentsInteger;
+    use assignments::Assignments;
 
     use crate::conjunction;
-    use crate::engine::cp::assignments_integer;
+    use crate::engine::cp::assignments;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let domain = assignments_integer.grow(5, 10);
+        let mut assignments = Assignments::default();
+        let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
         assert_eq!(reason_store.len(), 0);
         {
-            let mut context = PropagationContextMut::new(
-                &mut assignments_integer,
-                &mut reason_store,
-                PropagatorId(0),
-            );
+            let mut context =
+                PropagationContextMut::new(&mut assignments, &mut reason_store, PropagatorId(0));
 
             let result = context.set_lower_bound(&domain, 2, conjunction!());
             assert!(result.is_ok());
@@ -49,18 +46,15 @@ mod tests {
 
     #[test]
     fn test_no_update_reason_store_if_no_update_upper_bound() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let domain = assignments_integer.grow(5, 10);
+        let mut assignments = Assignments::default();
+        let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
 
         assert_eq!(reason_store.len(), 0);
         {
-            let mut context = PropagationContextMut::new(
-                &mut assignments_integer,
-                &mut reason_store,
-                PropagatorId(0),
-            );
+            let mut context =
+                PropagationContextMut::new(&mut assignments, &mut reason_store, PropagatorId(0));
 
             let result = context.set_upper_bound(&domain, 15, conjunction!());
             assert!(result.is_ok());
@@ -70,18 +64,15 @@ mod tests {
 
     #[test]
     fn test_no_update_reason_store_if_no_update_remove() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let domain = assignments_integer.grow(5, 10);
+        let mut assignments = Assignments::default();
+        let domain = assignments.grow(5, 10);
 
         let mut reason_store = ReasonStore::default();
 
         assert_eq!(reason_store.len(), 0);
         {
-            let mut context = PropagationContextMut::new(
-                &mut assignments_integer,
-                &mut reason_store,
-                PropagatorId(0),
-            );
+            let mut context =
+                PropagationContextMut::new(&mut assignments, &mut reason_store, PropagatorId(0));
 
             let result = context.remove(&domain, 15, conjunction!());
             assert!(result.is_ok());
@@ -92,7 +83,7 @@ mod tests {
     // todo: restore test
     // #[test]
     // fn test_no_update_reason_store_if_fixed_literal() {
-    // let mut assignments_integer = AssignmentsInteger::default();
+    // let mut assignments = Assignments::default();
     // let mut reason_store = ReasonStore::default();
     //
     // let literal = Literal::new(PropositionalVariable::new(0), true);
@@ -102,7 +93,7 @@ mod tests {
     // assert_eq!(reason_store.len(), 0);
     // {
     // let mut context = PropagationContextMut::new(
-    // &mut assignments_integer,
+    // &mut assignments,
     // &mut reason_store,
     // &mut assignments_propositional,
     // PropagatorId(0),

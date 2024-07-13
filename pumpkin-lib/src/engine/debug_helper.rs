@@ -8,7 +8,7 @@ use log::warn;
 
 use super::predicates::integer_predicate::IntegerPredicate;
 use crate::basic_types::PropositionalConjunction;
-use crate::engine::cp::AssignmentsInteger;
+use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
@@ -39,10 +39,10 @@ impl DebugHelper {
     // missed a propagation or failure  additionally checks whether the internal data structures
     // of the clausal propagator are okay and consistent with the assignments_propositional
     pub fn debug_fixed_point_propagation(
-        assignments_integer: &AssignmentsInteger,
+        assignments: &Assignments,
         propagators: &[Box<dyn Propagator>],
     ) -> bool {
-        let mut assignments_integer_clone = assignments_integer.clone();
+        let mut assignments_clone = assignments.clone();
         // check whether constraint programming propagators missed anything
         //  ask each propagator to propagate from scratch, and check whether any new propagations
         // took place  if a new propagation took place, then the main propagation loop
@@ -53,12 +53,11 @@ impl DebugHelper {
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
         for (propagator_id, propagator) in propagators.iter().enumerate() {
-            let num_entries_on_trail_before_propagation =
-                assignments_integer_clone.num_trail_entries();
+            let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
             let mut context = PropagationContextMut::new(
-                &mut assignments_integer_clone,
+                &mut assignments_clone,
                 &mut reason_store,
                 PropagatorId(propagator_id as u32),
             );
@@ -73,8 +72,8 @@ impl DebugHelper {
                 panic!();
             }
 
-            let num_missed_propagations = assignments_integer_clone.num_trail_entries()
-                - num_entries_on_trail_before_propagation;
+            let num_missed_propagations =
+                assignments_clone.num_trail_entries() - num_entries_on_trail_before_propagation;
 
             if num_missed_propagations > 0 {
                 eprintln!(
@@ -82,10 +81,10 @@ impl DebugHelper {
                     propagator.name(),
                 );
 
-                for idx in num_entries_on_trail_before_propagation
-                    ..assignments_integer_clone.num_trail_entries()
+                for idx in
+                    num_entries_on_trail_before_propagation..assignments_clone.num_trail_entries()
                 {
-                    let trail_entry = assignments_integer_clone.get_trail_entry(idx);
+                    let trail_entry = assignments_clone.get_trail_entry(idx);
                     let pred = trail_entry.predicate;
                     eprintln!("  - {pred:?}");
                 }
@@ -97,20 +96,20 @@ impl DebugHelper {
     }
 
     pub fn debug_reported_failure(
-        assignments_integer: &AssignmentsInteger,
+        assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) -> bool {
         DebugHelper::debug_reported_propagations_reproduce_failure(
-            assignments_integer,
+            assignments,
             failure_reason,
             propagator,
             propagator_id,
         );
 
         DebugHelper::debug_reported_propagations_negate_failure_and_check(
-            assignments_integer,
+            assignments,
             failure_reason,
             propagator,
             propagator_id,
@@ -121,7 +120,7 @@ impl DebugHelper {
     pub fn debug_propagator_reason(
         propagated_predicate: IntegerPredicate,
         reason: &PropositionalConjunction,
-        assignments_integer: &AssignmentsInteger,
+        assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: u32,
     ) -> bool {
@@ -165,12 +164,12 @@ impl DebugHelper {
         // Two checks are done.
         // Check #1: Does setting the predicates from the reason indeed lead to the propagation?
         {
-            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
+            let mut assignments_clone = assignments.debug_create_empty_clone();
 
             let reason_predicates: Vec<IntegerPredicate> = reason.iter().copied().collect();
             let adding_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_integers(
-                    &mut assignments_integer_clone,
+                    &mut assignments_clone,
                     &reason_predicates,
                 );
 
@@ -178,7 +177,7 @@ impl DebugHelper {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
                 let mut context = PropagationContextMut::new(
-                    &mut assignments_integer_clone,
+                    &mut assignments_clone,
                     &mut reason_store,
                     PropagatorId(propagator_id),
                 );
@@ -194,10 +193,10 @@ impl DebugHelper {
                     propagator.name()
                 );
 
-                // The predicate was either a propagation for the assignments_integer or
+                // The predicate was either a propagation for the assignments or
                 // assignments_propositional
                 assert!(
-                    assignments_integer_clone.evaluate_predicate(propagated_predicate).is_some_and(|x| x),
+                    assignments_clone.evaluate_predicate(propagated_predicate).is_some_and(|x| x),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n
@@ -222,7 +221,7 @@ impl DebugHelper {
         // This idea is by Graeme Gange in the context of debugging lazy explanations, and is
         // closely related to reverse constraint propagation.
         {
-            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
+            let mut assignments_clone = assignments.debug_create_empty_clone();
 
             let failing_predicates: Vec<IntegerPredicate> = once(!propagated_predicate)
                 .chain(reason.iter().copied())
@@ -230,7 +229,7 @@ impl DebugHelper {
 
             let adding_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_integers(
-                    &mut assignments_integer_clone,
+                    &mut assignments_clone,
                     &failing_predicates,
                 );
 
@@ -238,7 +237,7 @@ impl DebugHelper {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
                 let mut context = PropagationContextMut::new(
-                    &mut assignments_integer_clone,
+                    &mut assignments_clone,
                     &mut reason_store,
                     PropagatorId(propagator_id),
                 );
@@ -269,17 +268,17 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_reproduce_failure(
-        assignments_integer: &AssignmentsInteger,
+        assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
     ) {
-        let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
+        let mut assignments_clone = assignments.debug_create_empty_clone();
 
         let reason_predicates: Vec<IntegerPredicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful =
             DebugHelper::debug_add_predicates_to_assignment_integers(
-                &mut assignments_integer_clone,
+                &mut assignments_clone,
                 &reason_predicates,
             );
 
@@ -287,7 +286,7 @@ impl DebugHelper {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
             let mut context = PropagationContextMut::new(
-                &mut assignments_integer_clone,
+                &mut assignments_clone,
                 &mut reason_store,
                 propagator_id,
             );
@@ -312,7 +311,7 @@ impl DebugHelper {
     }
 
     fn debug_reported_propagations_negate_failure_and_check(
-        assignments_integer: &AssignmentsInteger,
+        assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -337,15 +336,15 @@ impl DebugHelper {
         let reason_predicates: Vec<IntegerPredicate> = failure_reason.iter().copied().collect();
         let mut found_nonconflicting_state_at_root = false;
         for predicate in &reason_predicates {
-            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
+            let mut assignments_clone = assignments.debug_create_empty_clone();
 
             let negated_predicate = predicate.not();
-            let outcome = assignments_integer_clone.post_integer_predicate(negated_predicate, None);
+            let outcome = assignments_clone.post_integer_predicate(negated_predicate, None);
 
             if outcome.is_ok() {
                 let mut reason_store = Default::default();
                 let mut context = PropagationContextMut::new(
-                    &mut assignments_integer_clone,
+                    &mut assignments_clone,
                     &mut reason_store,
                     propagator_id,
                 );
@@ -373,11 +372,11 @@ impl DebugHelper {
 // methods that serve as small utility functions
 impl DebugHelper {
     fn debug_add_predicates_to_assignment_integers(
-        assignments_integer: &mut AssignmentsInteger,
+        assignments: &mut Assignments,
         predicates: &[IntegerPredicate],
     ) -> bool {
         for integer_predicate in predicates {
-            let outcome = assignments_integer.post_integer_predicate(*integer_predicate, None);
+            let outcome = assignments.post_integer_predicate(*integer_predicate, None);
             match outcome {
                 Ok(()) => {
                     // do nothing, everything is okay

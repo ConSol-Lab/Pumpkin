@@ -7,7 +7,7 @@ use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -26,25 +26,25 @@ impl DomainId {
 impl IntegerVariable for DomainId {
     type AffineView = AffineView<Self>;
 
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound(&self, assignment: &Assignments) -> i32 {
         assignment.get_lower_bound(*self)
     }
 
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn upper_bound(&self, assignment: &Assignments) -> i32 {
         assignment.get_upper_bound(*self)
     }
 
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
+    fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         assignment.is_value_in_domain(*self, value)
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<IntegerPredicate> {
+    fn describe_domain(&self, assignment: &Assignments) -> Vec<IntegerPredicate> {
         assignment.get_domain_description(*self)
     }
 
     fn remove(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -53,7 +53,7 @@ impl IntegerVariable for DomainId {
 
     fn set_lower_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -62,7 +62,7 @@ impl IntegerVariable for DomainId {
 
     fn set_upper_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {

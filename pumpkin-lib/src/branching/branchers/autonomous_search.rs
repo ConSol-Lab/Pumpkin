@@ -8,10 +8,10 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
-/// and \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf) [`ValueSelector`].
+/// and \[2\]]<https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf>.
 /// There are two components: 1) predicate selection, and 2) truth value assignment.
 ///
 /// Predicate selection: The VSIDS algorithm is an adaptation for the CP case. It determines which
@@ -34,6 +34,7 @@ use crate::engine::AssignmentsInteger;
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct AutonomousSearch {
     /// Predicates are mapped to ids. This is used internally in the heap.
     predicate_id_info: PredicateIdGenerator,
@@ -65,7 +66,7 @@ const DEFAULT_VSIDS_DECAY_FACTOR: f64 = 0.95;
 // const DEFAULT_VSIDS_VALUE: f64 = 0.0;
 
 impl Default for AutonomousSearch {
-    /// Creates a new instance of the [`Vsids`] [`VariableSelector`] with default values for
+    /// Creates a new instance with default values for
     /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     fn default() -> Self {
@@ -84,6 +85,7 @@ impl Default for AutonomousSearch {
 impl AutonomousSearch {
     /// Resizes the heap to accommodate for the id.
     /// Recall that the underlying heap uses direct hashing.
+    #[allow(dead_code)]
     fn resize_heap(&mut self, id: PredicateId) {
         while self.heap.len() <= id.index() {
             self.heap.grow(id, 0.0);
@@ -91,6 +93,7 @@ impl AutonomousSearch {
     }
     /// Bumps the activity of a predicate by [`Vsids::increment`].
     /// Used when a predicate is encountered during a conflict.
+    #[allow(dead_code)]
     fn bump_activity(&mut self, predicate: IntegerPredicate) {
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
@@ -174,7 +177,7 @@ impl Brancher for AutonomousSearch {
     }
 
     /// Restores dormant predicates after backtracking.
-    fn synchronise(&mut self, assignments: &AssignmentsInteger) {
+    fn synchronise(&mut self, assignments: &Assignments) {
         // Note that while iterating with 'retain', the function also
         // readds the predicates to the heap that are no longer dormant.
         self.dormant_predicates.retain(|predicate| {
@@ -211,11 +214,11 @@ mod tests {
 
     // #[test]
     // fn vsids_bumped_var_is_max() {
-    // let (assignments_integer, assignments_propositional) =
+    // let (assignments, assignments_propositional) =
     // SelectionContext::create_for_testing(2, 0, None);
     // let mut test_rng = TestRandom::default();
     // let context = SelectionContext::new(
-    // &assignments_integer,
+    // &assignments,
     // &assignments_propositional,
     // &mut test_rng,
     // );
@@ -234,11 +237,11 @@ mod tests {
     // fn vsids_no_variables_will_return_none() {
     // let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&Vec::new());
     //
-    // let (assignments_integer, assignments_propositional) =
+    // let (assignments, assignments_propositional) =
     // SelectionContext::create_for_testing(0, 0, None);
     // let mut test_rng = TestRandom::default();
     // let context = SelectionContext::new(
-    // &assignments_integer,
+    // &assignments,
     // &assignments_propositional,
     // &mut test_rng,
     // );

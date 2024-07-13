@@ -4,7 +4,7 @@ use crate::basic_types::HashMap;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 /// The struct represents a nogood that does additional bookkeeping. The nogood is used during
@@ -22,7 +22,7 @@ pub(crate) struct AdvancedNogood {
     current_decision_level: usize,
     pub(crate) predicates: Vec<PredicateWithInfo>,
     /// Used to do semantic minimisation.
-    internal_assignments: AssignmentsInteger,
+    internal_assignments: Assignments,
     /// Incoming predicate domain ids are mapped to an internal representation, which is used in
     /// the internal assignments data structure.
     internal_ids: HashMap<DomainId, DomainId>,
@@ -38,7 +38,7 @@ impl AdvancedNogood {
         AdvancedNogood {
             current_decision_level,
             predicates: vec![],
-            internal_assignments: AssignmentsInteger::default(),
+            internal_assignments: Assignments::default(),
             internal_ids: HashMap::default(),
         }
     }
@@ -55,13 +55,9 @@ impl AdvancedNogood {
             // Internally the domain_id is replicated but with an internal id.
 
             // Collect root level state of the domain_id
-            let lower_bound = context
-                .assignments_integer
-                .get_initial_lower_bound(domain_id);
-            let upper_bound = context
-                .assignments_integer
-                .get_initial_upper_bound(domain_id);
-            let holes = context.assignments_integer.get_initial_holes(domain_id);
+            let lower_bound = context.assignments.get_initial_lower_bound(domain_id);
+            let upper_bound = context.assignments.get_initial_upper_bound(domain_id);
+            let holes = context.assignments.get_initial_holes(domain_id);
 
             // Replicate the domain with the new internal id
             let internal_domain_id = self.internal_assignments.grow(lower_bound, upper_bound);
@@ -152,14 +148,11 @@ impl AdvancedNogood {
 
                 // Add the predicate to the list of predicates in the nogood.
                 let decision_level = context
-                    .assignments_integer
+                    .assignments
                     .get_decision_level_for_predicate(&predicate)
                     .unwrap();
 
-                let trail_position = context
-                    .assignments_integer
-                    .get_trail_position(&predicate)
-                    .unwrap();
+                let trail_position = context.assignments.get_trail_position(&predicate).unwrap();
 
                 self.predicates.push(PredicateWithInfo {
                     predicate,
@@ -184,7 +177,7 @@ impl AdvancedNogood {
         for predicate in predicates {
             // println!("\tp: {}", predicate);
             // if !context
-            // .assignments_integer
+            // .assignments
             // .evaluate_predicate(predicate)
             // .is_some_and(|x| x)
             // {
@@ -193,7 +186,7 @@ impl AdvancedNogood {
 
             assert!(
                 context
-                    .assignments_integer
+                    .assignments
                     .evaluate_predicate(predicate)
                     .is_some_and(|x| x),
                 "Predicates must be true during conflict analysis."
@@ -341,13 +334,13 @@ impl AdvancedNogood {
                                     let original_id = p.predicate.get_domain();
                                     // Be careful not to mixed up internal_domain_id and domain_id.
                                     let decision_level = context
-                                        .assignments_integer
+                                        .assignments
                                         .get_decision_level_for_predicate(&predicate![
                                             original_id == assigned_value
                                         ])
                                         .unwrap();
                                     let trail_position = context
-                                        .assignments_integer
+                                        .assignments
                                         .get_trail_position(&predicate![
                                             original_id == assigned_value
                                         ])
@@ -370,13 +363,13 @@ impl AdvancedNogood {
                                 let strongest_lower_bound =
                                     self.internal_assignments.get_lower_bound(internal_id);
                                 let decision_level = context
-                                    .assignments_integer
+                                    .assignments
                                     .get_decision_level_for_predicate(&predicate![
                                         original_id >= strongest_lower_bound
                                     ])
                                     .unwrap();
                                 let trail_position = context
-                                    .assignments_integer
+                                    .assignments
                                     .get_trail_position(&predicate![
                                         original_id >= strongest_lower_bound
                                     ])
@@ -419,13 +412,13 @@ impl AdvancedNogood {
                                     // Be careful not to mixed up internal_domain_id and domain_id.
                                     let original_id = p.predicate.get_domain();
                                     let decision_level = context
-                                        .assignments_integer
+                                        .assignments
                                         .get_decision_level_for_predicate(&predicate![
                                             original_id == assigned_value
                                         ])
                                         .unwrap();
                                     let trail_position = context
-                                        .assignments_integer
+                                        .assignments
                                         .get_trail_position(&predicate![
                                             original_id == assigned_value
                                         ])
@@ -448,13 +441,13 @@ impl AdvancedNogood {
                                 let strongest_upper_bound =
                                     self.internal_assignments.get_upper_bound(internal_id);
                                 let decision_level = context
-                                    .assignments_integer
+                                    .assignments
                                     .get_decision_level_for_predicate(&predicate![
                                         original_id <= strongest_upper_bound
                                     ])
                                     .unwrap();
                                 let trail_position = context
-                                    .assignments_integer
+                                    .assignments
                                     .get_trail_position(&predicate![
                                         original_id <= strongest_upper_bound
                                     ])
@@ -554,11 +547,11 @@ pub(crate) struct PredicateWithInfo {
 // "\t{} {} {}",
 // pred,
 // context
-// .assignments_integer
+// .assignments
 // .get_decision_level_for_predicate(pred)
 // .unwrap(),
 // context
-// .assignments_integer
+// .assignments
 // .get_trail_position(pred)
 // .unwrap()
 // );

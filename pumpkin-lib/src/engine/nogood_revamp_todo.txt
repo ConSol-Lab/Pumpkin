@@ -15,7 +15,7 @@
 * later on: lazy explanation for current decision level predicates, could try it out!
 
 + sometimes &IntegerPredicate, sometimes IntegerPredicate -> perhaps best to decide one or the other
-* make assignment in assignments_integer, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
+* make assignment in assignments, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
 
 * add propagator returns bool, should return Result?
 
@@ -35,7 +35,7 @@ starts with x != 9, 8, 7, 6...(note that 10 is skipped), then goes to x != 1, an
 
 solver, line 1117 -> where are the other match cases?
 
-assignments_integer.rs, line 926, was look at lower bound instead of upper bound
+assignments.rs, line 926, was look at lower bound instead of upper bound
 line 422, for the upper bound reason but not equals trail, used lower instead of upper bound
 
 * need to cache reasons during computation in the analyser
@@ -75,7 +75,7 @@ rename watch_list_cp, propagator_cp...remove 'cp'. Also watch_list within the no
 
   debug_propagator_reason -> not used anywhere?
 
-  HasAssignments -> assignments_integer, can rename? Do we need this anymore?
+  HasAssignments -> assignments, can rename? Do we need this anymore?
 
 LearningOptions? I removed it.
 
@@ -113,7 +113,7 @@ removed difference logic
 
 Notify for BooleanDomain -> any, will notify for ==, and >=?
 
-self.assignments_integer.num_trail_entries() -> this is used for the restart strategy, but this makes no sense.
+self.assignments.num_trail_entries() -> this is used for the restart strategy, but this makes no sense.
 
 check the impl blocks in the CSP solver, see if they still make sense
 

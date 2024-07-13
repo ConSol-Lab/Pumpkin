@@ -83,21 +83,20 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let mut assignments_integer =
-            SelectionContext::create_for_testing(vec![(11, 15), (10, 20)]);
-        let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
+        let mut assignments = SelectionContext::create_for_testing(vec![(11, 15), (10, 20)]);
+        let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = Smallest::new(&integer_variables);
         let mut test_rng = TestRandom::default();
         {
-            let context = SelectionContext::new(&assignments_integer, &mut test_rng);
+            let context = SelectionContext::new(&assignments, &mut test_rng);
 
             let selected = strategy.select_variable(&context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments_integer.tighten_lower_bound(integer_variables[1], 15, None);
-        let context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let _ = assignments.tighten_lower_bound(integer_variables[1], 15, None);
+        let context = SelectionContext::new(&assignments, &mut test_rng);
         let selected = strategy.select_variable(&context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0]);
@@ -105,9 +104,9 @@ mod tests {
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let assignments_integer = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
+        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = Smallest::new(&integer_variables);

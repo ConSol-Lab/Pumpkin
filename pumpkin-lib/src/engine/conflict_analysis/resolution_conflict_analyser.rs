@@ -17,7 +17,7 @@ impl ResolutionNogoodConflictAnalyser {
     /// The asserting predicate is at position zero, and the second decision level positioned
     /// predicate is at position one.
     pub fn compute_1uip(&mut self, context: &mut ConflictAnalysisNogoodContext) -> LearnedNogood {
-        let mut nogood = AdvancedNogood::new(context.assignments_integer.get_decision_level());
+        let mut nogood = AdvancedNogood::new(context.assignments.get_decision_level());
 
         let conflict_nogood = context.get_conflict_nogood();
         // record the nogood size for statistical purposes
@@ -32,17 +32,17 @@ impl ResolutionNogoodConflictAnalyser {
         nogood.add_predicates(conflict_nogood, context);
 
         // println!("VARIABLE DOMAINS");
-        // for d in context.assignments_integer.get_domains() {
+        // for d in context.assignments.get_domains() {
         // println!(
         // "{}: [{}, {}]",
         // d,
-        // context.assignments_integer.get_lower_bound(d),
-        // context.assignments_integer.get_upper_bound(d)
+        // context.assignments.get_lower_bound(d),
+        // context.assignments.get_upper_bound(d)
         // );
         // }
         //
         // println!("TRAIL");
-        // for t in context.assignments_integer.trail.iter() {
+        // for t in context.assignments.trail.iter() {
         // println!("\t{} {}", t.predicate, t.reason.is_none());
         // }
         //

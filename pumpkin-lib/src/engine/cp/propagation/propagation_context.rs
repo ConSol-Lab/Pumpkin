@@ -4,7 +4,7 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
@@ -17,14 +17,12 @@ use crate::engine::EmptyDomain;
 /// the propagations and the solver during propagation.
 #[derive(Debug)]
 pub struct PropagationContext<'a> {
-    assignments: &'a AssignmentsInteger,
+    assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContext<'a> {
-    pub fn new(assignments_integer: &'a AssignmentsInteger) -> Self {
-        PropagationContext {
-            assignments: assignments_integer,
-        }
+    pub fn new(assignments: &'a Assignments) -> Self {
+        PropagationContext { assignments }
     }
 
     pub fn get_decision_level(&self) -> usize {
@@ -34,7 +32,7 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub struct PropagationContextMut<'a> {
-    assignments: &'a mut AssignmentsInteger,
+    assignments: &'a mut Assignments,
     reason_store: &'a mut ReasonStore,
 
     propagator_id: PropagatorId,
@@ -42,7 +40,7 @@ pub struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub fn new(
-        assignments: &'a mut AssignmentsInteger,
+        assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         propagator: PropagatorId,
     ) -> Self {
@@ -59,24 +57,24 @@ impl<'a> PropagationContextMut<'a> {
     }
 }
 
-/// A trait which defines common methods for retrieving the [`AssignmentsInteger`] and
+/// A trait which defines common methods for retrieving the [`Assignments`] and
 /// [`AssignmentsPropositional`] from the structure which implements this trait.
 pub trait HasAssignments {
-    /// Returns the stored [`AssignmentsInteger`].
-    fn assignments_integer(&self) -> &AssignmentsInteger;
+    /// Returns the stored [`Assignments`].
+    fn assignments(&self) -> &Assignments;
 }
 
 mod private {
     use super::*;
 
     impl HasAssignments for PropagationContext<'_> {
-        fn assignments_integer(&self) -> &AssignmentsInteger {
+        fn assignments(&self) -> &Assignments {
             self.assignments
         }
     }
 
     impl HasAssignments for PropagationContextMut<'_> {
-        fn assignments_integer(&self) -> &AssignmentsInteger {
+        fn assignments(&self) -> &Assignments {
             self.assignments
         }
     }
@@ -84,13 +82,13 @@ mod private {
 
 pub(crate) trait ReadDomains: HasAssignments {
     fn is_predicate_satisfied(&self, predicate: IntegerPredicate) -> bool {
-        self.assignments_integer()
+        self.assignments()
             .evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
     }
 
     fn is_predicate_falsified(&self, predicate: IntegerPredicate) -> bool {
-        self.assignments_integer()
+        self.assignments()
             .evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
     }
@@ -113,19 +111,19 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.lower_bound(self.assignments_integer())
+        var.lower_bound(self.assignments())
     }
 
     fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.upper_bound(self.assignments_integer())
+        var.upper_bound(self.assignments())
     }
 
     fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {
-        var.contains(self.assignments_integer(), value)
+        var.contains(self.assignments(), value)
     }
 
     fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<IntegerPredicate> {
-        var.describe_domain(self.assignments_integer())
+        var.describe_domain(self.assignments())
     }
 }
 

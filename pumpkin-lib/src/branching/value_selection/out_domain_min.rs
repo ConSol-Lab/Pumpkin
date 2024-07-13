@@ -28,9 +28,9 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = OutDomainMin;

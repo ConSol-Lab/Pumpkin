@@ -5,14 +5,14 @@ use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonStore;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::ConstraintProgrammingTrailEntry;
 use crate::pumpkin_assert_simple;
 
 // Does not have debug because of the brancher does not support it. Could be thought through later.
 #[allow(missing_debug_implementations)]
 pub struct ConflictAnalysisNogoodContext<'a> {
-    pub assignments_integer: &'a AssignmentsInteger,
+    pub assignments: &'a Assignments,
     pub solver_state: &'a mut CSPSolverState,
     pub reason_store: &'a mut ReasonStore,
     pub counters: &'a mut Counters,
@@ -29,7 +29,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 .iter()
                 .filter(|p| {
                     // filter out root predicates
-                    self.assignments_integer
+                    self.assignments
                         .get_decision_level_for_predicate(p)
                         .is_some_and(|dl| dl > 0)
                 })
@@ -40,7 +40,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     .iter()
                     .filter(|p| {
                         // filter out root predicates
-                        self.assignments_integer
+                        self.assignments
                             .get_decision_level_for_predicate(p)
                             .is_some_and(|dl| dl > 0)
                     })
@@ -58,7 +58,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         predicate: &IntegerPredicate,
     ) -> Vec<IntegerPredicate> {
         let trail_position = self
-            .assignments_integer
+            .assignments
             .get_trail_position(predicate)
             .expect("The predicate must be true during conflict analysis.");
 
@@ -68,7 +68,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             return vec![];
         }
 
-        let trail_entry = self.assignments_integer.get_trail_entry(trail_position);
+        let trail_entry = self.assignments.get_trail_entry(trail_position);
 
         if trail_entry.reason.is_none() {
             // this assert does not need to hold, can be as a result of a decision!
@@ -80,7 +80,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
     }
 
     fn helper_propagation_reason(&mut self, predicate: &IntegerPredicate) -> Vec<IntegerPredicate> {
-        // probably this function should go into the assignments_integer
+        // probably this function should go into the assignments
 
         // Note that this function can only be called with propagations, and never decision
         // predicates. Furthermore only predicate from the current decision level will be
@@ -99,7 +99,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // We assume that the predicate is indeed propagated, and not a decision.
         let mut extract_reason_from_trail =
             |trail_entry: &ConstraintProgrammingTrailEntry| -> Vec<IntegerPredicate> {
-                let propagation_context = PropagationContext::new(self.assignments_integer);
+                let propagation_context = PropagationContext::new(self.assignments);
 
                 let reason_ref = trail_entry
                     .reason
@@ -114,11 +114,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             };
 
         let trail_position = self
-            .assignments_integer
+            .assignments
             .get_trail_position(predicate)
             .expect("The predicate must be true during conflict analysis.");
 
-        let trail_entry = self.assignments_integer.get_trail_entry(trail_position);
+        let trail_entry = self.assignments.get_trail_entry(trail_position);
 
         // println!("input pred: {}", predicate);
         // println!("trail pred: {}", trail_entry.predicate);
@@ -526,9 +526,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .iter()
             .filter(|predicate| {
                 // We want to skip root level predicates, and keep everything else.
-                if let Some(decision_level) = self
-                    .assignments_integer
-                    .get_decision_level_for_predicate(predicate)
+                if let Some(decision_level) =
+                    self.assignments.get_decision_level_for_predicate(predicate)
                 {
                     // Only keep if it is not a root predicate.
                     decision_level > 0
@@ -542,10 +541,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
     }
 
     pub fn is_decision_predicate(&self, predicate: &IntegerPredicate) -> bool {
-        if let Some(trail_position) = self.assignments_integer.get_trail_position(predicate) {
-            self.assignments_integer.trail[trail_position]
-                .reason
-                .is_none()
+        if let Some(trail_position) = self.assignments.get_trail_position(predicate) {
+            self.assignments.trail[trail_position].reason.is_none()
         } else {
             false
         }

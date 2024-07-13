@@ -47,16 +47,16 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let mut assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let domain_ids = assignments_integer.get_domains().collect::<Vec<_>>();
+        let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainInterval;
 
         for to_remove in [2, 3, 7, 8] {
-            let _ = assignments_integer.remove_value_from_domain(domain_ids[0], to_remove, None);
+            let _ = assignments.remove_value_from_domain(domain_ids[0], to_remove, None);
         }
 
-        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] <= 1))
@@ -64,9 +64,9 @@ mod tests {
 
     #[test]
     fn test_no_holes_in_domain_bisects_domain() {
-        let assignments_integer = SelectionContext::create_for_testing(vec![(0, 10)]);
+        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;
@@ -78,9 +78,9 @@ mod tests {
 
     #[test]
     fn test_domain_of_size_two() {
-        let assignments_integer = SelectionContext::create_for_testing(vec![(1, 2)]);
+        let assignments = SelectionContext::create_for_testing(vec![(1, 2)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(&assignments_integer, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainInterval;

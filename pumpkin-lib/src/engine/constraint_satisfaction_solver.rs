@@ -40,7 +40,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::DebugHelper;
 use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
@@ -137,7 +137,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Performs conflict analysis, core extraction, and minimisation.
     conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
     /// Tracks information related to the assignments of integer variables.
-    pub(crate) assignments_integer: AssignmentsInteger,
+    pub(crate) assignments: Assignments,
     /// Contains information on which propagator to notify upon
     /// integer events, e.g., lower or upper bound change of a variable.
     watch_list_cp: WatchListCP,
@@ -214,7 +214,7 @@ impl ConstraintSatisfactionSolver {
         domain: DomainId,
         cp_propagators: &mut [Box<dyn Propagator>],
         propagator_queue: &mut PropagatorQueue,
-        assignments_integer: &mut AssignmentsInteger,
+        assignments: &mut Assignments,
         reason_store: &mut ReasonStore,
     ) {
         pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
@@ -229,7 +229,7 @@ impl ConstraintSatisfactionSolver {
             event,
             cp_propagators,
             propagator_queue,
-            assignments_integer,
+            assignments,
             reason_store,
         );
     }
@@ -241,11 +241,10 @@ impl ConstraintSatisfactionSolver {
         event: IntDomainEvent,
         cp_propagators: &mut [Box<dyn Propagator>],
         propagator_queue: &mut PropagatorQueue,
-        assignments_integer: &mut AssignmentsInteger,
+        assignments: &mut Assignments,
         reason_store: &mut ReasonStore,
     ) {
-        let mut context =
-            PropagationContextMut::new(assignments_integer, reason_store, propagator_id);
+        let mut context = PropagationContextMut::new(assignments, reason_store, propagator_id);
 
         let enqueue_decision =
             cp_propagators[propagator_id.0 as usize].notify(&mut context, local_id, event.into());
@@ -262,7 +261,7 @@ impl ConstraintSatisfactionSolver {
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
     fn notify_propagators_about_domain_events(&mut self) {
         self.event_drain
-            .extend(self.assignments_integer.drain_domain_events());
+            .extend(self.assignments.drain_domain_events());
 
         for (event, domain) in self.event_drain.drain(..) {
             // Special case: the nogood propagator is notified about each event.
@@ -271,7 +270,7 @@ impl ConstraintSatisfactionSolver {
                 domain,
                 &mut self.propagators,
                 &mut self.propagator_queue,
-                &mut self.assignments_integer,
+                &mut self.assignments,
                 &mut self.reason_store,
             );
             // Now notify other propagators subscribed to this event.
@@ -284,7 +283,7 @@ impl ConstraintSatisfactionSolver {
                     event,
                     &mut self.propagators,
                     &mut self.propagator_queue,
-                    &mut self.assignments_integer,
+                    &mut self.assignments,
                     &mut self.reason_store,
                 );
             }
@@ -294,7 +293,7 @@ impl ConstraintSatisfactionSolver {
     /// This is a temporary accessor to help refactoring.
     #[deprecated = "will be removed in favor of new state-based api"]
     pub fn get_solution_reference(&self) -> SolutionReference<'_> {
-        SolutionReference::new(&self.assignments_integer)
+        SolutionReference::new(&self.assignments)
     }
 
     #[allow(dead_code)]
@@ -314,7 +313,7 @@ impl ConstraintSatisfactionSolver {
         let mut csp_solver = ConstraintSatisfactionSolver {
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
-            assignments_integer: AssignmentsInteger::default(),
+            assignments: Assignments::default(),
             watch_list_cp: WatchListCP::default(),
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
@@ -390,7 +389,7 @@ impl ConstraintSatisfactionSolver {
             "Variables cannot be created in an inconsistent state"
         );
 
-        let domain_id = self.assignments_integer.grow(lower_bound, upper_bound);
+        let domain_id = self.assignments.grow(lower_bound, upper_bound);
         self.watch_list_cp.grow();
 
         if let Some(name) = name {
@@ -424,7 +423,7 @@ impl ConstraintSatisfactionSolver {
             if value == values[next_idx] {
                 next_idx += 1;
             } else {
-                self.assignments_integer
+                self.assignments
                     .remove_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
             }
@@ -500,7 +499,7 @@ impl ConstraintSatisfactionSolver {
         // let mut conflict_analysis_context = ConflictAnalysisContext {
         // assumptions: &self.assumptions,
         // clausal_propagator: &self.clausal_propagator,
-        // assignments_integer: &self.assignments_integer,
+        // assignments: &self.assignments,
         // assignments_propositional: &self.assignments_propositional,
         // internal_parameters: &self.internal_parameters,
         // solver_state: &mut self.state,
@@ -526,17 +525,17 @@ impl ConstraintSatisfactionSolver {
 
     /// Get the lower bound for the given variable.
     pub fn get_lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
-        variable.lower_bound(&self.assignments_integer)
+        variable.lower_bound(&self.assignments)
     }
 
     /// Get the upper bound for the given variable.
     pub fn get_upper_bound(&self, variable: &impl IntegerVariable) -> i32 {
-        variable.upper_bound(&self.assignments_integer)
+        variable.upper_bound(&self.assignments)
     }
 
     /// Determine whether `value` is in the domain of `variable`.
     pub fn integer_variable_contains(&self, variable: &impl IntegerVariable, value: i32) -> bool {
-        variable.contains(&self.assignments_integer, value)
+        variable.contains(&self.assignments, value)
     }
 
     /// Get the assigned integer for the given variable. If it is not assigned, `None` is returned.
@@ -584,18 +583,18 @@ impl ConstraintSatisfactionSolver {
 
             // println!(
             // "after prop. {}",
-            // self.assignments_integer.get_decision_level()
+            // self.assignments.get_decision_level()
             // );
-            // for t in self.assignments_integer.trail.iter() {
+            // for t in self.assignments.trail.iter() {
             // println!("\t{} {}", t.predicate, t.reason.is_none());
             // }
             //
-            // for d in self.assignments_integer.get_domains() {
+            // for d in self.assignments.get_domains() {
             // println!(
             // "{}: [{}, {}]",
             // d,
-            // self.assignments_integer.get_lower_bound(d),
-            // self.assignments_integer.get_upper_bound(d)
+            // self.assignments.get_lower_bound(d),
+            // self.assignments.get_upper_bound(d)
             // );
             // }
 
@@ -622,10 +621,10 @@ impl ConstraintSatisfactionSolver {
             else {
                 // println!(
                 // "\tconflict {}",
-                // self.assignments_integer.get_decision_level()
+                // self.assignments.get_decision_level()
                 // );
                 //
-                // for t in self.assignments_integer.trail.iter() {
+                // for t in self.assignments.trail.iter() {
                 // println!("\t\t{} {}", t.predicate, t.reason.is_none());
                 // }
 
@@ -654,13 +653,13 @@ impl ConstraintSatisfactionSolver {
         // Otherwise proceed with standard branching.
         else {
             let context = &mut SelectionContext::new(
-                &self.assignments_integer,
+                &self.assignments,
                 &mut self.internal_parameters.random_generator,
             );
             // If there is a next decision, make the decision.
             if let Some(decision_predicate) = brancher.next_decision(context) {
                 self.counters.num_decisions += 1;
-                self.assignments_integer
+                self.assignments
                     .post_integer_predicate(decision_predicate, None)
                     .expect("Decisions are expected not to fail.");
                 Ok(())
@@ -685,7 +684,7 @@ impl ConstraintSatisfactionSolver {
         assumption_predicate: IntegerPredicate,
     ) -> Result<(), CSPSolverExecutionFlag> {
         match self
-            .assignments_integer
+            .assignments
             .post_integer_predicate(assumption_predicate, None)
         {
             // The assumption is set to true. Note that the predicate may have been already true.
@@ -703,7 +702,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub(crate) fn declare_new_decision_level(&mut self) {
-        self.assignments_integer.increase_decision_level();
+        self.assignments.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
 
@@ -727,7 +726,7 @@ impl ConstraintSatisfactionSolver {
 
     fn compute_learned_nogood(&mut self, brancher: &mut impl Brancher) -> LearnedNogood {
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
-            assignments_integer: &self.assignments_integer,
+            assignments: &self.assignments,
             counters: &mut self.counters,
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
@@ -774,7 +773,7 @@ impl ConstraintSatisfactionSolver {
         // happened
         self.restart_strategy.notify_conflict(
             learned_nogood.predicates.len() as u32,
-            self.assignments_integer.num_trail_entries(),
+            self.assignments.num_trail_entries(),
         );
 
         self.counters
@@ -801,7 +800,7 @@ impl ConstraintSatisfactionSolver {
             .position(|propagator| propagator.name() == "NogoodPropagator")
             .expect("There has to be a nogood propagator!");
         let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             Self::get_nogood_propagator_id(),
         );
@@ -832,7 +831,7 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        self.assignments_integer
+        self.assignments
             .synchronise(backtrack_level)
             .iter()
             .for_each(|(domain_id, previous_value)| {
@@ -846,7 +845,7 @@ impl ConstraintSatisfactionSolver {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator_id in 0..self.propagators.len() {
-            let context = PropagationContext::new(&self.assignments_integer);
+            let context = PropagationContext::new(&self.assignments);
             self.propagators[propagator_id].synchronise(&context);
         }
     }
@@ -876,25 +875,24 @@ impl ConstraintSatisfactionSolver {
 
         // The last predicate on the trail reveals the domain id that has resulted
         // in an empty domain.
-        let entry = self.assignments_integer.get_last_entry_on_trail();
+        let entry = self.assignments.get_last_entry_on_trail();
         assert!(
             entry.reason.is_some(),
             "Cannot cause an empty domain using a decision."
         );
         let conflict_domain = entry.predicate.get_domain();
         assert!(
-            entry.old_lower_bound != self.assignments_integer.get_lower_bound(conflict_domain)
-                || entry.old_upper_bound
-                    != self.assignments_integer.get_upper_bound(conflict_domain),
+            entry.old_lower_bound != self.assignments.get_lower_bound(conflict_domain)
+                || entry.old_upper_bound != self.assignments.get_upper_bound(conflict_domain),
             "One of the two bounds had to change."
         );
 
-        let propagation_context = PropagationContext::new(&self.assignments_integer);
+        let propagation_context = PropagationContext::new(&self.assignments);
         // Recall that only one of the two bounds changed.
         // Here we compute whether it was the lower bound or upper bound that changed,
         // since we use this below.
         let upper_bound_changed =
-            entry.old_lower_bound == self.assignments_integer.get_lower_bound(conflict_domain);
+            entry.old_lower_bound == self.assignments.get_lower_bound(conflict_domain);
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
@@ -925,14 +923,14 @@ impl ConstraintSatisfactionSolver {
     /// Main propagation loop.
     pub(crate) fn propagate(&mut self) {
         // Record the number of predicates on the trail for statistics purposes.
-        let num_assigned_variables_old = self.assignments_integer.num_trail_entries();
+        let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop_new() {
             let propagator = &mut self.propagators[propagator_id.0 as usize];
             let mut context = PropagationContextMut::new(
-                &mut self.assignments_integer,
+                &mut self.assignments,
                 &mut self.reason_store,
                 propagator_id,
             );
@@ -951,7 +949,7 @@ impl ConstraintSatisfactionSolver {
                         // This way we guarantee that the assignment is consistent, which is needed
                         // for the conflict analysis data structures. The proper alternative would
                         // be to forbid the assignments from getting into an inconsistent state.
-                        self.assignments_integer.remove_last_trail_element();
+                        self.assignments.remove_last_trail_element();
 
                         let stored_conflict_info = StoredConflictInfo::EmptyDomain {
                             conflict_nogood: empty_domain_reason,
@@ -962,7 +960,7 @@ impl ConstraintSatisfactionSolver {
                     // A propagator-specific reason for the current conflict.
                     Inconsistency::Conflict { conflict_nogood } => {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
-                            &self.assignments_integer,
+                            &self.assignments,
                             &conflict_nogood,
                             propagator.as_ref(),
                             propagator_id,
@@ -983,15 +981,12 @@ impl ConstraintSatisfactionSolver {
         // Record statistics.
         self.counters.num_conflicts += self.state.is_conflicting() as u64;
         self.counters.num_propagations +=
-            self.assignments_integer.num_trail_entries() as u64 - num_assigned_variables_old as u64;
+            self.assignments.num_trail_entries() as u64 - num_assigned_variables_old as u64;
         // Only check fixed point propagation if there was no reported conflict,
         // since otherwise the state may be inconsistent.
         pumpkin_assert_extreme!(
             self.state.is_conflicting()
-                || DebugHelper::debug_fixed_point_propagation(
-                    &self.assignments_integer,
-                    &self.propagators,
-                )
+                || DebugHelper::debug_fixed_point_propagation(&self.assignments, &self.propagators,)
         );
     }
 
@@ -1041,7 +1036,7 @@ impl ConstraintSatisfactionSolver {
 
         let new_propagator = &mut self.propagators[new_propagator_id];
         let mut context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             new_propagator_id,
         );
@@ -1067,10 +1062,7 @@ impl ConstraintSatisfactionSolver {
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
-            match self
-                .assignments_integer
-                .post_integer_predicate(predicate, None)
-            {
+            match self.assignments.post_integer_predicate(predicate, None) {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
@@ -1082,7 +1074,7 @@ impl ConstraintSatisfactionSolver {
         nogood: Vec<IntegerPredicate>,
     ) -> Result<(), ConstraintOperationError> {
         let mut propagation_context = PropagationContextMut::new(
-            &mut self.assignments_integer,
+            &mut self.assignments,
             &mut self.reason_store,
             Self::get_nogood_propagator_id(),
         );
@@ -1158,7 +1150,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {
-        self.assignments_integer.get_decision_level()
+        self.assignments.get_decision_level()
     }
 }
 
@@ -1459,7 +1451,7 @@ mod tests {
             // return the correct result in this case
             // if self.conflicts.is_empty()
             // && self.original_propagations.iter().all(|propagation| {
-            // context.assignments_integer().evaluate_predicate(
+            // context.assignments().evaluate_predicate(
             // propagation
             // .1
             // .try_into()
@@ -1736,9 +1728,9 @@ mod tests {
     // let mut solver = ConstraintSatisfactionSolver::default();
     // let domain_id = solver.create_new_integer_variable(lb, ub, None);
     //
-    // assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
+    // assert_eq!(lb, solver.assignments.get_lower_bound(domain_id));
     //
-    // assert_eq!(ub, solver.assignments_integer.get_upper_bound(domain_id));
+    // assert_eq!(ub, solver.assignments.get_upper_bound(domain_id));
     //
     // assert_eq!(
     // solver.assignments_propositional.true_literal,

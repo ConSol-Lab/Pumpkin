@@ -10,7 +10,7 @@ use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 ///   This trail makes is easy to garbage collect reasons by simply synchronising whenever
-///   the `AssignmentsInteger` and `AssignmentsPropositional` are synchronised.
+///   the `Assignments` and `AssignmentsPropositional` are synchronised.
 #[derive(Default, Debug)]
 pub struct ReasonStore {
     trail: Trail<(PropagatorId, Reason)>,
@@ -141,11 +141,11 @@ mod tests {
     use super::*;
     use crate::conjunction;
     use crate::engine::variables::DomainId;
-    use crate::engine::AssignmentsInteger;
+    use crate::engine::Assignments;
 
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
-        let integers = AssignmentsInteger::default();
+        let integers = Assignments::default();
         let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn computing_a_lazy_reason_evaluates_the_reason_and_returns_a_reference() {
-        let integers = AssignmentsInteger::default();
+        let integers = Assignments::default();
         let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn pushing_a_reason_gives_a_reason_ref_that_can_be_computed() {
         let mut reason_store = ReasonStore::default();
-        let integers = AssignmentsInteger::default();
+        let integers = Assignments::default();
         let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
