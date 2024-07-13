@@ -117,7 +117,7 @@ impl NogoodPropagator {
         // could be done more efficiently but probably okay.
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
-        if nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
+        if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
             nogood.clear();
             return;
         }
@@ -125,9 +125,10 @@ impl NogoodPropagator {
         // Remove predicates that are satisfied at the root level.
         nogood.retain(|p| !context.is_predicate_satisfied(*p));
 
-        // If the nogood is violating at the root, return the unit violating nogood.
-        if nogood.iter().all(|p| context.is_predicate_satisfied(*p)) {
-            *nogood = vec![nogood[0]];
+        // If the nogood is violating at the root, the previous retain would leave an empty
+        // Return a violating nogood.
+        if nogood.is_empty() {
+            *nogood = vec![IntegerPredicate::trivially_true()];
             return;
         }
 

@@ -215,3 +215,5 @@ Propagators provide info for autonomous search. Possibly they also take into acc
 Update propagators with nogood information.
 
 Runtime data-driven priority queue.
+
+cargo test --package integration-tests --test mzn_constraint_test -- int_lin_le
