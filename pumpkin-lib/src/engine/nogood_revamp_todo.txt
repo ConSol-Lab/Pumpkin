@@ -200,6 +200,8 @@ implement SGS update
 
 readd vsids on integers?
 
+Trivially true predicates -> special case domain_id 0
+
 we notify of conflicting predicates for each predicate that appears in the conflict, although in principle we only want to do this 1) once per predicate? 2) only if the predicate actually contributes to the conflict.
 
 Assumptions -> can this be simplified in some way, say we first assign the predicates on the trail unless conflicting values, and then call the search? We would lose info on at which decision level we propagated things but that is not important anyway! This would simplify some parts of the solver, while make other parts a bit more complicated, could be worth it!

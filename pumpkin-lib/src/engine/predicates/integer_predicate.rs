@@ -75,6 +75,24 @@ impl IntegerPredicate {
             } => domain_id,
         }
     }
+
+    pub fn trivially_true() -> IntegerPredicate {
+        // By convention, there is a dummy 0-1 variable set to one at root.
+        // We use it to denote the trivially true predicate.
+        IntegerPredicate::Equal {
+            domain_id: DomainId { id: 0 },
+            equality_constant: 1,
+        }
+    }
+
+    pub fn trivially_false() -> IntegerPredicate {
+        // By convention, there is a dummy 0-1 variable set to one at root.
+        // We use it to denote the trivially true predicate.
+        IntegerPredicate::Equal {
+            domain_id: DomainId { id: 0 },
+            equality_constant: 0,
+        }
+    }
 }
 
 impl std::ops::Not for IntegerPredicate {
@@ -116,23 +134,29 @@ impl std::ops::Not for IntegerPredicate {
 
 impl std::fmt::Display for IntegerPredicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IntegerPredicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => write!(f, "[{} >= {}]", domain_id, lower_bound),
-            IntegerPredicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => write!(f, "[{} <= {}]", domain_id, upper_bound),
-            IntegerPredicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => write!(f, "[{} != {}]", domain_id, not_equal_constant),
-            IntegerPredicate::Equal {
-                domain_id,
-                equality_constant,
-            } => write!(f, "[{} == {}]", domain_id, equality_constant),
+        if *self == IntegerPredicate::trivially_true() {
+            write!(f, "[True]")
+        } else if *self == IntegerPredicate::trivially_false() {
+            write!(f, "[False]")
+        } else {
+            match self {
+                IntegerPredicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => write!(f, "[{} >= {}]", domain_id, lower_bound),
+                IntegerPredicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => write!(f, "[{} <= {}]", domain_id, upper_bound),
+                IntegerPredicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                } => write!(f, "[{} != {}]", domain_id, not_equal_constant),
+                IntegerPredicate::Equal {
+                    domain_id,
+                    equality_constant,
+                } => write!(f, "[{} == {}]", domain_id, equality_constant),
+            }
         }
     }
 }

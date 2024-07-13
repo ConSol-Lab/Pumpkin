@@ -214,21 +214,21 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        // if (bound - self.offset) % self.scale == 0 {
-        let inverted_bound = self.invert(bound, Rounding::Up);
-        self.inner.equality_predicate(inverted_bound)
-        //} else {
-        //    Predicate::False
-        //}
+        if (bound - self.offset) % self.scale == 0 {
+            let inverted_bound = self.invert(bound, Rounding::Up);
+            self.inner.equality_predicate(inverted_bound)
+        } else {
+            IntegerPredicate::trivially_false()
+        }
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        // if (bound - self.offset) % self.scale == 0 {
-        let inverted_bound = self.invert(bound, Rounding::Up);
-        self.inner.disequality_predicate(inverted_bound)
-        //} else {
-        //    Predicate::True
-        //}
+        if (bound - self.offset) % self.scale == 0 {
+            let inverted_bound = self.invert(bound, Rounding::Up);
+            self.inner.disequality_predicate(inverted_bound)
+        } else {
+            IntegerPredicate::trivially_true()
+        }
     }
 }
 

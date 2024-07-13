@@ -13,7 +13,6 @@ use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
-use crate::predicate;
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Literal {
@@ -157,15 +156,7 @@ impl PredicateConstructor for Literal {
     fn lower_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
         assert!(bound == 0 || bound == 1);
         match bound {
-            0 => {
-                // Asking for a predicate that represents the lower bound of zero of a literal means
-                // asking for a trivially true predicate.
-                // This feels a bit hacky, since it is not entirely clear when you would ask for
-                // such a predicate, but it seems correct.
-                let domain_id = self.predicate.get_domain();
-                let infinity = i32::MIN;
-                predicate![domain_id >= infinity]
-            }
+            0 => IntegerPredicate::trivially_true(),
             1 => self.predicate,
             _ => {
                 panic!(
@@ -179,15 +170,7 @@ impl PredicateConstructor for Literal {
         assert!(bound == 0 || bound == 1);
         match bound {
             0 => !self.predicate,
-            1 => {
-                // Asking for a predicate that represents the upper bound of one of a literal means
-                // asking for a trivially true predicate.
-                // This feels a bit hacky, since it is not entirely clear when you would ask for
-                // such a predicate, but it seems correct.
-                let domain_id = self.predicate.get_domain();
-                let infinity = i32::MIN;
-                predicate![domain_id >= infinity]
-            }
+            1 => IntegerPredicate::trivially_false(),
             _ => {
                 panic!(
                     "Upper bound predicate for literal must be restricted to zero or one values."
