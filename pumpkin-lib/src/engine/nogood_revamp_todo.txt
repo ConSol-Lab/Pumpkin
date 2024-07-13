@@ -1,13 +1,9 @@
-* The current implementation uses very simple propagation for nogood, so when we add the learned nogood, it does not actually propagate until much later!
-
 * Learned nogood management.
 * Restart policy before took into account number of assigned literals, now it might not?
 * Implementation of the nogood propagator is basic.
 * Implement LBD and activity for nogoods.
 * proof logging is done by the nogood propagator?
-* Nogood propagator could implement the Propagator trait -> could simplify the main propagation loop!
 * Remove allow dead code directives
-* Later on remove all SAT code / references / deadcode -> e.g., 'Predicate' does not need a sat literal anymore
 * Rename the nogood analysers / new structs.
 * Add comments? E.g., the ResolutionNogoodConflictAnalyser uses // but should use ///
 * Improve implementation across the board (propagation of nogood? the way they are passed/stored? conflict analysis algorithm?)
@@ -230,3 +226,9 @@ What do we watch for literals? How to implement it correctly? Does it make sense
 feature/revamp_skeleton4_removing_literals
 
 Observation: clauses of literals that were propagated at a higher decision level do not get bumped! Nor their LBDs updated! Seems counter-intuitive to only look at current decision level.
+
+predicate!(domain_id == 1) -> ok, but not 'predicate!(self.new_variable(0, 1) == 1)'
+
+preprocessing could make use of the True and False predicates.
+
+preprocessing -> how to remove opposite predicates?

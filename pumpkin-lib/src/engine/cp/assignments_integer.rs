@@ -469,6 +469,16 @@ impl AssignmentsInteger {
         }
     }
 
+    pub fn is_predicate_satisfied(&self, predicate: IntegerPredicate) -> bool {
+        self.evaluate_predicate(predicate)
+            .is_some_and(|truth_value| truth_value)
+    }
+
+    pub fn is_predicate_falsified(&self, predicate: IntegerPredicate) -> bool {
+        self.evaluate_predicate(predicate)
+            .is_some_and(|truth_value| !truth_value)
+    }
+
     /// Synchronises the internal structures of [`AssignmentsInteger`] based on the fact that
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before

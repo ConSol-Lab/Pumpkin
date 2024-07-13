@@ -1071,7 +1071,7 @@ impl ConstraintSatisfactionSolver {
                 .post_integer_predicate(predicate, None)
             {
                 Ok(_) => Ok(()),
-                Err(_) => Err(ConstraintOperationError::InfeasiblePredicate),
+                Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
         }
     }
@@ -1080,8 +1080,13 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         nogood: Vec<IntegerPredicate>,
     ) -> Result<(), ConstraintOperationError> {
+        let mut propagation_context = PropagationContextMut::new(
+            &mut self.assignments_integer,
+            &mut self.reason_store,
+            Self::get_nogood_propagator_id(),
+        );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
-        self.propagators[nogood_propagator_id].hack_add_nogood(nogood);
+        self.propagators[nogood_propagator_id].hack_add_nogood(nogood, &mut propagation_context)?;
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();

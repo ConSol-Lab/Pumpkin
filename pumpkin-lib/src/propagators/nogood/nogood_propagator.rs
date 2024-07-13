@@ -1,15 +1,20 @@
 use std::ops::Not;
 
+use log::warn;
+
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::HashSet;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::StorageKey;
+use crate::conjunction;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
-use crate::engine::AssignmentsInteger;
+use crate::engine::propagation::ReadDomains;
+use crate::pumpkin_assert_simple;
 
 // TODO:
 // Define data structures.
@@ -80,11 +85,19 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 // }
 
 #[derive(Default, Clone, Debug)]
+struct Nogood {
+    predicates: Vec<IntegerPredicate>,
+    #[allow(dead_code)]
+    is_learned: bool,
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct NogoodPropagator {
     #[allow(dead_code)]
-    nogoods: Vec<Vec<IntegerPredicate>>,
-    // nogoods: Vec<Rc<RefCell<[IntegerPredicate]>>>,
-    // nogoods: KeyedVec<NogoodId, Vec<IntegerPredicate>>,
+    nogoods: Vec<Nogood>,
+    permanent_nogoods: Vec<NogoodId>,
+    learned_nogoods: Vec<NogoodId>,
+    is_in_infeasible_state: bool,
     // Watch lists for the nogood propagator.
     // todo: could improve the data structure for watching.
     // watch_lists: HashMap<DomainId, WatchList>,
@@ -92,14 +105,103 @@ pub struct NogoodPropagator {
 }
 
 impl NogoodPropagator {
+    /// Does simple preprocessing, modifying the input nogood by:
+    ///     1. Removing duplicate predicates.
+    ///     2. Removing satisfied predicates at the root.
+    ///     3. Detecting predicates falsified at the root. In that case, the nogood is preprocessed
+    ///        to the empty nogood.
+    ///     4. Conflicting predicates?
+    fn preprocess_nogood(nogood: &mut Vec<IntegerPredicate>, context: &mut PropagationContextMut) {
+        pumpkin_assert_simple!(context.get_decision_level() == 0);
+        // The code below is broken down into several parts,
+        // could be done more efficiently but probably okay.
+
+        // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
+        if nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
+            nogood.clear();
+            return;
+        }
+
+        // Remove predicates that are satisfied at the root level.
+        nogood.retain(|p| !context.is_predicate_satisfied(*p));
+
+        // If the nogood is violating at the root, return the unit violating nogood.
+        if nogood.iter().all(|p| context.is_predicate_satisfied(*p)) {
+            *nogood = vec![nogood[0]];
+            return;
+        }
+
+        // We now remove duplicated predicates.
+        let mut present_predicates: HashSet<IntegerPredicate> = HashSet::default();
+        // We make use that adding elements to a hashset returns true if the element was not present
+        // in the set.
+        nogood.retain(|p| present_predicates.insert(*p));
+
+        // Check for contradicting predicates. In this case, the nogood cannot lead to propagation,
+        // so we can ignore it.
+        // Todo: The current version only partially does this, since there may be symmetries that
+        // are not detected, e.g., for a 0-1 integer variable, [x >= 1] and [x == 0] are
+        // opposite predicates but we do not detect these, and only check for direct
+        // negatives [x <= 0] and [x == 1].
+        if nogood.iter().any(|p| present_predicates.contains(&p.not())) {
+            nogood.clear();
+        }
+    }
+
     #[allow(dead_code)]
     fn add_permanent_nogood(
         &mut self,
-        _nogood: Vec<IntegerPredicate>,
-        _assignments: &mut AssignmentsInteger,
+        mut nogood: Vec<IntegerPredicate>,
+        context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {
-        // we do not need this for now?
-        todo!();
+        pumpkin_assert_simple!(
+            context.get_decision_level() == 0,
+            "Only allowed to add nogoods permanently at the root for now."
+        );
+
+        if self.is_in_infeasible_state {
+            return Err(ConstraintOperationError::InfeasibleState);
+        }
+
+        if nogood.is_empty() {
+            warn!("Adding empty nogood, unusual!");
+            return Ok(());
+        }
+
+        Self::preprocess_nogood(&mut nogood, context);
+
+        // Unit nogoods are added as root assignments rather than as nogoods.
+        if nogood.len() == 1 {
+            if context.is_predicate_satisfied(nogood[0]) {
+                self.is_in_infeasible_state = true;
+                Err(ConstraintOperationError::InfeasibleNogood)
+            } else if context.is_predicate_falsified(nogood[0]) {
+                Ok(())
+            } else {
+                // Post the negated predicate at the root to respect the nogood.
+                let result = context.post_predicate(nogood[0], conjunction!());
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(_) => {
+                        self.is_in_infeasible_state = true;
+                        Err(ConstraintOperationError::InfeasibleNogood)
+                    }
+                }
+            }
+        }
+        // Standard case, nogood is of size at least two.
+        // The preprocessing ensures that all predicates are unassigned.
+        else {
+            let new_nogood_id = NogoodId {
+                id: self.permanent_nogoods.len() as u32,
+            };
+            self.permanent_nogoods.push(new_nogood_id);
+            self.nogoods.push(Nogood {
+                predicates: nogood,
+                is_learned: false,
+            });
+            Ok(())
+        }
     }
 
     #[allow(dead_code)]
@@ -278,7 +380,7 @@ impl Propagator for NogoodPropagator {
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
         for nogood in self.nogoods.iter() {
-            self.debug_propagate_nogood_from_scratch(nogood, context)?;
+            self.debug_propagate_nogood_from_scratch(&nogood.predicates, context)?;
         }
         Ok(())
     }
@@ -294,7 +396,14 @@ impl Propagator for NogoodPropagator {
     ) {
         self.debug_propagate_nogood_from_scratch(&nogood, context)
             .expect("Do not expect to fail propagating learned nogood.");
-        self.nogoods.push(nogood);
+        let nogood_id = NogoodId {
+            id: self.nogoods.len() as u32,
+        };
+        self.nogoods.push(Nogood {
+            predicates: nogood,
+            is_learned: true,
+        });
+        self.learned_nogoods.push(nogood_id);
 
         // self.nogoods.push(nogood);
         // let nogood_id = NogoodId {
@@ -309,8 +418,18 @@ impl Propagator for NogoodPropagator {
     }
 
     /// Temporary hack, used to add nogoods. Will be replaced later.
-    fn hack_add_nogood(&mut self, nogood: Vec<IntegerPredicate>) {
-        self.nogoods.push(nogood);
+    fn hack_add_nogood(
+        &mut self,
+        nogood: Vec<IntegerPredicate>,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), ConstraintOperationError> {
+        match self.add_permanent_nogood(nogood, context) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                self.is_in_infeasible_state = true;
+                Err(e)
+            }
+        }
     }
 }
 

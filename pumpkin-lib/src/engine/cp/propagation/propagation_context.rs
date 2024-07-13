@@ -17,20 +17,24 @@ use crate::engine::EmptyDomain;
 /// the propagations and the solver during propagation.
 #[derive(Debug)]
 pub struct PropagationContext<'a> {
-    assignments_integer: &'a AssignmentsInteger,
+    assignments: &'a AssignmentsInteger,
 }
 
 impl<'a> PropagationContext<'a> {
     pub fn new(assignments_integer: &'a AssignmentsInteger) -> Self {
         PropagationContext {
-            assignments_integer,
+            assignments: assignments_integer,
         }
+    }
+
+    pub fn get_decision_level(&self) -> usize {
+        self.assignments.get_decision_level()
     }
 }
 
 #[derive(Debug)]
 pub struct PropagationContextMut<'a> {
-    assignments_integer: &'a mut AssignmentsInteger,
+    assignments: &'a mut AssignmentsInteger,
     reason_store: &'a mut ReasonStore,
 
     propagator_id: PropagatorId,
@@ -38,16 +42,20 @@ pub struct PropagationContextMut<'a> {
 
 impl<'a> PropagationContextMut<'a> {
     pub fn new(
-        assignments_integer: &'a mut AssignmentsInteger,
+        assignments: &'a mut AssignmentsInteger,
         reason_store: &'a mut ReasonStore,
         propagator: PropagatorId,
     ) -> Self {
         PropagationContextMut {
-            assignments_integer,
+            assignments,
             reason_store,
 
             propagator_id: propagator,
         }
+    }
+
+    pub fn get_decision_level(&self) -> usize {
+        self.assignments.get_decision_level()
     }
 }
 
@@ -63,18 +71,30 @@ mod private {
 
     impl HasAssignments for PropagationContext<'_> {
         fn assignments_integer(&self) -> &AssignmentsInteger {
-            self.assignments_integer
+            self.assignments
         }
     }
 
     impl HasAssignments for PropagationContextMut<'_> {
         fn assignments_integer(&self) -> &AssignmentsInteger {
-            self.assignments_integer
+            self.assignments
         }
     }
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
+    fn is_predicate_satisfied(&self, predicate: IntegerPredicate) -> bool {
+        self.assignments_integer()
+            .evaluate_predicate(predicate)
+            .is_some_and(|truth_value| truth_value)
+    }
+
+    fn is_predicate_falsified(&self, predicate: IntegerPredicate) -> bool {
+        self.assignments_integer()
+            .evaluate_predicate(predicate)
+            .is_some_and(|truth_value| !truth_value)
+    }
+
     fn is_literal_true(&self, literal: Literal) -> bool {
         self.lower_bound(&literal) == 1
     }
@@ -118,9 +138,9 @@ impl PropagationContextMut<'_> {
         value: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if var.contains(self.assignments_integer, value) {
+        if var.contains(self.assignments, value) {
             let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.remove(self.assignments_integer, value, Some(reason));
+            return var.remove(self.assignments, value, Some(reason));
         }
         Ok(())
     }
@@ -131,9 +151,9 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound < var.upper_bound(self.assignments_integer) {
+        if bound < var.upper_bound(self.assignments) {
             let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.set_upper_bound(self.assignments_integer, bound, Some(reason));
+            return var.set_upper_bound(self.assignments, bound, Some(reason));
         }
         Ok(())
     }
@@ -144,16 +164,15 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound > var.lower_bound(self.assignments_integer) {
+        if bound > var.lower_bound(self.assignments) {
             let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.set_lower_bound(self.assignments_integer, bound, Some(reason));
+            return var.set_lower_bound(self.assignments, bound, Some(reason));
         }
         Ok(())
     }
 
     pub fn evaluate_predicate(&self, integer_predicate: IntegerPredicate) -> Option<bool> {
-        self.assignments_integer
-            .evaluate_predicate(integer_predicate)
+        self.assignments.evaluate_predicate(integer_predicate)
     }
 
     pub fn post_predicate<R: Into<Reason> + Clone>(

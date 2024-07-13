@@ -1,3 +1,4 @@
+use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
@@ -130,7 +131,12 @@ pub trait Propagator {
     }
 
     /// Temporary hack, used to add nogoods. Will be replaced later.
-    fn hack_add_nogood(&mut self, _nogood: Vec<IntegerPredicate>) {
+
+    fn hack_add_nogood(
+        &mut self,
+        _nogood: Vec<IntegerPredicate>,
+        _context: &mut PropagationContextMut,
+    ) -> Result<(), ConstraintOperationError> {
         unreachable!();
     }
 }
