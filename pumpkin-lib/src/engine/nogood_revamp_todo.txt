@@ -4,54 +4,30 @@
 * Implement LBD and activity for nogoods.
 * proof logging is done by the nogood propagator?
 * Remove allow dead code directives
-* Rename the nogood analysers / new structs.
 * Add comments? E.g., the ResolutionNogoodConflictAnalyser uses // but should use ///
 * Improve implementation across the board (propagation of nogood? the way they are passed/stored? conflict analysis algorithm?)
 * Readd clause minimisation?
 * Do proper lazy?
-* Replace Boolean variables with 0-1 integers
 * Consider special data structures for 0-1 integers (assignments, predicate, compressed predicates)
 
 * get_decision_level for predicate can be done better -> todo!()
-* semantic minimisation? Not necessary?
 * get_trail_position
 * later on: lazy explanation for current decision level predicates, could try it out!
 
-* remove propositional conjunction? No longer needed, could simply use Vec since there is no more confusion with disjunction. -> or there may be confusion, so keep it!
-
 + sometimes &IntegerPredicate, sometimes IntegerPredicate -> perhaps best to decide one or the other
 * make assignment in assignments_integer, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
-* does_integer_predicate_hold in context could be moved to the trait ReadDomains?
-
-* the way the propagator constructed now is that only variables that are present at the time of creation of the propagator are added, probably we want to treat the nogood propagator in a special way afterall?
 
 * add propagator returns bool, should return Result?
 
 * bumped priorities of other propagators, so that nogoods at at level 0? Actually if it is so slow then might as well give large priority? Problem since we do not delete!
 
-* current when creating propositional variable, we also create a 0-1 integer variables, is this enough?
-
 * integration tests are amazing! But it took me a bit to understanding how to navigate the code. It just says test failed.
-
-
-
-How to change Booleans into Integers?
-
-pub fn create_new_propositional_variable(
-add clause should be changed? Or complemented? Not the cleanest now?
-// hack: not actually a learned nogood but can work
-disable clause propagator?
-
-* always enqueuing the nogood propagator -> I guess it is not a regular propagator after all.
 
 * fn debug_check_state for clausal_basic -> effectively deleted
 * is_propagation_complete -> deleted!
 * fn synchronise(&mut self, trail_size: usize) {
 
 * integer_assignment exposes trail
-
-* disabled the clausal propagator from posting permanent clauses
-
 
 * running int_lin_le -> wild variable selection
 starts with x != 9, 8, 7, 6...(note that 10 is skipped), then goes to x != 1, and then decides x <= 9. Funny because 9 is not in the domain, it is effectively saying x = 0. What? Also branching on not_equals...
@@ -74,30 +50,9 @@ line 422, for the upper bound reason but not equals trail, used lower instead of
 // mzn_search_unordered!(search_with_constants_in_search);
 disabled maxsat tests
 
-// process_domain_events returns a boolean but we never make use of it
-// todo rename process_domain_events into Notify propagator about domain events, something like that
-
-TODO -> what happens if a domain is empty? -> no need to handle this explicitly anymore!
-
-NOTIFY THE NOGOOD!
-
-todo: fix Booleans, these could be wrappers around IntegerVariable 0-1. Conceptually different, but under the hood could be the same. Also for notifying propagators?
-
 look at the Domain representation, and see what was the problem with some hacky thing, like at trail pos 0 we have some bound?
 
-Remove PropagationStatusCP, or rename.
-
 * What is the point of the OpaqueDomainEvent?
-
-++
-
-self.is_domain_assigned(domain_id)
-
-dismantling the solver:
-
-+ Removed the propositional representation
-
-[need to make sure to only use a CP representation for the branchers]
 
 rename watch_list_cp, propagator_cp...remove 'cp'. Also watch_list within the nogood is called watch_list, could distinguish the two watch lists by name.
 
@@ -131,6 +86,8 @@ LearningOptions? I removed it.
   pub type PropagationStatusCP = Result<(), Inconsistency>;
 
   could have special functions for BooleanDomainId? Probably need to...?
+
+  remove predicates from vsids that have very small values
 
 
 
@@ -232,3 +189,26 @@ predicate!(domain_id == 1) -> ok, but not 'predicate!(self.new_variable(0, 1) ==
 preprocessing could make use of the True and False predicates.
 
 preprocessing -> how to remove opposite predicates?
+
+
+VSIDS is a bit awkward. Bumping [x >= 3] and then [x >= 2] and then [x >= 1], which could happen due to lifting, may result in those predicates having lower scores compared to not doing lifting and simply bumping [x >= 3] three times. I guess we should bump the non-lifted values, and then lifted values? Or it might make sense to bump variables, and then bump values of the variable, so when we ask for branching, we first select variable and then value.
+
+Tests for VSIDS -> restore
+
+Phase saving not replicated
+
+fix citations
+
+implement SGS update
+
+need on_predicate for branchers!
+
+Assumptions -> can this be simplified in some way, say we first assign the predicates on the trail unless conflicting values, and then call the search? We would lose info on at which decision level we propagated things but that is not important anyway! This would simplify some parts of the solver, while make other parts a bit more complicated, could be worth it!
+
+let's study how often variables appear in the proof, and how successful are our strategies at finding those variables. The hypothesis is that strategies that are good at that are good at finding unsat solutions. Problem: there may be many different proofs.
+
+Propagators provide info for autonomous search. Possibly they also take into account importance of variables as evidenced by explanations.
+
+Update propagators with nogood information.
+
+Runtime data-driven priority queue.
