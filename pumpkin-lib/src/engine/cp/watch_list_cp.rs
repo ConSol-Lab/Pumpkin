@@ -20,7 +20,7 @@ pub struct Watchers<'a> {
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
-#[derive(Debug, EnumSetType)]
+#[derive(Debug, EnumSetType, Hash)]
 pub enum IntDomainEvent {
     /// Event where an (integer) variable domain collapses to a single value.
     Assign,

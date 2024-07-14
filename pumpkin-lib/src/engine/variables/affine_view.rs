@@ -63,6 +63,24 @@ where
         }
     }
 
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if self.scale < 0 {
+            self.map(
+                self.inner
+                    .upper_bound_at_trail_position(assignment, trail_position),
+            )
+        } else {
+            self.map(
+                self.inner
+                    .lower_bound_at_trail_position(assignment, trail_position),
+            )
+        }
+    }
+
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
         if self.scale < 0 {
             self.map(self.inner.lower_bound(assignment))
@@ -71,10 +89,43 @@ where
         }
     }
 
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if self.scale < 0 {
+            self.map(
+                self.inner
+                    .lower_bound_at_trail_position(assignment, trail_position),
+            )
+        } else {
+            self.map(
+                self.inner
+                    .upper_bound_at_trail_position(assignment, trail_position),
+            )
+        }
+    }
+
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         if (value - self.offset) % self.scale == 0 {
             let inverted = self.invert(value, Rounding::Up);
             self.inner.contains(assignment, inverted)
+        } else {
+            false
+        }
+    }
+
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        if (value - self.offset) % self.scale == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.inner
+                .contains_at_trail_position(assignment, inverted, trail_position)
         } else {
             false
         }

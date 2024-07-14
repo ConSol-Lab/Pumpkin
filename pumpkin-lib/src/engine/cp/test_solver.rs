@@ -74,6 +74,17 @@ impl TestSolver {
         Ok(propagator)
     }
 
+    pub fn get_propagation_context_mut(
+        &mut self,
+        propagator_id: PropagatorId,
+    ) -> PropagationContextMut {
+        PropagationContextMut {
+            assignments: &mut self.assignments,
+            reason_store: &mut self.reason_store,
+            propagator_id,
+        }
+    }
+
     pub fn initialise_at_root(
         &mut self,
         propagator: &mut BoxedPropagator,
@@ -243,7 +254,9 @@ impl TestSolver {
     }
 
     pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
-        let reason_ref = self.assignments.get_reason_for_predicate(predicate);
+        let reason_ref = self
+            .assignments
+            .get_reason_for_predicate_brute_force(predicate);
         let context = PropagationContext::new(&self.assignments);
         self.reason_store
             .get_or_compute(reason_ref, &context)

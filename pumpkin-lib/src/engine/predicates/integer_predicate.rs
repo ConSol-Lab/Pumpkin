@@ -44,6 +44,16 @@ impl IntegerPredicate {
         )
     }
 
+    pub fn is_upper_bound_predicate(&self) -> bool {
+        matches!(
+            *self,
+            IntegerPredicate::UpperBound {
+                domain_id: _,
+                upper_bound: _
+            }
+        )
+    }
+
     pub fn is_not_equal_predicate(&self) -> bool {
         matches!(
             *self,
@@ -73,6 +83,27 @@ impl IntegerPredicate {
                 domain_id,
                 equality_constant: _,
             } => domain_id,
+        }
+    }
+
+    pub fn get_right_hand_side(&self) -> i32 {
+        match self {
+            IntegerPredicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => *lower_bound,
+            IntegerPredicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => *upper_bound,
+            IntegerPredicate::NotEqual {
+                domain_id: _,
+                not_equal_constant,
+            } => *not_equal_constant,
+            IntegerPredicate::Equal {
+                domain_id: _,
+                equality_constant,
+            } => *equality_constant,
         }
     }
 

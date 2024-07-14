@@ -55,12 +55,34 @@ impl IntegerVariable for Literal {
         }
     }
 
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        match assignment.evaluate_predicate_at_trail_position(self.predicate, trail_position) {
+            Some(truth_value) => truth_value as i32,
+            None => 0,
+        }
+    }
+
     /// Returns the upper bound represented as a 0-1 value.
     /// Literals that evaluate to true have an upper bound of 1.
     /// Literal that evaluate to false have a upper bound of 0.
     /// Unassigned literals have a upper bound of 1.
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
         match assignment.evaluate_predicate(self.predicate) {
+            Some(truth_value) => truth_value as i32,
+            None => 1,
+        }
+    }
+
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        match assignment.evaluate_predicate_at_trail_position(self.predicate, trail_position) {
             Some(truth_value) => truth_value as i32,
             None => 1,
         }
@@ -79,6 +101,30 @@ impl IntegerVariable for Literal {
         );
 
         match assignment.evaluate_predicate(self.predicate) {
+            Some(truth_value) => {
+                // We rely on having the input value being restricted to zero or one.
+                truth_value && value == 1 || !truth_value && value == 0
+            }
+            None => {
+                // Since zero and one are the only options, then we simply return true since the
+                // truth value of the predicate has not yet been determined.
+                true
+            }
+        }
+    }
+
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        assert!(
+            value == 0 || value == 1,
+            "Literals can only be asked whether they contain zero or one values."
+        );
+
+        match assignment.evaluate_predicate_at_trail_position(self.predicate, trail_position) {
             Some(truth_value) => {
                 // We rely on having the input value being restricted to zero or one.
                 truth_value && value == 1 || !truth_value && value == 0

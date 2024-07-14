@@ -46,6 +46,10 @@ impl EventSink {
             let _ = self.present[domain].remove(event);
         })
     }
+
+    pub fn num_domains(&self) -> usize {
+        self.present.len()
+    }
 }
 
 #[cfg(test)]

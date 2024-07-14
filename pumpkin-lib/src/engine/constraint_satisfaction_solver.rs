@@ -147,7 +147,8 @@ pub struct ConstraintSatisfactionSolver {
     /// explanations during conflict analysis
     pub(crate) reason_store: ReasonStore,
     /// Contains events that need to be processed to notify propagators of event occurrences.
-    /// Used as a helper storage vector to avoid reallocation.
+    /// Used as a helper storage vector to avoid reallocation, and to take away ownership from the
+    /// events in assignments.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
     /// A set of counters updated during the search.
     counters: Counters,
@@ -260,6 +261,8 @@ impl ConstraintSatisfactionSolver {
     /// Process the stored domain events that happens as a result of decision/propagation predicates
     /// to the trail. Propagators are notified and enqueued if needed about the domain events.
     fn notify_propagators_about_domain_events(&mut self) {
+        assert!(self.event_drain.is_empty());
+
         self.event_drain
             .extend(self.assignments.drain_domain_events());
 
@@ -612,6 +615,8 @@ impl ConstraintSatisfactionSolver {
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
 
+                println!("DEC LVL NEW");
+
                 // Restarts should only occur after a new decision level has been declared to
                 // account for the fact that all assumptions should be assigned when restarts take
                 // place. Since one assumption is posted per decision level, all assumptions are
@@ -815,6 +820,9 @@ impl ConstraintSatisfactionSolver {
             &mut self.reason_store,
             Self::get_nogood_propagator_id(),
         );
+
+        println!("ADDING LEARNED: {:?}", learned_nogood.predicates);
+
         self.propagators[nogood_propagator_index]
             .hack_add_asserting_nogood(learned_nogood.predicates, &mut context);
     }
@@ -859,9 +867,12 @@ impl ConstraintSatisfactionSolver {
             let context = PropagationContext::new(&self.assignments);
             self.propagators[propagator_id].synchronise(&context);
         }
+
+        brancher.synchronise(&self.assignments);
+
+        self.event_drain.clear();
     }
 
-    /// This code is probably wrong.
     fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
         // The empty domain was caused by the last predicate on the trail.
         // Conceptually the reason for the empty domain is [x >= k] & [x <= k - 1].

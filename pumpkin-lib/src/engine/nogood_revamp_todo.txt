@@ -186,9 +186,7 @@ Observation: clauses of literals that were propagated at a higher decision level
 
 predicate!(domain_id == 1) -> ok, but not 'predicate!(self.new_variable(0, 1) == 1)'
 
-preprocessing could make use of the True and False predicates.
-
-preprocessing -> how to remove opposite predicates?
+preprocessing -> how to remove opposite predicates? Say a nogood with [x >= k] & [x <= k-1]. These can only come as from the input, or maybe as part of some preprocessing in the future, i.e., cannot be a result of a learned nogood.
 
 Tests for VSIDS -> restore
 
@@ -200,9 +198,23 @@ implement SGS update
 
 readd vsids on integers?
 
+event sink could be removed, we only rely on assignments.events
+
 Trivially true predicates -> special case domain_id 0
 
+What is this about?
+    /// Event where an (integer) variable domain removes an inner value within the domain.
+    /// N.B. this DomainEvent should not be subscribed to by itself!
+    #[doc(hidden)]
+    Removal,
+
 we notify of conflicting predicates for each predicate that appears in the conflict, although in principle we only want to do this 1) once per predicate? 2) only if the predicate actually contributes to the conflict.
+
+why was brancher not in CSP_solver? We need to document it somewhere.
+
+much faster to run test manually than to invoke cargo test?
+
+why is int_div_fzn defined the way it is? Seems odd. Two variables are -3..3, and one has {-3, -2, -1, 0...3}
 
 Assumptions -> can this be simplified in some way, say we first assign the predicates on the trail unless conflicting values, and then call the search? We would lose info on at which decision level we propagated things but that is not important anyway! This would simplify some parts of the solver, while make other parts a bit more complicated, could be worth it!
 
@@ -216,4 +228,8 @@ Update propagators with nogood information.
 
 Runtime data-driven priority queue.
 
+Need to see the performance difference of using all decision learning, but then adding the u1ip clause. All decision learning may bump the right clauses in the process, and seems to be more informative in terms of which constraints are being used for the analysis. 1UIP apparently has better learned clause, but it does not update the other information.
+
 cargo test --package integration-tests --test mzn_constraint_test -- int_lin_le
+
+cargo run -- -a "C:\Emir\Programerski projekti\pumpkin-private\integration-tests\tests\mzn_constraints\int_div.fzn"

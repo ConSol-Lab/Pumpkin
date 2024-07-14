@@ -32,10 +32,10 @@ impl<'a> PropagationContext<'a> {
 
 #[derive(Debug)]
 pub struct PropagationContextMut<'a> {
-    assignments: &'a mut Assignments,
-    reason_store: &'a mut ReasonStore,
+    pub(crate) assignments: &'a mut Assignments,
+    pub(crate) reason_store: &'a mut ReasonStore,
 
-    propagator_id: PropagatorId,
+    pub(crate) propagator_id: PropagatorId,
 }
 
 impl<'a> PropagationContextMut<'a> {
@@ -114,8 +114,24 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
+    fn lower_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.lower_bound_at_trail_position(self.assignments(), trail_position)
+    }
+
     fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
         var.upper_bound(self.assignments())
+    }
+
+    fn upper_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.upper_bound_at_trail_position(self.assignments(), trail_position)
     }
 
     fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {

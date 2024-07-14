@@ -30,12 +30,37 @@ impl IntegerVariable for DomainId {
         assignment.get_lower_bound(*self)
     }
 
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        assignment.get_lower_bound_at_trail_position(*self, trail_position)
+    }
+
     fn upper_bound(&self, assignment: &Assignments) -> i32 {
         assignment.get_upper_bound(*self)
     }
 
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        assignment.get_upper_bound_at_trail_position(*self, trail_position)
+    }
+
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         assignment.is_value_in_domain(*self, value)
+    }
+
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        assignment.is_value_in_domain_at_trail_position(*self, value, trail_position)
     }
 
     fn describe_domain(&self, assignment: &Assignments) -> Vec<IntegerPredicate> {

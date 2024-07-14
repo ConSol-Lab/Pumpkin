@@ -38,6 +38,12 @@ impl From<Vec<IntegerPredicate>> for PropositionalConjunction {
     }
 }
 
+impl From<PropositionalConjunction> for Vec<IntegerPredicate> {
+    fn from(conjunction: PropositionalConjunction) -> Vec<IntegerPredicate> {
+        conjunction.iter().copied().collect()
+    }
+}
+
 impl From<IntegerPredicate> for PropositionalConjunction {
     fn from(predicate: IntegerPredicate) -> Self {
         PropositionalConjunction {

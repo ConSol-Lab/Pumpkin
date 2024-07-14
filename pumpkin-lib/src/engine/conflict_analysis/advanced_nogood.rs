@@ -1,6 +1,6 @@
-use super::ConflictAnalysisNogoodContext;
 use super::LearnedNogood;
 use crate::basic_types::HashMap;
+use crate::branching::Brancher;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -43,11 +43,7 @@ impl AdvancedNogood {
         }
     }
 
-    fn register_id_internally(
-        &mut self,
-        domain_id: DomainId,
-        context: &ConflictAnalysisNogoodContext,
-    ) {
+    fn register_id_internally(&mut self, domain_id: DomainId, assignments: &Assignments) {
         // Only register if the domain is not yet registered.
         // I am disabling the clippy warning temporarily.
         #[allow(clippy::map_entry)]
@@ -55,9 +51,9 @@ impl AdvancedNogood {
             // Internally the domain_id is replicated but with an internal id.
 
             // Collect root level state of the domain_id
-            let lower_bound = context.assignments.get_initial_lower_bound(domain_id);
-            let upper_bound = context.assignments.get_initial_upper_bound(domain_id);
-            let holes = context.assignments.get_initial_holes(domain_id);
+            let lower_bound = assignments.get_initial_lower_bound(domain_id);
+            let upper_bound = assignments.get_initial_upper_bound(domain_id);
+            let holes = assignments.get_initial_holes(domain_id);
 
             // Replicate the domain with the new internal id
             let internal_domain_id = self.internal_assignments.grow(lower_bound, upper_bound);
@@ -78,9 +74,9 @@ impl AdvancedNogood {
     fn convert_into_internal_predicate(
         &mut self,
         predicate: IntegerPredicate,
-        context: &ConflictAnalysisNogoodContext,
+        assignments: &Assignments,
     ) -> IntegerPredicate {
-        self.register_id_internally(predicate.get_domain(), context);
+        self.register_id_internally(predicate.get_domain(), assignments);
         let internal_id = self.get_internal_id(predicate.get_domain());
         // The code below is cumbersome, but this is the idea:
         // The internal predicate is the same as the input predicate,
@@ -119,12 +115,8 @@ impl AdvancedNogood {
         true
     }
 
-    fn add_predicate(
-        &mut self,
-        predicate: IntegerPredicate,
-        context: &mut ConflictAnalysisNogoodContext,
-    ) {
-        let internal_predicate = self.convert_into_internal_predicate(predicate, context);
+    fn add_predicate(&mut self, predicate: IntegerPredicate, assignments: &Assignments) {
+        let internal_predicate = self.convert_into_internal_predicate(predicate, assignments);
 
         match self
             .internal_assignments
@@ -147,12 +139,13 @@ impl AdvancedNogood {
                     .expect("Previous code asserted this will be a success.");
 
                 // Add the predicate to the list of predicates in the nogood.
-                let decision_level = context
-                    .assignments
+                let decision_level = assignments
                     .get_decision_level_for_predicate(&predicate)
-                    .unwrap();
+                    .unwrap_or_default();
 
-                let trail_position = context.assignments.get_trail_position(&predicate).unwrap();
+                let trail_position = assignments
+                    .get_trail_position(&predicate)
+                    .unwrap_or_default();
 
                 self.predicates.push(PredicateWithInfo {
                     predicate,
@@ -172,7 +165,8 @@ impl AdvancedNogood {
     pub(crate) fn add_predicates(
         &mut self,
         predicates: Vec<IntegerPredicate>,
-        context: &mut ConflictAnalysisNogoodContext,
+        assignments: &Assignments,
+        mut brancher: Option<&mut dyn Brancher>,
     ) {
         for predicate in predicates {
             // println!("\tp: {}", predicate);
@@ -184,24 +178,23 @@ impl AdvancedNogood {
             // println!("\tNot ok: {:?}", predicate);
             // }
 
+            // The 'is_none' is a bit of a hack to be able to use the advanced nogood outside of
+            // conflict analysis.
             assert!(
-                context
-                    .assignments
-                    .evaluate_predicate(predicate)
-                    .is_some_and(|x| x),
+                assignments.evaluate_predicate(predicate).is_some_and(|x| x) || brancher.is_none(),
                 "Predicates must be true during conflict analysis."
             );
-            self.add_predicate(predicate, context);
+            self.add_predicate(predicate, assignments);
 
             // Currently we notify of every predicate. It may be better to only do so if the
             // predicate is not subsumed.
-            context
-                .brancher
-                .on_appearance_in_conflict_predicate(predicate);
+            if let Some(ref mut b) = brancher {
+                b.on_appearance_in_conflict_predicate(predicate)
+            }
 
             // println!("\tafter add: {:?}", self.predicates);
         }
-        self.simplify_predicates(context);
+        self.simplify_predicates(assignments);
         // println!("simply {:?}", self.predicates);
         // println!("\t resulting nogood: {:?}", learned_nogood);
         // println!("\t after min: {:?}", learned_nogood);
@@ -277,7 +270,7 @@ impl AdvancedNogood {
         Self::prepare_learned_nogood(self.predicates.clone(), self.current_decision_level)
     }
 
-    fn simplify_predicates(&mut self, context: &ConflictAnalysisNogoodContext) {
+    fn simplify_predicates(&mut self, assignments: &Assignments) {
         // I think this is correct, todo double check.
 
         // The predicates are determined based on the assignments.
@@ -333,14 +326,12 @@ impl AdvancedNogood {
                                 }) {
                                     let original_id = p.predicate.get_domain();
                                     // Be careful not to mixed up internal_domain_id and domain_id.
-                                    let decision_level = context
-                                        .assignments
+                                    let decision_level = assignments
                                         .get_decision_level_for_predicate(&predicate![
                                             original_id == assigned_value
                                         ])
                                         .unwrap();
-                                    let trail_position = context
-                                        .assignments
+                                    let trail_position = assignments
                                         .get_trail_position(&predicate![
                                             original_id == assigned_value
                                         ])
@@ -362,18 +353,16 @@ impl AdvancedNogood {
                                 let original_id = p.predicate.get_domain();
                                 let strongest_lower_bound =
                                     self.internal_assignments.get_lower_bound(internal_id);
-                                let decision_level = context
-                                    .assignments
+                                let decision_level = assignments
                                     .get_decision_level_for_predicate(&predicate![
                                         original_id >= strongest_lower_bound
                                     ])
-                                    .unwrap();
-                                let trail_position = context
-                                    .assignments
+                                    .unwrap_or_default();
+                                let trail_position = assignments
                                     .get_trail_position(&predicate![
                                         original_id >= strongest_lower_bound
                                     ])
-                                    .unwrap();
+                                    .unwrap_or_default();
                                 simplified_predicates.push(PredicateWithInfo {
                                     predicate: predicate![domain_id >= strongest_lower_bound],
                                     decision_level,
@@ -411,18 +400,16 @@ impl AdvancedNogood {
                                 }) {
                                     // Be careful not to mixed up internal_domain_id and domain_id.
                                     let original_id = p.predicate.get_domain();
-                                    let decision_level = context
-                                        .assignments
+                                    let decision_level = assignments
                                         .get_decision_level_for_predicate(&predicate![
                                             original_id == assigned_value
                                         ])
-                                        .unwrap();
-                                    let trail_position = context
-                                        .assignments
+                                        .unwrap_or_default();
+                                    let trail_position = assignments
                                         .get_trail_position(&predicate![
                                             original_id == assigned_value
                                         ])
-                                        .unwrap();
+                                        .unwrap_or_default();
                                     // Add the predicate to the simplified list.
                                     simplified_predicates.push(PredicateWithInfo {
                                         predicate: predicate![domain_id == assigned_value],
@@ -440,18 +427,16 @@ impl AdvancedNogood {
                                 let original_id = p.predicate.get_domain();
                                 let strongest_upper_bound =
                                     self.internal_assignments.get_upper_bound(internal_id);
-                                let decision_level = context
-                                    .assignments
+                                let decision_level = assignments
                                     .get_decision_level_for_predicate(&predicate![
                                         original_id <= strongest_upper_bound
                                     ])
-                                    .unwrap();
-                                let trail_position = context
-                                    .assignments
+                                    .unwrap_or_default();
+                                let trail_position = assignments
                                     .get_trail_position(&predicate![
                                         original_id <= strongest_upper_bound
                                     ])
-                                    .unwrap();
+                                    .unwrap_or_default();
                                 simplified_predicates.push(PredicateWithInfo {
                                     predicate: predicate![domain_id <= strongest_upper_bound],
                                     decision_level,

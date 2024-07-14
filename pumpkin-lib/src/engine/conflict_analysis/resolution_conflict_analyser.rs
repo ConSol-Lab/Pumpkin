@@ -29,7 +29,7 @@ impl ResolutionNogoodConflictAnalyser {
         // println!("before conflict: {:?}", conflict_nogood);
 
         // Initialise the nogood with the conflict nogood.
-        nogood.add_predicates(conflict_nogood, context);
+        nogood.add_predicates(conflict_nogood, context.assignments, Some(context.brancher));
 
         // println!("VARIABLE DOMAINS");
         // for d in context.assignments.get_domains() {
@@ -58,7 +58,7 @@ impl ResolutionNogoodConflictAnalyser {
             // 2) Add the reason of the next_predicate to the nogood.
             let reason = context.get_propagation_reason(&next_predicate);
             // println!("reason: {:?}", reason);
-            nogood.add_predicates(reason, context);
+            nogood.add_predicates(reason, context.assignments, Some(context.brancher));
             // println!("nogood: {:?}", nogood.predicates);
         }
         // todo: clause minimisation?
