@@ -5,7 +5,7 @@ use crate::basic_types::SolutionReference;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
 /// Similar to [`DynamicBrancher`], this is a pass-along structure which should be used when a
@@ -31,7 +31,7 @@ impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         self.selector.select_value(context, decision_variable)
     }
 

@@ -431,7 +431,7 @@ fn compile_bool_clause(
     // let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
     // let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
     //
-    // let clause: Vec<IntegerPredicate> = clause_1
+    // let clause: Vec<Predicate> = clause_1
     // .iter()
     // .copied()
     // .chain(clause_2.iter().map(|&literal| !literal))
@@ -572,7 +572,7 @@ fn compile_array_bool_and(
     // let r = context.resolve_bool_variable(&exprs[1])?;
     //
     // /\conjunction -> r
-    // let clause: Vec<IntegerPredicate> = conjunction
+    // let clause: Vec<Predicate> = conjunction
     // .iter()
     // .map(|&literal| !literal)
     // .chain(std::iter::once(r))

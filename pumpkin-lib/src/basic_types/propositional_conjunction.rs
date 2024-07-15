@@ -1,12 +1,12 @@
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Box<[IntegerPredicate]>,
+    predicates_in_conjunction: Box<[Predicate]>,
 }
 
 impl PropositionalConjunction {
-    pub fn new(predicates_in_conjunction: Box<[IntegerPredicate]>) -> Self {
+    pub fn new(predicates_in_conjunction: Box<[Predicate]>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
         }
@@ -16,13 +16,13 @@ impl PropositionalConjunction {
         self.predicates_in_conjunction.len() as u32
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, IntegerPredicate> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
         self.predicates_in_conjunction.iter()
     }
 }
 
-impl FromIterator<IntegerPredicate> for PropositionalConjunction {
-    fn from_iter<T: IntoIterator<Item = IntegerPredicate>>(iter: T) -> Self {
+impl FromIterator<Predicate> for PropositionalConjunction {
+    fn from_iter<T: IntoIterator<Item = Predicate>>(iter: T) -> Self {
         let vec = iter.into_iter().collect();
         PropositionalConjunction {
             predicates_in_conjunction: vec,
@@ -30,22 +30,22 @@ impl FromIterator<IntegerPredicate> for PropositionalConjunction {
     }
 }
 
-impl From<Vec<IntegerPredicate>> for PropositionalConjunction {
-    fn from(vec: Vec<IntegerPredicate>) -> Self {
+impl From<Vec<Predicate>> for PropositionalConjunction {
+    fn from(vec: Vec<Predicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: vec.into_boxed_slice(),
         }
     }
 }
 
-impl From<PropositionalConjunction> for Vec<IntegerPredicate> {
-    fn from(conjunction: PropositionalConjunction) -> Vec<IntegerPredicate> {
+impl From<PropositionalConjunction> for Vec<Predicate> {
+    fn from(conjunction: PropositionalConjunction) -> Vec<Predicate> {
         conjunction.iter().copied().collect()
     }
 }
 
-impl From<IntegerPredicate> for PropositionalConjunction {
-    fn from(predicate: IntegerPredicate) -> Self {
+impl From<Predicate> for PropositionalConjunction {
+    fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction: Box::new([predicate]),
         }

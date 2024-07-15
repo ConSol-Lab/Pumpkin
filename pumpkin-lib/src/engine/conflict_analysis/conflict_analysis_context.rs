@@ -2,7 +2,7 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
@@ -20,7 +20,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
-    pub fn get_conflict_nogood(&mut self) -> Vec<IntegerPredicate> {
+    pub fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
@@ -53,10 +53,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
     // Replaces the input predicate with its reason. In case the predicate was a result of a
     // decision, then the predicate is its own reason. Otherwise, the predicate has been propagated,
     // so the sufficient conditions for that propagation are computed based on the current trail.
-    fn compute_substitute_for_predicate(
-        &mut self,
-        predicate: &IntegerPredicate,
-    ) -> Vec<IntegerPredicate> {
+    fn compute_substitute_for_predicate(&mut self, predicate: &Predicate) -> Vec<Predicate> {
         let trail_position = self
             .assignments
             .get_trail_position(predicate)
@@ -79,7 +76,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         }
     }
 
-    fn helper_propagation_reason(&mut self, predicate: &IntegerPredicate) -> Vec<IntegerPredicate> {
+    fn helper_propagation_reason(&mut self, predicate: &Predicate) -> Vec<Predicate> {
         // probably this function should go into the assignments
 
         // Note that this function can only be called with propagations, and never decision
@@ -98,7 +95,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // Helper function to extract the reason from the trail predicate.
         // We assume that the predicate is indeed propagated, and not a decision.
         let mut extract_reason_from_trail =
-            |trail_entry: &ConstraintProgrammingTrailEntry| -> Vec<IntegerPredicate> {
+            |trail_entry: &ConstraintProgrammingTrailEntry| -> Vec<Predicate> {
                 let propagation_context = PropagationContext::new(self.assignments);
 
                 let reason_ref = trail_entry
@@ -139,12 +136,12 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             // 1) The predicate on the trail at the moment the input predicate became true, and
             // 2) The input predicate.
             match trail_entry.predicate {
-                IntegerPredicate::LowerBound {
+                Predicate::LowerBound {
                     domain_id: _,
                     lower_bound: trail_lower_bound,
                 } => {
                     match predicate {
-                        IntegerPredicate::LowerBound {
+                        Predicate::LowerBound {
                             domain_id,
                             lower_bound: input_lower_bound,
                         } => {
@@ -179,14 +176,14 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // only look for reasons for predicates from the current decision
                                 // level, and we never look for reasons at the root level.
 
-                                let one_less_bound_predicate = IntegerPredicate::LowerBound {
+                                let one_less_bound_predicate = Predicate::LowerBound {
                                     domain_id: *domain_id,
                                     lower_bound: input_lower_bound - 1,
                                 };
                                 let mut input_predicate_reason = self
                                     .compute_substitute_for_predicate(&one_less_bound_predicate);
 
-                                let not_equals_predicate = IntegerPredicate::NotEqual {
+                                let not_equals_predicate = Predicate::NotEqual {
                                     domain_id: *domain_id,
                                     not_equal_constant: input_lower_bound - 1,
                                 };
@@ -197,7 +194,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 input_predicate_reason
                             }
                         }
-                        IntegerPredicate::UpperBound {
+                        Predicate::UpperBound {
                             domain_id: _,
                             upper_bound: _,
                         } => {
@@ -205,7 +202,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // predicate is a lower bound predicate. This cannot be.
                             unreachable!()
                         }
-                        IntegerPredicate::NotEqual {
+                        Predicate::NotEqual {
                             domain_id: _,
                             not_equal_constant,
                         } => {
@@ -238,7 +235,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // true.
                                 // pumpkin_assert_simple!(trail_lower_bound != *not_equal_constant);
 
-                                // let predicate_reason = IntegerPredicate::LowerBound {
+                                // let predicate_reason = Predicate::LowerBound {
                                 //     domain_id: *domain_id,
                                 //    lower_bound: *not_equal_constant + 1,
                                 //};
@@ -250,7 +247,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // self.get_propagation_reason(&predicate_reason)
                             }
                         }
-                        IntegerPredicate::Equal {
+                        Predicate::Equal {
                             domain_id,
                             equality_constant,
                         } => {
@@ -269,11 +266,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // Note that it could be that one of the two predicates are decision
                             // predicates, so we need to use the substitute functions.
 
-                            let predicate_lb = IntegerPredicate::LowerBound {
+                            let predicate_lb = Predicate::LowerBound {
                                 domain_id: *domain_id,
                                 lower_bound: *equality_constant,
                             };
-                            let predicate_ub = IntegerPredicate::UpperBound {
+                            let predicate_ub = Predicate::UpperBound {
                                 domain_id: *domain_id,
                                 upper_bound: *equality_constant,
                             };
@@ -288,11 +285,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         }
                     }
                 }
-                IntegerPredicate::UpperBound {
+                Predicate::UpperBound {
                     domain_id: _,
                     upper_bound: trail_upper_bound,
                 } => match predicate {
-                    IntegerPredicate::LowerBound {
+                    Predicate::LowerBound {
                         domain_id: _,
                         lower_bound: _,
                     } => {
@@ -302,7 +299,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // So we conclude this branch is unreachable.
                         unreachable!()
                     }
-                    IntegerPredicate::UpperBound {
+                    Predicate::UpperBound {
                         domain_id,
                         upper_bound: input_upper_bound,
                     } => {
@@ -327,14 +324,14 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // The reason of the input predicate [x <= a] is computed recursively as
                             // the reason for [x <= a + 1] & [x != a + 1].
 
-                            let new_ub_predicate = IntegerPredicate::UpperBound {
+                            let new_ub_predicate = Predicate::UpperBound {
                                 domain_id: *domain_id,
                                 upper_bound: *input_upper_bound + 1,
                             };
                             let mut new_ub_reason =
                                 self.compute_substitute_for_predicate(&new_ub_predicate);
 
-                            let not_equal_predicate = IntegerPredicate::NotEqual {
+                            let not_equal_predicate = Predicate::NotEqual {
                                 domain_id: *domain_id,
                                 not_equal_constant: *input_upper_bound + 1,
                             };
@@ -344,7 +341,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             new_ub_reason
                         }
                     }
-                    IntegerPredicate::NotEqual {
+                    Predicate::NotEqual {
                         domain_id: _,
                         not_equal_constant,
                     } => {
@@ -358,7 +355,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // reason. todo: can do lifting here.
                         extract_reason_from_trail(&trail_entry)
                     }
-                    IntegerPredicate::Equal {
+                    Predicate::Equal {
                         domain_id,
                         equality_constant,
                     } => {
@@ -377,11 +374,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // Note that it could be that one of the two predicates are decision
                         // predicates, so we need to use the substitute functions.
 
-                        let predicate_lb = IntegerPredicate::LowerBound {
+                        let predicate_lb = Predicate::LowerBound {
                             domain_id: *domain_id,
                             lower_bound: *equality_constant,
                         };
-                        let predicate_ub = IntegerPredicate::UpperBound {
+                        let predicate_ub = Predicate::UpperBound {
                             domain_id: *domain_id,
                             upper_bound: *equality_constant,
                         };
@@ -393,11 +390,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         reason_lb
                     }
                 },
-                IntegerPredicate::NotEqual {
+                Predicate::NotEqual {
                     domain_id: _,
                     not_equal_constant,
                 } => match predicate {
-                    IntegerPredicate::LowerBound {
+                    Predicate::LowerBound {
                         domain_id,
                         lower_bound: input_lower_bound,
                     } => {
@@ -414,11 +411,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                         // The reason for the input predicate [x >= a] is computed recursively as
                         // the reason for [x >= a - 1] & [x != a-1].
-                        let new_lb_predicate = IntegerPredicate::LowerBound {
+                        let new_lb_predicate = Predicate::LowerBound {
                             domain_id: *domain_id,
                             lower_bound: input_lower_bound - 1,
                         };
-                        let new_not_equals_predicate = IntegerPredicate::NotEqual {
+                        let new_not_equals_predicate = Predicate::NotEqual {
                             domain_id: *domain_id,
                             not_equal_constant: input_lower_bound - 1,
                         };
@@ -431,7 +428,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         new_lb_reason.append(&mut new_not_equal_reason);
                         new_lb_reason
                     }
-                    IntegerPredicate::UpperBound {
+                    Predicate::UpperBound {
                         domain_id,
                         upper_bound: input_upper_bound,
                     } => {
@@ -448,11 +445,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                         // The reason for the input predicate [x <= a] is computed recursively as
                         // the reason for [x <= a + 1] & [x != a + 1].
-                        let new_ub_predicate = IntegerPredicate::UpperBound {
+                        let new_ub_predicate = Predicate::UpperBound {
                             domain_id: *domain_id,
                             upper_bound: input_upper_bound + 1,
                         };
-                        let new_not_equals_predicate = IntegerPredicate::NotEqual {
+                        let new_not_equals_predicate = Predicate::NotEqual {
                             domain_id: *domain_id,
                             not_equal_constant: input_upper_bound + 1,
                         };
@@ -465,7 +462,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         new_ub_reason.append(&mut new_not_equal_reason);
                         new_ub_reason
                     }
-                    IntegerPredicate::NotEqual {
+                    Predicate::NotEqual {
                         domain_id: _,
                         not_equal_constant: _,
                     } => {
@@ -477,7 +474,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // unreachable.
                         unreachable!()
                     }
-                    IntegerPredicate::Equal {
+                    Predicate::Equal {
                         domain_id,
                         equality_constant,
                     } => {
@@ -489,11 +486,11 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // Note that it could be that one of the two predicates are decision
                         // predicates, so we need to use the substitute functions.
 
-                        let predicate_lb = IntegerPredicate::LowerBound {
+                        let predicate_lb = Predicate::LowerBound {
                             domain_id: *domain_id,
                             lower_bound: *equality_constant,
                         };
-                        let predicate_ub = IntegerPredicate::UpperBound {
+                        let predicate_ub = Predicate::UpperBound {
                             domain_id: *domain_id,
                             upper_bound: *equality_constant,
                         };
@@ -505,7 +502,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         reason_lb
                     }
                 },
-                IntegerPredicate::Equal {
+                Predicate::Equal {
                     domain_id: _,
                     equality_constant: _,
                 } => {
@@ -518,10 +515,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         }
     }
 
-    pub fn get_propagation_reason(
-        &mut self,
-        predicate: &IntegerPredicate,
-    ) -> Vec<IntegerPredicate> {
+    pub fn get_propagation_reason(&mut self, predicate: &Predicate) -> Vec<Predicate> {
         self.helper_propagation_reason(predicate)
             .iter()
             .filter(|predicate| {
@@ -540,7 +534,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .collect()
     }
 
-    pub fn is_decision_predicate(&self, predicate: &IntegerPredicate) -> bool {
+    pub fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.assignments.get_trail_position(predicate) {
             self.assignments.trail[trail_position].reason.is_none()
         } else {

@@ -11,7 +11,7 @@ use crate::basic_types::StorageKey;
 use crate::conjunction;
 use crate::engine::conflict_analysis::AdvancedNogood;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -62,7 +62,7 @@ impl PropagatorConstructor for NogoodPropagatorConstructor {
 
 #[derive(Default, Clone, Debug)]
 struct Nogood {
-    predicates: Vec<IntegerPredicate>,
+    predicates: Vec<Predicate>,
     #[allow(dead_code)]
     is_learned: bool,
 }
@@ -96,14 +96,14 @@ impl NogoodPropagator {
     ///     3. Detecting predicates falsified at the root. In that case, the nogood is preprocessed
     ///        to the empty nogood.
     ///     4. Conflicting predicates?
-    fn preprocess_nogood(nogood: &mut Vec<IntegerPredicate>, context: &mut PropagationContextMut) {
+    fn preprocess_nogood(nogood: &mut Vec<Predicate>, context: &mut PropagationContextMut) {
         pumpkin_assert_simple!(context.get_decision_level() == 0);
         // The code below is broken down into several parts,
         // could be done more efficiently but probably okay.
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
-            *nogood = vec![IntegerPredicate::trivially_false()];
+            *nogood = vec![Predicate::trivially_false()];
             return;
         }
 
@@ -113,12 +113,12 @@ impl NogoodPropagator {
         // If the nogood is violating at the root, the previous retain would leave an empty
         // Return a violating nogood.
         if nogood.is_empty() {
-            *nogood = vec![IntegerPredicate::trivially_true()];
+            *nogood = vec![Predicate::trivially_true()];
             return;
         }
 
         // We now remove duplicated predicates.
-        let mut present_predicates: HashSet<IntegerPredicate> = HashSet::default();
+        let mut present_predicates: HashSet<Predicate> = HashSet::default();
         // We make use that adding elements to a hashset returns true if the element was not present
         // in the set.
         nogood.retain(|p| present_predicates.insert(*p));
@@ -130,7 +130,7 @@ impl NogoodPropagator {
         // opposite predicates but we do not detect these, and only check for direct
         // negatives [x <= 0] and [x == 1], [x == 1] & [x == 2] is not sensible.
         if nogood.iter().any(|p| present_predicates.contains(&p.not())) {
-            *nogood = vec![IntegerPredicate::trivially_false()];
+            *nogood = vec![Predicate::trivially_false()];
         }
 
         // This is a way to do semantic minimisation.
@@ -142,7 +142,7 @@ impl NogoodPropagator {
     #[allow(dead_code)]
     fn add_permanent_nogood(
         &mut self,
-        mut nogood: Vec<IntegerPredicate>,
+        mut nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
@@ -199,7 +199,7 @@ impl NogoodPropagator {
         }
     }
 
-    fn add_watcher(&mut self, predicate: IntegerPredicate, nogood_id: NogoodId) {
+    fn add_watcher(&mut self, predicate: Predicate, nogood_id: NogoodId) {
         // Add this nogood to the watch list of the new watcher.
 
         if predicate.get_domain().id as usize >= self.watch_lists.len() {
@@ -210,28 +210,28 @@ impl NogoodPropagator {
         }
 
         match predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.watch_lists[domain_id].lower_bound.push(Watcher {
                 right_hand_side: lower_bound,
                 nogood_id,
             }),
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.watch_lists[domain_id].upper_bound.push(Watcher {
                 right_hand_side: upper_bound,
                 nogood_id,
             }),
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => self.watch_lists[domain_id].hole.push(Watcher {
                 right_hand_side: not_equal_constant,
                 nogood_id,
             }),
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => self.watch_lists[domain_id].equals.push(Watcher {
@@ -249,7 +249,7 @@ impl NogoodPropagator {
     #[allow(dead_code)]
     fn debug_propagate_nogood_from_scratch(
         &self,
-        nogood: &[IntegerPredicate],
+        nogood: &[Predicate],
         context: &mut PropagationContextMut,
     ) -> Result<(), Inconsistency> {
         // Inefficient way of propagating, but okay for testing purposes
@@ -313,7 +313,7 @@ impl NogoodPropagator {
     // ))
     // }
 
-    // fn add_watcher(&mut self, predicate: IntegerPredicate, nogood_id: NogoodId) {
+    // fn add_watcher(&mut self, predicate: Predicate, nogood_id: NogoodId) {
     // todo: look up Hashset operations to do this properly.
     // Create an entry in case the predicate is missing
     // if !self.watch_lists.contains_key(&predicate.get_domain()) {
@@ -323,19 +323,19 @@ impl NogoodPropagator {
     // }
     //
     // match predicate {
-    // IntegerPredicate::LowerBound {
+    // Predicate::LowerBound {
     // domain_id,
     // lower_bound,
     // } => todo!(),
-    // IntegerPredicate::UpperBound {
+    // Predicate::UpperBound {
     // domain_id,
     // upper_bound,
     // } => todo!(),
-    // IntegerPredicate::NotEqual {
+    // Predicate::NotEqual {
     // domain_id,
     // not_equal_constant,
     // } => todo!(),
-    // IntegerPredicate::Equal {
+    // Predicate::Equal {
     // domain_id,
     // equality_constant,
     // } => todo!(),
@@ -372,27 +372,27 @@ impl NogoodPropagator {
 
     fn debug_is_properly_watched(&self) -> bool {
         let is_watching =
-            |predicate: IntegerPredicate, nogood_id: NogoodId| -> bool {
+            |predicate: Predicate, nogood_id: NogoodId| -> bool {
                 match predicate {
-                    IntegerPredicate::LowerBound {
+                    Predicate::LowerBound {
                         domain_id,
                         lower_bound,
                     } => self.watch_lists[domain_id].lower_bound.iter().any(|w| {
                         w.right_hand_side == lower_bound && w.nogood_id.id == nogood_id.id
                     }),
-                    IntegerPredicate::UpperBound {
+                    Predicate::UpperBound {
                         domain_id,
                         upper_bound,
                     } => self.watch_lists[domain_id].upper_bound.iter().any(|w| {
                         w.right_hand_side == upper_bound && w.nogood_id.id == nogood_id.id
                     }),
-                    IntegerPredicate::NotEqual {
+                    Predicate::NotEqual {
                         domain_id,
                         not_equal_constant,
                     } => self.watch_lists[domain_id].hole.iter().any(|w| {
                         w.right_hand_side == not_equal_constant && w.nogood_id.id == nogood_id.id
                     }),
-                    IntegerPredicate::Equal {
+                    Predicate::Equal {
                         domain_id,
                         equality_constant,
                     } => self.watch_lists[domain_id].equals.iter().any(|w| {
@@ -499,7 +499,7 @@ impl Propagator for NogoodPropagator {
                                 .nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
-                            let is_watched_predicate = |predicate: IntegerPredicate| {
+                            let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_lower_bound_predicate()
                                     && predicate.get_domain() == update_info.0
                             };
@@ -544,7 +544,7 @@ impl Propagator for NogoodPropagator {
                                     );
                                     // Add this nogood to the watch list of the new watcher.
                                     match nogood[1] {
-                                        IntegerPredicate::LowerBound {
+                                        Predicate::LowerBound {
                                             domain_id,
                                             lower_bound,
                                         } => {
@@ -553,7 +553,7 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::UpperBound {
+                                        Predicate::UpperBound {
                                             domain_id,
                                             upper_bound,
                                         } => {
@@ -562,14 +562,14 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::NotEqual {
+                                        Predicate::NotEqual {
                                             domain_id,
                                             not_equal_constant,
                                         } => self.watch_lists[domain_id].hole.push(Watcher {
                                             right_hand_side: not_equal_constant,
                                             nogood_id,
                                         }),
-                                        IntegerPredicate::Equal {
+                                        Predicate::Equal {
                                             domain_id,
                                             equality_constant,
                                         } => self.watch_lists[domain_id].equals.push(Watcher {
@@ -665,7 +665,7 @@ impl Propagator for NogoodPropagator {
                                 .nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
-                            let is_watched_predicate = |predicate: IntegerPredicate| {
+                            let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_upper_bound_predicate()
                                     && predicate.get_domain() == update_info.0
                             };
@@ -710,7 +710,7 @@ impl Propagator for NogoodPropagator {
                                     );
                                     // Add this nogood to the watch list of the new watcher.
                                     match nogood[1] {
-                                        IntegerPredicate::LowerBound {
+                                        Predicate::LowerBound {
                                             domain_id,
                                             lower_bound,
                                         } => {
@@ -719,7 +719,7 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::UpperBound {
+                                        Predicate::UpperBound {
                                             domain_id,
                                             upper_bound,
                                         } => {
@@ -728,14 +728,14 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::NotEqual {
+                                        Predicate::NotEqual {
                                             domain_id,
                                             not_equal_constant,
                                         } => self.watch_lists[domain_id].hole.push(Watcher {
                                             right_hand_side: not_equal_constant,
                                             nogood_id,
                                         }),
-                                        IntegerPredicate::Equal {
+                                        Predicate::Equal {
                                             domain_id,
                                             equality_constant,
                                         } => self.watch_lists[domain_id].equals.push(Watcher {
@@ -838,7 +838,7 @@ impl Propagator for NogoodPropagator {
                                 self.watch_lists[update_info.0].hole[current_index].nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
-                            let is_watched_predicate = |predicate: IntegerPredicate| {
+                            let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_not_equal_predicate()
                                     && predicate.get_domain() == update_info.0
                                     && predicate.get_right_hand_side() == right_hand_side
@@ -884,7 +884,7 @@ impl Propagator for NogoodPropagator {
                                     );
                                     // Add this nogood to the watch list of the new watcher.
                                     match nogood[1] {
-                                        IntegerPredicate::LowerBound {
+                                        Predicate::LowerBound {
                                             domain_id,
                                             lower_bound,
                                         } => {
@@ -893,7 +893,7 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::UpperBound {
+                                        Predicate::UpperBound {
                                             domain_id,
                                             upper_bound,
                                         } => {
@@ -902,14 +902,14 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::NotEqual {
+                                        Predicate::NotEqual {
                                             domain_id,
                                             not_equal_constant,
                                         } => self.watch_lists[domain_id].hole.push(Watcher {
                                             right_hand_side: not_equal_constant,
                                             nogood_id,
                                         }),
-                                        IntegerPredicate::Equal {
+                                        Predicate::Equal {
                                             domain_id,
                                             equality_constant,
                                         } => self.watch_lists[domain_id].equals.push(Watcher {
@@ -1008,7 +1008,7 @@ impl Propagator for NogoodPropagator {
                                 self.watch_lists[update_info.0].equals[current_index].nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
-                            let is_watched_predicate = |predicate: IntegerPredicate| {
+                            let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_equality_predicate()
                                     && predicate.get_domain() == update_info.0
                                     && predicate.get_right_hand_side() == assigned_value
@@ -1058,7 +1058,7 @@ impl Propagator for NogoodPropagator {
                                     // Add this nogood to the watch list of the new watcher.
                                     // Ensure there is an entry.
                                     match nogood[1] {
-                                        IntegerPredicate::LowerBound {
+                                        Predicate::LowerBound {
                                             domain_id,
                                             lower_bound,
                                         } => {
@@ -1067,7 +1067,7 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::UpperBound {
+                                        Predicate::UpperBound {
                                             domain_id,
                                             upper_bound,
                                         } => {
@@ -1076,14 +1076,14 @@ impl Propagator for NogoodPropagator {
                                                 nogood_id,
                                             })
                                         }
-                                        IntegerPredicate::NotEqual {
+                                        Predicate::NotEqual {
                                             domain_id,
                                             not_equal_constant,
                                         } => self.watch_lists[domain_id].hole.push(Watcher {
                                             right_hand_side: not_equal_constant,
                                             nogood_id,
                                         }),
-                                        IntegerPredicate::Equal {
+                                        Predicate::Equal {
                                             domain_id,
                                             equality_constant,
                                         } => self.watch_lists[domain_id].equals.push(Watcher {
@@ -1351,7 +1351,7 @@ impl Propagator for NogoodPropagator {
     // Learned nogood during search.
     fn hack_add_asserting_nogood(
         &mut self,
-        nogood: Vec<IntegerPredicate>,
+        nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) {
         if nogood.len() == 1 {
@@ -1389,7 +1389,7 @@ impl Propagator for NogoodPropagator {
     /// Temporary hack, used to add nogoods. Will be replaced later.
     fn hack_add_nogood(
         &mut self,
-        nogood: Vec<IntegerPredicate>,
+        nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {
         match self.add_permanent_nogood(nogood, context) {

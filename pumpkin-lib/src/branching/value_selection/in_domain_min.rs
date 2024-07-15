@@ -1,6 +1,6 @@
 use super::ValueSelector;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -13,7 +13,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMin {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         predicate!(decision_variable <= context.lower_bound(decision_variable))
     }
 }

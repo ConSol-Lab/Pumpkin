@@ -6,7 +6,7 @@ use std::ops::Not;
 use log::debug;
 use log::warn;
 
-use super::predicates::integer_predicate::IntegerPredicate;
+use super::predicates::predicate::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
@@ -118,7 +118,7 @@ impl DebugHelper {
     }
 
     pub fn debug_propagator_reason(
-        propagated_predicate: IntegerPredicate,
+        propagated_predicate: Predicate,
         reason: &PropositionalConjunction,
         assignments: &Assignments,
         propagator: &dyn Propagator,
@@ -166,7 +166,7 @@ impl DebugHelper {
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
 
-            let reason_predicates: Vec<IntegerPredicate> = reason.iter().copied().collect();
+            let reason_predicates: Vec<Predicate> = reason.iter().copied().collect();
             let adding_predicates_was_successful =
                 DebugHelper::debug_add_predicates_to_assignment_integers(
                     &mut assignments_clone,
@@ -223,7 +223,7 @@ impl DebugHelper {
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
 
-            let failing_predicates: Vec<IntegerPredicate> = once(!propagated_predicate)
+            let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
                 .chain(reason.iter().copied())
                 .collect();
 
@@ -275,7 +275,7 @@ impl DebugHelper {
     ) {
         let mut assignments_clone = assignments.debug_create_empty_clone();
 
-        let reason_predicates: Vec<IntegerPredicate> = failure_reason.iter().copied().collect();
+        let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let adding_predicates_was_successful =
             DebugHelper::debug_add_predicates_to_assignment_integers(
                 &mut assignments_clone,
@@ -333,13 +333,13 @@ impl DebugHelper {
             return;
         }
 
-        let reason_predicates: Vec<IntegerPredicate> = failure_reason.iter().copied().collect();
+        let reason_predicates: Vec<Predicate> = failure_reason.iter().copied().collect();
         let mut found_nonconflicting_state_at_root = false;
         for predicate in &reason_predicates {
             let mut assignments_clone = assignments.debug_create_empty_clone();
 
             let negated_predicate = predicate.not();
-            let outcome = assignments_clone.post_integer_predicate(negated_predicate, None);
+            let outcome = assignments_clone.post_predicate(negated_predicate, None);
 
             if outcome.is_ok() {
                 let mut reason_store = Default::default();
@@ -373,10 +373,10 @@ impl DebugHelper {
 impl DebugHelper {
     fn debug_add_predicates_to_assignment_integers(
         assignments: &mut Assignments,
-        predicates: &[IntegerPredicate],
+        predicates: &[Predicate],
     ) -> bool {
-        for integer_predicate in predicates {
-            let outcome = assignments.post_integer_predicate(*integer_predicate, None);
+        for predicate in predicates {
+            let outcome = assignments.post_predicate(*predicate, None);
             match outcome {
                 Ok(()) => {
                     // do nothing, everything is okay
@@ -387,7 +387,7 @@ impl DebugHelper {
                     debug!(
                         "Trivial failure detected in the given reason.\n
                          The reported failure: {:?}\n
-                         Failure detected after trying to apply '{integer_predicate}'.",
+                         Failure detected after trying to apply '{predicate}'.",
                         predicates
                     );
                     return false;

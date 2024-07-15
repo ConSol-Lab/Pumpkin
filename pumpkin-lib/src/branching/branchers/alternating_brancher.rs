@@ -3,7 +3,7 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::ConstraintSatisfactionSolver;
 
@@ -70,7 +70,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
 }
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         if self.is_using_default_brancher {
             self.default_brancher.next_decision(context)
         } else {
@@ -78,7 +78,7 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.other_brancher
             .on_appearance_in_conflict_predicate(predicate)
     }

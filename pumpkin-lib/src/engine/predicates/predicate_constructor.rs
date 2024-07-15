@@ -1,41 +1,41 @@
-use super::integer_predicate::IntegerPredicate;
+use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
 pub trait PredicateConstructor {
     type Value;
 
-    fn lower_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate;
-    fn upper_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate;
-    fn equality_predicate(&self, bound: Self::Value) -> IntegerPredicate;
-    fn disequality_predicate(&self, bound: Self::Value) -> IntegerPredicate;
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate;
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate;
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate;
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate;
 }
 
 impl PredicateConstructor for DomainId {
     type Value = i32;
 
-    fn lower_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        IntegerPredicate::LowerBound {
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::LowerBound {
             domain_id: *self,
             lower_bound: bound,
         }
     }
 
-    fn upper_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        IntegerPredicate::UpperBound {
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::UpperBound {
             domain_id: *self,
             upper_bound: bound,
         }
     }
 
-    fn equality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        IntegerPredicate::Equal {
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::Equal {
             domain_id: *self,
             equality_constant: bound,
         }
     }
 
-    fn disequality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
-        IntegerPredicate::NotEqual {
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
+        Predicate::NotEqual {
             domain_id: *self,
             not_equal_constant: bound,
         }
@@ -74,19 +74,19 @@ mod tests {
     fn macro_local_identifiers_are_matched() {
         let x = DomainId { id: 0 };
 
-        let lower_bound_predicate = IntegerPredicate::LowerBound {
+        let lower_bound_predicate = Predicate::LowerBound {
             domain_id: x,
             lower_bound: 2,
         };
-        let upper_bound_predicate = IntegerPredicate::UpperBound {
+        let upper_bound_predicate = Predicate::UpperBound {
             domain_id: x,
             upper_bound: 3,
         };
-        let equality_predicate = IntegerPredicate::Equal {
+        let equality_predicate = Predicate::Equal {
             domain_id: x,
             equality_constant: 5,
         };
-        let disequality_predicate = IntegerPredicate::NotEqual {
+        let disequality_predicate = Predicate::NotEqual {
             domain_id: x,
             not_equal_constant: 5,
         };
@@ -107,25 +107,25 @@ mod tests {
             x: DomainId { id: 0 },
         };
 
-        let lower_bound_predicate = IntegerPredicate::LowerBound {
+        let lower_bound_predicate = Predicate::LowerBound {
             domain_id: wrapper.x,
             lower_bound: 2,
         };
         assert_eq!(lower_bound_predicate, predicate![wrapper.x >= 2]);
 
-        let upper_bound_predicate = IntegerPredicate::UpperBound {
+        let upper_bound_predicate = Predicate::UpperBound {
             domain_id: wrapper.x,
             upper_bound: 3,
         };
         assert_eq!(upper_bound_predicate, predicate![wrapper.x <= 3]);
 
-        let equality_predicate = IntegerPredicate::Equal {
+        let equality_predicate = Predicate::Equal {
             domain_id: wrapper.x,
             equality_constant: 5,
         };
         assert_eq!(equality_predicate, predicate![wrapper.x == 5]);
 
-        let disequality_predicate = IntegerPredicate::NotEqual {
+        let disequality_predicate = Predicate::NotEqual {
             domain_id: wrapper.x,
             not_equal_constant: 5,
         };
@@ -136,25 +136,25 @@ mod tests {
     fn macro_index_expressions_are_matched() {
         let wrapper = [DomainId { id: 0 }];
 
-        let lower_bound_predicate = IntegerPredicate::LowerBound {
+        let lower_bound_predicate = Predicate::LowerBound {
             domain_id: wrapper[0],
             lower_bound: 2,
         };
         assert_eq!(lower_bound_predicate, predicate![wrapper[0] >= 2]);
 
-        let upper_bound_predicate = IntegerPredicate::UpperBound {
+        let upper_bound_predicate = Predicate::UpperBound {
             domain_id: wrapper[0],
             upper_bound: 3,
         };
         assert_eq!(upper_bound_predicate, predicate![wrapper[0] <= 3]);
 
-        let equality_predicate = IntegerPredicate::Equal {
+        let equality_predicate = Predicate::Equal {
             domain_id: wrapper[0],
             equality_constant: 5,
         };
         assert_eq!(equality_predicate, predicate![wrapper[0] == 5]);
 
-        let disequality_predicate = IntegerPredicate::NotEqual {
+        let disequality_predicate = Predicate::NotEqual {
             domain_id: wrapper[0],
             not_equal_constant: 5,
         };

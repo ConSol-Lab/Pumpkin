@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
@@ -13,7 +13,7 @@ impl ValueSelector<DomainId> for InDomainRandom {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: DomainId,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))
             .filter(|bound| context.contains(decision_variable, *bound))

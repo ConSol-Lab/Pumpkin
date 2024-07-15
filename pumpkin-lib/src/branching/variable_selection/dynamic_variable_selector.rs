@@ -4,7 +4,7 @@ use super::VariableSelector;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
 /// Similar to [`DynamicBrancher`], this is a pass-along structure which should be used when a
@@ -30,7 +30,7 @@ impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
         self.selector.select_variable(context)
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.selector.on_appearance_in_conflict_predicate(predicate)
     }
 

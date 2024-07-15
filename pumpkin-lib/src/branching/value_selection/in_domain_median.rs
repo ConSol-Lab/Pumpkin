@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -14,7 +14,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMedian {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         let values_in_domain = (context.lower_bound(decision_variable)
             ..=context.upper_bound(decision_variable))
             .filter(|bound| context.contains(decision_variable, *bound))

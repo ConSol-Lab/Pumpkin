@@ -14,7 +14,7 @@
 * get_trail_position
 * later on: lazy explanation for current decision level predicates, could try it out!
 
-+ sometimes &IntegerPredicate, sometimes IntegerPredicate -> perhaps best to decide one or the other
++ sometimes &Predicate, sometimes Predicate -> perhaps best to decide one or the other
 * make assignment in assignments, it checks the boughts, the calls the methods, but those methods anyway check the bounds.
 
 * add propagator returns bool, should return Result?
@@ -56,14 +56,14 @@ look at the Domain representation, and see what was the problem with some hacky 
 
 rename watch_list_cp, propagator_cp...remove 'cp'. Also watch_list within the nogood is called watch_list, could distinguish the two watch lists by name.
 
-    fn peek_next_assumption_predicate(&self) -> Option<IntegerPredicate> { -> can be done in a single line!!
+    fn peek_next_assumption_predicate(&self) -> Option<Predicate> { -> can be done in a single line!!
 
 
   making a decision returns a CSPSolverExecutionFlag -> this also has a timeout??
 
   removed virtual binary clauses -> we actually never got to use it.
 
-  PropositionalConjunction -> Vec<IntegerPredicate>, there is a partialEq, do we want this? Or do we just make a new nogood vector? Instead of "PropositionalConjunction", we call it nogood?
+  PropositionalConjunction -> Vec<Predicate>, there is a partialEq, do we want this? Or do we just make a new nogood vector? Instead of "PropositionalConjunction", we call it nogood?
 
   log nogoods?
 
@@ -94,7 +94,7 @@ LearningOptions? I removed it.
 
   #[derive(Debug, Error, Copy, Clone)]
 #[error("Attempt to transform non-integer predicate to integer predicate")]
-pub struct IntegerPredicateConversionError;
+pub struct PredicateConversionError;
 
 
 Removed RPEngine and proof related things from the solve
@@ -161,11 +161,11 @@ predicates.mod ruined
 
 //! Structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)). -> fix this.
 
-Maybe BooleanVariable -> Literal? , struct Literal(IntegerPredicate)
+Maybe BooleanVariable -> Literal? , struct Literal(Predicate)
 
 initial_holes returns a vector? Could be an iterator, or a reference?
 
-IntegerPredicate -> Predicate
+Predicate -> Predicate
 
 When we add the blocking solution nogood, only consider predicates that are assigned as a result of a decision! Say max(a, b) = c, then if 'a' and 'b' are a result of a decision, then there is no need to add the value of 'c' to the nogood.
 
@@ -176,7 +176,7 @@ Trail does not properly handle the case when decisions are popped.
 
 Where do we keep implementation of traits? For example, DomainId has IntegerVariable in its file, but the PredicateConstructor is in the predicate constructor file.
 
-Do we want to have trivially true predicates? Hard without it I guess? For example AffineView, equality_predicate returns IntegerPredicate...
+Do we want to have trivially true predicates? Hard without it I guess? For example AffineView, equality_predicate returns Predicate...
 
 What do we watch for literals? How to implement it correctly? Does it make sense to implement Scaled literal for instance.... 
 
@@ -249,4 +249,4 @@ TODOs:
 
 + Incremental linear? Maybe also batch up linears into one propagator?
 + Special case 0-1?
-+ rename IntegerPredicate -> Predicate
++ rename Predicate -> Predicate

@@ -6,7 +6,7 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StorageKey;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 
@@ -44,7 +44,7 @@ pub struct AutonomousSearch {
     /// labelled as dormant because they do not contribute to VSIDS at the moment. When
     /// backtracking, dormant predicates are examined and readded to the heap. Dormant predicates
     /// with low activities are removed.
-    dormant_predicates: Vec<IntegerPredicate>,
+    dormant_predicates: Vec<Predicate>,
     /// How much the activity of a predicate is increased when it appears in a conflict.
     /// This value changes during search (see [`Vsids::decay_activities`]).
     increment: f64,
@@ -94,7 +94,7 @@ impl AutonomousSearch {
     /// Bumps the activity of a predicate by [`Vsids::increment`].
     /// Used when a predicate is encountered during a conflict.
     #[allow(dead_code)]
-    fn bump_activity(&mut self, predicate: IntegerPredicate) {
+    fn bump_activity(&mut self, predicate: Predicate) {
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
         // Scale the activities if the values are too large.
@@ -133,10 +133,7 @@ impl AutonomousSearch {
         self.increment *= 1.0 / self.decay_factor;
     }
 
-    fn next_candidate_predicate(
-        &mut self,
-        context: &mut SelectionContext,
-    ) -> Option<IntegerPredicate> {
+    fn next_candidate_predicate(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         loop {
             // We peek the next variable, since we do not pop since we do not (yet) want to
             // remove the value from the heap.
@@ -156,7 +153,7 @@ impl AutonomousSearch {
         }
     }
 
-    fn determine_polarity(&self, predicate: IntegerPredicate) -> IntegerPredicate {
+    fn determine_polarity(&self, predicate: Predicate) -> Predicate {
         if self.best_known_solution.is_empty() {
             predicate
         } else {
@@ -171,7 +168,7 @@ impl AutonomousSearch {
 }
 
 impl Brancher for AutonomousSearch {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         self.next_candidate_predicate(context)
             .map(|predicate| self.determine_polarity(predicate))
     }

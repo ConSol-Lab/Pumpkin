@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
@@ -13,7 +13,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMax {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         predicate!(decision_variable >= context.upper_bound(decision_variable))
     }
 }

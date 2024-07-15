@@ -400,7 +400,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 mod tests {
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
-    use crate::engine::predicates::integer_predicate::IntegerPredicate;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
@@ -477,7 +477,7 @@ mod tests {
                         ];
                         expected
                             .iter()
-                            .all(|y| x.iter().collect::<Vec<&IntegerPredicate>>().contains(&y))
+                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
                             && x.iter().all(|y| expected.contains(y))
                     }
                 }

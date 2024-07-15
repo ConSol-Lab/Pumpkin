@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
@@ -15,7 +15,7 @@ impl ValueSelector<DomainId> for InDomainSplitRandom {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: DomainId,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         let bound = context.lower_bound(decision_variable)
             + (context.get_size_of_domain(decision_variable) as f64 / 2.0).floor() as i32;
 

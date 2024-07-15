@@ -2,7 +2,7 @@
 use crate::branching::InDomainMedian;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::pumpkin_assert_simple;
@@ -20,7 +20,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMiddle {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         let bound = context.lower_bound(decision_variable)
             + (context.get_size_of_domain(decision_variable) as f64 / 2.0).floor() as i32;
         pumpkin_assert_simple!(

@@ -29,7 +29,7 @@ use crate::branching::SelectionContext;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::debug_helper::DebugDyn;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -133,7 +133,7 @@ pub struct ConstraintSatisfactionSolver {
     /// information is kept after a restart.
     restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
-    assumptions: Vec<IntegerPredicate>,
+    assumptions: Vec<Predicate>,
     /// Performs conflict analysis, core extraction, and minimisation.
     conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
     /// Tracks information related to the assignments of integer variables.
@@ -354,13 +354,13 @@ impl ConstraintSatisfactionSolver {
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
-        let dummy_assumptions: Vec<IntegerPredicate> = vec![];
+        let dummy_assumptions: Vec<Predicate> = vec![];
         self.solve_under_assumptions(&dummy_assumptions, termination, brancher)
     }
 
     pub fn solve_under_assumptions(
         &mut self,
-        assumptions: &[IntegerPredicate],
+        assumptions: &[Predicate],
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
@@ -512,7 +512,7 @@ impl ConstraintSatisfactionSolver {
     pub fn extract_clausal_core(
         &mut self,
         _brancher: &mut impl Brancher,
-    ) -> Result<Vec<IntegerPredicate>, IntegerPredicate> {
+    ) -> Result<Vec<Predicate>, Predicate> {
         todo!();
         // let mut conflict_analysis_context = ConflictAnalysisContext {
         // assumptions: &self.assumptions,
@@ -576,7 +576,7 @@ impl ConstraintSatisfactionSolver {
 
 // methods that serve as the main building blocks
 impl ConstraintSatisfactionSolver {
-    fn initialise(&mut self, assumptions: &[IntegerPredicate]) {
+    fn initialise(&mut self, assumptions: &[Predicate]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
             "Solver is not expected to be in the infeasible under assumptions state when initialising.
@@ -680,7 +680,7 @@ impl ConstraintSatisfactionSolver {
             if let Some(decision_predicate) = brancher.next_decision(context) {
                 self.counters.num_decisions += 1;
                 self.assignments
-                    .post_integer_predicate(decision_predicate, None)
+                    .post_predicate(decision_predicate, None)
                     .expect("Decisions are expected not to fail.");
                 Ok(())
             }
@@ -701,12 +701,9 @@ impl ConstraintSatisfactionSolver {
     /// If the predicate is false, returns an Err(CSPSolverExecutionFlag::Infeasible).
     pub(crate) fn enqueue_assumption_predicate(
         &mut self,
-        assumption_predicate: IntegerPredicate,
+        assumption_predicate: Predicate,
     ) -> Result<(), CSPSolverExecutionFlag> {
-        match self
-            .assignments
-            .post_integer_predicate(assumption_predicate, None)
-        {
+        match self.assignments.post_predicate(assumption_predicate, None) {
             // The assumption is set to true. Note that the predicate may have been already true.
             // This could happen when other assumptions propagated the predicate
             // or the assumption is already set to true at the root level.
@@ -730,7 +727,7 @@ impl ConstraintSatisfactionSolver {
     /// - Derives a nogood using our CP version of the 1UIP scheme.
     /// - Adds the learned nogood to the database.
     /// - Performs backtracking.
-    /// - Enqueues the propagated [`IntegerPredicate`] of the learned nogood.
+    /// - Enqueues the propagated [`Predicate`] of the learned nogood.
     /// - Todo: Updates the internal data structures (e.g. for the restart strategy or the learned
     ///   clause manager)
     ///
@@ -931,7 +928,7 @@ impl ConstraintSatisfactionSolver {
         // We need to append one of the two bounds to the reason. However PropositionalConjunction
         // does not have a push function, so we create a new PropositionalConjunction from scratch.
         // Perhaps this can be addressed better some time in the future.
-        let mut temp: Vec<IntegerPredicate> = reason_changing_bound.iter().copied().collect();
+        let mut temp: Vec<Predicate> = reason_changing_bound.iter().copied().collect();
         // Add the other bound.
         // If the upper bound changed, then add the lower bound predicate to the reason.
         if upper_bound_changed {
@@ -941,7 +938,7 @@ impl ConstraintSatisfactionSolver {
         else {
             temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
         }
-        // let m: Vec<IntegerPredicate> = temp.to_vec();
+        // let m: Vec<Predicate> = temp.to_vec();
         // println!("Reason for empty domain of {}: {:?}", conflict_domain, m);
         temp.into()
     }
@@ -1016,7 +1013,7 @@ impl ConstraintSatisfactionSolver {
         );
     }
 
-    fn peek_next_assumption_predicate(&self) -> Option<IntegerPredicate> {
+    fn peek_next_assumption_predicate(&self) -> Option<Predicate> {
         // The convention is that at decision level i, the (i-1)th assumption is posted.
         // Note that decisions start being posted start at 1, hence the minus one.
         let next_assumption_index = self.get_decision_level() - 1;
@@ -1076,10 +1073,7 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    pub fn post_predicate(
-        &mut self,
-        predicate: IntegerPredicate,
-    ) -> Result<(), ConstraintOperationError> {
+    pub fn post_predicate(&mut self, predicate: Predicate) -> Result<(), ConstraintOperationError> {
         assert!(
             self.get_decision_level() == 0,
             "Can only post predicates at the root level."
@@ -1088,17 +1082,14 @@ impl ConstraintSatisfactionSolver {
         if self.state.is_infeasible() {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
-            match self.assignments.post_integer_predicate(predicate, None) {
+            match self.assignments.post_predicate(predicate, None) {
                 Ok(_) => Ok(()),
                 Err(_) => Err(ConstraintOperationError::InfeasibleNogood),
             }
         }
     }
 
-    pub fn add_nogood(
-        &mut self,
-        nogood: Vec<IntegerPredicate>,
-    ) -> Result<(), ConstraintOperationError> {
+    pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
         let mut propagation_context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
@@ -1123,7 +1114,7 @@ impl ConstraintSatisfactionSolver {
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        _literals: impl IntoIterator<Item = IntegerPredicate>,
+        _literals: impl IntoIterator<Item = Predicate>,
     ) -> Result<(), ConstraintOperationError> {
         // todo: took as input literals, but now we have nogoods?
         // also remove the add_clause with add_nogood
@@ -1137,7 +1128,7 @@ impl ConstraintSatisfactionSolver {
         //
         // let literals: Vec<Literal> = literals.into_iter().collect();
         //
-        // let nogood: Vec<IntegerPredicate> = literals
+        // let nogood: Vec<Predicate> = literals
         // .iter()
         // .map(|literal| {
         // self.variable_literal_mappings
@@ -1227,7 +1218,7 @@ enum CSPSolverStateInternal {
     },
     Infeasible,
     InfeasibleUnderAssumptions {
-        violated_assumption: IntegerPredicate,
+        violated_assumption: Predicate,
     },
     Timeout,
 }
@@ -1273,7 +1264,7 @@ impl CSPSolverState {
         )
     }
 
-    pub fn get_violated_assumption(&self) -> IntegerPredicate {
+    pub fn get_violated_assumption(&self) -> Predicate {
         if let CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         } = self.internal_state
@@ -1334,7 +1325,7 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::Timeout;
     }
 
-    fn declare_infeasible_under_assumptions(&mut self, violated_assumption: IntegerPredicate) {
+    fn declare_infeasible_under_assumptions(&mut self, violated_assumption: Predicate) {
         pumpkin_assert_simple!(!self.is_infeasible());
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
@@ -1350,7 +1341,7 @@ mod tests {
     use crate::basic_types::PropositionalConjunction;
     use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::conjunction;
-    use crate::engine::predicates::integer_predicate::IntegerPredicate;
+    use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
@@ -1363,11 +1354,11 @@ mod tests {
     use crate::predicate;
 
     /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
-    /// explanations (in the forms of tuples of [`IntegerPredicate`]s and
+    /// explanations (in the forms of tuples of [`Predicate`]s and
     /// [`PropositionalConjunction`]s), and conflicts (also in the form of
     /// [`PropositionalConjunction`]s).
     struct TestPropagatorConstructor {
-        propagations: Vec<(IntegerPredicate, PropositionalConjunction)>,
+        propagations: Vec<(Predicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
     }
 
@@ -1375,7 +1366,7 @@ mod tests {
         type Propagator = TestPropagator;
 
         fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
-            let propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)> = self
+            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
                 .propagations
                 .iter()
                 .enumerate()
@@ -1409,8 +1400,8 @@ mod tests {
     /// a conflict then this method will panic.
     struct TestPropagator {
         #[allow(dead_code)]
-        original_propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)>,
-        propagations: Vec<(DomainId, IntegerPredicate, PropositionalConjunction)>,
+        original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
+        propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
         conflicts: Vec<PropositionalConjunction>,
     }
 
@@ -1428,9 +1419,9 @@ mod tests {
 
         fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
             while let Some(propagation) = self.propagations.pop() {
-                let integer_predicate = propagation.1;
-                match integer_predicate {
-                    IntegerPredicate::LowerBound {
+                let predicate = propagation.1;
+                match predicate {
+                    Predicate::LowerBound {
                         domain_id: _,
                         lower_bound,
                     } => {
@@ -1438,7 +1429,7 @@ mod tests {
                             context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
                         assert!(result.is_ok())
                     }
-                    IntegerPredicate::UpperBound {
+                    Predicate::UpperBound {
                         domain_id: _,
                         upper_bound,
                     } => {
@@ -1446,7 +1437,7 @@ mod tests {
                             context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
                         assert!(result.is_ok())
                     }
-                    IntegerPredicate::NotEqual {
+                    Predicate::NotEqual {
                         domain_id: _,
                         not_equal_constant,
                     } => {
@@ -1454,7 +1445,7 @@ mod tests {
                             context.remove(&propagation.0, not_equal_constant, propagation.2);
                         assert!(result.is_ok())
                     }
-                    IntegerPredicate::Equal {
+                    Predicate::Equal {
                         domain_id: _,
                         equality_constant: _,
                     } => todo!(),
@@ -1493,14 +1484,14 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn is_same_core(core1: &[IntegerPredicate], core2: &[IntegerPredicate]) -> bool {
+    fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
     #[allow(dead_code)]
     fn is_result_the_same(
-        res1: &Result<Vec<IntegerPredicate>, IntegerPredicate>,
-        res2: &Result<Vec<IntegerPredicate>, IntegerPredicate>,
+        res1: &Result<Vec<Predicate>, Predicate>,
+        res2: &Result<Vec<Predicate>, Predicate>,
     ) -> bool {
         // if the two results disagree on the outcome, can already return false
         if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
@@ -1523,9 +1514,9 @@ mod tests {
     #[allow(dead_code)]
     fn run_test(
         mut solver: ConstraintSatisfactionSolver,
-        assumptions: Vec<IntegerPredicate>,
+        assumptions: Vec<Predicate>,
         expected_flag: CSPSolverExecutionFlag,
-        expected_result: Result<Vec<IntegerPredicate>, IntegerPredicate>,
+        expected_result: Result<Vec<Predicate>, Predicate>,
     ) {
         let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
@@ -1543,7 +1534,7 @@ mod tests {
     }
 
     // TODO: readd this
-    // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<IntegerPredicate>) {
+    // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
     // let mut solver = ConstraintSatisfactionSolver::default();
     // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
     // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);

@@ -1,5 +1,5 @@
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
@@ -29,5 +29,5 @@ pub trait VariableSelector<Var> {
 
     /// A function which is called when a variable appears in a conflict during conflict analysis
     /// (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
-    fn on_appearance_in_conflict_predicate(&mut self, _predicate: IntegerPredicate) {}
+    fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 }

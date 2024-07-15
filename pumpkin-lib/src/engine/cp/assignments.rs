@@ -4,7 +4,7 @@ use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -53,7 +53,7 @@ impl Assignments {
     pub fn get_last_predicates_on_trail(
         &self,
         num_predicates: usize,
-    ) -> impl Iterator<Item = IntegerPredicate> + '_ {
+    ) -> impl Iterator<Item = Predicate> + '_ {
         self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
             .iter()
             .map(|e| e.predicate)
@@ -168,7 +168,7 @@ impl Assignments {
         self.domains[domain_id].domain_iterator()
     }
 
-    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<IntegerPredicate> {
+    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
         // if fixed, this is just one predicate
@@ -227,31 +227,28 @@ impl Assignments {
     /// Note that it is not necessary for the predicate to be explicitly present on the trail,
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
-    pub fn get_trail_position(&self, integer_predicate: &IntegerPredicate) -> Option<usize> {
-        self.domains[integer_predicate.get_domain()]
-            .get_update_info(integer_predicate)
+    pub fn get_trail_position(&self, predicate: &Predicate) -> Option<usize> {
+        self.domains[predicate.get_domain()]
+            .get_update_info(predicate)
             .map(|u| u.trail_position)
     }
 
-    pub fn get_decision_level_for_predicate(
-        &self,
-        integer_predicate: &IntegerPredicate,
-    ) -> Option<usize> {
+    pub fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
         // println!(
         // "{} {} {:?}",
-        // integer_predicate,
-        // integer_predicate.get_domain(),
-        // self.domains[integer_predicate.get_domain()].upper_bound_updates
+        // predicate,
+        // predicate.get_domain(),
+        // self.domains[predicate.get_domain()].upper_bound_updates
         // );
         //
-        // let m = self.domains[integer_predicate.get_domain()]
-        // .get_update_info(integer_predicate)
+        // let m = self.domains[predicate.get_domain()]
+        // .get_update_info(predicate)
         // .map(|u| u.decision_level)
         // .unwrap();
         // println!("RET VAL {}", m);
 
-        self.domains[integer_predicate.get_domain()]
-            .get_update_info(integer_predicate)
+        self.domains[predicate.get_domain()]
+            .get_update_info(predicate)
             .map(|u| u.decision_level)
     }
 }
@@ -269,7 +266,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = IntegerPredicate::LowerBound {
+        let predicate = Predicate::LowerBound {
             domain_id,
             lower_bound: new_lower_bound,
         };
@@ -311,7 +308,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = IntegerPredicate::UpperBound {
+        let predicate = Predicate::UpperBound {
             domain_id,
             upper_bound: new_upper_bound,
         };
@@ -374,7 +371,7 @@ impl Assignments {
             return self.domains[domain_id].verify_consistency();
         }
 
-        let predicate = IntegerPredicate::NotEqual {
+        let predicate = Predicate::NotEqual {
             domain_id,
             not_equal_constant: removed_value_from_domain,
         };
@@ -405,42 +402,42 @@ impl Assignments {
         domain.verify_consistency()
     }
 
-    /// Apply the given [`IntegerPredicate`] to the integer domains.
+    /// Apply the given [`Predicate`] to the integer domains.
     ///
-    /// In case where the [`IntegerPredicate`] is already true, this does nothing. If instead
-    /// applying the [`IntegerPredicate`] leads to an [`EmptyDomain`], the error variant is
+    /// In case where the [`Predicate`] is already true, this does nothing. If instead
+    /// applying the [`Predicate`] leads to an [`EmptyDomain`], the error variant is
     /// returned.
-    pub fn post_integer_predicate(
+    pub fn post_predicate(
         &mut self,
-        predicate: IntegerPredicate,
+        predicate: Predicate,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         match predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.tighten_lower_bound(domain_id, lower_bound, reason),
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.tighten_upper_bound(domain_id, upper_bound, reason),
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => self.remove_value_from_domain(domain_id, not_equal_constant, reason),
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => self.make_assignment(domain_id, equality_constant, reason),
         }
     }
 
-    /// Determines whether the provided [`IntegerPredicate`] holds in the current state of the
+    /// Determines whether the provided [`Predicate`] holds in the current state of the
     /// [`Assignments`]. In case the predicate is not assigned yet (neither true nor false),
     /// returns None.
-    pub fn evaluate_predicate(&self, predicate: IntegerPredicate) -> Option<bool> {
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         match predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => {
@@ -452,7 +449,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => {
@@ -464,7 +461,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => {
@@ -479,7 +476,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => {
@@ -500,11 +497,11 @@ impl Assignments {
 
     pub fn evaluate_predicate_at_trail_position(
         &self,
-        predicate: IntegerPredicate,
+        predicate: Predicate,
         trail_position: usize,
     ) -> Option<bool> {
         match predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => {
@@ -519,7 +516,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => {
@@ -534,7 +531,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => {
@@ -555,7 +552,7 @@ impl Assignments {
                     None
                 }
             }
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => {
@@ -580,12 +577,12 @@ impl Assignments {
         }
     }
 
-    pub fn is_predicate_satisfied(&self, predicate: IntegerPredicate) -> bool {
+    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
     }
 
-    pub fn is_predicate_falsified(&self, predicate: IntegerPredicate) -> bool {
+    pub fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
     }
@@ -629,7 +626,7 @@ impl Assignments {
 
 #[cfg(test)]
 impl Assignments {
-    pub fn get_reason_for_predicate_brute_force(&self, predicate: IntegerPredicate) -> ReasonRef {
+    pub fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
         self.trail
             .iter()
             .find_map(|entry| {
@@ -645,7 +642,7 @@ impl Assignments {
 
 #[derive(Clone, Copy, Debug)]
 pub struct ConstraintProgrammingTrailEntry {
-    pub predicate: IntegerPredicate,
+    pub predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
     ///  to update the bounds when backtracking.
     pub old_lower_bound: i32,
@@ -999,7 +996,7 @@ impl IntegerDomain {
 
     fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
         match entry.predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound: _,
             } => {
@@ -1008,7 +1005,7 @@ impl IntegerDomain {
                 let _ = self.lower_bound_updates.pop();
                 pumpkin_assert_moderate!(!self.lower_bound_updates.is_empty());
             }
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound: _,
             } => {
@@ -1017,7 +1014,7 @@ impl IntegerDomain {
                 let _ = self.upper_bound_updates.pop();
                 pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
             }
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => {
@@ -1044,7 +1041,7 @@ impl IntegerDomain {
                     pumpkin_assert_moderate!(!self.upper_bound_updates.is_empty());
                 }
             }
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id: _,
                 equality_constant: _,
             } => {
@@ -1063,15 +1060,12 @@ impl IntegerDomain {
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
 
-    fn get_update_info(
-        &self,
-        integer_predicate: &IntegerPredicate,
-    ) -> Option<PairDecisionLevelTrailPosition> {
+    fn get_update_info(&self, predicate: &Predicate) -> Option<PairDecisionLevelTrailPosition> {
         // Perhaps the recursion could be done in a cleaner way,
         // e.g., separate functions dependibng on the type of predicate.
         // For the initial version, the current version is okay.
-        match integer_predicate {
-            IntegerPredicate::LowerBound {
+        match predicate {
+            Predicate::LowerBound {
                 domain_id: _,
                 lower_bound,
             } => {
@@ -1091,7 +1085,7 @@ impl IntegerDomain {
                         trail_position: u.trail_position,
                     })
             }
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id: _,
                 upper_bound,
             } => {
@@ -1111,7 +1105,7 @@ impl IntegerDomain {
                         trail_position: u.trail_position,
                     })
             }
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => {
@@ -1129,44 +1123,40 @@ impl IntegerDomain {
                     // So we can stop as soon as we find one of the two.
 
                     // Check the lower bound first.
-                    if let Some(trail_position) =
-                        self.get_update_info(&IntegerPredicate::LowerBound {
-                            domain_id: *domain_id,
-                            lower_bound: not_equal_constant + 1,
-                        })
-                    {
+                    if let Some(trail_position) = self.get_update_info(&Predicate::LowerBound {
+                        domain_id: *domain_id,
+                        lower_bound: not_equal_constant + 1,
+                    }) {
                         // The lower bound removed the value from the domain,
                         // report the trail position of the lower bound.
                         Some(trail_position)
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.get_update_info(&IntegerPredicate::UpperBound {
+                        self.get_update_info(&Predicate::UpperBound {
                             domain_id: *domain_id,
                             upper_bound: not_equal_constant - 1,
                         })
                     }
                 }
             }
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => {
                 // For equality to hold, both the lower and upper bound predicates must hold.
                 // Check lower bound first.
-                if let Some(lb_trail_position) =
-                    self.get_update_info(&IntegerPredicate::LowerBound {
-                        domain_id: *domain_id,
-                        lower_bound: *equality_constant,
-                    })
-                {
+                if let Some(lb_trail_position) = self.get_update_info(&Predicate::LowerBound {
+                    domain_id: *domain_id,
+                    lower_bound: *equality_constant,
+                }) {
                     // The lower bound found,
                     // now the check depends on the upper bound.
 
                     // If both the lower and upper bounds are present,
                     // report the trail position of the bound that was set last.
                     // Otherwise, return that the predicate is not on the trail.
-                    self.get_update_info(&IntegerPredicate::UpperBound {
+                    self.get_update_info(&Predicate::UpperBound {
                         domain_id: *domain_id,
                         upper_bound: *equality_constant,
                     })
@@ -1469,7 +1459,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::LowerBound {
+                .get_update_info(&Predicate::LowerBound {
                     domain_id,
                     lower_bound: 12,
                 })
@@ -1485,7 +1475,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::LowerBound {
+                .get_update_info(&Predicate::LowerBound {
                     domain_id,
                     lower_bound: 50,
                 })
@@ -1500,7 +1490,7 @@ mod tests {
         let (domain_id, domain, _) = get_domain1();
 
         assert!(domain
-            .get_update_info(&IntegerPredicate::LowerBound {
+            .get_update_info(&Predicate::LowerBound {
                 domain_id,
                 lower_bound: 101,
             })
@@ -1513,7 +1503,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::LowerBound {
+                .get_update_info(&Predicate::LowerBound {
                     domain_id,
                     lower_bound: -10,
                 })
@@ -1532,7 +1522,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::LowerBound {
+                .get_update_info(&Predicate::LowerBound {
                     domain_id,
                     lower_bound: 52,
                 })
@@ -1551,7 +1541,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::NotEqual {
+                .get_update_info(&Predicate::NotEqual {
                     domain_id,
                     not_equal_constant: 50,
                 })
@@ -1571,7 +1561,7 @@ mod tests {
 
         assert_eq!(
             domain
-                .get_update_info(&IntegerPredicate::NotEqual {
+                .get_update_info(&Predicate::NotEqual {
                     domain_id,
                     not_equal_constant: 55,
                 })
@@ -1590,8 +1580,8 @@ mod tests {
         // decision level 1
         assignment.increase_decision_level();
         assignment
-            .post_integer_predicate(
-                IntegerPredicate::LowerBound {
+            .post_predicate(
+                Predicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 2,
                 },
@@ -1599,8 +1589,8 @@ mod tests {
             )
             .expect("");
         assignment
-            .post_integer_predicate(
-                IntegerPredicate::LowerBound {
+            .post_predicate(
+                Predicate::LowerBound {
                     domain_id: domain_id2,
                     lower_bound: 25,
                 },
@@ -1611,8 +1601,8 @@ mod tests {
         // decision level 2
         assignment.increase_decision_level();
         assignment
-            .post_integer_predicate(
-                IntegerPredicate::LowerBound {
+            .post_predicate(
+                Predicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 5,
                 },
@@ -1623,8 +1613,8 @@ mod tests {
         // decision level 3
         assignment.increase_decision_level();
         assignment
-            .post_integer_predicate(
-                IntegerPredicate::LowerBound {
+            .post_predicate(
+                Predicate::LowerBound {
                     domain_id: domain_id1,
                     lower_bound: 7,
                 },
@@ -1782,29 +1772,29 @@ mod tests {
         let _ = assignments.remove_value_from_domain(domain_id, 2, None);
         let _ = assignments.tighten_upper_bound(domain_id, 6, None);
 
-        let lb_predicate = |lower_bound: i32| -> IntegerPredicate {
-            IntegerPredicate::LowerBound {
+        let lb_predicate = |lower_bound: i32| -> Predicate {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             }
         };
 
-        let ub_predicate = |upper_bound: i32| -> IntegerPredicate {
-            IntegerPredicate::UpperBound {
+        let ub_predicate = |upper_bound: i32| -> Predicate {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             }
         };
 
-        let eq_predicate = |equality_constant: i32| -> IntegerPredicate {
-            IntegerPredicate::Equal {
+        let eq_predicate = |equality_constant: i32| -> Predicate {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             }
         };
 
-        let neq_predicate = |not_equal_constant: i32| -> IntegerPredicate {
-            IntegerPredicate::NotEqual {
+        let neq_predicate = |not_equal_constant: i32| -> Predicate {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             }

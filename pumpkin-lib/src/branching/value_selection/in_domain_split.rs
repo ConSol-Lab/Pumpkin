@@ -1,6 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::pumpkin_assert_advanced;
@@ -18,7 +18,7 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainSplit {
         &mut self,
         context: &mut SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         InDomainSplit::get_predicate_excluding_upper_half(context, decision_variable)
     }
 }
@@ -27,7 +27,7 @@ impl InDomainSplit {
     pub fn get_predicate_excluding_upper_half<Var: IntegerVariable + Copy>(
         context: &SelectionContext,
         decision_variable: Var,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         // Note that the domain of the variable should always have at least 2 values in it
         // (otherwise it should have been reported as fixed and not selected)
         let bound = context.lower_bound(decision_variable)

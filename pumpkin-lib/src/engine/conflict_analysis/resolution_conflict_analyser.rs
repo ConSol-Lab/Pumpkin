@@ -1,14 +1,14 @@
 use super::ConflictAnalysisNogoodContext;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::engine::conflict_analysis::advanced_nogood::AdvancedNogood;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ResolutionNogoodConflictAnalyser {}
 
 #[derive(Clone, Debug)]
 pub struct LearnedNogood {
-    pub predicates: Vec<IntegerPredicate>,
+    pub predicates: Vec<Predicate>,
     pub backjump_level: usize,
 }
 

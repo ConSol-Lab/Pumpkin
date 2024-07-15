@@ -8,7 +8,7 @@ use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 #[cfg(doc)]
@@ -31,13 +31,13 @@ use crate::optimisation::LinearSearch;
 /// behaviour of the solver is undefined.
 pub trait Brancher {
     /// Returns the next decision concerning a single variable and value; it returns the
-    /// [`IntegerPredicate`] corresponding to this decision (or [`None`] if all variables under
+    /// [`Predicate`] corresponding to this decision (or [`None`] if all variables under
     /// consideration are assigned).
     ///
     /// Note that this method **cannot** perform the assignment of the decision, it should only
-    /// return a suggestion in the form of a [`IntegerPredicate`]; the [`SelectionContext`] is
+    /// return a suggestion in the form of a [`Predicate`]; the [`SelectionContext`] is
     /// only mutable to account for the usage of random generators (e.g. see [`Random`]).
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate>;
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate>;
 
     /// A function which is called after a conflict has been found and processed but (currently)
     /// does not provide any additional information.
@@ -54,7 +54,7 @@ pub trait Brancher {
 
     /// A function which is called when an integer variable appears in a conflict during conflict
     /// analysis (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
-    fn on_appearance_in_conflict_predicate(&mut self, _predicate: IntegerPredicate) {}
+    fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
     /// This method is called whenever a restart is performed as determined by the
     /// [`RestartStrategy`].

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
@@ -45,7 +45,7 @@ impl DynamicBrancher {
 }
 
 impl Brancher for DynamicBrancher {
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         loop {
             if self.brancher_index >= self.branchers.len() {
                 return None;
@@ -74,7 +74,7 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_unassign_integer(variable, value));
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_appearance_in_conflict_predicate(predicate));

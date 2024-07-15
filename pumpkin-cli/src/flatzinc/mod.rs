@@ -16,7 +16,7 @@ use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::engine::predicates::integer_predicate::IntegerPredicate;
+use pumpkin_lib::engine::predicates::predicate::Predicate;
 use pumpkin_lib::engine::termination::time_budget::TimeBudget;
 use pumpkin_lib::engine::ConstraintSatisfactionSolver;
 use pumpkin_lib::optimisation::log_statistics;
@@ -186,7 +186,7 @@ pub(crate) fn solve(
 fn get_bound_predicate(
     objective_function: FlatzincObjective,
     optimal_objective_value: i32,
-) -> IntegerPredicate {
+) -> Predicate {
     match objective_function {
         FlatzincObjective::Maximize(domain) => predicate![domain <= optimal_objective_value],
         FlatzincObjective::Minimize(domain) => predicate![domain >= optimal_objective_value],
@@ -249,7 +249,7 @@ fn add_blocking_nogood(
                 Box::new(array_of_ints.get_contents().map(|&domain| {
                     let value = solution.get_integer_value(domain);
                     predicate![domain == value]
-                })) as Box<dyn Iterator<Item = IntegerPredicate>>
+                })) as Box<dyn Iterator<Item = Predicate>>
             }
         })
         .collect::<Vec<_>>();

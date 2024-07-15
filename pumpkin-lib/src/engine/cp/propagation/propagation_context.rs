@@ -1,5 +1,5 @@
 use super::PropagatorId;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
@@ -81,13 +81,13 @@ mod private {
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_predicate_satisfied(&self, predicate: IntegerPredicate) -> bool {
+    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.assignments()
             .evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
     }
 
-    fn is_predicate_falsified(&self, predicate: IntegerPredicate) -> bool {
+    fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.assignments()
             .evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
@@ -138,7 +138,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.contains(self.assignments(), value)
     }
 
-    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<IntegerPredicate> {
+    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<Predicate> {
         var.describe_domain(self.assignments())
     }
 }
@@ -185,29 +185,29 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn evaluate_predicate(&self, integer_predicate: IntegerPredicate) -> Option<bool> {
-        self.assignments.evaluate_predicate(integer_predicate)
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.assignments.evaluate_predicate(predicate)
     }
 
     pub fn post_predicate<R: Into<Reason> + Clone>(
         &mut self,
-        integer_predicate: IntegerPredicate,
+        predicate: Predicate,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        match integer_predicate {
-            IntegerPredicate::LowerBound {
+        match predicate {
+            Predicate::LowerBound {
                 domain_id,
                 lower_bound,
             } => self.set_lower_bound(&domain_id, lower_bound, reason),
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id,
                 upper_bound,
             } => self.set_upper_bound(&domain_id, upper_bound, reason),
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
             } => self.remove(&domain_id, not_equal_constant, reason),
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id,
                 equality_constant,
             } => {

@@ -6,7 +6,7 @@ use crate::basic_types::Function;
 use crate::basic_types::Solution;
 use crate::basic_types::Stopwatch;
 use crate::branching::Brancher;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::optimisation::log_statistics_with_objective;
@@ -74,13 +74,13 @@ impl LinearSearch {
 
             // Add constraint on the upper bound of the objective function.
             // todo: check if this is okay, or whether it should go through the view!
-            let objective_predicate = IntegerPredicate::UpperBound {
+            let objective_predicate = Predicate::UpperBound {
                 domain_id: objective_variable,
                 upper_bound: internal_objective_value - 1,
             };
             let obj_status = csp_solver
                 .assignments
-                .post_integer_predicate(objective_predicate, None);
+                .post_predicate(objective_predicate, None);
 
             // In case some cases, infeasibility can be detected while constraining the upper bound,
             // meaning the current best solution is optimal.

@@ -8,7 +8,7 @@ use super::propagation::EnqueueDecision;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -161,12 +161,8 @@ impl TestSolver {
 
     pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
         match truth_value {
-            true => self
-                .assignments
-                .post_integer_predicate(literal.into(), None),
-            false => self
-                .assignments
-                .post_integer_predicate((!literal).into(), None),
+            true => self.assignments.post_predicate(literal.into(), None),
+            false => self.assignments.post_predicate((!literal).into(), None),
         }
     }
 
@@ -253,7 +249,7 @@ impl TestSolver {
         }
     }
 
-    pub fn get_reason_int(&mut self, predicate: IntegerPredicate) -> &PropositionalConjunction {
+    pub fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);

@@ -1,7 +1,7 @@
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
@@ -124,7 +124,7 @@ pub trait Propagator {
     /// finds the nogood propagator, and then calls this function. Will be replaced later.
     fn hack_add_asserting_nogood(
         &mut self,
-        _nogood: Vec<IntegerPredicate>,
+        _nogood: Vec<Predicate>,
         _context: &mut PropagationContextMut,
     ) {
         unreachable!();
@@ -134,7 +134,7 @@ pub trait Propagator {
 
     fn hack_add_nogood(
         &mut self,
-        _nogood: Vec<IntegerPredicate>,
+        _nogood: Vec<Predicate>,
         _context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {
         unreachable!();

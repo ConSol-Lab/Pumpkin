@@ -7,7 +7,7 @@ use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::ConstraintSatisfactionSolver;
 
@@ -71,7 +71,7 @@ where
     ///  - If all variables under consideration are fixed (i.e. `select_variable` return None) then
     ///    we simply return None
     ///  - Otherwise we select a value and return the corresponding literal
-    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<IntegerPredicate> {
+    fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         self.variable_selector
             .select_variable(context)
             .map(|selected_variable| {
@@ -89,7 +89,7 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_predicate(&mut self, predicate: IntegerPredicate) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.variable_selector
             .on_appearance_in_conflict_predicate(predicate)
     }

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::basic_types::Random;
 #[cfg(doc)]
 use crate::branching::Brancher;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 #[cfg(doc)]
 use crate::engine::propagation::PropagationContext;
 use crate::engine::variables::DomainGeneratorIterator;
@@ -63,7 +63,7 @@ impl<'a> SelectionContext<'a> {
         self.lower_bound(var.clone()) == self.upper_bound(var)
     }
 
-    pub fn is_predicate_assigned(&self, predicate: IntegerPredicate) -> bool {
+    pub fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
         self.assignments.evaluate_predicate(predicate).is_some()
     }
 

@@ -28,7 +28,7 @@ impl From<PropositionalConjunction> for Inconsistency {
 // Todo? Uncomment?
 // impl<Slice> From<Slice> for Inconsistency
 // where
-// Slice: AsRef<[IntegerPredicate]>,
+// Slice: AsRef<[Predicate]>,
 // {
 // fn from(value: Slice) -> Self {
 // let conflict_nogood: PropositionalConjunction = value.as_ref().to_vec().into();

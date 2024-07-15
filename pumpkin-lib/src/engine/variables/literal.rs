@@ -5,7 +5,7 @@ use enumset::EnumSet;
 use super::IntegerVariable;
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
@@ -16,11 +16,11 @@ use crate::engine::Watchers;
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct Literal {
-    predicate: IntegerPredicate,
+    predicate: Predicate,
 }
 
 impl Literal {
-    pub fn new(predicate: IntegerPredicate) -> Literal {
+    pub fn new(predicate: Predicate) -> Literal {
         Literal { predicate }
     }
 }
@@ -35,7 +35,7 @@ impl Not for Literal {
     }
 }
 
-impl From<Literal> for IntegerPredicate {
+impl From<Literal> for Predicate {
     fn from(value: Literal) -> Self {
         value.predicate
     }
@@ -137,7 +137,7 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn describe_domain(&self, _assignment: &Assignments) -> Vec<IntegerPredicate> {
+    fn describe_domain(&self, _assignment: &Assignments) -> Vec<Predicate> {
         unimplemented!();
     }
 
@@ -148,8 +148,8 @@ impl IntegerVariable for Literal {
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         match value {
-            0 => assignment.post_integer_predicate(self.predicate, reason),
-            1 => assignment.post_integer_predicate(!self.predicate, reason),
+            0 => assignment.post_predicate(self.predicate, reason),
+            1 => assignment.post_predicate(!self.predicate, reason),
             _ => panic!("Literals can only be asked to remove zero or one values."),
         }
     }
@@ -165,7 +165,7 @@ impl IntegerVariable for Literal {
                 // do nothing, since literals always have lower bound of zero.
                 Ok(())
             }
-            1 => assignment.post_integer_predicate(self.predicate, reason),
+            1 => assignment.post_predicate(self.predicate, reason),
             _ => panic!("Literals can only be asked to set lower bounds to either zero or one."),
         }
     }
@@ -177,7 +177,7 @@ impl IntegerVariable for Literal {
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
         match value {
-            0 => assignment.post_integer_predicate(!self.predicate, reason),
+            0 => assignment.post_predicate(!self.predicate, reason),
             1 => {
                 // do nothing, since literals always have an upper bound of one.
                 Ok(())
@@ -199,10 +199,10 @@ impl IntegerVariable for Literal {
 impl PredicateConstructor for Literal {
     type Value = i32;
 
-    fn lower_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+    fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
         assert!(bound == 0 || bound == 1);
         match bound {
-            0 => IntegerPredicate::trivially_true(),
+            0 => Predicate::trivially_true(),
             1 => self.predicate,
             _ => {
                 panic!(
@@ -212,11 +212,11 @@ impl PredicateConstructor for Literal {
         }
     }
 
-    fn upper_bound_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+    fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
         assert!(bound == 0 || bound == 1);
         match bound {
             0 => !self.predicate,
-            1 => IntegerPredicate::trivially_false(),
+            1 => Predicate::trivially_false(),
             _ => {
                 panic!(
                     "Upper bound predicate for literal must be restricted to zero or one values."
@@ -225,7 +225,7 @@ impl PredicateConstructor for Literal {
         }
     }
 
-    fn equality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+    fn equality_predicate(&self, bound: Self::Value) -> Predicate {
         assert!(bound == 0 || bound == 1);
         match bound {
             0 => !self.predicate,
@@ -234,7 +234,7 @@ impl PredicateConstructor for Literal {
         }
     }
 
-    fn disequality_predicate(&self, bound: Self::Value) -> IntegerPredicate {
+    fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
         assert!(bound == 0 || bound == 1);
         match bound {
             0 => self.predicate,

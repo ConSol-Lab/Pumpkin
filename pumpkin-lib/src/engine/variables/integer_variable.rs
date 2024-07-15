@@ -2,7 +2,7 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::Assignments;
@@ -46,7 +46,7 @@ pub trait IntegerVariable:
     /// This should not be used to explicitly check for holes in the domain, but only to build
     /// explanations. If views change the observed domain, they will not change this description,
     /// because it should be a description of the domain in the solver.
-    fn describe_domain(&self, assignment: &Assignments) -> Vec<IntegerPredicate>;
+    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate>;
 
     /// Remove a value from the domain of this variable.
     fn remove(

@@ -1,7 +1,7 @@
 use super::LearnedNogood;
 use crate::basic_types::HashMap;
 use crate::branching::Brancher;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
@@ -73,28 +73,28 @@ impl AdvancedNogood {
 
     fn convert_into_internal_predicate(
         &mut self,
-        predicate: IntegerPredicate,
+        predicate: Predicate,
         assignments: &Assignments,
-    ) -> IntegerPredicate {
+    ) -> Predicate {
         self.register_id_internally(predicate.get_domain(), assignments);
         let internal_id = self.get_internal_id(predicate.get_domain());
         // The code below is cumbersome, but this is the idea:
         // The internal predicate is the same as the input predicate,
         // but swapping out the domain id for the internal domain id.
         match predicate {
-            IntegerPredicate::LowerBound {
+            Predicate::LowerBound {
                 domain_id: _,
                 lower_bound,
             } => predicate![internal_id >= lower_bound],
-            IntegerPredicate::UpperBound {
+            Predicate::UpperBound {
                 domain_id: _,
                 upper_bound,
             } => predicate![internal_id <= upper_bound],
-            IntegerPredicate::NotEqual {
+            Predicate::NotEqual {
                 domain_id: _,
                 not_equal_constant,
             } => predicate![internal_id != not_equal_constant],
-            IntegerPredicate::Equal {
+            Predicate::Equal {
                 domain_id: _,
                 equality_constant,
             } => predicate![internal_id == equality_constant],
@@ -115,7 +115,7 @@ impl AdvancedNogood {
         true
     }
 
-    fn add_predicate(&mut self, predicate: IntegerPredicate, assignments: &Assignments) {
+    fn add_predicate(&mut self, predicate: Predicate, assignments: &Assignments) {
         let internal_predicate = self.convert_into_internal_predicate(predicate, assignments);
 
         match self
@@ -135,7 +135,7 @@ impl AdvancedNogood {
             None => {
                 // The predicate is undecided, so we can post it.
                 self.internal_assignments
-                    .post_integer_predicate(internal_predicate, None)
+                    .post_predicate(internal_predicate, None)
                     .expect("Previous code asserted this will be a success.");
 
                 // Add the predicate to the list of predicates in the nogood.
@@ -164,7 +164,7 @@ impl AdvancedNogood {
     /// functions. Note that semantic redundancies is automatically applied.
     pub(crate) fn add_predicates(
         &mut self,
-        predicates: Vec<IntegerPredicate>,
+        predicates: Vec<Predicate>,
         assignments: &Assignments,
         mut brancher: Option<&mut dyn Brancher>,
     ) {
@@ -201,7 +201,7 @@ impl AdvancedNogood {
     }
     /// Removes the predicate that has the highest trail position.
     /// Returns None if the nogood is empty.
-    pub(crate) fn pop_highest_trail_predicate(&mut self) -> Option<IntegerPredicate> {
+    pub(crate) fn pop_highest_trail_predicate(&mut self) -> Option<Predicate> {
         assert!(
             !self.predicates.is_empty(),
             "Do not expect to see an empty nogood during conflict analysis!"
@@ -298,7 +298,7 @@ impl AdvancedNogood {
         for p in &self.predicates {
             let internal_id = self.get_internal_id(p.predicate.get_domain());
             match p.predicate {
-                IntegerPredicate::LowerBound {
+                Predicate::LowerBound {
                     domain_id,
                     lower_bound,
                 } => {
@@ -372,7 +372,7 @@ impl AdvancedNogood {
                         }
                     }
                 }
-                IntegerPredicate::UpperBound {
+                Predicate::UpperBound {
                     domain_id,
                     upper_bound,
                 } => {
@@ -446,7 +446,7 @@ impl AdvancedNogood {
                         }
                     }
                 }
-                IntegerPredicate::NotEqual {
+                Predicate::NotEqual {
                     domain_id: _,
                     not_equal_constant,
                 } => {
@@ -458,7 +458,7 @@ impl AdvancedNogood {
                         simplified_predicates.push(*p);
                     }
                 }
-                IntegerPredicate::Equal {
+                Predicate::Equal {
                     domain_id: _,
                     equality_constant: _,
                 } => {
@@ -515,7 +515,7 @@ impl AdvancedNogood {
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub(crate) struct PredicateWithInfo {
-    predicate: IntegerPredicate,
+    predicate: Predicate,
     decision_level: usize,
     trail_position: usize,
 }
@@ -551,7 +551,7 @@ pub(crate) struct PredicateWithInfo {
 // So as a work around we do this minimisation to merge two predicate literals into one, and
 // only do it for the current decision level if there are two predicates left.
 
-// let semantic_minimiser_draft = |nogood: &Vec<IntegerPredicate>| -> Vec<IntegerPredicate> {
+// let semantic_minimiser_draft = |nogood: &Vec<Predicate>| -> Vec<Predicate> {
 // the idea is to collect all the bounds present,
 // then replace predicates if the bound meet.
 // let mut lbs: HashMap<DomainId, i32> = HashMap::default();
@@ -559,7 +559,7 @@ pub(crate) struct PredicateWithInfo {
 // first collect bounds
 // for predicate in nogood {
 // match predicate {
-// IntegerPredicate::LowerBound {
+// Predicate::LowerBound {
 // domain_id,
 // lower_bound: predicate_bound,
 // } => {
@@ -570,7 +570,7 @@ pub(crate) struct PredicateWithInfo {
 // let _ = lbs.insert(*domain_id, *predicate_bound);
 // }
 // }
-// IntegerPredicate::UpperBound {
+// Predicate::UpperBound {
 // domain_id,
 // upper_bound: predicate_bound,
 // } => {
@@ -581,12 +581,12 @@ pub(crate) struct PredicateWithInfo {
 // let _ = ubs.insert(*domain_id, *predicate_bound);
 // }
 // }
-// IntegerPredicate::NotEqual {
+// Predicate::NotEqual {
 // domain_id: _,
 // not_equal_constant: _,
 // } => { // do nothing
 // }
-// IntegerPredicate::Equal {
+// Predicate::Equal {
 // domain_id,
 // equality_constant,
 // } => {
@@ -607,7 +607,7 @@ pub(crate) struct PredicateWithInfo {
 // }
 // }
 //
-// let is_assigned = |predicate: &IntegerPredicate| -> bool {
+// let is_assigned = |predicate: &Predicate| -> bool {
 // let d = predicate.get_domain();
 // if let Some(lb) = lbs.get(&d) {
 // if let Some(ub) = ubs.get(&d) {
@@ -620,10 +620,10 @@ pub(crate) struct PredicateWithInfo {
 // };
 // now rewrite the predicates
 // let mut already_added_equality: HashSet<DomainId> = HashSet::default();
-// let mut new_nogood: Vec<IntegerPredicate> = vec![];
+// let mut new_nogood: Vec<Predicate> = vec![];
 // for predicate in nogood {
 // match predicate {
-// IntegerPredicate::LowerBound {
+// Predicate::LowerBound {
 // domain_id,
 // lower_bound: _,
 // } => {
@@ -633,7 +633,7 @@ pub(crate) struct PredicateWithInfo {
 // }
 // otherwise the predicate is not fixed, so add the better version of it
 // else if lbs.contains_key(domain_id) {
-// new_nogood.push(IntegerPredicate::LowerBound {
+// new_nogood.push(Predicate::LowerBound {
 // domain_id: *domain_id,
 // lower_bound: *lbs.get(domain_id).unwrap(),
 // })
@@ -641,13 +641,13 @@ pub(crate) struct PredicateWithInfo {
 // new_nogood.push(*predicate);
 // }
 // }
-// IntegerPredicate::UpperBound {
+// Predicate::UpperBound {
 // domain_id,
 // upper_bound: _,
 // } => {
 // if is_assigned(predicate) {
 // if !already_added_equality.contains(domain_id) {
-// new_nogood.push(IntegerPredicate::Equal {
+// new_nogood.push(Predicate::Equal {
 // domain_id: *domain_id,
 // equality_constant: *ubs.get(domain_id).unwrap(),
 // });
@@ -656,7 +656,7 @@ pub(crate) struct PredicateWithInfo {
 // }
 // otherwise the predicate is not fixed, so add the better version of it
 // else if ubs.contains_key(domain_id) {
-// new_nogood.push(IntegerPredicate::UpperBound {
+// new_nogood.push(Predicate::UpperBound {
 // domain_id: *domain_id,
 // upper_bound: *ubs.get(domain_id).unwrap(),
 // })
@@ -664,7 +664,7 @@ pub(crate) struct PredicateWithInfo {
 // new_nogood.push(*predicate);
 // }
 // }
-// IntegerPredicate::NotEqual {
+// Predicate::NotEqual {
 // domain_id,
 // not_equal_constant,
 // } => {
@@ -687,7 +687,7 @@ pub(crate) struct PredicateWithInfo {
 // new_nogood.push(*predicate);
 // }
 // }
-// IntegerPredicate::Equal {
+// Predicate::Equal {
 // domain_id,
 // equality_constant: _,
 // } => {

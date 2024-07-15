@@ -1,6 +1,6 @@
 use super::HashMap;
 use super::StorageKey;
-use crate::engine::predicates::integer_predicate::IntegerPredicate;
+use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Default)]
@@ -10,8 +10,8 @@ pub struct PredicateIdGenerator {
     /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
     deleted_ids: Vec<PredicateId>,
     /// Active predicates are stored here.
-    id_to_predicate: HashMap<PredicateId, IntegerPredicate>,
-    predicate_to_id: HashMap<IntegerPredicate, PredicateId>,
+    id_to_predicate: HashMap<PredicateId, Predicate>,
+    predicate_to_id: HashMap<Predicate, PredicateId>,
 }
 
 impl PredicateIdGenerator {
@@ -28,7 +28,7 @@ impl PredicateIdGenerator {
 
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
-    pub fn get_id(&mut self, predicate: IntegerPredicate) -> PredicateId {
+    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
@@ -40,7 +40,7 @@ impl PredicateIdGenerator {
         }
     }
 
-    pub fn get_predicate(&self, id: PredicateId) -> Option<IntegerPredicate> {
+    pub fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
         self.id_to_predicate.get(&id).copied()
     }
 
