@@ -336,6 +336,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks
         let mut task_index = 0;
+        explanation_handler.next_profile();
         while task_index < tasks_to_consider.len() {
             let task = Rc::clone(tasks_to_consider.get(task_index));
             if context.is_fixed(&task.start_variable)
