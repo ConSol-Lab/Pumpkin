@@ -42,6 +42,7 @@
 //! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::results::SatisfactionResult;
 //! # use crate::pumpkin_lib::results::ProblemSolution;
+//! # use pumpkin_lib::options::CumulativeExplanationType;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
@@ -59,6 +60,7 @@
 //!     &resource_requirements,
 //!     resource_capacity,
 //!     false,
+//!     CumulativeExplanationType::default(),
 //! );
 //!
 //! let mut termination = Indefinite;
@@ -109,7 +111,7 @@
 //! }
 //! ```
 mod time_table;
-pub use time_table::ExplanationType;
+pub use time_table::CumulativeExplanationType;
 pub(crate) use time_table::*;
 
 mod utils;

@@ -179,8 +179,8 @@ struct Args {
     #[arg(long = "cumulative-allow-holes", default_value_t = false)]
     cumulative_allow_holes: bool,
 
-    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = ExplanationType::default().into())]
-    cumulative_explanation_type: CliArg<ExplanationType>,
+    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default().into())]
+    cumulative_explanation_type: CliArg<CumulativeExplanationType>,
 
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
     /// that it evaluates to the reported objective value.
@@ -452,11 +452,13 @@ fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>,
     }
 }
 
-fn cumulative_explanation_type_parser(s: &str) -> Result<CliArg<ExplanationType>, String> {
+fn cumulative_explanation_type_parser(
+    s: &str,
+) -> Result<CliArg<CumulativeExplanationType>, String> {
     match s {
-        "naive" => Ok(ExplanationType::Naive.into()),
-        "big-step" => Ok(ExplanationType::BigStep.into()),
-        "pointwise" => Ok(ExplanationType::PointWise.into()),
+        "naive" => Ok(CumulativeExplanationType::Naive.into()),
+        "big-step" => Ok(CumulativeExplanationType::BigStep.into()),
+        "pointwise" => Ok(CumulativeExplanationType::PointWise.into()),
         value => Err(format!(
             "'{value}' is not a valid cumulative explanation type"
         )),
@@ -495,7 +497,7 @@ impl<T> From<T> for CliArg<T> {
     }
 }
 
-impl std::fmt::Display for CliArg<ExplanationType> {
+impl std::fmt::Display for CliArg<CumulativeExplanationType> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.inner, f)
     }

@@ -432,7 +432,7 @@ mod tests {
     use crate::engine::test_helper::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::ExplanationType;
+    use crate::propagators::CumulativeExplanationType;
     use crate::propagators::TimeTableOverInterval;
 
     #[test]
@@ -459,7 +459,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -491,7 +491,7 @@ mod tests {
             .collect(),
             1,
             false,
-            ExplanationType::Naive,
+            CumulativeExplanationType::Naive,
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
@@ -534,7 +534,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -591,7 +591,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -621,7 +621,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -666,7 +666,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::Naive,
+                CumulativeExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -735,7 +735,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -815,7 +815,7 @@ mod tests {
                 .collect(),
                 5,
                 false,
-                ExplanationType::default(),
+                CumulativeExplanationType::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -863,7 +863,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::Naive,
+                CumulativeExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -914,7 +914,7 @@ mod tests {
                 .collect(),
                 1,
                 false,
-                ExplanationType::Naive,
+                CumulativeExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -961,7 +961,7 @@ mod tests {
                 .collect(),
                 1,
                 true,
-                ExplanationType::Naive,
+                CumulativeExplanationType::Naive,
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);

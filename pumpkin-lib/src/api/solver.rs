@@ -31,7 +31,7 @@ use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
-use crate::propagators::ExplanationType;
+use crate::propagators::CumulativeExplanationType;
 use crate::propagators::ReifiedPropagatorConstructor;
 use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
@@ -967,6 +967,7 @@ impl Solver {
     /// # use pumpkin_lib::Solver;
     /// # use pumpkin_lib::results::SatisfactionResult;
     /// # use crate::pumpkin_lib::results::ProblemSolution;
+    /// # use pumpkin_lib::options::CumulativeExplanationType;
     /// let solver = Solver::default();
     ///
     /// let mut solver = Solver::default();
@@ -986,7 +987,7 @@ impl Solver {
     ///     &resource_requirements,
     ///     resource_capacity,
     ///     false,
-    ///     ExplanationType::default(),
+    ///     CumulativeExplanationType::default(),
     /// );
     ///
     /// let mut termination = Indefinite;
@@ -1049,7 +1050,7 @@ impl Solver {
         resource_requirements: &[i32],
         resource_capacity: i32,
         allow_holes_in_domain: bool,
-        explanation_type: ExplanationType,
+        explanation_type: CumulativeExplanationType,
     ) -> Result<(), ConstraintOperationError> {
         pumpkin_assert_simple!(
             start_times.len() == durations.len() && durations.len() == resource_requirements.len(),

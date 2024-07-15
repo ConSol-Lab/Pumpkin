@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
-use crate::propagators::ExplanationType;
+use crate::propagators::CumulativeExplanationType;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -74,7 +74,7 @@ pub(crate) struct CumulativeConstructor<Var, T> {
     /// the domain
     pub(crate) allow_holes_in_domain: bool,
 
-    pub(crate) explanation_type: ExplanationType,
+    pub(crate) explanation_type: CumulativeExplanationType,
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
@@ -82,7 +82,7 @@ impl<Var, T> CumulativeConstructor<Var, T> {
         tasks: Box<[ArgTask<Var>]>,
         capacity: i32,
         allow_holes_in_domain: bool,
-        explanation_type: ExplanationType,
+        explanation_type: CumulativeExplanationType,
     ) -> Self {
         CumulativeConstructor {
             tasks,
@@ -166,7 +166,7 @@ pub(crate) struct CumulativeParameters<Var> {
     /// the domain
     pub(crate) allow_holes_in_domain: bool,
 
-    pub(crate) explanation_type: ExplanationType,
+    pub(crate) explanation_type: CumulativeExplanationType,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
@@ -174,7 +174,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
         tasks: Vec<Task<Var>>,
         capacity: i32,
         allow_holes_in_domain: bool,
-        explanation_type: ExplanationType,
+        explanation_type: CumulativeExplanationType,
     ) -> CumulativeParameters<Var> {
         let tasks = tasks
             .into_iter()

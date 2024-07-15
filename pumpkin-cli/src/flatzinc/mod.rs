@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use log::warn;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::options::ExplanationType;
+use pumpkin_lib::options::CumulativeExplanationType;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
 use pumpkin_lib::results::solution_iterator::IteratedSolution;
@@ -45,7 +45,7 @@ pub(crate) struct FlatZincOptions {
     /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
     pub(crate) cumulative_allow_holes: bool,
 
-    pub(crate) cumulative_explanation_type: ExplanationType,
+    pub(crate) cumulative_explanation_type: CumulativeExplanationType,
 }
 
 #[cfg(test)]
@@ -56,7 +56,7 @@ impl Default for FlatZincOptions {
             free_search: false,
             all_solutions: false,
             cumulative_allow_holes: false,
-            cumulative_explanation_type: ExplanationType::default(),
+            cumulative_explanation_type: CumulativeExplanationType::default(),
         }
     }
 }
