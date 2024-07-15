@@ -32,7 +32,7 @@ use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
 use crate::propagators::maximum::MaximumConstructor;
 use crate::propagators::ArgTask;
 use crate::propagators::ReifiedPropagatorConstructor;
-use crate::propagators::TimeTableOverInterval;
+use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
@@ -1053,7 +1053,7 @@ impl Solver {
             "The number of start variables, durations and resource requirements should be the same!car"
         );
         self.satisfaction_solver
-            .add_propagator(TimeTableOverInterval::new(
+            .add_propagator(TimeTableOverIntervalIncremental::new(
                 start_times
                     .iter()
                     .zip(durations)

@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
+use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
 use crate::propagators::TimeTablePerPointPropagator;
@@ -91,7 +92,7 @@ impl<Var, T> CumulativeConstructor<Var, T> {
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
 /// method for each type `T`
-#[allow(dead_code)] // Temporary until the structure is used
+#[allow(unused)]
 pub(crate) type TimeTablePerPoint<Var> =
     CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
@@ -108,6 +109,12 @@ pub(crate) type TimeTablePerPointIncremental<Var> =
 #[allow(unused)]
 pub(crate) type TimeTableOverInterval<Var> =
     CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>;
+
+/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
+/// type of [`TimeTableOverIntervalIncrementalPropagator`]; this is used to prevent creating a
+/// different `new` method for each type `T`
+pub(crate) type TimeTableOverIntervalIncremental<Var> =
+    CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>;
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
