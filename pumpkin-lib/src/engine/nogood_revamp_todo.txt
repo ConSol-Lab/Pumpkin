@@ -239,14 +239,18 @@ cargo run -- -a "C:\Emir\Programerski projekti\pumpkin-private\integration-tests
 
 TODOs:
 
-+ Lazy explanations!
-+ Reintroduce reif and bool constraints -> check BooleanVariable.
-+ Learned clause management (combine with above)
++ Lazy explanations! -> Rc into closures
++ Reintroduce reif and bool constraints -> check Literal.
+
 + Finalise VSIDS -> loading best solution
 + Hacky methods from propagator, downcasting instead.
-
-+ Improve/simplify nogood propagator? (ThinVec?)
++ API merge
 
 + Incremental linear? Maybe also batch up linears into one propagator?
 + Special case 0-1?
-+ rename Predicate -> Predicate
+
++ Learned clause management (combine with above)
++ Improve/simplify nogood propagator? (ThinVec?)
+maybe literal can be asked about values outside {0, 1}?
+trivially true could be in assignment?
+Constraint API
