@@ -263,10 +263,14 @@ impl ConstraintSatisfactionSolver {
     fn notify_propagators_about_domain_events(&mut self) {
         assert!(self.event_drain.is_empty());
 
-        self.event_drain
-            .extend(self.assignments.drain_domain_events());
+        // Eagerly adding since the drain operation lazily removes elements from internal data
+        // structures.
+        self.assignments.drain_domain_events().for_each(|e| {
+            self.event_drain.push(e);
+        });
 
         for (event, domain) in self.event_drain.drain(..) {
+            // println!("\tnoti {} {}", domain, event);
             // Special case: the nogood propagator is notified about each event.
             Self::notify_nogood_propagator(
                 event,
@@ -615,7 +619,7 @@ impl ConstraintSatisfactionSolver {
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
 
-                println!("DEC LVL NEW");
+                // println!("-------------------\nDEC LVL NEW");
 
                 // Restarts should only occur after a new decision level has been declared to
                 // account for the fact that all assumptions should be assigned when restarts take
@@ -821,7 +825,7 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
 
-        println!("ADDING LEARNED: {:?}", learned_nogood.predicates);
+        // println!("ADDING LEARNED: {:?}", learned_nogood.predicates);
 
         self.propagators[nogood_propagator_index]
             .hack_add_asserting_nogood(learned_nogood.predicates, &mut context);

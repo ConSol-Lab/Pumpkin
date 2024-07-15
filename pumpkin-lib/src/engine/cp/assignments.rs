@@ -610,7 +610,12 @@ impl Assignments {
                     unfixed_variables.push((domain_id, value_before));
                 }
         });
-        let _ = self.events.drain();
+        // Drain does not remove the events from the internal data structure. Elements are removed
+        // lazily, as the iterator gets executed. For this reason we go through the entire iterator.
+        let iter = self.events.drain();
+        let _ = iter.count();
+        // println!("ASSIGN AFTER SYNC PRESENT: {:?}", self.events.present);
+        // println!("others: {:?}", self.events.events);
         unfixed_variables
     }
 

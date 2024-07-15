@@ -222,16 +222,16 @@ impl AdvancedNogood {
 
             // I think this is not true: it could be that two predicates have the same trail
             // position because they have been implicit set to true due to the posted predicate.
-            assert!(
-                self.predicates[position].predicate == next_predicate.predicate
-                    && self
-                        .predicates
-                        .iter()
-                        .filter(|p| p.trail_position == next_predicate.trail_position)
-                        .count()
-                        == 1,
-                "Sanity check that the trail positions are unique."
-            );
+            // assert!(
+            // self.predicates[position].predicate == next_predicate.predicate
+            // && self
+            // .predicates
+            // .iter()
+            // .filter(|p| p.trail_position == next_predicate.trail_position)
+            // .count()
+            // == 1,
+            // "Sanity check that the trail positions are unique."
+            // );
             let removed_predicate = self.predicates.swap_remove(position);
             Some(removed_predicate.predicate)
         } else {

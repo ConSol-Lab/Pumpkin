@@ -214,7 +214,9 @@ why was brancher not in CSP_solver? We need to document it somewhere.
 
 much faster to run test manually than to invoke cargo test?
 
-why is int_div_fzn defined the way it is? Seems odd. Two variables are -3..3, and one has {-3, -2, -1, 0...3}
+what about debug logging? To show the trace...?
+
+event sink drain is very awkward -> in case the drain gets interupted, the data structures do not get cleared!
 
 Assumptions -> can this be simplified in some way, say we first assign the predicates on the trail unless conflicting values, and then call the search? We would lose info on at which decision level we propagated things but that is not important anyway! This would simplify some parts of the solver, while make other parts a bit more complicated, could be worth it!
 
@@ -233,3 +235,18 @@ Need to see the performance difference of using all decision learning, but then 
 cargo test --package integration-tests --test mzn_constraint_test -- int_lin_le
 
 cargo run -- -a "C:\Emir\Programerski projekti\pumpkin-private\integration-tests\tests\mzn_constraints\int_div.fzn"
+
+
+TODOs:
+
++ Lazy explanations!
++ Reintroduce reif and bool constraints -> check BooleanVariable.
++ Learned clause management (combine with above)
++ Finalise VSIDS -> loading best solution
++ Hacky methods from propagator, downcasting instead.
+
++ Improve/simplify nogood propagator? (ThinVec?)
+
++ Incremental linear? Maybe also batch up linears into one propagator?
++ Special case 0-1?
++ rename IntegerPredicate -> Predicate

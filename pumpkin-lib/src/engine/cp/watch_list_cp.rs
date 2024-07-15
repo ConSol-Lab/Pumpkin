@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
@@ -32,6 +34,17 @@ pub enum IntDomainEvent {
     /// N.B. this DomainEvent should not be subscribed to by itself!
     #[doc(hidden)]
     Removal,
+}
+
+impl Display for IntDomainEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntDomainEvent::Assign => write!(f, "[Event:Assign]"),
+            IntDomainEvent::LowerBound => write!(f, "[Event:LB]"),
+            IntDomainEvent::UpperBound => write!(f, "[Event:UB]"),
+            IntDomainEvent::Removal => write!(f, "[Event:Remove]"),
+        }
+    }
 }
 
 // public functions

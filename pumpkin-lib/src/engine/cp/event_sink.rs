@@ -7,6 +7,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::DomainEvents;
 #[cfg(doc)]
 use crate::propagators;
+use crate::pumpkin_assert_advanced;
 
 /// While a propagator runs (see [`propagators`]), the propagations it performs
 /// are captured as events in the event sink. When the propagator finishes, the event sink is
@@ -17,8 +18,8 @@ use crate::propagators;
 /// The event sink will ensure duplicate events are ignored.
 #[derive(Default, Clone, Debug)]
 pub struct EventSink {
-    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
-    events: Vec<(IntDomainEvent, DomainId)>,
+    pub present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
+    pub events: Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl EventSink {
@@ -36,8 +37,13 @@ impl EventSink {
     pub fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
+        // println!("EO {} {}", domain, event);
+        // println!("\tpresent: {}", elem.contains(event));
+
         if elem.insert(event) {
             self.events.push((event, domain));
+        } else {
+            pumpkin_assert_advanced!(self.events.iter().any(|p| p.0 == event && p.1 == domain));
         }
     }
 
