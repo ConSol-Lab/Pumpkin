@@ -715,6 +715,10 @@ mod debug {
         let time_table_scratch = create_time_table_over_interval_from_scratch(context, parameters)
             .expect("Expected no error");
 
+        if time_table.is_empty() {
+            return time_table_scratch.is_empty();
+        }
+
         // First we merge all of the split profiles to ensure that it is the same as the
         // non-incremental time-table
         let mut time_table = time_table.clone();
