@@ -1,6 +1,8 @@
+use std::fmt::Debug;
+
 use super::Constraint;
 use crate::propagators::ArgTask;
-use crate::propagators::TimeTableOverInterval;
+use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -103,7 +105,7 @@ use crate::variables::IntegerVariable;
 /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
 /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
 /// 21, 2015, pp. 149–157.
-pub fn cumulative<Var: IntegerVariable + 'static>(
+pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     start_times: &[Var],
     durations: &[i32],
     resource_requirements: &[i32],
@@ -116,7 +118,7 @@ pub fn cumulative<Var: IntegerVariable + 'static>(
 same!car"
     );
 
-    TimeTableOverInterval::new(
+    TimeTableOverIntervalIncremental::new(
         start_times
             .iter()
             .zip(durations)

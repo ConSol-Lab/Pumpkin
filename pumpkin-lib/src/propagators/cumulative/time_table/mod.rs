@@ -70,11 +70,12 @@
 //! 149–157.
 
 mod time_table_over_interval;
+mod time_table_over_interval_incremental;
 mod time_table_per_point;
 mod time_table_per_point_incremental;
 mod time_table_util;
-
 pub(crate) use time_table_over_interval::*;
+pub(crate) use time_table_over_interval_incremental::*;
 pub(crate) use time_table_per_point::*;
 pub(crate) use time_table_per_point_incremental::*;
 

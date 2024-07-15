@@ -368,7 +368,7 @@ impl AssignmentsInteger {
                     None
                 }
             })
-            .unwrap_or_else(|| panic!("found a reason with predicate {}", predicate))
+            .unwrap_or_else(|| panic!("found no reason with predicate {}", predicate))
     }
 }
 
