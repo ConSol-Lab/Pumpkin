@@ -119,9 +119,9 @@ impl Predicate {
     pub fn trivially_false() -> Predicate {
         // By convention, there is a dummy 0-1 variable set to one at root.
         // We use it to denote the trivially true predicate.
-        Predicate::Equal {
+        Predicate::NotEqual {
             domain_id: DomainId { id: 0 },
-            equality_constant: 0,
+            not_equal_constant: 1,
         }
     }
 }
@@ -195,5 +195,24 @@ impl std::fmt::Display for Predicate {
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Predicate;
+
+    #[test]
+    fn negating_trivially_true_predicate() {
+        let trivially_true = Predicate::trivially_true();
+        let trivially_false = Predicate::trivially_false();
+        assert!(!trivially_true == trivially_false);
+    }
+
+    #[test]
+    fn negating_trivially_false_predicate() {
+        let trivially_true = Predicate::trivially_true();
+        let trivially_false = Predicate::trivially_false();
+        assert!(!trivially_false == trivially_true);
     }
 }

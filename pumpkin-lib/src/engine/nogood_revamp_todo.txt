@@ -1,8 +1,7 @@
 * Learned nogood management.
 * Restart policy before took into account number of assigned literals, now it might not?
-* Implementation of the nogood propagator is basic.
 * Implement LBD and activity for nogoods.
-* proof logging is done by the nogood propagator?
+* proof logging, who does this? I suppose the solver using the predicate ids, that is never deletes?
 * Remove allow dead code directives
 * Add comments? E.g., the ResolutionNogoodConflictAnalyser uses // but should use ///
 * Improve implementation across the board (propagation of nogood? the way they are passed/stored? conflict analysis algorithm?)
@@ -29,10 +28,6 @@
 
 * integer_assignment exposes trail
 
-* running int_lin_le -> wild variable selection
-starts with x != 9, 8, 7, 6...(note that 10 is skipped), then goes to x != 1, and then decides x <= 9. Funny because 9 is not in the domain, it is effectively saying x = 0. What? Also branching on not_equals...
-
-
 solver, line 1117 -> where are the other match cases?
 
 assignments.rs, line 926, was look at lower bound instead of upper bound
@@ -54,10 +49,7 @@ look at the Domain representation, and see what was the problem with some hacky 
 
 * What is the point of the OpaqueDomainEvent?
 
-rename watch_list_cp, propagator_cp...remove 'cp'. Also watch_list within the nogood is called watch_list, could distinguish the two watch lists by name.
-
-    fn peek_next_assumption_predicate(&self) -> Option<Predicate> { -> can be done in a single line!!
-
+watch_list within the nogood is called watch_list, could distinguish the two watch lists by name.
 
   making a decision returns a CSPSolverExecutionFlag -> this also has a timeout??
 
@@ -84,28 +76,16 @@ LearningOptions? I removed it.
   is a nogood actually a propositional conjunction?
 
   pub type PropagationStatusCP = Result<(), Inconsistency>;
-
-  could have special functions for BooleanDomainId? Probably need to...?
-
-  remove predicates from vsids that have very small values
-
-
-
-
+  
   #[derive(Debug, Error, Copy, Clone)]
 #[error("Attempt to transform non-integer predicate to integer predicate")]
 pub struct PredicateConversionError;
 
-
 Removed RPEngine and proof related things from the solve
 
-removed VSIDS
-removed solution guided search
 phase saving
 
-
 removed domain events boolean, can think about this
-
 
 removed maxsat? There was an Instance in basic_types with a checker with functions that are allow dead code.
 
@@ -119,8 +99,6 @@ check the impl blocks in the CSP solver, see if they still make sense
 
 SAT options are not used anymore?
 
-revisit encodings, not sure if it is done properly?
-
 single_integer_encoding -> readd tests
 
 
@@ -129,7 +107,6 @@ disabled MaxSAT reading -> need to rethink how to do this, for example, if a lit
 Removed encoders!!
 
 strenthen upper bound in linear search, do we need to go through the view to place an upper bound on the objective?
-
 
 #[derive(Clone, Copy, Debug)]
 /// A struct containing a literal, weight and (optionally) the bound which the literal represents
@@ -161,11 +138,7 @@ predicates.mod ruined
 
 //! Structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)). -> fix this.
 
-Maybe BooleanVariable -> Literal? , struct Literal(Predicate)
-
 initial_holes returns a vector? Could be an iterator, or a reference?
-
-Predicate -> Predicate
 
 When we add the blocking solution nogood, only consider predicates that are assigned as a result of a decision! Say max(a, b) = c, then if 'a' and 'b' are a result of a decision, then there is no need to add the value of 'c' to the nogood.
 
@@ -173,20 +146,13 @@ Assignments should never get into inconsistent state, make the check before gett
 
 Trail does not properly handle the case when decisions are popped.
 
-
-Where do we keep implementation of traits? For example, DomainId has IntegerVariable in its file, but the PredicateConstructor is in the predicate constructor file.
-
-Do we want to have trivially true predicates? Hard without it I guess? For example AffineView, equality_predicate returns Predicate...
-
-What do we watch for literals? How to implement it correctly? Does it make sense to implement Scaled literal for instance.... 
-
 feature/revamp_skeleton4_removing_literals
 
 Observation: clauses of literals that were propagated at a higher decision level do not get bumped! Nor their LBDs updated! Seems counter-intuitive to only look at current decision level.
 
 predicate!(domain_id == 1) -> ok, but not 'predicate!(self.new_variable(0, 1) == 1)'
 
-preprocessing -> how to remove opposite predicates? Say a nogood with [x >= k] & [x <= k-1]. These can only come as from the input, or maybe as part of some preprocessing in the future, i.e., cannot be a result of a learned nogood.
+preprocessing -> how to detect opposite predicates? Say a nogood with [x >= k] & [x <= k-1]. These can only come as from the input, or maybe as part of some preprocessing in the future, i.e., cannot be a result of a learned nogood.
 
 Tests for VSIDS -> restore
 
@@ -200,13 +166,24 @@ readd vsids on integers?
 
 event sink could be removed, we only rely on assignments.events
 
-Trivially true predicates -> special case domain_id 0
-
 What is this about?
     /// Event where an (integer) variable domain removes an inner value within the domain.
     /// N.B. this DomainEvent should not be subscribed to by itself!
     #[doc(hidden)]
     Removal,
+
+where do we add comments with if statements, e.g.,
+
+if ... 
+{
+  
+}
+else
+{
+  
+}
+
+for the else case, do we add the comemnt in the brackets, or just before the else? Fmt complains about it sometimes, it says it will not format because it will remove the comment?
 
 we notify of conflicting predicates for each predicate that appears in the conflict, although in principle we only want to do this 1) once per predicate? 2) only if the predicate actually contributes to the conflict.
 
@@ -239,18 +216,23 @@ cargo run -- -a "C:\Emir\Programerski projekti\pumpkin-private\integration-tests
 
 TODOs:
 
+Maarten
 + Lazy explanations! -> Rc into closures
 + Reintroduce reif and bool constraints -> check Literal.
 
+Imko
 + Finalise VSIDS -> loading best solution
 + Hacky methods from propagator, downcasting instead.
 + API merge
 
-+ Incremental linear? Maybe also batch up linears into one propagator?
-+ Special case 0-1?
-
+Emir
 + Learned clause management (combine with above)
 + Improve/simplify nogood propagator? (ThinVec?)
-maybe literal can be asked about values outside {0, 1}?
+
+(done) maybe literal can be asked about values outside {0, 1}?
 trivially true could be in assignment?
-Constraint API
+
+Undefined
++ Incremental linear? Maybe also batch up linears into one propagator?
+
++ Special case 0-1?

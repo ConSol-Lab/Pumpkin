@@ -93,23 +93,10 @@ impl IntegerVariable for Literal {
     /// Literals that evaluate to true only contain value 1.
     /// Literals that evaluate to false only contain value 0.
     /// Unassigned literals contain both values 0 and 1.
-    /// For other values, the function will panic.
     fn contains(&self, assignment: &Assignments, value: i32) -> bool {
-        assert!(
-            value == 0 || value == 1,
-            "Literals can only be asked whether they contain zero or one values."
-        );
-
         match assignment.evaluate_predicate(self.predicate) {
-            Some(truth_value) => {
-                // We rely on having the input value being restricted to zero or one.
-                truth_value && value == 1 || !truth_value && value == 0
-            }
-            None => {
-                // Since zero and one are the only options, then we simply return true since the
-                // truth value of the predicate has not yet been determined.
-                true
-            }
+            Some(truth_value) => truth_value && value == 1 || !truth_value && value == 0,
+            None => value == 1 || value == 0,
         }
     }
 
@@ -119,21 +106,9 @@ impl IntegerVariable for Literal {
         value: i32,
         trail_position: usize,
     ) -> bool {
-        assert!(
-            value == 0 || value == 1,
-            "Literals can only be asked whether they contain zero or one values."
-        );
-
         match assignment.evaluate_predicate_at_trail_position(self.predicate, trail_position) {
-            Some(truth_value) => {
-                // We rely on having the input value being restricted to zero or one.
-                truth_value && value == 1 || !truth_value && value == 0
-            }
-            None => {
-                // Since zero and one are the only options, then we simply return true since the
-                // truth value of the predicate has not yet been determined.
-                true
-            }
+            Some(truth_value) => truth_value && value == 1 || !truth_value && value == 0,
+            None => value == 1 || value == 0,
         }
     }
 
@@ -147,10 +122,11 @@ impl IntegerVariable for Literal {
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
+        // Note that removing a value that is neither zero nor one does nothing.
         match value {
             0 => assignment.post_predicate(self.predicate, reason),
             1 => assignment.post_predicate(!self.predicate, reason),
-            _ => panic!("Literals can only be asked to remove zero or one values."),
+            _ => Ok(()),
         }
     }
 
@@ -160,13 +136,14 @@ impl IntegerVariable for Literal {
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        match value {
-            0 => {
-                // do nothing, since literals always have lower bound of zero.
-                Ok(())
-            }
-            1 => assignment.post_predicate(self.predicate, reason),
-            _ => panic!("Literals can only be asked to set lower bounds to either zero or one."),
+        if value <= 0 {
+            // Do nothing, since literals always have lower bound of zero.
+            Ok(())
+        } else if value == 1 {
+            assignment.post_predicate(self.predicate, reason)
+        } else {
+            // Otherwise the bound surpasses one, so the domain gets empty.
+            Err(EmptyDomain)
         }
     }
 
@@ -176,13 +153,14 @@ impl IntegerVariable for Literal {
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        match value {
-            0 => assignment.post_predicate(!self.predicate, reason),
-            1 => {
-                // do nothing, since literals always have an upper bound of one.
-                Ok(())
-            }
-            _ => panic!("Literals can only be asked to set upper bounds to either zero or one."),
+        if value >= 1 {
+            // Do nothing, the upper bound is always at mos one.
+            Ok(())
+        } else if value == 0 {
+            assignment.post_predicate(!self.predicate, reason)
+        } else {
+            // Otherwise the bound goes below zero, so the domain is empty.
+            Err(EmptyDomain)
         }
     }
 
@@ -200,48 +178,38 @@ impl PredicateConstructor for Literal {
     type Value = i32;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        assert!(bound == 0 || bound == 1);
-        match bound {
-            0 => Predicate::trivially_true(),
-            1 => self.predicate,
-            _ => {
-                panic!(
-                    "Lower bound predicate for literal must be restricted to zero or one values."
-                )
-            }
+        if bound <= 0 {
+            Predicate::trivially_true()
+        } else if bound == 1 {
+            self.predicate
+        } else {
+            Predicate::trivially_false()
         }
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        assert!(bound == 0 || bound == 1);
-        match bound {
-            0 => !self.predicate,
-            1 => Predicate::trivially_false(),
-            _ => {
-                panic!(
-                    "Upper bound predicate for literal must be restricted to zero or one values."
-                )
-            }
+        if bound >= 1 {
+            Predicate::trivially_true()
+        } else if bound == 0 {
+            !self.predicate
+        } else {
+            Predicate::trivially_false()
         }
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        assert!(bound == 0 || bound == 1);
         match bound {
             0 => !self.predicate,
             1 => self.predicate,
-            _ => panic!("Equality predicate for literal must be restricted to zero or one values."),
+            _ => Predicate::trivially_false(),
         }
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        assert!(bound == 0 || bound == 1);
         match bound {
             0 => self.predicate,
             1 => !self.predicate,
-            _ => {
-                panic!("Not equals predicate for literal must be restricted to zero or one values.")
-            }
+            _ => Predicate::trivially_true(),
         }
     }
 }
