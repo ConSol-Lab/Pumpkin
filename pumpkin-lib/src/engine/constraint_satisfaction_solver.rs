@@ -332,16 +332,18 @@ impl ConstraintSatisfactionSolver {
 
         let _ = csp_solver.add_propagator(NogoodPropagatorConstructor);
 
-        // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
-        // assigned to one. We use it to represent predicates that are trivially true.
-        let dummy_id = csp_solver.create_new_integer_variable(0, 1, Some("Dummy".to_owned()));
-        assert!(dummy_id.id == 0);
+        // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
+        // variable that is assigned to one. We use it to represent predicates that are
+        // trivially true. We need to adjust other data structures to take this into account.
+        let dummy_id = Predicate::trivially_true().get_domain();
+        csp_solver.watch_list_cp.grow();
         csp_solver
-            .assignments
-            .tighten_lower_bound(dummy_id, 1, None)
-            .expect("Cannot fail.");
-        // Just to drain the dummy variable events.
-        csp_solver.propagate();
+            .variable_names
+            .add_integer(dummy_id, "Dummy".to_owned());
+
+        assert!(dummy_id.id == 0);
+        assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
+        assert!(csp_solver.assignments.get_upper_bound(dummy_id) == 1);
 
         csp_solver
     }

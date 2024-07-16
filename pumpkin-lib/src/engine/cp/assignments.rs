@@ -11,11 +11,26 @@ use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Assignments {
     pub(crate) trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: KeyedVec<DomainId, IntegerDomain>,
     events: EventSink,
+}
+
+impl Default for Assignments {
+    fn default() -> Self {
+        let mut assignments = Self {
+            trail: Default::default(),
+            domains: Default::default(),
+            events: Default::default(),
+        };
+        // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
+        // assigned to one. We use it to represent predicates that are trivially true.
+        let dummy_variable = assignments.grow(1, 1);
+        assert!(dummy_variable.id == 0);
+        assignments
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
