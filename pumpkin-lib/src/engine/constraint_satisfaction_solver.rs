@@ -1133,11 +1133,14 @@ impl ConstraintSatisfactionSolver {
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        _predicates: impl IntoIterator<Item = Predicate>,
+        predicates: impl IntoIterator<Item = Predicate>,
     ) -> Result<(), ConstraintOperationError> {
         // todo: took as input literals, but now we have nogoods?
         // also remove the add_clause with add_nogood
-        todo!()
+        // Imko: I think we can simply negate the clause and retrieve a nogood, e.g. if we have the
+        // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
+        // 5] /\ [x2 = 3] /\ [x3 > 5]`
+        self.add_nogood(predicates.into_iter().map(|predicate| !predicate).collect())
         // pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         // pumpkin_assert_moderate!(self.is_propagation_complete());
         //
