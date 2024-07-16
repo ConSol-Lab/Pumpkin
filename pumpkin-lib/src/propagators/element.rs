@@ -58,8 +58,11 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> PropagatorConstructor
-    for ElementConstructor<VX, VI, VE>
+impl<
+        VX: IntegerVariable + 'static,
+        VI: IntegerVariable + 'static,
+        VE: IntegerVariable + 'static,
+    > PropagatorConstructor for ElementConstructor<VX, VI, VE>
 {
     type Propagator = ElementPropagator<VX, VI, VE>;
 
@@ -85,8 +88,11 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
     }
 }
 
-impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
-    for ElementPropagator<VX, VI, VE>
+impl<
+        VX: IntegerVariable + 'static,
+        VI: IntegerVariable + 'static,
+        VE: IntegerVariable + 'static,
+    > Propagator for ElementPropagator<VX, VI, VE>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         // Ensure index is non-negative

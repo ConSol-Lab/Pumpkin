@@ -29,7 +29,7 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     c: i32,
 }
 
-impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
+impl<Var: 'static> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
 where
     Var: IntegerVariable,
 {
@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
+impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {

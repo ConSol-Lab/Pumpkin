@@ -18,7 +18,7 @@ pub(crate) struct MaximumConstructor<ElementVar, Rhs> {
     pub(crate) rhs: Rhs,
 }
 
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> PropagatorConstructor
     for MaximumConstructor<ElementVar, Rhs>
 {
     type Propagator = MaximumPropagator<ElementVar, Rhs>;
@@ -52,7 +52,7 @@ pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     rhs: Rhs,
 }
 
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
     fn priority(&self) -> u32 {

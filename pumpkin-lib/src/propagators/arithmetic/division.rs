@@ -38,9 +38,9 @@ const ID_RHS: LocalId = LocalId::from(2);
 
 impl<VA, VB, VC> PropagatorConstructor for DivisionConstructor<VA, VB, VC>
 where
-    VA: IntegerVariable,
-    VB: IntegerVariable,
-    VC: IntegerVariable,
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
 {
     type Propagator = DivisionPropagator<VA, VB, VC>;
 
@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<VA, VB, VC> Propagator for DivisionPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,

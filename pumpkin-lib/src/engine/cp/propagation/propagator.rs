@@ -1,7 +1,8 @@
-use crate::basic_types::ConstraintOperationError;
+use downcast_rs::impl_downcast;
+use downcast_rs::Downcast;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
@@ -17,6 +18,10 @@ use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 
+// We need to use this to cast from `Box<dyn Propagator>` to `NogoodPropagator`; rust inherently
+// does not allow downcasting from the trait definition to its concrete type.
+impl_downcast!(Propagator);
+
 /// All propagators implement the [`Propagator`] trait, with the exception of the
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
@@ -27,7 +32,7 @@ use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 /// most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
-pub trait Propagator {
+pub trait Propagator: Downcast {
     /// Return the name of the propagator, this is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
@@ -129,27 +134,6 @@ pub trait Propagator {
         _context: PropagationContext,
     ) -> Option<PropositionalConjunction> {
         None
-    }
-
-    /// Temporary hack, used to add nogoods.
-    /// To add a learned nogood, the solver goes through all of its propagators,
-    /// finds the nogood propagator, and then calls this function. Will be replaced later.
-    fn hack_add_asserting_nogood(
-        &mut self,
-        _nogood: Vec<Predicate>,
-        _context: &mut PropagationContextMut,
-    ) {
-        unreachable!();
-    }
-
-    /// Temporary hack, used to add nogoods. Will be replaced later.
-
-    fn hack_add_nogood(
-        &mut self,
-        _nogood: Vec<Predicate>,
-        _context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
-        unreachable!();
     }
 }
 

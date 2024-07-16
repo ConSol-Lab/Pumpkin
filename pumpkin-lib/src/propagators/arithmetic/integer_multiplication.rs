@@ -33,9 +33,9 @@ const ID_C: LocalId = LocalId::from(2);
 
 impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationConstructor<VA, VB, VC>
 where
-    VA: IntegerVariable,
-    VB: IntegerVariable,
-    VC: IntegerVariable,
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
 {
     type Propagator = IntegerMultiplicationPropagator<VA, VB, VC>;
 
@@ -48,7 +48,8 @@ where
     }
 }
 
-impl<VA, VB, VC> Propagator for IntegerMultiplicationPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static> Propagator
+    for IntegerMultiplicationPropagator<VA, VB, VC>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,

@@ -17,7 +17,7 @@ pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     pub(crate) absolute: VB,
 }
 
-impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
+impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> PropagatorConstructor
     for AbsoluteValueConstructor<VA, VB>
 {
     type Propagator = AbsoluteValuePropagator<VA, VB>;
@@ -40,7 +40,9 @@ pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     absolute: VB,
 }
 
-impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
+impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
+    for AbsoluteValuePropagator<VA, VB>
+{
     fn priority(&self) -> u32 {
         0
     }

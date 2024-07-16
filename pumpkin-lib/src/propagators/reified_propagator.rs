@@ -322,9 +322,9 @@ mod tests {
     impl<Propagation, ConsistencyCheck, Init> Propagator
         for GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
-        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
-        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
+        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction> + 'static,
+        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction> + 'static,
     {
         fn name(&self) -> &str {
             "Failing Propagator"
@@ -361,9 +361,9 @@ mod tests {
     impl<Propagation, ConsistencyCheck, Init> PropagatorConstructor
         for GenericArgs<Propagation, ConsistencyCheck, Init>
     where
-        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
-        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction>,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
+        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction> + 'static,
+        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction> + 'static,
     {
         type Propagator = GenericPropagator<Propagation, ConsistencyCheck, Init>;
 

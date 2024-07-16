@@ -1,6 +1,5 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
-
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::time::Instant;
@@ -46,6 +45,7 @@ use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::propagators::nogood::NogoodPropagator;
 use crate::propagators::nogood::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
@@ -831,9 +831,22 @@ impl ConstraintSatisfactionSolver {
         );
 
         // println!("ADDING LEARNED: {:?}", learned_nogood.predicates);
+        ConstraintSatisfactionSolver::add_asserting_nogood_to_nogood_propagator(
+            &mut self.propagators[nogood_propagator_index],
+            learned_nogood.predicates,
+            &mut context,
+        )
+    }
 
-        self.propagators[nogood_propagator_index]
-            .hack_add_asserting_nogood(learned_nogood.predicates, &mut context);
+    fn add_asserting_nogood_to_nogood_propagator(
+        nogood_propagator: &mut Box<dyn Propagator>,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+    ) {
+        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => nogood_propagator.add_asserting_nogood(nogood, context),
+            None => panic!("Provided propagator should be the nogood propagator"),
+        }
     }
 
     /// Performs a restart during the search process; it is only called when it has been determined
@@ -1110,7 +1123,11 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
-        self.propagators[nogood_propagator_id].hack_add_nogood(nogood, &mut propagation_context)?;
+        ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
+            &mut self.propagators[nogood_propagator_id],
+            nogood,
+            &mut propagation_context,
+        )?;
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();
@@ -1118,6 +1135,19 @@ impl ConstraintSatisfactionSolver {
             Err(ConstraintOperationError::InfeasibleState)
         } else {
             Ok(())
+        }
+    }
+
+    fn add_nogood_to_nogood_propagator(
+        nogood_propagator: &mut Box<dyn Propagator>,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), ConstraintOperationError> {
+        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => nogood_propagator.add_nogood(nogood, context),
+            None => {
+                panic!("Provided propagator should be the nogood propagator",)
+            }
         }
     }
 

@@ -140,6 +140,58 @@ impl NogoodPropagator {
         *nogood = temp.extract_final_learned_nogood().predicates;
     }
 
+    // Learned nogood during search.
+    pub(crate) fn add_asserting_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+    ) {
+        if nogood.len() == 1 {
+            self.add_permanent_nogood(nogood, context)
+                .expect("Unit learned nogoods cannot fail.");
+            return;
+        }
+
+        self.debug_propagate_nogood_from_scratch(&nogood, context)
+            .expect("Do not expect to fail propagating learned nogood.");
+
+        let nogood_id = NogoodId {
+            id: self.nogoods.len() as u32,
+        };
+        self.add_watcher(nogood[0], nogood_id);
+        self.add_watcher(nogood[1], nogood_id);
+        self.nogoods.push(Nogood {
+            predicates: nogood,
+            is_learned: true,
+        });
+        self.learned_nogoods.push(nogood_id);
+
+        // self.nogoods.push(nogood);
+        // let nogood_id = NogoodId {
+        // id: self.nogoods.len() as u32,
+        // };
+        // self.add_watcher(nogood[0], nogood_id);
+        // self.add_watcher(nogood[1], nogood_id);
+        // self.nogoods.push(nogood);
+        //
+        // TODO PROPAGATION
+        // todo!();
+    }
+
+    pub(crate) fn add_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+    ) -> Result<(), ConstraintOperationError> {
+        match self.add_permanent_nogood(nogood, context) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                self.is_in_infeasible_state = true;
+                Err(e)
+            }
+        }
+    }
+
     #[allow(dead_code)]
     fn add_permanent_nogood(
         &mut self,
@@ -1347,59 +1399,6 @@ impl Propagator for NogoodPropagator {
         }
         Ok(())
     }
-
-    // Learned nogood during search.
-    fn hack_add_asserting_nogood(
-        &mut self,
-        nogood: Vec<Predicate>,
-        context: &mut PropagationContextMut,
-    ) {
-        if nogood.len() == 1 {
-            self.add_permanent_nogood(nogood, context)
-                .expect("Unit learned nogoods cannot fail.");
-            return;
-        }
-
-        self.debug_propagate_nogood_from_scratch(&nogood, context)
-            .expect("Do not expect to fail propagating learned nogood.");
-
-        let nogood_id = NogoodId {
-            id: self.nogoods.len() as u32,
-        };
-        self.add_watcher(nogood[0], nogood_id);
-        self.add_watcher(nogood[1], nogood_id);
-        self.nogoods.push(Nogood {
-            predicates: nogood,
-            is_learned: true,
-        });
-        self.learned_nogoods.push(nogood_id);
-
-        // self.nogoods.push(nogood);
-        // let nogood_id = NogoodId {
-        // id: self.nogoods.len() as u32,
-        // };
-        // self.add_watcher(nogood[0], nogood_id);
-        // self.add_watcher(nogood[1], nogood_id);
-        // self.nogoods.push(nogood);
-        //
-        // TODO PROPAGATION
-        // todo!();
-    }
-
-    /// Temporary hack, used to add nogoods. Will be replaced later.
-    fn hack_add_nogood(
-        &mut self,
-        nogood: Vec<Predicate>,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
-        match self.add_permanent_nogood(nogood, context) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                self.is_in_infeasible_state = true;
-                Err(e)
-            }
-        }
-    }
 }
 
 /// The watch list is specific to a domain id.
@@ -1465,11 +1464,22 @@ mod tests {
     //
     // nogood with redundant predicate
 
+    use super::NogoodPropagator;
     use crate::conjunction;
+    use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::propagators::nogood::NogoodPropagatorConstructor;
+
+    fn downcast_to_nogood_propagator(
+        nogood_propagator: &mut Box<dyn Propagator>,
+    ) -> &mut NogoodPropagator {
+        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => nogood_propagator,
+            None => panic!("Provided propagator should be the nogood propagator"),
+        }
+    }
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -1488,8 +1498,8 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let context = &mut solver.get_propagation_context_mut(PropagatorId(0));
-            propagator
-                .hack_add_nogood(nogood.into(), context)
+            downcast_to_nogood_propagator(&mut propagator)
+                .add_nogood(nogood.into(), context)
                 .expect("");
         }
 
@@ -1528,8 +1538,8 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let context = &mut solver.get_propagation_context_mut(PropagatorId(0));
-            propagator
-                .hack_add_nogood(nogood.into(), context)
+            downcast_to_nogood_propagator(&mut propagator)
+                .add_nogood(nogood.into(), context)
                 .expect("");
         }
 
