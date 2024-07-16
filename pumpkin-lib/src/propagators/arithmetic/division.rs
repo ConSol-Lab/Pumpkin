@@ -1,4 +1,3 @@
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;

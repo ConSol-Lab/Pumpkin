@@ -53,7 +53,7 @@ impl EventSink {
         })
     }
 
-    pub fn num_domains(&self) -> usize {
+    pub(crate) fn num_domains(&self) -> usize {
         self.present.len()
     }
 }

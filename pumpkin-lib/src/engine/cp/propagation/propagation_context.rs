@@ -65,6 +65,7 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
+    #[allow(dead_code)]
     fn build_reason(&self, reason: Reason) -> Reason {
         if let Some(reification_literal) = self.reification_literal {
             match reason {
@@ -87,7 +88,7 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext {
-            assignments: &self.assignments,
+            assignments: self.assignments,
         }
     }
 
@@ -136,6 +137,7 @@ pub(crate) trait ReadDomains: HasAssignments {
         self.lower_bound(&literal) == 1
     }
 
+    #[allow(dead_code)]
     fn is_literal_false(&self, literal: Literal) -> bool {
         self.upper_bound(&literal) == 0
     }

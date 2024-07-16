@@ -68,13 +68,14 @@ struct Nogood {
 }
 
 #[derive(Clone, Copy, Debug, Hash)]
+#[allow(dead_code)]
 struct PairDomainEvent {
     domain_id: DomainId,
     event: IntDomainEvent,
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct NogoodPropagator {
+pub(crate) struct NogoodPropagator {
     nogoods: KeyedVec<NogoodId, Nogood>,
     permanent_nogoods: Vec<NogoodId>,
     learned_nogoods: Vec<NogoodId>,

@@ -4,7 +4,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug, Default)]
-pub struct PredicateIdGenerator {
+pub(crate) struct PredicateIdGenerator {
     /// The value of the next id, provided there are no delete_ids that can be reused.
     next_id: u32,
     /// When an id is deleted, it gets stored here, so that the id can be reused in the future.
@@ -28,7 +28,7 @@ impl PredicateIdGenerator {
 
     /// Returns an id for the predicate. If the predicate already has an id, its id is returned.
     /// Otherwise, a new id is create and returned.
-    pub fn get_id(&mut self, predicate: Predicate) -> PredicateId {
+    pub(crate) fn get_id(&mut self, predicate: Predicate) -> PredicateId {
         if let Some(id) = self.predicate_to_id.get(&predicate) {
             *id
         } else {
@@ -40,11 +40,11 @@ impl PredicateIdGenerator {
         }
     }
 
-    pub fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
+    pub(crate) fn get_predicate(&self, id: PredicateId) -> Option<Predicate> {
         self.id_to_predicate.get(&id).copied()
     }
 
-    pub fn delete_id(&mut self, id: PredicateId) {
+    pub(crate) fn delete_id(&mut self, id: PredicateId) {
         pumpkin_assert_moderate!(!self.deleted_ids.contains(&id));
         // Add the deleted id for future reuse.
         self.deleted_ids.push(id);
@@ -64,13 +64,13 @@ impl PredicateIdGenerator {
     /// Returns an iterator over all active predicate ids.
     /// Note that constructing the iterator is not constant time,
     /// since the function internally sortes the inactive predicate ids.
-    pub fn iter(&self) -> PredicateIdIterator {
+    pub(crate) fn iter(&self) -> PredicateIdIterator {
         PredicateIdIterator::new(self.next_id, self.deleted_ids.clone())
     }
 }
 
 #[derive(Debug)]
-pub struct PredicateIdIterator {
+pub(crate) struct PredicateIdIterator {
     sorted_deleted_ids: Vec<PredicateId>,
     current_id: u32,
     next_deleted: u32,
@@ -135,7 +135,7 @@ impl Iterator for PredicateIdIterator {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct PredicateId {
+pub(crate) struct PredicateId {
     id: u32,
 }
 

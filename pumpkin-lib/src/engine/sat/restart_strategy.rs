@@ -93,7 +93,7 @@ impl Default for RestartOptions {
 }
 
 #[derive(Debug)]
-pub struct RestartStrategy {
+pub(crate) struct RestartStrategy {
     /// A generator for determining how many conflicts should be found before the next restart is
     /// able to take place (one example of such a generator is [`LubySequence`]).
     sequence_generator: Box<dyn SequenceGenerator>,

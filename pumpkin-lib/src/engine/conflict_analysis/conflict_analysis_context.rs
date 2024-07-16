@@ -11,16 +11,16 @@ use crate::pumpkin_assert_simple;
 
 // Does not have debug because of the brancher does not support it. Could be thought through later.
 #[allow(missing_debug_implementations)]
-pub struct ConflictAnalysisNogoodContext<'a> {
-    pub assignments: &'a Assignments,
-    pub solver_state: &'a mut CSPSolverState,
-    pub reason_store: &'a mut ReasonStore,
-    pub counters: &'a mut Counters,
-    pub brancher: &'a mut dyn Brancher,
+pub(crate) struct ConflictAnalysisNogoodContext<'a> {
+    pub(crate) assignments: &'a Assignments,
+    pub(crate) solver_state: &'a mut CSPSolverState,
+    pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) counters: &'a mut Counters,
+    pub(crate) brancher: &'a mut dyn Brancher,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
-    pub fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
+    pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
@@ -515,7 +515,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         }
     }
 
-    pub fn get_propagation_reason(&mut self, predicate: &Predicate) -> Vec<Predicate> {
+    pub(crate) fn get_propagation_reason(&mut self, predicate: &Predicate) -> Vec<Predicate> {
         self.helper_propagation_reason(predicate)
             .iter()
             .filter(|predicate| {
@@ -534,7 +534,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .collect()
     }
 
-    pub fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.assignments.get_trail_position(predicate) {
             self.assignments.trail[trail_position].reason.is_none()
         } else {

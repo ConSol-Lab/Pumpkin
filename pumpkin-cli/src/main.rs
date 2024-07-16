@@ -331,9 +331,9 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn cnf_problem(
-    solver_options: SolverOptions,
-    time_limit: Option<Duration>,
-    instance_path: impl AsRef<Path>,
+    _solver_options: SolverOptions,
+    _time_limit: Option<Duration>,
+    _instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
     // todo: parsers were removed?
     todo!()

@@ -38,7 +38,7 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn pop_new(&mut self) -> Option<PropagatorId> {
+    pub(crate) fn pop_new(&mut self) -> Option<PropagatorId> {
         if self.is_empty() {
             None
         } else {
@@ -46,7 +46,7 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn pop(&mut self) -> PropagatorId {
+    pub(crate) fn pop(&mut self) -> PropagatorId {
         pumpkin_assert_moderate!(!self.is_empty());
 
         let top_priority = self.present_priorities.peek().unwrap().0 as usize;

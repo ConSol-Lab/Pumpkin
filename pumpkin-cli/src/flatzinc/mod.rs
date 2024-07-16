@@ -9,9 +9,7 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use log::warn;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
 use pumpkin_lib::results::solution_iterator::IteratedSolution;

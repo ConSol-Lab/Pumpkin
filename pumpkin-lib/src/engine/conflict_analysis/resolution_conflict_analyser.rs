@@ -4,19 +4,22 @@ use crate::engine::conflict_analysis::advanced_nogood::AdvancedNogood;
 use crate::engine::predicates::predicate::Predicate;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct ResolutionNogoodConflictAnalyser {}
+pub(crate) struct ResolutionNogoodConflictAnalyser {}
 
 #[derive(Clone, Debug)]
-pub struct LearnedNogood {
-    pub predicates: Vec<Predicate>,
-    pub backjump_level: usize,
+pub(crate) struct LearnedNogood {
+    pub(crate) predicates: Vec<Predicate>,
+    pub(crate) backjump_level: usize,
 }
 
 impl ResolutionNogoodConflictAnalyser {
     /// Computes the learned nogood according to the 1UIP scheme.
     /// The asserting predicate is at position zero, and the second decision level positioned
     /// predicate is at position one.
-    pub fn compute_1uip(&mut self, context: &mut ConflictAnalysisNogoodContext) -> LearnedNogood {
+    pub(crate) fn compute_1uip(
+        &mut self,
+        context: &mut ConflictAnalysisNogoodContext,
+    ) -> LearnedNogood {
         let mut nogood = AdvancedNogood::new(context.assignments.get_decision_level());
 
         let conflict_nogood = context.get_conflict_nogood();

@@ -60,7 +60,8 @@
 //!     &resource_requirements,
 //!     resource_capacity,
 //!     false,
-//! ).post(&mut solver);
+//! )
+//! .post(&mut solver);
 //!
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher_over_all_propositional_variables();

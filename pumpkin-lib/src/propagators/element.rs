@@ -3,7 +3,6 @@ use std::cmp::max;
 use std::cmp::min;
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;

@@ -51,7 +51,7 @@ impl<T> Trail<T> {
     /// todo: this is a temporary hack, because we do not check whether the current decision
     /// level needs updating. For now this is okay since we never pop the decision predicate, but
     /// in general this could be an issue.
-    pub fn pop(&mut self) -> Option<T> {
+    pub(crate) fn pop(&mut self) -> Option<T> {
         self.trail.pop()
     }
 

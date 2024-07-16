@@ -115,43 +115,53 @@ impl TestSolver {
         )
     }
 
-    pub fn is_literal_assigned(&self, literal: Literal) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_literal_assigned(&self, literal: Literal) -> bool {
         self.assignments
             .evaluate_predicate(literal.into())
             .is_some()
     }
 
-    pub fn is_literal_false(&self, literal: Literal) -> bool {
+    pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
             .evaluate_predicate(literal.into())
             .is_some_and(|truth_value| !truth_value)
     }
 
-    pub fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+    #[allow(dead_code)]
+    pub(crate) fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
         self.assignments.tighten_lower_bound(var, bound, None)
     }
 
-    pub fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
+    #[allow(dead_code)]
+    pub(crate) fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
         self.assignments.tighten_upper_bound(var, bound, None)
     }
 
-    pub fn upper_bound(&self, var: DomainId) -> i32 {
+    pub(crate) fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignments.get_upper_bound(var)
     }
 
-    pub fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
+    pub(crate) fn remove(&mut self, var: DomainId, value: i32) -> Result<(), EmptyDomain> {
         self.assignments.remove_value_from_domain(var, value, None)
     }
 
-    pub fn set_literal(&mut self, literal: Literal, truth_value: bool) -> Result<(), EmptyDomain> {
+    pub(crate) fn set_literal(
+        &mut self,
+        literal: Literal,
+        truth_value: bool,
+    ) -> Result<(), EmptyDomain> {
         match truth_value {
             true => self.assignments.post_predicate(literal.into(), None),
             false => self.assignments.post_predicate((!literal).into(), None),
         }
     }
 
-    pub fn propagate(&mut self, propagator: &mut BoxedPropagator) -> Result<(), Inconsistency> {
-        let mut context = PropagationContextMut::new(
+    pub(crate) fn propagate(
+        &mut self,
+        propagator: &mut BoxedPropagator,
+    ) -> Result<(), Inconsistency> {
+        let context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
             PropagatorId(0),
@@ -186,7 +196,7 @@ impl TestSolver {
 
     fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
         let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
-        let context = PropagationContext::new(&mut self.assignments);
+        let context = PropagationContext::new(&self.assignments);
         for (event, domain) in events {
             for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
                 let _ = propagator.notify(context, propagator_var.variable, event.into());
@@ -194,20 +204,17 @@ impl TestSolver {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn notify(
-        &mut self,
+        &self,
         propagator: &mut BoxedPropagator,
         event: OpaqueDomainEvent,
         local_id: LocalId,
     ) -> EnqueueDecision {
-        propagator.notify(
-            PropagationContext::new(&mut self.assignments),
-            local_id,
-            event,
-        )
+        propagator.notify(PropagationContext::new(&self.assignments), local_id, event)
     }
 
-    pub fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
+    pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);

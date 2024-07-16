@@ -619,10 +619,10 @@ impl Solver {
     // pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
     //     self.satisfaction_solver.conclude_proof_optimal(bound)
     // }
-
-    pub(crate) fn into_satisfaction_solver(self) -> ConstraintSatisfactionSolver {
-        self.satisfaction_solver
-    }
+    //
+    // pub(crate) fn into_satisfaction_solver(self) -> ConstraintSatisfactionSolver {
+    //     self.satisfaction_solver
+    // }
 }
 
 // todo: fix explanation of default brancher

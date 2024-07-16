@@ -1,20 +1,15 @@
-use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
 pub(crate) mod optimisation;
 
-use optimisation::linear_search::LinearSearch;
-use optimisation::optimisation_result::MaxSatOptimisationResult;
-use optimisation::optimisation_solver::OptimisationSolver;
 use pumpkin_lib::options::SolverOptions;
-use pumpkin_lib::termination::TimeBudget;
 
 use crate::result::PumpkinError;
 
 pub(crate) fn wcnf_problem(
-    solver_options: SolverOptions,
-    time_limit: Option<Duration>,
-    instance_path: impl AsRef<Path>,
+    _solver_options: SolverOptions,
+    _time_limit: Option<Duration>,
+    _instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
     // todo: parsers were removed?
     todo!()

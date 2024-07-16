@@ -5,15 +5,12 @@ use std::rc::Rc;
 use pumpkin_lib::constraints;
 use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::constraints::NegatableConstraint;
-use pumpkin_lib::predicate;
 use pumpkin_lib::variables::AffineView;
 use pumpkin_lib::variables::DomainId;
-use pumpkin_lib::variables::Literal;
 use pumpkin_lib::variables::TransformableVariable;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::compiler::context::Set;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 

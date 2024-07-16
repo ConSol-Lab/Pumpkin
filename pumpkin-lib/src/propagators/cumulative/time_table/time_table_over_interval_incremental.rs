@@ -1097,9 +1097,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 9),
@@ -1291,9 +1289,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 >= 0),
@@ -1343,9 +1339,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),

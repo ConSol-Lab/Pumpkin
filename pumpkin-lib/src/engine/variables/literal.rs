@@ -2,7 +2,6 @@ use std::ops::Not;
 
 use enumset::EnumSet;
 
-use super::DomainId;
 use super::IntegerVariable;
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;

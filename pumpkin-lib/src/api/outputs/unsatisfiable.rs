@@ -1,7 +1,6 @@
 //! Contains the representation of a unsatisfiable solution.
 
 use crate::branching::Brancher;
-use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicates::Predicate;
 #[cfg(doc)]

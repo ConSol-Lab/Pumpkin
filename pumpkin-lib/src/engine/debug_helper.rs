@@ -38,7 +38,7 @@ impl DebugHelper {
     // and no conflict were detected  the point is to check whether there is a propagation that
     // missed a propagation or failure  additionally checks whether the internal data structures
     // of the clausal propagator are okay and consistent with the assignments_propositional
-    pub fn debug_fixed_point_propagation(
+    pub(crate) fn debug_fixed_point_propagation(
         assignments: &Assignments,
         propagators: &[Box<dyn Propagator>],
     ) -> bool {
@@ -95,7 +95,7 @@ impl DebugHelper {
         true
     }
 
-    pub fn debug_reported_failure(
+    pub(crate) fn debug_reported_failure(
         assignments: &Assignments,
         failure_reason: &PropositionalConjunction,
         propagator: &dyn Propagator,

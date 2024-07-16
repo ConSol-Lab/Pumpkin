@@ -33,7 +33,8 @@ impl<WrappedPropagatorConstructor: PropagatorConstructor> PropagatorConstructor
 
         let reification_literal = context.register(
             self.reification_literal,
-            DomainEvents::LOWER_BOUND, // If the lower-bound of the reification variable changes then this means that it's been assigned true
+            DomainEvents::LOWER_BOUND, /* If the lower-bound of the reification variable changes
+                                        * then this means that it's been assigned true */
             reification_literal_id,
         );
 
@@ -237,11 +238,11 @@ mod tests {
 
         solver.assert_bounds(var, 1, 5);
 
-        solver.set_literal(reification_literal, true);
+        let _ = solver.set_literal(reification_literal, true);
         solver.propagate(&mut propagator).expect("no conflict");
 
         solver.assert_bounds(var, 3, 5);
-        let reason = solver.get_reason_int(predicate![var >= 3].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![var >= 3]);
         assert_eq!(
             reason,
             &PropositionalConjunction::from(Predicate::from(reification_literal))
@@ -253,7 +254,7 @@ mod tests {
         let mut solver = TestSolver::default();
 
         let reification_literal = solver.new_literal();
-        solver.set_literal(reification_literal, true);
+        let _ = solver.set_literal(reification_literal, true);
 
         let var = solver.new_variable(1, 1);
 

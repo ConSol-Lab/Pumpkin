@@ -1,11 +1,9 @@
 use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
-use crate::predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
-use crate::variables::TransformableVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
@@ -35,6 +33,7 @@ pub fn boolean_equals(
     }
 }
 
+#[allow(dead_code)]
 struct BooleanLessThanOrEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
@@ -60,7 +59,7 @@ impl Constraint for BooleanLessThanOrEqual {
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self, _solver: &mut Solver) -> Vec<AffineView<DomainId>> {
         // todo: create vector with single type
         todo!()
         // let domains = self
@@ -75,6 +74,7 @@ impl BooleanLessThanOrEqual {
     }
 }
 
+#[allow(dead_code)]
 struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
@@ -100,7 +100,7 @@ impl Constraint for BooleanEqual {
 }
 
 impl BooleanEqual {
-    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self, _solver: &mut Solver) -> Vec<AffineView<DomainId>> {
         // todo: create vector with single type
         todo!()
         // self.bools

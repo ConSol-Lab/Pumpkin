@@ -7,7 +7,6 @@ use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
 use pumpkin_lib::termination::TerminationCondition;
-use pumpkin_lib::variables::DomainId;
 use pumpkin_lib::Function;
 use pumpkin_lib::Solver;
 
@@ -18,6 +17,7 @@ use super::stopwatch::Stopwatch;
 pub(crate) struct LinearSearch;
 
 impl LinearSearch {
+    #[allow(dead_code)]
     pub(crate) fn new() -> LinearSearch {
         LinearSearch
     }
@@ -54,7 +54,7 @@ impl LinearSearch {
         //     self.upper_bound_encoding,
         // );
 
-        let mut first_iteration = true;
+        // let first_iteration = true;
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {

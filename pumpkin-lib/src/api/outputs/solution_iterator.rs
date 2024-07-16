@@ -42,7 +42,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
     pub fn next_solution(&mut self) -> IteratedSolution {
         if let Some(blocking_clause) = self.next_blocking_clause.take() {
             self.solver.restore_state_at_root(self.brancher);
-            if self.solver.add_clause(blocking_clause).is_err() {
+            if self.solver.add_nogood(blocking_clause).is_err() {
                 return IteratedSolution::Finished;
             }
         }
@@ -63,6 +63,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
         }
     }
 
+    // todo: rewrite documentation
     /// Creates a clause which prevents the current solution from occurring again by going over the
     /// defined output variables and creating a clause which prevents those values from
     /// being assigned. This method is used when attempting to find multiple solutions. It restores
@@ -78,7 +79,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             .map(|variable| {
                 predicate!(
                     variable
-                        != self
+                        == self
                             .solver
                             .assignments
                             .get_assigned_value(variable)

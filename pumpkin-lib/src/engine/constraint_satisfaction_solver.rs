@@ -3,7 +3,6 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::marker::PhantomData;
 use std::time::Instant;
 
 use rand::rngs::SmallRng;
@@ -25,7 +24,6 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
-use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::Brancher;
 use crate::branching::InDomainMin;
 use crate::branching::InputOrder;
@@ -222,7 +220,6 @@ impl ConstraintSatisfactionSolver {
         cp_propagators: &mut [Box<dyn Propagator>],
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        reason_store: &mut ReasonStore,
     ) {
         pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
         let nogood_propagator_id = Self::get_nogood_propagator_id();
@@ -281,7 +278,6 @@ impl ConstraintSatisfactionSolver {
                 &mut self.propagators,
                 &mut self.propagator_queue,
                 &mut self.assignments,
-                &mut self.reason_store,
             );
             // Now notify other propagators subscribed to this event.
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
@@ -1081,7 +1077,7 @@ impl ConstraintSatisfactionSolver {
         self.propagators.push(propagator_to_add);
 
         let new_propagator = &mut self.propagators[new_propagator_id];
-        let context = PropagationContext::new(&mut self.assignments);
+        let context = PropagationContext::new(&self.assignments);
         if new_propagator.initialise_at_root(context).is_err() {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
@@ -1137,11 +1133,11 @@ impl ConstraintSatisfactionSolver {
     /// modification of the solver will take place.
     pub fn add_clause(
         &mut self,
-        _literals: impl IntoIterator<Item = Predicate>,
+        _predicates: impl IntoIterator<Item = Predicate>,
     ) -> Result<(), ConstraintOperationError> {
         // todo: took as input literals, but now we have nogoods?
         // also remove the add_clause with add_nogood
-        todo!();
+        todo!()
         // pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         // pumpkin_assert_moderate!(self.is_propagation_complete());
         //
@@ -1389,7 +1385,7 @@ mod tests {
     impl PropagatorConstructor for TestPropagatorConstructor {
         type Propagator = TestPropagator;
 
-        fn create(self, mut context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
+        fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
             let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
                 .propagations
                 .iter()
@@ -1416,6 +1412,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     /// Todo: this comment is conflicting. Better explain what is going on.
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
