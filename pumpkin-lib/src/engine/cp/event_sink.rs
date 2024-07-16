@@ -47,16 +47,57 @@ impl EventSink {
         }
     }
 
-    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
-        self.events.drain(..).inspect(|&(event, domain)| {
-            let _ = self.present[domain].remove(event);
-        })
+    /// Drain all the events from the [`EventSink`]. When the iterator is dropped, all remaining
+    /// events are cleared from the sink, similar to the `drain` functions on containers in the
+    /// standard library.
+    pub(crate) fn drain(&mut self) -> Drain<'_> {
+        Drain {
+            drain: self.events.drain(..),
+            present: &mut self.present,
+        }
     }
 
     pub(crate) fn num_domains(&self) -> usize {
         self.present.len()
     }
 }
+
+pub(crate) struct Drain<'a> {
+    present: &'a mut KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
+    drain: std::vec::Drain<'a, (IntDomainEvent, DomainId)>,
+}
+
+impl Drop for Drain<'_> {
+    fn drop(&mut self) {
+        for (event, domain) in self.drain.by_ref() {
+            let _ = self.present[domain].remove(event);
+        }
+    }
+}
+
+impl Iterator for Drain<'_> {
+    type Item = (IntDomainEvent, DomainId);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.drain.next().inspect(|&(event, domain)| {
+            let _ = self.present[domain].remove(event);
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.drain.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for Drain<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.drain.next_back().inspect(|&(event, domain)| {
+            let _ = self.present[domain].remove(event);
+        })
+    }
+}
+
+impl ExactSizeIterator for Drain<'_> {}
 
 #[cfg(test)]
 mod tests {

@@ -1241,9 +1241,7 @@ impl Propagator for NogoodPropagator {
 
     fn synchronise(&mut self, context: &PropagationContext) {
         self.last_index_on_trail = context.assignments().trail.len();
-        // Draining does not remove elements from internal data structures since this is done
-        // lazily, as the iterator is called. For this reason we call count to exhaust the iterator.
-        let _ = self.enqueued_updates.drain().count();
+        let _ = self.enqueued_updates.drain();
     }
 
     fn notify(
