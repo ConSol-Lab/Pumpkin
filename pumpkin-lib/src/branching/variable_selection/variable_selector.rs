@@ -24,7 +24,7 @@ pub trait VariableSelector<Var> {
     /// single backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
-    /// A function which is called when a variable appears in a conflict during conflict analysis
-    /// (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
+    /// A function which is called when a [`Predicate`] appears in a conflict during conflict
+    /// analysis.
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 }

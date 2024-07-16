@@ -42,10 +42,8 @@ pub mod variables {
     //!   lower-bound and an upper-bound or using [`Solver::new_sparse_integer`] when creating a
     //!   variable with holes in the domain. These variables can be transformed (according to the
     //!   trait [`TransformableVariable`]) to create an [`AffineView`].
-    //! - Propositional Variables ([`PropositionalVariable`]) - These specify booleans that can be
-    //!   used when interacting with the [`Solver`]. A [`Literal`] is used when a
-    //!   [`PropositionalVariable`] is given a polarity (i.e. it is the positive [`Literal`] or its
-    //!   negated version). A [`Literal`] can be created using [`Solver::new_literal`].
+    //! - Literals ([`Literal`]) - These specify booleans that can be used when interacting with the
+    //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
     pub use crate::engine::variables::AffineView;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
@@ -116,12 +114,10 @@ pub mod predicates {
     //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
     //!
     //! The solver only utilizes the following types of predicates:
-    //! - **Predicates over integers** - These [`IntegerPredicate`]s specify atomic constraints of
-    //!   the form `[x >= v]`, `[x <= v]`, `[x == v]`, and `[x != v]`.
-    //! - **Predicates over literals** - These [`Predicate::Literal`]s specify [`Literal`]s which
-    //!   are linked to the aforementioned [`IntegerPredicate`]s.
-    //! - **Always True/False** - The [`Predicate::True`]/[`Predicate::False`] specify logical
-    //!   predicates which are always true/false.
+    //! - A [`Predicate::LowerBound`] of the form `[x >= v]`
+    //! - A [`Predicate::UpperBound`] of the form `[x <= v]`
+    //! - A [`Predicate::Equal`] of the form `[x = v]`
+    //! - A [`Predicate::NotEqual`] of the form `[x != v]`
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.

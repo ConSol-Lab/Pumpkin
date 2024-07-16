@@ -14,7 +14,7 @@ use crate::results::Solution;
 use crate::variables::DomainId;
 
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
-/// and [Solution Guided Search \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
+/// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
 /// There are two components: 1) predicate selection, and 2) truth value assignment.
 ///
 /// Predicate selection: The VSIDS algorithm is an adaptation for the CP case. It determines which
@@ -33,6 +33,7 @@ use crate::variables::DomainId;
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
 /// efficient SAT solver’, in Proceedings of the 38th annual Design Automation Conference, 2001.
+///
 /// \[2\] E. Demirović, G. Chu, and P. J. Stuckey, ‘Solution-based phase saving for CP: A
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).

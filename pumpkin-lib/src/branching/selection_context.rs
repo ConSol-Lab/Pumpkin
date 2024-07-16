@@ -73,7 +73,7 @@ impl<'a> SelectionContext<'a> {
         self.assignments.evaluate_predicate(predicate).is_some()
     }
 
-    /// Returns all currently defined [`DomainId`] in the provided [`Assignments`].
+    /// Returns all currently defined [`DomainId`]s.
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         self.assignments.get_domains()
     }
