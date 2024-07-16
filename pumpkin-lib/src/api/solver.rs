@@ -204,6 +204,16 @@ impl Solver {
             .create_new_literal(Some(name.into()))
     }
 
+    /// Get a literal which is always true.
+    pub fn get_true_literal(&self) -> Literal {
+        Literal::new(Predicate::trivially_true())
+    }
+
+    /// Get a literal which is always false.
+    pub fn get_false_literal(&self) -> Literal {
+        Literal::new(Predicate::trivially_false())
+    }
+
     /// Create a new integer variable with the given bounds.
     ///
     /// # Example

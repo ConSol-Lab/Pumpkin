@@ -104,93 +104,90 @@ impl CompilationContext<'_> {
 
     pub(crate) fn resolve_bool_variable(
         &mut self,
-        _expr: &flatzinc::Expr,
+        expr: &flatzinc::Expr,
     ) -> Result<Literal, FlatZincError> {
-        todo!();
-        // match expr {
-        // flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
-        // flatzinc::Expr::Bool(value) => {
-        // if *value {
-        // Ok(self.constant_bool_true)
-        // } else {
-        // Ok(self.constant_bool_false)
-        // }
-        // }
-        // _ => Err(FlatZincError::UnexpectedExpr),
-        // }
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
+            flatzinc::Expr::Bool(value) => {
+                if *value {
+                    Ok(self.solver.get_true_literal())
+                } else {
+                    Ok(self.solver.get_false_literal())
+                }
+            }
+            _ => Err(FlatZincError::UnexpectedExpr),
+        }
     }
 
     #[allow(dead_code)]
     pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
-        _identifier: &str,
+        identifier: &str,
     ) -> Result<Literal, FlatZincError> {
-        todo!();
-        // if let Some(literal) = self
-        // .boolean_variable_map
-        // .get(&self.literal_equivalences.representative(identifier))
-        // {
-        // Ok(*literal)
-        // } else {
-        // self.boolean_parameters
-        // .get(&self.literal_equivalences.representative(identifier))
-        // .map(|value| {
-        // if *value {
-        // self.constant_bool_true
-        // } else {
-        // self.constant_bool_false
-        // }
-        // })
-        // .ok_or_else(|| FlatZincError::InvalidIdentifier {
-        // identifier: identifier.into(),
-        // expected_type: "bool variable".into(),
-        // })
-        // }
+        if let Some(literal) = self
+            .boolean_variable_map
+            .get(&self.literal_equivalences.representative(identifier))
+        {
+            Ok(*literal)
+        } else {
+            self.boolean_parameters
+                .get(&self.literal_equivalences.representative(identifier))
+                .map(|value| {
+                    if *value {
+                        self.solver.get_true_literal()
+                    } else {
+                        self.solver.get_false_literal()
+                    }
+                })
+                .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                    identifier: identifier.into(),
+                    expected_type: "bool variable".into(),
+                })
+        }
     }
 
     pub(crate) fn resolve_bool_variable_array(
         &self,
-        _expr: &flatzinc::Expr,
+        expr: &flatzinc::Expr,
     ) -> Result<Rc<[Literal]>, FlatZincError> {
-        todo!();
-        // match expr {
-        // flatzinc::Expr::VarParIdentifier(id) => {
-        // if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
-        // Ok(Rc::clone(literal))
-        // } else {
-        // self.boolean_array_parameters
-        // .get(id.as_str())
-        // .map(|array| {
-        // array
-        // .iter()
-        // .map(|value| {
-        // if *value {
-        // self.constant_bool_true
-        // } else {
-        // self.constant_bool_false
-        // }
-        // })
-        // .collect()
-        // })
-        // .ok_or_else(|| FlatZincError::InvalidIdentifier {
-        // identifier: id.as_str().into(),
-        // expected_type: "boolean variable array".into(),
-        // })
-        // }
-        // }
-        //
-        // flatzinc::Expr::ArrayOfBool(array) => array
-        // .iter()
-        // .map(|elem| match elem {
-        // flatzinc::BoolExpr::VarParIdentifier(id) => {
-        // self.resolve_bool_variable_from_identifier(id)
-        // }
-        // flatzinc::BoolExpr::Bool(true) => Ok(self.constant_bool_true),
-        // flatzinc::BoolExpr::Bool(false) => Ok(self.constant_bool_false),
-        // })
-        // .collect(),
-        // _ => Err(FlatZincError::UnexpectedExpr),
-        // }
+        match expr {
+            flatzinc::Expr::VarParIdentifier(id) => {
+                if let Some(literal) = self.boolean_variable_arrays.get(id.as_str()) {
+                    Ok(Rc::clone(literal))
+                } else {
+                    self.boolean_array_parameters
+                        .get(id.as_str())
+                        .map(|array| {
+                            array
+                                .iter()
+                                .map(|value| {
+                                    if *value {
+                                        self.solver.get_true_literal()
+                                    } else {
+                                        self.solver.get_false_literal()
+                                    }
+                                })
+                                .collect()
+                        })
+                        .ok_or_else(|| FlatZincError::InvalidIdentifier {
+                            identifier: id.as_str().into(),
+                            expected_type: "boolean variable array".into(),
+                        })
+                }
+            }
+
+            flatzinc::Expr::ArrayOfBool(array) => array
+                .iter()
+                .map(|elem| match elem {
+                    flatzinc::BoolExpr::VarParIdentifier(id) => {
+                        self.resolve_bool_variable_from_identifier(id)
+                    }
+                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
+                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
+                })
+                .collect(),
+            _ => Err(FlatZincError::UnexpectedExpr),
+        }
     }
 
     pub(crate) fn resolve_array_integer_constants(
@@ -603,28 +600,27 @@ impl Domain {
         Domain::IntervalDomain { lb, ub }
     }
 
-    pub(crate) fn into_boolean(self, _solver: &mut Solver, _name: String) -> Literal {
-        todo!();
-        // match self {
-        // Domain::IntervalDomain { lb, ub } => {
-        // if lb == ub && lb == 1 {
-        // solver.get_true_literal()
-        // } else if lb == ub && lb == 0 {
-        // solver.get_false_literal()
-        // } else {
-        // solver.create_new_boolean_variable(Some(name))
-        // }
-        // }
-        // Domain::SparseDomain { values } => {
-        // if values.len() == 1 && values[0] == 1 {
-        // solver.get_true_literal()
-        // } else if values.len() == 1 && values[0] == 0 {
-        // solver.get_false_literal()
-        // } else {
-        // solver.create_new_boolean_variable(Some(name))
-        // }
-        // }
-        // }
+    pub(crate) fn into_boolean(self, solver: &mut Solver, name: String) -> Literal {
+        match self {
+            Domain::IntervalDomain { lb, ub } => {
+                if lb == ub && lb == 1 {
+                    solver.get_true_literal()
+                } else if lb == ub && lb == 0 {
+                    solver.get_false_literal()
+                } else {
+                    solver.new_named_literal(name)
+                }
+            }
+            Domain::SparseDomain { values } => {
+                if values.len() == 1 && values[0] == 1 {
+                    solver.get_true_literal()
+                } else if values.len() == 1 && values[0] == 0 {
+                    solver.get_false_literal()
+                } else {
+                    solver.new_named_literal(name)
+                }
+            }
+        }
     }
 
     pub(crate) fn into_variable(self, solver: &mut Solver, name: String) -> DomainId {
