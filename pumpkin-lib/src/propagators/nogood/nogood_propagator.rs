@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::ops::Not;
+use std::rc::Rc;
 
 use log::warn;
 
@@ -76,7 +78,7 @@ struct PairDomainEvent {
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct NogoodPropagator {
-    nogoods: KeyedVec<NogoodId, Nogood>,
+    nogoods: KeyedVec<NogoodId, Rc<RefCell<Nogood>>>,
     permanent_nogoods: Vec<NogoodId>,
     learned_nogoods: Vec<NogoodId>,
     // The trail index is used to determine the domains of the variables since last time.
@@ -160,20 +162,13 @@ impl NogoodPropagator {
         };
         self.add_watcher(nogood[0], nogood_id);
         self.add_watcher(nogood[1], nogood_id);
-        self.nogoods.push(Nogood {
+        self.nogoods.push(Rc::new(RefCell::new(Nogood {
             predicates: nogood,
             is_learned: true,
-        });
+        })));
+
         self.learned_nogoods.push(nogood_id);
 
-        // self.nogoods.push(nogood);
-        // let nogood_id = NogoodId {
-        // id: self.nogoods.len() as u32,
-        // };
-        // self.add_watcher(nogood[0], nogood_id);
-        // self.add_watcher(nogood[1], nogood_id);
-        // self.nogoods.push(nogood);
-        //
         // TODO PROPAGATION
         // todo!();
     }
@@ -244,10 +239,11 @@ impl NogoodPropagator {
             self.add_watcher(nogood[0], new_nogood_id);
             self.add_watcher(nogood[1], new_nogood_id);
 
-            self.nogoods.push(Nogood {
+            self.nogoods.push(Rc::new(RefCell::new(Nogood {
                 predicates: nogood,
                 is_learned: false,
-            });
+            })));
+
             Ok(())
         }
     }
@@ -405,7 +401,7 @@ impl NogoodPropagator {
         for nogood in self.nogoods.iter() {
             print!("ng: ");
 
-            for p in nogood.predicates.iter() {
+            for p in nogood.borrow().predicates.iter() {
                 let m = match assignments.evaluate_predicate(*p) {
                     Some(b) => b as i32,
                     None => -1,
@@ -459,8 +455,8 @@ impl NogoodPropagator {
                 id: nogood.0 as u32,
             };
             assert!(
-                is_watching(nogood.1.predicates[0], nogood_id)
-                    && is_watching(nogood.1.predicates[1], nogood_id)
+                is_watching(nogood.1.borrow().predicates[0], nogood_id)
+                    && is_watching(nogood.1.borrow().predicates[1], nogood_id)
             );
         }
         true
@@ -557,7 +553,7 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[update_info.0].lower_bound
                                 [current_index]
                                 .nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
+                            let nogood = &mut self.nogoods[nogood_id].borrow_mut().predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_lower_bound_predicate()
@@ -723,7 +719,7 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[update_info.0].upper_bound
                                 [current_index]
                                 .nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
+                            let nogood = &mut self.nogoods[nogood_id].borrow_mut().predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_upper_bound_predicate()
@@ -896,7 +892,7 @@ impl Propagator for NogoodPropagator {
 
                             let nogood_id =
                                 self.watch_lists[update_info.0].hole[current_index].nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
+                            let nogood = &mut self.nogoods[nogood_id].borrow_mut().predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_not_equal_predicate()
@@ -1066,7 +1062,7 @@ impl Propagator for NogoodPropagator {
 
                             let nogood_id =
                                 self.watch_lists[update_info.0].equals[current_index].nogood_id;
-                            let nogood = &mut self.nogoods[nogood_id].predicates;
+                            let nogood = &mut self.nogoods[nogood_id].borrow_mut().predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
                                 predicate.is_equality_predicate()
@@ -1395,7 +1391,7 @@ impl Propagator for NogoodPropagator {
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
         for nogood in self.nogoods.iter() {
-            self.debug_propagate_nogood_from_scratch(&nogood.predicates, &mut context)?;
+            self.debug_propagate_nogood_from_scratch(&nogood.borrow().predicates, &mut context)?;
         }
         Ok(())
     }
