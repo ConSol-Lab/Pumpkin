@@ -1082,6 +1082,9 @@ impl ConstraintSatisfactionSolver {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
+            self.propagator_queue
+                .enqueue_propagator(new_propagator_id, new_propagator.priority());
+
             self.propagate();
 
             if self.state.no_conflict() {
