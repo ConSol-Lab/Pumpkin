@@ -230,7 +230,7 @@ impl PropagationContextMut<'_> {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    pub fn post_predicate<R: Into<Reason> + Clone>(
+    pub fn post_predicate<R: Into<Reason>>(
         &mut self,
         predicate: Predicate,
         reason: R,
@@ -252,8 +252,17 @@ impl PropagationContextMut<'_> {
                 domain_id,
                 equality_constant,
             } => {
-                self.set_lower_bound(&domain_id, equality_constant, reason.clone())?;
-                self.set_upper_bound(&domain_id, equality_constant, reason)
+                if self
+                    .assignments
+                    .is_value_in_domain(domain_id, equality_constant)
+                    && !self.assignments.is_domain_assigned(domain_id)
+                {
+                    let reason = self.reason_store.push(self.propagator_id, reason.into());
+                    self.assignments
+                        .make_assignment(domain_id, equality_constant, Some(reason))?;
+                }
+
+                Ok(())
             }
         }
     }

@@ -130,8 +130,8 @@ impl From<PropositionalConjunction> for Reason {
     }
 }
 
-impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<F> for Reason {
-    fn from(value: F) -> Self {
+impl<R: LazyReason + 'static> From<R> for Reason {
+    fn from(value: R) -> Self {
         Reason::Lazy(Box::new(value))
     }
 }

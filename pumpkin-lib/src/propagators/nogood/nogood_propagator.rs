@@ -23,6 +23,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::ReadDomains;
+use crate::engine::reason::LazyReason;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::EventSink;
@@ -154,9 +155,6 @@ impl NogoodPropagator {
             return;
         }
 
-        self.debug_propagate_nogood_from_scratch(&nogood, context)
-            .expect("Do not expect to fail propagating learned nogood.");
-
         let nogood_id = NogoodId {
             id: self.nogoods.len() as u32,
         };
@@ -166,6 +164,9 @@ impl NogoodPropagator {
             predicates: nogood,
             is_learned: true,
         })));
+
+        self.debug_propagate_nogood_from_scratch(nogood_id, context)
+            .expect("Do not expect to fail propagating learned nogood.");
 
         self.learned_nogoods.push(nogood_id);
 
@@ -298,13 +299,17 @@ impl NogoodPropagator {
     #[allow(dead_code)]
     fn debug_propagate_nogood_from_scratch(
         &self,
-        nogood: &[Predicate],
+        nogood_id: NogoodId,
         context: &mut PropagationContextMut,
     ) -> Result<(), Inconsistency> {
         // Inefficient way of propagating, but okay for testing purposes
         // Explicitly goes through each predicate, and does multiple passes.
 
+        let nogood = &self.nogoods[nogood_id];
+
         let num_falsified_predicates = nogood
+            .borrow()
+            .predicates
             .iter()
             .filter(|predicate| context.evaluate_predicate(**predicate).is_some_and(|x| !x))
             .count();
@@ -315,35 +320,43 @@ impl NogoodPropagator {
         }
 
         let num_satisfied_predicates = nogood
+            .borrow()
+            .predicates
             .iter()
             .filter(|predicate| context.evaluate_predicate(**predicate).is_some_and(|x| x))
             .count();
 
-        assert!(num_satisfied_predicates + num_falsified_predicates <= nogood.len());
+        let nogood_len = nogood.borrow().predicates.len();
+        assert!(num_satisfied_predicates + num_falsified_predicates <= nogood_len);
 
         // If all predicates in the nogood are satisfied, there is a conflict.
-        if num_satisfied_predicates == nogood.len() {
+        if num_satisfied_predicates == nogood_len {
             return Err(Inconsistency::Conflict {
-                conflict_nogood: nogood.iter().copied().collect(),
+                conflict_nogood: nogood.borrow().predicates.iter().copied().collect(),
             });
         }
         // If all but one predicate are satisfied, then we can propagate.
         // Note that this only makes sense since we know that there are no falsifying predicates at
         // this point.
-        else if num_satisfied_predicates == nogood.len() - 1 {
+        else if num_satisfied_predicates == nogood_len - 1 {
             // Note that we negate the remaining unassigned predicate!
             let propagated_predicate = nogood
+                .borrow()
+                .predicates
                 .iter()
                 .find(|predicate| context.evaluate_predicate(**predicate).is_none())
                 .unwrap()
                 .not();
-            assert!(nogood.iter().any(|p| *p == propagated_predicate.not()));
 
-            let reason: PropositionalConjunction = nogood
+            assert!(nogood
+                .borrow()
+                .predicates
                 .iter()
-                .filter(|p| **p != propagated_predicate.not())
-                .copied()
-                .collect();
+                .any(|p| *p == propagated_predicate.not()));
+
+            let reason = NogoodReason {
+                nogood: Rc::clone(nogood),
+            };
 
             // println!("from scratching: {}", propagated_predicate);
             // println!("...because of: {:?}", reason);
@@ -553,6 +566,7 @@ impl Propagator for NogoodPropagator {
                             let nogood_id = self.watch_lists[update_info.0].lower_bound
                                 [current_index]
                                 .nogood_id;
+
                             let nogood = &mut self.nogoods[nogood_id].borrow_mut().predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -659,11 +673,10 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason: PropositionalConjunction =
-                                nogood[1..].iter().copied().collect();
-                            pumpkin_assert_moderate!(nogood[1..]
-                                .iter()
-                                .all(|p| context.is_predicate_satisfied(*p)));
+                            let reason = NogoodReason {
+                                nogood: Rc::clone(&self.nogoods[nogood_id]),
+                            };
+
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
@@ -825,11 +838,10 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason: PropositionalConjunction =
-                                nogood[1..].iter().copied().collect();
-                            pumpkin_assert_moderate!(nogood[1..]
-                                .iter()
-                                .all(|p| context.is_predicate_satisfied(*p)));
+                            let reason = NogoodReason {
+                                nogood: Rc::clone(&self.nogoods[nogood_id]),
+                            };
+
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
@@ -999,11 +1011,10 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason: PropositionalConjunction =
-                                nogood[1..].iter().copied().collect();
-                            pumpkin_assert_moderate!(nogood[1..]
-                                .iter()
-                                .all(|p| context.is_predicate_satisfied(*p)));
+                            let reason = NogoodReason {
+                                nogood: Rc::clone(&self.nogoods[nogood_id]),
+                            };
+
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
@@ -1175,11 +1186,10 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason: PropositionalConjunction =
-                                nogood[1..].iter().copied().collect();
-                            pumpkin_assert_moderate!(nogood[1..]
-                                .iter()
-                                .all(|p| context.is_predicate_satisfied(*p)));
+                            let reason = NogoodReason {
+                                nogood: Rc::clone(&self.nogoods[nogood_id]),
+                            };
+
                             // println!("propagating {}", !nogood[0]);
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
@@ -1390,8 +1400,8 @@ impl Propagator for NogoodPropagator {
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
-        for nogood in self.nogoods.iter() {
-            self.debug_propagate_nogood_from_scratch(&nogood.borrow().predicates, &mut context)?;
+        for nogood_id in self.nogoods.keys() {
+            self.debug_propagate_nogood_from_scratch(nogood_id, &mut context)?;
         }
         Ok(())
     }
@@ -1440,6 +1450,23 @@ impl StorageKey for NogoodId {
 
     fn create_from_index(index: usize) -> Self {
         NogoodId { id: index as u32 }
+    }
+}
+
+struct NogoodReason {
+    nogood: Rc<RefCell<Nogood>>,
+}
+
+impl LazyReason for NogoodReason {
+    fn compute(self: Box<Self>, _: &PropagationContext) -> PropositionalConjunction {
+        // We assume the propagated predicate is at position 0 in the nogood.
+        self.nogood
+            .borrow()
+            .predicates
+            .iter()
+            .skip(1)
+            .copied()
+            .collect()
     }
 }
 
