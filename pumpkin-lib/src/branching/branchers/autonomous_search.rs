@@ -12,23 +12,41 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
 use crate::variables::DomainId;
+#[cfg(doc)]
+use crate::DefaultBrancher;
 
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
-/// There are two components: 1) predicate selection, and 2) truth value assignment.
+/// There are three components:
+/// 1. Predicate selection
+/// 2. Truth value assignment
+/// 3. Backup Selection
 ///
-/// Predicate selection: The VSIDS algorithm is an adaptation for the CP case. It determines which
-/// predicate should be branched on based on how often it appears in conflicts. Intuitively, the
-/// more often a predicate appears in *recent* conflicts, the more "important" it is during the
-/// search process. VSIDS is originally from the SAT field (see \[1\]) but we adapted it for
-/// constraint programming by considering predicates from recent conflicts rather than Boolean
-/// variables.
+/// # Predicate selection
+/// The VSIDS algorithm is an adaptation for the CP case. It determines which
+/// [`Predicate`] should be branched on based on how often it appears in conflicts.
 ///
-/// Truth value assignment: The truth value for the predicate is selected to be consistent with the
+/// Intuitively, the more often a [`Predicate`] appears in *recent* conflicts, the more "important"
+/// it is during the search process. VSIDS is originally from the SAT field (see \[1\]) but we
+/// adapted it for constraint programming by considering [`Predicate`]s from recent conflicts
+/// directly rather than Boolean variables.
+///
+/// # Truth value assignment
+/// The truth value for the [`Predicate`] is selected to be consistent with the
 /// best solution known so far. In this way, the search is directed around this existing solution.
+///
 /// In case where there is no known solution, then the predicate is assigned to true. This resembles
 /// a fail-first strategy with the idea that the given predicate was encountered in conflicts, so
 /// assigning it to true may cause another conflict soon.
+///
+/// # Backup selection
+/// VSIDS relies on [`Predicate`]s appearing in conflicts to discover which [`Predicate`]s are
+/// "important". However, it could be the case that all [`Predicate`]s which VSIDS has discovered
+/// are already assigned.
+///
+/// In this case, [`AutonomousSearch`] defaults either to the backup described in
+/// [`DefaultBrancher`] (when created using [`AutonomousSearch::default_over_all_variables`]) or it
+/// defaults to the [`Brancher`] provided to [`AutonomousSearch::new`].
 ///
 /// # Bibliography
 /// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
