@@ -2,6 +2,7 @@ use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
+use crate::predicates::Predicate;
 
 /// A trait which specifies the common behaviours of [`Solution`] and [`SolutionReference`].
 pub trait ProblemSolution: HasAssignments {
@@ -52,6 +53,14 @@ impl Solution {
         SolutionReference {
             assignments: &self.assignments,
         }
+    }
+
+    pub fn contains_domain_id(&self, domain_id: DomainId) -> bool {
+        domain_id.id < self.assignments.num_domains()
+    }
+
+    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
+        self.assignments.is_predicate_satisfied(predicate)
     }
 }
 

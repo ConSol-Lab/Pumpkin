@@ -60,7 +60,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             even_number_of_solutions: true,
             is_using_default_brancher: false,
             other_brancher,
-            default_brancher: solver.default_brancher_over_all_propositional_variables(),
+            default_brancher: solver.default_brancher(),
             strategy,
         }
     }
@@ -144,7 +144,7 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EverySolution,
         );
 
@@ -163,7 +163,7 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EveryOtherSolution,
         );
 
@@ -186,7 +186,7 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
@@ -207,7 +207,7 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EveryRestart,
         );
 

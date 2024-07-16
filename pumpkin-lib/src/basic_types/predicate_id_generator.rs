@@ -15,6 +15,11 @@ pub(crate) struct PredicateIdGenerator {
 }
 
 impl PredicateIdGenerator {
+    #[cfg(test)]
+    pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
+        self.predicate_to_id.contains_key(&predicate)
+    }
+
     fn get_new_predicate_id(&mut self) -> PredicateId {
         // We either reuse a previously deleted id, or create a new one.
         if let Some(recycled_id) = self.deleted_ids.pop() {
