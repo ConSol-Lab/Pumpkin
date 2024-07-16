@@ -191,8 +191,7 @@ pub struct SatisfactionSolverOptions {
     pub restart_options: RestartOptions,
     /// Whether learned clause minimisation should take place
     pub learning_clause_minimisation: bool,
-    /// A random number generator which is used by the [`ConstraintSatisfactionSolver`],
-    /// passing it as an argument allows seeding based on CLI input.
+    /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
 }
 

@@ -110,7 +110,7 @@ impl std::fmt::Debug for Solver {
 }
 
 impl Solver {
-    /// Creates a solver with the provided [`LearningOptions`] and [`SolverOptions`].
+    /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         Solver {
             satisfaction_solver: ConstraintSatisfactionSolver::new(solver_options),
@@ -338,10 +338,9 @@ impl Solver {
     /// terminate by the provided [`TerminationCondition`]) and returns a [`SatisfactionResult`]
     /// which can be used to obtain the found solution or find other solutions.
     ///
-    /// This method takes as input a list of [`Literal`]s which represent so-called assumptions (see
-    /// \[1\] for a more detailed explanation). The [`Literal`]s corresponding to [`Predicate`]s
-    /// over [`IntegerVariable`]s (e.g. lower-bound predicates) can be retrieved from the [`Solver`]
-    /// using [`Solver::get_literal`].
+    /// This method takes as input a list of [`Predicate`]s which represent so-called assumptions
+    /// (see \[1\] for a more detailed explanation). See the [`predicate`] documentation for how
+    /// to construct these predicates.
     ///
     /// # Bibliography
     /// \[1\] N. Eén and N. Sörensson, ‘Temporal induction by incremental SAT solving’, Electronic
@@ -357,7 +356,8 @@ impl Solver {
             .solve_under_assumptions(assumptions, termination, brancher)
         {
             CSPSolverExecutionFlag::Feasible => {
-                let solution = self.satisfaction_solver.get_solution_reference().into();
+                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
+                brancher.on_solution(solution.as_reference());
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 SatisfactionResultUnderAssumptions::Satisfiable(solution)
@@ -602,10 +602,7 @@ impl Solver {
 
 /// Default brancher implementation
 impl Solver {
-    /// Creates a default [`IndependentVariableValueBrancher`] which uses [`Vsids`] as
-    /// [`VariableSelector`] and [`SolutionGuidedValueSelector`] (with [`PhaseSaving`] as its
-    /// back-up selector) as its [`ValueSelector`]; it searches over all
-    /// [`PropositionalVariable`]s defined in the provided `solver`.
+    /// Creates an instance of the [`DefaultBrancher`].
     pub fn default_brancher(&self) -> DefaultBrancher {
         DefaultBrancher::default_over_all_variables(&self.satisfaction_solver.assignments)
     }
@@ -635,7 +632,18 @@ impl Solver {
     // }
 }
 
-// todo: fix explanation of default brancher
+/// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
+/// If VSIDS does not contain any (unfixed) predicates then it will default to the
+/// [`IndependentVariableValueBrancher`] using [`InputOrder`] for variable selection (over the
+/// variables in the order in which they were defined) and [`InDomainRandom`] for value selection.
+///
+/// # Bibliography
+/// \[1\] M. W. Moskewicz, C. F. Madigan, Y. Zhao, L. Zhang, and S. Malik, ‘Chaff: Engineering an
+/// efficient SAT solver’, in Proceedings of the 38th annual Design Automation Conference, 2001.
+///
+/// \[2\] E. Demirović, G. Chu, and P. J. Stuckey, ‘Solution-based phase saving for CP: A
+/// value-selection heuristic to simulate local search behavior in complete solvers’, in the
+/// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 pub type DefaultBrancher = AutonomousSearch<
     IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainRandom>,
 >;

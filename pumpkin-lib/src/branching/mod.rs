@@ -6,7 +6,7 @@
 //! - The [`VariableSelector`] which defines the method required of a variable selector (including
 //!   the hooks into the solver); the main method of this trait is the
 //!   [`VariableSelector::select_variable`] method. An example implementation of this trait is the
-//!   [`Vsids`] strategy.
+//!   [`AntiFirstFail`] strategy.
 //! - The [`ValueSelector`] which defines the method required of a value selector (including the
 //!   hooks into the solver); the main method of this trait is the [`ValueSelector::select_value`]
 //!   method.
@@ -46,7 +46,7 @@
 //!
 //! A default implementation of a [`Brancher`]
 //! is provided using the method
-//! [`Solver::default_brancher_over_all_propositional_variables`].
+//! [`Solver::default_brancher`].
 //! ```rust
 //! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::variables::PropositionalVariable;

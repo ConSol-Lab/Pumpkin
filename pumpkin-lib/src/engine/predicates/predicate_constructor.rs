@@ -1,8 +1,7 @@
 use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
-/// A trait which defines methods for creating a [`Predicate`]. It currently only specifies the
-/// creation of [`Predicate`]s based on [`IntegerPredicate`]s.
+/// A trait which defines methods for creating a [`Predicate`].
 pub trait PredicateConstructor {
     /// The value used to represent a bound.
     type Value;
@@ -52,20 +51,20 @@ impl PredicateConstructor for DomainId {
     }
 }
 
-/// A macro which allows for the creation of an [`IntegerPredicate`].
+/// A macro which allows for the creation of a [`Predicate`].
 ///
 /// # Example
 /// ```rust
 /// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::predicate;
-/// # use pumpkin_lib::predicates::IntegerPredicate;
+/// # use pumpkin_lib::predicates::Predicate;
 /// let mut solver = Solver::default();
 /// let x = solver.new_bounded_integer(0, 10);
 ///
 /// let lower_bound_predicate = predicate!(x >= 5);
 /// assert_eq!(
 ///     lower_bound_predicate,
-///     IntegerPredicate::LowerBound {
+///     Predicate::LowerBound {
 ///         domain_id: x,
 ///         lower_bound: 5
 ///     }
@@ -75,7 +74,7 @@ impl PredicateConstructor for DomainId {
 /// let upper_bound_predicate = predicate!(x <= 5);
 /// assert_eq!(
 ///     upper_bound_predicate,
-///     IntegerPredicate::UpperBound {
+///     Predicate::UpperBound {
 ///         domain_id: x,
 ///         upper_bound: 5
 ///     }
@@ -85,7 +84,7 @@ impl PredicateConstructor for DomainId {
 /// let equality_predicate = predicate!(x == 5);
 /// assert_eq!(
 ///     equality_predicate,
-///     IntegerPredicate::Equal {
+///     Predicate::Equal {
 ///         domain_id: x,
 ///         equality_constant: 5
 ///     }
@@ -95,7 +94,7 @@ impl PredicateConstructor for DomainId {
 /// let disequality_predicate = predicate!(x != 5);
 /// assert_eq!(
 ///     disequality_predicate,
-///     IntegerPredicate::NotEqual {
+///     Predicate::NotEqual {
 ///         domain_id: x,
 ///         not_equal_constant: 5
 ///     }

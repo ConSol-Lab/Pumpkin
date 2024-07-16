@@ -4,8 +4,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::optimisation::LinearSearch;
 
 /// A trait containing the interface for [`ValueSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting a value
@@ -25,6 +23,6 @@ pub trait ValueSelector<Var> {
     /// backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
-    /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
+    /// This method is called when a solution is found.
     fn on_solution(&mut self, _solution: SolutionReference) {}
 }

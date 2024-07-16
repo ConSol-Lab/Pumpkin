@@ -4,7 +4,7 @@ use crate::basic_types::HashMap;
 use crate::basic_types::SolutionReference;
 use crate::engine::variables::DomainId;
 
-/// A struct which represents a weighted linear function over [`Literal`]s, [`DomainId`]s, and a
+/// A struct which represents a linear function over weighted [`DomainId`]s, and a
 /// constant term.
 #[derive(Clone, Default, Debug)]
 pub struct Function {

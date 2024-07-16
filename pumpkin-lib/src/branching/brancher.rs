@@ -13,6 +13,8 @@ use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::results::solution_iterator::SolutionIterator;
+#[cfg(doc)]
+use crate::Solver;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
 /// [`ValueSelector`]).
@@ -39,7 +41,7 @@ pub trait Brancher {
     /// does not provide any additional information.
     fn on_conflict(&mut self) {}
 
-    /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].
+    /// This method is called when a solution is found by the [`Solver`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
@@ -48,8 +50,8 @@ pub trait Brancher {
     /// single backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
-    /// A function which is called when an integer variable appears in a conflict during conflict
-    /// analysis (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
+    /// A function which is called when a [`Predicate`] appears in a conflict during conflict
+    /// analysis.
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
     /// This method is called whenever a restart is performed.
