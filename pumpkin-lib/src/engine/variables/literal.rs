@@ -186,9 +186,9 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn watch_all(&self, _watchers: &mut Watchers<'_>, _events: EnumSet<IntDomainEvent>) {
-        unimplemented!()
-        // watchers.watch_all(*self, events);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+        let domain = self.predicate.get_domain();
+        watchers.watch_all(domain, events);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
