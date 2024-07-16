@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -76,11 +78,15 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        if local_id < self.reification_literal_id {
-            let decision = self.propagator.notify(context, local_id, event);
-            self.filter_enqueue_decision(context, decision)
-        } else {
-            panic!("no integer variables are registered beyond those from the wrapped propagator")
+        match local_id.cmp(&self.reification_literal_id) {
+            Ordering::Less => {
+                let decision = self.propagator.notify(context, local_id, event);
+                self.filter_enqueue_decision(context, decision)
+            }
+            Ordering::Equal => EnqueueDecision::Enqueue,
+            Ordering::Greater => panic!(
+                "no integer variables are registered beyond those from the wrapped propagator"
+            ),
         }
     }
 

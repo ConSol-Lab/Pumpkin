@@ -166,7 +166,17 @@ impl IntegerVariable for Literal {
 
     fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
         let domain = self.predicate.get_domain();
-        watchers.watch_all(domain, events);
+
+        let mapped_events = events
+            .into_iter()
+            .map(|event| match event {
+                IntDomainEvent::LowerBound => IntDomainEvent::UpperBound,
+                IntDomainEvent::UpperBound => IntDomainEvent::LowerBound,
+                evt @ (IntDomainEvent::Removal | IntDomainEvent::Assign) => evt,
+            })
+            .collect::<EnumSet<IntDomainEvent>>();
+
+        watchers.watch_all(domain, mapped_events);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
