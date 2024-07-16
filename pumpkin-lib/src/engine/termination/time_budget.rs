@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use super::TerminationCondition;
 
-/// Give the solver a specific time budget to complete the search.
+/// A [`TerminationCondition`] which triggers when the specified time budget has been exceeded.
 #[derive(Clone, Copy, Debug)]
 pub struct TimeBudget {
     /// The point in time from which to measure the budget.

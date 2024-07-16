@@ -4,14 +4,14 @@ use super::MovingAverage;
 use crate::pumpkin_assert_simple;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
-pub struct WindowedMovingAverage {
+pub(crate) struct WindowedMovingAverage {
     window_size: u64,
     windowed_sum: u64,
     values_in_window: VecDeque<u64>,
 }
 
 impl WindowedMovingAverage {
-    pub fn new(window_size: u64) -> WindowedMovingAverage {
+    pub(crate) fn new(window_size: u64) -> WindowedMovingAverage {
         pumpkin_assert_simple!(window_size > 0);
         WindowedMovingAverage {
             window_size,

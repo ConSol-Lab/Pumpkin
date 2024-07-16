@@ -2,12 +2,12 @@ use super::SequenceGenerator;
 
 // A sequence that generates the same value
 #[derive(Debug, Copy, Clone)]
-pub struct ConstantSequence {
+pub(crate) struct ConstantSequence {
     constant_value: i64,
 }
 
 impl ConstantSequence {
-    pub fn new(constant_value: i64) -> ConstantSequence {
+    pub(crate) fn new(constant_value: i64) -> ConstantSequence {
         ConstantSequence { constant_value }
     }
 }

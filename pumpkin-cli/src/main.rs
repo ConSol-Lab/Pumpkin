@@ -1,29 +1,32 @@
+mod file_format;
 mod flatzinc;
+mod maxsat;
 mod result;
 
 use std::fmt::Debug;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use file_format::FileFormat;
 use log::error;
 use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
-use pumpkin_lib::basic_types::sequence_generators::SequenceGeneratorType;
-use pumpkin_lib::basic_types::signal_handling::signal_handler;
-use pumpkin_lib::basic_types::statistic_logging::statistic_logger;
-use pumpkin_lib::basic_types::*;
-use pumpkin_lib::engine::RestartOptions;
-use pumpkin_lib::engine::*;
+use pumpkin_lib::options::RestartOptions;
+use pumpkin_lib::options::SequenceGeneratorType;
+use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use result::PumpkinError;
 use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
+use crate::maxsat::wcnf_problem;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -162,7 +165,7 @@ fn configure_logging(
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     match file_format {
-        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine | FileFormat::MaxSAT2022 => {
+        FileFormat::CnfDimacsPLine | FileFormat::WcnfDimacsPLine => {
             configure_logging_sat(verbose, log_statistics, omit_timestamp, omit_call_site)
         }
         FileFormat::FlatZinc => configure_logging_minizinc(verbose, log_statistics),
@@ -179,7 +182,7 @@ fn configure_logging_unknown() -> std::io::Result<()> {
 }
 
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
-    statistic_logger::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    pumpkin_lib::statistics::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -205,7 +208,7 @@ fn configure_logging_sat(
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
-    statistic_logger::configure(log_statistics, "c STAT", None);
+    pumpkin_lib::statistics::configure(log_statistics, "c STAT", None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -249,9 +252,6 @@ fn main() {
 fn run() -> PumpkinResult<()> {
     pumpkin_lib::print_pumpkin_assert_warning_message!();
 
-    // Register the handling of signals (for example CTRL+C)
-    signal_handler::register_signals()?;
-
     let args = Args::parse();
 
     let file_format = match args.instance_path.extension().and_then(|ext| ext.to_str()) {
@@ -274,23 +274,23 @@ fn run() -> PumpkinResult<()> {
 
     // todo: disabled proof logging
     // let proof_log = if let Some(path_buf) = args.proof {
-    // match file_format {
-    // FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
-    // FileFormat::WcnfDimacsPLine => {
-    // return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
-    // }
-    // FileFormat::MaxSAT2022 => {
-    // return Err(PumpkinError::ProofGenerationNotSupported(
-    // "maxsat".to_owned(),
-    // ))
-    // }
-    // FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
-    // }
+    //     match file_format {
+    //         FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+    //         FileFormat::WcnfDimacsPLine => {
+    //             return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
+    //         }
+    //         FileFormat::MaxSAT2022 => {
+    //             return Err(PumpkinError::ProofGenerationNotSupported(
+    //                 "maxsat".to_owned(),
+    //             ))
+    //         }
+    //         FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+    //     }
     // } else {
-    // ProofLog::default()
+    //     ProofLog::default()
     // };
 
-    let solver_options = SatisfactionSolverOptions {
+    let solver_options = SolverOptions {
         restart_options: RestartOptions {
             sequence_generator_type: args.restart_sequence_generator_type.inner,
             base_interval: args.restart_base_interval,
@@ -313,15 +313,10 @@ fn run() -> PumpkinResult<()> {
     let _verify_outcome = args.verify_solution;
 
     match file_format {
-        FileFormat::CnfDimacsPLine => {
-            todo!();
-        }
-        FileFormat::WcnfDimacsPLine => {
-            todo!();
-        }
-        FileFormat::MaxSAT2022 => todo!(),
+        FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
+        FileFormat::WcnfDimacsPLine => wcnf_problem(solver_options, time_limit, instance_path)?,
         FileFormat::FlatZinc => flatzinc::solve(
-            ConstraintSatisfactionSolver::new(solver_options),
+            Solver::with_options(solver_options),
             instance_path,
             time_limit,
             FlatZincOptions {
@@ -333,6 +328,46 @@ fn run() -> PumpkinResult<()> {
     }
 
     Ok(())
+}
+
+fn cnf_problem(
+    _solver_options: SolverOptions,
+    _time_limit: Option<Duration>,
+    _instance_path: impl AsRef<Path>,
+) -> Result<(), PumpkinError> {
+    // todo: parsers were removed?
+    todo!()
+    // let instance_file = File::open(instance_path)?;
+    // let mut solver = parse_cnf::<SolverDimacsSink>(
+    //     instance_file,
+    //     SolverArgs::new(learning_options, solver_options),
+    // )?;
+
+    // let mut termination =
+    //     TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
+    // let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    // match solver.satisfy(&mut brancher, &mut termination) {
+    //     SatisfactionResult::Satisfiable(solution) => {
+    //         println!("s SATISFIABLE");
+    //         let num_propositional_variables = solution.num_propositional_variables();
+    //         println!(
+    //             "v {}",
+    //             stringify_solution(&solution, num_propositional_variables, true)
+    //         );
+    //     }
+    //     SatisfactionResult::Unsatisfiable => {
+    //         if solver.conclude_proof_unsat().is_err() {
+    //             warn!("Failed to log solver conclusion");
+    //         };
+
+    //         println!("s UNSATISFIABLE");
+    //     }
+    //     SatisfactionResult::Unknown => {
+    //         println!("s UNKNOWN");
+    //     }
+    // };
+
+    // Ok(())
 }
 
 fn learned_clause_minimisation_parser(s: &str) -> Result<CliArg<bool>, String> {

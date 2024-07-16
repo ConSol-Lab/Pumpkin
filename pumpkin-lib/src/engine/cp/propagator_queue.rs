@@ -7,14 +7,14 @@ use crate::engine::cp::propagation::PropagatorId;
 use crate::pumpkin_assert_moderate;
 
 #[derive(Debug)]
-pub struct PropagatorQueue {
+pub(crate) struct PropagatorQueue {
     queues: Vec<VecDeque<PropagatorId>>,
     present_propagators: HashSet<PropagatorId>,
     present_priorities: BinaryHeap<Reverse<u32>>,
 }
 
 impl PropagatorQueue {
-    pub fn new(num_priority_levels: u32) -> PropagatorQueue {
+    pub(crate) fn new(num_priority_levels: u32) -> PropagatorQueue {
         PropagatorQueue {
             queues: vec![VecDeque::new(); num_priority_levels as usize],
             present_propagators: HashSet::default(),
@@ -22,11 +22,11 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.present_propagators.is_empty()
     }
 
-    pub fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
+    pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 
         if !self.is_propagator_enqueued(propagator_id) {
@@ -38,7 +38,7 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn pop_new(&mut self) -> Option<PropagatorId> {
+    pub(crate) fn pop_new(&mut self) -> Option<PropagatorId> {
         if self.is_empty() {
             None
         } else {
@@ -46,7 +46,7 @@ impl PropagatorQueue {
         }
     }
 
-    pub fn pop(&mut self) -> PropagatorId {
+    pub(crate) fn pop(&mut self) -> PropagatorId {
         pumpkin_assert_moderate!(!self.is_empty());
 
         let top_priority = self.present_priorities.peek().unwrap().0 as usize;
@@ -63,7 +63,7 @@ impl PropagatorQueue {
         next_propagator_id
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         while !self.present_priorities.is_empty() {
             let priority = self.present_priorities.pop().unwrap().0 as usize;
             pumpkin_assert_moderate!(!self.queues[priority].is_empty());

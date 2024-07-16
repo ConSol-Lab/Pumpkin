@@ -19,9 +19,9 @@ use pumpkin_lib::branching::OutDomainMin;
 use pumpkin_lib::branching::OutDomainRandom;
 use pumpkin_lib::branching::ReverseInDomainSplit;
 use pumpkin_lib::branching::Smallest;
-use pumpkin_lib::engine::variables::DomainId;
 use pumpkin_lib::pumpkin_assert_eq_simple;
 use pumpkin_lib::pumpkin_assert_simple;
+use pumpkin_lib::variables::DomainId;
 
 use super::error::FlatZincError;
 pub(crate) enum VariableSelectionStrategy {

@@ -1,8 +1,11 @@
 use super::solution::ProblemSolution;
+use super::Solution;
 use crate::basic_types::HashMap;
 use crate::basic_types::SolutionReference;
 use crate::engine::variables::DomainId;
 
+/// A struct which represents a weighted linear function over [`Literal`]s, [`DomainId`]s, and a
+/// constant term.
 #[derive(Clone, Default, Debug)]
 pub struct Function {
     term: HashMap<DomainId, u64>,
@@ -18,7 +21,7 @@ impl Function {
         self.constant_term += value;
     }
 
-    pub fn get_terms(&self) -> std::collections::hash_map::Iter<DomainId, u64> {
+    pub fn get_terms(&self) -> impl Iterator<Item = (&DomainId, &u64)> {
         self.term.iter()
     }
 
@@ -40,7 +43,7 @@ impl Function {
         value
     }
 
-    pub fn evaluate_assignment(&self, solution: SolutionReference<'_>) -> u64 {
+    pub fn evaluate_assignment(&self, solution: &Solution) -> u64 {
         let mut value: u64 = self.constant_term;
         for term in self.get_terms() {
             let domain_id = *term.0;

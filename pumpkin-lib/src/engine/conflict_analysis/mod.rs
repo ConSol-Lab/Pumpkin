@@ -6,6 +6,6 @@ mod conflict_analysis_context;
 mod resolution_conflict_analyser;
 
 pub(crate) use advanced_nogood::AdvancedNogood;
-pub use conflict_analysis_context::ConflictAnalysisNogoodContext;
-pub use resolution_conflict_analyser::LearnedNogood;
-pub use resolution_conflict_analyser::ResolutionNogoodConflictAnalyser;
+pub(crate) use conflict_analysis_context::ConflictAnalysisNogoodContext;
+pub(crate) use resolution_conflict_analyser::LearnedNogood;
+pub(crate) use resolution_conflict_analyser::ResolutionNogoodConflictAnalyser;

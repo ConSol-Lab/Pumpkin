@@ -91,14 +91,14 @@ pub(crate) mod propagator_constructor_context;
 pub(crate) mod propagator_id;
 pub(crate) mod propagator_var_id;
 
-pub use local_id::LocalId;
-pub use propagation_context::PropagationContext;
+pub(crate) use local_id::LocalId;
+pub(crate) use propagation_context::PropagationContext;
 pub(crate) use propagation_context::PropagationContextMut;
 pub(crate) use propagation_context::ReadDomains;
 pub(crate) use propagator::EnqueueDecision;
-pub use propagator::Propagator;
-pub use propagator_constructor::PropagatorConstructor;
-pub use propagator_constructor_context::PropagatorConstructorContext;
+pub(crate) use propagator::Propagator;
+pub(crate) use propagator_constructor::PropagatorConstructor;
+pub(crate) use propagator_constructor_context::PropagatorConstructorContext;
 pub(crate) use propagator_id::PropagatorId;
 pub(crate) use propagator_var_id::PropagatorVarId;
 

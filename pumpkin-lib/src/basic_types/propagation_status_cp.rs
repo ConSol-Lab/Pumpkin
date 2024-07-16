@@ -2,8 +2,9 @@ use crate::basic_types::PropositionalConjunction;
 use crate::engine::EmptyDomain;
 
 /// The result of invoking a constraint programming propagator. The propagation can either succeed
-/// or identify a conflict. The necessary conditions for the conflict must be captured in the
-/// conflict nogood.
+/// or identify a conflict. The necessary conditions for the conflict must be captured in the error
+/// variant, i.e. a propositional conjunction.
+pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Inconsistency {

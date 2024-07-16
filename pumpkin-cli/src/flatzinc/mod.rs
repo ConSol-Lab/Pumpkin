@@ -2,7 +2,6 @@ mod ast;
 mod compiler;
 pub(crate) mod error;
 mod instance;
-mod minizinc_optimiser;
 mod parser;
 
 use std::fs::File;
@@ -10,24 +9,23 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::basic_types::ProblemSolution;
-use pumpkin_lib::basic_types::SolutionReference;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::engine::predicates::predicate::Predicate;
-use pumpkin_lib::engine::termination::time_budget::TimeBudget;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-use pumpkin_lib::optimisation::log_statistics;
-use pumpkin_lib::optimisation::log_statistics_with_objective;
 use pumpkin_lib::predicate;
+use pumpkin_lib::predicates::Predicate;
+use pumpkin_lib::results::solution_iterator::IteratedSolution;
+use pumpkin_lib::results::OptimisationResult;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::Solution;
+use pumpkin_lib::results::SolutionReference;
+use pumpkin_lib::termination::Combinator;
+use pumpkin_lib::termination::OsSignal;
+use pumpkin_lib::termination::TimeBudget;
+use pumpkin_lib::Solver;
 
 use self::instance::FlatZincInstance;
 use self::instance::FlatzincObjective;
 use self::instance::Output;
-use self::minizinc_optimiser::MinizincOptimisationResult;
-use self::minizinc_optimiser::MinizincOptimiser;
 use crate::flatzinc::error::FlatZincError;
 
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
@@ -59,114 +57,129 @@ impl Default for FlatZincOptions {
 }
 
 pub(crate) fn solve(
-    mut solver: ConstraintSatisfactionSolver,
+    mut solver: Solver,
     instance: impl AsRef<Path>,
     time_limit: Option<Duration>,
     options: FlatZincOptions,
 ) -> Result<(), FlatZincError> {
     let instance = File::open(instance)?;
 
-    let mut termination = time_limit.map(TimeBudget::starting_now);
+    let mut termination = Combinator::new(
+        OsSignal::install(),
+        time_limit.map(TimeBudget::starting_now),
+    );
 
     let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
 
     let value = if let Some(objective_function) = &instance.objective_function {
-        let brancher = if options.free_search {
+        let mut brancher = if options.free_search {
             // The free search flag is active, we just use the default brancher
             DynamicBrancher::new(vec![Box::new(
-                IndependentVariableValueBrancher::default_over_all_variables(&solver),
+                solver.default_brancher_over_all_propositional_variables(),
             )])
         } else {
             instance.search.expect("Expected a search to be defined")
         };
 
-        let mut optimisation_solver = MinizincOptimiser::new(&mut solver, *objective_function);
-        match optimisation_solver.solve(&mut termination, brancher, &instance.outputs) {
-            MinizincOptimisationResult::Optimal {
-                optimal_objective_value,
-            } => {
-                // todo: add proof logging
+        if options.all_solutions {
+            solver.with_solution_callback(move |solution| {
+                print_solution_from_solver(solution, &outputs)
+            })
+        }
+
+        let result = match objective_function {
+            FlatzincObjective::Maximize(domain_id) => {
+                solver.maximise(&mut brancher, &mut termination, *domain_id)
+            }
+            FlatzincObjective::Minimize(domain_id) => {
+                solver.minimise(&mut brancher, &mut termination, *domain_id)
+            }
+        };
+
+        match result {
+            OptimisationResult::Optimal(optimal_solution) => {
+                let optimal_objective_value =
+                    optimal_solution.get_integer_value(*objective_function.get_domain());
                 // let objective_bound_literal = solver.get_literal(get_bound_predicate(
-                // objective_function,
-                // optimal_objective_value as i32,
+                //     *objective_function,
+                //     optimal_objective_value,
                 // ));
-                //
+
+                // todo: add proof logging
                 // if solver
-                // .conclude_proof_optimal(objective_bound_literal)
-                // .is_err()
+                //     .conclude_proof_optimal(objective_bound_literal)
+                //     .is_err()
                 // {
-                // warn!("Failed to log solver conclusion");
+                //     warn!("Failed to log solver conclusion");
                 // };
 
+                // If `all_solutions` is not turned on then we have not printed the solution yet and
+                // need to print it!
+                if !options.all_solutions {
+                    print_solution_from_solver(&optimal_solution, &instance.outputs)
+                }
                 println!("==========");
                 Some(optimal_objective_value)
             }
-            MinizincOptimisationResult::Satisfiable {
-                best_found_objective_value,
-            } => Some(best_found_objective_value),
-            MinizincOptimisationResult::Infeasible => {
-                // todo: readd proof logging
+            OptimisationResult::Satisfiable(solution) => {
+                let best_found_objective_value =
+                    solution.get_integer_value(*objective_function.get_domain());
+                Some(best_found_objective_value)
+            }
+            OptimisationResult::Unsatisfiable => {
+                // todo: add proof logging
                 // if solver.conclude_proof_unsat().is_err() {
-                // warn!("Failed to log solver conclusion");
+                //     warn!("Failed to log solver conclusion");
                 // };
 
                 println!("{MSG_UNSATISFIABLE}");
                 None
             }
-            MinizincOptimisationResult::Unknown => {
+            OptimisationResult::Unknown => {
                 println!("{MSG_UNKNOWN}");
                 None
             }
         }
     } else {
         let mut brancher = instance.search.expect("Expected a search to be defined");
-
-        let mut found_solution = false;
-
-        loop {
-            match solver.solve(&mut termination, &mut brancher) {
-                CSPSolverExecutionFlag::Feasible => {
-                    found_solution = true;
-
-                    #[allow(deprecated)]
-                    print_solution_from_solver(solver.get_solution_reference(), &outputs);
-
-                    #[allow(deprecated)]
-                    brancher.on_solution(solver.get_solution_reference());
-
-                    let could_find_another_solution =
-                        add_blocking_nogood(&mut solver, &outputs, &mut brancher);
-
-                    if !could_find_another_solution {
+        if options.all_solutions {
+            let mut solution_iterator =
+                solver.get_solution_iterator(&mut brancher, &mut termination);
+            loop {
+                match solution_iterator.next_solution() {
+                    IteratedSolution::Solution(solution) => {
+                        print_solution_reference_from_solver(&solution, &outputs);
+                    }
+                    IteratedSolution::Finished => {
                         println!("==========");
                         break;
                     }
+                    IteratedSolution::Unknown => {
+                        break;
+                    }
+                    IteratedSolution::Unsatisfiable => {
+                        println!("{MSG_UNSATISFIABLE}");
+                        break;
+                    }
                 }
-                CSPSolverExecutionFlag::Infeasible if !found_solution => {
-                    // todo: readd proof logging
+            }
+        } else {
+            match solver.satisfy(&mut brancher, &mut termination) {
+                SatisfactionResult::Satisfiable(solution) => {
+                    print_solution_from_solver(&solution, &outputs);
+                }
+                SatisfactionResult::Unsatisfiable => {
+                    // todo: add proof-logging
                     // if solver.conclude_proof_unsat().is_err() {
-                    // warn!("Failed to log solver conclusion");
+                    //     warn!("Failed to log solver conclusion");
                     // };
 
                     println!("{MSG_UNSATISFIABLE}");
-                    break;
                 }
-                CSPSolverExecutionFlag::Infeasible => {
-                    println!("==========");
-                    break;
-                }
-
-                // Only when no solutions are found should the UNKNOWN marker be printed.
-                CSPSolverExecutionFlag::Timeout if !found_solution => {
+                SatisfactionResult::Unknown => {
                     println!("{MSG_UNKNOWN}");
-                    break;
                 }
-                CSPSolverExecutionFlag::Timeout => break,
-            }
-
-            if !options.all_solutions {
-                break;
             }
         }
 
@@ -174,9 +187,9 @@ pub(crate) fn solve(
     };
 
     if let Some(value) = value {
-        log_statistics_with_objective(&solver, value)
+        solver.log_statistics_with_objective(value as i64)
     } else {
-        log_statistics(&solver)
+        solver.log_statistics()
     }
 
     Ok(())
@@ -193,77 +206,8 @@ fn get_bound_predicate(
     }
 }
 
-/// Creates a clause which prevents the current solution from occurring again by going over the
-/// defined output variables and creating a clause which prevents those values from being assigned.
-///
-/// This method is used when attempting to find multiple solutions. It restores the state of the
-/// passed [`ConstraintSatisfactionSolver`] to the root (using
-/// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the clause
-/// was successful (i.e. it is possible that there could be another solution) and returns false
-/// otherwise (i.e. if adding a clause led to a conflict which indicates that there are no more
-/// solutions).
-fn add_blocking_nogood(
-    solver: &mut ConstraintSatisfactionSolver,
-    outputs: &[Output],
-    brancher: &mut impl Brancher,
-) -> bool {
-    #[allow(deprecated)]
-    let solution = solver.get_solution_reference();
-
-    let nogood = outputs
-        .iter()
-        .flat_map(|output| match output {
-            Output::Bool(_bool) => {
-                todo!();
-                // let literal = *bool.get_variable();
-                //
-                // let literal = if solution.get_literal_value(literal) {
-                // literal
-                // } else {
-                // !literal
-                // };
-                //
-                // Box::new(std::iter::once(literal))
-            }
-
-            Output::Int(int) => {
-                let domain = *int.get_variable();
-                let value = solution.get_integer_value(domain);
-                Box::new(std::iter::once(predicate![domain == value]))
-            }
-
-            #[allow(trivial_casts)]
-            Output::ArrayOfBool(_array_of_bool) => {
-                todo!();
-                // Box::new(array_of_bool.get_contents().map(|&literal| {
-                // if solution.get_literal_value(literal) {
-                // literal
-                // } else {
-                // !literal
-                // }
-                // })) as Box<dyn Iterator<Item = BooleanDomainId>>
-            }
-
-            #[allow(trivial_casts)]
-            Output::ArrayOfInt(array_of_ints) => {
-                Box::new(array_of_ints.get_contents().map(|&domain| {
-                    let value = solution.get_integer_value(domain);
-                    predicate![domain == value]
-                })) as Box<dyn Iterator<Item = Predicate>>
-            }
-        })
-        .collect::<Vec<_>>();
-
-    solver.restore_state_at_root(brancher);
-    if nogood.is_empty() {
-        return false;
-    }
-
-    solver.add_nogood(nogood).is_ok()
-}
-
 fn parse_and_compile(
-    solver: &mut ConstraintSatisfactionSolver,
+    solver: &mut Solver,
     instance: impl Read,
     options: FlatZincOptions,
 ) -> Result<FlatZincInstance, FlatZincError> {
@@ -272,7 +216,32 @@ fn parse_and_compile(
 }
 
 /// Prints the current solution.
-fn print_solution_from_solver(solution: SolutionReference<'_>, outputs: &[Output]) {
+fn print_solution_from_solver(solution: &Solution, outputs: &[Output]) {
+    for output_specification in outputs {
+        match output_specification {
+            Output::Bool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
+
+            Output::Int(output) => {
+                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+            }
+
+            Output::ArrayOfBool(output) => {
+                output.print_value(|literal| solution.get_literal_value(*literal))
+            }
+
+            Output::ArrayOfInt(output) => {
+                output.print_value(|domain_id| solution.get_integer_value(*domain_id))
+            }
+        }
+    }
+
+    println!("----------");
+}
+
+/// Prints the current solution.
+fn print_solution_reference_from_solver(solution: &SolutionReference<'_>, outputs: &[Output]) {
     for output_specification in outputs {
         match output_specification {
             Output::Bool(output) => {
@@ -482,7 +451,7 @@ mod tests {
             array [1..2] of var bool: xs :: output_array([1..2]) = [x1,x2];
             solve satisfy;
         "#;
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
@@ -504,7 +473,7 @@ mod tests {
             array [1..4] of var bool: xs :: output_array([1..2, 1..2]) = [x1,x2,x3,x4];
             solve satisfy;
         "#;
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
@@ -522,7 +491,7 @@ mod tests {
             array [1..2] of var int: xs :: output_array([1..2]) = [x1,x2];
             solve satisfy;
         "#;
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())
@@ -544,7 +513,7 @@ mod tests {
             array [1..4] of var 1..10: xs :: output_array([1..2, 1..2]) = [x1,x2,x3,x4];
             solve satisfy;
         "#;
-        let mut solver = ConstraintSatisfactionSolver::default();
+        let mut solver = Solver::default();
 
         let instance =
             parse_and_compile(&mut solver, instance.as_bytes(), FlatZincOptions::default())

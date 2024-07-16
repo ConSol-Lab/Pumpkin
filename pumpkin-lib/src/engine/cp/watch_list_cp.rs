@@ -8,7 +8,7 @@ use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
 
 #[derive(Default, Debug)]
-pub struct WatchListCP {
+pub(crate) struct WatchListCP {
     watchers: KeyedVec<DomainId, WatcherCP>, /* contains propagator ids of propagators that
                                               * watch domain changes of the i-th integer
                                               * variable */
@@ -49,20 +49,16 @@ impl Display for IntDomainEvent {
 
 // public functions
 impl WatchListCP {
-    pub fn grow(&mut self) {
+    pub(crate) fn grow(&mut self) {
         self.watchers.push(WatcherCP::default());
     }
 
     #[allow(dead_code)]
-    pub fn is_watching_anything(&self) -> bool {
+    pub(crate) fn is_watching_anything(&self) -> bool {
         self.is_watching_anything
     }
 
-    pub fn num_domains(&self) -> u32 {
-        self.watchers.len() as u32
-    }
-
-    pub fn get_affected_propagators(
+    pub(crate) fn get_affected_propagators(
         &self,
         event: IntDomainEvent,
         domain: DomainId,
@@ -86,22 +82,7 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub fn watch(&mut self, domain: DomainId, event: IntDomainEvent) {
-        let watcher = &mut self.watch_list.watchers[domain];
-
-        let event_watcher = match event {
-            IntDomainEvent::LowerBound => &mut watcher.lower_bound_watchers,
-            IntDomainEvent::UpperBound => &mut watcher.upper_bound_watchers,
-            IntDomainEvent::Assign => &mut watcher.assign_watchers,
-            IntDomainEvent::Removal => &mut watcher.removal_watchers,
-        };
-
-        if !event_watcher.contains(&self.propagator_var) {
-            event_watcher.push(self.propagator_var);
-        }
-    }
-
-    pub fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
+    pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
         self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 

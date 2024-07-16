@@ -16,6 +16,7 @@ use crate::engine::Watchers;
 pub struct PropagatorConstructorContext<'a> {
     watch_list: &'a mut WatchListCP,
     propagator_id: PropagatorId,
+    next_local_id: LocalId,
 }
 
 impl PropagatorConstructorContext<'_> {
@@ -26,6 +27,7 @@ impl PropagatorConstructorContext<'_> {
         PropagatorConstructorContext {
             watch_list,
             propagator_id,
+            next_local_id: LocalId::from(0),
         }
     }
 
@@ -50,9 +52,15 @@ impl PropagatorConstructorContext<'_> {
             variable: local_id,
         };
 
+        self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
+
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all(&mut watchers, domain_events.get_int_events());
 
         var
+    }
+
+    pub fn get_next_local_id(&self) -> LocalId {
+        self.next_local_id
     }
 }

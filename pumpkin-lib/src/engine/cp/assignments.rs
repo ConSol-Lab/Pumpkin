@@ -13,7 +13,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug, Default)]
 pub struct Assignments {
-    pub trail: Trail<ConstraintProgrammingTrailEntry>,
+    pub(crate) trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: KeyedVec<DomainId, IntegerDomain>,
     events: EventSink,
 }
@@ -22,35 +22,38 @@ pub struct Assignments {
 pub struct EmptyDomain;
 
 impl Assignments {
-    pub fn increase_decision_level(&mut self) {
+    pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
 
-    pub fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         self.trail.get_decision_level()
     }
 
-    pub fn num_domains(&self) -> u32 {
+    pub(crate) fn num_domains(&self) -> u32 {
         self.domains.len() as u32
     }
 
-    pub fn get_domains(&self) -> DomainGeneratorIterator {
-        DomainGeneratorIterator::new(0, self.num_domains())
+    pub(crate) fn get_domains(&self) -> DomainGeneratorIterator {
+        // todo: we use 1 here to prevent the always true literal from ending up in the blocking
+        // clause
+        DomainGeneratorIterator::new(1, self.num_domains())
     }
 
-    pub fn num_trail_entries(&self) -> usize {
+    pub(crate) fn num_trail_entries(&self) -> usize {
         self.trail.len()
     }
 
-    pub fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
+    pub(crate) fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
         self.trail[index]
     }
 
-    pub fn get_last_entry_on_trail(&self) -> ConstraintProgrammingTrailEntry {
+    pub(crate) fn get_last_entry_on_trail(&self) -> ConstraintProgrammingTrailEntry {
         *self.trail.last().unwrap()
     }
 
-    pub fn get_last_predicates_on_trail(
+    #[allow(dead_code)]
+    pub(crate) fn get_last_predicates_on_trail(
         &self,
         num_predicates: usize,
     ) -> impl Iterator<Item = Predicate> + '_ {
@@ -59,7 +62,8 @@ impl Assignments {
             .map(|e| e.predicate)
     }
 
-    pub fn get_last_entries_on_trail(
+    #[allow(dead_code)]
+    pub(crate) fn get_last_entries_on_trail(
         &self,
         num_predicates: usize,
     ) -> &[ConstraintProgrammingTrailEntry] {
@@ -70,7 +74,7 @@ impl Assignments {
     // note that this is an internal method that does _not_ allocate additional information
     // necessary for the solver apart from the domain when creating a new integer variable, use
     // create_new_domain_id in the ConstraintSatisfactionSolver
-    pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+    pub(crate) fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         let id = DomainId {
             id: self.num_domains(),
         };
@@ -83,11 +87,13 @@ impl Assignments {
         id
     }
 
-    pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+    pub(crate) fn drain_domain_events(
+        &mut self,
+    ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain()
     }
 
-    pub fn debug_create_empty_clone(&self) -> Self {
+    pub(crate) fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
         let event_sink = EventSink::new(domains.len());
         self.trail.iter().rev().for_each(|entry| {
@@ -103,11 +109,11 @@ impl Assignments {
 
 // methods for getting info about the domains
 impl Assignments {
-    pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
+    pub(crate) fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].lower_bound()
     }
 
-    pub fn get_lower_bound_at_trail_position(
+    pub(crate) fn get_lower_bound_at_trail_position(
         &self,
         domain_id: DomainId,
         trail_position: usize,
@@ -115,11 +121,11 @@ impl Assignments {
         self.domains[domain_id].lower_bound_at_trail_position(trail_position)
     }
 
-    pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
+    pub(crate) fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].upper_bound()
     }
 
-    pub fn get_upper_bound_at_trail_position(
+    pub(crate) fn get_upper_bound_at_trail_position(
         &self,
         domain_id: DomainId,
         trail_position: usize,
@@ -127,15 +133,15 @@ impl Assignments {
         self.domains[domain_id].upper_bound_at_trail_position(trail_position)
     }
 
-    pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
+    pub(crate) fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].initial_lower_bound()
     }
 
-    pub fn get_initial_upper_bound(&self, domain_id: DomainId) -> i32 {
+    pub(crate) fn get_initial_upper_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].initial_upper_bound()
     }
 
-    pub fn get_initial_holes(&self, domain_id: DomainId) -> Vec<i32> {
+    pub(crate) fn get_initial_holes(&self, domain_id: DomainId) -> Vec<i32> {
         self.domains[domain_id]
             .hole_updates
             .iter()
@@ -144,7 +150,7 @@ impl Assignments {
             .collect()
     }
 
-    pub fn get_assigned_value(&self, domain_id: DomainId) -> Option<i32> {
+    pub(crate) fn get_assigned_value(&self, domain_id: DomainId) -> Option<i32> {
         if self.is_domain_assigned(domain_id) {
             Some(self.domains[domain_id].lower_bound())
         } else {
@@ -152,7 +158,7 @@ impl Assignments {
         }
     }
 
-    pub fn get_assigned_value_at_trail_position(
+    pub(crate) fn get_assigned_value_at_trail_position(
         &self,
         domain_id: DomainId,
         trail_position: usize,
@@ -164,11 +170,12 @@ impl Assignments {
         }
     }
 
-    pub fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
+    #[allow(dead_code)]
+    pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
         self.domains[domain_id].domain_iterator()
     }
 
-    pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
+    pub(crate) fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
         // if fixed, this is just one predicate
@@ -191,12 +198,12 @@ impl Assignments {
         predicates
     }
 
-    pub fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
+    pub(crate) fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
         let domain = &self.domains[domain_id];
         domain.contains(value)
     }
 
-    pub fn is_value_in_domain_at_trail_position(
+    pub(crate) fn is_value_in_domain_at_trail_position(
         &self,
         domain_id: DomainId,
         value: i32,
@@ -205,11 +212,11 @@ impl Assignments {
         self.domains[domain_id].contains_at_trail_position(value, trail_position)
     }
 
-    pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
+    pub(crate) fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
         self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
     }
 
-    pub fn is_domain_assigned_at_trail_position(
+    pub(crate) fn is_domain_assigned_at_trail_position(
         &self,
         domain_id: DomainId,
         trail_position: usize,
@@ -218,7 +225,7 @@ impl Assignments {
             == self.get_upper_bound_at_trail_position(domain_id, trail_position)
     }
 
-    pub fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
+    pub(crate) fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
         self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
     }
 
@@ -227,13 +234,13 @@ impl Assignments {
     /// Note that it is not necessary for the predicate to be explicitly present on the trail,
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
-    pub fn get_trail_position(&self, predicate: &Predicate) -> Option<usize> {
+    pub(crate) fn get_trail_position(&self, predicate: &Predicate) -> Option<usize> {
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
             .map(|u| u.trail_position)
     }
 
-    pub fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
+    pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
         // println!(
         // "{} {} {:?}",
         // predicate,
@@ -255,7 +262,7 @@ impl Assignments {
 
 // methods to change the domains
 impl Assignments {
-    pub fn tighten_lower_bound(
+    pub(crate) fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
         new_lower_bound: i32,
@@ -297,7 +304,7 @@ impl Assignments {
         domain.verify_consistency()
     }
 
-    pub fn tighten_upper_bound(
+    pub(crate) fn tighten_upper_bound(
         &mut self,
         domain_id: DomainId,
         new_upper_bound: i32,
@@ -339,7 +346,7 @@ impl Assignments {
         domain.verify_consistency()
     }
 
-    pub fn make_assignment(
+    pub(crate) fn make_assignment(
         &mut self,
         domain_id: DomainId,
         assigned_value: i32,
@@ -360,7 +367,7 @@ impl Assignments {
         self.domains[domain_id].verify_consistency()
     }
 
-    pub fn remove_value_from_domain(
+    pub(crate) fn remove_value_from_domain(
         &mut self,
         domain_id: DomainId,
         removed_value_from_domain: i32,
@@ -407,7 +414,7 @@ impl Assignments {
     /// In case where the [`Predicate`] is already true, this does nothing. If instead
     /// applying the [`Predicate`] leads to an [`EmptyDomain`], the error variant is
     /// returned.
-    pub fn post_predicate(
+    pub(crate) fn post_predicate(
         &mut self,
         predicate: Predicate,
         reason: Option<ReasonRef>,
@@ -435,7 +442,7 @@ impl Assignments {
     /// Determines whether the provided [`Predicate`] holds in the current state of the
     /// [`Assignments`]. In case the predicate is not assigned yet (neither true nor false),
     /// returns None.
-    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+    pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         match predicate {
             Predicate::LowerBound {
                 domain_id,
@@ -495,7 +502,7 @@ impl Assignments {
         }
     }
 
-    pub fn evaluate_predicate_at_trail_position(
+    pub(crate) fn evaluate_predicate_at_trail_position(
         &self,
         predicate: Predicate,
         trail_position: usize,
@@ -577,12 +584,14 @@ impl Assignments {
         }
     }
 
-    pub fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
     }
 
-    pub fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
     }
@@ -591,7 +600,7 @@ impl Assignments {
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
     /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
-    pub fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
+    pub(crate) fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
         self.trail.synchronise(new_decision_level).for_each(|entry| {
             pumpkin_assert_moderate!(
@@ -617,7 +626,7 @@ impl Assignments {
     }
 
     /// todo: This is a temporary hack, not to be used in general.
-    pub fn remove_last_trail_element(&mut self) {
+    pub(crate) fn remove_last_trail_element(&mut self) {
         let entry = self.trail.pop().unwrap();
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
@@ -626,7 +635,7 @@ impl Assignments {
 
 #[cfg(test)]
 impl Assignments {
-    pub fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
+    pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
         self.trail
             .iter()
             .find_map(|entry| {
@@ -641,16 +650,16 @@ impl Assignments {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ConstraintProgrammingTrailEntry {
-    pub predicate: Predicate,
+pub(crate) struct ConstraintProgrammingTrailEntry {
+    pub(crate) predicate: Predicate,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
     ///  to update the bounds when backtracking.
-    pub old_lower_bound: i32,
-    pub old_upper_bound: i32,
+    pub(crate) old_lower_bound: i32,
+    pub(crate) old_upper_bound: i32,
     /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
     /// the update was due  to synchronisation from the propositional trail.
-    pub reason: Option<ReasonRef>,
+    pub(crate) reason: Option<ReasonRef>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -789,6 +798,7 @@ impl IntegerDomain {
             .bound
     }
 
+    #[allow(dead_code)]
     fn domain_iterator(&self) -> IntegerDomainIterator {
         // Ideally we use into_iter but I did not manage to get it to work,
         // because the iterator takes a lifelines
@@ -1179,12 +1189,13 @@ impl IntegerDomain {
 }
 
 #[derive(Debug)]
-pub struct IntegerDomainIterator<'a> {
+pub(crate) struct IntegerDomainIterator<'a> {
     domain: &'a IntegerDomain,
     current_value: i32,
 }
 
 impl IntegerDomainIterator<'_> {
+    #[allow(dead_code)]
     fn new(domain: &IntegerDomain) -> IntegerDomainIterator {
         IntegerDomainIterator {
             domain,

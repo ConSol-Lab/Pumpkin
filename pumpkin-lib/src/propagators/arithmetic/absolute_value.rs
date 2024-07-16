@@ -1,9 +1,8 @@
-use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
@@ -11,7 +10,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 
 #[derive(Debug)]
-pub struct AbsoluteValueConstructor<VA, VB> {
+pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,
     /// The absolute of `signed`.
@@ -23,7 +22,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
 {
     type Propagator = AbsoluteValuePropagator<VA, VB>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let signed = context.register(self.signed, DomainEvents::BOUNDS, LocalId::from(0));
         let absolute = context.register(self.absolute, DomainEvents::BOUNDS, LocalId::from(1));
 
@@ -36,18 +35,12 @@ impl<VA: IntegerVariable, VB: IntegerVariable> PropagatorConstructor
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
 #[derive(Debug)]
-pub struct AbsoluteValuePropagator<VA, VB> {
+pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     signed: VA,
     absolute: VB,
 }
 
 impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
-        self.debug_propagate_from_scratch(context)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -56,20 +49,14 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
         "IntAbs"
     }
 
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
         // The bound of absolute may be tightened further during propagation, but it is at least
         // zero at the root.
         context.set_lower_bound(&self.absolute, 0, conjunction!())?;
-        self.propagate(context)
-    }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
         // Propagating absolute value can be broken into a few cases:
         // - `signed` is sign-fixed (i.e. `upper_bound <= 0` or `lower_bound >= 0`), in which case
         //   the bounds of `signed` can be propagated to `absolute` (taking care of swapping bounds

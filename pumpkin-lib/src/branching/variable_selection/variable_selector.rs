@@ -3,8 +3,6 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::optimisation::LinearSearch;
 
 /// A trait containing the interface for [`VariableSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting
@@ -23,8 +21,7 @@ pub trait VariableSelector<Var> {
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
     /// [`DomainId`] which has been reset. This method could thus be called multiple times in a
-    /// single backtracking operation by the solver
-    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
+    /// single backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// A function which is called when a variable appears in a conflict during conflict analysis

@@ -2,25 +2,15 @@
 
 use std::rc::Rc;
 
-use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::engine::variables::AffineView;
-use pumpkin_lib::engine::variables::DomainId;
-use pumpkin_lib::engine::variables::Literal;
-use pumpkin_lib::engine::variables::TransformableVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::constraints;
+use pumpkin_lib::constraints::Constraint;
+use pumpkin_lib::constraints::NegatableConstraint;
+use pumpkin_lib::variables::AffineView;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::TransformableVariable;
 
-use super::constraints::bool_lin_eq;
-use super::constraints::bool_lin_le;
-use super::constraints::int_eq_reif;
-use super::constraints::int_le_reif;
-use super::constraints::int_lin_eq_reif;
-use super::constraints::int_lin_le_reif;
-use super::constraints::int_lin_ne_reif;
-use super::constraints::int_lt_reif;
-use super::constraints::int_ne_reif;
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
-use crate::flatzinc::compiler::constraints::array_bool_or;
 use crate::flatzinc::FlatZincError;
 use crate::flatzinc::FlatZincOptions;
 
@@ -32,9 +22,19 @@ pub(crate) fn run(
     for constraint_item in &ast.constraint_decls {
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
-        let is_satisfiable = match id.as_str() {
+        let is_satisfiable: bool = match id.as_str() {
             "array_int_maximum" => compile_array_int_maximum(context, exprs)?,
             "array_int_minimum" => compile_array_int_minimum(context, exprs)?,
+            "int_max" => {
+                compile_ternary_int_predicate(context, exprs, annos, "int_max", |a, b, c| {
+                    constraints::maximum([a, b], c)
+                })?
+            }
+            "int_min" => {
+                compile_ternary_int_predicate(context, exprs, annos, "int_min", |a, b, c| {
+                    constraints::minimum([a, b], c)
+                })?
+            }
 
             // We rewrite `array_int_element` to `array_var_int_element`.
             "array_int_element" => compile_array_var_int_element(context, exprs)?,
@@ -45,108 +45,123 @@ pub(crate) fn run(
                 exprs,
                 annos,
                 "int_lin_ne",
-                |solver, terms, rhs| solver.int_lin_ne(terms, rhs),
+                constraints::not_equals,
             )?,
             "int_lin_ne_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_ne_reif",
-                int_lin_ne_reif,
+                constraints::not_equals,
             )?,
             "int_lin_le" => compile_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le",
-                |solver, terms, rhs| solver.int_lin_le(terms, rhs),
+                constraints::less_than_or_equals,
             )?,
             "int_lin_le_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_le_reif",
-                int_lin_le_reif,
+                constraints::less_than_or_equals,
             )?,
-            "int_lin_eq" => compile_int_lin_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lin_eq",
-                |solver, terms, rhs| solver.int_lin_eq(terms, rhs),
-            )?,
+            "int_lin_eq" => {
+                compile_int_lin_predicate(context, exprs, annos, "int_lin_eq", constraints::equals)?
+            }
             "int_lin_eq_reif" => compile_reified_int_lin_predicate(
                 context,
                 exprs,
                 annos,
                 "int_lin_eq_reif",
-                int_lin_eq_reif,
+                constraints::equals,
             )?,
-            "int_ne" => {
-                compile_binary_int_predicate(context, exprs, annos, "int_ne", |solver, a, b| {
-                    solver.int_ne(a, b)
-                })?
-            }
+            "int_ne" => compile_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_ne",
+                constraints::binary_not_equals,
+            )?,
             "int_ne_reif" => compile_reified_binary_int_predicate(
                 context,
                 exprs,
                 annos,
                 "int_ne_reif",
-                int_ne_reif,
+                constraints::binary_not_equals,
             )?,
-            "int_le" => {
-                compile_binary_int_predicate(context, exprs, annos, "int_le", |solver, a, b| {
-                    solver.int_le(a, b)
-                })?
-            }
-            "int_le_reif" => compile_reified_binary_int_predicate(
+            "int_eq" => compile_binary_int_predicate(
                 context,
                 exprs,
                 annos,
-                "int_le_reif",
-                int_le_reif,
+                "int_eq",
+                constraints::binary_equals,
             )?,
-            "int_lt" => {
-                compile_binary_int_predicate(context, exprs, annos, "int_lt", |solver, a, b| {
-                    solver.int_lt(a, b)
-                })?
-            }
-            "int_lt_reif" => compile_reified_binary_int_predicate(
-                context,
-                exprs,
-                annos,
-                "int_lt_reif",
-                int_lt_reif,
-            )?,
-            "int_eq" => {
-                compile_binary_int_predicate(context, exprs, annos, "int_eq", |solver, a, b| {
-                    solver.int_eq(a, b)
-                })?
-            }
             "int_eq_reif" => compile_reified_binary_int_predicate(
                 context,
                 exprs,
                 annos,
                 "int_eq_reif",
-                int_eq_reif,
+                constraints::binary_equals,
             )?,
-            "int_plus" => compile_ternary_int_predicate(context, exprs, annos, "int_plus", |solver, a, b, c| {
-                solver.int_plus(a, b, c)
-            })?,
-            "int_times" => compile_ternary_int_predicate(context, exprs, annos, "int_times", |solver, a, b, c| {
-                solver.int_times(a, b, c)
-            })?,
-            "int_div" => compile_ternary_int_predicate(context, exprs, annos, "int_div", |solver, a, b, c| {
-                solver.int_div(a, b, c)
-            })?,
-            "int_abs" => {
-                compile_binary_int_predicate(context, exprs, annos, "int_abs", |solver, a, b| {
-                    solver.int_abs(a, b)
-                })?
+            "int_le" => compile_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_le",
+                constraints::binary_less_than_or_equals,
+            )?,
+            "int_le_reif" => compile_reified_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_le_reif",
+                constraints::binary_less_than_or_equals,
+            )?,
+            "int_lt" => compile_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lt",
+                constraints::binary_less_than,
+            )?,
+            "int_lt_reif" => compile_reified_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_lt_reif",
+                constraints::binary_less_than,
+            )?,
+
+            "int_plus" => {
+                compile_ternary_int_predicate(context, exprs, annos, "int_plus", constraints::plus)?
             }
-            "int_max" => compile_int_max(context, exprs)?,
-            "int_min" => compile_int_min(context, exprs)?,
-            "fzn_all_different_int" => compile_all_different(context, exprs, annos)?,
+
+            "int_times" => compile_ternary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_times",
+                constraints::times,
+            )?,
+            "int_div" => compile_ternary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_div",
+                constraints::division,
+            )?,
+            "int_abs" => compile_binary_int_predicate(
+                context,
+                exprs,
+                annos,
+                "int_abs",
+                constraints::absolute,
+            )?,
+
+            "pumpkin_all_different" => compile_all_different(context, exprs, annos)?,
 
             "array_bool_and" => compile_array_bool_and(context, exprs)?,
             "array_bool_element" => {
@@ -174,16 +189,15 @@ pub(crate) fn run(
             "bool_eq" => compile_bool_eq(context, exprs)?,
             "bool_eq_reif" => compile_bool_eq_reif(context, exprs)?,
             "bool_not" => compile_bool_not(context, exprs)?,
-
             "set_in_reif" => compile_set_in_reif(context, exprs)?,
             "set_in" => {
-                // We do not do anything further as we handle the domain changes in a pre-processing step (see `handle_set_in.rs`).
+                // 'set_in' constraints are handled in pre-processing steps.
+                // TODO: remove it from the AST, so it does not need to be matched here
                 true
-            },
+            }
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
-
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -219,13 +233,15 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    Ok(context.solver.cumulative(
+    let post_result = constraints::cumulative(
         &start_times,
         &durations,
         &resource_requirements,
         resource_capacity,
         options.cumulative_allow_holes,
-    ))
+    )
+    .post(context.solver);
+    Ok(post_result.is_ok())
 }
 
 fn compile_array_int_maximum(
@@ -237,7 +253,9 @@ fn compile_array_int_maximum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(context.solver.maximum(array.as_ref(), rhs))
+    Ok(constraints::maximum(array.as_ref(), rhs)
+        .post(context.solver)
+        .is_ok())
 }
 
 fn compile_array_int_minimum(
@@ -249,33 +267,9 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(context.solver.minimum(array.iter().copied(), rhs))
-}
-
-fn compile_int_max(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
-) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_max");
-
-    let a = context.resolve_integer_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
-    let c = context.resolve_integer_variable(&exprs[2])?;
-
-    Ok(context.solver.maximum([a, b], c))
-}
-
-fn compile_int_min(
-    context: &mut CompilationContext<'_>,
-    exprs: &[flatzinc::Expr],
-) -> Result<bool, FlatZincError> {
-    check_parameters!(exprs, 3, "int_min");
-
-    let a = context.resolve_integer_variable(&exprs[0])?;
-    let b = context.resolve_integer_variable(&exprs[1])?;
-    let c = context.resolve_integer_variable(&exprs[2])?;
-
-    Ok(context.solver.minimum([a, b], c))
+    Ok(constraints::minimum(array.iter().copied(), rhs)
+        .post(context.solver)
+        .is_ok())
 }
 
 fn compile_set_in_reif(
@@ -356,9 +350,9 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(context
-        .solver
-        .array_var_int_element(index, array.as_ref(), rhs))
+    Ok(constraints::element(index, array.as_ref(), rhs)
+        .post(context.solver)
+        .is_ok())
 }
 
 fn compile_bool_not(
@@ -488,7 +482,9 @@ fn compile_bool_or(
     let clause = context.resolve_bool_variable_array(&exprs[0])?;
     let r = context.resolve_bool_variable(&exprs[1])?;
 
-    Ok(array_bool_or(context.solver, clause.as_ref(), r))
+    Ok(constraints::clause(clause.as_ref())
+        .reify(context.solver, r)
+        .is_ok())
 }
 
 fn compile_bool_xor(
@@ -587,17 +583,12 @@ fn compile_array_bool_and(
     // Ok(first_implication && second_implication)
 }
 
-fn compile_ternary_int_predicate(
+fn compile_ternary_int_predicate<C: Constraint>(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        DomainId,
-        DomainId,
-        DomainId,
-    ) -> bool,
+    create_constraint: impl FnOnce(DomainId, DomainId, DomainId) -> C,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -605,30 +596,32 @@ fn compile_ternary_int_predicate(
     let b = context.resolve_integer_variable(&exprs[1])?;
     let c = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(post_constraint(context.solver, a, b, c))
+    let constraint = create_constraint(a, b, c);
+    Ok(constraint.post(context.solver).is_ok())
 }
 
-fn compile_binary_int_predicate(
+fn compile_binary_int_predicate<C: Constraint>(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId) -> bool,
+    create_constraint: impl FnOnce(DomainId, DomainId) -> C,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, predicate_name);
 
     let a = context.resolve_integer_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(post_constraint(context.solver, a, b))
+    let constraint = create_constraint(a, b);
+    Ok(constraint.post(context.solver).is_ok())
 }
 
-fn compile_reified_binary_int_predicate(
+fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(&mut ConstraintSatisfactionSolver, DomainId, DomainId, Literal) -> bool,
+    create_constraint: impl FnOnce(DomainId, DomainId) -> C,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -636,7 +629,8 @@ fn compile_reified_binary_int_predicate(
     let b = context.resolve_integer_variable(&exprs[1])?;
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
-    Ok(post_constraint(context.solver, a, b, reif))
+    let constraint = create_constraint(a, b);
+    Ok(constraint.reify(context.solver, reif).is_ok())
 }
 
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
@@ -646,16 +640,12 @@ fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<Do
         .collect::<Box<[_]>>()
 }
 
-fn compile_int_lin_predicate(
+fn compile_int_lin_predicate<C: Constraint>(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        Box<[AffineView<DomainId>]>,
-        i32,
-    ) -> bool,
+    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32) -> C,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, predicate_name);
 
@@ -665,20 +655,16 @@ fn compile_int_lin_predicate(
 
     let terms = weighted_vars(weights, vars);
 
-    Ok(post_constraint(context.solver, terms, rhs))
+    let constraint = create_constraint(terms, rhs);
+    Ok(constraint.post(context.solver).is_ok())
 }
 
-fn compile_reified_int_lin_predicate(
+fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     context: &mut CompilationContext,
     exprs: &[flatzinc::Expr],
     _: &[flatzinc::Annotation],
     predicate_name: &str,
-    post_constraint: impl FnOnce(
-        &mut ConstraintSatisfactionSolver,
-        Box<[AffineView<DomainId>]>,
-        i32,
-        Literal,
-    ) -> bool,
+    create_constraint: impl FnOnce(Box<[AffineView<DomainId>]>, i32) -> C,
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 4, predicate_name);
 
@@ -689,7 +675,8 @@ fn compile_reified_int_lin_predicate(
 
     let terms = weighted_vars(weights, vars);
 
-    Ok(post_constraint(context.solver, terms, rhs, reif))
+    let constraint = create_constraint(terms, rhs);
+    Ok(constraint.reify(context.solver, reif).is_ok())
 }
 
 fn compile_bool_lin_eq_predicate(
@@ -702,7 +689,11 @@ fn compile_bool_lin_eq_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(bool_lin_eq(context.solver, &weights, &bools, rhs))
+    Ok(
+        constraints::boolean_equals(weights.as_ref(), bools.as_ref(), rhs)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_bool_lin_le_predicate(
@@ -715,7 +706,11 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(bool_lin_le(context.solver, &weights, &bools, rhs))
+    Ok(
+        constraints::boolean_less_than_or_equals(weights.as_ref(), bools.as_ref(), rhs)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_all_different(
@@ -726,5 +721,7 @@ fn compile_all_different(
     check_parameters!(exprs, 1, "fzn_all_different");
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
-    Ok(context.solver.all_different(variables))
+    Ok(constraints::all_different(variables)
+        .post(context.solver)
+        .is_ok())
 }
