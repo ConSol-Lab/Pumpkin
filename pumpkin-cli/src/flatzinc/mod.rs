@@ -75,9 +75,7 @@ pub(crate) fn solve(
     let value = if let Some(objective_function) = &instance.objective_function {
         let mut brancher = if options.free_search {
             // The free search flag is active, we just use the default brancher
-            DynamicBrancher::new(vec![Box::new(
-                solver.default_brancher_over_all_propositional_variables(),
-            )])
+            DynamicBrancher::new(vec![Box::new(solver.default_brancher())])
         } else {
             instance.search.expect("Expected a search to be defined")
         };

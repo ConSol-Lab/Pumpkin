@@ -1,17 +1,20 @@
+use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::basic_types::KeyValueHeap;
-use crate::basic_types::KeyedVec;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StorageKey;
 use crate::branching::Brancher;
+use crate::branching::InDomainRandom;
+use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::results::Solution;
+use crate::variables::DomainId;
 
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
-/// and \[2\]]<https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf>.
+/// and [Solution Guided Search \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
 /// There are two components: 1) predicate selection, and 2) truth value assignment.
 ///
 /// Predicate selection: The VSIDS algorithm is an adaptation for the CP case. It determines which
@@ -35,7 +38,7 @@ use crate::engine::Assignments;
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 #[derive(Debug)]
 #[allow(dead_code)]
-pub struct AutonomousSearch {
+pub struct AutonomousSearch<BackupBrancher> {
     /// Predicates are mapped to ids. This is used internally in the heap.
     predicate_id_info: PredicateIdGenerator,
     /// Stores the activities for a predicate, represented with its id.
@@ -56,20 +59,31 @@ pub struct AutonomousSearch {
     /// [`Vsids::increment`] since 0 <= [`Vsids::decay_factor`] <= 1).
     /// The decay factor is constant.
     decay_factor: f64,
-
-    best_known_solution: KeyedVec<DomainId, i32>,
+    /// Contains the best-known solution or [`None`] if no solution has been found.
+    best_known_solution: Option<Solution>,
+    /// If the heap does not contain any more unfixed predicates then this backup_brancher will be
+    /// used instead.
+    backup_brancher: BackupBrancher,
 }
 
 const DEFAULT_VSIDS_INCREMENT: f64 = 1.0;
 const DEFAULT_VSIDS_MAX_THRESHOLD: f64 = 1e100;
 const DEFAULT_VSIDS_DECAY_FACTOR: f64 = 0.95;
-// const DEFAULT_VSIDS_VALUE: f64 = 0.0;
+const DEFAULT_VSIDS_VALUE: f64 = 0.0;
 
-impl Default for AutonomousSearch {
+impl
+    AutonomousSearch<
+        IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainRandom>,
+    >
+{
     /// Creates a new instance with default values for
     /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
-    fn default() -> Self {
+    ///
+    /// If there are no more predicates left to select, this [`Brancher`] switches to [`InputOrder`]
+    /// with [`InDomainRandom`].
+    pub fn default_over_all_variables(assignments: &Assignments) -> Self {
+        let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),
@@ -77,46 +91,74 @@ impl Default for AutonomousSearch {
             increment: DEFAULT_VSIDS_INCREMENT,
             max_threshold: DEFAULT_VSIDS_MAX_THRESHOLD,
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
-            best_known_solution: KeyedVec::default(),
+            best_known_solution: None,
+            backup_brancher: IndependentVariableValueBrancher::new(
+                InputOrder::new(&variables),
+                InDomainRandom,
+            ),
         }
     }
 }
 
-impl AutonomousSearch {
-    /// Resizes the heap to accommodate for the id.
-    /// Recall that the underlying heap uses direct hashing.
-    #[allow(dead_code)]
-    fn resize_heap(&mut self, id: PredicateId) {
-        while self.heap.len() <= id.index() {
-            self.heap.grow(id, 0.0);
+impl<BackupSelector> AutonomousSearch<BackupSelector> {
+    /// Creates a new instance with default values for
+    /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
+    /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
+    ///
+    /// Uses the `backup_brancher` in case there are no more predicates to be selected by VSIDS.
+    pub fn new(backup_brancher: BackupSelector) -> Self {
+        AutonomousSearch {
+            predicate_id_info: PredicateIdGenerator::default(),
+            heap: KeyValueHeap::default(),
+            dormant_predicates: vec![],
+            increment: DEFAULT_VSIDS_INCREMENT,
+            max_threshold: DEFAULT_VSIDS_MAX_THRESHOLD,
+            decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
+            best_known_solution: None,
+            backup_brancher,
         }
     }
+
+    fn minimum_activity_threshold(&self) -> f64 {
+        1_f64 / self.increment
+    }
+
+    /// Resizes the heap to accommodate for the id.
+    /// Recall that the underlying heap uses direct hashing.
+    fn resize_heap(&mut self, id: PredicateId) {
+        while self.heap.len() <= id.index() {
+            self.heap.grow(id, DEFAULT_VSIDS_VALUE);
+        }
+    }
+
     /// Bumps the activity of a predicate by [`Vsids::increment`].
     /// Used when a predicate is encountered during a conflict.
-    #[allow(dead_code)]
     fn bump_activity(&mut self, predicate: Predicate) {
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
+
         // Scale the activities if the values are too large.
         // Also remove predicates that have activities close to zero.
         let activity = self.heap.get_value(id);
         if activity + self.increment >= self.max_threshold {
             // Adjust heap values.
             self.heap.divide_values(self.max_threshold);
+
             // Remove inactive predicates from the heap,
             // and stage the ids for removal from the id generator.
-            let mut deleted_ids = vec![];
-            let small_activity = 1_f64 / self.increment;
-            for id in self.predicate_id_info.iter() {
-                if *self.heap.get_value(id) <= small_activity {
-                    self.heap.delete_key(id);
-                    deleted_ids.push(id);
+            self.predicate_id_info.iter().for_each(|predicate_id| {
+                // If the predicate does not reach the minimum activity threshold then we remove it
+                // from the heap and we remove its id from the generator
+                //
+                // Note that we check whether the current predicate being removed is not the
+                // predicate is being bumped, this is to prevent multiple IDs from being assigned.
+                if *self.heap.get_value(predicate_id) <= self.minimum_activity_threshold()
+                    && predicate_id != id
+                {
+                    self.heap.delete_key(predicate_id);
+                    self.predicate_id_info.delete_id(predicate_id);
                 }
-            }
-            // Now remove the ids from the generator.
-            for deleted_id in deleted_ids {
-                self.predicate_id_info.delete_id(deleted_id);
-            }
+            });
             // Adjust increment. It is important to adjust the increment after the above code.
             self.increment /= self.max_threshold;
         }
@@ -144,6 +186,9 @@ impl AutonomousSearch {
                     .expect("We expected present predicates to be registered.");
                 if context.is_predicate_assigned(predicate) {
                     let _ = self.heap.pop_max();
+
+                    // We know that this predicate is now dormant
+                    self.dormant_predicates.push(predicate);
                 } else {
                     return Some(predicate);
                 }
@@ -153,30 +198,50 @@ impl AutonomousSearch {
         }
     }
 
+    /// Determines whether the provided [`Predicate`] should be returned as is or whether its
+    /// negation should be returned. This is determined based on its assignment in the best-known
+    /// solution.
+    ///
+    /// For example, if we have found the solution `x = 5` then the call `determine_polarity([x >=
+    /// 3])` would return `true`.
     fn determine_polarity(&self, predicate: Predicate) -> Predicate {
-        if self.best_known_solution.is_empty() {
-            predicate
-        } else {
+        if let Some(solution) = &self.best_known_solution {
+            // We have a solution
             assert!(
-                predicate.get_domain().id < self.best_known_solution.len() as u32,
+                solution.contains_domain_id(predicate.get_domain()),
                 "For now we do not expect new variables during the search"
             );
             // Match the truth value according to the best solution.
-            todo!();
+            if solution.is_predicate_satisfied(predicate) {
+                predicate
+            } else {
+                !predicate
+            }
+        } else {
+            // We do not have a solution to match against, we simply return the predicate with
+            // positive polarity
+            predicate
         }
     }
 }
 
-impl Brancher for AutonomousSearch {
+impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
-        self.next_candidate_predicate(context)
-            .map(|predicate| self.determine_polarity(predicate))
+        let result = self
+            .next_candidate_predicate(context)
+            .map(|predicate| self.determine_polarity(predicate));
+        if result.is_none() && !context.are_all_variables_assigned() {
+            // There are variables for which we do not have a predicate, rely on the backup
+            self.backup_brancher.next_decision(context)
+        } else {
+            result
+        }
     }
 
     /// Restores dormant predicates after backtracking.
     fn synchronise(&mut self, assignments: &Assignments) {
         // Note that while iterating with 'retain', the function also
-        // readds the predicates to the heap that are no longer dormant.
+        // re-adds the predicates to the heap that are no longer dormant.
         self.dormant_predicates.retain(|predicate| {
             // Only unassigned predicates are readded.
             if assignments.evaluate_predicate(*predicate).is_none() {
@@ -195,55 +260,174 @@ impl Brancher for AutonomousSearch {
         self.decay_activities();
     }
 
-    fn on_solution(&mut self, _solution: SolutionReference) {
-        todo!();
+    fn on_solution(&mut self, solution: SolutionReference) {
+        // We store the best known solution
+        self.best_known_solution = Some(solution.into());
     }
 
-    // On predicate in conflict!
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+        self.bump_activity(predicate)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    // use super::Vsids;
-    // use crate::basic_types::tests::TestRandom;
-    // use crate::branching::variable_selection::VariableSelector;
-    // use crate::branching::SelectionContext;
+    use super::AutonomousSearch;
+    use crate::basic_types::tests::TestRandom;
+    use crate::branching::branchers::autonomous_search::DEFAULT_VSIDS_MAX_THRESHOLD;
+    use crate::branching::Brancher;
+    use crate::branching::SelectionContext;
+    use crate::engine::Assignments;
+    use crate::predicate;
+    use crate::results::SolutionReference;
 
-    // #[test]
-    // fn vsids_bumped_var_is_max() {
-    // let (assignments, assignments_propositional) =
-    // SelectionContext::create_for_testing(2, 0, None);
-    // let mut test_rng = TestRandom::default();
-    // let context = SelectionContext::new(
-    // &assignments,
-    // &assignments_propositional,
-    // &mut test_rng,
-    // );
-    // let domains = context.get_domains().collect::<Vec<_>>();
-    //
-    // let mut vsids = Vsids::new(&domains);
-    // vsids.bump_activity(domains[1]);
-    //
-    // let chosen = vsids.select_variable(&context);
-    //
-    // assert!(chosen.is_some());
-    // assert_eq!(chosen.unwrap(), domains[1]);
-    // }
-    //
-    // #[test]
-    // fn vsids_no_variables_will_return_none() {
-    // let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&Vec::new());
-    //
-    // let (assignments, assignments_propositional) =
-    // SelectionContext::create_for_testing(0, 0, None);
-    // let mut test_rng = TestRandom::default();
-    // let context = SelectionContext::new(
-    // &assignments,
-    // &assignments_propositional,
-    // &mut test_rng,
-    // );
-    // let chosen = vsids.select_variable(&context);
-    //
-    // assert!(chosen.is_none());
-    // }
+    #[test]
+    fn brancher_picks_bumped_values() {
+        let mut assignments = Assignments::default();
+        let x = assignments.grow(0, 10);
+        let y = assignments.grow(-10, 0);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
+        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
+        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
+
+        (0..100).for_each(|_| brancher.on_conflict());
+    }
+
+    #[test]
+    fn value_removed_if_threshold_too_small() {
+        let mut assignments = Assignments::default();
+        let x = assignments.grow(0, 10);
+        let y = assignments.grow(-10, 0);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
+        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
+
+        brancher.increment = DEFAULT_VSIDS_MAX_THRESHOLD;
+
+        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
+
+        assert!(!brancher
+            .predicate_id_info
+            .has_id_for_predicate(predicate!(x >= 5)));
+        assert!(brancher
+            .predicate_id_info
+            .has_id_for_predicate(predicate!(y >= -5)));
+    }
+
+    #[test]
+    fn dormant_values() {
+        let mut assignments = Assignments::default();
+        let x = assignments.grow(0, 10);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+
+        let predicate = predicate!(x >= 5);
+        brancher.on_appearance_in_conflict_predicate(predicate);
+        let decision = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert_eq!(decision, Some(predicate));
+
+        assignments.increase_decision_level();
+        // Decision Level 1
+        let _ = assignments.tighten_lower_bound(x, 5, None);
+
+        assignments.increase_decision_level();
+        // Decision Level 2
+        let _ = assignments.tighten_lower_bound(x, 7, None);
+
+        assignments.increase_decision_level();
+        // Decision Level 3
+        let _ = assignments.tighten_lower_bound(x, 10, None);
+
+        assignments.increase_decision_level();
+        // We end at decision level 4
+
+        let decision = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert!(decision.is_none());
+        assert!(brancher.dormant_predicates.contains(&predicate));
+
+        let _ = assignments.synchronise(3);
+
+        let decision = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert!(decision.is_none());
+        assert!(brancher.dormant_predicates.contains(&predicate));
+
+        let _ = assignments.synchronise(0);
+        brancher.synchronise(&assignments);
+
+        let decision = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert_eq!(decision, Some(predicate));
+        assert!(!brancher.dormant_predicates.contains(&predicate));
+    }
+
+    #[test]
+    fn uses_fallback() {
+        let mut assignments = Assignments::default();
+        let x = assignments.grow(0, 10);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+
+        let result = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom {
+                usizes: vec![7],
+                bools: vec![],
+            },
+        ));
+        assert_eq!(result, Some(predicate!(x == 7)));
+    }
+
+    #[test]
+    fn uses_stored_solution() {
+        let mut assignments = Assignments::default();
+        let x = assignments.grow(0, 10);
+
+        assignments.increase_decision_level();
+        let _ = assignments.make_assignment(x, 7, None);
+
+        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
+
+        brancher.on_solution(SolutionReference::new(&assignments));
+
+        let _ = assignments.synchronise(0);
+
+        assert_eq!(
+            predicate!(x >= 5),
+            brancher.determine_polarity(predicate!(x >= 5))
+        );
+        assert_eq!(
+            !predicate!(x >= 10),
+            brancher.determine_polarity(predicate!(x >= 10))
+        );
+        assert_eq!(
+            predicate!(x <= 8),
+            brancher.determine_polarity(predicate!(x <= 8))
+        );
+        assert_eq!(
+            !predicate!(x <= 5),
+            brancher.determine_polarity(predicate!(x <= 5))
+        );
+
+        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
+
+        let result = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+        assert_eq!(result, Some(predicate!(x >= 5)));
+    }
 }

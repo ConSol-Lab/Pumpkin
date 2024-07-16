@@ -5,13 +5,14 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashSet;
 use crate::basic_types::Solution;
+use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
-use crate::branching::InDomainMin;
+use crate::branching::InDomainRandom;
 use crate::branching::InputOrder;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorConstructor;
@@ -605,9 +606,8 @@ impl Solver {
     /// [`VariableSelector`] and [`SolutionGuidedValueSelector`] (with [`PhaseSaving`] as its
     /// back-up selector) as its [`ValueSelector`]; it searches over all
     /// [`PropositionalVariable`]s defined in the provided `solver`.
-    pub fn default_brancher_over_all_propositional_variables(&self) -> DefaultBrancher {
-        self.satisfaction_solver
-            .default_brancher_over_all_propositional_variables()
+    pub fn default_brancher(&self) -> DefaultBrancher {
+        DefaultBrancher::default_over_all_variables(&self.satisfaction_solver.assignments)
     }
 }
 
@@ -636,5 +636,6 @@ impl Solver {
 }
 
 // todo: fix explanation of default brancher
-pub type DefaultBrancher =
-    IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>;
+pub type DefaultBrancher = AutonomousSearch<
+    IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainRandom>,
+>;

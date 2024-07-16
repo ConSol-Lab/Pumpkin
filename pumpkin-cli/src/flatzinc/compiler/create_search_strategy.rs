@@ -81,22 +81,15 @@ fn create_from_search_strategy(
             // MiniZinc specification specifies that we need to ensure that all variables are fixed;
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
-            brancher.add_brancher(Box::new(
-                context
-                    .solver
-                    .default_brancher_over_all_propositional_variables(),
-            ));
+            brancher.add_brancher(Box::new(context.solver.default_brancher()));
             Ok(brancher)
         }
         Search::Seq(search_strategies) => {
             // MiniZinc specification specifies that we need to ensure that all variables are fixed;
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
-            let brancher_over_all_variables: Box<dyn Brancher> = Box::new(
-                context
-                    .solver
-                    .default_brancher_over_all_propositional_variables(),
-            );
+            let brancher_over_all_variables: Box<dyn Brancher> =
+                Box::new(context.solver.default_brancher());
             let brancher = DynamicBrancher::new(
                 search_strategies
                     .iter()
@@ -113,9 +106,7 @@ fn create_from_search_strategy(
             Ok(brancher)
         }
         Search::Unspecified => Ok(DynamicBrancher::new(vec![Box::new(
-            context
-                .solver
-                .default_brancher_over_all_propositional_variables(),
+            context.solver.default_brancher(),
         )])),
     }
 }

@@ -29,6 +29,12 @@ impl<'a> SelectionContext<'a> {
         }
     }
 
+    pub fn are_all_variables_assigned(&self) -> bool {
+        self.assignments
+            .get_domains()
+            .all(|domain_id| self.assignments.is_domain_assigned(domain_id))
+    }
+
     /// Returns a random generator which can be used to generate random values (see [`Random`] for
     /// more information).
     pub fn random(&mut self) -> &mut dyn Random {
