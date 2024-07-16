@@ -3,9 +3,9 @@
 //! propagators
 
 mod cumulative_structs;
-pub use cumulative_structs::*;
+pub(crate) use cumulative_structs::*;
 
-pub mod util;
+pub(crate) mod util;
 
 mod sparse_set;
 pub(crate) use sparse_set::*;

@@ -13,8 +13,8 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::Assignments;
 
 /// The context provided to the [`Brancher`],
-/// the behaviour is similar to that of the [`PropagationContext`] with a few additional methods
-/// which might be extended in the future.
+/// it allows the retrieval of domain values of variables and access to methods from a [`Random`]
+/// generator.
 #[derive(Debug)]
 pub struct SelectionContext<'a> {
     assignments: &'a Assignments,

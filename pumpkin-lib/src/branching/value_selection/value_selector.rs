@@ -22,8 +22,7 @@ pub trait ValueSelector<Var> {
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
     /// [`DomainId`] which has been reset and `value` which is the value to which the variable was
     /// previously fixed. This method could thus be called multiple times in a single
-    /// backtracking operation by the solver
-    /// (see the `backtrack` method of [`ConstraintSatisfactionSolver`]).
+    /// backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
     /// This method is called when a solution is found in the optimisation loop of [`LinearSearch`].

@@ -6,6 +6,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::pumpkin_assert_simple;
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -15,7 +16,7 @@ use crate::engine::EmptyDomain;
 ///
 /// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PropagationContext<'a> {
     assignments: &'a Assignments,
 }
@@ -36,19 +37,57 @@ pub struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
 
     pub(crate) propagator_id: PropagatorId,
+
+    reification_literal: Option<Literal>,
 }
 
 impl<'a> PropagationContextMut<'a> {
     pub fn new(
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
-        propagator: PropagatorId,
+        propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
             assignments,
             reason_store,
+            propagator_id,
+            reification_literal: None,
+        }
+    }
 
-            propagator_id: propagator,
+    /// Apply a reification literal to all the explanations that are passed to the context.
+    pub(crate) fn with_reification(&mut self, reification_literal: Literal) {
+        pumpkin_assert_simple!(
+            self.reification_literal.is_none(),
+            "cannot reify an already reified propagation context"
+        );
+
+        self.reification_literal = Some(reification_literal);
+    }
+
+    fn build_reason(&self, reason: Reason) -> Reason {
+        if let Some(reification_literal) = self.reification_literal {
+            match reason {
+                Reason::Eager(mut conjunction) => {
+                    conjunction.add(reification_literal.into());
+                    Reason::Eager(conjunction)
+                }
+                Reason::Lazy(callback) => {
+                    Reason::Lazy(Box::new(move |context: &PropagationContext| {
+                        let mut conjunction = callback.compute(context);
+                        conjunction.add(reification_literal.into());
+                        conjunction
+                    }))
+                }
+            }
+        } else {
+            reason
+        }
+    }
+
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments: &self.assignments,
         }
     }
 

@@ -38,7 +38,7 @@ impl<'a> SolutionReference<'a> {
 impl<'a> ProblemSolution for SolutionReference<'a> {}
 
 /// A solution which takes ownership of its inner structures.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Solution {
     assignments: Assignments,
 }
@@ -48,7 +48,7 @@ impl Solution {
         Self { assignments }
     }
 
-    pub(crate) fn as_reference(&self) -> SolutionReference<'_> {
+    pub fn as_reference(&self) -> SolutionReference<'_> {
         SolutionReference {
             assignments: &self.assignments,
         }

@@ -1,12 +1,14 @@
 use crate::engine::predicates::predicate::Predicate;
 
+/// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
+/// <= 10]`).
 #[derive(Clone, Default, Eq)]
 pub struct PropositionalConjunction {
-    predicates_in_conjunction: Box<[Predicate]>,
+    predicates_in_conjunction: Vec<Predicate>,
 }
 
 impl PropositionalConjunction {
-    pub fn new(predicates_in_conjunction: Box<[Predicate]>) -> Self {
+    pub fn new(predicates_in_conjunction: Vec<Predicate>) -> Self {
         PropositionalConjunction {
             predicates_in_conjunction,
         }
@@ -14,6 +16,10 @@ impl PropositionalConjunction {
 
     pub fn num_predicates(&self) -> u32 {
         self.predicates_in_conjunction.len() as u32
+    }
+
+    pub fn add(&mut self, predicate: Predicate) {
+        self.predicates_in_conjunction.push(predicate);
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
@@ -32,9 +38,7 @@ impl FromIterator<Predicate> for PropositionalConjunction {
 
 impl From<Vec<Predicate>> for PropositionalConjunction {
     fn from(vec: Vec<Predicate>) -> Self {
-        PropositionalConjunction {
-            predicates_in_conjunction: vec.into_boxed_slice(),
-        }
+        PropositionalConjunction::new(vec)
     }
 }
 
@@ -47,7 +51,7 @@ impl From<PropositionalConjunction> for Vec<Predicate> {
 impl From<Predicate> for PropositionalConjunction {
     fn from(predicate: Predicate) -> Self {
         PropositionalConjunction {
-            predicates_in_conjunction: Box::new([predicate]),
+            predicates_in_conjunction: vec![predicate],
         }
     }
 }
@@ -88,10 +92,28 @@ impl PartialEq for PropositionalConjunction {
     }
 }
 
+/// A macro which allows for the creation of a [`PropositionalConjunction`].
+///
+/// # Example
+/// ```rust
+/// # use pumpkin_lib::predicates::PropositionalConjunction;
+/// # use pumpkin_lib::Solver;
+/// # use pumpkin_lib::conjunction;
+/// # use pumpkin_lib::predicate;
+/// let mut solver = Solver::default();
+/// let x = solver.new_bounded_integer(0, 10);
+/// let y = solver.new_bounded_integer(5, 15);
+///
+/// let conjunction = conjunction!([x >= 5] & [y <= 10]);
+/// assert_eq!(
+///     conjunction,
+///     PropositionalConjunction::new(vec![predicate!(x >= 5), predicate!(y <= 10)].into())
+/// );
+/// ```
 #[macro_export]
 macro_rules! conjunction {
     (@to_conjunction $($body:tt)*) => {
-        $crate::basic_types::PropositionalConjunction::from($($body)*)
+        $crate::predicates::PropositionalConjunction::from($($body)*)
     };
 
     (@munch {$($body:tt)*} -> & [$($pred:tt)+] $($rest:tt)*) => {

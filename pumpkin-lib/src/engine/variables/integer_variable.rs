@@ -10,6 +10,9 @@ use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
 
+/// A trait specifying the required behaviour of an integer variable such as retrieving a
+/// lower-bound ([`IntegerVariable::lower_bound`]) or adjusting the bounds
+/// ([`IntegerVariable::set_lower_bound`]).
 pub trait IntegerVariable:
     Clone + PredicateConstructor<Value = i32> + TransformableVariable<Self::AffineView>
 {

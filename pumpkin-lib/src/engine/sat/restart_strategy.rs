@@ -9,6 +9,8 @@ use crate::basic_types::sequence_generators::LubySequence;
 use crate::basic_types::sequence_generators::SequenceGenerator;
 use crate::basic_types::sequence_generators::SequenceGeneratorType;
 
+/// The options which are used by the solver to determine when a restart should occur.
+///
 /// An implementation of a restart strategy based on the specfication of [Section 4 of \[1\]](https://fmv.jku.at/papers/BiereFroehlich-POS15.pdf)
 /// (for more information about the Glucose restart strategies see [\[2\]](https://www.cril.univ-artois.fr/articles/xxmain.pdf) and
 /// [\[3\]](http://www.pragmaticsofsat.org/2012/slides-glucose.pdf)). The idea is to restart when the
@@ -41,8 +43,6 @@ use crate::basic_types::sequence_generators::SequenceGeneratorType;
 ///
 /// \[5\] M. Luby, A. Sinclair, and D. Zuckerman, ‘Optimal speedup of Las Vegas algorithms’,
 /// Information Processing Letters, vol. 47, no. 4, pp. 173–180, 1993.
-
-/// Parameters related to the restarts as provided to [`RestartStrategy`].
 #[derive(Debug, Clone, Copy)]
 pub struct RestartOptions {
     /// Decides the sequence based on which the restarts are performed.
@@ -54,12 +54,11 @@ pub struct RestartOptions {
     pub base_interval: u64,
     /// The minimum number of conflicts to be reached before the first restart is considered
     pub min_num_conflicts_before_first_restart: u64,
-    /// Used to determine if a restart should be forced (part of [`RestartStrategy`]).
-    /// The state is "bad" if the current LBD value (see [`RestartStrategy`] for a
-    /// definition) is much greater than the global LBD average A greater/lower value for
-    /// lbd-coef means a less/more frequent restart policy
+    /// Used to determine if a restart should be forced.
+    /// The state is "bad" if the current LBD value is much greater than the global LBD average A
+    /// greater/lower value for lbd-coef means a less/more frequent restart policy
     pub lbd_coef: f64,
-    /// Used to determine if a restart should be blocked (part of [`RestartStrategy`]).
+    /// Used to determine if a restart should be blocked.
     /// To be used in combination with
     /// [`RestartOptions::num_assigned_window`].
     /// A restart is blocked if the number of assigned propositional variables is must greater than
@@ -67,7 +66,7 @@ pub struct RestartOptions {
     /// [`RestartOptions::num_assigned_coef`] means fewer/more blocked restarts
     pub num_assigned_coef: f64,
     /// Used to determine the length of the recent past that should be considered when deciding on
-    /// blocking restarts (part of [`RestartStrategy`]). The solver considers the last
+    /// blocking restarts. The solver considers the last
     /// [`RestartOptions::num_assigned_window`] conflicts as the reference point for the
     /// number of assigned variables
     pub num_assigned_window: u64,
@@ -136,7 +135,7 @@ impl Default for RestartStrategy {
 }
 
 impl RestartStrategy {
-    pub fn new(options: RestartOptions) -> Self {
+    pub(crate) fn new(options: RestartOptions) -> Self {
         let mut sequence_generator: Box<dyn SequenceGenerator> =
             match options.sequence_generator_type {
                 SequenceGeneratorType::Constant => Box::new(ConstantSequence::new(
@@ -173,10 +172,6 @@ impl RestartStrategy {
         }
     }
 
-    pub fn number_of_restarts(&self) -> u64 {
-        self.number_of_restarts
-    }
-
     /// Determines whether the restart strategy indicates that a restart should take place; the
     /// strategy considers three conditions (in this order):
     /// - If no restarts have taken place yet then a restart can only take place if the number of
@@ -191,7 +186,7 @@ impl RestartStrategy {
     ///   [`RestartOptions::lbd_coef`], this condition determines whether the solver is learning
     ///   "bad" clauses based on the LBD; if it is learning "sufficiently bad" clauses then a
     ///   restart will be performed.
-    pub fn should_restart(&self) -> bool {
+    pub(crate) fn should_restart(&self) -> bool {
         // Do not restart until a certain number of conflicts take place before the first restart
         // this is done to collect some early runtime statistics for the restart strategy
         if self.number_of_restarts == 0
@@ -216,7 +211,7 @@ impl RestartStrategy {
     /// Notifies the restart strategy that a conflict has taken place so that it can adjust its
     /// internal values, this method has the additional responsibility of checking whether a restart
     /// should be blocked based on whether the solver is "sufficiently close" to finding a solution.
-    pub fn notify_conflict(&mut self, lbd: u32, num_literals_on_trail: usize) {
+    pub(crate) fn notify_conflict(&mut self, lbd: u32, num_literals_on_trail: usize) {
         // Update moving averages
         self.number_of_assigned_variables_moving_average
             .add_term(num_literals_on_trail as u64);
@@ -246,7 +241,7 @@ impl RestartStrategy {
 
     /// Notifies the restart strategy that a restart has taken place so that it can adjust its
     /// internal values
-    pub fn notify_restart(&mut self) {
+    pub(crate) fn notify_restart(&mut self) {
         self.number_of_restarts += 1;
         self.reset_values()
     }

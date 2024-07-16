@@ -10,72 +10,80 @@ pub const PUMPKIN_ASSERT_ADVANCED: u8 = 3;
 pub const PUMPKIN_ASSERT_EXTREME: u8 = 4;
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! print_pumpkin_assert_warning_message {
     () => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
-            warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
+        if pumpkin_lib::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= pumpkin_lib::asserts::PUMPKIN_ASSERT_MODERATE {
+            warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_lib::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
         };
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_simple {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_SIMPLE {
             assert!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_eq_simple {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_SIMPLE {
             assert_eq!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_ne_simple {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_SIMPLE {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_SIMPLE {
             assert_ne!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_moderate {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_MODERATE {
             assert!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_ne_moderate {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_MODERATE {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_MODERATE {
             assert_ne!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_advanced {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_ADVANCED {
             assert!($($arg)*);
         }
     };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! pumpkin_assert_extreme {
     ($($arg:tt)*) => {
-        if $crate::pumpkin_asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME {
+        if $crate::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION >= $crate::asserts::PUMPKIN_ASSERT_EXTREME {
             assert!($($arg)*);
         }
     };

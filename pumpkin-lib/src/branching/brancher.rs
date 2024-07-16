@@ -12,11 +12,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 #[cfg(doc)]
-use crate::engine::ConstraintSatisfactionSolver;
-#[cfg(doc)]
-use crate::engine::RestartStrategy;
-#[cfg(doc)]
-use crate::optimisation::LinearSearch;
+use crate::results::solution_iterator::SolutionIterator;
 
 /// A trait for definining a branching strategy (oftentimes utilising a [`VariableSelector`] and a
 /// [`ValueSelector`]).
@@ -56,8 +52,7 @@ pub trait Brancher {
     /// analysis (see the `compute_1uip` method of [`ConstraintSatisfactionSolver`]).
     fn on_appearance_in_conflict_predicate(&mut self, _predicate: Predicate) {}
 
-    /// This method is called whenever a restart is performed as determined by the
-    /// [`RestartStrategy`].
+    /// This method is called whenever a restart is performed.
     fn on_restart(&mut self) {}
 
     /// Called after backtracking.

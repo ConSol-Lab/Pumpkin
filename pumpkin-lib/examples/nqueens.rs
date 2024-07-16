@@ -1,9 +1,10 @@
-use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use pumpkin_lib::constraints::ConstraintsExt;
-use pumpkin_lib::engine::termination::indefinite::Indefinite;
-use pumpkin_lib::engine::variables::TransformableVariable;
-use pumpkin_lib::engine::ConstraintSatisfactionSolver;
+use pumpkin_lib::constraints;
+use pumpkin_lib::constraints::Constraint;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_lib::Solver;
 
 fn main() {
     let n = std::env::args()
@@ -17,12 +18,12 @@ fn main() {
         return;
     }
 
-    let mut solver = ConstraintSatisfactionSolver::default();
+    let mut solver = Solver::default();
     let variables = (0..n)
-        .map(|_| solver.create_new_integer_variable(0, n as i32 - 1, None))
+        .map(|_| solver.new_bounded_integer(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
-    let _ = solver.all_different(variables.clone());
+    let _ = constraints::all_different(variables.clone()).post(&mut solver);
 
     let diag1 = variables
         .iter()
@@ -37,20 +38,18 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    let _ = solver.all_different(diag1);
-    let _ = solver.all_different(diag2);
+    let _ = constraints::all_different(diag1).post(&mut solver);
+    let _ = constraints::all_different(diag2).post(&mut solver);
 
-    let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
-    match solver.solve(&mut Indefinite, &mut brancher) {
-        CSPSolverExecutionFlag::Feasible => {
+    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    match solver.satisfy(&mut brancher, &mut Indefinite) {
+        SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));
 
             for row in 0..n {
                 println!("{row_separator}");
 
-                let queen_col = solver
-                    .get_assigned_integer_value(&variables[row as usize])
-                    .unwrap() as u32;
+                let queen_col = solution.get_integer_value(variables[row as usize]) as u32;
 
                 for col in 0..n {
                     let string = if queen_col == col { "| * " } else { "|   " };
@@ -63,12 +62,10 @@ fn main() {
 
             println!("{row_separator}");
         }
-
-        CSPSolverExecutionFlag::Infeasible => {
+        SatisfactionResult::Unsatisfiable => {
             println!("{n}-queens is unsatisfiable.");
         }
-
-        CSPSolverExecutionFlag::Timeout => {
+        SatisfactionResult::Unknown => {
             println!("Timeout.");
         }
     }

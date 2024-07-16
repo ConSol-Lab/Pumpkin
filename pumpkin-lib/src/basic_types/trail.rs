@@ -5,7 +5,7 @@ use std::vec::Drain;
 use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug)]
-pub struct Trail<T> {
+pub(crate) struct Trail<T> {
     current_decision_level: usize,
     /// At index i is the position where the i-th decision level ends (exclusive) on the trail
     trail_delimiter: Vec<usize>,
@@ -25,16 +25,16 @@ impl<T> Default for Trail<T> {
 }
 
 impl<T> Trail<T> {
-    pub fn increase_decision_level(&mut self) {
+    pub(crate) fn increase_decision_level(&mut self) {
         self.current_decision_level += 1;
         self.trail_delimiter.push(self.trail.len());
     }
 
-    pub fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         self.current_decision_level
     }
 
-    pub fn synchronise(&mut self, new_decision_level: usize) -> Rev<Drain<T>> {
+    pub(crate) fn synchronise(&mut self, new_decision_level: usize) -> Rev<Drain<T>> {
         pumpkin_assert_simple!(new_decision_level < self.current_decision_level);
 
         let new_trail_len = self.trail_delimiter[new_decision_level];
@@ -44,7 +44,7 @@ impl<T> Trail<T> {
         self.trail.drain(new_trail_len..).rev()
     }
 
-    pub fn push(&mut self, elem: T) {
+    pub(crate) fn push(&mut self, elem: T) {
         self.trail.push(elem)
     }
 
@@ -57,7 +57,7 @@ impl<T> Trail<T> {
 
     /// Only used in `crate::engine::cp::reason::ReasonStore` to replace a lazy reason with its
     ///   result.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.trail.get_mut(index)
     }
 }

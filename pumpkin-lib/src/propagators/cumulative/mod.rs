@@ -38,84 +38,79 @@
 //! // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
 //! // We can infer that Task 0 and Task 1 execute at the same time
 //! // while Task 2 will start after them
-//! use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-//! use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-//! use pumpkin_lib::constraints::ConstraintsExt;
-//! use pumpkin_lib::engine::termination::indefinite::Indefinite;
-//! use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-//! use pumpkin_lib::propagators::ArgTask;
-//! use pumpkin_lib::propagators::TimeTablePerPoint;
-//! let solver = ConstraintSatisfactionSolver::default();
+//! # use pumpkin_lib::termination::Indefinite;
+//! # use pumpkin_lib::Solver;
+//! # use pumpkin_lib::results::SatisfactionResult;
+//! # use pumpkin_lib::constraints::Constraint;
+//! # use crate::pumpkin_lib::results::ProblemSolution;
+//! let mut solver = Solver::default();
 //!
-//! let mut solver = ConstraintSatisfactionSolver::default();
-//!
-//! let start_0 = solver.create_new_integer_variable(0, 4, None);
-//! let start_1 = solver.create_new_integer_variable(0, 4, None);
-//! let start_2 = solver.create_new_integer_variable(0, 5, None);
+//! let start_0 = solver.new_bounded_integer(0, 4);
+//! let start_1 = solver.new_bounded_integer(0, 4);
+//! let start_2 = solver.new_bounded_integer(0, 5);
 //!
 //! let start_times = [start_0, start_1, start_2];
 //! let durations = [5, 2, 5];
 //! let resource_requirements = [1, 1, 2];
 //! let resource_capacity = 2;
 //!
-//! solver.cumulative(
+//! pumpkin_lib::constraints::cumulative(
 //!     &start_times,
 //!     &durations,
 //!     &resource_requirements,
 //!     resource_capacity,
 //!     false,
-//! );
-//! let mut brancher =
-//!     IndependentVariableValueBrancher::default_over_all_variables(&solver);
+//! ).post(&mut solver);
 //!
-//! let result = solver.solve(&mut Indefinite, &mut brancher);
+//! let mut termination = Indefinite;
+//! let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//!
+//! let result = solver.satisfy(&mut brancher, &mut termination);
 //!
 //! // We check whether the result was feasible
-//! assert_eq!(CSPSolverExecutionFlag::Feasible, result);
+//! if let SatisfactionResult::Satisfiable(solution) = result {
+//!     let horizon = durations.iter().sum::<i32>();
+//!     let start_times = [start_0, start_1, start_2];
 //!
-//! let horizon = durations.iter().sum::<i32>();
-//! let start_times = [start_0, start_1, start_2];
+//!     // Now we check whether the resource constraint is satisfied at each time-point t
+//!     assert!((0..=horizon).all(|t| {
+//!         // We gather all of the resource usages at the current time t
+//!         let resource_usage_at_t = start_times
+//!             .iter()
+//!             .enumerate()
+//!             .filter_map(|(task_index, start_time)| {
+//!                 if solution.get_integer_value(*start_time) <= t
+//!                     && solution.get_integer_value(*start_time) + durations[task_index] > t
+//!                 {
+//!                     Some(resource_requirements[task_index])
+//!                 } else {
+//!                     None
+//!                 }
+//!             })
+//!             .sum::<i32>();
+//!         // Then we check whether the resource usage at the current time point is lower than
+//!         // the resource capacity
+//!         resource_usage_at_t <= resource_capacity
+//!     }));
 //!
-//! // Now we check whether the resource constraint is satisfied at each time-point t
-//! assert!((0..=horizon).all(|t| {
-//!     // We gather all of the resource usages at the current time t
-//!     let resource_usage_at_t = start_times
-//!         .iter()
-//!         .enumerate()
-//!         .filter_map(|(task_index, start_time)| {
-//!             if solver.get_assigned_integer_value(start_time).unwrap() <= t
-//!                 && solver.get_assigned_integer_value(start_time).unwrap()
-//!                     + durations[task_index]
-//!                     > t
-//!             {
-//!                 Some(resource_requirements[task_index])
-//!             } else {
-//!                 None
-//!             }
-//!         })
-//!         .sum::<i32>();
-//!     // Then we check whether the resource usage at the current time point is lower than the
-//!     // resource capacity
-//!     resource_usage_at_t <= resource_capacity
-//! }));
-//!
-//! // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and Task 1
-//! // overlap
-//! assert!(
-//!     solver.get_assigned_integer_value(&start_2).unwrap()
-//!         >= solver.get_assigned_integer_value(&start_0).unwrap() + durations[0]
-//!         && solver.get_assigned_integer_value(&start_2).unwrap()
-//!             >= solver.get_assigned_integer_value(&start_1).unwrap() + durations[1]
-//! );
-//! assert!(
-//!     solver.get_assigned_integer_value(&start_0).unwrap()
-//!         < solver.get_assigned_integer_value(&start_1).unwrap() + durations[1]
-//!         && solver.get_assigned_integer_value(&start_1).unwrap()
-//!             < solver.get_assigned_integer_value(&start_0).unwrap() + durations[0]
-//! );
+//!     // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and
+//!     // Task 1 overlap
+//!     assert!(
+//!         solution.get_integer_value(start_2)
+//!             >= solution.get_integer_value(start_0) + durations[0]
+//!             && solution.get_integer_value(start_2)
+//!                 >= solution.get_integer_value(start_1) + durations[1]
+//!     );
+//!     assert!(
+//!         solution.get_integer_value(start_0)
+//!             < solution.get_integer_value(start_1) + durations[1]
+//!             && solution.get_integer_value(start_1)
+//!                 < solution.get_integer_value(start_0) + durations[0]
+//!     );
+//! }
 //! ```
 mod time_table;
-pub use time_table::*;
+pub(crate) use time_table::*;
 
 mod utils;
-pub use utils::*;
+pub(crate) use utils::*;

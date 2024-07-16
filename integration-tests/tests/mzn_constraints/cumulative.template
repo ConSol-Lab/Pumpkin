@@ -1,0 +1,14 @@
+predicate gecode_cumulatives(
+    array [int] of var int: start_times,
+    array [int] of var int: durations,
+    array [int] of var int: resource_requirements,
+    var int: resource_capacity
+);
+
+var 1..5: x:: output_var;
+var 3..5: y:: output_var;
+var 1..10: z:: output_var;
+
+constraint gecode_cumulatives([x, y, z], [1, 2, 3], [1, 2, 1], 2);
+
+solve satisfy;

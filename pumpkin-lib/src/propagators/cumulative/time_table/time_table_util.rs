@@ -75,7 +75,7 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -138,11 +138,41 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 pub(crate) enum AddedMandatoryConsumption {
     /// There was an existing mandatory part but it has been extended by an update; the first
     /// [`Range`] is the added mandatory part due to an update of the upper-bound of the start time
-    /// and the second [`Range`] si the added mandatory part due to an update of the lower-bound of
+    /// and the second [`Range`] is the added mandatory part due to an update of the lower-bound of
     /// the start time.
     AdditionalMandatoryParts(Range<i32>, Range<i32>),
     /// There was no existing mandatory part before the update but there is one now.
     FullyNewMandatoryPart(Range<i32>),
+}
+
+impl AddedMandatoryConsumption {
+    /// There are two cases:
+    /// - In the case of [`AddedMandatoryConsumption::AdditionalMandatoryParts`] - This function
+    ///   will return first the range which has been added due to an update of the lower-bound and
+    ///   then the range which has bene added due to an update of the uppper-bound.
+    /// - In the case of [`AddedMandatoryConsumption::FullyNewMandatoryPart`] - This function will
+    ///   return the range consisting of the added mandatory part.
+    ///
+    /// This function is used by [`TimeTableOverIntervalIncremental::propagate`] since it needs to
+    /// traverse the second added mandatory part first due to the way it processes indices.
+    pub(crate) fn get_reverse_update_ranges(&self) -> Vec<Range<i32>> {
+        match self {
+            AddedMandatoryConsumption::AdditionalMandatoryParts(
+                first_added_part,
+                second_added_part,
+            ) => {
+                // First return the second part and then return the first part, filtering out the
+                // empty mandatory parts
+                [second_added_part.clone(), first_added_part.clone()]
+                    .into_iter()
+                    .filter(|added_part| !added_part.is_empty())
+                    .collect()
+            }
+            AddedMandatoryConsumption::FullyNewMandatoryPart(added_mandatory_part) => {
+                vec![added_mandatory_part.clone()]
+            }
+        }
+    }
 }
 
 impl Iterator for AddedMandatoryConsumption {
@@ -238,7 +268,12 @@ pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
 
 /// Determines whether the interval \[lower_bound, upper_bound\) overlaps with the interval \[start,
 /// end\]
-fn has_overlap_with_interval(lower_bound: i32, upper_bound: i32, start: i32, end: i32) -> bool {
+pub(crate) fn has_overlap_with_interval(
+    lower_bound: i32,
+    upper_bound: i32,
+    start: i32,
+    end: i32,
+) -> bool {
     start < upper_bound && lower_bound <= end
 }
 

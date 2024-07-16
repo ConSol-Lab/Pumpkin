@@ -1,11 +1,13 @@
-use super::independent_variable_value_brancher::DefaultBrancher;
-use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
+//! A [`Brancher`] which alternates between the [`DefaultBrancher`] and another [`Brancher`] based
+//! on the strategy specified in [`AlternatingStrategy`].
+
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::ConstraintSatisfactionSolver;
+use crate::DefaultBrancher;
+use crate::Solver;
 
 /// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
 /// switching every time a solution is found ([`AlternatingStrategy::EverySolution`]), after every
@@ -50,7 +52,7 @@ pub struct AlternatingBrancher<OtherBrancher> {
 
 impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
     pub fn new(
-        solver: &ConstraintSatisfactionSolver,
+        solver: &Solver,
         other_brancher: OtherBrancher,
         strategy: AlternatingStrategy,
     ) -> Self {
@@ -58,7 +60,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             even_number_of_solutions: true,
             is_using_default_brancher: false,
             other_brancher,
-            default_brancher: IndependentVariableValueBrancher::default_over_all_variables(solver),
+            default_brancher: solver.default_brancher_over_all_propositional_variables(),
             strategy,
         }
     }
@@ -132,79 +134,80 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::branching::Brancher;
-    use crate::engine::ConstraintSatisfactionSolver;
+    use crate::engine::Assignments;
+    use crate::results::SolutionReference;
+    use crate::Solver;
 
     #[test]
     fn test_every_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EverySolution,
         );
 
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
     }
 
     #[test]
     fn test_every_other_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EveryOtherSolution,
         );
 
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(!brancher.is_using_default_brancher);
     }
 
     #[test]
     fn test_switch_to_default_after_first_solution() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
+
         assert!(!brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
-        #[allow(deprecated)]
-        brancher.on_solution(solver.get_solution_reference());
+        brancher.on_solution(empty_solution_reference);
         assert!(brancher.is_using_default_brancher);
     }
 
     #[test]
     fn test_every_other_restart() {
-        let solver = ConstraintSatisfactionSolver::default();
+        let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            IndependentVariableValueBrancher::default_over_all_variables(&solver),
+            solver.default_brancher_over_all_propositional_variables(),
             AlternatingStrategy::EveryRestart,
         );
 

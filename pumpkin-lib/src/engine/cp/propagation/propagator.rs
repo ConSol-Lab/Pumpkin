@@ -1,5 +1,6 @@
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::local_id::LocalId;
@@ -11,6 +12,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::PropositionalConjunction;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
@@ -41,10 +43,7 @@ pub trait Propagator {
     ///
     /// Propagators are not required to propagate until a fixed point. It will be called again by
     /// the solver until no further propagations happen.
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency>;
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP;
 
     /// Propagate method that will be called during search (e.g. in
     /// [`ConstraintSatisfactionSolver::solve`]).
@@ -64,7 +63,7 @@ pub trait Propagator {
     /// again by the solver until no further propagations happen.
     ///
     /// By default, this function calls [`Propagator::debug_propagate_from_scratch`].
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
+    fn propagate(&mut self, context: PropagationContextMut) -> PropagationStatusCP {
         self.debug_propagate_from_scratch(context)
     }
 
@@ -82,7 +81,7 @@ pub trait Propagator {
     /// upon propagator construction via [`PropagatorConstructor`].
     fn notify(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -106,17 +105,31 @@ pub trait Propagator {
         3
     }
 
-    /// Initialises the propagator and performs root propagation. This method is called only once by
-    /// the [`ConstraintSatisfactionSolver`] when the propagator is added using
-    /// [`ConstraintSatisfactionSolver::add_propagator`]. The return value is the same as for
-    /// the [`Propagator::propagate`] method.
+    /// Initialises the propagator without performing propagation. This method is called only once
+    /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
+    /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
-    /// By default this function calls [`Propagator::propagate`] at the root level.
+    /// The method can be used to detect root-level inconsistencies.
+    ///
+    /// The solver will call this before any call to [`Propagator::propagate`] is made.
     fn initialise_at_root(
         &mut self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
-        self.propagate(context)
+        _: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        Ok(())
+    }
+
+    /// A check whether this propagator can detect an inconsistency.
+    ///
+    /// By implementing this function, if the propagator is reified, it can propagate the
+    /// reification literal based on the detected inconsistency. Yet, an implementation is not
+    /// needed for correctness, as [`Propagator::propagate`] should still check for
+    /// inconsistency as well.
+    fn detect_inconsistency(
+        &self,
+        _context: PropagationContext,
+    ) -> Option<PropositionalConjunction> {
+        None
     }
 
     /// Temporary hack, used to add nogoods.

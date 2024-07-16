@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use super::create_time_table_per_point_from_scratch;
+use super::debug_propagate_from_scratch_time_table_point;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -13,11 +16,12 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -26,6 +30,7 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 #[cfg(doc)]
 use crate::propagators::Task;
+#[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
@@ -50,7 +55,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-pub struct TimeTablePerPointIncrementalPropagator<Var> {
+pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
@@ -75,7 +80,7 @@ where
 {
     type Propagator = TimeTablePerPointIncrementalPropagator<Var>;
 
-    fn create(self, context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context);
         TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
@@ -86,7 +91,7 @@ where
 }
 
 impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var> {
-    pub fn new(
+    pub(crate) fn new(
         parameters: CumulativeParameters<Var>,
     ) -> TimeTablePerPointIncrementalPropagator<Var> {
         TimeTablePerPointIncrementalPropagator {
@@ -109,13 +114,11 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
             // The time-table needs to be recalculated from scratch anyways so we perform the
             // calculation now
             self.time_table =
-                TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-                    context,
-                    &self.parameters,
-                )?;
+                create_time_table_per_point_from_scratch(&context.as_readonly(), &self.parameters)?;
             self.time_table_outdated = false;
+            self.parameters.updated.clear();
         } else {
-            for updated_task_info in self.parameters.updated.iter() {
+            for updated_task_info in self.parameters.updated.drain(..) {
                 // Go over all of the updated tasks and calculate the added mandatory part (we know
                 // that for each of these tasks, a mandatory part exists, otherwise it would not
                 // have been added (see [`should_propagate`]))
@@ -145,10 +148,11 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
 
                     if current_profile.height > self.parameters.capacity {
                         // The newly introduced mandatory part(s) caused an overflow of the resource
-                        return Err(create_inconsistency(
-                            context,
+                        return Err(create_propositional_conjunction(
+                            &context.as_readonly(),
                             &current_profile.profile_tasks,
-                        ));
+                        )
+                        .into());
                     }
                 }
             }
@@ -158,10 +162,10 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncrementalPropagator<Var> {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                context,
+                &context.as_readonly(),
                 &self.parameters.tasks,
                 &self.parameters.bounds,
             ),
@@ -169,16 +173,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         );
 
         // We update the time-table based on the stored updates
-        self.update_time_table(context)?;
-
-        // We have processed all of the updates, we can clear the structure
-        self.parameters.updated.clear();
+        self.update_time_table(&mut context)?;
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 ResourceProfile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
+        propagate_based_on_timetable(&mut context, self.time_table.values(), &self.parameters)
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
@@ -196,7 +197,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
     fn notify(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: PropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -211,7 +212,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.time_table.is_empty(),
         );
 
@@ -220,7 +221,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         if let Some(update) = result.update {
             self.parameters.updated.push(update)
         }
-        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
         result.decision
     }
 
@@ -234,8 +235,8 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
     fn initialise_at_root(
         &mut self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -246,23 +247,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         self.parameters.updated.clear();
 
         // Then we do normal propagation
-        self.time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context,
-            &self.parameters,
-        )?;
+        self.time_table = create_time_table_per_point_from_scratch(&context, &self.parameters)?;
         self.time_table_outdated = false;
-        propagate_based_on_timetable(context, self.time_table.values(), &self.parameters)
+        Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
-        TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
-            context,
-            &self.parameters,
-        )
+        debug_propagate_from_scratch_time_table_point(context, &self.parameters)
     }
 }
 

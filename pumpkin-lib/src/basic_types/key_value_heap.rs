@@ -18,7 +18,7 @@ use crate::pumpkin_assert_moderate;
 /// which allows for generalised `Key`s (required to implement [StorageKey]) and `Value`s (which are
 /// required to be ordered, divisible and addable).
 #[derive(Debug)]
-pub struct KeyValueHeap<Key: StorageKey, Value> {
+pub(crate) struct KeyValueHeap<Key: StorageKey, Value> {
     /// Contains the values stored as a heap; the value of key `i` is at index
     /// [`KeyValueHeap::map_key_to_position\[i\]`][KeyValueHeap::map_key_to_position]
     values: Vec<Value>,
@@ -48,20 +48,11 @@ impl<
         Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
     > KeyValueHeap<Key, Value>
 {
-    pub fn new() -> KeyValueHeap<Key, Value> {
-        KeyValueHeap {
-            values: Vec::default(),
-            map_key_to_position: KeyedVec::default(),
-            map_position_to_key: Vec::default(),
-            end_position: 0,
-        }
-    }
-
     /// Return the key with maximum value from the heap, or None if the heap is empty. Note that
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///
     /// The time-complexity of this operation is O(1)
-    pub fn peek_max(&self) -> Option<(&Key, &Value)> {
+    pub(crate) fn peek_max(&self) -> Option<(&Key, &Value)> {
         if self.is_empty() {
             None
         } else {
@@ -72,7 +63,7 @@ impl<
         }
     }
 
-    pub fn get_value(&self, key: Key) -> &Value {
+    pub(crate) fn get_value(&self, key: Key) -> &Value {
         pumpkin_assert_moderate!(
             key.index() < self.map_key_to_position.len(),
             "Attempted to get key with index {} for a map with length {}",
@@ -86,7 +77,7 @@ impl<
     /// empty.
     ///
     ///  The time-complexity of this operation is O(logn)
-    pub fn pop_max(&mut self) -> Option<Key> {
+    pub(crate) fn pop_max(&mut self) -> Option<Key> {
         let best_key = self.map_position_to_key[0];
         pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
         self.delete_key(best_key);
@@ -97,7 +88,7 @@ impl<
     ///
     /// The worst-case time-complexity of this operation is O(logn); average case is likely to be
     /// better
-    pub fn increment(&mut self, key: Key, increment: Value) {
+    pub(crate) fn increment(&mut self, key: Key, increment: Value) {
         let position = self.map_key_to_position[key];
         self.values[position] += increment;
         // Recall that increment may be applied to keys not present
@@ -111,7 +102,7 @@ impl<
     /// nothing. Its value is the previous value used before 'delete_key' was called.
     ///
     ///  The run-time complexity of this operation is O(logn)
-    pub fn restore_key(&mut self, key: Key) {
+    pub(crate) fn restore_key(&mut self, key: Key) {
         if !self.is_key_present(key) {
             // The key is somewhere in the range [end_position, max_size-1]
             // We place the key at the end of the heap, increase end_position, and sift up
@@ -129,7 +120,7 @@ impl<
     /// [`KeyValueHeap::divide_values`].
     ///
     /// The run-time complexity of this operation is O(logn)
-    pub fn delete_key(&mut self, key: Key) {
+    pub(crate) fn delete_key(&mut self, key: Key) {
         if self.is_key_present(key) {
             // Place the key at the end of the heap, decrement the heap, and sift down to ensure a
             // valid heap
@@ -143,23 +134,23 @@ impl<
     }
 
     /// Returns how many elements are in the heap (including the (temporarily) "removed" values)
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.values.len()
     }
 
     /// Returns whether there are elements left in the heap (excluding the "removed" values)
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.end_position == 0
     }
 
     /// Returns whether the key is currently not (temporarily) remove
-    pub fn is_key_present(&self, key: Key) -> bool {
+    pub(crate) fn is_key_present(&self, key: Key) -> bool {
         self.map_key_to_position[key] < self.end_position
     }
 
     /// Increases the size of the heap by one and adjust the data structures appropriately by adding
     /// `Key` and `Value`
-    pub fn grow(&mut self, key: Key, value: Value) {
+    pub(crate) fn grow(&mut self, key: Key, value: Value) {
         let last_index = self.values.len();
         self.values.push(value);
         // Initially the key is placed placed at the very end, will be placed in the correct
@@ -179,7 +170,7 @@ impl<
     /// that have been [`KeyValueHeap::delete_key`].
     ///
     /// The run-time complexity of this operation is O(n)
-    pub fn divide_values(&mut self, divisor: Value) {
+    pub(crate) fn divide_values(&mut self, divisor: Value) {
         for value in self.values.iter_mut() {
             *value /= divisor;
         }

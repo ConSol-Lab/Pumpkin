@@ -1,4 +1,5 @@
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::LocalId;
@@ -9,6 +10,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
+use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_assert_simple;
 
 /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
@@ -43,7 +45,7 @@ where
 {
     type Propagator = DivisionPropagator<VA, VB, VC>;
 
-    fn create(self, mut context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         DivisionPropagator {
             numerator: context.register(self.numerator, DomainEvents::BOUNDS, ID_NUMERATOR),
             denominator: context.register(self.denominator, DomainEvents::BOUNDS, ID_DENOMINATOR),
@@ -58,12 +60,6 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
-        perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
-    }
-
-    fn synchronise(&mut self, _context: &PropagationContext) {}
-
     fn priority(&self) -> u32 {
         0
     }
@@ -74,31 +70,29 @@ where
 
     fn initialise_at_root(
         &mut self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+        context: PropagationContext,
+    ) -> Result<(), PropositionalConjunction> {
         if context.contains(&self.denominator, 0) {
             pumpkin_assert_simple!(
                 !context.contains(&self.denominator, 0),
                 "Denominator cannot contain 0"
             );
         }
-        self.propagate(context)
+
+        Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        context: &mut PropagationContextMut,
-    ) -> Result<(), Inconsistency> {
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
         perform_propagation(context, &self.numerator, &self.denominator, &self.rhs)
     }
 }
 
 fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
-    context: &mut PropagationContextMut,
+    mut context: PropagationContextMut,
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> Result<(), Inconsistency> {
+) -> PropagationStatusCP {
     if context.lower_bound(denominator) < 0 && context.upper_bound(denominator) > 0 {
         // For now we don't do anything in this case, note that this will not lead to incorrect
         // behaviour since any solution to this constraint will necessarily have to fix the
@@ -123,32 +117,32 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 
     // We propagate the domains to their appropriate signs (e.g. if the numerator is negative and
     // the denominator is positive then the rhs should also be negative)
-    propagate_signs(context, numerator, denominator, rhs)?;
+    propagate_signs(&mut context, numerator, denominator, rhs)?;
 
     // If the upper-bound of the numerator is positive and the upper-bound of the rhs is positive
     // then we can simply update the upper-bounds
     if context.upper_bound(numerator) >= 0 && context.upper_bound(rhs) >= 0 {
-        propagate_upper_bounds(context, numerator, denominator, rhs)?;
+        propagate_upper_bounds(&mut context, numerator, denominator, rhs)?;
     }
 
     // If the lower-bound of the numerator is negative and the lower-bound of the rhs is negative
     // then we negate these variables and update the upper-bounds
     if context.upper_bound(negated_numerator) >= 0 && context.upper_bound(negated_rhs) >= 0 {
-        propagate_upper_bounds(context, negated_numerator, denominator, negated_rhs)?;
+        propagate_upper_bounds(&mut context, negated_numerator, denominator, negated_rhs)?;
     }
 
     // If the domain of the numerator is positive and the domain of the rhs is positive (and we know
     // that our denominator is positive) then we can propagate based on the assumption that all the
     // domains are positive
     if context.lower_bound(numerator) >= 0 && context.lower_bound(rhs) >= 0 {
-        propagate_positive_domains(context, numerator, denominator, rhs)?;
+        propagate_positive_domains(&mut context, numerator, denominator, rhs)?;
     }
 
     // If the domain of the numerator is negative and the domain of the rhs is negative (and we know
     // that our denominator is positive) then we propagate based on the views over the numerator and
     // rhs
     if context.lower_bound(negated_numerator) >= 0 && context.lower_bound(negated_rhs) >= 0 {
-        propagate_positive_domains(context, negated_numerator, denominator, negated_rhs)?;
+        propagate_positive_domains(&mut context, negated_numerator, denominator, negated_rhs)?;
     }
 
     Ok(())
@@ -169,7 +163,7 @@ fn propagate_positive_domains<VA: IntegerVariable, VB: IntegerVariable, VC: Inte
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> Result<(), Inconsistency> {
+) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
     let numerator_min = context.lower_bound(numerator);
@@ -258,7 +252,7 @@ fn propagate_upper_bounds<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerV
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> Result<(), Inconsistency> {
+) -> PropagationStatusCP {
     let rhs_max = context.upper_bound(rhs);
     let numerator_max = context.upper_bound(numerator);
     let denominator_min = context.lower_bound(denominator);
@@ -303,7 +297,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
     numerator: &VA,
     denominator: &VB,
     rhs: &VC,
-) -> Result<(), Inconsistency> {
+) -> PropagationStatusCP {
     let rhs_min = context.lower_bound(rhs);
     let rhs_max = context.upper_bound(rhs);
     let numerator_min = context.lower_bound(numerator);

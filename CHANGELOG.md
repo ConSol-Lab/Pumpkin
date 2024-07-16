@@ -108,6 +108,7 @@
 * Implemented API for reverse propagation, including deletable clauses.
 * Replaced explicit CP representation with a compact version.
 * Added functionality to query domain values at given trail position.
+* Added support for half-reification of arbitrary propagators.
 
 ## Bugfixes
 

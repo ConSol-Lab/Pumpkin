@@ -2,12 +2,12 @@
 //!
 //! See the [`crate::engine::cp::propagation`] for info on propagators.
 
-pub mod arithmetic;
+pub(crate) mod arithmetic;
 mod cumulative;
 pub(crate) mod element;
-mod nogood;
+pub(crate) mod nogood;
+mod reified_propagator;
 
-pub use arithmetic::*;
-pub use cumulative::*;
-pub use nogood::NogoodPropagator;
-pub use nogood::NogoodPropagatorConstructor;
+pub(crate) use arithmetic::*;
+pub(crate) use cumulative::*;
+pub(crate) use reified_propagator::*;

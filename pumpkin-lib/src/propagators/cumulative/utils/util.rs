@@ -3,13 +3,11 @@
 //! input parameters.
 use std::rc::Rc;
 
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
-use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -19,10 +17,10 @@ use crate::propagators::UpdatedTaskInfo;
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
-pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
+    context: &PropagationContext,
     conflict_tasks: &[Rc<Task<Var>>],
-) -> Inconsistency {
+) -> PropositionalConjunction {
     let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
     for task in conflict_tasks.iter() {
         error_clause.push(predicate!(
@@ -33,7 +31,7 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
         ));
     }
 
-    Inconsistency::from(PropositionalConjunction::from(error_clause))
+    PropositionalConjunction::from(error_clause)
 }
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
@@ -42,7 +40,7 @@ pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
-    mut context: PropagatorConstructorContext<'_>,
+    context: &mut PropagatorConstructorContext<'_>,
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
@@ -76,7 +74,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
 pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     bounds: &mut [(i32, i32)],
     task: &Rc<Task<Var>>,
 ) {
@@ -108,7 +106,7 @@ pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
 
 /// Determines whether the stored bounds are equal when propagation occurs
 pub(crate) fn check_bounds_equal_at_propagation<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &PropagationContext,
     tasks: &[Rc<Task<Var>>],
     bounds: &[(i32, i32)],
 ) -> bool {

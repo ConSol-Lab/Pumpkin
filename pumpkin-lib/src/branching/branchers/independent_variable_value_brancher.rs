@@ -1,3 +1,6 @@
+//! A [`Brancher`] which simply switches uses a single [`VariableSelector`] and a single
+//! [`ValueSelector`].
+
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
@@ -21,13 +24,13 @@ where
 {
     /// The [`VariableSelector`] of the [`Brancher`], determines which (unfixed) variable to branch
     /// next on.
-    variable_selector: VariableSelect,
+    pub(crate) variable_selector: VariableSelect,
     /// The [`ValueSelector`] of the [`Brancher`] determines which value in the domain to branch
     /// next on given a variable.
-    value_selector: ValueSelect,
+    pub(crate) value_selector: ValueSelect,
     /// [`PhantomData`] to ensure that the variable type is bound to the
     /// [`IndependentVariableValueBrancher`]
-    variable_type: PhantomData<Var>,
+    pub(crate) variable_type: PhantomData<Var>,
 }
 
 impl<Var, VariableSelect, ValueSelect>

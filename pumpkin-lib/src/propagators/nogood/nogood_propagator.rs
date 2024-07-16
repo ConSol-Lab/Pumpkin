@@ -50,12 +50,12 @@ use crate::pumpkin_assert_simple;
 // Todo: the way the hashmap is used is not efficient.
 
 #[derive(Debug, Clone, Copy)]
-pub struct NogoodPropagatorConstructor {}
+pub(crate) struct NogoodPropagatorConstructor;
 
 impl PropagatorConstructor for NogoodPropagatorConstructor {
     type Propagator = NogoodPropagator;
 
-    fn create(self, mut _context: PropagatorConstructorContext<'_>) -> Self::Propagator {
+    fn create(self, mut _context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         NogoodPropagator::default()
     }
 }
@@ -425,7 +425,7 @@ impl Propagator for NogoodPropagator {
         0
     }
 
-    fn propagate(&mut self, context: &mut PropagationContextMut) -> Result<(), Inconsistency> {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         // old version from scratch:
         // let result = self.debug_propagate_from_scratch(context);
         // self.last_index_on_trail = context.assignments.trail.len();
@@ -1182,7 +1182,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        _context: &mut PropagationContextMut,
+        _context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -1336,14 +1336,14 @@ impl Propagator for NogoodPropagator {
 
     fn debug_propagate_from_scratch(
         &self,
-        context: &mut PropagationContextMut,
+        mut context: PropagationContextMut,
     ) -> Result<(), Inconsistency> {
         // Very inefficient version!
 
         // The algorithm goes through every nogood explicitly
         // and computes from scratch.
         for nogood in self.nogoods.iter() {
-            self.debug_propagate_nogood_from_scratch(&nogood.predicates, context)?;
+            self.debug_propagate_nogood_from_scratch(&nogood.predicates, &mut context)?;
         }
         Ok(())
     }
@@ -1469,7 +1469,7 @@ mod tests {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
-    use crate::propagators::NogoodPropagatorConstructor;
+    use crate::propagators::nogood::NogoodPropagatorConstructor;
 
     #[test]
     fn ternary_nogood_propagate() {
@@ -1480,7 +1480,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(NogoodPropagatorConstructor {})
+            .new_propagator(NogoodPropagatorConstructor)
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, dummy.id as i32, dummy, 1);
