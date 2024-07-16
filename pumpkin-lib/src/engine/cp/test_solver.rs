@@ -27,12 +27,26 @@ use crate::engine::WatchListCP;
 use crate::predicate;
 
 /// A container for CP variables, which can be used to test propagators.
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct TestSolver {
     assignments: Assignments,
     reason_store: ReasonStore,
     watch_list: WatchListCP,
-    next_id: u32,
+    next_propagator_id: u32,
+}
+
+impl Default for TestSolver {
+    fn default() -> Self {
+        let mut solver = Self {
+            assignments: Default::default(),
+            reason_store: Default::default(),
+            watch_list: Default::default(),
+            next_propagator_id: Default::default(),
+        };
+        // We allocate space for the zero-th dummy variable at the root level of the assignments.
+        solver.watch_list.grow();
+        solver
+    }
 }
 
 type BoxedPropagator = Box<dyn Propagator>;
@@ -62,8 +76,8 @@ impl TestSolver {
         Constructor: PropagatorConstructor,
         Constructor::Propagator: 'static,
     {
-        let id = PropagatorId(self.next_id);
-        self.next_id += 1;
+        let id = PropagatorId(self.next_propagator_id);
+        self.next_propagator_id += 1;
 
         let mut propagator = constructor.create_boxed(&mut PropagatorConstructorContext::new(
             &mut self.watch_list,
@@ -198,8 +212,15 @@ impl TestSolver {
         let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
         let context = PropagationContext::new(&self.assignments);
         for (event, domain) in events {
-            for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                let _ = propagator.notify(context, propagator_var.variable, event.into());
+            // The nogood propagator is treated in a special way, since it is not explicitly
+            // subscribed to any domain updates, but implicitly is subscribed to all updates.
+            if propagator.name() == "NogoodPropagator" {
+                let local_id = LocalId::from(domain.id);
+                let _ = propagator.notify(context, local_id, event.into());
+            } else {
+                for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
+                    let _ = propagator.notify(context, propagator_var.variable, event.into());
+                }
             }
         }
     }

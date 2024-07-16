@@ -1369,14 +1369,15 @@ mod tests {
     }
 
     #[test]
-    fn values_can_be_removed_from_domains() {
+    fn value_can_be_removed_from_domains() {
         let mut events = EventSink::default();
         events.grow();
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(1, 1, 2, &mut events);
 
-        assert!(!domain.contains(2));
+        assert!(domain.contains(2));
+        assert!(!domain.contains(1));
     }
 
     #[test]
@@ -1386,7 +1387,7 @@ mod tests {
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
         domain.remove_value(1, 1, 1, &mut events);
-        domain.remove_value(1, 1, 2, &mut events);
+        domain.remove_value(2, 1, 2, &mut events);
 
         assert_eq!(3, domain.lower_bound());
     }
@@ -1420,10 +1421,11 @@ mod tests {
         events.grow();
 
         let mut domain = IntegerDomain::new(1, 5, DomainId::new(0));
-        domain.remove_value(1, 1, 1, &mut events);
-        domain.set_lower_bound(2, 1, 2, &mut events);
+        domain.remove_value(2, 1, 2, &mut events);
+        domain.remove_value(3, 1, 3, &mut events);
+        domain.set_lower_bound(2, 1, 4, &mut events);
 
-        assert_eq!(3, domain.lower_bound());
+        assert_eq!(4, domain.lower_bound());
     }
 
     #[test]
@@ -1744,7 +1746,7 @@ mod tests {
 
         let mut iter = domain.domain_iterator();
         assert_eq!(iter.next(), Some(0));
-        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
         assert_eq!(iter.next(), Some(3));
         assert_eq!(iter.next(), Some(5));
         assert_eq!(iter.next(), None);
@@ -1775,7 +1777,7 @@ mod tests {
         let mut domain = IntegerDomain::new(0, 10, domain_id);
         domain.remove_value(7, 0, 1, &mut events);
         domain.remove_value(9, 0, 5, &mut events);
-        domain.remove_value(7, 0, 10, &mut events);
+        domain.remove_value(2, 0, 10, &mut events);
         domain.set_upper_bound(6, 1, 10, &mut events);
 
         let mut iter = domain.domain_iterator();

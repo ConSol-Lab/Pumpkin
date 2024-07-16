@@ -434,6 +434,13 @@ impl Propagator for NogoodPropagator {
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
+        if self.watch_lists.len() <= context.assignments().num_domains() as usize {
+            self.watch_lists.resize(
+                context.assignments().num_domains() as usize + 1,
+                WatchList::default(),
+            );
+        }
+
         // for t in context.assignments.trail.iter() {
         // println!("\t{}, dec: {}", t.predicate, t.reason.is_none());
         // }
@@ -1187,14 +1194,6 @@ impl Propagator for NogoodPropagator {
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        // pumpkin_assert_moderate!(!self.is_update_present(local_id, event));
-        // let update = (
-        // DomainId {
-        // id: local_id.unpack(),
-        // },
-        // event.unwrap(),
-        // );
-
         // let domain_id = DomainId {
         //    id: local_id.unpack(),
         //};
@@ -1233,10 +1232,10 @@ impl Propagator for NogoodPropagator {
             self.enqueued_updates.grow();
         }
 
-        if local_id.unpack() as usize >= self.watch_lists.len() {
-            self.watch_lists
-                .resize((local_id.unpack() + 1) as usize, WatchList::default());
-        }
+        // if local_id.unpack() as usize >= self.watch_lists.len() {
+        // self.watch_lists
+        // .resize((local_id.unpack() + 1) as usize, WatchList::default());
+        // }
 
         // Save the update,
         // and also enqueue removal in case the lower or upper bound updates are set.
@@ -1497,9 +1496,13 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, a.id as i32, a, 3);
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, b.id as i32, b, 0);
 
+        println!("before fixed point");
+
         solver
             .propagate_until_fixed_point(&mut propagator)
             .expect("");
+
+        println!("GOT HERE");
 
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, c.id as i32, c, 15);
 

@@ -18,7 +18,7 @@ use crate::pumpkin_assert_simple;
 /// the propagations and the solver during propagation.
 #[derive(Clone, Copy, Debug)]
 pub struct PropagationContext<'a> {
-    assignments: &'a Assignments,
+    pub assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContext<'a> {
