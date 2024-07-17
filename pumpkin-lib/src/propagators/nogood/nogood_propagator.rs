@@ -361,9 +361,21 @@ impl NogoodPropagator {
                 .iter()
                 .any(|p| *p == propagated_predicate.not()));
 
-            let reason = NogoodReason {
-                nogood: Rc::clone(nogood),
-            };
+            // Cannot use lazy explanations when propagating from scratch,
+            // since the propagated predicate may not be at position zero,
+            // but we cannot change the nogood since this function is with nonmutable self.
+            // So we need to do eager then.
+            // let reason = NogoodReason {
+            //    nogood: Rc::clone(nogood),
+            //};
+
+            let reason: PropositionalConjunction = nogood
+                .borrow()
+                .predicates
+                .iter()
+                .filter(|p| **p != !propagated_predicate)
+                .copied()
+                .collect();
 
             // println!("from scratching: {}", propagated_predicate);
             // println!("...because of: {:?}", reason);
@@ -501,7 +513,7 @@ impl Propagator for NogoodPropagator {
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         // old version from scratch:
         // let result = self.debug_propagate_from_scratch(context);
-        // self.last_index_on_trail = context.assignments.trail.len();
+        // self.last_index_on_trail = context.assignments.trail.len() - 1;
         // return result;
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
