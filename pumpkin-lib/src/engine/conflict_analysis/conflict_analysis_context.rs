@@ -68,8 +68,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         let trail_entry = self.assignments.get_trail_entry(trail_position);
 
         if trail_entry.reason.is_none() {
-            // this assert does not need to hold, can be as a result of a decision!
-            // pumpkin_assert_simple!(*predicate == trail_entry.predicate);
             vec![*predicate]
         } else {
             self.get_propagation_reason(predicate)
@@ -123,6 +121,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // "reason in loop: {:?}",
         // extract_reason_from_trail(&trail_entry)
         // );
+
         // We distinguish between two cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == *predicate {
@@ -410,7 +409,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         pumpkin_assert_simple!(*input_lower_bound > not_equal_constant);
 
                         // The reason for the input predicate [x >= a] is computed recursively as
-                        // the reason for [x >= a - 1] & [x != a-1].
+                        // the reason for [x >= a - 1] & [x != a - 1].
                         let new_lb_predicate = Predicate::LowerBound {
                             domain_id: *domain_id,
                             lower_bound: input_lower_bound - 1,
@@ -509,6 +508,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     // We do not post equality literals on the trail,
                     // and instead decomposed them into lower and upper bound predicates,
                     // so we can skip considering this case.
+
                     unreachable!()
                 }
             }
@@ -520,7 +520,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             .iter()
             .filter(|predicate| {
                 // We want to skip root level predicates, and keep everything else.
-                if let Some(decision_level) =
+                self.assignments.get_decision_level_for_predicate(predicate).unwrap() > 0
+                /*if let Some(decision_level) =
                     self.assignments.get_decision_level_for_predicate(predicate)
                 {
                     // Only keep if it is not a root predicate.
@@ -528,7 +529,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 } else {
                     // Decision predicates are kept.
                     true
-                }
+                }*/
             })
             .copied()
             .collect()

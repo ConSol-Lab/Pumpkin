@@ -255,15 +255,22 @@ impl AdvancedNogood {
 
         // println!("before simpl: {:?}", self.predicates_current_decision_level);
         let mut simplified_nogood = AdvancedNogood::new(0);
-        for p in &self.predicates_current_decision_level {
-            simplified_nogood.add_predicate(p.predicate, assignments);
+        let mut temp_assignments = self.internal_assignments.clone();
+        let _ = temp_assignments.synchronise(0);
+
+        for p in self.predicates_current_decision_level.clone() {
+            let internal_predicate = self.convert_into_internal_predicate(p.predicate, assignments);
+            simplified_nogood.add_predicate(internal_predicate, &temp_assignments);
         }
-        let temp = simplified_nogood.extract_final_learned_nogood(assignments);
+        let temp = simplified_nogood.extract_final_learned_nogood(&self.internal_assignments);
         self.predicates_current_decision_level = temp
             .iter()
-            .map(|p| PredicateWithInfo {
-                predicate: *p,
-                trail_position: assignments.get_trail_position(p).unwrap(),
+            .map(|p| {
+                let external_predicate = self.convert_into_external_predicate(*p);
+                PredicateWithInfo {
+                    predicate: external_predicate,
+                    trail_position: assignments.get_trail_position(&external_predicate).unwrap(),
+                }
             })
             .collect();
         // println!("after simpl: {:?}", self.predicates_current_decision_level);

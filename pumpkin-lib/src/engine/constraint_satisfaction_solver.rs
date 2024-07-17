@@ -753,6 +753,7 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
         let learned_nogood = self.compute_learned_nogood(brancher);
+        // println!("NOGOOD LEARNING: {:?}", learned_nogood.predicates);
         self.process_learned_nogood(learned_nogood, brancher);
         self.state.declare_solving();
     }

@@ -1,3 +1,5 @@
+* disabled preprocessing of nogood, which can be a problem if we end up with duplicate predicates!
+
 * Learned nogood management.
 * Restart policy before took into account number of assigned literals, now it might not?
 * Implement LBD and activity for nogoods.

@@ -28,6 +28,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
+use crate::predicate;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -444,14 +445,11 @@ impl NogoodPropagator {
             println!();
         }
 
-        println!("<= list");
+        println!("= list");
         for m in self.watch_lists.iter().enumerate() {
-            println!("var x{}: {:?}", m.0, m.1.upper_bound);
+            println!("var x{}: {:?}", m.0, m.1.equals);
         }
-        println!(">= list");
-        for m in self.watch_lists.iter().enumerate() {
-            println!("var x{}: {:?}", m.0, m.1.lower_bound);
-        }
+
         println!("+++++++");
     }
 
@@ -512,9 +510,9 @@ impl Propagator for NogoodPropagator {
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         // old version from scratch:
-        // let result = self.debug_propagate_from_scratch(context);
+        let result = self.debug_propagate_from_scratch(context);
         // self.last_index_on_trail = context.assignments.trail.len() - 1;
-        // return result;
+        return result;
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
@@ -554,7 +552,7 @@ impl Propagator for NogoodPropagator {
         for update_info in events {
             let update_info: (DomainId, IntDomainEvent) = (update_info.1, update_info.0);
             // println!("\tmm: {}", update_info.0);
-            // for m in self.watch_lists[update_info.0].upper_bound.iter() {
+            // for m in self.watch_lists[update_info.0].hole.iter() {
             // println!("w {}: {:?}", m.right_hand_side, self.nogoods[m.nogood_id]);
             // }
             //
@@ -694,6 +692,10 @@ impl Propagator for NogoodPropagator {
                             current_index += 1;
 
                             // At this point, nonwatched predicates and nogood[1] are falsified.
+                            pumpkin_assert_advanced!(nogood[1..]
+                                .iter()
+                                .all(|p| context.is_predicate_satisfied(*p)));
+
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
@@ -869,6 +871,10 @@ impl Propagator for NogoodPropagator {
                             current_index += 1;
 
                             // At this point, nonwatched predicates and nogood[1] are falsified.
+                            pumpkin_assert_advanced!(nogood[1..]
+                                .iter()
+                                .all(|p| context.is_predicate_satisfied(*p)));
+
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
@@ -928,11 +934,18 @@ impl Propagator for NogoodPropagator {
                         let right_hand_side =
                             self.watch_lists[update_info.0].hole[current_index].right_hand_side;
 
+                        let update_domain = update_info.0;
+                        // Only look at the watcher if:
+                        // 1) The removed value was definitely removed due to bound changes, OR
+                        // 2) The removed value is within the bounds, and was actually removed.
                         if old_upper_bound >= right_hand_side && right_hand_side > new_upper_bound
                             || old_lower_bound <= right_hand_side
                                 && right_hand_side < new_lower_bound
                             || (new_lower_bound < right_hand_side
-                                && right_hand_side < new_upper_bound)
+                                && right_hand_side < new_upper_bound
+                                && context.is_predicate_satisfied(predicate!(
+                                    update_domain != right_hand_side
+                                )))
                         {
                             // todo: check cached predicate?
 
@@ -1042,6 +1055,10 @@ impl Propagator for NogoodPropagator {
                             current_index += 1;
 
                             // At this point, nonwatched predicates and nogood[1] are falsified.
+                            pumpkin_assert_advanced!(nogood[1..]
+                                .iter()
+                                .all(|p| context.is_predicate_satisfied(*p)));
+
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
@@ -1217,6 +1234,10 @@ impl Propagator for NogoodPropagator {
                             current_index += 1;
 
                             // At this point, nonwatched predicates and nogood[1] are falsified.
+                            pumpkin_assert_advanced!(nogood[1..]
+                                .iter()
+                                .all(|p| context.is_predicate_satisfied(*p)));
+
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
@@ -1274,7 +1295,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        _context: PropagationContext,
+        context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
