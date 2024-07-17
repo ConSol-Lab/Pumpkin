@@ -157,6 +157,8 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) {
+        // println!("Learn: {:?}", nogood);
+
         if nogood.len() == 1 {
             self.add_permanent_nogood(nogood, context)
                 .expect("Unit learned nogoods cannot fail.");
@@ -187,6 +189,8 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {
+        // println!("Perma: {:?}", nogood);
+
         match self.add_permanent_nogood(nogood, context) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -216,7 +220,11 @@ impl NogoodPropagator {
             return Ok(());
         }
 
+        // println!("before process: {:?}", nogood);
+
         Self::preprocess_nogood(&mut nogood, context);
+
+        // println!("after process: {:?}", nogood);
 
         // Unit nogoods are added as root assignments rather than as nogoods.
         if nogood.len() == 1 {
@@ -510,9 +518,9 @@ impl Propagator for NogoodPropagator {
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         // old version from scratch:
-        let result = self.debug_propagate_from_scratch(context);
+        // let result = self.debug_propagate_from_scratch(context);
         // self.last_index_on_trail = context.assignments.trail.len() - 1;
-        return result;
+        // return result;
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
@@ -1295,7 +1303,7 @@ impl Propagator for NogoodPropagator {
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        _context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {

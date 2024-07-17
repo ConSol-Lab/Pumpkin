@@ -2,6 +2,7 @@ use super::ConflictAnalysisNogoodContext;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::engine::conflict_analysis::advanced_nogood::AdvancedNogood;
 use crate::engine::predicates::predicate::Predicate;
+use crate::pumpkin_assert_advanced;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ResolutionNogoodConflictAnalyser {}
@@ -23,6 +24,10 @@ impl ResolutionNogoodConflictAnalyser {
         let mut nogood = AdvancedNogood::new(context.assignments.get_decision_level());
 
         let conflict_nogood = context.get_conflict_nogood();
+        pumpkin_assert_advanced!(conflict_nogood
+            .iter()
+            .all(|p| context.assignments.is_predicate_satisfied(*p)));
+
         // record the nogood size for statistical purposes
         context
             .counters
@@ -81,6 +86,10 @@ impl ResolutionNogoodConflictAnalyser {
         else {
             0
         };
+
+        pumpkin_assert_advanced!(nogood[1..]
+            .iter()
+            .all(|p| context.assignments.is_predicate_satisfied(*p)));
 
         LearnedNogood {
             backjump_level,
