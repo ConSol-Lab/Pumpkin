@@ -1,5 +1,8 @@
 #![cfg(test)]
-use integration_tests::run_mzn_test;
+
+mod helpers;
+
+use helpers::run_mzn_test;
 
 macro_rules! mzn_search_ordered {
     ($name:ident) => {

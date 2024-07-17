@@ -1,6 +1,8 @@
 #![cfg(test)]
-use integration_tests::ensure_release_binary_built;
-use integration_tests::run_solver_with_options;
+
+mod helpers;
+
+use helpers::run_solver_with_options;
 
 macro_rules! mzn_infeasible_test {
     ($name:ident) => {
@@ -13,8 +15,6 @@ macro_rules! mzn_infeasible_test {
 mzn_infeasible_test!(prop_stress);
 
 pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str) {
-    ensure_release_binary_built();
-
     let instance_path = format!(
         "{}/tests/{folder_name}/{instance_name}.fzn",
         env!("CARGO_MANIFEST_DIR")
