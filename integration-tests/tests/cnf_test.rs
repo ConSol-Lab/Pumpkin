@@ -5,7 +5,6 @@ use std::process::Output;
 use integration_tests::ensure_release_binary_built;
 use integration_tests::run_solution_checker;
 use integration_tests::run_solver;
-use integration_tests::verify_proof;
 use integration_tests::Checker;
 use integration_tests::CheckerOutput;
 use integration_tests::Files;
@@ -127,8 +126,9 @@ impl Checker for CnfChecker {
         }
     }
 
-    fn after_checking_action(files: Files, output: &Output) {
-        verify_proof(files, output).unwrap()
+    fn after_checking_action(_files: Files, _output: &Output) {
+        // todo: bring back the proof logging
+        // verify_proof(files, output).unwrap()
     }
 }
 

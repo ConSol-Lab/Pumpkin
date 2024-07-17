@@ -547,6 +547,21 @@ impl ConstraintSatisfactionSolver {
         // core
     }
 
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        let literal_is_true = self.assignments.is_predicate_satisfied(literal.into());
+        let opposite_literal_is_true = self.assignments.is_predicate_satisfied((!literal).into());
+
+        pumpkin_assert_moderate!(!(literal_is_true && opposite_literal_is_true));
+
+        // If both the literal is not true and its negation is not true then the literal is
+        // unassigned
+        if !literal_is_true && !opposite_literal_is_true {
+            None
+        } else {
+            Some(literal_is_true)
+        }
+    }
+
     /// Get the lower bound for the given variable.
     pub fn get_lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
         variable.lower_bound(&self.assignments)
@@ -1169,12 +1184,34 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         predicates: impl IntoIterator<Item = Predicate>,
     ) -> Result<(), ConstraintOperationError> {
+        pumpkin_assert_simple!(
+            self.get_decision_level() == 0,
+            "Clauses can only be added in the root"
+        );
         // todo: took as input literals, but now we have nogoods?
         // also remove the add_clause with add_nogood
         // Imko: I think we can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`
-        self.add_nogood(predicates.into_iter().map(|predicate| !predicate).collect())
+        let predicates = predicates
+            .into_iter()
+            .map(|predicate| !predicate)
+            .collect::<Vec<_>>();
+        if predicates.is_empty() {
+            self.state
+                .declare_conflict(StoredConflictInfo::RootLevelConflict(
+                    ConstraintOperationError::InfeasibleClause,
+                ));
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+        if let Err(constraint_operation_error) = self.add_nogood(predicates) {
+            self.state
+                .declare_conflict(StoredConflictInfo::RootLevelConflict(
+                    constraint_operation_error,
+                ));
+            return Err(constraint_operation_error);
+        }
+        Ok(())
         // pumpkin_assert_moderate!(!self.state.is_infeasible_under_assumptions());
         // pumpkin_assert_moderate!(self.is_propagation_complete());
         //

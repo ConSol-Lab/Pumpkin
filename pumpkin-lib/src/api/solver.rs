@@ -143,6 +143,10 @@ impl Solver {
 
 /// Methods to retrieve information about variables
 impl Solver {
+    pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
+        self.satisfaction_solver.get_literal_value(literal)
+    }
+
     /// Get the lower-bound of the given [`IntegerVariable`] at the root level (after propagation).
     pub fn lower_bound(&self, variable: &impl IntegerVariable) -> i32 {
         self.satisfaction_solver.get_lower_bound(variable)

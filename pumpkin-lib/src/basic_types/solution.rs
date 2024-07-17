@@ -1,4 +1,5 @@
 use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
@@ -47,6 +48,11 @@ pub struct Solution {
 impl Solution {
     pub fn new(assignments: Assignments) -> Self {
         Self { assignments }
+    }
+
+    pub fn get_domains(&self) -> DomainGeneratorIterator {
+        self.assignments.get_domains()
+        // todo: Should we skip the first element as it could be the always true domain id?
     }
 
     pub fn as_reference(&self) -> SolutionReference<'_> {

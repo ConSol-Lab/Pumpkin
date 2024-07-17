@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::Solver;
 
 /// Errors related to adding constraints to the [`Solver`].
-#[derive(Error, Debug, Copy, Clone)]
+#[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConstraintOperationError {
     #[error("Adding the nogood failed because it is infeasible at the root")]
     InfeasibleNogood,

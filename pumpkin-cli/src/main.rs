@@ -1,9 +1,11 @@
 mod file_format;
 mod flatzinc;
 mod maxsat;
+mod parsers;
 mod result;
 
 use std::fmt::Debug;
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,9 +18,17 @@ use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
+use parsers::dimacs::parse_cnf;
+use parsers::dimacs::SolverArgs;
+use parsers::dimacs::SolverDimacsSink;
+use pumpkin_lib::asserts::pumpkin_assert_simple;
 use pumpkin_lib::options::RestartOptions;
 use pumpkin_lib::options::SequenceGeneratorType;
 use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::results::ProblemSolution;
+use pumpkin_lib::results::SatisfactionResult;
+use pumpkin_lib::results::Solution;
+use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -272,6 +282,13 @@ fn run() -> PumpkinResult<()> {
         args.omit_call_site,
     )?;
 
+    // let learning_options = LearningOptions {
+    //     num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
+    //     high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy.inner,
+    //     lbd_threshold: args.learning_lbd_threshold,
+    //     ..Default::default()
+    // };
+
     // todo: disabled proof logging
     // let proof_log = if let Some(path_buf) = args.proof {
     //     match file_format {
@@ -331,43 +348,55 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn cnf_problem(
-    _solver_options: SolverOptions,
-    _time_limit: Option<Duration>,
-    _instance_path: impl AsRef<Path>,
+    solver_options: SolverOptions,
+    time_limit: Option<Duration>,
+    instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
-    // todo: parsers were removed?
-    todo!()
-    // let instance_file = File::open(instance_path)?;
-    // let mut solver = parse_cnf::<SolverDimacsSink>(
-    //     instance_file,
-    //     SolverArgs::new(learning_options, solver_options),
-    // )?;
+    let instance_file = File::open(instance_path)?;
+    let mut solver = parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
 
-    // let mut termination =
-    //     TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    // let mut brancher = solver.default_brancher_over_all_propositional_variables();
-    // match solver.satisfy(&mut brancher, &mut termination) {
-    //     SatisfactionResult::Satisfiable(solution) => {
-    //         println!("s SATISFIABLE");
-    //         let num_propositional_variables = solution.num_propositional_variables();
-    //         println!(
-    //             "v {}",
-    //             stringify_solution(&solution, num_propositional_variables, true)
-    //         );
-    //     }
-    //     SatisfactionResult::Unsatisfiable => {
-    //         if solver.conclude_proof_unsat().is_err() {
-    //             warn!("Failed to log solver conclusion");
-    //         };
+    let mut termination =
+        TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
+    let mut brancher = solver.default_brancher();
+    match solver.satisfy(&mut brancher, &mut termination) {
+        SatisfactionResult::Satisfiable(solution) => {
+            println!("s SATISFIABLE");
+            println!("v {}", stringify_solution(&solution, true));
+        }
+        SatisfactionResult::Unsatisfiable => {
+            // todo: add back proof logging
+            // if solver.conclude_proof_unsat().is_err() {
+            //     warn!("Failed to log solver conclusion");
+            // };
 
-    //         println!("s UNSATISFIABLE");
-    //     }
-    //     SatisfactionResult::Unknown => {
-    //         println!("s UNKNOWN");
-    //     }
-    // };
+            println!("s UNSATISFIABLE");
+        }
+        SatisfactionResult::Unknown => {
+            println!("s UNKNOWN");
+        }
+    };
 
-    // Ok(())
+    Ok(())
+}
+
+fn stringify_solution(solution: &Solution, terminate_with_zero: bool) -> String {
+    solution
+        .get_domains()
+        .map(|domain_id| {
+            let value = solution.get_integer_value(domain_id);
+            pumpkin_assert_simple!((0..=1).contains(&value));
+            if value == 1 {
+                format!("{} ", domain_id.id)
+            } else {
+                format!("-{} ", domain_id.id)
+            }
+        })
+        .chain(if terminate_with_zero {
+            std::iter::once(String::from("0"))
+        } else {
+            std::iter::once(String::new())
+        })
+        .collect::<String>()
 }
 
 fn learned_clause_minimisation_parser(s: &str) -> Result<CliArg<bool>, String> {

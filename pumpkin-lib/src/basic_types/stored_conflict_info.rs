@@ -4,6 +4,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::ConstraintOperationError;
 
 /// A conflict info which can be stored in the solver.
 /// Two (related) conflicts can happen:
@@ -18,4 +19,5 @@ pub enum StoredConflictInfo {
     EmptyDomain {
         conflict_nogood: PropositionalConjunction,
     },
+    RootLevelConflict(ConstraintOperationError),
 }

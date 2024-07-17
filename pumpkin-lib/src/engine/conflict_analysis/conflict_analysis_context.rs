@@ -47,6 +47,9 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     .copied()
                     .collect()
             }
+            StoredConflictInfo::RootLevelConflict(_) => {
+                unreachable!("Should never attempt to learn a nogood from a root level conflict")
+            }
         }
     }
 
