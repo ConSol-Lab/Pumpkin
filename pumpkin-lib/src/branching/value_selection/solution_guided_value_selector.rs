@@ -95,6 +95,7 @@ where
         context: &mut SelectionContext,
         decision_variable: PropositionalVariable,
     ) -> Predicate {
+        self.saved_values.accomodate(decision_variable, None);
         match self.saved_values[decision_variable] {
             Some(value) => {
                 pumpkin_assert_moderate!(
@@ -108,27 +109,9 @@ where
         }
     }
 
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        if all_variables.is_empty() {
-            warn!("Empty set of variables provided to solution guided value selector, this could indicate an error");
-        }
-        while self.saved_values.len()
-            <= all_variables
-                .iter()
-                .map(|variable| variable.index())
-                .max()
-                .unwrap()
-        {
-            self.saved_values.push(None);
-        }
-        self.backup_selector
-            .on_encoding_objective_function(all_variables)
-    }
-
     fn on_solution(&mut self, solution: SolutionReference) {
-        for propositional_variable_index in 0..self.saved_values.len() {
-            let propositional_variable =
-                PropositionalVariable::new(propositional_variable_index as u32);
+        for propositional_variable in solution.get_propostional_variables() {
+            self.saved_values.accomodate(propositional_variable, None);
             self.update(
                 propositional_variable,
                 solution.get_propositional_variable_value(propositional_variable),
@@ -142,10 +125,14 @@ where
 mod tests {
     use super::SolutionGuidedValueSelector;
     use crate::basic_types::tests::TestRandom;
+    use crate::basic_types::StorageKey;
     use crate::branching::value_selection::PhaseSaving;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
     use crate::engine::predicates::predicate::Predicate;
+    use crate::results::SolutionReference;
+    use crate::variables::Literal;
+    use crate::variables::PropositionalVariable;
 
     #[test]
     fn saved_value_is_returned_prop() {
@@ -231,5 +218,61 @@ mod tests {
         } else {
             panic!("Predicate which was not a literal was returned")
         }
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_selected_variable() {
+        let variable = PropositionalVariable::create_from_index(1);
+
+        let backup = PhaseSaving::new(&[variable]);
+
+        let mut solution_guided = SolutionGuidedValueSelector::new(&[], vec![], backup);
+
+        let (assignments_integer, assignments_propositional) =
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut test_rng,
+        );
+
+        let selected = solution_guided.select_value(&mut context, variable);
+
+        assert_eq!(selected, Predicate::Literal(Literal::new(variable, false)));
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_on_solution() {
+        let variable = PropositionalVariable::create_from_index(1);
+
+        let backup = PhaseSaving::new(&[variable]);
+
+        let mut solution_guided = SolutionGuidedValueSelector::new(&[], vec![], backup);
+
+        let (assignments_integer, mut assignments_propositional) =
+            SelectionContext::create_for_testing(0, 1, None);
+        let mut test_rng = TestRandom::default();
+
+        assignments_propositional.increase_decision_level();
+
+        assignments_propositional.enqueue_decision_literal(Literal::new(variable, true));
+
+        solution_guided.on_solution(SolutionReference::new(
+            &assignments_propositional,
+            &assignments_integer,
+        ));
+
+        let _ = assignments_propositional.synchronise(0).collect::<Vec<_>>();
+
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut test_rng,
+        );
+
+        let selected = solution_guided.select_value(&mut context, variable);
+
+        assert_eq!(selected, Predicate::Literal(Literal::new(variable, true)));
     }
 }

@@ -19,7 +19,7 @@ impl Iterator for PropositionalVariableGeneratorIterator {
     type Item = PropositionalVariable;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index == self.end_index {
+        if self.current_index >= self.end_index {
             return None;
         }
 
