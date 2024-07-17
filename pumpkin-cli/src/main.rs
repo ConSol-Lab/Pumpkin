@@ -13,11 +13,13 @@ use std::time::Duration;
 
 use clap::Parser;
 use file_format::FileFormat;
+use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
+use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
@@ -37,6 +39,9 @@ use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
+
+pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
+// pub(crate) type HashSet<K, Hasher = FnvBuildHasher> = std::collections::HashSet<K, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -165,6 +170,14 @@ struct Args {
     /// that it evaluates to the reported objective value.
     #[arg(long = "verify", default_value_t = false)]
     verify_solution: bool,
+
+    /// The encoding to use for the upper bound constraint in an optimisation problem.
+    #[arg(
+        long = "upper-bound-encoding",
+        value_parser = upper_bound_encoding_parser,
+        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer.into()
+    )]
+    upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
 }
 
 fn configure_logging(
@@ -331,7 +344,12 @@ fn run() -> PumpkinResult<()> {
 
     match file_format {
         FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
-        FileFormat::WcnfDimacsPLine => wcnf_problem(solver_options, time_limit, instance_path)?,
+        FileFormat::WcnfDimacsPLine => wcnf_problem(
+            solver_options,
+            time_limit,
+            instance_path,
+            args.upper_bound_encoding.inner,
+        )?,
         FileFormat::FlatZinc => flatzinc::solve(
             Solver::with_options(solver_options),
             instance_path,
@@ -361,7 +379,10 @@ fn cnf_problem(
     match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(solution) => {
             println!("s SATISFIABLE");
-            println!("v {}", stringify_solution(&solution, true));
+            println!(
+                "v {}",
+                stringify_solution(&solution, solution.num_domains(), true)
+            );
         }
         SatisfactionResult::Unsatisfiable => {
             // todo: add back proof logging
@@ -379,9 +400,14 @@ fn cnf_problem(
     Ok(())
 }
 
-fn stringify_solution(solution: &Solution, terminate_with_zero: bool) -> String {
+fn stringify_solution(
+    solution: &Solution,
+    number_of_variables: usize,
+    terminate_with_zero: bool,
+) -> String {
     solution
         .get_domains()
+        .take(number_of_variables)
         .map(|domain_id| {
             let value = solution.get_integer_value(domain_id);
             pumpkin_assert_simple!((0..=1).contains(&value));
@@ -397,6 +423,14 @@ fn stringify_solution(solution: &Solution, terminate_with_zero: bool) -> String 
             std::iter::once(String::new())
         })
         .collect::<String>()
+}
+
+fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>, String> {
+    match s {
+        "gte" => Ok(PseudoBooleanEncoding::GeneralizedTotalizer.into()),
+        "cne" => Ok(PseudoBooleanEncoding::CardinalityNetwork.into()),
+        value => Err(format!("'{value}' is not a valid upper bound encoding.")),
+    }
 }
 
 fn learned_clause_minimisation_parser(s: &str) -> Result<CliArg<bool>, String> {
@@ -432,6 +466,12 @@ impl<T> From<T> for CliArg<T> {
 }
 
 impl std::fmt::Display for CliArg<SequenceGeneratorType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.inner, f)
+    }
+}
+
+impl std::fmt::Display for CliArg<PseudoBooleanEncoding> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.inner, f)
     }

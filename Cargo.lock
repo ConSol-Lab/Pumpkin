@@ -352,6 +352,7 @@ dependencies = [
  "clap",
  "env_logger",
  "flatzinc",
+ "fnv",
  "itertools",
  "log",
  "pumpkin-lib",

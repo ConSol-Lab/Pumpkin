@@ -10,37 +10,40 @@ use integration_tests::CheckerOutput;
 use integration_tests::Files;
 
 macro_rules! test_wcnf_instance {
-    ($name:ident) => {
+    ($name:ident, $optimal_objective:literal) => {
         #[test]
         fn $name() {
-            run_wcnf_test(stringify!($name));
+            run_wcnf_test(stringify!($name), $optimal_objective);
         }
     };
 }
 
-test_wcnf_instance!(simple);
-test_wcnf_instance!(karate);
-test_wcnf_instance!(riskmap);
-test_wcnf_instance!(johnson8_2_4);
-test_wcnf_instance!(johnson8_4_4);
-test_wcnf_instance!(normalized_g2x2);
-test_wcnf_instance!(normalized_g9x3);
-test_wcnf_instance!(normalized_g9x9);
-test_wcnf_instance!(ram_k3_n9);
+test_wcnf_instance!(simple, 1);
+test_wcnf_instance!(karate, 4);
+test_wcnf_instance!(riskmap, 9);
+test_wcnf_instance!(johnson8_2_4, 24);
+test_wcnf_instance!(johnson8_4_4, 56);
+test_wcnf_instance!(normalized_g2x2, 2);
+test_wcnf_instance!(normalized_g9x3, 7);
+test_wcnf_instance!(normalized_g9x9, 20);
+test_wcnf_instance!(ram_k3_n9, 1);
 
-struct MaxSATChecker;
+struct MaxSATChecker {
+    expected_objective: u64,
+}
 
 impl Checker for MaxSATChecker {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "maxsat-checker"
     }
 
-    fn prepare_command(cmd: &mut Command, files: &Files) {
+    fn prepare_command(&self, cmd: &mut Command, files: &Files) {
+        let _ = cmd.arg("-o").arg(format!("{}", self.expected_objective));
         let _ = cmd.arg(&files.instance_file);
         let _ = cmd.arg(&files.log_file);
     }
 
-    fn parse_checker_output(output: &Output) -> CheckerOutput {
+    fn parse_checker_output(&self, output: &Output) -> CheckerOutput {
         if output.status.success() {
             CheckerOutput::Acceptable
         } else {
@@ -49,7 +52,7 @@ impl Checker for MaxSATChecker {
     }
 }
 
-fn run_wcnf_test(instance_name: &str) {
+fn run_wcnf_test(instance_name: &str, expected_objective: u64) {
     ensure_release_binary_built();
 
     let instance_path = format!(
@@ -58,5 +61,5 @@ fn run_wcnf_test(instance_name: &str) {
     );
     let files = run_solver(instance_path, false);
 
-    run_solution_checker::<MaxSATChecker>(files);
+    run_solution_checker(files, MaxSATChecker { expected_objective });
 }

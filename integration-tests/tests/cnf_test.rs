@@ -107,16 +107,16 @@ test_cnf_instance!(unit7);
 struct CnfChecker;
 
 impl Checker for CnfChecker {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "precochk"
     }
 
-    fn prepare_command(cmd: &mut Command, files: &Files) {
+    fn prepare_command(&self, cmd: &mut Command, files: &Files) {
         let _ = cmd.arg(&files.instance_file);
         let _ = cmd.arg(&files.log_file);
     }
 
-    fn parse_checker_output(output: &Output) -> CheckerOutput {
+    fn parse_checker_output(&self, output: &Output) -> CheckerOutput {
         let code = output.status.code().unwrap_or(1);
 
         if code == 0 || code == 20 {
@@ -126,7 +126,7 @@ impl Checker for CnfChecker {
         }
     }
 
-    fn after_checking_action(_files: Files, _output: &Output) {
+    fn after_checking_action(&self, _files: Files, _output: &Output) {
         // todo: bring back the proof logging
         // verify_proof(files, output).unwrap()
     }
@@ -141,5 +141,5 @@ fn run_cnf_test(instance_name: &str) {
     );
     let files = run_solver(instance_path, true);
 
-    run_solution_checker::<CnfChecker>(files);
+    run_solution_checker(files, CnfChecker);
 }

@@ -79,10 +79,12 @@ pub fn run_solver_with_options<'a>(
         .spawn()
         .expect("Failed to run solver.");
 
+    println!("{command:?}");
+
     match child.wait_timeout(TEST_TIMEOUT) {
         Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
         Ok(Some(status)) if status.success() => {}
-        Ok(Some(_)) => panic!("error solving instance"),
+        Ok(Some(e)) => panic!("error solving instance: {e}"),
         Err(e) => panic!("error starting solver: {e}"),
     }
 
@@ -126,19 +128,19 @@ pub enum CheckerOutput {
 }
 
 pub trait Checker {
-    fn executable_name() -> &'static str;
+    fn executable_name(&self) -> &'static str;
 
-    fn prepare_command(cmd: &mut Command, files: &Files);
+    fn prepare_command(&self, cmd: &mut Command, files: &Files);
 
-    fn parse_checker_output(output: &Output) -> CheckerOutput;
+    fn parse_checker_output(&self, output: &Output) -> CheckerOutput;
 
-    fn after_checking_action(files: Files, _output: &Output) {
+    fn after_checking_action(&self, files: Files, _output: &Output) {
         files.cleanup().unwrap()
     }
 }
 
-pub fn run_solution_checker<Check: Checker>(files: Files) {
-    let checker_exe = get_executable(format!("{}/{}", env!("OUT_DIR"), Check::executable_name()));
+pub fn run_solution_checker(files: Files, checker: impl Checker) {
+    let checker_exe = get_executable(format!("{}/{}", env!("OUT_DIR"), checker.executable_name()));
 
     let mut command = Command::new(checker_exe);
     let _ = command
@@ -146,16 +148,16 @@ pub fn run_solution_checker<Check: Checker>(files: Files) {
         .stdin(Stdio::null())
         .stderr(Stdio::piped());
 
-    Check::prepare_command(&mut command, &files);
+    checker.prepare_command(&mut command, &files);
 
     let output = command.output().unwrap_or_else(|_| {
         panic!(
             "Failed to run solution checker: {}",
-            Check::executable_name()
+            checker.executable_name()
         )
     });
 
-    match Check::parse_checker_output(&output) {
+    match checker.parse_checker_output(&output) {
         CheckerOutput::Panic => {
             println!("{}", std::str::from_utf8(&output.stdout).unwrap());
 
@@ -164,7 +166,7 @@ pub fn run_solution_checker<Check: Checker>(files: Files) {
                 output.status
             );
         }
-        CheckerOutput::Acceptable => Check::after_checking_action(files, &output),
+        CheckerOutput::Acceptable => checker.after_checking_action(files, &output),
     }
 }
 

@@ -1,9 +1,6 @@
 use log::info;
 use pumpkin_lib::asserts::pumpkin_assert_moderate;
-use pumpkin_lib::asserts::pumpkin_assert_simple;
 use pumpkin_lib::branching::Brancher;
-use pumpkin_lib::predicate;
-use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
 use pumpkin_lib::termination::TerminationCondition;
@@ -12,14 +9,18 @@ use pumpkin_lib::Solver;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;
+use crate::maxsat::encoders::PseudoBooleanConstraintEncoder;
+use crate::maxsat::encoders::PseudoBooleanEncoding;
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct LinearSearch;
+pub(crate) struct LinearSearch {
+    encoding: PseudoBooleanEncoding,
+}
 
 impl LinearSearch {
     #[allow(dead_code)]
-    pub(crate) fn new() -> LinearSearch {
-        LinearSearch
+    pub(crate) fn new(encoding: PseudoBooleanEncoding) -> LinearSearch {
+        LinearSearch { encoding }
     }
 
     pub(crate) fn solve(
@@ -31,11 +32,6 @@ impl LinearSearch {
         mut brancher: impl Brancher,
         initial_solution: Solution,
     ) -> MaxSatOptimisationResult {
-        // todo: bring back encoders
-        pumpkin_assert_simple!(objective_function.get_terms().count() == 1);
-
-        let objective_variable = *objective_function.get_terms().next().unwrap().0;
-
         brancher.on_solution(initial_solution.as_reference());
 
         let mut best_solution: Solution = initial_solution;
@@ -48,13 +44,11 @@ impl LinearSearch {
             process_time.elapsed().as_secs(),
             process_time.elapsed().as_millis(),
         );
-        // let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
-        //     objective_function,
-        //     solver,
-        //     self.upper_bound_encoding,
-        // );
-
-        // let first_iteration = true;
+        let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
+            objective_function,
+            solver,
+            self.encoding,
+        );
 
         loop {
             if best_objective_value == objective_function.get_constant_term() {
@@ -64,26 +58,12 @@ impl LinearSearch {
                 };
             }
 
-            // let encoding_status =
-            //     upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
-
-            // if first_iteration {
-            //     brancher.on_encoding_objective_function(
-            //         &(1..best_solution.num_propositional_variables() as u32)
-            //             .map(PropositionalVariable::new)
-            //             .collect::<Vec<_>>(),
-            //     );
-
-            //     first_iteration = false;
-            // }
-
-            let constraint_addition = solver.add_clause(std::iter::once(predicate!(
-                objective_variable <= best_solution.get_integer_value(objective_variable) - 1
-            )));
+            let encoding_status =
+                upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
 
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal
-            if constraint_addition.is_err() {
+            if encoding_status.is_err() {
                 solver.log_statistics_with_objective(best_objective_value as i64);
                 return MaxSatOptimisationResult::Optimal {
                     solution: best_solution,

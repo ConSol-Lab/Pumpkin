@@ -226,10 +226,10 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     fn determine_polarity(&self, predicate: Predicate) -> Predicate {
         if let Some(solution) = &self.best_known_solution {
             // We have a solution
-            assert!(
-                solution.contains_domain_id(predicate.get_domain()),
-                "For now we do not expect new variables during the search"
-            );
+            if !solution.contains_domain_id(predicate.get_domain()) {
+                // This can occur if an encoding is used
+                return predicate;
+            }
             // Match the truth value according to the best solution.
             if solution.is_predicate_satisfied(predicate) {
                 predicate

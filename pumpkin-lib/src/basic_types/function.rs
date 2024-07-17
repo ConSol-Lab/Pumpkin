@@ -15,6 +15,10 @@ pub struct Function {
 }
 
 impl Function {
+    pub fn get_sum_of_literal_weights(&self) -> u64 {
+        self.literals.values().sum()
+    }
+
     pub fn add_term(&mut self, domain_id: DomainId, weight: u64) {
         *self.term.entry(domain_id).or_insert(0) += weight;
     }
@@ -40,7 +44,7 @@ impl Function {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.term.is_empty() && self.constant_term == 0
+        self.term.is_empty() && self.literals.is_empty() && self.constant_term == 0
     }
 
     pub fn evaluate_solution(&self, solution: SolutionReference) -> u64 {

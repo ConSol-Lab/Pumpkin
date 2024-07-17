@@ -13,6 +13,7 @@ thiserror = "1.0.40"
 flatzinc = "0.3.19"
 itertools = "0.12.1"
 rand = { version = "0.8.5", features = [ "small_rng" ] }
+fnv = "1.0.7"
 
 [lints]
 workspace = true

@@ -307,9 +307,10 @@ impl Solver {
     ) -> SatisfactionResult {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
-                let solution_reference = self.satisfaction_solver.get_solution_reference();
-                brancher.on_solution(solution_reference);
-                SatisfactionResult::Satisfiable(solution_reference.into())
+                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                brancher.on_solution(solution.as_reference());
+                SatisfactionResult::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
