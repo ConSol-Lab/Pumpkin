@@ -105,6 +105,8 @@ impl NogoodPropagator {
         // The code below is broken down into several parts,
         // could be done more efficiently but probably okay.
 
+        // println!("In comes the nogood: {:?}", nogood);
+
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
             *nogood = vec![Predicate::trivially_false()];
@@ -113,6 +115,8 @@ impl NogoodPropagator {
 
         // Remove predicates that are satisfied at the root level.
         nogood.retain(|p| !context.is_predicate_satisfied(*p));
+
+        // println!("after removing sat predicates : {:?}", nogood);
 
         // If the nogood is violating at the root, the previous retain would leave an empty
         // Return a violating nogood.
@@ -127,6 +131,8 @@ impl NogoodPropagator {
         // in the set.
         nogood.retain(|p| present_predicates.insert(*p));
 
+        // println!("after removing duplicates: {:?}", nogood);
+
         // Check for contradicting predicates. In this case, the nogood cannot lead to propagation,
         // so we can ignore it.
         // Todo: The current version only partially does this, since there may be symmetries that
@@ -140,7 +146,8 @@ impl NogoodPropagator {
         // This is a way to do semantic minimisation.
         let mut temp = AdvancedNogood::new(0);
         temp.add_predicates(nogood.clone(), context.assignments, None);
-        *nogood = temp.extract_final_learned_nogood().predicates;
+        *nogood = temp.extract_final_learned_nogood(context.assignments());
+        // println!("after extraction: {:?}", nogood);
     }
 
     // Learned nogood during search.
@@ -425,9 +432,13 @@ impl NogoodPropagator {
             println!();
         }
 
-        println!("eq list");
+        println!("<= list");
         for m in self.watch_lists.iter().enumerate() {
-            println!("var x{}: {:?}", m.0, m.1.equals);
+            println!("var x{}: {:?}", m.0, m.1.upper_bound);
+        }
+        println!(">= list");
+        for m in self.watch_lists.iter().enumerate() {
+            println!("var x{}: {:?}", m.0, m.1.lower_bound);
         }
         println!("+++++++");
     }
@@ -502,6 +513,8 @@ impl Propagator for NogoodPropagator {
             );
         }
 
+        let old_trail_position = context.assignments.trail.len() - 1;
+
         // for t in context.assignments.trail.iter() {
         // println!("\t{}, dec: {}", t.predicate, t.reason.is_none());
         // }
@@ -529,11 +542,10 @@ impl Propagator for NogoodPropagator {
         for update_info in events {
             let update_info: (DomainId, IntDomainEvent) = (update_info.1, update_info.0);
             // println!("\tmm: {}", update_info.0);
-            // if let Some(hehe) = self.watch_lists.get(&update_info.0) {
-            // for m in hehe.equals.iter() {
+            // for m in self.watch_lists[update_info.0].upper_bound.iter() {
             // println!("w {}: {:?}", m.right_hand_side, self.nogoods[m.nogood_id]);
             // }
-            // }
+            //
             // match update_info.1 {
             // IntDomainEvent::Assign => println!("ass"),
             // IntDomainEvent::LowerBound => println!("lb"),
@@ -720,13 +732,23 @@ impl Propagator for NogoodPropagator {
                     let mut current_index = 0_usize;
                     let mut end_index = 0_usize;
                     let num_watchers = self.watch_lists[update_info.0].upper_bound.len();
+                    // println!("num watching {}", num_watchers);
                     // Iterate through all watchers.
                     while current_index < num_watchers {
                         let right_hand_side = self.watch_lists[update_info.0].upper_bound
                             [current_index]
                             .right_hand_side;
 
+                        // println!("...hmm {old_upper_bound} > {right_hand_side} &&
+                        // {right_hand_side} >= {new_upper_bound}");
+                        // println!("trail pos: {}", self.last_index_on_trail);
+                        // println!(
+                        // "how {:?}",
+                        // context.assignments.domains[update_info.0].upper_bound_updates
+                        // );
+
                         if old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound {
+                            // println!("Im in?");
                             // todo: check cached predicate?
 
                             let nogood_id = self.watch_lists[update_info.0].upper_bound
@@ -1221,15 +1243,9 @@ impl Propagator for NogoodPropagator {
                 }
             }
         }
-        // Handling a corner case that appears in the tests.
-        // Normally there is a dummy entry at position 0 so there is something.
-        self.last_index_on_trail = if !context.assignments.trail.is_empty() {
-            context.assignments.trail.len() - 1
-        } else {
-            0
-        };
+        self.last_index_on_trail = old_trail_position;
 
-        let _ = self.enqueued_updates.drain();
+        // let _ = self.enqueued_updates.drain();
 
         // println!("after propagate");
         // self.debug_print(context.assignments());
@@ -1240,7 +1256,7 @@ impl Propagator for NogoodPropagator {
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        self.last_index_on_trail = context.assignments().trail.len();
+        self.last_index_on_trail = context.assignments().trail.len() - 1;
         let _ = self.enqueued_updates.drain();
     }
 
@@ -1251,8 +1267,8 @@ impl Propagator for NogoodPropagator {
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         // let domain_id = DomainId {
-        //    id: local_id.unpack(),
-        //};
+        // id: local_id.unpack(),
+        // };
         // match event.unwrap() {
         // IntDomainEvent::Assign => println!(
         // "\te {} = {} {} {}",
@@ -1527,13 +1543,9 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, a.id as i32, a, 3);
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, b.id as i32, b, 0);
 
-        println!("before fixed point");
-
         solver
             .propagate_until_fixed_point(&mut propagator)
             .expect("");
-
-        println!("GOT HERE");
 
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, c.id as i32, c, 15);
 

@@ -112,8 +112,8 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn describe_domain(&self, _assignment: &Assignments) -> Vec<Predicate> {
-        unimplemented!();
+    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate> {
+        assignment.get_domain_description(self.predicate.get_domain())
     }
 
     fn remove(
