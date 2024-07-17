@@ -959,8 +959,18 @@ impl ConstraintSatisfactionSolver {
         // Recall that only one of the two bounds changed.
         // Here we compute whether it was the lower bound or upper bound that changed,
         // since we use this below.
-        let upper_bound_changed =
-            entry.old_lower_bound == self.assignments.get_lower_bound(conflict_domain);
+        // let upper_bound_changed =
+        //    entry.old_lower_bound == self.assignments.get_lower_bound(conflict_domain);
+
+        // println!(
+        // "old bounds lb ub {} {}",
+        // entry.old_lower_bound, entry.old_upper_bound
+        // );
+        // println!(
+        // "new bounds lb ub {} {}",
+        // self.assignments.get_lower_bound(conflict_domain),
+        // self.assignments.get_upper_bound(conflict_domain)
+        // );
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
@@ -970,22 +980,33 @@ impl ConstraintSatisfactionSolver {
             .unwrap()
             .clone();
 
+        let mut empty_domain_reason: Vec<Predicate> = vec![
+            predicate!(conflict_domain >= entry.old_lower_bound),
+            predicate!(conflict_domain <= entry.old_upper_bound),
+        ];
+
+        let mut m = reason_changing_bound.iter().copied().collect();
+        empty_domain_reason.append(&mut m);
+        empty_domain_reason.into()
+
+        // todo: the version below not good.
+
         // We need to append one of the two bounds to the reason. However PropositionalConjunction
         // does not have a push function, so we create a new PropositionalConjunction from scratch.
         // Perhaps this can be addressed better some time in the future.
-        let mut temp: Vec<Predicate> = reason_changing_bound.iter().copied().collect();
+        // let mut temp: Vec<Predicate> = reason_changing_bound.iter().copied().collect();
         // Add the other bound.
         // If the upper bound changed, then add the lower bound predicate to the reason.
-        if upper_bound_changed {
-            temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
-        }
+        // if upper_bound_changed {
+        // temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
+        // }
         // If the lower bound changed, then add the lower bound predicate to the reason.
-        else {
-            temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
-        }
+        // else {
+        // temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
+        // }
         // let m: Vec<Predicate> = temp.to_vec();
         // println!("Reason for empty domain of {}: {:?}", conflict_domain, m);
-        temp.into()
+        // temp.into()
     }
 
     /// Main propagation loop.

@@ -672,6 +672,11 @@ impl Assignments {
     /// todo: This is a temporary hack, not to be used in general.
     pub(crate) fn remove_last_trail_element(&mut self) {
         let entry = self.trail.pop().unwrap();
+        // println!(
+        // "\tHacky remova: {} {}",
+        // entry.predicate,
+        // entry.reason.is_none()
+        // );
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
     }
