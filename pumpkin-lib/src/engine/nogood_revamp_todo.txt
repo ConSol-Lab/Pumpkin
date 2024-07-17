@@ -230,7 +230,7 @@ Emir
 + Improve/simplify nogood propagator? (ThinVec?)
 
 (done) maybe literal can be asked about values outside {0, 1}?
-trivially true could be in assignment?
+(done?) trivially true could be in assignment?
 
 Undefined
 + Incremental linear? Maybe also batch up linears into one propagator?

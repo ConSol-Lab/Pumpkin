@@ -48,8 +48,6 @@ impl ResolutionNogoodConflictAnalyser {
         // for t in context.assignments.trail.iter() {
         // println!("\t{} {}", t.predicate, t.reason.is_none());
         // }
-        //
-        // println!("conflict: {:?}", nogood.predicates);
 
         // Keep refining the nogood until it propagates.
         while !nogood.is_nogood_propagating() {
@@ -62,9 +60,31 @@ impl ResolutionNogoodConflictAnalyser {
             let reason = context.get_propagation_reason(&next_predicate);
             // println!("reason: {:?}", reason);
             nogood.add_predicates(reason, context.assignments, Some(context.brancher));
-            // println!("nogood: {:?}", nogood.predicates);
         }
         // todo: clause minimisation?
-        nogood.extract_final_learned_nogood()
+        let mut nogood = nogood.extract_final_learned_nogood(context.assignments);
+        // Sorting does the trick with placing the correct predicates at the first two positions,
+        // however this can be done more efficiently, since we only need the first two positions
+        // to be properly sorted.
+        nogood.sort_by_key(|p| context.assignments.get_trail_position(p));
+        nogood.reverse();
+
+        // The second highest decision level predicate is at position one.
+        // This is the backjump level.
+        let backjump_level = if nogood.len() > 1 {
+            context
+                .assignments
+                .get_decision_level_for_predicate(&nogood[1])
+                .unwrap()
+        }
+        // For unit nogoods, the solver backtracks to the root level.
+        else {
+            0
+        };
+
+        LearnedNogood {
+            backjump_level,
+            predicates: nogood,
+        }
     }
 }

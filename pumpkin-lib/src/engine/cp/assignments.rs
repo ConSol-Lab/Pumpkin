@@ -27,7 +27,8 @@ impl Default for Assignments {
         };
         // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
         // assigned to one. We use it to represent predicates that are trivially true.
-        let dummy_variable = assignments.grow(1, 1);
+        let dummy_variable = assignments.grow(0, 1);
+        let _ = assignments.tighten_lower_bound(dummy_variable, 1, None);
         assert!(dummy_variable.id == 0);
         assignments
     }
@@ -190,23 +191,40 @@ impl Assignments {
         self.domains[domain_id].domain_iterator()
     }
 
+    /// Returns the conjunction of predicates that define the domain.
+    /// Root level predicates are ignored.
     pub(crate) fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
-        // if fixed, this is just one predicate
-        if domain.lower_bound() == domain.upper_bound() {
+
+        // If the domain assigned at a nonroot level, this is just one predicate.
+        if domain.lower_bound() == domain.upper_bound()
+            && domain.lower_bound_decision_level() > 0
+            && domain.upper_bound_decision_level() > 0
+        {
             predicates.push(predicate![domain_id == domain.lower_bound()]);
             return predicates;
         }
-        // if not fixed, start with the bounds...
-        predicates.push(predicate![domain_id >= domain.lower_bound()]);
-        predicates.push(predicate![domain_id <= domain.upper_bound()]);
-        // then the holes...
+
+        // Add bounds but avoid root assignments.
+        if domain.lower_bound_decision_level() > 0 {
+            predicates.push(predicate![domain_id >= domain.lower_bound()]);
+        }
+
+        if domain.upper_bound_decision_level() > 0 {
+            predicates.push(predicate![domain_id <= domain.upper_bound()]);
+        }
+
+        // Add holes.
         for hole in &self.domains[domain_id].holes {
-            // Only record holes that are within the lower and upper bound.
-            // Note that the bound values cannot be in the holes,
-            // so we can use strictly lower/greater than comparison
-            if domain.lower_bound() < *hole.0 && *hole.0 < domain.upper_bound() {
+            // Only record holes that are within the lower and upper bound,
+            // that are not root assignments.
+            // Since bound values cannot be in the holes,
+            // we can use '<' or '>'.
+            if hole.1.decision_level > 0
+                && domain.lower_bound() < *hole.0
+                && *hole.0 < domain.upper_bound()
+            {
                 predicates.push(predicate![domain_id != *hole.0]);
             }
         }
@@ -272,6 +290,17 @@ impl Assignments {
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
             .map(|u| u.decision_level)
+    }
+
+    pub fn get_domain_descriptions(&self) -> Vec<Predicate> {
+        let mut descriptions: Vec<Predicate> = vec![];
+        for domain in self.domains.iter().enumerate() {
+            let domain_id = DomainId {
+                id: domain.0 as u32,
+            };
+            descriptions.append(&mut self.get_domain_description(domain_id));
+        }
+        descriptions
     }
 }
 
@@ -753,6 +782,13 @@ impl IntegerDomain {
             .bound
     }
 
+    fn lower_bound_decision_level(&self) -> usize {
+        self.lower_bound_updates
+            .last()
+            .expect("Cannot be empty.")
+            .decision_level
+    }
+
     fn initial_lower_bound(&self) -> i32 {
         // the first entry is never removed,
         // and contains the bound that was assigned upon creation
@@ -785,6 +821,13 @@ impl IntegerDomain {
             .last()
             .expect("Cannot be empty.")
             .bound
+    }
+
+    fn upper_bound_decision_level(&self) -> usize {
+        self.upper_bound_updates
+            .last()
+            .expect("Cannot be empty.")
+            .decision_level
     }
 
     fn initial_upper_bound(&self) -> i32 {

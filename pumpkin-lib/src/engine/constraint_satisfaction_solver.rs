@@ -327,16 +327,17 @@ impl ConstraintSatisfactionSolver {
             variable_names: VariableNames::default(),
         };
 
-        let _ = csp_solver.add_propagator(NogoodPropagatorConstructor);
-
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
         // variable that is assigned to one. We use it to represent predicates that are
         // trivially true. We need to adjust other data structures to take this into account.
-        let dummy_id = Predicate::trivially_true().get_domain();
         csp_solver.watch_list_cp.grow();
+        let dummy_id = Predicate::trivially_true().get_domain();
+
         csp_solver
             .variable_names
             .add_integer(dummy_id, "Dummy".to_owned());
+
+        let _ = csp_solver.add_propagator(NogoodPropagatorConstructor);
 
         assert!(dummy_id.id == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
@@ -605,12 +606,23 @@ impl ConstraintSatisfactionSolver {
                 return CSPSolverExecutionFlag::Timeout;
             }
 
+            // println!("before prop. {}", self.assignments.get_decision_level());
+            // for t in self.assignments.trail.iter() {
+            // println!("\t{} {}", t.predicate, t.reason.is_none());
+            // }
+            //
+            // for d in self.assignments.get_domains() {
+            // println!(
+            // "{}: [{}, {}]",
+            // d,
+            // self.assignments.get_lower_bound(d),
+            // self.assignments.get_upper_bound(d)
+            // );
+            // }
+
             self.propagate();
 
-            // println!(
-            // "after prop. {}",
-            // self.assignments.get_decision_level()
-            // );
+            // println!("after prop. {}", self.assignments.get_decision_level());
             // for t in self.assignments.trail.iter() {
             // println!("\t{} {}", t.predicate, t.reason.is_none());
             // }
@@ -647,10 +659,7 @@ impl ConstraintSatisfactionSolver {
             }
             // conflict
             else {
-                // println!(
-                // "\tconflict {}",
-                // self.assignments.get_decision_level()
-                // );
+                // println!("\tconflict {}", self.assignments.get_decision_level());
                 //
                 // for t in self.assignments.trail.iter() {
                 // println!("\t\t{} {}", t.predicate, t.reason.is_none());
