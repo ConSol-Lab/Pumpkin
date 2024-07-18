@@ -1,7 +1,6 @@
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
@@ -108,7 +107,7 @@ pub trait Propagator {
         &mut self,
         _context: &PropagationContext,
         _local_id: LocalId,
-        _event: OpaqueBacktrackDomainEvent,
+        _event: OpaqueDomainEvent,
     ) {
     }
 

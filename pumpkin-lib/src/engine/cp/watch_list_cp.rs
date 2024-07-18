@@ -35,14 +35,6 @@ pub enum IntDomainEvent {
     Removal,
 }
 
-#[derive(Debug, EnumSetType)]
-pub enum BacktrackEvent {
-    Unassign,
-    LowerBound,
-    UpperBound,
-    Addition,
-}
-
 // public functions
 impl WatchListCP {
     pub(crate) fn grow(&mut self) {
@@ -74,16 +66,16 @@ impl WatchListCP {
 
     pub(crate) fn get_backtrack_affected_propagators(
         &self,
-        event: BacktrackEvent,
+        event: IntDomainEvent,
         domain: DomainId,
     ) -> &[PropagatorVarId] {
         let watcher = &self.watchers[domain];
 
         match event {
-            BacktrackEvent::Unassign => &watcher.backtrack_watcher.unassign_watchers,
-            BacktrackEvent::LowerBound => &watcher.backtrack_watcher.lower_bound_watchers,
-            BacktrackEvent::UpperBound => &watcher.backtrack_watcher.upper_bound_watchers,
-            BacktrackEvent::Addition => &watcher.backtrack_watcher.addition_watchers,
+            IntDomainEvent::Assign => &watcher.backtrack_watcher.assign_watchers,
+            IntDomainEvent::LowerBound => &watcher.backtrack_watcher.lower_bound_watchers,
+            IntDomainEvent::UpperBound => &watcher.backtrack_watcher.upper_bound_watchers,
+            IntDomainEvent::Removal => &watcher.backtrack_watcher.removal_watchers,
         }
     }
 }
@@ -96,13 +88,7 @@ impl<'a> Watchers<'a> {
         }
     }
 
-    pub(crate) fn watch_all(
-        &mut self,
-        domain: DomainId,
-        events: EnumSet<IntDomainEvent>,
-        register_for_backtrack_events: bool,
-    ) {
-        self.watch_list.is_watching_any_backtrack_events |= register_for_backtrack_events;
+    pub(crate) fn watch_all(&mut self, domain: DomainId, events: EnumSet<IntDomainEvent>) {
         self.watch_list.is_watching_anything = true;
         let watcher = &mut self.watch_list.watchers[domain];
 
@@ -117,22 +103,27 @@ impl<'a> Watchers<'a> {
             if !event_watcher.contains(&self.propagator_var) {
                 event_watcher.push(self.propagator_var);
             }
+        }
+    }
 
-            if register_for_backtrack_events {
-                let backtrack_event_watchers = match event {
-                    IntDomainEvent::Assign => &mut watcher.backtrack_watcher.unassign_watchers,
-                    IntDomainEvent::LowerBound => {
-                        &mut watcher.backtrack_watcher.lower_bound_watchers
-                    }
-                    IntDomainEvent::UpperBound => {
-                        &mut watcher.backtrack_watcher.upper_bound_watchers
-                    }
-                    IntDomainEvent::Removal => &mut watcher.backtrack_watcher.addition_watchers,
-                };
+    pub(crate) fn watch_all_backtrack(
+        &mut self,
+        domain: DomainId,
+        events: EnumSet<IntDomainEvent>,
+    ) {
+        self.watch_list.is_watching_any_backtrack_events = true;
+        let watcher = &mut self.watch_list.watchers[domain];
 
-                if !backtrack_event_watchers.contains(&self.propagator_var) {
-                    backtrack_event_watchers.push(self.propagator_var)
-                }
+        for event in events {
+            let backtrack_event_watchers = match event {
+                IntDomainEvent::Assign => &mut watcher.backtrack_watcher.assign_watchers,
+                IntDomainEvent::LowerBound => &mut watcher.backtrack_watcher.lower_bound_watchers,
+                IntDomainEvent::UpperBound => &mut watcher.backtrack_watcher.upper_bound_watchers,
+                IntDomainEvent::Removal => &mut watcher.backtrack_watcher.removal_watchers,
+            };
+
+            if !backtrack_event_watchers.contains(&self.propagator_var) {
+                backtrack_event_watchers.push(self.propagator_var)
             }
         }
     }
@@ -142,7 +133,7 @@ impl<'a> Watchers<'a> {
 struct WatcherCP {
     // FIXME measure performance of these vectors, they are treated as sets
     forward_watcher: Watcher,
-    backtrack_watcher: BacktrackWatcher,
+    backtrack_watcher: Watcher,
 }
 
 #[derive(Debug, Default)]
@@ -151,12 +142,4 @@ struct Watcher {
     upper_bound_watchers: Vec<PropagatorVarId>,
     assign_watchers: Vec<PropagatorVarId>,
     removal_watchers: Vec<PropagatorVarId>,
-}
-
-#[derive(Debug, Default)]
-struct BacktrackWatcher {
-    lower_bound_watchers: Vec<PropagatorVarId>,
-    upper_bound_watchers: Vec<PropagatorVarId>,
-    unassign_watchers: Vec<PropagatorVarId>,
-    addition_watchers: Vec<PropagatorVarId>,
 }

@@ -2,14 +2,12 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::basic_types::StorageKey;
-use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::AssignmentsInteger;
-use crate::engine::BacktrackEvent;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -73,20 +71,15 @@ impl IntegerVariable for DomainId {
         assignment.tighten_upper_bound(*self, value, reason)
     }
 
-    fn watch_all(
-        &self,
-        watchers: &mut Watchers<'_>,
-        events: EnumSet<IntDomainEvent>,
-        register_for_backtrack_events: bool,
-    ) {
-        watchers.watch_all(*self, events, register_for_backtrack_events);
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+        watchers.watch_all(*self, events);
+    }
+
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+        watchers.watch_all_backtrack(*self, events);
     }
 
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
-        event.unwrap()
-    }
-
-    fn unpack_backtrack_event(&self, event: OpaqueBacktrackDomainEvent) -> BacktrackEvent {
         event.unwrap()
     }
 }

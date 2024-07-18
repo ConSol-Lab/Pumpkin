@@ -74,14 +74,13 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
                     x_i.clone(),
                     DomainEvents::ANY_INT,
                     LocalId::from(i as u32 + ID_X_OFFSET),
-                    false,
                 )
             })
             .collect();
         ElementPropagator {
             array,
-            index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX, false),
-            rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS, false),
+            index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX),
+            rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS),
         }
     }
 }

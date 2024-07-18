@@ -1,4 +1,3 @@
-use super::watch_list_cp::BacktrackEvent;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
 use crate::engine::cp::event_sink::EventSink;
@@ -24,9 +23,9 @@ pub struct AssignmentsInteger {
     /// is used to implement [`Propagator::notify`].
     events: EventSink<IntDomainEvent>,
 
-    /// Keeps track of the [`BacktrackEvent`]s which occur while backtracking, this is used to
+    /// Keeps track of the [`IntDomainEvent`]s which are undone while backtracking, this is used to
     /// implement [`Propagator::notify_backtrack`].
-    backtrack_events: EventSink<BacktrackEvent>,
+    backtrack_events: EventSink<IntDomainEvent>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -101,7 +100,7 @@ impl AssignmentsInteger {
 
     pub fn drain_backtrack_domain_events(
         &mut self,
-    ) -> impl Iterator<Item = (BacktrackEvent, DomainId)> + '_ {
+    ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.backtrack_events.drain()
     }
 
@@ -367,7 +366,7 @@ impl AssignmentsInteger {
                 self.domains[domain_id].undo_trail_entry(&entry);
                 if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
                     // This `domain_id` was unassigned while backtracking
-                    self.backtrack_events.event_occurred(BacktrackEvent::Unassign, domain_id);
+                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
                     // Variable used to be fixed but is not after backtracking
                     unfixed_variables.push((domain_id, value_before));
                 }
@@ -375,13 +374,13 @@ impl AssignmentsInteger {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 match entry.predicate {
                     IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
-                        self.backtrack_events.event_occurred(BacktrackEvent::LowerBound, domain_id)
+                        self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
                     },
                     IntegerPredicate::UpperBound { domain_id, upper_bound: _ } => {
-                        self.backtrack_events.event_occurred(BacktrackEvent::UpperBound, domain_id)
+                        self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
                     },
                     IntegerPredicate::NotEqual { domain_id, not_equal_constant: _ } => {
-                        self.backtrack_events.event_occurred(BacktrackEvent::Addition, domain_id)
+                        self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
                     },
                     IntegerPredicate::Equal { domain_id: _, equality_constant: _ } => {
                         // This case has been handled before this
@@ -603,7 +602,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [BacktrackEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
     }
 
     #[test]
@@ -624,7 +623,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [BacktrackEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
     }
 
     #[test]
@@ -645,7 +644,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 1);
 
-        assert_contains_events(&events, d1, [BacktrackEvent::Addition]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
     }
 
     #[test]
@@ -666,7 +665,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 3);
 
-        assert_contains_events(&events, d1, [BacktrackEvent::Unassign]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Assign]);
     }
 
     #[test]

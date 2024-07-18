@@ -1,13 +1,11 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::engine::opaque_domain_event::OpaqueBacktrackDomainEvent;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::AssignmentsInteger;
-use crate::engine::BacktrackEvent;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -62,15 +60,10 @@ pub trait IntegerVariable:
     ) -> Result<(), EmptyDomain>;
 
     /// Register a watch for this variable on the given domain events.
-    fn watch_all(
-        &self,
-        watchers: &mut Watchers<'_>,
-        events: EnumSet<IntDomainEvent>,
-        register_for_backtrack_events: bool,
-    );
+    fn watch_all(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
+
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>);
 
     /// Decode a domain event for this variable.
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent;
-
-    fn unpack_backtrack_event(&self, event: OpaqueBacktrackDomainEvent) -> BacktrackEvent;
 }

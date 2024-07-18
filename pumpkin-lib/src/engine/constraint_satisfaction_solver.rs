@@ -18,7 +18,6 @@ use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
-use super::BacktrackEvent;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
@@ -164,7 +163,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Contains events that need to be processe to notify propagators of event occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
 
-    backtrack_event_drain: Vec<(BacktrackEvent, DomainId)>,
+    backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
     pub(crate) variable_literal_mappings: VariableLiteralMappings,
     /// Used during synchronisation of the propositional and integer trail.
@@ -1747,7 +1746,6 @@ mod tests {
                             variable.0.get_domain().unwrap(),
                             DomainEvents::BOUNDS,
                             LocalId::from(index as u32),
-                            false,
                         ),
                         variable.0,
                         variable.1.clone(),

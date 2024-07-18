@@ -72,13 +72,11 @@ where
                             x_i.clone().scaled(1), // scale by 1 to make it an AffineView
                             DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32),
-                            false,
                         ),
                         context.register(
                             x_i.clone().scaled(-1),
                             DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 1),
-                            false,
                         ),
                     )
                 })
@@ -91,13 +89,11 @@ where
                             x_j.clone().scaled(1),
                             DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 2),
-                            false,
                         ),
                         context.register(
                             x_j.clone().scaled(-1),
                             DomainEvents::UPPER_BOUND,
                             LocalId::from(4 * i as u32 + 3),
-                            false,
                         ),
                     )
                 })

@@ -106,6 +106,7 @@ pub(crate) type TimeTablePerPointIncremental<Var> =
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTableOverIntervalPropagator`]; this is used to prevent creating a different
 /// `new` method for each type `T
+#[allow(unused)]
 pub(crate) type TimeTableOverInterval<Var> =
     CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>;
 

@@ -30,7 +30,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
             .cloned()
             .enumerate()
             .map(|(idx, var)| {
-                context.register(var, DomainEvents::BOUNDS, LocalId::from(idx as u32), false)
+                context.register(var, DomainEvents::BOUNDS, LocalId::from(idx as u32))
             })
             .collect::<Box<_>>();
 
@@ -38,7 +38,6 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
             self.rhs,
             DomainEvents::UPPER_BOUND,
             LocalId::from(array.len() as u32),
-            false,
         );
 
         MaximumPropagator { array, rhs }

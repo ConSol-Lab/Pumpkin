@@ -46,14 +46,9 @@ where
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         DivisionPropagator {
-            numerator: context.register(self.numerator, DomainEvents::BOUNDS, ID_NUMERATOR, false),
-            denominator: context.register(
-                self.denominator,
-                DomainEvents::BOUNDS,
-                ID_DENOMINATOR,
-                false,
-            ),
-            rhs: context.register(self.rhs, DomainEvents::BOUNDS, ID_RHS, false),
+            numerator: context.register(self.numerator, DomainEvents::BOUNDS, ID_NUMERATOR),
+            denominator: context.register(self.denominator, DomainEvents::BOUNDS, ID_DENOMINATOR),
+            rhs: context.register(self.rhs, DomainEvents::BOUNDS, ID_RHS),
         }
     }
 }

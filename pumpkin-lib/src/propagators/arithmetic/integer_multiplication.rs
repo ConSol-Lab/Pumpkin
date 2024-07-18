@@ -41,9 +41,9 @@ where
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         IntegerMultiplicationPropagator {
-            a: context.register(self.a, DomainEvents::ANY_INT, ID_A, false),
-            b: context.register(self.b, DomainEvents::ANY_INT, ID_B, false),
-            c: context.register(self.c, DomainEvents::ANY_INT, ID_C, false),
+            a: context.register(self.a, DomainEvents::ANY_INT, ID_A),
+            b: context.register(self.b, DomainEvents::ANY_INT, ID_B),
+            c: context.register(self.c, DomainEvents::ANY_INT, ID_C),
         }
     }
 }
