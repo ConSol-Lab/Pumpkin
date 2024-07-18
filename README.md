@@ -1,8 +1,10 @@
-<p align="center">
-    <img align="left" width="60%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
-</p>
-
 # Pumpkin
+
+[![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
+
+<p align="center">
+    <img align="left" width="45%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
+</p>
 
 Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU Delft. It is based on the (lazy clause generation) constraint programming paradigm.
 
