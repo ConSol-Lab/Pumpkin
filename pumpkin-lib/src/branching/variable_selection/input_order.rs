@@ -39,10 +39,6 @@ impl VariableSelector<PropositionalVariable> for InputOrder<PropositionalVariabl
             .find(|variable| !context.is_propositional_variable_fixed(**variable))
             .copied()
     }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.variables = all_variables.to_vec();
-    }
 }
 
 #[cfg(test)]

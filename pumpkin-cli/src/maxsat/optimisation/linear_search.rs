@@ -4,11 +4,9 @@ use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::encodings::Function;
 use pumpkin_lib::encodings::PseudoBooleanConstraintEncoder;
 use pumpkin_lib::encodings::PseudoBooleanEncoding;
-use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
 use pumpkin_lib::termination::TerminationCondition;
-use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Solver;
 
 use super::optimisation_result::MaxSatOptimisationResult;
@@ -51,8 +49,6 @@ impl LinearSearch {
             self.upper_bound_encoding,
         );
 
-        let mut first_iteration = true;
-
         loop {
             if best_objective_value == objective_function.get_constant_term() {
                 solver.log_statistics_with_objective(best_objective_value as i64);
@@ -63,16 +59,6 @@ impl LinearSearch {
 
             let encoding_status =
                 upper_bound_encoder.constrain_at_most_k(best_objective_value - 1, solver);
-
-            if first_iteration {
-                brancher.on_encoding_objective_function(
-                    &(1..best_solution.num_propositional_variables() as u32)
-                        .map(PropositionalVariable::new)
-                        .collect::<Vec<_>>(),
-                );
-
-                first_iteration = false;
-            }
 
             // in case some cases infeasibility can be detected while constraining the upper bound
             //  meaning the current best solution is optimal

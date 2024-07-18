@@ -8,7 +8,6 @@ use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
-use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -18,8 +17,8 @@ use crate::propagators::UpdatedTaskInfo;
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
-pub(crate) fn create_inconsistency<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
+    context: &PropagationContext,
     conflict_tasks: &[Rc<Task<Var>>],
 ) -> PropositionalConjunction {
     let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
@@ -76,7 +75,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 /// Updates the bounds of the provided [`Task`] to those stored in
 /// `context`.
 pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
-    context: PropagationContext,
+    context: &PropagationContext,
     bounds: &mut [(i32, i32)],
     task: &Rc<Task<Var>>,
 ) {
@@ -108,7 +107,7 @@ pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
 
 /// Determines whether the stored bounds are equal when propagation occurs
 pub(crate) fn check_bounds_equal_at_propagation<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+    context: &PropagationContext,
     tasks: &[Rc<Task<Var>>],
     bounds: &[(i32, i32)],
 ) -> bool {

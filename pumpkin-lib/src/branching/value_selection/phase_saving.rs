@@ -21,18 +21,19 @@ use crate::pumpkin_assert_moderate;
 /// satisfiability solvers’, in Theory and Applications of Satisfiability Testing--SAT 2007: 10th
 /// International Conference, Lisbon, Portugal, May 28-31, 2007. Proceedings 10, 2007, pp. 294–299.
 #[derive(Debug)]
-pub struct PhaseSaving<Var, Value> {
+pub struct PhaseSaving<Var, Value: PartialEq> {
     /// The saved values used by [`PhaseSaving`]
     saved_values: KeyedVec<Var, StoredValue<Value>>,
+    default_value: Value,
 }
 
-#[derive(Debug, Clone)]
-enum StoredValue<Value> {
+#[derive(Debug, Clone, PartialEq)]
+enum StoredValue<Value: PartialEq> {
     Frozen(Value),
     Regular(Value),
 }
 
-impl<Value: Copy> StoredValue<Value> {
+impl<Value: Copy + PartialEq> StoredValue<Value> {
     fn get_value(&self) -> Value {
         match self {
             StoredValue::Frozen(value) => *value,
@@ -52,7 +53,7 @@ impl PhaseSaving<PropositionalVariable, bool> {
     }
 }
 
-impl<Var: StorageKey + Copy + PartialEq, Value: Copy> PhaseSaving<Var, Value> {
+impl<Var: StorageKey + Copy + PartialEq, Value: Copy + PartialEq> PhaseSaving<Var, Value> {
     /// Constructor for creating the [`PhaseSaving`] [`ValueSelector`] with a default value;
     /// the default value will be the selected value if no value is saved for the provided variable
     pub fn with_default_value(variables: &[Var], default_value: Value) -> Self {
@@ -74,6 +75,7 @@ impl<Var: StorageKey + Copy + PartialEq, Value: Copy> PhaseSaving<Var, Value> {
             warn!("Empty set of variables provided to phase saving value selector, this could indicate an error");
             return PhaseSaving {
                 saved_values: KeyedVec::default(),
+                default_value,
             };
         }
         pumpkin_assert_moderate!(
@@ -89,13 +91,19 @@ impl<Var: StorageKey + Copy + PartialEq, Value: Copy> PhaseSaving<Var, Value> {
             .unwrap();
         let saved_values = KeyedVec::new(vec![StoredValue::Regular(default_value); max_index + 1]);
         if max_index > 0 {
-            let mut phase_saving = PhaseSaving { saved_values };
+            let mut phase_saving = PhaseSaving {
+                saved_values,
+                default_value,
+            };
             for (var, value) in variables_with_initial_value {
                 phase_saving.freeze(var, value)
             }
             return phase_saving;
         }
-        PhaseSaving { saved_values }
+        PhaseSaving {
+            saved_values,
+            default_value,
+        }
     }
 
     /// Update the value of the variable to the provided value if it is not frozen
@@ -120,6 +128,8 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
         _: &mut SelectionContext,
         decision_variable: PropositionalVariable,
     ) -> Predicate {
+        self.saved_values
+            .accomodate(decision_variable, StoredValue::Regular(self.default_value));
         Literal::new(
             decision_variable,
             self.saved_values[decision_variable].get_value(),
@@ -128,23 +138,11 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
     }
 
     fn on_unassign_literal(&mut self, lit: Literal) {
+        self.saved_values.accomodate(
+            lit.get_propositional_variable(),
+            StoredValue::Regular(self.default_value),
+        );
         self.update(lit.get_propositional_variable(), lit.is_positive())
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        if all_variables.is_empty() {
-            warn!("Empty set of variables provided to phase saving value selector, this could indicate an error");
-            return;
-        }
-        while self.saved_values.len()
-            <= all_variables
-                .iter()
-                .map(|variable| variable.index())
-                .max()
-                .unwrap()
-        {
-            self.saved_values.push(StoredValue::Regular(false));
-        }
     }
 }
 
@@ -152,9 +150,13 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
 mod tests {
     use super::PhaseSaving;
     use crate::basic_types::tests::TestRandom;
+    use crate::basic_types::StorageKey;
+    use crate::branching::value_selection::phase_saving::StoredValue;
     use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
     use crate::engine::predicates::predicate::Predicate;
+    use crate::variables::Literal;
+    use crate::variables::PropositionalVariable;
 
     #[test]
     fn saved_value_is_returned_prop() {
@@ -179,5 +181,39 @@ mod tests {
         } else {
             panic!("Predicate which was not a literal was returned")
         }
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_variable_unassign() {
+        let mut phase_saving = PhaseSaving::new(&[]);
+
+        let literal = Literal::new(PropositionalVariable::create_from_index(1), false);
+
+        phase_saving.on_unassign_literal(literal);
+
+        assert_eq!(
+            phase_saving.saved_values[literal.get_propositional_variable()],
+            StoredValue::Regular(false)
+        );
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_selected_variable() {
+        let mut phase_saving = PhaseSaving::new(&[]);
+
+        let (assignments_integer, assignments_propositional) =
+            SelectionContext::create_for_testing(0, 0, None);
+        let mut test_rng = TestRandom::default();
+        let mut context = SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut test_rng,
+        );
+
+        let variable = PropositionalVariable::create_from_index(1);
+
+        let selected = phase_saving.select_value(&mut context, variable);
+
+        assert_eq!(selected, Predicate::Literal(Literal::new(variable, false)));
     }
 }

@@ -256,15 +256,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
-name = "integration-tests"
-version = "0.1.0"
-dependencies = [
- "cc",
- "regex",
- "wait-timeout",
-]
-
-[[package]]
 name = "is-terminal"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -343,6 +334,7 @@ dependencies = [
 name = "pumpkin-cli"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "clap",
  "env_logger",
  "flatzinc",
@@ -350,7 +342,9 @@ dependencies = [
  "log",
  "pumpkin-lib",
  "rand",
+ "regex",
  "thiserror",
+ "wait-timeout",
 ]
 
 [[package]]

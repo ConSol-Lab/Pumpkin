@@ -10,6 +10,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use log::warn;
+use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingBrancher;
+use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
@@ -73,16 +75,18 @@ pub(crate) fn solve(
     let instance = parse_and_compile(&mut solver, instance, options)?;
     let outputs = instance.outputs.clone();
 
-    let value = if let Some(objective_function) = &instance.objective_function {
-        let mut brancher = if options.free_search {
-            // The free search flag is active, we just use the default brancher
-            DynamicBrancher::new(vec![Box::new(
-                solver.default_brancher_over_all_propositional_variables(),
-            )])
-        } else {
-            instance.search.expect("Expected a search to be defined")
-        };
+    let mut brancher = if options.free_search {
+        // The free search flag is active, we just use the default brancher
+        DynamicBrancher::new(vec![Box::new(AlternatingBrancher::new(
+            &solver,
+            instance.search.expect("Expected a search to be defined"),
+            AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
+        ))])
+    } else {
+        instance.search.expect("Expected a search to be defined")
+    };
 
+    let value = if let Some(objective_function) = &instance.objective_function {
         if options.all_solutions {
             solver.with_solution_callback(move |solution| {
                 print_solution_from_solver(solution, &outputs)
@@ -141,7 +145,6 @@ pub(crate) fn solve(
             }
         }
     } else {
-        let mut brancher = instance.search.expect("Expected a search to be defined");
         if options.all_solutions {
             let mut solution_iterator =
                 solver.get_solution_iterator(&mut brancher, &mut termination);

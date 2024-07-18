@@ -1,14 +1,16 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+
 use std::process::Command;
 use std::process::Output;
 
-use integration_tests::ensure_release_binary_built;
-use integration_tests::run_solution_checker;
-use integration_tests::run_solver;
-use integration_tests::verify_proof;
-use integration_tests::Checker;
-use integration_tests::CheckerOutput;
-use integration_tests::Files;
+mod helpers;
+
+use helpers::run_solution_checker;
+use helpers::run_solver;
+use helpers::verify_proof;
+use helpers::Checker;
+use helpers::CheckerOutput;
+use helpers::Files;
 
 macro_rules! test_cnf_instance {
     ($name:ident) => {
@@ -108,16 +110,16 @@ test_cnf_instance!(unit7);
 struct CnfChecker;
 
 impl Checker for CnfChecker {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "precochk"
     }
 
-    fn prepare_command(cmd: &mut Command, files: &Files) {
+    fn prepare_command(&self, cmd: &mut Command, files: &Files) {
         let _ = cmd.arg(&files.instance_file);
         let _ = cmd.arg(&files.log_file);
     }
 
-    fn parse_checker_output(output: &Output) -> CheckerOutput {
+    fn parse_checker_output(&self, output: &Output) -> CheckerOutput {
         let code = output.status.code().unwrap_or(1);
 
         if code == 0 || code == 20 {
@@ -127,19 +129,17 @@ impl Checker for CnfChecker {
         }
     }
 
-    fn after_checking_action(files: Files, output: &Output) {
+    fn after_checking_action(&self, files: Files, output: &Output) {
         verify_proof(files, output).unwrap()
     }
 }
 
 fn run_cnf_test(instance_name: &str) {
-    ensure_release_binary_built();
-
     let instance_path = format!(
         "{}/tests/cnf/{instance_name}.cnf",
         env!("CARGO_MANIFEST_DIR")
     );
     let files = run_solver(instance_path, true);
 
-    run_solution_checker::<CnfChecker>(files);
+    run_solution_checker(files, CnfChecker);
 }

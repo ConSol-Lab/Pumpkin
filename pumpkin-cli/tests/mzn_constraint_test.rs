@@ -1,5 +1,8 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
-use integration_tests::run_mzn_test;
+
+mod helpers;
+
+use helpers::run_mzn_test;
 
 macro_rules! mzn_test {
     ($name:ident) => {

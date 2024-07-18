@@ -11,7 +11,6 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
 /// sequentially applies [`Brancher::next_decision`] until all of them return [`None`] in which case
@@ -97,12 +96,6 @@ impl Brancher for DynamicBrancher {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_appearance_in_conflict_integer(variable));
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_encoding_objective_function(all_variables));
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

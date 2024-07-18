@@ -20,7 +20,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::util::create_inconsistency;
+use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
@@ -80,78 +80,12 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
             parameters,
         }
     }
-
-    pub(crate) fn debug_propagate_from_scratch_time_table_point(
-        context: &mut PropagationContextMut,
-        parameters: &CumulativeParameters<Var>,
-    ) -> PropagationStatusCP {
-        // We first create a time-table per point and return an error if there was
-        // an overflow of the resource capacity while building the time-table
-        let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context.as_readonly(),
-            parameters,
-        )?;
-        // Then we check whether propagation can take place
-        propagate_based_on_timetable(context, time_table.values(), parameters)
-    }
-
-    /// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
-    /// start and end (both inclusive) consisting of tasks with a cumulative height Assumptions:
-    /// The time-table is sorted based on start time and none of the profiles overlap - generally,
-    /// it is assumed that the calculated [`ResourceProfile`]s are maximal
-    ///
-    /// The result of this method is either the time-table of type
-    /// [`PerPointTimeTableType`] or the tasks responsible for the
-    /// conflict in the form of an [`Inconsistency`].
-    pub(crate) fn create_time_table_per_point_from_scratch(
-        context: PropagationContext,
-        parameters: &CumulativeParameters<Var>,
-    ) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
-        let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
-        // First we go over all tasks and determine their mandatory parts
-        for task in parameters.tasks.iter() {
-            let upper_bound = context.upper_bound(&task.start_variable);
-            let lower_bound = context.lower_bound(&task.start_variable);
-
-            if upper_bound < lower_bound + task.processing_time {
-                // There is a mandatory part
-                for i in upper_bound..(lower_bound + task.processing_time) {
-                    // For every time-point of the mandatory part,
-                    //  add the resource usage of the current task to the ResourceProfile and add it
-                    // to the profile tasks of the resource
-                    let current_profile: &mut ResourceProfile<Var> = time_table
-                        .entry(i as u32)
-                        .or_insert(ResourceProfile::default(i));
-                    current_profile.height += task.resource_usage;
-                    current_profile.profile_tasks.push(Rc::clone(task));
-
-                    if current_profile.height > parameters.capacity {
-                        // The addition of the current task to the resource profile has caused an
-                        // overflow
-                        return Err(create_inconsistency(
-                            context,
-                            &current_profile.profile_tasks,
-                        ));
-                    }
-                }
-            }
-        }
-        pumpkin_assert_extreme!(
-            time_table
-                .values()
-                .all(|profile| profile.start == profile.end),
-            "The TimeTablePerPoint method should only create profiles where `start == end`"
-        );
-        Ok(time_table)
-    }
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table = TimeTablePerPointPropagator::create_time_table_per_point_from_scratch(
-            context.as_readonly(),
-            &self.parameters,
-        )?;
+        let time_table =
+            create_time_table_per_point_from_scratch(&context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
@@ -182,13 +116,13 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
-        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
         result.decision
     }
 
@@ -215,15 +149,70 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
-        TimeTablePerPointPropagator::debug_propagate_from_scratch_time_table_point(
-            &mut context,
-            &self.parameters,
-        )
+    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
+        debug_propagate_from_scratch_time_table_point(context, &self.parameters)
     }
+}
+
+/// Creates a time-table consisting of [`ResourceProfile`]s which represent rectangles with a
+/// start and end (both inclusive) consisting of tasks with a cumulative height Assumptions:
+/// The time-table is sorted based on start time and none of the profiles overlap - generally,
+/// it is assumed that the calculated [`ResourceProfile`]s are maximal
+///
+/// The result of this method is either the time-table of type
+/// [`PerPointTimeTableType`] or the tasks responsible for the
+/// conflict in the form of an [`Inconsistency`].
+pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 'static>(
+    context: &PropagationContext,
+    parameters: &CumulativeParameters<Var>,
+) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
+    let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
+    // First we go over all tasks and determine their mandatory parts
+    for task in parameters.tasks.iter() {
+        let upper_bound = context.upper_bound(&task.start_variable);
+        let lower_bound = context.lower_bound(&task.start_variable);
+
+        if upper_bound < lower_bound + task.processing_time {
+            // There is a mandatory part
+            for i in upper_bound..(lower_bound + task.processing_time) {
+                // For every time-point of the mandatory part,
+                //  add the resource usage of the current task to the ResourceProfile and add it
+                // to the profile tasks of the resource
+                let current_profile: &mut ResourceProfile<Var> = time_table
+                    .entry(i as u32)
+                    .or_insert(ResourceProfile::default(i));
+                current_profile.height += task.resource_usage;
+                current_profile.profile_tasks.push(Rc::clone(task));
+
+                if current_profile.height > parameters.capacity {
+                    // The addition of the current task to the resource profile has caused an
+                    // overflow
+                    return Err(create_propositional_conjunction(
+                        context,
+                        &current_profile.profile_tasks,
+                    ));
+                }
+            }
+        }
+    }
+    pumpkin_assert_extreme!(
+        time_table
+            .values()
+            .all(|profile| profile.start == profile.end),
+        "The TimeTablePerPoint method should only create profiles where `start == end`"
+    );
+    Ok(time_table)
+}
+
+pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
+    mut context: PropagationContextMut,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    // We first create a time-table per point and return an error if there was
+    // an overflow of the resource capacity while building the time-table
+    let time_table = create_time_table_per_point_from_scratch(&context.as_readonly(), parameters)?;
+    // Then we check whether propagation can take place
+    propagate_based_on_timetable(&mut context, time_table.values(), parameters)
 }
 
 #[cfg(test)]
