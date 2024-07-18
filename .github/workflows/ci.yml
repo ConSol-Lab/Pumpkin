@@ -1,0 +1,45 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - run: cargo test --release --no-fail-fast
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - run: cargo doc --no-deps
+    
+  code_style:
+    name: Code Style and Lints
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - run: cargo +nightly fmt --check
+    - run: cargo clippy --all-targets
+    
+  licenses:
+    name: Dependency Licensing
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - run: ./scripts/deny.sh --ci
