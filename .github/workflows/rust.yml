@@ -1,0 +1,32 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --release --verbose
+    - name: Run cargo-deny
+      run: ./scripts/deny.sh --ci
+    - name: Format
+      run: ./scripts/fmt.sh --ci
+    - name: Run Clippy
+      run: ./scripts/clippy.sh --ci
+    - name: Check Documentation
+      run: ./scripts/documentation.sh --ci
+    - name: Run cargo-deny
+      run: ./scripts/deny.sh --ci
+    - name: Run tests
+      run: cargo test --release --verbose --no-fail-fast
