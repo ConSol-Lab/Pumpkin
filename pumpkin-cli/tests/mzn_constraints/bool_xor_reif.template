@@ -1,0 +1,7 @@
+var bool: r:: output_var;
+var bool: x:: output_var;
+var bool: y:: output_var;
+
+constraint bool_xor(x,y,r);
+
+solve satisfy;
