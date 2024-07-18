@@ -60,7 +60,8 @@ jobs:
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - uses: dtolnay/rust-toolchain@nightly
-      components: clippy, rustfmt
+      with:
+        components: clippy, rustfmt
     - run: cargo +nightly fmt --check
     - run: cargo clippy --all-targets
     
