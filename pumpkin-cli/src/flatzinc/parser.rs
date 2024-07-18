@@ -1,9 +1,7 @@
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
-
-use flatzinc::convert_error;
-use flatzinc::VerboseError;
+use std::str::FromStr;
 
 use super::ast::FlatZincAst;
 use super::ast::FlatZincAstBuilder;
@@ -19,8 +17,8 @@ pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
     for line in reader.lines() {
         let line = line?;
 
-        match flatzinc::statement::<VerboseError<&str>>(&line) {
-            Ok((_, stmt)) => match stmt {
+        match flatzinc::statements::Stmt::from_str(&line) {
+            Ok(stmt) => match stmt {
                 // Ignore.
                 flatzinc::Stmt::Comment(_) | flatzinc::Stmt::Predicate(_) => {}
 
@@ -29,12 +27,8 @@ pub(crate) fn parse(source: impl Read) -> Result<FlatZincAst, FlatZincError> {
                 flatzinc::Stmt::Constraint(constraint) => ast_builder.add_constraint(constraint),
                 flatzinc::Stmt::SolveItem(solve_item) => ast_builder.set_solve_item(solve_item),
             },
-            Err(flatzinc::Err::Error(e)) | Err(flatzinc::Err::Failure(e)) => {
-                let error_msg = convert_error(line.as_str(), e);
-                return Err(FlatZincError::SyntaxError(error_msg.into()));
-            }
-            Err(_) => {
-                return Err(FlatZincError::SyntaxError("Input incomplete".into()));
+            Err(msg) => {
+                return Err(FlatZincError::SyntaxError(msg.into()));
             }
         }
     }
