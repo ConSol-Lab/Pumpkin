@@ -101,6 +101,15 @@ impl<T> SparseSet<T> {
             self.swap(self.indices[(self.mapping)(to_remove)], self.size);
         }
     }
+
+    /// Restored the value of `to-restore` to the domain; if the value is not ouside of the domain
+    /// then this method does not perform any operations.
+    pub(crate) fn restore(&mut self, to_restore: &T) {
+        if self.indices[(self.mapping)(to_restore)] >= self.size {
+            self.swap(self.indices[(self.mapping)(to_restore)], self.size);
+            self.size += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +150,30 @@ mod tests {
         sparse_set.remove(&1);
         sparse_set.remove(&2);
         assert!(sparse_set.is_empty());
+    }
+
+    #[test]
+    fn restoring_after_removing_all_elements() {
+        let mut sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
+        sparse_set.remove(&0);
+        sparse_set.remove(&1);
+        sparse_set.remove(&2);
+        assert!(sparse_set.is_empty());
+
+        sparse_set.restore(&1);
+        assert_eq!(sparse_set.len(), 1);
+        assert_eq!(*sparse_set.get(0), 1);
+
+        sparse_set.restore(&1);
+        assert_eq!(sparse_set.len(), 1);
+        assert_eq!(*sparse_set.get(0), 1);
+
+        sparse_set.restore(&0);
+        assert_eq!(sparse_set.len(), 2);
+        assert_eq!(*sparse_set.get(1), 0);
+
+        sparse_set.restore(&2);
+        assert_eq!(sparse_set.len(), 3);
+        assert_eq!(*sparse_set.get(2), 2);
     }
 }
