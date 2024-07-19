@@ -35,8 +35,8 @@ impl<WrappedPropagatorConstructor: PropagatorConstructor> PropagatorConstructor
 
         let reification_literal = context.register(
             self.reification_literal,
-            DomainEvents::LOWER_BOUND, /* If the lower-bound of the reification variable changes
-                                        * then this means that it's been assigned true */
+            DomainEvents::BOUNDS, /* If the lower-bound of the reification variable changes
+                                   * then this means that it's been assigned true */
             reification_literal_id,
         );
 
@@ -141,6 +141,10 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         }
 
         Ok(())
+    }
+
+    fn synchronise(&mut self, context: &PropagationContext) {
+        self.propagator.synchronise(context);
     }
 }
 
