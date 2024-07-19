@@ -25,6 +25,8 @@
 //! implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 //! (TRICS), 2013, pp. 1–10.
 
+use crate::pumpkin_assert_moderate;
+
 /// A set for keeping track of which values are still part of the original domain based on [\[1\]](https://hal.science/hal-01339250/document).
 /// See the module level documentation for more information.
 ///
@@ -99,7 +101,31 @@ impl<T> SparseSet<T> {
             // The element is part of the domain and should be removed
             self.size -= 1;
             self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+            let _ = self.domain.pop().expect("Has to have something to pop.");
+            self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> + '_ {
+        self.domain.iter()
+    }
+
+    pub(crate) fn insert(&mut self, element: T) {
+        if !self.contains(&element) {
+            if (self.mapping)(&element) >= self.indices.len() {
+                self.indices
+                    .resize((self.mapping)(&element) + 1, usize::MAX);
+            }
+
+            self.indices[(self.mapping)(&element)] = self.size;
+            self.domain.push(element);
+            self.size += 1;
+        }
+    }
+
+    pub(crate) fn contains(&self, element: &T) -> bool {
+        (self.mapping)(element) < self.indices.len()
+            && self.indices[(self.mapping)(element)] < self.size
     }
 }
 
@@ -141,5 +167,33 @@ mod tests {
         sparse_set.remove(&1);
         sparse_set.remove(&2);
         assert!(sparse_set.is_empty());
+    }
+
+    #[test]
+    fn iter1() {
+        let sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        let v: Vec<u32> = sparse_set.iter().copied().collect();
+        assert_eq!(v.len(), 3);
+        assert!(v.contains(&10));
+        assert!(v.contains(&5));
+        assert!(v.contains(&2));
+    }
+
+    #[test]
+    fn iter2() {
+        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        sparse_set.insert(100);
+        sparse_set.insert(2);
+        sparse_set.insert(20);
+        sparse_set.remove(&10);
+        sparse_set.insert(10);
+        sparse_set.remove(&10);
+
+        let v: Vec<u32> = sparse_set.iter().copied().collect();
+        assert_eq!(v.len(), 5);
+        assert!(v.contains(&5));
+        assert!(v.contains(&2));
+        assert!(v.contains(&100));
+        assert!(v.contains(&20));
     }
 }
