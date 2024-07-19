@@ -248,7 +248,9 @@ impl AdvancedNogood {
     /// analysis, i.e., the predicate may be propagating but it may not be detected because equality
     /// is now two predicates instead of one.
     fn simplify_current_decision_level_predicates(&mut self, assignments: &Assignments) {
-        // Current decision level predicates can be empty for root level preprocessing.
+        // Current decision level predicates are empty for root level preprocessing, since the
+        // decision level is then set to a value greater than zero, but all predicates are at the
+        // level zero.
         if self.is_trivially_falsified || self.predicates_current_decision_level.is_empty() {
             return;
         }
