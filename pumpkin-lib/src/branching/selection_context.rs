@@ -166,7 +166,7 @@ impl<'a> SelectionContext<'a> {
             }
         }
 
-        for _ in 0..(num_propositional_variables + 1) {
+        for _ in 0..num_propositional_variables {
             // We create an additional variable to ensure that the generator returns the correct
             // variables
             let _ = mediator.create_new_propositional_variable(

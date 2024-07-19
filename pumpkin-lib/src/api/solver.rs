@@ -14,7 +14,9 @@ use crate::branching::Brancher;
 use crate::branching::PhaseSaving;
 use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
+use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -22,25 +24,12 @@ use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::options::LearningOptions;
 use crate::options::SolverOptions;
-use crate::predicate;
-use crate::propagators::absolute_value::AbsoluteValueConstructor;
-use crate::propagators::division::DivisionConstructor;
-use crate::propagators::element::ElementConstructor;
-use crate::propagators::integer_multiplication::IntegerMultiplicationConstructor;
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
-use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
-use crate::propagators::maximum::MaximumConstructor;
-use crate::propagators::ArgTask;
-use crate::propagators::CumulativeExplanationType;
-use crate::propagators::ReifiedPropagatorConstructor;
-use crate::propagators::TimeTableOverIntervalIncremental;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 use crate::statistics::log_statistic;
 use crate::statistics::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
-use crate::variables::TransformableVariable;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
 /// and solving problems.
@@ -354,9 +343,10 @@ impl Solver {
     ) -> SatisfactionResult {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
-                let solution_reference = self.satisfaction_solver.get_solution_reference();
-                brancher.on_solution(solution_reference);
-                SatisfactionResult::Satisfiable(solution_reference.into())
+                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
+                self.satisfaction_solver.restore_state_at_root(brancher);
+                brancher.on_solution(solution.as_reference());
+                SatisfactionResult::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
@@ -408,9 +398,10 @@ impl Solver {
             .solve_under_assumptions(assumptions, termination, brancher)
         {
             CSPSolverExecutionFlag::Feasible => {
-                let solution = self.satisfaction_solver.get_solution_reference().into();
+                let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                brancher.on_solution(solution.as_reference());
                 SatisfactionResultUnderAssumptions::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
@@ -618,6 +609,30 @@ impl Solver {
 
 /// Functions for adding new constraints to the solver.
 impl Solver {
+    /// Add a constraint to the solver. This returns a [`ConstraintPoster`] which enables control
+    /// on whether to add the constraint as-is, or whether to (half) reify it.
+    ///
+    /// If none of the methods on [`ConstraintPoster`] are used, the constraint _is not_ actually
+    /// added to the solver. In this case, a warning is emitted.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_lib::constraints;
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// let a = solver.new_bounded_integer(0, 3);
+    /// let b = solver.new_bounded_integer(0, 3);
+    ///
+    /// solver.add_constraint(constraints::equals([a, b], 0)).post();
+    /// ```
+    pub fn add_constraint<Constraint>(
+        &mut self,
+        constraint: Constraint,
+    ) -> ConstraintPoster<'_, Constraint> {
+        ConstraintPoster::new(self, constraint)
+    }
+
     /// Creates a clause from `literals` and adds it to the current formula.
     ///
     /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
@@ -630,570 +645,25 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
-    /// Adds the [element](https://sofdem.github.io/gccat/gccat/Celement.html) constraint which states that `array[index] = rhs`.
-    pub fn element<ElementVar: IntegerVariable + 'static>(
-        &mut self,
-        index: impl IntegerVariable + 'static,
-        array: impl Into<Box<[ElementVar]>>,
-        rhs: impl IntegerVariable + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(ElementConstructor {
-            index,
-            array: array.into(),
-            rhs,
-        })
-    }
-
-    /// Adds the constraint `\sum terms_i != rhs`.
-    pub fn not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(LinearNotEqualConstructor::new(terms.into(), rhs))
-    }
-
-    /// Adds the constraint `reif <-> \sum terms_i != rhs`.
-    pub fn reified_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: Box<[Var]>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_not_equals(terms.clone(), rhs, reif)?;
-        self.half_reified_equals(terms, rhs, !reif)
-    }
-
-    /// Adds the constraint `reif -> \sum terms_i != rhs`.
-    pub fn half_reified_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(ReifiedPropagatorConstructor {
-                propagator: LinearNotEqualConstructor::new(terms.into(), rhs),
-                reification_literal: reif,
-            })
-    }
-
-    /// Adds the constraint `\sum terms_i <= rhs`.
-    pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(LinearLessOrEqualConstructor::new(terms.into(), rhs))
-    }
-
-    /// Adds the constraint `reif <-> (\sum terms_i <= rhs)`.
-    pub fn reified_less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: Box<[Var]>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_less_than_or_equals(terms.clone(), rhs, reif)?;
-        self.half_reified_less_than_or_equals(
-            terms.iter().map(|term| term.scaled(-1)).collect::<Vec<_>>(),
-            -rhs - 1,
-            !reif,
-        )
-    }
-
-    /// Adds the constraint `reif -> (\sum terms_i <= rhs)`.
-    pub fn half_reified_less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(ReifiedPropagatorConstructor {
-                propagator: LinearLessOrEqualConstructor::new(terms.into(), rhs),
-                reification_literal: reif,
-            })
-    }
-
-    /// Adds the constraint `\sum terms_i = rhs`.
-    pub fn equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-    ) -> Result<(), ConstraintOperationError> {
-        let terms = terms.into();
-
-        self.less_than_or_equals(terms.clone(), rhs)?;
-
-        let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.less_than_or_equals(negated, -rhs)
-    }
-
-    /// Adds the constraint `reif <-> (\sum terms_i = rhs)`.
-    pub fn reified_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: Box<[Var]>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_equals(terms.clone(), rhs, reif)?;
-        self.half_reified_not_equals(terms, rhs, !reif)
-    }
-
-    /// Adds the constraint `reif -> (\sum terms_i = rhs)`.
-    pub fn half_reified_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        terms: impl Into<Box<[Var]>>,
-        rhs: i32,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let terms = terms.into();
-
-        self.half_reified_less_than_or_equals(terms.clone(), rhs, reif)?;
-
-        let negated = terms.iter().map(|var| var.scaled(-1)).collect::<Box<[_]>>();
-        self.half_reified_less_than_or_equals(negated, -rhs, reif)
-    }
-
-    /// Adds the constraint `lhs != rhs`.
-    pub fn binary_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-    ) -> Result<(), ConstraintOperationError> {
-        self.not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
-    }
-
-    /// Adds the constraint `reif <-> lhs != rhs`.
-    pub fn reified_binary_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        a: Var,
-        b: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_binary_not_equals(a.clone(), b.clone(), reif)?;
-        self.half_reified_binary_equals(a, b, !reif)
-    }
-
-    /// Adds the constraint `reif -> lhs != rhs`.
-    pub fn half_reified_binary_not_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_not_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
-    }
-
-    /// Adds the constraint `lhs <= rhs`.
-    pub fn binary_less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-    ) -> Result<(), ConstraintOperationError> {
-        self.less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
-    }
-
-    /// Adds the constraint `reif <-> (lhs <= rhs)`.
-    pub fn reified_binary_less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        a: Var,
-        b: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.reified_less_than_or_equals(vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
-    }
-
-    /// Adds the constraint `reif -> (lhs <= rhs)`.
-    pub fn half_reified_binary_less_than_or_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
-    }
-
-    /// Adds the constraint `lhs < rhs`.
-    pub fn binary_less_than<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-    ) -> Result<(), ConstraintOperationError> {
-        self.binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1))
-    }
-
-    pub fn reified_binary_less_than<Var: IntegerVariable + 'static>(
-        &mut self,
-        a: Var,
-        b: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.reified_less_than_or_equals(vec![a.scaled(1), b.scaled(-1)].into(), -1, reif)
-    }
-
-    /// Adds the constraint `reif -> (lhs < rhs)`.
-    pub fn half_reified_binary_less_than<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1), reif)
-    }
-
-    /// Adds the constraint `lhs = rhs`.
-    pub fn binary_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-    ) -> Result<(), ConstraintOperationError> {
-        self.equals([lhs.scaled(1), rhs.scaled(-1)], 0)
-    }
-
-    /// Adds the constraint `reif <-> (lhs = rhs)`.
-    pub fn reified_binary_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        a: Var,
-        b: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.reified_equals(vec![a.scaled(1), b.scaled(-1)].into(), 0, reif)
-    }
-
-    /// Adds the constraint `reif -> (lhs = rhs)`.
-    pub fn half_reified_binary_equals<Var: IntegerVariable + 'static>(
-        &mut self,
-        lhs: Var,
-        rhs: Var,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        self.half_reified_equals([lhs.scaled(1), rhs.scaled(-1)], 0, reif)
-    }
-
-    /// Adds the constraint `a + b = c`.
-    pub fn plus<Var: IntegerVariable + 'static>(
-        &mut self,
-        a: Var,
-        b: Var,
-        c: Var,
-    ) -> Result<(), ConstraintOperationError> {
-        self.equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
-    }
-
-    /// Adds the constraint `a * b = c`.
-    pub fn times(
-        &mut self,
-        a: impl IntegerVariable + 'static,
-        b: impl IntegerVariable + 'static,
-        c: impl IntegerVariable + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(IntegerMultiplicationConstructor { a, b, c })
-    }
-
-    /// A propagator for maintaining the constraint `numerator / denominator = rhs`; note that this
-    /// propagator performs truncating division (i.e. rounding towards 0).
+    /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
+    /// through propagation, this will return a [`ConstraintOperationError`].
     ///
-    /// The propagator assumes that the `denominator` is a non-zero integer.
+    /// The caller should ensure the solver is in the root state before calling this, either
+    /// because no call to [`Self::solve()`] has been made, or because
+    /// [`Self::restore_state_at_root()`] was called.
     ///
-    /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
-    pub fn division(
+    /// If the solver is already in a conflicting state, i.e. a previous call to this method
+    /// already returned `false`, calling this again will not alter the solver in any way, and
+    /// `false` will be returned again.
+    pub(crate) fn add_propagator<Constructor>(
         &mut self,
-        numerator: impl IntegerVariable + 'static,
-        denominator: impl IntegerVariable + 'static,
-        rhs: impl IntegerVariable + 'static,
+        constructor: Constructor,
     ) -> Result<(), ConstraintOperationError>
     where
-        Self: Sized,
+        Constructor: PropagatorConstructor,
+        Constructor::Propagator: 'static,
     {
-        self.satisfaction_solver
-            .add_propagator(DivisionConstructor {
-                numerator,
-                denominator,
-                rhs,
-            })
-    }
-
-    /// Adds the constraint `|signed| = absolute`.
-    pub fn absolute(
-        &mut self,
-        signed: impl IntegerVariable + 'static,
-        absolute: impl IntegerVariable + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver
-            .add_propagator(AbsoluteValueConstructor { signed, absolute })
-    }
-
-    /// Adds the constraint that all variables must be distinct.
-    pub fn all_different<Var: IntegerVariable + 'static>(
-        &mut self,
-        variables: impl Into<Box<[Var]>>,
-    ) -> Result<(), ConstraintOperationError> {
-        let variables = variables.into();
-
-        for i in 0..variables.len() {
-            for j in i + 1..variables.len() {
-                self.binary_not_equals(variables[i].clone(), variables[j].clone())?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Posts the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
-    /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
-    /// exceeds `bound`.
-    ///
-    /// The implementation uses a form of time-table reasoning (for an example of this type of
-    /// reasoning, see \[1], note that it does **not** implement the specific algorithm in the paper
-    /// but that the reasoning used is the same).
-    ///
-    /// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
-    /// this is not the case then this method will panic.
-    ///
-    /// # Example
-    /// ```rust
-    /// // We construct three tasks for a resource with capacity 2:
-    /// // - Task 0: Start times: [0, 5], Processing time: 4, Resource usage: 1
-    /// // - Task 1: Start times: [0, 5], Processing time: 2, Resource usage: 1
-    /// // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
-    /// // We can infer that Task 0 and Task 1 execute at the same time
-    /// // while Task 2 will start after them
-    /// # use pumpkin_lib::termination::Indefinite;
-    /// # use pumpkin_lib::Solver;
-    /// # use pumpkin_lib::results::SatisfactionResult;
-    /// # use crate::pumpkin_lib::results::ProblemSolution;
-    /// # use pumpkin_lib::options::CumulativeExplanationType;
-    /// let solver = Solver::default();
-    ///
-    /// let mut solver = Solver::default();
-    ///
-    /// let start_0 = solver.new_bounded_integer(0, 4);
-    /// let start_1 = solver.new_bounded_integer(0, 4);
-    /// let start_2 = solver.new_bounded_integer(0, 5);
-    ///
-    /// let start_times = [start_0, start_1, start_2];
-    /// let durations = [5, 2, 5];
-    /// let resource_requirements = [1, 1, 2];
-    /// let resource_capacity = 2;
-    ///
-    /// solver.cumulative(
-    ///     &start_times,
-    ///     &durations,
-    ///     &resource_requirements,
-    ///     resource_capacity,
-    ///     false,
-    ///     CumulativeExplanationType::default(),
-    /// );
-    ///
-    /// let mut termination = Indefinite;
-    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
-    ///
-    /// let result = solver.satisfy(&mut brancher, &mut termination);
-    ///
-    /// // We check whether the result was feasible
-    /// if let SatisfactionResult::Satisfiable(solution) = result {
-    ///     let horizon = durations.iter().sum::<i32>();
-    ///     let start_times = [start_0, start_1, start_2];
-    ///
-    ///     // Now we check whether the resource constraint is satisfied at each time-point t
-    ///     assert!((0..=horizon).all(|t| {
-    ///         // We gather all of the resource usages at the current time t
-    ///         let resource_usage_at_t = start_times
-    ///             .iter()
-    ///             .enumerate()
-    ///             .filter_map(|(task_index, start_time)| {
-    ///                 if solution.get_integer_value(*start_time) <= t
-    ///                     && solution.get_integer_value(*start_time) + durations[task_index] > t
-    ///                 {
-    ///                     Some(resource_requirements[task_index])
-    ///                 } else {
-    ///                     None
-    ///                 }
-    ///             })
-    ///             .sum::<i32>();
-    ///         // Then we check whether the resource usage at the current time point is lower than
-    ///         // the resource capacity
-    ///         resource_usage_at_t <= resource_capacity
-    ///     }));
-    ///
-    ///     // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and
-    ///     // Task 1 overlap
-    ///     assert!(
-    ///         solution.get_integer_value(start_2)
-    ///             >= solution.get_integer_value(start_0) + durations[0]
-    ///             && solution.get_integer_value(start_2)
-    ///                 >= solution.get_integer_value(start_1) + durations[1]
-    ///     );
-    ///     assert!(
-    ///         solution.get_integer_value(start_0)
-    ///             < solution.get_integer_value(start_1) + durations[1]
-    ///             && solution.get_integer_value(start_1)
-    ///                 < solution.get_integer_value(start_0) + durations[0]
-    ///     );
-    /// }
-    /// ```
-    ///
-    /// # Bibliography
-    /// \[1\] S. Gay, R. Hartert, and P. Schaus, ‘Simple and scalable time-table filtering for the
-    /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
-    /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
-    /// 21, 2015, pp. 149–157.
-    pub fn cumulative<Var: IntegerVariable + 'static + std::fmt::Debug + Copy>(
-        &mut self,
-        start_times: &[Var],
-        durations: &[i32],
-        resource_requirements: &[i32],
-        resource_capacity: i32,
-        allow_holes_in_domain: bool,
-        explanation_type: CumulativeExplanationType,
-    ) -> Result<(), ConstraintOperationError> {
-        pumpkin_assert_simple!(
-            start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
-            "The number of start variables, durations and resource requirements should be the same!car"
-        );
-        self.satisfaction_solver
-            .add_propagator(TimeTableOverIntervalIncremental::new(
-                start_times
-                    .iter()
-                    .zip(durations)
-                    .zip(resource_requirements)
-                    .map(|((start_time, duration), resource_requirement)| ArgTask {
-                        start_time: *start_time,
-                        processing_time: *duration,
-                        resource_usage: *resource_requirement,
-                    })
-                    .collect(),
-                resource_capacity,
-                allow_holes_in_domain,
-                explanation_type,
-            ))
-    }
-
-    /// Posts the constraint `max(array) = m`.
-    pub fn maximum<Var: IntegerVariable + 'static>(
-        &mut self,
-        array: impl Into<Box<[Var]>>,
-        rhs: impl IntegerVariable + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(MaximumConstructor {
-            array: array.into(),
-            rhs,
-        })
-    }
-
-    /// Posts the constraint `min(array) = m`.
-    pub fn minimum<Var: IntegerVariable + 'static>(
-        &mut self,
-        array: impl IntoIterator<Item = Var>,
-        rhs: impl IntegerVariable + 'static,
-    ) -> Result<(), ConstraintOperationError> {
-        let array = array
-            .into_iter()
-            .map(|var| var.scaled(-1))
-            .collect::<Box<_>>();
-        self.maximum(array, rhs.scaled(-1))
-    }
-
-    /// Posts the constraint `reif <-> \/ clause`
-    pub fn reified_clause(
-        &mut self,
-        clause: impl Into<Vec<Literal>>,
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        let mut clause = clause.into();
-
-        // \/clause -> r
-        clause
-            .iter()
-            .try_for_each(|&literal| self.add_clause([!literal, reif]))?;
-
-        // r -> \/clause
-        clause.insert(0, !reif);
-
-        self.add_clause(clause)
-    }
-
-    /// Posts the constraint `reif <-> /\ literal_i`
-    pub fn reified_conjunction(
-        &mut self,
-        conjunction: &[Literal],
-        reif: Literal,
-    ) -> Result<(), ConstraintOperationError> {
-        // /\conjunction -> r
-        let clause: Vec<Literal> = conjunction
-            .iter()
-            .map(|&literal| !literal)
-            .chain(std::iter::once(reif))
-            .collect();
-        self.add_clause(clause)?;
-
-        // r -> /\conjunction
-        conjunction
-            .iter()
-            .try_for_each(|&literal| self.add_clause([!reif, literal]))?;
-        Ok(())
-    }
-
-    /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
-    pub fn boolean_less_than_or_equals(
-        &mut self,
-        weights: &[i32],
-        bools: &[Literal],
-        rhs: i32,
-    ) -> Result<(), ConstraintOperationError> {
-        let domains = bools
-            .iter()
-            .enumerate()
-            .map(|(index, bool)| {
-                let corresponding_domain_id = self.new_bounded_integer(0, 1);
-                // bool -> [domain = 1]
-                let _ = self.add_clause([
-                    !*bool,
-                    self.get_literal(predicate![corresponding_domain_id >= 1]),
-                ]);
-                // !bool -> [domain = 0]
-                let _ = self.add_clause([
-                    *bool,
-                    self.get_literal(predicate![corresponding_domain_id <= 0]),
-                ]);
-                corresponding_domain_id.scaled(weights[index])
-            })
-            .collect::<Vec<_>>();
-        self.less_than_or_equals(domains, rhs)
-    }
-
-    /// Posts the constraint `\sum weights_i * bools_i <= rhs`.
-    pub fn boolean_equals(
-        &mut self,
-        weights: &[i32],
-        bools: &[Literal],
-        rhs: DomainId,
-    ) -> Result<(), ConstraintOperationError> {
-        let domains = bools
-            .iter()
-            .enumerate()
-            .map(|(index, bool)| {
-                let corresponding_domain_id = self.new_bounded_integer(0, 1);
-                // bool -> [domain = 1]
-                let _ = self.add_clause([
-                    !*bool,
-                    self.get_literal(predicate![corresponding_domain_id >= 1]),
-                ]);
-                // !bool -> [domain = 0]
-                let _ = self.add_clause([
-                    *bool,
-                    self.get_literal(predicate![corresponding_domain_id <= 0]),
-                ]);
-                corresponding_domain_id.scaled(weights[index])
-            })
-            .chain(std::iter::once(rhs.scaled(-1)))
-            .collect::<Vec<_>>();
-        self.equals(domains, 0)
+        self.satisfaction_solver.add_propagator(constructor)
     }
 }
 

@@ -126,7 +126,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.is_time_table_empty,
         );
         update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
@@ -319,18 +319,8 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static>(
                     height: current_resource_usage,
                 };
                 if is_conflicting {
-                    println!(
-                        "Conflict -> {:?} - Capacity: {}",
-                        new_profile
-                            .profile_tasks
-                            .iter()
-                            .map(|current| format!(
-                                "Duration: {}, Usage: {}",
-                                current.processing_time, current.resource_usage
-                            ))
-                            .collect::<Vec<_>>(),
-                        parameters.capacity
-                    );
+                    // We have found a conflict and the profile has been ended, we can report the
+                    // conflict using the current profile
                     return Err(create_conflict_explanation(
                         context,
                         &new_profile,

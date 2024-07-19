@@ -132,6 +132,7 @@ impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
     /// Bumps the activity of a variable after it has been encountered during a conflict by
     /// [`Vsids::increment`]
     fn bump_activity(&mut self, variable: Var) {
+        self.heap.accomodate(variable, DEFAULT_VSIDS_VALUE);
         // Scale the activities if the values are too large
         let activity = self.heap.get_value(variable);
         if activity + self.increment >= self.max_threshold {
@@ -144,6 +145,7 @@ impl<Var: StorageKey + Clone + Copy> Vsids<Var> {
 
     /// Restores a variable under consideration after backtracking
     fn restore(&mut self, variable: Var) {
+        self.heap.accomodate(variable, DEFAULT_VSIDS_VALUE);
         self.heap.restore_key(variable);
     }
 
@@ -213,33 +215,17 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
     fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
         self.bump_activity(literal.get_propositional_variable())
     }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        if all_variables.is_empty() {
-            warn!("The VSIDS variable selector was not provided with any variables");
-            return;
-        }
-        let max_index = all_variables
-            .iter()
-            .map(|variable| variable.index())
-            .max()
-            .unwrap();
-        while self.heap.len() <= max_index {
-            self.heap.grow(
-                PropositionalVariable::create_from_index(self.heap.len()),
-                DEFAULT_VSIDS_VALUE,
-            );
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Vsids;
     use crate::basic_types::tests::TestRandom;
+    use crate::basic_types::StorageKey;
     use crate::branching::variable_selection::VariableSelector;
     use crate::branching::SelectionContext;
     use crate::engine::variables::PropositionalVariable;
+    use crate::variables::Literal;
 
     #[test]
     fn vsids_bumped_var_is_max() {
@@ -277,5 +263,27 @@ mod tests {
         let chosen = vsids.select_variable(&context);
 
         assert!(chosen.is_none());
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_on_unassign() {
+        let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&[]);
+
+        let variable = PropositionalVariable::create_from_index(0);
+
+        assert_eq!(vsids.heap.len(), 0);
+        vsids.on_unassign_literal(Literal::new(variable, true));
+        assert_eq!(vsids.heap.len(), 1);
+    }
+
+    #[test]
+    fn does_not_panic_with_unknown_on_appearance_in_conflict() {
+        let mut vsids: Vsids<PropositionalVariable> = Vsids::new(&[]);
+
+        let variable = PropositionalVariable::create_from_index(0);
+
+        assert_eq!(vsids.heap.len(), 0);
+        vsids.on_appearance_in_conflict_literal(Literal::new(variable, true));
+        assert_eq!(vsids.heap.len(), 1);
     }
 }

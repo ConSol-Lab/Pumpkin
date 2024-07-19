@@ -206,7 +206,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.time_table.is_empty(),
         );
         if let Some(update) = result.update {
@@ -691,8 +691,6 @@ mod checks {
 
 /// Contains functions related to debugging
 mod debug {
-    use std::fmt::Debug;
-
     use crate::basic_types::HashSet;
     use crate::engine::propagation::PropagationContext;
     use crate::propagators::create_time_table_over_interval_from_scratch;
@@ -712,7 +710,7 @@ mod debug {
     ///      - The heights are the same
     ///      - The profile tasks should be the same; note that we do not check whether the order is
     ///        the same!
-    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static + Debug>(
+    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
         context: &PropagationContext,
         time_table: &OverIntervalTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
@@ -728,7 +726,6 @@ mod debug {
         // non-incremental time-table
         let mut time_table = time_table.clone();
         let time_table_len = time_table.len();
-
         merge_profiles(&mut time_table, 0, time_table_len - 1);
 
         // Then we compare whether the time-tables are the same with the following checks:
@@ -739,10 +736,10 @@ mod debug {
         //      - The heights are the same
         //      - The profile tasks of the profiles should be the same; note that we do not check
         //        whether the order is the same!
-        let result = time_table.len() == time_table_scratch.len()
+        time_table.len() == time_table_scratch.len()
             && time_table
                 .iter()
-                .zip(time_table_scratch.clone())
+                .zip(time_table_scratch)
                 .all(|(actual, expected)| {
                     actual.height == expected.height
                         && actual.start == expected.start
@@ -752,14 +749,7 @@ mod debug {
                             .profile_tasks
                             .iter()
                             .all(|task| expected.profile_tasks.contains(task))
-                });
-        if !result {
-            let time_table_scratch =
-                create_time_table_over_interval_from_scratch(context, parameters)
-                    .expect("Expected no error");
-            println!("{time_table:?}\n{time_table_scratch:?}");
-        }
-        result
+                })
     }
 
     /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`

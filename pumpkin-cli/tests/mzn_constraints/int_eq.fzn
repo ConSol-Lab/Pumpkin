@@ -1,0 +1,6 @@
+var 1..3: x :: output_var;
+var 1..3: y :: output_var;
+
+constraint int_eq(x, y);
+
+solve satisfy;

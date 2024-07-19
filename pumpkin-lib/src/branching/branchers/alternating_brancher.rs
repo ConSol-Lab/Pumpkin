@@ -9,7 +9,6 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -99,13 +98,6 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     fn on_conflict(&mut self) {
         self.other_brancher.on_conflict();
         self.default_brancher.on_conflict()
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.other_brancher
-            .on_encoding_objective_function(all_variables);
-        self.default_brancher
-            .on_encoding_objective_function(all_variables)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

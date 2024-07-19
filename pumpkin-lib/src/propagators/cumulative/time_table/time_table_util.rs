@@ -75,7 +75,7 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: PropagationContext,
+    context: &PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -138,7 +138,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 pub(crate) enum AddedMandatoryConsumption {
     /// There was an existing mandatory part but it has been extended by an update; the first
     /// [`Range`] is the added mandatory part due to an update of the upper-bound of the start time
-    /// and the second [`Range`] si the added mandatory part due to an update of the lower-bound of
+    /// and the second [`Range`] is the added mandatory part due to an update of the lower-bound of
     /// the start time.
     AdditionalMandatoryParts(Range<i32>, Range<i32>),
     /// There was no existing mandatory part before the update but there is one now.

@@ -1,7 +1,6 @@
 use crate::branching::SelectionContext;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 
@@ -37,11 +36,4 @@ pub trait VariableSelector<Var> {
 
     /// A function which is called when a variable appears in a conflict during conflict analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
-
-    /// A function which is called when new [`PropositionalVariable`]s are added to the solver when
-    /// encoding an objective function.
-    ///
-    /// Note that this method provides **all** [`PropositionalVariable`]s and it is up to the
-    /// selector to determine how to handle it.
-    fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 }

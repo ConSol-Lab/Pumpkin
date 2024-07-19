@@ -117,7 +117,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         let result = should_enqueue(
             &self.parameters,
             &updated_task,
-            context,
+            &context,
             self.is_time_table_empty,
         );
 

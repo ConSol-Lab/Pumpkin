@@ -71,6 +71,10 @@ impl<'a> SolutionReference<'a> {
             assignments_integer,
         }
     }
+
+    pub fn get_propostional_variables(&self) -> impl Iterator<Item = PropositionalVariable> {
+        self.assignments_propositional.get_propositional_variables()
+    }
 }
 
 impl<'a> ProblemSolution for SolutionReference<'a> {}

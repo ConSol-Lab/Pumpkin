@@ -11,7 +11,6 @@ use crate::branching::VariableSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -88,13 +87,6 @@ where
     fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
         self.variable_selector
             .on_appearance_in_conflict_integer(variable)
-    }
-
-    fn on_encoding_objective_function(&mut self, all_variables: &[PropositionalVariable]) {
-        self.variable_selector
-            .on_encoding_objective_function(all_variables);
-        self.value_selector
-            .on_encoding_objective_function(all_variables);
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

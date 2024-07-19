@@ -3,6 +3,8 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
+use pumpkin_lib::constraints;
+use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::Indefinite;
@@ -54,19 +56,14 @@ fn main() {
             let literal = precedence_literals[x][y];
             let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
             // literal => s_y - s_x <= -p_y)
-            let _ = solver.half_reified_less_than_or_equals(
-                variables.clone(),
-                -(processing_times[y] as i32),
-                literal,
-            );
+            let _ =
+                constraints::less_than_or_equals(variables.clone(), -(processing_times[y] as i32))
+                    .implied_by(&mut solver, literal);
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = solver.half_reified_less_than_or_equals(
-                variables.clone(),
-                processing_times[y] as i32,
-                !literal,
-            );
+            let _ = constraints::less_than_or_equals(variables.clone(), processing_times[y] as i32)
+                .implied_by(&mut solver, literal);
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([literal, precedence_literals[y][x]]);

@@ -11,7 +11,6 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
-use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::results::solution_iterator::SolutionIterator;
 
@@ -60,13 +59,6 @@ pub trait Brancher {
     /// A function which is called when an integer variable appears in a conflict during conflict
     /// analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
-
-    /// A function which is called when new [`PropositionalVariable`]s are added to the solver when
-    /// encoding the objective function.
-    ///
-    /// Note that this method provides **all** [`Literal`]s of the solver and it is up to the
-    /// selector to determine how to handle it.
-    fn on_encoding_objective_function(&mut self, _all_variables: &[PropositionalVariable]) {}
 
     /// This method is called when a solution is found; this will either be called when a new
     /// incumbent solution is found (i.e. a solution with a better objective value than previously

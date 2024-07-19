@@ -1,3 +1,4 @@
+use pumpkin_lib::constraints;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::Indefinite;
@@ -21,7 +22,9 @@ fn main() {
         .map(|_| solver.new_bounded_integer(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
-    let _ = solver.all_different(variables.clone());
+    let _ = solver
+        .add_constraint(constraints::all_different(variables.clone()))
+        .post();
 
     let diag1 = variables
         .iter()
@@ -36,8 +39,12 @@ fn main() {
         .map(|(i, var)| var.offset(-(i as i32)))
         .collect::<Vec<_>>();
 
-    let _ = solver.all_different(diag1);
-    let _ = solver.all_different(diag2);
+    let _ = solver
+        .add_constraint(constraints::all_different(diag1))
+        .post();
+    let _ = solver
+        .add_constraint(constraints::all_different(diag2))
+        .post();
 
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
