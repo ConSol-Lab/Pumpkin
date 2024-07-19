@@ -18,7 +18,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
-use crate::propagators::cumulative::time_table::explanations::CumulativeExplanationHandler;
+use crate::propagators::cumulative::time_table::explanations::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
@@ -332,11 +332,11 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     );
 
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
-    let mut explanation_handler = CumulativeExplanationHandler::new(parameters.explanation_type);
+    let mut propagation_handler = CumulativePropagationHandler::new(parameters.explanation_type);
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks
         let mut task_index = 0;
-        explanation_handler.next_profile();
+        propagation_handler.next_profile();
         while task_index < tasks_to_consider.len() {
             let task = Rc::clone(tasks_to_consider.get(task_index));
             if context.is_fixed(&task.start_variable)
@@ -359,7 +359,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
                 &task,
                 profile,
                 parameters,
-                &mut explanation_handler,
+                &mut propagation_handler,
             )?;
         }
     }
@@ -418,7 +418,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
-    explanation_handler: &mut CumulativeExplanationHandler,
+    propagation_handler: &mut CumulativePropagationHandler,
 ) -> Result<(), EmptyDomain> {
     if profile.height + task.resource_usage <= parameters.capacity
         || has_mandatory_part_in_interval(&context.as_readonly(), task, profile.start, profile.end)
@@ -440,7 +440,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             profile,
             parameters.capacity,
         ) {
-            explanation_handler.propagate_lower_bound_with_explanations(context, profile, task)?;
+            propagation_handler.propagate_lower_bound_with_explanations(context, profile, task)?;
         }
         if upper_bound_can_be_propagated_by_profile(
             &context.as_readonly(),
@@ -448,7 +448,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             profile,
             parameters.capacity,
         ) {
-            explanation_handler.propagate_upper_bound_with_explanations(context, profile, task)?;
+            propagation_handler.propagate_upper_bound_with_explanations(context, profile, task)?;
         }
         if parameters.allow_holes_in_domain {
             // We go through all of the time-points which cause `task` to overlap with the resource
@@ -474,7 +474,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             let upper_bound_removed_time_points =
                 min(context.upper_bound(&task.start_variable), profile.end);
             for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
-                explanation_handler.propagate_hole_in_domain(context, profile, task, time_point)?;
+                propagation_handler.propagate_hole_in_domain(context, profile, task, time_point)?;
             }
         }
     }

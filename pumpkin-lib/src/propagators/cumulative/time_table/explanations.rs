@@ -18,16 +18,39 @@ use crate::variables::IntegerVariable;
 /// Determines what type of explanation is used for the cumulative constraint based on the
 /// explanations described in Section 4.5.1 and 4.5.2 of \[1\].
 ///
-/// For propagations, we different between 2 types of explanations;
+/// For the explanations of conflicts and conflicts, we different between 3 types of explanations:
+/// - The naive explanation (see [`CumulativeExplanationType::Naive`])
+/// - The bigstep explanation (see [CumulativeExplanationType::BigStep])
+/// - The pointwise explanation (see [CumulativeExplanationType::PointWise])
 ///
 /// # Bibliography
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum CumulativeExplanationType {
+    /// The naive explanation approach simply uses the current bounds of the profile and the
+    /// propagated task in the explanation.
     Naive,
-    BigStep,
+    /// The default; lifts the explanation to create an explanation which uses the bounds which
+    /// would cause the tasks in the profile to have mandatory parts in the range of the
+    /// propagating profile.
     #[default]
+    BigStep,
+    /// Creates an explanation over a set of time-points;
+    ///
+    /// ## Propagations
+    /// Note that we currently do not generate chains of profiles which cause a propagation. This
+    /// means that the explanation only concerns a single profile; the selected time-points for
+    /// a propagation of task i are constructed as follows in the case of a lower-bound
+    /// propagation: `[profile.start, profile.start + i.process_time, profile.start + (2 *
+    /// i.processing_time), ..., profile.end]`. Thus, if the profile is shorter than
+    /// `i.processing_time`, two explanations are generated for the time-points `profile.start`
+    /// and `profile.end`.
+    ///
+    /// ## Conflicts
+    /// For conflicts we follow the work by Schutt (see the documentation for
+    /// [`CumulativeExplanationType`]) and select the middle point in the profile as the point used
+    /// for the explanation.
     PointWise,
 }
 
@@ -41,12 +64,17 @@ impl Display for CumulativeExplanationType {
     }
 }
 
-pub(crate) struct CumulativeExplanationHandler {
+/// Structure for handling the creation of propagations and their explanations.
+pub(crate) struct CumulativePropagationHandler {
+    /// The type of explanation which is used
     explanation_type: CumulativeExplanationType,
+    /// If the same profile propagates multiple tasks then it is beneficial to cache that
+    /// explanation and re-use it. Note that this will only be used for
+    /// [`CumulativeExplanationType::Naive`] and [`CumulativeExplanationType::BigStep`].
     stored_profile_explanation: OnceCell<Rc<PropositionalConjunction>>,
 }
 
-impl CumulativeExplanationHandler {
+impl CumulativePropagationHandler {
     pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
         Self {
             explanation_type,
@@ -54,10 +82,13 @@ impl CumulativeExplanationHandler {
         }
     }
 
+    /// Signifies that we are moving to another profile and we cannot re-use the cached explanation
+    /// of [`CumulativePropagationHandler::stored_profile_explanation`].
     pub(crate) fn next_profile(&mut self) {
         self.stored_profile_explanation = OnceCell::new();
     }
 
+    /// Either we get the stored stored profile explanation or we initialize it.
     fn get_stored_profile_explanation_or_init<Var: IntegerVariable + 'static>(
         &mut self,
         context: &mut PropagationContextMut,
@@ -80,6 +111,7 @@ impl CumulativeExplanationHandler {
         }))
     }
 
+    /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_lower_bound_with_explanations<Var: IntegerVariable + 'static>(
         &mut self,
         context: &mut PropagationContextMut,
@@ -112,6 +144,7 @@ impl CumulativeExplanationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
+                // The first time-point which we explain is always the start of the profile
                 let mut time_point = profile.start;
                 loop {
                     if time_point >= profile.end {
@@ -154,6 +187,7 @@ impl CumulativeExplanationHandler {
         }
     }
 
+    /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_upper_bound_with_explanations<Var: IntegerVariable + 'static>(
         &mut self,
         context: &mut PropagationContextMut,
@@ -186,6 +220,7 @@ impl CumulativeExplanationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
+                // The first time-point which we explain is always the end of the profile
                 let mut time_point = profile.end;
                 loop {
                     if time_point <= profile.start {
@@ -226,6 +261,8 @@ impl CumulativeExplanationHandler {
         }
     }
 
+    /// Propagates a hole in the domain; note that this explanation does not contain any of the
+    /// bounds of `propagating_task`.
     pub(crate) fn propagate_hole_in_domain<Var: IntegerVariable + 'static>(
         &mut self,
         context: &mut PropagationContextMut,
@@ -253,6 +290,8 @@ impl CumulativeExplanationHandler {
     }
 }
 
+/// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
+/// `explanation_type`.
 pub(crate) fn create_conflict_explanation<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
     conflict_profile: &ResourceProfile<Var>,
@@ -314,6 +353,7 @@ pub(crate) fn create_conflict_explanation<Var: IntegerVariable + 'static>(
     }
 }
 
+/// Adds the lower-bound predicate of the propagating task to the provided `explanation`.
 fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 'static>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
@@ -332,6 +372,7 @@ fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 'static>(
     explanation
 }
 
+/// Adds the upper-bound predicate of the propagating task to the provided `explanation`.
 fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 'static>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
@@ -350,6 +391,8 @@ fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 'static>(
     explanation
 }
 
+/// Creates the propagation explanation using the big-step approach (see
+/// [`CumulativeExplanationType::BigStep`])
 fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
 ) -> PropositionalConjunction {
@@ -367,6 +410,8 @@ fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
         .collect()
 }
 
+/// Creates the propagation explanation using the point-wise approach (see
+/// [`CumulativeExplanationType::PointWise`])
 fn create_pointwise_propagation_explanation<Var: IntegerVariable + 'static>(
     time_point: i32,
     profile: &ResourceProfile<Var>,
@@ -385,6 +430,8 @@ fn create_pointwise_propagation_explanation<Var: IntegerVariable + 'static>(
         .collect()
 }
 
+/// Creates the propagation explanation using the naive approach (see
+/// [`CumulativeExplanationType::Naive`])
 fn create_naive_propagation_explanation<'a, Var: IntegerVariable + 'static>(
     profile: &'a ResourceProfile<Var>,
     context: &'a PropagationContext,
@@ -407,6 +454,7 @@ fn create_naive_propagation_explanation<'a, Var: IntegerVariable + 'static>(
         .collect()
 }
 
+/// Creates the lower-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
 pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     Var: IntegerVariable + 'static,
 >(
@@ -435,6 +483,7 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     }
 }
 
+/// Creates the upper-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
 pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
     Var: IntegerVariable + 'static,
 >(
