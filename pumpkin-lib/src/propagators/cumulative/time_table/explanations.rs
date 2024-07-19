@@ -402,7 +402,7 @@ fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
         .flat_map(|profile_task| {
             [
                 predicate!(
-                    profile_task.start_variable >= profile.end - profile_task.processing_time
+                    profile_task.start_variable >= profile.end - profile_task.processing_time + 1
                 ),
                 predicate!(profile_task.start_variable <= profile.start),
             ]
@@ -508,5 +508,213 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
                 <= time_point
                     .expect("Expected time-point to be provided to pointwise explanation creation")
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::rc::Rc;
+
+    use super::create_conflict_explanation;
+    use super::CumulativeExplanationType;
+    use super::CumulativePropagationHandler;
+    use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContext;
+    use crate::engine::propagation::PropagationContextMut;
+    use crate::engine::propagation::PropagatorId;
+    use crate::engine::reason::ReasonStore;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
+    use crate::predicate;
+    use crate::predicates::Predicate;
+    use crate::predicates::PropositionalConjunction;
+    use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+    use crate::propagators::Task;
+    use crate::variables::DomainId;
+
+    struct PropagationHandler {
+        propagation_handler: CumulativePropagationHandler,
+        reason_store: ReasonStore,
+        assignments_integer: AssignmentsInteger,
+        assignments_propositional: AssignmentsPropositional,
+    }
+
+    impl PropagationHandler {
+        fn new(explanation_type: CumulativeExplanationType) -> Self {
+            let propagation_handler = CumulativePropagationHandler::new(explanation_type);
+
+            let reason_store = ReasonStore::default();
+            let assignments_propositional = AssignmentsPropositional::default();
+            let assignments_integer = AssignmentsInteger::default();
+            Self {
+                propagation_handler,
+                reason_store,
+                assignments_integer,
+                assignments_propositional,
+            }
+        }
+
+        fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
+            let y = self.assignments_integer.grow(15, 16);
+
+            let profile_task = Task {
+                start_variable: y,
+                processing_time: 4,
+                resource_usage: 1,
+                id: LocalId::from(1),
+            };
+
+            let profile = ResourceProfile {
+                start: 15,
+                end: 17,
+                profile_tasks: vec![Rc::new(profile_task)],
+                height: 1,
+            };
+
+            let reason = create_conflict_explanation(
+                &PropagationContext::new(
+                    &self.assignments_integer,
+                    &self.assignments_propositional,
+                ),
+                &profile,
+                self.propagation_handler.explanation_type,
+            );
+
+            (reason, y)
+        }
+
+        fn set_up_example(&mut self) -> (PropositionalConjunction, DomainId, DomainId) {
+            let x = self.assignments_integer.grow(11, 20);
+            let y = self.assignments_integer.grow(15, 16);
+
+            let propagating_task = Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            };
+
+            let profile_task = Task {
+                start_variable: y,
+                processing_time: 4,
+                resource_usage: 1,
+                id: LocalId::from(1),
+            };
+
+            let profile = ResourceProfile {
+                start: 15,
+                end: 17,
+                profile_tasks: vec![Rc::new(profile_task)],
+                height: 1,
+            };
+
+            let result = self
+                .propagation_handler
+                .propagate_lower_bound_with_explanations(
+                    &mut PropagationContextMut::new(
+                        &mut self.assignments_integer,
+                        &mut self.reason_store,
+                        &mut self.assignments_propositional,
+                        PropagatorId(0),
+                    ),
+                    &profile,
+                    &Rc::new(propagating_task),
+                );
+            assert!(result.is_ok());
+            assert_eq!(self.assignments_integer.get_lower_bound(x), 18);
+
+            let reason = self.get_reason_for(predicate!(x >= 18));
+
+            (reason, x, y)
+        }
+
+        fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
+            let reason_ref = self
+                .assignments_integer
+                .get_reason_for_predicate(predicate.try_into().unwrap());
+            let context =
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+            let reason = self
+                .reason_store
+                .get_or_compute(reason_ref, &context)
+                .expect("reason_ref should not be stale");
+            reason.clone()
+        }
+    }
+
+    #[test]
+    fn test_naive_explanation() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, x, y) = propagation_handler.set_up_example();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 11),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_big_step_explanation() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::BigStep);
+        let (reason, x, y) = propagation_handler.set_up_example();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 10),
+            predicate!(y >= 14),
+            predicate!(y <= 15),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_pointwise_explanation() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::PointWise);
+        let (reason_last_propagation, x, y) = propagation_handler.set_up_example();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 12),
+            predicate!(y >= 14),
+            predicate!(y <= 17),
+        ]
+        .into();
+        assert_eq!(reason_last_propagation, expected_reason);
+
+        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x >= 16));
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 10),
+            predicate!(y >= 12),
+            predicate!(y <= 15),
+        ]
+        .into();
+        assert_eq!(reason_first_propagation, expected_reason);
+    }
+
+    #[test]
+    fn test_conflict_naive() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::Naive);
+        let (reason, y) = propagation_handler.set_up_conflict_example();
+        let expected_reason: PropositionalConjunction =
+            vec![predicate!(y >= 15), predicate!(y <= 16)].into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_conflict_big_step() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::BigStep);
+        let (reason, y) = propagation_handler.set_up_conflict_example();
+        let expected_reason: PropositionalConjunction =
+            vec![predicate!(y >= 14), predicate!(y <= 15)].into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_conflict_point_wise() {
+        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::PointWise);
+        let (reason, y) = propagation_handler.set_up_conflict_example();
+        let expected_reason: PropositionalConjunction =
+            vec![predicate!(y >= 13), predicate!(y <= 16)].into();
+        assert_eq!(reason, expected_reason);
     }
 }
