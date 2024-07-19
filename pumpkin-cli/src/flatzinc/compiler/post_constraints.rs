@@ -299,7 +299,7 @@ fn compile_set_in_reif(
                 .is_ok()
                 && context
                     .solver
-                    .add_clause([!reif, predicate![variable >= upper_bound + 1]])
+                    .add_clause([!reif, !predicate![variable >= upper_bound + 1]])
                     .is_ok();
 
             // `!reif -> x \notin S`
