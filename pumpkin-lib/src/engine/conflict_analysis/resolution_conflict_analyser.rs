@@ -66,7 +66,7 @@ impl ResolutionNogoodConflictAnalyser {
                     id: self.heap_current_decision_level.len() as u32,
                 };
                 self.heap_current_decision_level.grow(next_id, 0);
-                self.heap_current_decision_level.delete_key(next_id);
+                self.heap_current_decision_level.delete_key(next_id);                
             }
 
             if !self
@@ -74,7 +74,6 @@ impl ResolutionNogoodConflictAnalyser {
                 .is_key_present(predicate_id)
                 && *self.heap_current_decision_level.get_value(predicate_id) == 0
             {
-
                 brancher.on_appearance_in_conflict_predicate(predicate);
 
                 let trail_position = assignments.get_trail_position(&predicate).unwrap();
@@ -82,7 +81,7 @@ impl ResolutionNogoodConflictAnalyser {
                 self.heap_current_decision_level.restore_key(predicate_id);
                 self.heap_current_decision_level
                     .increment(predicate_id, trail_position as u32);
-                
+
                 if *self.heap_current_decision_level.get_value(predicate_id)
                 != trail_position.try_into().unwrap()
                 {
@@ -116,7 +115,6 @@ impl ResolutionNogoodConflictAnalyser {
         semantic_minimiser: &mut SemanticMinimiser,
         brancher: &mut dyn Brancher,
     ) -> LearnedNogood {
-        assert!(self.heap_current_decision_level.num_nonremoved_elements() == 1 || self.heap_current_decision_level.num_nonremoved_elements() == 2);
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
 

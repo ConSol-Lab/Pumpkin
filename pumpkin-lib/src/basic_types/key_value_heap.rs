@@ -21,10 +21,10 @@ use crate::pumpkin_assert_moderate;
 pub(crate) struct KeyValueHeap<Key: StorageKey, Value> {
     /// Contains the values stored as a heap; the value of key `i` is at index
     /// [`KeyValueHeap::map_key_to_position\[i\]`][KeyValueHeap::map_key_to_position]
-    pub values: Vec<Value>,
+    values: Vec<Value>,
     /// `map_key_to_position[i]` is the index of the value of the key `i` in
     /// [`KeyValueHeap::values`]
-    pub map_key_to_position: KeyedVec<Key, usize>,
+    map_key_to_position: KeyedVec<Key, usize>,
     /// `map_position_to_key[i]` is the key which is associated with `i` in
     /// [`KeyValueHeap::values`]
     map_position_to_key: Vec<Key>,
@@ -78,30 +78,35 @@ impl<
     ///
     ///  The time-complexity of this operation is O(logn)
     pub(crate) fn pop_max(&mut self) -> Option<Key> {
-        if self.num_nonremoved_elements() == 0 {
-            return None;
-        }
-
-        let mut best_value = self.values[0];
-        let mut best_index = 0;
-
-        for i in 1..self.end_position {
-            if self.values[i] > best_value {
-                best_value = self.values[i];
-                best_index = i;
-            }
-        }
-        let best_key = self.map_position_to_key[best_index];
-        self.delete_key(best_key);
-        Some(best_key)
-
-        // let best_key = self.map_position_to_key[0];
-        // pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
-        // pumpkin_assert_extreme!(self.is_max_at_top());
+        // if self.num_nonremoved_elements() == 0 {
+        // return None;
+        // }
+        //
+        // let mut best_value = self.values[0];
+        // let mut best_index = 0;
+        //
+        // for i in 1..self.end_position {
+        // if self.values[i] > best_value {
+        // best_value = self.values[i];
+        // best_index = i;
+        // }
+        // }
+        // let best_key = self.map_position_to_key[best_index];
         // self.delete_key(best_key);
         // Some(best_key)
+
+        if !self.is_empty() {
+            let best_key = self.map_position_to_key[0];
+            pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
+            // pumpkin_assert_extreme!(self.is_max_at_top());
+            self.delete_key(best_key);
+            Some(best_key)
+        } else {
+            None
+        }
     }
 
+    #[allow(dead_code)]
     fn is_max_at_top(&self) -> bool {
         self.values[0..self.end_position]
             .iter()
@@ -257,15 +262,23 @@ impl<
     }
 
     fn is_heap_locally(&self, position: usize) -> bool {
-        // Either the node is a left, or it satisfies the heap property (the value of the parent is
+        // Either the node is a leaf, or it satisfies the heap property (the value of the parent is
         // at least as large as the values of its child)
         let left_child_position = KeyValueHeap::<Key, Value>::get_left_child_position(position);
         let right_child_position = KeyValueHeap::<Key, Value>::get_right_child_position(position);
 
-        self.is_leaf(position)
-            || (self.values[position] >= self.values[left_child_position]
-                && right_child_position < self.end_position
-                && self.values[position] >= self.values[right_child_position])
+        if self.is_leaf(position) {
+            return true;
+        }
+
+        // if does not have right child, then just compare with left child.
+        if right_child_position >= self.end_position {
+            return self.values[position] >= self.values[left_child_position];
+        }
+
+        // Otherwise the node has two children, compare with both.
+        self.values[position] >= self.values[left_child_position]
+            && self.values[position] >= self.values[right_child_position]
     }
 
     fn is_leaf(&self, position: usize) -> bool {
@@ -298,5 +311,91 @@ impl<
 
     fn get_right_child_position(position: usize) -> usize {
         2 * position + 2
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::KeyValueHeap;
+
+    #[test]
+    fn failing_test_case() {
+        let mut heap: KeyValueHeap<usize, u32> = KeyValueHeap::default();
+
+        heap.grow(0, 7);
+        heap.grow(1, 5);
+
+        assert_eq!(heap.pop_max().unwrap(), 0);
+
+        heap.grow(2, 7);
+        heap.grow(3, 6);
+
+        assert_eq!(heap.pop_max().unwrap(), 2);
+        assert_eq!(heap.pop_max().unwrap(), 3);
+    }
+
+    #[test]
+    fn failing_test_case2() {
+        let mut heap: KeyValueHeap<usize, u32> = KeyValueHeap::default();
+
+        heap.grow(0, 5);
+        heap.grow(1, 7);
+        heap.grow(2, 6);
+
+        assert_eq!(heap.pop_max().unwrap(), 1);
+        assert_eq!(heap.pop_max().unwrap(), 2);
+    }
+
+    // Uses the heap to sort the input vectors, and compare with a sorted version of the vector.
+    fn heap_sort_test_helper(numbers: Vec<usize>) {
+        let mut sorted_numbers = numbers.clone();
+        sorted_numbers.sort();
+        sorted_numbers.reverse();
+
+        let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
+        for n in numbers.iter().enumerate() {
+            heap.grow(n.0, *n.1);
+        }
+
+        let mut heap_sorted_vector: Vec<usize> = vec![];
+        while let Some(index) = heap.pop_max() {
+            heap_sorted_vector.push(numbers[index]);
+        }
+
+        assert_eq!(heap_sorted_vector, sorted_numbers);
+    }
+
+    #[test]
+    fn trivial() {
+        let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
+        heap.grow(0, 5);
+        assert_eq!(heap.pop_max(), Some(0));
+        assert!(heap.is_empty());
+        assert_eq!(heap.pop_max(), None);
+    }
+
+    #[test]
+    fn trivial_sort() {
+        heap_sort_test_helper(vec![5]);
+    }
+
+    #[test]
+    fn simple() {
+        heap_sort_test_helper(vec![5, 10]);
+    }
+
+    #[test]
+    fn random1() {
+        heap_sort_test_helper(vec![5, 10, 3]);
+    }
+
+    #[test]
+    fn random2() {
+        heap_sort_test_helper(vec![3, 10, 5]);
+    }
+
+    #[test]
+    fn random3() {
+        heap_sort_test_helper(vec![1, 2, 3, 4]);
     }
 }

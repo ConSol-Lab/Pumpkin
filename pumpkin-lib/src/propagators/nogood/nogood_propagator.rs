@@ -1083,7 +1083,6 @@ impl Propagator for NogoodPropagator {
                                 if let Some(new_rhs) = kept_watcher_new_rhs {
                                     // Keep the current watch for this predicate,
                                     // and update its right hand side.
-
                                     self.watch_lists[update_info.0].hole[end_index] =
                                         self.watch_lists[update_info.0].hole[current_index];
                                     self.watch_lists[update_info.0].hole[end_index]
