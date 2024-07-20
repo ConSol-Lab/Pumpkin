@@ -25,8 +25,6 @@
 //! implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 //! (TRICS), 2013, pp. 1–10.
 
-use crate::pumpkin_assert_moderate;
-
 /// A set for keeping track of which values are still part of the original domain based on [\[1\]](https://hal.science/hal-01339250/document).
 /// See the module level documentation for more information.
 ///
@@ -40,7 +38,7 @@ use crate::pumpkin_assert_moderate;
 /// \[1\] V. le C. de Saint-Marcq, P. Schaus, C. Solnon, and C. Lecoutre, ‘Sparse-sets for domain
 /// implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 /// (TRICS), 2013, pp. 1–10.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SparseSet<T> {
     /// The number of elements which are currently in the domain
     size: usize,

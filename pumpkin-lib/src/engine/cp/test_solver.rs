@@ -7,6 +7,7 @@ use std::fmt::Formatter;
 use super::propagation::EnqueueDecision;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
+use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::LocalId;
@@ -31,6 +32,7 @@ use crate::predicate;
 pub(crate) struct TestSolver {
     assignments: Assignments,
     reason_store: ReasonStore,
+    semantic_minimiser: SemanticMinimiser,
     watch_list: WatchListCP,
     next_propagator_id: u32,
 }
@@ -40,6 +42,7 @@ impl Default for TestSolver {
         let mut solver = Self {
             assignments: Default::default(),
             reason_store: Default::default(),
+            semantic_minimiser: Default::default(),
             watch_list: Default::default(),
             next_propagator_id: Default::default(),
         };
@@ -103,7 +106,12 @@ impl TestSolver {
         &mut self,
         propagator_id: PropagatorId,
     ) -> PropagationContextMut {
-        PropagationContextMut::new(&mut self.assignments, &mut self.reason_store, propagator_id)
+        PropagationContextMut::new(
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.semantic_minimiser,
+            propagator_id,
+        )
     }
 
     pub(crate) fn increase_lower_bound_and_notify(
@@ -178,6 +186,7 @@ impl TestSolver {
         let context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
+            &mut self.semantic_minimiser,
             PropagatorId(0),
         );
         propagator.propagate(context)
@@ -195,6 +204,7 @@ impl TestSolver {
                 let context = PropagationContextMut::new(
                     &mut self.assignments,
                     &mut self.reason_store,
+                    &mut self.semantic_minimiser,
                     PropagatorId(0),
                 );
                 propagator.propagate(context)?;

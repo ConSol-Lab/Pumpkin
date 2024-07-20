@@ -1,4 +1,5 @@
 use super::PropagatorId;
+use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
@@ -35,9 +36,8 @@ impl<'a> PropagationContext<'a> {
 pub struct PropagationContextMut<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
-
     pub(crate) propagator_id: PropagatorId,
-
+    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     reification_literal: Option<Literal>,
 }
 
@@ -45,12 +45,14 @@ impl<'a> PropagationContextMut<'a> {
     pub fn new(
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
+        semantic_minimiser: &'a mut SemanticMinimiser,
         propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
             assignments,
             reason_store,
             propagator_id,
+            semantic_minimiser,
             reification_literal: None,
         }
     }

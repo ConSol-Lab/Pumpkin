@@ -75,6 +75,10 @@ impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
         self.elements.resize(new_len, value)
     }
 
+    pub(crate) fn clear(&mut self) {
+        self.elements.clear();
+    }
+
     /// Ensure the storage can accomodate the given key. Values for keys that are between the
     /// current last key and the given key will be `default_value`.
     #[allow(dead_code)]

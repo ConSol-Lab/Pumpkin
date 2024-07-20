@@ -12,19 +12,20 @@ use std::ops::DivAssign;
 use super::KeyedVec;
 use super::StorageKey;
 use crate::basic_types::HashSet;
+use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 
 /// A [max-heap](https://en.wikipedia.org/wiki/Min-max_heap)
 /// which allows for generalised `Key`s (required to implement [StorageKey]) and `Value`s (which are
 /// required to be ordered, divisible and addable).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct KeyValueHeap<Key: StorageKey, Value> {
     /// Contains the values stored as a heap; the value of key `i` is at index
     /// [`KeyValueHeap::map_key_to_position\[i\]`][KeyValueHeap::map_key_to_position]
-    values: Vec<Value>,
+    pub values: Vec<Value>,
     /// `map_key_to_position[i]` is the index of the value of the key `i` in
     /// [`KeyValueHeap::values`]
-    map_key_to_position: KeyedVec<Key, usize>,
+    pub map_key_to_position: KeyedVec<Key, usize>,
     /// `map_position_to_key[i]` is the key which is associated with `i` in
     /// [`KeyValueHeap::values`]
     map_position_to_key: Vec<Key>,
@@ -78,10 +79,34 @@ impl<
     ///
     ///  The time-complexity of this operation is O(logn)
     pub(crate) fn pop_max(&mut self) -> Option<Key> {
-        let best_key = self.map_position_to_key[0];
-        pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
+        if self.num_nonremoved_elements() == 0 {
+            return None;
+        }
+
+        let mut best_value = self.values[0];
+        let mut best_index = 0;
+
+        for i in 1..self.end_position {
+            if self.values[i] > best_value {
+                best_value = self.values[i];
+                best_index = i;
+            }
+        }
+        let best_key = self.map_position_to_key[best_index];
         self.delete_key(best_key);
         Some(best_key)
+
+        // let best_key = self.map_position_to_key[0];
+        // pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
+        // pumpkin_assert_extreme!(self.is_max_at_top());
+        // self.delete_key(best_key);
+        // Some(best_key)
+    }
+
+    fn is_max_at_top(&self) -> bool {
+        self.values[0..self.end_position]
+            .iter()
+            .all(|v| *v <= self.values[0])
     }
 
     /// Increments the value of the element of 'key' by 'increment'
@@ -138,6 +163,10 @@ impl<
         self.values.len()
     }
 
+    pub(crate) fn num_nonremoved_elements(&self) -> usize {
+        self.end_position
+    }
+
     /// Returns whether there are elements left in the heap (excluding the "removed" values)
     pub(crate) fn is_empty(&self) -> bool {
         self.end_position == 0
@@ -164,6 +193,13 @@ impl<
         self.swap_positions(self.end_position, last_index);
         self.end_position += 1;
         self.sift_up(self.end_position - 1);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.values.clear();
+        self.map_key_to_position.clear();
+        self.map_position_to_key.clear();
+        self.end_position = 0;
     }
 
     /// Divides all the values in the heap by 'divisor'. This will also affect the values of keys

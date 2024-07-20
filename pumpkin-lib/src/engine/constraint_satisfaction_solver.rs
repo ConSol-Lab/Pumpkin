@@ -10,6 +10,7 @@ use rand::SeedableRng;
 use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
+use super::conflict_analysis::SemanticMinimiser;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
@@ -138,6 +139,7 @@ pub struct ConstraintSatisfactionSolver {
     assumptions: Vec<Predicate>,
     /// Performs conflict analysis, core extraction, and minimisation.
     conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
+    semantic_minimiser: SemanticMinimiser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments: Assignments,
     /// Contains information on which propagator to notify upon
@@ -324,6 +326,7 @@ impl ConstraintSatisfactionSolver {
             counters: Counters::default(),
             internal_parameters: solver_options,
             variable_names: VariableNames::default(),
+            semantic_minimiser: SemanticMinimiser::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -780,6 +783,7 @@ impl ConstraintSatisfactionSolver {
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
             brancher,
+            semantic_minimiser: &mut self.semantic_minimiser,
         };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -851,6 +855,7 @@ impl ConstraintSatisfactionSolver {
         let mut context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
+            &mut self.semantic_minimiser,
             Self::get_nogood_propagator_id(),
         );
 
@@ -1021,6 +1026,7 @@ impl ConstraintSatisfactionSolver {
             let context = PropagationContextMut::new(
                 &mut self.assignments,
                 &mut self.reason_store,
+                &mut self.semantic_minimiser,
                 propagator_id,
             );
 
@@ -1165,6 +1171,7 @@ impl ConstraintSatisfactionSolver {
         let mut propagation_context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
+            &mut self.semantic_minimiser,
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();

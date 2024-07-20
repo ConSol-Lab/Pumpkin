@@ -6,6 +6,7 @@ use std::ops::Not;
 use log::debug;
 use log::warn;
 
+use super::conflict_analysis::SemanticMinimiser;
 use super::predicates::predicate::Predicate;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
@@ -56,9 +57,11 @@ impl DebugHelper {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();
+            let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
                 &mut assignments_clone,
                 &mut reason_store,
+                &mut semantic_minimiser,
                 PropagatorId(propagator_id as u32),
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -177,9 +180,11 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
+                let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
                     &mut assignments_clone,
                     &mut reason_store,
+                    &mut semantic_minimiser,
                     PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -236,9 +241,11 @@ impl DebugHelper {
             if adding_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
+                let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
                     &mut assignments_clone,
                     &mut reason_store,
+                    &mut semantic_minimiser,
                     PropagatorId(propagator_id),
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -284,9 +291,11 @@ impl DebugHelper {
         if adding_predicates_was_successful {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
+            let mut semantic_minimiser = SemanticMinimiser::default();
             let context = PropagationContextMut::new(
                 &mut assignments_clone,
                 &mut reason_store,
+                &mut semantic_minimiser,
                 propagator_id,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
@@ -342,9 +351,11 @@ impl DebugHelper {
 
             if outcome.is_ok() {
                 let mut reason_store = Default::default();
+                let mut semantic_minimiser = SemanticMinimiser::default();
                 let context = PropagationContextMut::new(
                     &mut assignments_clone,
                     &mut reason_store,
+                    &mut semantic_minimiser,
                     propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);

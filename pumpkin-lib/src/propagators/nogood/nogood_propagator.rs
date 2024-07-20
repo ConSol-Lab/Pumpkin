@@ -5,13 +5,11 @@ use std::rc::Rc;
 use log::warn;
 
 use crate::basic_types::ConstraintOperationError;
-use crate::basic_types::HashSet;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::StorageKey;
 use crate::conjunction;
-use crate::engine::conflict_analysis::AdvancedNogood;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
@@ -88,10 +86,8 @@ pub(crate) struct NogoodPropagator {
     is_in_infeasible_state: bool,
     // Watch lists for the nogood propagator.
     // todo: could improve the data structure for watching.
-    // todo: no point in using HashMaps, could us a simple array with direct hashing.
     watch_lists: KeyedVec<DomainId, WatchList>,
-    enqueued_updates: EventSink, /* HashSet<(DomainId, IntDomainEvent)>, // Vec<(DomainId,
-                                  * IntDomainEvent)>, */
+    enqueued_updates: EventSink,
 }
 
 impl NogoodPropagator {
@@ -106,7 +102,16 @@ impl NogoodPropagator {
         // The code below is broken down into several parts,
         // could be done more efficiently but probably okay.
 
-        // println!("In comes the nogood: {:?}", nogood);
+        // We opt for semantic minimisation upfront. This way we avoid the possibility of having
+        // assigned predicates in the final nogood. This could happen since the root bound can
+        // change since the initial time the semantic minimiser recorded it, so it would not know
+        // that a previously nonroot bound is now actually a root bound.
+
+        // Semantic minimisation will take care of removing duplicate predicates, conflicting
+        // nogoods, and may result in few predicates since it removes redundancies.
+        *nogood = context
+            .semantic_minimiser
+            .minimise(nogood, context.assignments);
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
@@ -117,38 +122,12 @@ impl NogoodPropagator {
         // Remove predicates that are satisfied at the root level.
         nogood.retain(|p| !context.is_predicate_satisfied(*p));
 
-        // println!("after removing sat predicates : {:?}", nogood);
-
-        // If the nogood is violating at the root, the previous retain would leave an empty
+        // If the nogood is violating at the root, the previous retain would leave an empty nogood.
         // Return a violating nogood.
         if nogood.is_empty() {
             *nogood = vec![Predicate::trivially_true()];
-            return;
         }
-
-        // We now remove duplicated predicates.
-        let mut present_predicates: HashSet<Predicate> = HashSet::default();
-        // We make use that adding elements to a hashset returns true if the element was not present
-        // in the set.
-        nogood.retain(|p| present_predicates.insert(*p));
-
-        // println!("after removing duplicates: {:?}", nogood);
-
-        // Check for contradicting predicates. In this case, the nogood cannot lead to propagation,
-        // so we can ignore it.
-        // Todo: The current version only partially does this, since there may be symmetries that
-        // are not detected, e.g., for a 0-1 integer variable, [x >= 1] and [x == 0] are
-        // opposite predicates but we do not detect these, and only check for direct
-        // negatives [x <= 0] and [x == 1], [x == 1] & [x == 2] is not sensible.
-        if nogood.iter().any(|p| present_predicates.contains(&p.not())) {
-            *nogood = vec![Predicate::trivially_false()];
-        }
-
-        // This is a way to do semantic minimisation.
-        let mut temp = AdvancedNogood::new(0);
-        temp.add_predicates(nogood.clone(), context.assignments, None);
-        *nogood = temp.extract_final_learned_nogood(context.assignments());
-        // println!("after extraction: {:?}", nogood);
+        // Done with preprocessing, the result is stored in the input nogood.
     }
 
     // Learned nogood during search.
@@ -468,26 +447,28 @@ impl NogoodPropagator {
                     Predicate::LowerBound {
                         domain_id,
                         lower_bound,
-                    } => self.watch_lists[domain_id].lower_bound.iter().any(|w| {
-                        w.right_hand_side == lower_bound && w.nogood_id.id == nogood_id.id
-                    }),
+                    } => self.watch_lists[domain_id]
+                        .lower_bound
+                        .iter()
+                        .any(|w| w.right_hand_side == lower_bound && w.nogood_id == nogood_id),
                     Predicate::UpperBound {
                         domain_id,
                         upper_bound,
-                    } => self.watch_lists[domain_id].upper_bound.iter().any(|w| {
-                        w.right_hand_side == upper_bound && w.nogood_id.id == nogood_id.id
-                    }),
+                    } => self.watch_lists[domain_id]
+                        .upper_bound
+                        .iter()
+                        .any(|w| w.right_hand_side == upper_bound && w.nogood_id == nogood_id),
                     Predicate::NotEqual {
                         domain_id,
                         not_equal_constant,
                     } => self.watch_lists[domain_id].hole.iter().any(|w| {
-                        w.right_hand_side == not_equal_constant && w.nogood_id.id == nogood_id.id
+                        w.right_hand_side == not_equal_constant && w.nogood_id == nogood_id
                     }),
                     Predicate::Equal {
                         domain_id,
                         equality_constant,
                     } => self.watch_lists[domain_id].equals.iter().any(|w| {
-                        w.right_hand_side == equality_constant && w.nogood_id.id == nogood_id.id
+                        w.right_hand_side == equality_constant && w.nogood_id == nogood_id
                     }),
                 }
             };
@@ -1493,7 +1474,7 @@ struct Watcher {
 // }
 // }
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq)]
 struct NogoodId {
     id: u32,
 }

@@ -186,6 +186,14 @@ impl Assignments {
         }
     }
 
+    pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
+        if let Some(trail_position) = self.get_trail_position(predicate) {
+            self.trail[trail_position].reason.is_none()
+        } else {
+            false
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn get_domain_iterator(&self, domain_id: DomainId) -> IntegerDomainIterator {
         self.domains[domain_id].domain_iterator()
@@ -403,7 +411,7 @@ impl Assignments {
             self.tighten_lower_bound(domain_id, assigned_value, reason)?;
         }
 
-        // only tighten the uper bound if needed
+        // only tighten the upper bound if needed
         if self.get_upper_bound(domain_id) > assigned_value {
             self.tighten_upper_bound(domain_id, assigned_value, reason)?;
         }
