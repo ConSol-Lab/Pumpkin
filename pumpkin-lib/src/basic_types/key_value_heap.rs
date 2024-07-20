@@ -398,4 +398,9 @@ mod test {
     fn random3() {
         heap_sort_test_helper(vec![1, 2, 3, 4]);
     }
+
+    #[test]
+    fn duplicates() {
+        heap_sort_test_helper(vec![2, 2, 1, 1, 3, 3, 3]);
+    }
 }
