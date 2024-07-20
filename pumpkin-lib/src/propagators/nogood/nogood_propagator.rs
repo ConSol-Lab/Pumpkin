@@ -477,6 +477,30 @@ impl NogoodPropagator {
             let nogood_id = NogoodId {
                 id: nogood.0 as u32,
             };
+
+            if !(is_watching(nogood.1.borrow().predicates[0], nogood_id)
+                && is_watching(nogood.1.borrow().predicates[1], nogood_id))
+            {
+                println!("Nogood id: {}", nogood_id.id);
+                println!("Nogood: {:?}", nogood);
+                println!(
+                    "watching 0: {}",
+                    is_watching(nogood.1.borrow().predicates[0], nogood_id)
+                );
+                println!(
+                    "watching 1: {}",
+                    is_watching(nogood.1.borrow().predicates[1], nogood_id)
+                );
+                println!(
+                    "watch list 0: {:?}",
+                    self.watch_lists[nogood.1.borrow().predicates[0].get_domain()]
+                );
+                println!(
+                    "watch list 1: {:?}",
+                    self.watch_lists[nogood.1.borrow().predicates[1].get_domain()]
+                );
+            }
+
             assert!(
                 is_watching(nogood.1.borrow().predicates[0], nogood_id)
                     && is_watching(nogood.1.borrow().predicates[1], nogood_id)
@@ -504,6 +528,16 @@ impl Propagator for NogoodPropagator {
         // return result;
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
+
+        // if self.watch_lists.len() > 4 {
+        // println!("Watch list x4: {:?}", self.watch_lists[DomainId::new(4)]);
+        // }
+        //
+        // if self.nogoods.len() > 11 {
+        // println!("nogood: {:?}", self.nogoods[NogoodId { id: 11 }]);
+        // }
+        //
+        // println!("----");
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(
@@ -669,7 +703,6 @@ impl Propagator for NogoodPropagator {
                                 // of the the current predicate, since we
                                 // are only incrementing the current index, and not copying
                                 // anything to the end_index.
-
                                 current_index += 1;
                                 continue;
                             }
@@ -971,6 +1004,13 @@ impl Propagator for NogoodPropagator {
                             // Look for another nonsatisfied predicate
                             // to replace the watched predicate.
                             let mut found_new_watch = false;
+                            // The watcher for holes has a special case. In case the watcher that is
+                            // going to replace this one is 1) a predicate with the same
+                            // domain_id and 2) is also a not equals predicate, then the watcher
+                            // should not be moved from this list, but instead only its right hand
+                            // side should be changed to reflect the new watcher. The variable
+                            // 'kept_watcher_new_rhs' holds info about this new rhs if appropriate.
+                            let mut kept_watcher_new_rhs: Option<i32> = None;
                             // Start from index 2 since we are skipping watched predicates.
                             for i in 2..nogood.len() {
                                 // Find a predicate that is either false or unassigned,
@@ -1009,10 +1049,22 @@ impl Propagator for NogoodPropagator {
                                         Predicate::NotEqual {
                                             domain_id,
                                             not_equal_constant,
-                                        } => self.watch_lists[domain_id].hole.push(Watcher {
-                                            right_hand_side: not_equal_constant,
-                                            nogood_id,
-                                        }),
+                                        } => {
+                                            // If the watcher indeed needs to move from this watch
+                                            // list to another list.
+                                            if domain_id != update_info.0 {
+                                                self.watch_lists[domain_id].hole.push(Watcher {
+                                                    right_hand_side: not_equal_constant,
+                                                    nogood_id,
+                                                })
+                                            } else {
+                                                // The watcher should stay in this list, but change
+                                                // its right hand side to reflect the new watching
+                                                // predicate. Here we only note that the watcher
+                                                // should stay, and later it actually gets copied.
+                                                kept_watcher_new_rhs = Some(not_equal_constant);
+                                            }
+                                        }
                                         Predicate::Equal {
                                             domain_id,
                                             equality_constant,
@@ -1028,13 +1080,38 @@ impl Propagator for NogoodPropagator {
                             } // end iterating through the nogood
 
                             if found_new_watch {
-                                // Note this nogood is effectively removed from the watch list
-                                // of the the current predicate, since we
-                                // are only incrementing the current index, and not copying
-                                // anything to the end_index.
+                                if let Some(new_rhs) = kept_watcher_new_rhs {
+                                    // Keep the current watch for this predicate,
+                                    // and update its right hand side.
 
-                                current_index += 1;
-                                continue;
+                                    self.watch_lists[update_info.0].hole[end_index] =
+                                        self.watch_lists[update_info.0].hole[current_index];
+                                    self.watch_lists[update_info.0].hole[end_index]
+                                        .right_hand_side = new_rhs;
+
+                                    // pumpkin_assert_moderate!(
+                                    // self.nogoods[self.watch_lists[update_info.0].hole
+                                    // [end_index]
+                                    // .nogood_id]
+                                    // .as_ref()
+                                    // .borrow()
+                                    // .predicates[1]
+                                    // .get_right_hand_side()
+                                    // == new_rhs
+                                    // );
+
+                                    end_index += 1;
+                                    current_index += 1;
+
+                                    continue;
+                                } else {
+                                    // Note this nogood is effectively removed from the watch list
+                                    // of the the current predicate, since we
+                                    // are only incrementing the current index, and not copying
+                                    // anything to the end_index.
+                                    current_index += 1;
+                                    continue;
+                                }
                             }
 
                             // Keep the current watch for this predicate.

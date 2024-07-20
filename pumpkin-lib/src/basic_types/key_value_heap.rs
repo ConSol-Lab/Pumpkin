@@ -12,7 +12,6 @@ use std::ops::DivAssign;
 use super::KeyedVec;
 use super::StorageKey;
 use crate::basic_types::HashSet;
-use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 
 /// A [max-heap](https://en.wikipedia.org/wiki/Min-max_heap)

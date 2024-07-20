@@ -9,7 +9,6 @@ use crate::branching::Brancher;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::pumpkin_assert_advanced;
-use crate::pumpkin_assert_moderate;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ResolutionNogoodConflictAnalyser {
@@ -50,7 +49,7 @@ impl ResolutionNogoodConflictAnalyser {
 
         // Ignore root level predicates.
         if dec_level == 0 {
-            return;
+            //do nothing
         }
         // We distinguish between predicates from the current decision level and other predicates.
         else if dec_level == assignments.get_decision_level() {
