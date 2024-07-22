@@ -18,7 +18,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
-use crate::propagators::cumulative::time_table::explanations::CumulativePropagationHandler;
+use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;

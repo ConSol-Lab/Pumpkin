@@ -20,7 +20,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
