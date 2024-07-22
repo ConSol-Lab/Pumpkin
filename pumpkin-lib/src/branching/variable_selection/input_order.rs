@@ -3,6 +3,7 @@ use log::warn;
 use crate::branching::SelectionContext;
 use crate::branching::VariableSelector;
 use crate::engine::variables::DomainId;
+use crate::variables::Literal;
 
 /// A [`VariableSelector`] which selects the first variable which is not fixed given the order in
 /// the provided list.
@@ -27,6 +28,15 @@ impl VariableSelector<DomainId> for InputOrder<DomainId> {
         self.variables
             .iter()
             .find(|variable| !context.is_integer_fixed(**variable))
+            .copied()
+    }
+}
+
+impl VariableSelector<Literal> for InputOrder<Literal> {
+    fn select_variable(&mut self, context: &SelectionContext) -> Option<Literal> {
+        self.variables
+            .iter()
+            .find(|&&variable| !context.is_predicate_assigned(variable.into()))
             .copied()
     }
 }
