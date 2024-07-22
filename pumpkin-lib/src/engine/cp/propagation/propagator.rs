@@ -10,8 +10,10 @@ use crate::engine::propagation::propagation_context::PropagationContextMut;
 use crate::engine::propagation::PropagatorConstructor;
 #[cfg(doc)]
 use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
@@ -134,6 +136,16 @@ pub trait Propagator: Downcast {
         _context: PropagationContext,
     ) -> Option<PropositionalConjunction> {
         None
+    }
+
+    fn lazy_explanation(&mut self, _code: u64, _assignments: &Assignments) -> &[Predicate] {
+        panic!(
+            "{}",
+            format!(
+                "Propagator {} does not support lazy explanations.",
+                self.name()
+            )
+        );
     }
 }
 

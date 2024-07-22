@@ -82,6 +82,7 @@ impl<'a> PropagationContextMut<'a> {
                         conjunction
                     }))
                 }
+                Reason::DynamicLazy { code: _ } => todo!(),
             }
         } else {
             reason

@@ -337,7 +337,7 @@ impl DebugHelper {
         //  then (!p1 || !p2 || !p3) should not lead to immediate failure
 
         // empty reasons are by definition satisifed after negation
-        if failure_reason.num_predicates() == 0 {
+        if failure_reason.is_empty() {
             return;
         }
 

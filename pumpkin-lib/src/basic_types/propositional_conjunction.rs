@@ -1,3 +1,6 @@
+use std::ops::Index;
+use std::ops::IndexMut;
+
 use crate::engine::predicates::predicate::Predicate;
 
 /// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
@@ -14,8 +17,12 @@ impl PropositionalConjunction {
         }
     }
 
-    pub fn num_predicates(&self) -> u32 {
-        self.predicates_in_conjunction.len() as u32
+    pub fn len(&self) -> usize {
+        self.predicates_in_conjunction.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn add(&mut self, predicate: Predicate) {
@@ -24,6 +31,36 @@ impl PropositionalConjunction {
 
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
         self.predicates_in_conjunction.iter()
+    }
+
+    pub fn as_slice(&self) -> &[Predicate] {
+        self.predicates_in_conjunction.as_slice()
+    }
+
+    pub fn clear(&mut self) {
+        self.predicates_in_conjunction.clear();
+    }
+
+    pub fn push(&mut self, predicate: Predicate) {
+        self.predicates_in_conjunction.push(predicate);
+    }
+
+    pub fn swap(&mut self, a: usize, b: usize) {
+        self.predicates_in_conjunction.swap(a, b)
+    }
+}
+
+impl Index<usize> for PropositionalConjunction {
+    type Output = Predicate;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.predicates_in_conjunction[index]
+    }
+}
+
+impl IndexMut<usize> for PropositionalConjunction {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.predicates_in_conjunction[index]
     }
 }
 

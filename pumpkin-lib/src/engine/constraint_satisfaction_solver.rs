@@ -784,6 +784,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             brancher,
             semantic_minimiser: &mut self.semantic_minimiser,
+            propagators: &mut self.propagators,
         };
         self.conflict_nogood_analyser
             .compute_1uip(&mut conflict_analysis_context)
@@ -925,26 +926,9 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn compute_reason_for_empty_domain(&mut self) -> PropositionalConjunction {
-        // The empty domain was caused by the last predicate on the trail.
-        // Conceptually the reason for the empty domain is [x >= k] & [x <= k - 1].
-        // However we cannot simply use that as a conflict nogood, since our conflict analysis
-        // procedure has issues when initialising the starting nogood containing inconsistent
-        // bounds. To address this corner case:
-        // Manually do the first step of the analysis
-        // procedure below before saving the nogood for further conflict analysis. Specifically, we
-        // conceptually start from [x >= k] & [x <= k - 1], and replace the last bound with its
-        // reason. More details below.
-
-        // To compute this reason in the solver, we do the following.
-        // Record the reason for the last predicate. This is explicitly given on the trail.
-        // Note that out of the two bounds, only one of them changed and surpassed the other.
-        // Determine which of the other two bounds was the one that remained fixed.
-        // Find the reason for that bound.
-        // The conjunction the bound reason is the conflict nogood.
-
-        // Recall that the last predicate on the trail is _not_ necessarily a bound predicate!
-        // It could be for instance that the variable x was assigned to a value k, and then a
-        // propagator posted [x != k]. The above description handles also these cases.
+        // The empty domain happened after posting the last predicate on the trail.
+        // The reason for this empty domain is computed as the reason for the bounds before the last
+        // trail predicate was posted, plus the reason for the last trail predicate.
 
         // The last predicate on the trail reveals the domain id that has resulted
         // in an empty domain.
@@ -961,57 +945,24 @@ impl ConstraintSatisfactionSolver {
         );
 
         let propagation_context = PropagationContext::new(&self.assignments);
-        // Recall that only one of the two bounds changed.
-        // Here we compute whether it was the lower bound or upper bound that changed,
-        // since we use this below.
-        // let upper_bound_changed =
-        //    entry.old_lower_bound == self.assignments.get_lower_bound(conflict_domain);
-
-        // println!(
-        // "old bounds lb ub {} {}",
-        // entry.old_lower_bound, entry.old_upper_bound
-        // );
-        // println!(
-        // "new bounds lb ub {} {}",
-        // self.assignments.get_lower_bound(conflict_domain),
-        // self.assignments.get_upper_bound(conflict_domain)
-        // );
 
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
-        let reason_changing_bound = self
-            .reason_store
-            .get_or_compute(entry.reason.unwrap(), &propagation_context)
-            .unwrap()
-            .clone();
+        let reason_changing_bound = ReasonStore::get_or_compute_new(
+            &mut self.reason_store,
+            entry.reason.unwrap(),
+            &propagation_context,
+            &mut self.propagators,
+        )
+        .unwrap();
 
         let mut empty_domain_reason: Vec<Predicate> = vec![
             predicate!(conflict_domain >= entry.old_lower_bound),
             predicate!(conflict_domain <= entry.old_upper_bound),
         ];
 
-        let mut m = reason_changing_bound.iter().copied().collect();
-        empty_domain_reason.append(&mut m);
+        empty_domain_reason.append(&mut reason_changing_bound.to_vec());
         empty_domain_reason.into()
-
-        // todo: the version below not good.
-
-        // We need to append one of the two bounds to the reason. However PropositionalConjunction
-        // does not have a push function, so we create a new PropositionalConjunction from scratch.
-        // Perhaps this can be addressed better some time in the future.
-        // let mut temp: Vec<Predicate> = reason_changing_bound.iter().copied().collect();
-        // Add the other bound.
-        // If the upper bound changed, then add the lower bound predicate to the reason.
-        // if upper_bound_changed {
-        // temp.push(predicate![conflict_domain >= entry.old_lower_bound]);
-        // }
-        // If the lower bound changed, then add the lower bound predicate to the reason.
-        // else {
-        // temp.push(predicate![conflict_domain <= entry.old_upper_bound]);
-        // }
-        // let m: Vec<Predicate> = temp.to_vec();
-        // println!("Reason for empty domain of {}: {:?}", conflict_domain, m);
-        // temp.into()
     }
 
     /// Main propagation loop.

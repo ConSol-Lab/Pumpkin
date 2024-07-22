@@ -1,11 +1,13 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use super::propagation::Propagator;
 use super::propagation::PropagatorId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::DebugDyn;
+use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
@@ -14,6 +16,7 @@ use crate::pumpkin_assert_simple;
 #[derive(Default, Debug)]
 pub struct ReasonStore {
     trail: Trail<(PropagatorId, Reason)>,
+    pub helper: PropositionalConjunction,
 }
 
 impl ReasonStore {
@@ -36,6 +39,17 @@ impl ReasonStore {
         self.trail
             .get_mut(reference.0 as usize)
             .map(|reason| reason.1.compute(context))
+    }
+
+    pub fn get_or_compute_new<'this>(
+        &'this mut self,
+        reference: ReasonRef,
+        context: &PropagationContext,
+        propagators: &'this mut Vec<Box<(dyn Propagator + 'static)>>,
+    ) -> Option<&'this [Predicate]> {
+        self.trail
+            .get_mut(reference.0 as usize)
+            .map(|reason| reason.1.compute_new(context, reason.0, propagators))
     }
 
     pub fn increase_decision_level(&mut self) {
@@ -71,6 +85,9 @@ pub enum Reason {
     /// only once, then replaced by an Eager version with the result.
     /// Todo: we need to rework the lazy explanation mechanism.
     Lazy(Box<dyn LazyReason>),
+    DynamicLazy {
+        code: u64,
+    },
 }
 
 impl Debug for Reason {
@@ -81,6 +98,7 @@ impl Debug for Reason {
                 .debug_tuple("Lazy")
                 .field(&DebugDyn::from("Reason"))
                 .finish(),
+            Reason::DynamicLazy { code } => f.debug_tuple("ImmutableLazy").field(code).finish(),
         }
     }
 }
@@ -101,6 +119,37 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction> LazyReason for 
 }
 
 impl Reason {
+    pub fn compute_new<'a>(
+        &'a mut self,
+        context: &PropagationContext,
+        propagator_id: PropagatorId,
+        propagators: &'a mut Vec<Box<dyn Propagator>>,
+    ) -> &[Predicate] {
+        // New tryout version: we do not replace the reason with an eager explanation for dynamic
+        // lazy explanations.
+        if let Reason::DynamicLazy { code } = self {
+            return propagators[propagator_id].lazy_explanation(*code);
+        }
+
+        // It is not possible to (1) match on the reason to see if it is Lazy, (2) use it to compute
+        // a new result, and (3) then change the Lazy into an Eager, because the closure is
+        // borrowed. instead, we first unconditionally mem::replace the reason with an
+        // eager one, so the original is moved to a local variable, then match on that
+        // original, and put the result into the eager one.
+        let reason = std::mem::replace(self, Reason::Eager(Default::default()));
+        // Get a &mut to the field in Eager to put the result there.
+        let Reason::Eager(result) = self else {
+            // (this branch gets optimised out)
+            unreachable!()
+        };
+        match reason {
+            Reason::Eager(prop_conj) => *result = prop_conj,
+            Reason::Lazy(f) => *result = f.compute(context),
+            Reason::DynamicLazy { code: _ } => unreachable!(),
+        }
+        result.as_slice()
+    }
+
     /// Compute the reason for a propagation.
     /// If the reason is 'Lazy', this computes the reason and replaces the lazy explanation with an
     /// eager one that was just computed.
@@ -119,6 +168,7 @@ impl Reason {
         match reason {
             Reason::Eager(prop_conj) => *result = prop_conj,
             Reason::Lazy(f) => *result = f.compute(context),
+            Reason::DynamicLazy { code: _ } => unreachable!(),
         }
         result
     }

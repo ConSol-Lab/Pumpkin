@@ -247,7 +247,8 @@ impl ResolutionNogoodConflictAnalyser {
                 break;
             }
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
-            let reason = context.get_propagation_reason_simple(next_predicate);
+            let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(next_predicate, context.assignments, context.reason_store, context.propagators);
+            
             //println!("reason: {:?}", reason);
             for predicate in reason.iter() {
                 self.add_predicate_to_conflict_nogood(
