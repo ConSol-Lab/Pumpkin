@@ -1,6 +1,6 @@
 use enumset::EnumSet;
-use enumset::EnumSetType;
 
+use super::IntDomainEvent;
 use crate::basic_types::KeyedVec;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
@@ -15,24 +15,15 @@ use crate::propagators;
 /// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
-#[derive(Clone, Debug)]
-pub(crate) struct EventSink<EventType: EnumSetType> {
-    present: KeyedVec<DomainId, EnumSet<EventType>>,
-    events: Vec<(EventType, DomainId)>,
+#[derive(Clone, Debug, Default)]
+pub(crate) struct EventSink {
+    present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
+    events: Vec<(IntDomainEvent, DomainId)>,
 }
 
-impl<EventType: EnumSetType> Default for EventSink<EventType> {
-    fn default() -> Self {
-        Self {
-            present: Default::default(),
-            events: Default::default(),
-        }
-    }
-}
-
-impl<EventType: EnumSetType> EventSink<EventType> {
+impl EventSink {
     pub(crate) fn new(num_domains: usize) -> Self {
-        let mut event_sink: EventSink<EventType> = EventSink::default();
+        let mut event_sink = EventSink::default();
         for _ in 0..num_domains {
             event_sink.grow();
         }
@@ -42,7 +33,7 @@ impl<EventType: EnumSetType> EventSink<EventType> {
         self.present.push(EnumSet::new());
     }
 
-    pub(crate) fn event_occurred(&mut self, event: EventType, domain: DomainId) {
+    pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
         if elem.insert(event) {
@@ -50,7 +41,7 @@ impl<EventType: EnumSetType> EventSink<EventType> {
         }
     }
 
-    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (EventType, DomainId)> + '_ {
+    pub(crate) fn drain(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain(..).inspect(|&(event, domain)| {
             let _ = self.present[domain].remove(event);
         })
@@ -64,7 +55,7 @@ mod tests {
 
     #[test]
     fn the_default_sink_is_empty() {
-        let mut sink: EventSink<IntDomainEvent> = EventSink::default();
+        let mut sink = EventSink::default();
 
         let events = sink.drain().collect::<Vec<_>>();
         assert!(events.is_empty());

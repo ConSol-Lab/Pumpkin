@@ -21,11 +21,11 @@ pub struct AssignmentsInteger {
 
     /// Keeps track of the [`IntDomainEvent`]s which occur while propagating/making decisions, this
     /// is used to implement [`Propagator::notify`].
-    events: EventSink<IntDomainEvent>,
+    events: EventSink,
 
     /// Keeps track of the [`IntDomainEvent`]s which are undone while backtracking, this is used to
     /// implement [`Propagator::notify_backtrack`].
-    backtrack_events: EventSink<IntDomainEvent>,
+    backtrack_events: EventSink,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -467,7 +467,7 @@ impl IntegerDomainExplicit {
         self.lower_bound <= value && value <= self.upper_bound && self.is_value_in_domain[idx]
     }
 
-    fn remove_value(&mut self, value: i32, events: &mut EventSink<IntDomainEvent>) {
+    fn remove_value(&mut self, value: i32, events: &mut EventSink) {
         if value < self.lower_bound || value > self.upper_bound {
             return;
         }
@@ -488,7 +488,7 @@ impl IntegerDomainExplicit {
         }
     }
 
-    fn set_upper_bound(&mut self, value: i32, events: &mut EventSink<IntDomainEvent>) {
+    fn set_upper_bound(&mut self, value: i32, events: &mut EventSink) {
         if value >= self.upper_bound {
             return;
         }
@@ -503,7 +503,7 @@ impl IntegerDomainExplicit {
         }
     }
 
-    fn set_lower_bound(&mut self, value: i32, events: &mut EventSink<IntDomainEvent>) {
+    fn set_lower_bound(&mut self, value: i32, events: &mut EventSink) {
         if value <= self.lower_bound {
             return;
         }
@@ -518,7 +518,7 @@ impl IntegerDomainExplicit {
         }
     }
 
-    fn update_lower_bound(&mut self, events: &mut EventSink<IntDomainEvent>) {
+    fn update_lower_bound(&mut self, events: &mut EventSink) {
         while self.get_index(self.lower_bound) < self.is_value_in_domain.len()
             && !self.is_value_in_domain[self.get_index(self.lower_bound)]
         {
@@ -527,7 +527,7 @@ impl IntegerDomainExplicit {
         }
     }
 
-    fn update_upper_bound(&mut self, events: &mut EventSink<IntDomainEvent>) {
+    fn update_upper_bound(&mut self, events: &mut EventSink) {
         while self.upper_bound + self.offset >= 0
             && !self.is_value_in_domain[self.get_index(self.upper_bound)]
         {
