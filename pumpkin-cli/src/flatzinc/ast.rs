@@ -1,3 +1,4 @@
+use log::warn;
 use pumpkin_lib::branching::AntiFirstFail;
 use pumpkin_lib::branching::DynamicValueSelector;
 use pumpkin_lib::branching::DynamicVariableSelector;
@@ -22,6 +23,7 @@ use pumpkin_lib::branching::Smallest;
 use pumpkin_lib::pumpkin_assert_eq_simple;
 use pumpkin_lib::pumpkin_assert_simple;
 use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
 
 use super::error::FlatZincError;
 pub(crate) enum VariableSelectionStrategy {
@@ -38,6 +40,43 @@ pub(crate) enum VariableSelectionStrategy {
 }
 
 impl VariableSelectionStrategy {
+    pub(crate) fn create_from_literals(
+        &self,
+        propositional_variables: &[Literal],
+    ) -> DynamicVariableSelector<Literal> {
+        DynamicVariableSelector::new(match self {
+            VariableSelectionStrategy::AntiFirstFail => {
+                warn!("AntiFirstFail does not make sense for propositional variables, defaulting to input order...");
+                Box::new(InputOrder::new(propositional_variables))
+            }
+            VariableSelectionStrategy::DomWDeg => todo!("DomWDeg is not yet implemented"),
+            VariableSelectionStrategy::FirstFail => {
+                warn!("FirstFail does not make sense for propositional variables, defaulting to input order...");
+                Box::new(InputOrder::new(propositional_variables))
+            }
+            VariableSelectionStrategy::Impact => todo!("Impact is not yet implemented"),
+            VariableSelectionStrategy::InputOrder => {
+                Box::new(InputOrder::new(propositional_variables))
+            }
+            VariableSelectionStrategy::Largest => {
+                warn!("Largest does not make sense for propositional variables, defaulting to input order...");
+                Box::new(InputOrder::new(propositional_variables))
+            }
+            VariableSelectionStrategy::MaxRegret => {
+                warn!("MaxRegret does not make sense for propositional variables, defaulting to input order...");
+                Box::new(InputOrder::new(propositional_variables))
+            }
+            VariableSelectionStrategy::MostConstrained => {
+                todo!("MostConstrained is not yet implemented")
+            }
+            VariableSelectionStrategy::Occurrence => todo!("Occurrence is not yet implemented"),
+            VariableSelectionStrategy::Smallest => {
+                warn!("Smallest does not make sense for propositional variables, defaulting to input order...");
+                Box::new(InputOrder::new(propositional_variables))
+            }
+        })
+    }
+
     pub(crate) fn create_from_domains(
         &self,
         variables: &[DomainId],
@@ -77,6 +116,34 @@ pub(crate) enum ValueSelectionStrategy {
 }
 
 impl ValueSelectionStrategy {
+    pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Literal> {
+        DynamicValueSelector::new(match self {
+            ValueSelectionStrategy::InDomain
+            | ValueSelectionStrategy::InDomainInterval
+            | ValueSelectionStrategy::InDomainMin
+            | ValueSelectionStrategy::InDomainSplit
+            | ValueSelectionStrategy::OutDomainMax => Box::new(InDomainMin),
+            ValueSelectionStrategy::InDomainMax
+            | ValueSelectionStrategy::InDomainReverseSplit
+            | ValueSelectionStrategy::OutDomainMin => Box::new(InDomainMax),
+            ValueSelectionStrategy::InDomainMedian => {
+                warn!("InDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+                Box::new(InDomainMin)
+            }
+            ValueSelectionStrategy::InDomainMiddle => {
+                warn!("InDomainMiddle does not make sense for propositional variables, defaulting to InDomainMin...");
+                Box::new(InDomainMin)
+            }
+            ValueSelectionStrategy::InDomainRandom
+            | ValueSelectionStrategy::InDomainSplitRandom
+            | ValueSelectionStrategy::OutDomainRandom => Box::new(InDomainRandom),
+            ValueSelectionStrategy::OutDomainMedian => {
+                warn!("OutDomainMedian does not make sense for propositional variables, defaulting to InDomainMin...");
+                Box::new(InDomainMin)
+            }
+        })
+    }
+
     pub(crate) fn create_for_domains(&self) -> DynamicValueSelector<DomainId> {
         DynamicValueSelector::new(match self {
             ValueSelectionStrategy::InDomain => Box::new(InDomainMin),

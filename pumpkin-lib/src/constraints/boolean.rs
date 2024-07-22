@@ -1,9 +1,11 @@
 use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
+use crate::predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
+use crate::variables::TransformableVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
@@ -59,18 +61,23 @@ impl Constraint for BooleanLessThanOrEqual {
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self, _solver: &mut Solver) -> Vec<AffineView<DomainId>> {
-        // todo: create vector with single type
-        todo!()
-        // let domains = self
-        //     .bools
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(index, bool)| {
-        //         bool.scaled(self.weights[index])
-        //     })
-        //     .collect::<Vec<_>>();
-        // domains
+    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
+        let domains = self
+            .bools
+            .iter()
+            .enumerate()
+            .map(|(index, bool)| {
+                let corresponding_domain_id = solver.new_bounded_integer(0, 1);
+                // bool -> [domain = 1]
+                let _ =
+                    solver.add_clause([(!*bool).into(), predicate![corresponding_domain_id >= 1]]);
+                // !bool -> [domain = 0]
+                let _ =
+                    solver.add_clause([(*bool).into(), predicate![corresponding_domain_id <= 0]]);
+                corresponding_domain_id.scaled(self.weights[index])
+            })
+            .collect::<Vec<_>>();
+        domains
     }
 }
 
@@ -100,14 +107,21 @@ impl Constraint for BooleanEqual {
 }
 
 impl BooleanEqual {
-    fn create_domains(&self, _solver: &mut Solver) -> Vec<AffineView<DomainId>> {
-        // todo: create vector with single type
-        todo!()
-        // self.bools
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(index, bool)| bool.scaled(self.weights[index]))
-        //     .chain(std::iter::once(self.rhs.scaled(-1)))
-        //     .collect()
+    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
+        self.bools
+            .iter()
+            .enumerate()
+            .map(|(index, bool)| {
+                let corresponding_domain_id = solver.new_bounded_integer(0, 1);
+                // bool -> [domain = 1]
+                let _ =
+                    solver.add_clause([(!*bool).into(), predicate![corresponding_domain_id >= 1]]);
+                // !bool -> [domain = 0]
+                let _ =
+                    solver.add_clause([(*bool).into(), predicate![corresponding_domain_id <= 0]]);
+                corresponding_domain_id.scaled(self.weights[index])
+            })
+            .chain(std::iter::once(self.rhs.scaled(-1)))
+            .collect()
     }
 }
