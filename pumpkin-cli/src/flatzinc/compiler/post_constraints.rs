@@ -299,7 +299,7 @@ fn compile_set_in_reif(
                 .is_ok()
                 && context
                     .solver
-                    .add_clause([!reif, predicate![variable >= upper_bound + 1]])
+                    .add_clause([!reif, !predicate![variable >= upper_bound + 1]])
                     .is_ok();
 
             // `!reif -> x \notin S`
@@ -488,12 +488,14 @@ fn compile_bool_xor_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = constraints::clause([!a, !b])
-        .reify(context.solver, r)
+    let c1 = constraints::clause([!a, !b, !r])
+        .post(context.solver)
         .is_ok();
-    let c2 = constraints::clause([b, a]).reify(context.solver, r).is_ok();
+    let c2 = constraints::clause([!a, b, r]).post(context.solver).is_ok();
+    let c3 = constraints::clause([a, !b, r]).post(context.solver).is_ok();
+    let c4 = constraints::clause([a, b, !r]).post(context.solver).is_ok();
 
-    Ok(c1 && c2)
+    Ok(c1 && c2 && c3 && c4)
 }
 
 fn compile_array_var_bool_element(

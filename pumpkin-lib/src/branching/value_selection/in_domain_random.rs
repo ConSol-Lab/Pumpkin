@@ -3,6 +3,7 @@ use crate::branching::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
+use crate::variables::Literal;
 
 /// A [`ValueSelector`] which assigns to a random value in the domain.
 #[derive(Debug, Clone, Copy)]
@@ -22,6 +23,20 @@ impl ValueSelector<DomainId> for InDomainRandom {
             .random()
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable == values_in_domain[random_index])
+    }
+}
+
+impl ValueSelector<Literal> for InDomainRandom {
+    fn select_value(
+        &mut self,
+        context: &mut SelectionContext,
+        decision_variable: Literal,
+    ) -> Predicate {
+        if context.random().generate_bool(0.5) {
+            decision_variable.into()
+        } else {
+            (!decision_variable).into()
+        }
     }
 }
 

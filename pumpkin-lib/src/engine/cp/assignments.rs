@@ -266,10 +266,6 @@ impl Assignments {
             == self.get_upper_bound_at_trail_position(domain_id, trail_position)
     }
 
-    pub(crate) fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
-        self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
-    }
-
     /// Returns the index of the trail entry at which point the given predicate became true.
     /// In case the predicate is not true, then the function returns None.
     /// Note that it is not necessary for the predicate to be explicitly present on the trail,
@@ -404,8 +400,6 @@ impl Assignments {
         assigned_value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        pumpkin_assert_moderate!(!self.is_domain_assigned_to_value(domain_id, assigned_value));
-
         // only tighten the lower bound if needed
         if self.get_lower_bound(domain_id) < assigned_value {
             self.tighten_lower_bound(domain_id, assigned_value, reason)?;
