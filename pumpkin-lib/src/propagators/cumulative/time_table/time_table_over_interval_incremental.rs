@@ -85,8 +85,7 @@ where
         TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
             tasks,
             self.capacity,
-            self.allow_holes_in_domain,
-            self.explanation_type,
+            self.options,
         ))
     }
 }
@@ -152,7 +151,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
                                 create_conflict_explanation(
                                     &context.as_readonly(),
                                     &conflict_profile,
-                                    self.parameters.explanation_type,
+                                    self.parameters.options.explanation_type,
                                 )
                             })?;
                         }
@@ -865,6 +864,7 @@ mod tests {
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
+    use crate::propagators::CumulativeOptions;
     use crate::propagators::TimeTableOverIntervalIncremental;
 
     #[test]
@@ -890,8 +890,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -922,8 +924,10 @@ mod tests {
             .into_iter()
             .collect(),
             1,
-            false,
-            CumulativeExplanationType::Naive,
+            CumulativeOptions {
+                allow_holes_in_domain: false,
+                explanation_type: CumulativeExplanationType::Naive,
+            },
         ));
         assert!(matches!(result, Err(Inconsistency::Other(_))));
         assert!(match result {
@@ -966,8 +970,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -1023,8 +1029,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -1053,8 +1061,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -1098,8 +1108,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -1167,8 +1179,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1247,8 +1261,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1295,8 +1311,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -1346,8 +1364,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);

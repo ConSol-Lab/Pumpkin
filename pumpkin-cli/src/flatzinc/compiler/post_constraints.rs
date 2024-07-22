@@ -5,6 +5,7 @@ use std::rc::Rc;
 use pumpkin_lib::constraints;
 use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::constraints::NegatableConstraint;
+use pumpkin_lib::options::CumulativeOptions;
 use pumpkin_lib::predicate;
 use pumpkin_lib::variables::AffineView;
 use pumpkin_lib::variables::DomainId;
@@ -236,13 +237,15 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    let post_result = constraints::cumulative(
+    let post_result = constraints::cumulative_with_options(
         &start_times,
         &durations,
         &resource_requirements,
         resource_capacity,
-        options.cumulative_allow_holes,
-        options.cumulative_explanation_type,
+        CumulativeOptions::new(
+            options.cumulative_allow_holes,
+            options.cumulative_explanation_type,
+        ),
     )
     .post(context.solver);
     Ok(post_result.is_ok())

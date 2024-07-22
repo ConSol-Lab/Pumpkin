@@ -68,8 +68,7 @@ where
         TimeTablePerPointPropagator::new(CumulativeParameters::new(
             tasks,
             self.capacity,
-            self.allow_holes_in_domain,
-            self.explanation_type,
+            self.options,
         ))
     }
 }
@@ -191,7 +190,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 's
                     return Err(create_conflict_explanation(
                         context,
                         current_profile,
-                        parameters.explanation_type,
+                        parameters.options.explanation_type,
                     ));
                 }
             }
@@ -228,6 +227,7 @@ mod tests {
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
+    use crate::propagators::CumulativeOptions;
     use crate::propagators::TimeTablePerPoint;
 
     #[test]
@@ -253,8 +253,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -285,8 +287,10 @@ mod tests {
             .into_iter()
             .collect(),
             1,
-            false,
-            CumulativeExplanationType::Naive,
+            CumulativeOptions {
+                allow_holes_in_domain: false,
+                explanation_type: CumulativeExplanationType::Naive,
+            },
         ));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
@@ -328,8 +332,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -385,8 +391,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -415,8 +423,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -460,8 +470,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         let result = solver.propagate_until_fixed_point(&mut propagator);
@@ -531,8 +543,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -611,8 +625,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 5,
-                false,
-                CumulativeExplanationType::default(),
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -659,8 +675,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -712,8 +730,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                false,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -760,8 +780,10 @@ mod tests {
                 .into_iter()
                 .collect(),
                 1,
-                true,
-                CumulativeExplanationType::Naive,
+                CumulativeOptions {
+                    allow_holes_in_domain: true,
+                    explanation_type: CumulativeExplanationType::Naive,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);

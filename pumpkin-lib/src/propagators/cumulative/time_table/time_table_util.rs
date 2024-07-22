@@ -108,7 +108,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         });
     }
 
-    result.decision = if parameters.allow_holes_in_domain {
+    result.decision = if parameters.options.allow_holes_in_domain {
         // If there are updates then propagations might occur due to new mandatory parts being
         // added. However, if there are no updates then because we allow holes in the domain, no
         // updates can occur so we can skip propagation!
@@ -332,7 +332,8 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     );
 
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
-    let mut propagation_handler = CumulativePropagationHandler::new(parameters.explanation_type);
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type);
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks
         let mut task_index = 0;
@@ -450,7 +451,7 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
         ) {
             propagation_handler.propagate_upper_bound_with_explanations(context, profile, task)?;
         }
-        if parameters.allow_holes_in_domain {
+        if parameters.options.allow_holes_in_domain {
             // We go through all of the time-points which cause `task` to overlap with the resource
             // profile
 

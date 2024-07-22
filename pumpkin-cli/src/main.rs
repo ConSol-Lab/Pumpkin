@@ -179,8 +179,12 @@ struct Args {
     #[arg(long = "cumulative-allow-holes", default_value_t = false)]
     cumulative_allow_holes: bool,
 
-    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default().into())]
-    cumulative_explanation_type: CliArg<CumulativeExplanationType>,
+    /// Determines the type of explanation used by the cumulative propagator(s) to explain
+    /// propagations/conflicts.
+    ///
+    /// Possible values: ["naive", "big-step", "pointwise"]
+    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
+    cumulative_explanation_type: CumulativeExplanationType,
 
     /// Verify the reported solution is consistent with the instance, and, if applicable, verify
     /// that it evaluates to the reported objective value.
@@ -363,7 +367,7 @@ fn run() -> PumpkinResult<()> {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
                 cumulative_allow_holes: args.cumulative_allow_holes,
-                cumulative_explanation_type: args.cumulative_explanation_type.inner,
+                cumulative_explanation_type: args.cumulative_explanation_type,
             },
         )?,
     }
@@ -452,15 +456,13 @@ fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>,
     }
 }
 
-fn cumulative_explanation_type_parser(
-    s: &str,
-) -> Result<CliArg<CumulativeExplanationType>, String> {
+fn cumulative_explanation_type_parser(s: &str) -> Result<CumulativeExplanationType, String> {
     match s {
-        "naive" => Ok(CumulativeExplanationType::Naive.into()),
-        "big-step" => Ok(CumulativeExplanationType::BigStep.into()),
-        "pointwise" => Ok(CumulativeExplanationType::PointWise.into()),
+        "naive" => Ok(CumulativeExplanationType::Naive),
+        "big-step" => Ok(CumulativeExplanationType::BigStep),
+        "pointwise" => Ok(CumulativeExplanationType::PointWise),
         value => Err(format!(
-            "'{value}' is not a valid cumulative explanation type"
+            "'{value}' is not a valid cumulative explanation type. Possible values: ['naive', 'big-step', 'pointwise']"
         )),
     }
 }

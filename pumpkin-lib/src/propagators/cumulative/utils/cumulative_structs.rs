@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
-use crate::propagators::CumulativeExplanationType;
+use crate::propagators::CumulativeOptions;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -69,27 +69,21 @@ pub(crate) struct CumulativeConstructor<Var, T> {
     /// without this field we would need to create a new argument struct for each cumulative
     /// propagator
     propagator_type: PhantomData<T>,
-    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
-    /// false then it will only adjust the bounds when appropriate rather than removing values from
-    /// the domain
-    pub(crate) allow_holes_in_domain: bool,
-
-    pub(crate) explanation_type: CumulativeExplanationType,
+    /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
+    pub(crate) options: CumulativeOptions,
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
     pub(crate) fn new(
         tasks: Box<[ArgTask<Var>]>,
         capacity: i32,
-        allow_holes_in_domain: bool,
-        explanation_type: CumulativeExplanationType,
+        options: CumulativeOptions,
     ) -> Self {
         CumulativeConstructor {
             tasks,
             capacity,
             propagator_type: PhantomData,
-            allow_holes_in_domain,
-            explanation_type,
+            options,
         }
     }
 }
@@ -161,20 +155,15 @@ pub(crate) struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
-    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
-    /// false then it will only adjust the bounds when appropriate rather than removing values from
-    /// the domain
-    pub(crate) allow_holes_in_domain: bool,
-
-    pub(crate) explanation_type: CumulativeExplanationType,
+    /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
+    pub(crate) options: CumulativeOptions,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
     pub(crate) fn new(
         tasks: Vec<Task<Var>>,
         capacity: i32,
-        allow_holes_in_domain: bool,
-        explanation_type: CumulativeExplanationType,
+        options: CumulativeOptions,
     ) -> CumulativeParameters<Var> {
         let tasks = tasks
             .into_iter()
@@ -186,8 +175,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
-            allow_holes_in_domain,
-            explanation_type,
+            options,
         }
     }
 }

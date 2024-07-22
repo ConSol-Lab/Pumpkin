@@ -10,5 +10,6 @@ pub(crate) mod element;
 mod reified_propagator;
 pub(crate) use arithmetic::*;
 pub use cumulative::CumulativeExplanationType;
+pub use cumulative::CumulativeOptions;
 pub(crate) use cumulative::*;
 pub(crate) use reified_propagator::*;

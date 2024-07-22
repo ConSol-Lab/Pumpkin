@@ -62,8 +62,6 @@
 //!         &durations,
 //!         &resource_requirements,
 //!         resource_capacity,
-//!         false,
-//!         CumulativeExplanationType::default(),
 //!     ))
 //!     .post();
 //!
@@ -117,6 +115,8 @@
 mod time_table;
 pub use time_table::CumulativeExplanationType;
 pub(crate) use time_table::*;
+mod options;
+pub use options::CumulativeOptions;
 
 mod utils;
 pub(crate) use utils::*;
