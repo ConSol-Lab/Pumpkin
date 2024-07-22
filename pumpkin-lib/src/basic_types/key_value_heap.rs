@@ -76,25 +76,8 @@ impl<
     /// Deletes the key with maximum value from the heap and returns it, or None if the heap is
     /// empty.
     ///
-    ///  The time-complexity of this operation is O(logn)
+    ///  The time-complexity of this operation is O(logn).
     pub(crate) fn pop_max(&mut self) -> Option<Key> {
-        // if self.num_nonremoved_elements() == 0 {
-        // return None;
-        // }
-        //
-        // let mut best_value = self.values[0];
-        // let mut best_index = 0;
-        //
-        // for i in 1..self.end_position {
-        // if self.values[i] > best_value {
-        // best_value = self.values[i];
-        // best_index = i;
-        // }
-        // }
-        // let best_key = self.map_position_to_key[best_index];
-        // self.delete_key(best_key);
-        // Some(best_key)
-
         if !self.is_empty() {
             let best_key = self.map_position_to_key[0];
             pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
@@ -173,7 +156,7 @@ impl<
 
     /// Returns whether there are elements left in the heap (excluding the "removed" values)
     pub(crate) fn is_empty(&self) -> bool {
-        self.end_position == 0
+        self.num_nonremoved_elements() == 0
     }
 
     /// Returns whether the key is currently not (temporarily) remove

@@ -1716,8 +1716,10 @@ impl Propagator for NogoodPropagator {
         // Note that low lbd nogoods are kept permanently, so these are not updated.
         if self.nogoods[id].is_learned && self.nogoods[id].lbd > self.parameters.lbd_threshold {
             // LBD update.
+            // Note that we do not need to take into account the propagated predicate (in position
+            // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = Self::compute_lbd(
-                self.nogoods[id].predicates.as_slice(),
+                &self.nogoods[id].predicates.as_slice()[1..],
                 &mut self.lbd_helper,
                 assignments,
             );

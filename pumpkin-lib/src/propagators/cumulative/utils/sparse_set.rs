@@ -105,20 +105,7 @@ impl<T> SparseSet<T> {
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> + '_ {
-        self.domain.iter()
-    }
-
-    pub(crate) fn insert(&mut self, element: T) {
-        if !self.contains(&element) {
-            if (self.mapping)(&element) >= self.indices.len() {
-                self.indices
-                    .resize((self.mapping)(&element) + 1, usize::MAX);
-            }
-
-            self.indices[(self.mapping)(&element)] = self.size;
-            self.domain.push(element);
-            self.size += 1;
-        }
+        self.domain[0..self.size].iter()
     }
 
     pub(crate) fn contains(&self, element: &T) -> bool {
@@ -133,11 +120,22 @@ impl<T> SparseSet<T> {
         }
     }
 
+    pub(crate) fn insert(&mut self, element: T) {
+        if !self.contains(&element) {
+            self.accommodate(&element);
+
+            self.indices[(self.mapping)(&element)] = self.size;
+            self.domain.push(element);
+            self.size += 1;
+        }
+    }
+
     pub(crate) fn clear(&mut self) {
         self.size = 0;
         for element in &self.domain {
             self.indices[(self.mapping)(element)] = usize::MAX;
         }
+        self.domain.clear();
     }
 }
 

@@ -82,6 +82,7 @@ impl ResolutionNogoodConflictAnalyser {
                 self.heap_current_decision_level
                     .increment(predicate_id, trail_position as u32);
 
+                // todo: I think this is not needed, but double check.
                 if *self.heap_current_decision_level.get_value(predicate_id)
                 != trail_position.try_into().unwrap()
                 {
@@ -130,7 +131,7 @@ impl ResolutionNogoodConflictAnalyser {
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions
         // to be properly sorted.
-        clean_nogood.sort_by_key(|p| assignments.get_trail_position(p));
+        clean_nogood.sort_by_key(|p| assignments.get_trail_position(p).unwrap());
         clean_nogood.reverse();
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
