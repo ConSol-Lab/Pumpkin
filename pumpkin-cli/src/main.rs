@@ -40,7 +40,21 @@ use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    help_template = "\
+{before-help}{name} {version}
+Authors: {author}
+About: {about}
+
+{usage-heading}\n{tab}{usage}
+
+{all-args}{after-help}
+",
+    author,
+    version,
+    about,
+    arg_required_else_help = true
+)]
 struct Args {
     /// The instance to solve. The file should have one of the following extensions:
     ///  - '*.cnf' for SAT instances, given in the DIMACS format,
