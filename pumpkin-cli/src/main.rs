@@ -89,9 +89,9 @@ struct Args {
         short = 'l',
         long = "learning-sorting-strategy",
         value_parser = learned_clause_sorting_strategy_parser,
-        default_value_t = LearnedClauseSortingStrategy::Activity.into(), verbatim_doc_comment
+        default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
     )]
-    learning_sorting_strategy: CliArg<LearnedClauseSortingStrategy>,
+    learning_sorting_strategy: LearnedClauseSortingStrategy,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
@@ -119,9 +119,9 @@ struct Args {
     #[arg(
         long = "restart-sequence",
         value_parser = sequence_generator_parser,
-        default_value_t = SequenceGeneratorType::Constant.into(), verbatim_doc_comment
+        default_value_t = SequenceGeneratorType::Constant, verbatim_doc_comment
     )]
-    restart_sequence_generator_type: CliArg<SequenceGeneratorType>,
+    restart_sequence_generator_type: SequenceGeneratorType,
 
     /// The base interval length is used as a multiplier to the restart sequence.
     /// - In the case of the "constant" restart sequence this argument indicates the constant which
@@ -312,9 +312,9 @@ struct Args {
     #[arg(
         long = "upper-bound-encoding",
         value_parser = upper_bound_encoding_parser,
-        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer.into(), verbatim_doc_comment
+        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer, verbatim_doc_comment
     )]
-    upper_bound_encoding: CliArg<PseudoBooleanEncoding>,
+    upper_bound_encoding: PseudoBooleanEncoding,
 
     /// Determines whether to allow the cumulative propagator(s) to create holes in the domain.
     ///
@@ -446,7 +446,7 @@ fn run() -> PumpkinResult<()> {
 
     let learning_options = LearningOptions {
         num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
-        high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy.inner,
+        high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy,
         lbd_threshold: args.learning_lbd_threshold,
         ..Default::default()
     };
@@ -465,7 +465,7 @@ fn run() -> PumpkinResult<()> {
 
     let solver_options = SolverOptions {
         restart_options: RestartOptions {
-            sequence_generator_type: args.restart_sequence_generator_type.inner,
+            sequence_generator_type: args.restart_sequence_generator_type,
             base_interval: args.restart_base_interval,
             min_num_conflicts_before_first_restart: args
                 .restart_min_num_conflicts_before_first_restart,
@@ -494,7 +494,7 @@ fn run() -> PumpkinResult<()> {
             solver_options,
             time_limit,
             instance_path,
-            args.upper_bound_encoding.inner,
+            args.upper_bound_encoding,
         )?,
         FileFormat::FlatZinc => flatzinc::solve(
             Solver::with_options(learning_options, solver_options),
@@ -572,68 +572,31 @@ fn stringify_solution(
         .collect::<String>()
 }
 
-fn learned_clause_sorting_strategy_parser(
-    s: &str,
-) -> Result<CliArg<LearnedClauseSortingStrategy>, String> {
+fn learned_clause_sorting_strategy_parser(s: &str) -> Result<LearnedClauseSortingStrategy, String> {
     match s {
-        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd.into()),
-        "activity" => Ok(LearnedClauseSortingStrategy::Activity.into()),
+        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd),
+        "activity" => Ok(LearnedClauseSortingStrategy::Activity),
         value => Err(format!(
             "'{value}' is not a valid learned clause sorting strategy. Possible values: ['lbd', 'activity']"
         )),
     }
 }
 
-fn upper_bound_encoding_parser(s: &str) -> Result<CliArg<PseudoBooleanEncoding>, String> {
+fn upper_bound_encoding_parser(s: &str) -> Result<PseudoBooleanEncoding, String> {
     match s {
-        "gte" => Ok(PseudoBooleanEncoding::GeneralizedTotalizer.into()),
-        "cne" => Ok(PseudoBooleanEncoding::CardinalityNetwork.into()),
+        "gte" => Ok(PseudoBooleanEncoding::GeneralizedTotalizer),
+        "cne" => Ok(PseudoBooleanEncoding::CardinalityNetwork),
         value => Err(format!(
             "'{value}' is not a valid upper bound encoding. Possible values: ['gte', 'cne']."
         )),
     }
 }
 
-fn sequence_generator_parser(s: &str) -> Result<CliArg<SequenceGeneratorType>, String> {
+fn sequence_generator_parser(s: &str) -> Result<SequenceGeneratorType, String> {
     match s {
-        "constant" => Ok(SequenceGeneratorType::Constant.into()),
-        "geometric" => Ok(SequenceGeneratorType::Geometric.into()),
-        "luby" => Ok(SequenceGeneratorType::Luby.into()),
+        "constant" => Ok(SequenceGeneratorType::Constant),
+        "geometric" => Ok(SequenceGeneratorType::Geometric),
+        "luby" => Ok(SequenceGeneratorType::Luby),
         value => Err(format!("'{value}' is not a valid sequence generator. Possible values: ['constant', 'geometric', 'luby'].")),
-    }
-}
-
-#[derive(Debug, Clone)]
-struct CliArg<T> {
-    inner: T,
-}
-
-impl<T> From<T> for CliArg<T> {
-    fn from(value: T) -> Self {
-        CliArg { inner: value }
-    }
-}
-
-impl std::fmt::Display for CliArg<LearnedClauseSortingStrategy> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        std::fmt::Display::fmt(&self.inner, f)
-    }
-}
-
-impl std::fmt::Display for CliArg<PseudoBooleanEncoding> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.inner, f)
-    }
-}
-
-impl std::fmt::Display for CliArg<SequenceGeneratorType> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.inner, f)
-    }
-}
-
-impl std::fmt::Display for CliArg<bool> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.inner, f)
     }
 }
