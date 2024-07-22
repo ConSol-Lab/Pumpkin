@@ -3,14 +3,18 @@
 [![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
 
 <p align="center">
-    <img align="left" width="45%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
+    <img align="left" width="50%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
 </p>
 
+<p align="left">
 Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU Delft. It is based on the (lazy clause generation) constraint programming paradigm.
 
-Our goal is to keep the solver efficient, easy to use, and well-documented. The solver is written in pure Rust and follows Rust best practices. As a result, downloading and compiling Pumpkin is straight-forward!
+Our goal is to keep the solver efficient, easy-to-use, and well-documented. The solver is written in pure Rust and follows Rust best practices. As a result, downloading and compiling Pumpkin is straight-forward!
 
 A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See our CP’24 paper for more details.
+</p>
+
+<br clear="left"/>
 
 The solver currently supports integer variables and a number of (global) constraints:
 
@@ -21,7 +25,7 @@ The solver currently supports integer variables and a number of (global) constra
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
 
-<br clear="left"/>
+
 
 # Usage
 
@@ -64,8 +68,16 @@ cargo doc --no-deps
 There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](./pumpkin-lib/examples/) which contains examples such as bibd, nqueens, and disjunctive scheduling.
 
 # Contributing
-[comment]: <> (Not quite sure whether this is something we want to already include here?)
-We encourage contributions to Pumpkin by merge requests and issues. When contribution please ensure that you use the extensive formatting rules that we [define in the toml file](./Cargo.toml).
+We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
+
+## Documentation
+One of the development goals of Pumpkin is to ensure that the solver is easy-to-use and well-documented. To this end, it is required that any external contribution is well-documented (both the structs/enums/methods and the implementation itself)!
+
+## Pre-commit Hooks
+To ensure certain standards, we make use of [pre-commit hooks](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks). The hooks that we use can be registered using the following command:
+```sh
+cp .githooks/pre-commit .git/hooks
+```
 
 ## Formatting
 To make use of these formatting rules, we require the [nightly toolchain](https://doc.rust-lang.org/beta/book/appendix-07-nightly-rust.html). *Note that we only use the nightly toolchain for formatting.* The nightly version which can be installed using the following command:
@@ -77,8 +89,4 @@ The formatting can then be run using:
 cargo +nightly fmt
 ```
 
-## Pre-commit Hooks
-To ensure standards, we make use of [pre-commit hooks](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks). The hooks that we use can be registered using the following command:
-```sh
-cp .githooks/pre-commit .git/hooks
-```
+
