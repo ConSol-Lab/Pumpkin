@@ -128,7 +128,7 @@ impl Reason {
         // New tryout version: we do not replace the reason with an eager explanation for dynamic
         // lazy explanations.
         if let Reason::DynamicLazy { code } = self {
-            return propagators[propagator_id].lazy_explanation(*code);
+            return propagators[propagator_id].lazy_explanation(*code, context.assignments);
         }
 
         // It is not possible to (1) match on the reason to see if it is Lazy, (2) use it to compute

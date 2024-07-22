@@ -67,6 +67,7 @@ struct Nogood {
     predicates: PropositionalConjunction,
     is_learned: bool,
     lbd: u32,
+    is_protected: bool,
     activity: f32,
 }
 
@@ -94,7 +95,7 @@ impl Nogood {
 pub(crate) struct NogoodPropagator {
     nogoods: KeyedVec<NogoodId, Nogood>,
     permanent_nogoods: Vec<NogoodId>,
-    learned_nogoods: Vec<NogoodId>,
+    learned_nogood_ids: LearnedNogoodIds,
     // The trail index is used to determine the domains of the variables since last time.
     last_index_on_trail: usize,
     is_in_infeasible_state: bool,
@@ -103,6 +104,50 @@ pub(crate) struct NogoodPropagator {
     watch_lists: KeyedVec<DomainId, WatchList>,
     enqueued_updates: EventSink,
     lbd_helper: SparseSet<u32>,
+    clause_bump_increment: f32,
+    learning_options: LearningOptions,
+}
+
+#[derive(Default, Debug, Clone)]
+struct LearnedNogoodIds {
+    low_lbd: Vec<NogoodId>,
+    high_lbd: Vec<NogoodId>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LearningOptions {
+    pub max_clause_activity: f32,
+    pub clause_activity_decay_factor: f32,
+    pub num_high_lbd_learned_clauses_max: usize,
+    pub lbd_threshold: u32,
+    pub high_lbd_learned_clause_sorting_strategy: LearnedClauseSortingStrategy,
+}
+
+impl Default for LearningOptions {
+    fn default() -> Self {
+        Self {
+            max_clause_activity: 1e20,
+            clause_activity_decay_factor: 0.99,
+            num_high_lbd_learned_clauses_max: 4000,
+            high_lbd_learned_clause_sorting_strategy: LearnedClauseSortingStrategy::Activity,
+            lbd_threshold: 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LearnedClauseSortingStrategy {
+    Activity,
+    Lbd,
+}
+
+impl std::fmt::Display for LearnedClauseSortingStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            LearnedClauseSortingStrategy::Lbd => write!(f, "lbd"),
+            LearnedClauseSortingStrategy::Activity => write!(f, "activity"),
+        }
+    }
 }
 
 impl Default for NogoodPropagator {
@@ -111,12 +156,14 @@ impl Default for NogoodPropagator {
         Self {
             nogoods: Default::default(),
             permanent_nogoods: Default::default(),
-            learned_nogoods: Default::default(),
+            learned_nogood_ids: Default::default(),
             last_index_on_trail: Default::default(),
             is_in_infeasible_state: Default::default(),
             watch_lists: Default::default(),
             enqueued_updates: Default::default(),
             lbd_helper: SparseSet::new(vec![], mapping),
+            learning_options: LearningOptions::default(),
+            clause_bump_increment: 1.0,
         }
     }
 }
@@ -166,9 +213,8 @@ impl NogoodPropagator {
         lbd_helper: &mut SparseSet<u32>,
         assignments: &Assignments,
     ) -> u32 {
-        todo!();
-        // lbd_helper.clear();
-        // accommodate decision level?
+        lbd_helper.clear();
+        lbd_helper.accommodate(assignments.get_decision_level());
         for predicate in predicates {
             let decision_level = assignments
                 .get_decision_level_for_predicate(predicate)
@@ -208,13 +254,15 @@ impl NogoodPropagator {
         self.nogoods
             .push(Nogood::new_learned_nogood(nogood.into(), lbd));
 
+        // todo: this propagation can be done properly.
         self.debug_propagate_nogood_from_scratch(nogood_id, context)
             .expect("Do not expect to fail propagating learned nogood.");
 
-        self.learned_nogoods.push(nogood_id);
-
-        // TODO PROPAGATION
-        // todo!();
+        if lbd <= self.learning_options.lbd_threshold {
+            self.learned_nogood_ids.low_lbd.push(nogood_id);
+        } else {
+            self.learned_nogood_ids.high_lbd.push(nogood_id);
+        }
     }
 
     pub(crate) fn add_nogood(
@@ -512,6 +560,113 @@ impl NogoodPropagator {
         }
         true
     }
+
+    fn shrink_learned_clause_database_if_needed(&mut self, context: &PropagationContextMut) {
+        // Only remove learned nogoods if there are too many.
+        if self.learned_nogood_ids.high_lbd.len()
+            > self.learning_options.num_high_lbd_learned_clauses_max
+        {
+            // The procedure is divided into two parts (for simplicity of implementation).
+            // 1. Promote nogoods that are in the high lbd group but got updated to a low lbd.
+            // 2. Remove roughly half of the nogoods that have high lbd.
+            self.promote_high_lbd_clauses();
+            self.remove_high_lbd_clauses(context);
+        }
+    }
+
+    fn promote_high_lbd_clauses(&mut self) {
+        self.learned_nogood_ids.high_lbd.retain(|id| {
+            // If the LBD is still high, the nogood stays in the high LBD category.
+            if self.nogoods[*id].lbd > self.learning_options.lbd_threshold {
+                true
+            }
+            // Otherwise the nogood is promoted to the low LBD group.
+            else {
+                self.learned_nogood_ids.low_lbd.push(*id);
+                false
+            }
+        })
+    }
+
+    fn remove_high_lbd_clauses(&mut self, context: &PropagationContextMut) {
+        // roughly half of the learned clauses will be removed
+
+        self.sort_high_lbd_clauses_by_quality_decreasing_order();
+
+        // the removal is done in two phases
+        //  in the first phase, clauses are deleted but the clause references are not removed from
+        // self.learned_clauses  in the second phase, the corresponding clause references
+        // are removed from the learned clause vector
+        let mut num_clauses_to_remove = self.learned_clauses.high_lbd.len() as u64
+            - self.parameters.num_high_lbd_learned_clauses_max / 2;
+        // note the 'rev', since we give priority to poor clauses for deletion
+        //  even though we aim to remove half of the clauses, less could be removed if many clauses
+        // are protected or in propagation
+        for &clause_reference in self.learned_clauses.high_lbd.iter().rev() {
+            if num_clauses_to_remove == 0 {
+                break;
+            }
+
+            // protected clauses are skipped
+            if clause_allocator[clause_reference].is_protected_against_deletion() {
+                clause_allocator[clause_reference].clear_protection_against_deletion();
+                continue;
+            }
+
+            // clauses that are currently in propagation are skipped
+            //  otherwise there may be problems with conflict analysis
+            if is_clause_propagating(assignments, clause_allocator, clause_reference) {
+                continue;
+            }
+
+            // remove the clause from the watch list
+            clausal_propagator.remove_clause_from_consideration(
+                clause_allocator[clause_reference].get_literal_slice(),
+                clause_reference,
+            );
+
+            // delete the clause
+            clause_allocator.delete_clause(clause_reference);
+
+            num_clauses_to_remove -= 1;
+        }
+
+        self.learned_clauses
+            .high_lbd
+            .retain(|&clause_reference| !clause_allocator[clause_reference].is_deleted());
+    }
+
+    fn sort_high_lbd_clauses_by_quality_decreasing_order(&mut self) {
+        // The ordering is such that the 'better' nogoods are in front.
+        // Note that this is not the most efficient sorting comparison, but will do for now.
+        self.learned_nogood_ids
+            .high_lbd
+            .sort_unstable_by(|id1, id2| {
+                let nogood1 = self.nogoods[*id1];
+                let nogood2 = self.nogoods[*id2];
+
+                match self
+                    .learning_options
+                    .high_lbd_learned_clause_sorting_strategy
+                {
+                    LearnedClauseSortingStrategy::Activity => {
+                        // Note that here we reverse nogood1 and nogood2,
+                        // because a higher value for activity is better.
+                        nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
+                    }
+                    LearnedClauseSortingStrategy::Lbd => {
+                        if nogood1.lbd != nogood2.lbd {
+                            // Recall that lower LBD is better.
+                            nogood1.lbd.cmp(&nogood2.lbd)
+                        } else {
+                            // Note that here we reverse nogood1 and nogood2,
+                            // because a higher value for activity is better.
+                            nogood2.activity.partial_cmp(&nogood1.activity).unwrap()
+                        }
+                    }
+                }
+            });
+    }
 }
 
 impl Propagator for NogoodPropagator {
@@ -549,6 +704,8 @@ impl Propagator for NogoodPropagator {
                 WatchList::default(),
             );
         }
+
+        self.shrink_learned_clause_database_if_needed();
 
         let old_trail_position = context.assignments.trail.len() - 1;
 
@@ -1531,27 +1688,48 @@ impl Propagator for NogoodPropagator {
         Ok(())
     }
 
+    /// Returns the slice representing a conjunction of predicates that explain the propagation
+    /// encoded by the code, which was given to the solver by the propagator at the time of
+    /// propagation.
+    /// In case of the noogood propagator, lazy explanations internally also update information
+    /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
     fn lazy_explanation(&mut self, code: u64, assignments: &Assignments) -> &[Predicate] {
-        let nogood_id = NogoodId { id: code as u32 };
-        // update nogood activity.
-        todo!();
+        let id = NogoodId { id: code as u32 };
+        // Update the LBD and activity of the nogood, if appropriate.
+        // Note that low lbd nogoods are kept permanently, so these are not updated.
+        if self.nogoods[id].is_learned && self.nogoods[id].lbd > self.learning_options.lbd_threshold
+        {
+            // LBD update.
+            let current_lbd = Self::compute_lbd(
+                self.nogoods[id].predicates.as_slice(),
+                &mut self.lbd_helper,
+                assignments,
+            );
+            // The nogood keeps track of the best lbd encountered.
+            if current_lbd < self.nogoods[id].lbd {
+                self.nogoods[id].lbd = current_lbd;
+                if current_lbd <= 30 {
+                    self.nogoods[id].is_protected = true;
+                }
+            }
 
-        // Update the LBD if the nogood is learned.
-        // TODO maybe lbd >= lbd_threshold
-        if self.nogoods[nogood_id].is_learned {
-            // The LBD is updated only the current LBD is better than the previous one.
-            self.nogoods[nogood_id].lbd = cmp::min(
-                self.nogoods[nogood_id].lbd,
-                Self::compute_lbd(
-                    self.nogoods[nogood_id].predicates.as_slice(),
-                    &mut self.lbd_helper,
-                    assignments,
-                ),
-            )
+            // Nogood activity update.
+            // Rescale the nogood activities,
+            // in case bumping the activity now would lead to a large activity value.
+            if self.nogoods[id].activity + self.clause_bump_increment
+                > self.learning_options.max_clause_activity
+            {
+                self.learned_nogood_ids.high_lbd.iter().for_each(|i| {
+                    self.nogoods[*i].activity /= self.learning_options.max_clause_activity;
+                });
+                self.clause_bump_increment /= self.learning_options.max_clause_activity;
+            }
+
+            // At this point, it is safe to increase the activity value
+            self.nogoods[id].activity += self.clause_bump_increment;
         }
-
         // update LBD, so we need code plus assignments as input.
-        &self.nogoods[nogood_id].predicates.as_slice()[1..]
+        &self.nogoods[id].predicates.as_slice()[1..]
     }
 }
 
