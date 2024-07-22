@@ -126,13 +126,18 @@ impl<T> SparseSet<T> {
             && self.indices[(self.mapping)(element)] < self.size
     }
 
-    pub(crate) fn accommodate(&mut self, max_index: usize) {
-        // only take action if there is a need.
-        todo!();
+    pub(crate) fn accommodate(&mut self, element: &T) {
+        let index = (self.mapping)(element);
+        if self.indices.len() <= index {
+            self.indices.resize(index + 1, usize::MAX);
+        }
     }
 
     pub(crate) fn clear(&mut self) {
-        todo!();
+        self.size = 0;
+        for element in &self.domain {
+            self.indices[(self.mapping)(element)] = usize::MAX;
+        }
     }
 }
 

@@ -689,8 +689,24 @@ impl ConstraintSatisfactionSolver {
 
                 self.resolve_conflict_with_nogood(brancher);
 
-                brancher.on_conflict()
+                brancher.on_conflict();
+                self.decay_nogood_activities();
             }
+        }
+    }
+
+    fn decay_nogood_activities(&mut self) {
+        let nogood_propagator_index = self
+            .propagators
+            .iter()
+            .position(|propagator| propagator.name() == "NogoodPropagator")
+            .expect("There has to be a nogood propagator!");
+
+        match self.propagators[nogood_propagator_index].downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => {
+                nogood_propagator.decay_nogood_activities();
+            }
+            None => panic!("Provided propagator should be the nogood propagator"),
         }
     }
 

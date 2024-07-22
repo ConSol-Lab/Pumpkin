@@ -43,7 +43,6 @@ impl SemanticMinimiser {
         for domain_id in self.present_ids.iter() {
             // If at least one domain is inconsistent, we can stop.
             if self.domains[domain_id].inconsistent {
-                println!("LOL WOOT?");
                 return vec![Predicate::trivially_false()];
             }
             self.domains[domain_id].add_domain_description_to_vector(
