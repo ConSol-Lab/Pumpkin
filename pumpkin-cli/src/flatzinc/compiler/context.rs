@@ -178,7 +178,6 @@ impl CompilationContext<'_> {
                         })
                 }
             }
-
             flatzinc::Expr::ArrayOfBool(array) => array
                 .iter()
                 .map(|elem| match elem {
@@ -187,6 +186,15 @@ impl CompilationContext<'_> {
                     }
                     flatzinc::BoolExpr::Bool(true) => Ok(self.constant_bool_true),
                     flatzinc::BoolExpr::Bool(false) => Ok(self.constant_bool_false),
+                })
+                .collect(),
+            flatzinc::Expr::ArrayOfInt(array) => array
+                .iter()
+                .map(|elem| match elem {
+                    flatzinc::IntExpr::VarParIdentifier(id) => {
+                        self.resolve_bool_variable_from_identifier(id)
+                    }
+                    _ => panic!("Bool search should not be over integer variable"),
                 })
                 .collect(),
             _ => Err(FlatZincError::UnexpectedExpr),
