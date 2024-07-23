@@ -67,23 +67,70 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
+        // This is the constraint that is being propagated:
+        // max(a0, a1, ..., an-1) = rhs
+
+        // Propagate bounds on the variables based on the rhs:
+        // Rule 1.
+        // UB(a_i) <= UB(rhs)
+
+        // Propagate bounds on the rhs variable:
+        // Rule 2.
+        // LB(rhs) >= max{LB(a_i)}.
+        // Rule 3.
+        // max_ub = max{UB(a_i)}.
+        // if all UB(a_i) <= max_ub, then UB(rhs) <= max_ub.
+
         let rhs_ub = context.upper_bound(&self.rhs);
-        let mut max_ub = i32::MIN;
-        let mut max_lb = i32::MIN;
-        let mut lb_reason = vec![];
-        let mut ub_reason = vec![];
 
-        for var in self.array.iter() {
+        // Assume the variable at index zero is the minimum/maximum.
+        let mut max_ub = context.upper_bound(&self.array[0]);
+        let mut max_lb = context.lower_bound(&self.array[0]);
+        let mut lb_reason = predicate![self.array[0] >= max_lb];
+        // Note the skip(1), since we already took the zeroth element into account above.
+        for var in self.array.iter().skip(1) {
+            // Rule 1.
             context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
-            lb_reason.push(predicate![var >= context.lower_bound(var)]);
-            ub_reason.push(predicate![var <= context.upper_bound(var)]);
 
-            max_ub = i32::max(context.upper_bound(var), max_ub);
-            max_lb = i32::max(context.lower_bound(var), max_lb);
+            let var_lb = context.lower_bound(var);
+            let var_ub = context.upper_bound(var);
+
+            if var_lb > max_lb {
+                max_lb = var_lb;
+                lb_reason = predicate![var >= var_lb];
+            }
+
+            if var_ub > max_ub {
+                max_ub = var_ub;
+            }
+        }
+        // Rule 2.
+        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::from(lb_reason))?;
+
+        // Rule 3.
+        if rhs_ub > max_ub {
+            let ub_reason: PropositionalConjunction = self
+                .array
+                .iter()
+                .map(|var| predicate![var <= max_ub])
+                .collect();
+            context.set_upper_bound(&self.rhs, max_ub, ub_reason)?;
         }
 
-        context.set_upper_bound(&self.rhs, max_ub, PropositionalConjunction::new(ub_reason))?;
-        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::new(lb_reason))?;
+        // Rule 4.
+        // Conflict:
+        // if LB(rhs) > UB(a_i) for all i, then conflict.
+        let rhs_lb = context.lower_bound(&self.rhs);
+        if rhs_lb > max_ub {
+            let cut_off = rhs_lb - 1;
+            let mut reason: PropositionalConjunction = self
+                .array
+                .iter()
+                .map(|var| predicate![var <= cut_off])
+                .collect();
+            reason.add(predicate![self.rhs >= rhs_lb]);
+            return Err(reason.into());
+        }
 
         Ok(())
     }
@@ -114,7 +161,7 @@ mod tests {
         solver.assert_bounds(rhs, 1, 5);
 
         let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
-        assert_eq!(conjunction!([a <= 3] & [b <= 4] & [c <= 5]), reason.clone());
+        assert_eq!(conjunction!([a <= 5] & [b <= 5] & [c <= 5]), reason.clone());
     }
 
     #[test]
@@ -137,7 +184,7 @@ mod tests {
         solver.assert_bounds(rhs, 5, 10);
 
         let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
-        assert_eq!(conjunction!([a >= 3] & [b >= 4] & [c >= 5]), reason.clone());
+        assert_eq!(conjunction!([c >= 5]), reason.clone());
     }
 
     #[test]
