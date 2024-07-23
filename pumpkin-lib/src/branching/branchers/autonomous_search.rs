@@ -207,6 +207,9 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
                     let _ = self.heap.pop_max();
 
                     // We know that this predicate is now dormant
+                    let predicate_id = self.predicate_id_info.get_id(predicate);
+                    self.heap.delete_key(predicate_id);
+                    self.predicate_id_info.delete_id(predicate_id);
                     self.dormant_predicates.push(predicate);
                 } else {
                     return Some(predicate);
@@ -265,6 +268,11 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
             // Only unassigned predicates are readded.
             if assignments.evaluate_predicate(*predicate).is_none() {
                 let id = self.predicate_id_info.get_id(*predicate);
+
+                while self.heap.len() <= id.index() {
+                    self.heap.grow(id, DEFAULT_VSIDS_VALUE);
+                }
+
                 self.heap.restore_key(id);
                 false
             }
