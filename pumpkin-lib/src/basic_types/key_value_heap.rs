@@ -169,7 +169,8 @@ impl<
 
     /// Returns whether the key is currently not (temporarily) remove
     pub(crate) fn is_key_present(&self, key: Key) -> bool {
-        self.map_key_to_position[key] < self.end_position
+        key.index() < self.map_key_to_position.len()
+            && self.map_key_to_position[key] < self.end_position
     }
 
     /// Increases the size of the heap by one and adjust the data structures appropriately by adding
