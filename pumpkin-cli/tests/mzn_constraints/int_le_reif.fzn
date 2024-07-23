@@ -1,0 +1,7 @@
+var 1..3: x :: output_var;
+var 1..3: y :: output_var;
+var bool: r :: output_var;
+
+constraint int_le_reif(x, y, r);
+
+solve satisfy;

@@ -1,0 +1,6 @@
+var 0..3: x :: output_var;
+var -2..3: y :: output_var;
+
+constraint int_lin_ne([1, 2], [x, y], 0);
+
+solve satisfy;

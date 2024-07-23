@@ -41,6 +41,8 @@
 //! # use pumpkin_lib::termination::Indefinite;
 //! # use pumpkin_lib::Solver;
 //! # use pumpkin_lib::results::SatisfactionResult;
+//! # use pumpkin_lib::constraints;
+//! # use pumpkin_lib::constraints::Constraint;
 //! # use crate::pumpkin_lib::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
@@ -53,13 +55,15 @@
 //! let resource_requirements = [1, 1, 2];
 //! let resource_capacity = 2;
 //!
-//! solver.cumulative(
-//!     &start_times,
-//!     &durations,
-//!     &resource_requirements,
-//!     resource_capacity,
-//!     false,
-//! );
+//! solver
+//!     .add_constraint(constraints::cumulative(
+//!         &start_times,
+//!         &durations,
+//!         &resource_requirements,
+//!         resource_capacity,
+//!         false,
+//!     ))
+//!     .post();
 //!
 //! let mut termination = Indefinite;
 //! let mut brancher = solver.default_brancher_over_all_propositional_variables();

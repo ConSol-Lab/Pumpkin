@@ -57,7 +57,7 @@ pub(crate) fn run_solver_with_options<'a>(
     let mut command = Command::new(solver);
 
     if with_proof {
-        let _ = command.arg("--proof").arg(&proof_file_path);
+        let _ = command.arg("--proof-path").arg(&proof_file_path);
     }
 
     for arg in args {
