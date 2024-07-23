@@ -14,6 +14,7 @@ use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::branching::InDomainRandom;
 use crate::branching::InputOrder;
+use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::termination::TerminationCondition;
@@ -362,9 +363,9 @@ impl Solver {
         {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
-                brancher.on_solution(solution.as_reference());
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                brancher.on_solution(solution.as_reference());
                 SatisfactionResultUnderAssumptions::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
@@ -571,6 +572,30 @@ impl Solver {
 
 /// Functions for adding new constraints to the solver.
 impl Solver {
+    /// Add a constraint to the solver. This returns a [`ConstraintPoster`] which enables control
+    /// on whether to add the constraint as-is, or whether to (half) reify it.
+    ///
+    /// If none of the methods on [`ConstraintPoster`] are used, the constraint _is not_ actually
+    /// added to the solver. In this case, a warning is emitted.
+    ///
+    /// # Example
+    /// ```
+    /// # use pumpkin_lib::constraints;
+    /// # use pumpkin_lib::Solver;
+    /// let mut solver = Solver::default();
+    ///
+    /// let a = solver.new_bounded_integer(0, 3);
+    /// let b = solver.new_bounded_integer(0, 3);
+    ///
+    /// solver.add_constraint(constraints::equals([a, b], 0)).post();
+    /// ```
+    pub fn add_constraint<Constraint>(
+        &mut self,
+        constraint: Constraint,
+    ) -> ConstraintPoster<'_, Constraint> {
+        ConstraintPoster::new(self, constraint)
+    }
+
     /// Creates a clause from `literals` and adds it to the current formula.
     ///
     /// If the formula becomes trivially unsatisfiable, a [`ConstraintOperationError`] will be
@@ -584,7 +609,7 @@ impl Solver {
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return `false`. If not, this returns `true`.
+    /// through propagation, this will return a [`ConstraintOperationError`].
     ///
     /// The caller should ensure the solver is in the root state before calling this, either
     /// because no call to [`Self::solve()`] has been made, or because

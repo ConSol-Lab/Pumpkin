@@ -10,13 +10,19 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    compile_c_binary(&["src/drat-trim.c"], "drat-trim")?;
-    compile_c_binary(&["src/precochk.c"], "precochk")?;
-    compile_c_binary(&["src/maxsat-checker.cc", "src/Wcnf.cc"], "maxsat-checker")?;
+    compile_c_binary(&["tests/cnf/checkers/drat-trim.c"], "drat-trim")?;
+    compile_c_binary(&["tests/cnf/checkers/precochk.c"], "precochk")?;
+    compile_c_binary(
+        &[
+            "tests/wcnf/checkers/maxsat-checker.cc",
+            "tests/wcnf/checkers/Wcnf.cc",
+        ],
+        "maxsat-checker",
+    )?;
 
-    println!("cargo:rerun-if-changed=src/*.c");
-    println!("cargo:rerun-if-changed=src/*.h");
-    println!("cargo:rerun-if-changed=src/*.cc");
+    println!("cargo:rerun-if-changed=tests/**/*.c");
+    println!("cargo:rerun-if-changed=tests/**/*.h");
+    println!("cargo:rerun-if-changed=tests/**/*.cc");
     println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())

@@ -2,12 +2,13 @@
 use std::process::Command;
 use std::process::Output;
 
-use integration_tests::ensure_release_binary_built;
-use integration_tests::run_solution_checker;
-use integration_tests::run_solver;
-use integration_tests::Checker;
-use integration_tests::CheckerOutput;
-use integration_tests::Files;
+mod helpers;
+
+use helpers::run_solution_checker;
+use helpers::run_solver;
+use helpers::Checker;
+use helpers::CheckerOutput;
+use helpers::Files;
 
 macro_rules! test_wcnf_instance {
     ($name:ident, $optimal_objective:literal) => {
@@ -53,8 +54,6 @@ impl Checker for MaxSATChecker {
 }
 
 fn run_wcnf_test(instance_name: &str, expected_objective: u64) {
-    ensure_release_binary_built();
-
     let instance_path = format!(
         "{}/tests/wcnf/{instance_name}.wcnf",
         env!("CARGO_MANIFEST_DIR")

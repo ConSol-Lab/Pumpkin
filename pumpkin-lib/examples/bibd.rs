@@ -13,7 +13,6 @@
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::constraints;
-use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::Indefinite;
@@ -93,12 +92,16 @@ fn main() {
 
     // Enforce the row sum.
     for row in matrix.iter() {
-        let _ = constraints::equals(row.clone(), bibd.row_sum as i32).post(&mut solver);
+        let _ = solver
+            .add_constraint(constraints::equals(row.clone(), bibd.row_sum as i32))
+            .post();
     }
 
     // Enforce the column sum.
     for row in transpose(&matrix) {
-        let _ = constraints::equals(row, bibd.column_sum as i32).post(&mut solver);
+        let _ = solver
+            .add_constraint(constraints::equals(row, bibd.column_sum as i32))
+            .post();
     }
 
     // Enforce the dot product constraint.
@@ -110,19 +113,21 @@ fn main() {
     for r1 in 0..bibd.rows as usize {
         for r2 in r1 + 1..bibd.rows as usize {
             for col in 0..bibd.columns as usize {
-                let _ = constraints::times(
-                    matrix[r1][col],
-                    matrix[r2][col],
-                    pairwise_product[r1][r2][col],
-                )
-                .post(&mut solver);
+                let _ = solver
+                    .add_constraint(constraints::times(
+                        matrix[r1][col],
+                        matrix[r2][col],
+                        pairwise_product[r1][r2][col],
+                    ))
+                    .post();
             }
 
-            let _ = constraints::less_than_or_equals(
-                pairwise_product[r1][r2].clone(),
-                bibd.max_dot_product as i32,
-            )
-            .post(&mut solver);
+            let _ = solver
+                .add_constraint(constraints::less_than_or_equals(
+                    pairwise_product[r1][r2].clone(),
+                    bibd.max_dot_product as i32,
+                ))
+                .post();
         }
     }
 

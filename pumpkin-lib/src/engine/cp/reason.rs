@@ -123,7 +123,7 @@ impl Reason {
         &'a mut self,
         context: &PropagationContext,
         propagator_id: PropagatorId,
-        propagators: &'a mut Vec<Box<dyn Propagator>>,
+        #[allow(clippy::ptr_arg)] propagators: &'a mut Vec<Box<dyn Propagator>>,
     ) -> &[Predicate] {
         // New tryout version: we do not replace the reason with an eager explanation for dynamic
         // lazy explanations.

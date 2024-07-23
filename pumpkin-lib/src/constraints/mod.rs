@@ -1,11 +1,12 @@
-//! Defines the constraints which Pumpkin provides out of the box.
+//! Defines the constraints which Pumpkin provides out of the box. To add constraints to the
+//! solver, look at [`Solver::add_constraint`] for an example.
 //!
 //! A constraint is a relation over variables. In the solver, constraints are enforced through
 //! propagators, and therefore constraints can be viewed as a collection of propagators.
 //!
 //! # Note
 //! At the moment, the API for posting propagators is not yet publicly accessible as it is
-//! highly unstable. Consumers of the Pumpkin library can therefore only define constraints by
+//! unstable. Consumers of the Pumpkin library can therefore only define constraints by
 //! decomposing them into the constraints that are predefined in the library. Once the
 //! propagator API is stabilized, it will become part of the public API.
 
@@ -13,28 +14,34 @@ mod all_different;
 mod arithmetic;
 mod boolean;
 mod clause;
+mod constraint_poster;
 mod cumulative;
+mod element;
 
 pub use all_different::*;
 pub use arithmetic::*;
 pub use boolean::*;
 pub use clause::*;
+pub use constraint_poster::*;
 pub use cumulative::*;
+pub use element::*;
 
 use crate::engine::propagation::PropagatorConstructor;
-use crate::propagators::element::ElementConstructor;
 use crate::propagators::ReifiedPropagatorConstructor;
-use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// A [`Constraint`] is a relation over variables.
+/// A [`Constraint`] is a relation over variables. It disqualifies certain partial assignments of
+/// making it into a solution of the problem.
+///
+/// For example, the constraint `a = b` over two variables `a` and `b` only allows assignments to
+/// `a` and `b` of the same value, and rejects any assignment where `a` and `b` differ.
 pub trait Constraint {
-    /// Post the constraint to the solver.
+    /// Add the constraint to the solver.
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
 
-    /// Post the half-reified version of the constraint to the solver. I.e. post the constraint
+    /// Add the half-reified version of the constraint to the solver. I.e. post the constraint
     /// `r -> Self` where `r` is a reification literal.
     fn implied_by(
         self,
@@ -86,7 +93,7 @@ pub trait NegatableConstraint: Constraint {
 
     fn negation(&self) -> Self::NegatedConstraint;
 
-    /// Post the reified version of the constraint to the solver. I.e. post the constraint
+    /// Add the reified version of the constraint to the solver. I.e. post the constraint
     /// `r <-> Self` where `r` is a reification literal.
     fn reify(
         self,
@@ -100,18 +107,5 @@ pub trait NegatableConstraint: Constraint {
 
         self.implied_by(solver, reification_literal)?;
         negation.implied_by(solver, !reification_literal)
-    }
-}
-
-/// Creates the [element](https://sofdem.github.io/gccat/gccat/Celement.html) constraint which states that `array[index] = rhs`.
-pub fn element<ElementVar: IntegerVariable + 'static>(
-    index: impl IntegerVariable + 'static,
-    array: impl Into<Box<[ElementVar]>>,
-    rhs: impl IntegerVariable + 'static,
-) -> impl Constraint {
-    ElementConstructor {
-        index,
-        array: array.into(),
-        rhs,
     }
 }

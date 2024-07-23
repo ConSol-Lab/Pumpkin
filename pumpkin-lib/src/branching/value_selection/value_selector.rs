@@ -23,6 +23,8 @@ pub trait ValueSelector<Var> {
     /// backtracking operation by the solver.
     fn on_unassign_integer(&mut self, _variable: DomainId, _value: i32) {}
 
-    /// This method is called when a solution is found.
+    /// This method is called when a solution is found; either when iterating over all solutions in
+    /// the case of a satisfiable problem or on solutions of increasing quality when solving an
+    /// optimisation problem.
     fn on_solution(&mut self, _solution: SolutionReference) {}
 }

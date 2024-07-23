@@ -60,7 +60,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         predicate: Predicate,
         assignments: &Assignments,
         reason_store: &'a mut ReasonStore,
-        mut propagators: &'a mut Vec<Box<dyn Propagator>>,
+        propagators: &'a mut Vec<Box<dyn Propagator>>,
     ) -> &'a [Predicate] {
         // probably this function should go into the reason store?
 
@@ -117,7 +117,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
-            let propagators = propagators;
             reason_store
                 .get_or_compute_new(reason_ref, &propagation_context, propagators)
                 .expect("reason reference should not be stale")
@@ -155,7 +154,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                     .reason
                                     .expect("Cannot be a null reason for propagation.");
 
-                                let propagators = propagators;
                                 reason_store
                                     .get_or_compute_new(
                                         reason_ref,
@@ -225,7 +223,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 .reason
                                 .expect("Cannot be a null reason for propagation.");
 
-                            let propagators = propagators;
                             reason_store
                                 .get_or_compute_new(reason_ref, &propagation_context, propagators)
                                 .expect("reason reference should not be stale")
@@ -294,7 +291,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 .reason
                                 .expect("Cannot be a null reason for propagation.");
 
-                            let propagators = propagators;
                             reason_store
                                 .get_or_compute_new(reason_ref, &propagation_context, propagators)
                                 .expect("reason reference should not be stale")
@@ -343,7 +339,6 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             .reason
                             .expect("Cannot be a null reason for propagation.");
 
-                        let propagators = propagators;
                         reason_store
                             .get_or_compute_new(reason_ref, &propagation_context, propagators)
                             .expect("reason reference should not be stale")

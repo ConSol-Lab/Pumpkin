@@ -44,7 +44,7 @@ pub(crate) fn wcnf_problem(
 
     match solver.solve(&mut termination, brancher) {
         MaxSatOptimisationResult::Optimal { solution } => {
-            println!("s OPTIMAL");
+            println!("s OPTIMUM FOUND");
             println!(
                 "v {}",
                 stringify_solution(&solution, last_instance_variable, false)

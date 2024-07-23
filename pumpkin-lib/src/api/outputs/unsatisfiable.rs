@@ -48,6 +48,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
     /// # use pumpkin_lib::termination::Indefinite;
     /// # use pumpkin_lib::predicate;
+    /// # use pumpkin_lib::constraints;
     /// # use pumpkin_lib::constraints::Constraint;
     /// // We create the solver with default options
     /// let mut solver = Solver::default();
@@ -58,7 +59,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// let z = solver.new_bounded_integer(0, 2);
     ///
     /// // We create the all-different constraint
-    /// pumpkin_lib::constraints::all_different(vec![x, y, z]).post(&mut solver);
+    /// solver.add_constraint(constraints::all_different(vec![x, y, z])).post();
     ///
     /// // We create a termination condition which allows the solver to run indefinitely
     /// let mut termination = Indefinite;

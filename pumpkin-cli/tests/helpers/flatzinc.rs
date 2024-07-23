@@ -56,7 +56,7 @@ fn create_array_from_string(s: &str) -> Result<Value, IntArrayError> {
 }
 
 #[derive(Debug)]
-pub struct Solutions<const ORDERED: bool> {
+pub(crate) struct Solutions<const ORDERED: bool> {
     pub(crate) assignments: Vec<BTreeMap<String, Value>>,
 }
 

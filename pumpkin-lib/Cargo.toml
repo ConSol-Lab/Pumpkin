@@ -22,3 +22,6 @@ env_logger = "0.10.0"
 
 [lints]
 workspace = true
+
+[features]
+debug-checks = []

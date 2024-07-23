@@ -29,12 +29,12 @@ pub(crate) struct LearnedNogood {
 }
 
 impl ResolutionNogoodConflictAnalyser {
-    /// Clears all data structures to prepare for the new conflict analysis.    
+    /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
         self.predicates_lower_decision_level.clear();
         self.predicate_id_generator.clear();
         self.heap_current_decision_level.clear();
-        //println!("start...........");
+        // println!("start...........");
     }
 
     fn add_predicate_to_conflict_nogood(
@@ -49,7 +49,7 @@ impl ResolutionNogoodConflictAnalyser {
 
         // Ignore root level predicates.
         if dec_level == 0 {
-            //do nothing
+            // do nothing
         }
         // We distinguish between predicates from the current decision level and other predicates.
         else if dec_level == assignments.get_decision_level() {
@@ -66,7 +66,7 @@ impl ResolutionNogoodConflictAnalyser {
                     id: self.heap_current_decision_level.len() as u32,
                 };
                 self.heap_current_decision_level.grow(next_id, 0);
-                self.heap_current_decision_level.delete_key(next_id);                
+                self.heap_current_decision_level.delete_key(next_id);
             }
 
             if !self
@@ -84,17 +84,17 @@ impl ResolutionNogoodConflictAnalyser {
 
                 // todo: I think this is not needed, but double check.
                 if *self.heap_current_decision_level.get_value(predicate_id)
-                != trail_position.try_into().unwrap()
+                    != trail_position.try_into().unwrap()
                 {
                     self.heap_current_decision_level.delete_key(predicate_id);
                 }
 
                 // The way we compute reasons, this could happen actually.
-                /*pumpkin_assert_moderate!(
-                    *self.heap_current_decision_level.get_value(predicate_id)
-                        == trail_position as u32,
-                    "Can only add the predicate to the heap once."
-                );*/
+                // pumpkin_assert_moderate!(
+                // self.heap_current_decision_level.get_value(predicate_id)
+                // == trail_position as u32,
+                // "Can only add the predicate to the heap once."
+                // );
             }
         } else {
             // We do not check for duplicate, we simply add the predicate.
@@ -185,23 +185,23 @@ impl ResolutionNogoodConflictAnalyser {
             .average_conflict_size
             .add_term(num_initial_conflict_predicates as u64);
 
-        /*println!("lower dec lvls: {:?}", self.predicates_lower_decision_level);
-
-        println!("VARIABLE DOMAINS");
-        for d in context.assignments.get_domains() {
-            println!(
-                "{}: [{}, {}]",
-                d,
-                context.assignments.get_lower_bound(d),
-                context.assignments.get_upper_bound(d)
-            );
-        }
-
-        println!("curr dec lvl: {}", context.assignments.get_decision_level());
-        println!("TRAIL");
-        for t in context.assignments.trail.iter() {
-            println!("\t{} {}", t.predicate, t.reason.is_none());
-        }*/
+        // println!("lower dec lvls: {:?}", self.predicates_lower_decision_level);
+        //
+        // println!("VARIABLE DOMAINS");
+        // for d in context.assignments.get_domains() {
+        // println!(
+        // "{}: [{}, {}]",
+        // d,
+        // context.assignments.get_lower_bound(d),
+        // context.assignments.get_upper_bound(d)
+        // );
+        // }
+        //
+        // println!("curr dec lvl: {}", context.assignments.get_decision_level());
+        // println!("TRAIL");
+        // for t in context.assignments.trail.iter() {
+        // println!("\t{} {}", t.predicate, t.reason.is_none());
+        // }
 
         // Keep refining the conflict nogood until there is only one predicate from the current
         // decision level. There is an exception special case: when posting the decision [x = v], it
@@ -215,31 +215,33 @@ impl ResolutionNogoodConflictAnalyser {
 
             let next_predicate = self.pop_predicate_from_conflict_nogood();
 
-            //println!("Next pred: {}", next_predicate);
+            // println!("Next pred: {}", next_predicate);
             // 2) Add the reason of the next_predicate to the nogood.
 
             // 2.a) Here we treat the special case: if the next predicate is a decision, this means
             // that we are done with analysis since the only remaining predicate in the heap is the
             // other decision.
             if context.assignments.is_decision_predicate(&next_predicate) {
-                /*if self.heap_current_decision_level.num_nonremoved_elements() != 1 &&  self.heap_current_decision_level.num_nonremoved_elements() != 2
-                {
-                    println!("NUM ELEMETNS {}", self.heap_current_decision_level.num_nonremoved_elements());
-                    while self.heap_current_decision_level.num_nonremoved_elements() != 0
-                    {
-                        let poppers = self.heap_current_decision_level.pop_max();
-                        println!("\tpopped {}", self.predicate_id_generator.get_predicate(poppers.unwrap()).unwrap());
-                    }
-                    panic!();
-                }*/
-                
-                //assert!(self.heap_current_decision_level.num_nonremoved_elements() == 1 || self.heap_current_decision_level.num_nonremoved_elements() == 2);
+                // if self.heap_current_decision_level.num_nonremoved_elements() != 1 &&
+                // self.heap_current_decision_level.num_nonremoved_elements() != 2 {
+                // println!("NUM ELEMETNS {}",
+                // self.heap_current_decision_level.num_nonremoved_elements());
+                // while self.heap_current_decision_level.num_nonremoved_elements() != 0
+                // {
+                // let poppers = self.heap_current_decision_level.pop_max();
+                // println!("\tpopped {}",
+                // self.predicate_id_generator.get_predicate(poppers.unwrap()).unwrap());
+                // }
+                // panic!();
+                // }
+
+                // assert!(self.heap_current_decision_level.num_nonremoved_elements() == 1 ||
+                // self.heap_current_decision_level.num_nonremoved_elements() == 2);
                 // As a simple workaround, we add the currently analysed predicate to set of
                 // predicates from the lower predicate level, and stop analysis. Semantic
                 // minimisation will ensure the bound predicates get converted into an equality
                 // decision predicate.
-                while self.heap_current_decision_level.num_nonremoved_elements() != 1
-                {
+                while self.heap_current_decision_level.num_nonremoved_elements() != 1 {
                     let p = self.pop_predicate_from_conflict_nogood();
                     self.predicates_lower_decision_level.push(p);
                 }
@@ -248,9 +250,14 @@ impl ResolutionNogoodConflictAnalyser {
                 break;
             }
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
-            let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(next_predicate, context.assignments, context.reason_store, context.propagators);
-            
-            //println!("reason: {:?}", reason);
+            let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                next_predicate,
+                context.assignments,
+                context.reason_store,
+                context.propagators,
+            );
+
+            // println!("reason: {:?}", reason);
             for predicate in reason.iter() {
                 self.add_predicate_to_conflict_nogood(
                     *predicate,

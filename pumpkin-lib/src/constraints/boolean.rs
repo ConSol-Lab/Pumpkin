@@ -2,6 +2,7 @@ use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
@@ -22,7 +23,7 @@ pub fn boolean_less_than_or_equals(
     }
 }
 
-/// Creates the constraint `\sum weights_i * bools_i <= rhs`.
+/// Creates the constraint `\sum weights_i * bools_i == rhs`.
 pub fn boolean_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Literal]>>,
@@ -35,7 +36,6 @@ pub fn boolean_equals(
     }
 }
 
-#[allow(dead_code)]
 struct BooleanLessThanOrEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
@@ -69,11 +69,15 @@ impl BooleanLessThanOrEqual {
             .map(|(index, bool)| {
                 let corresponding_domain_id = solver.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let _ =
-                    solver.add_clause([(!*bool).into(), predicate![corresponding_domain_id >= 1]]);
+                let _ = solver.add_clause([
+                    Predicate::from(!*bool),
+                    predicate![corresponding_domain_id >= 1],
+                ]);
                 // !bool -> [domain = 0]
-                let _ =
-                    solver.add_clause([(*bool).into(), predicate![corresponding_domain_id <= 0]]);
+                let _ = solver.add_clause([
+                    Predicate::from(*bool),
+                    predicate![corresponding_domain_id <= 0],
+                ]);
                 corresponding_domain_id.scaled(self.weights[index])
             })
             .collect::<Vec<_>>();
@@ -81,7 +85,6 @@ impl BooleanLessThanOrEqual {
     }
 }
 
-#[allow(dead_code)]
 struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
@@ -114,11 +117,15 @@ impl BooleanEqual {
             .map(|(index, bool)| {
                 let corresponding_domain_id = solver.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
-                let _ =
-                    solver.add_clause([(!*bool).into(), predicate![corresponding_domain_id >= 1]]);
+                let _ = solver.add_clause([
+                    Predicate::from(!*bool),
+                    predicate![corresponding_domain_id >= 1],
+                ]);
                 // !bool -> [domain = 0]
-                let _ =
-                    solver.add_clause([(*bool).into(), predicate![corresponding_domain_id <= 0]]);
+                let _ = solver.add_clause([
+                    Predicate::from(*bool),
+                    predicate![corresponding_domain_id <= 0],
+                ]);
                 corresponding_domain_id.scaled(self.weights[index])
             })
             .chain(std::iter::once(self.rhs.scaled(-1)))

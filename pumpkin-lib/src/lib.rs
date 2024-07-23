@@ -45,6 +45,7 @@
 //! # use pumpkin_lib::results::OptimisationResult;
 //! # use pumpkin_lib::termination::Indefinite;
 //! # use pumpkin_lib::results::ProblemSolution;
+//! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
@@ -53,7 +54,9 @@
 //! # let z = solver.new_bounded_integer(7, 25);
 //! // We create the constraint:
 //! // - x + y + z = 17
-//! pumpkin_lib::constraints::equals(vec![x, y, z], 17).post(&mut solver);
+//! solver
+//!     .add_constraint(constraints::equals(vec![x, y, z], 17))
+//!     .post();
 //! ```
 //!
 //! For finding a solution, a [`TerminationCondition`] and a [`Brancher`] should be specified, which
@@ -76,13 +79,14 @@
 //! # use pumpkin_lib::results::SatisfactionResult;
 //! # use pumpkin_lib::termination::Indefinite;
 //! # use pumpkin_lib::results::ProblemSolution;
+//! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! # use std::cmp::max;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
-//! # pumpkin_lib::constraints::equals(vec![x, y, z], 17).post(&mut solver);
+//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher_over_all_propositional_variables();
 //! // Then we find a solution to the problem
@@ -104,6 +108,7 @@
 //! [`Solver::minimise`]; first the objective variable and a constraint over this value are added:
 //! ```rust
 //! # use pumpkin_lib::Solver;
+//! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! # let mut solver = Solver::default();
 //! # let x = solver.new_bounded_integer(5, 10);
@@ -113,7 +118,9 @@
 //! let objective = solver.new_bounded_integer(-10, 30);
 //!
 //! // We add a constraint which specifies the value of the objective
-//! pumpkin_lib::constraints::maximum(vec![x, y, z], objective).post(&mut solver);
+//! solver
+//!     .add_constraint(constraints::maximum(vec![x, y, z], objective))
+//!     .post();
 //! ```
 //!
 //! Then we can find the optimal solution using [`Solver::minimise`] or [`Solver::maximise`]:
@@ -130,8 +137,8 @@
 //! # let y = solver.new_bounded_integer(-3, 15);
 //! # let z = solver.new_bounded_integer(7, 25);
 //! # let objective = solver.new_bounded_integer(-10, 30);
-//! # constraints::equals(vec![x, y, z], 17).post(&mut solver);
-//! # constraints::maximum(vec![x, y, z], objective).post(&mut solver);
+//! # solver.add_constraint(constraints::equals(vec![x, y, z], 17)).post();
+//! # solver.add_constraint(constraints::maximum(vec![x, y, z], objective)).post();
 //! # let mut termination = Indefinite;
 //! # let mut brancher = solver.default_brancher_over_all_propositional_variables();
 //! // Then we solve to optimality
@@ -168,6 +175,7 @@
 //! # use pumpkin_lib::termination::Indefinite;
 //! # use pumpkin_lib::results::ProblemSolution;
 //! # use pumpkin_lib::results::solution_iterator::IteratedSolution;
+//! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -178,7 +186,7 @@
 //! let z = solver.new_bounded_integer(0, 2);
 //!
 //! // We create the all-different constraint
-//! pumpkin_lib::constraints::all_different(vec![x, y, z]).post(&mut solver);
+//! solver.add_constraint(constraints::all_different(vec![x, y, z])).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;
@@ -232,6 +240,7 @@
 //! # use pumpkin_lib::results::SatisfactionResultUnderAssumptions;
 //! # use pumpkin_lib::termination::Indefinite;
 //! # use pumpkin_lib::predicate;
+//! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! // We create the solver with default options
 //! let mut solver = Solver::default();
@@ -242,7 +251,7 @@
 //! let z = solver.new_bounded_integer(0, 2);
 //!
 //! // We create the all-different constraint
-//! pumpkin_lib::constraints::all_different(vec![x, y, z]).post(&mut solver);
+//! solver.add_constraint(constraints::all_different(vec![x, y, z])).post();
 //!
 //! // We create a termination condition which allows the solver to run indefinitely
 //! let mut termination = Indefinite;

@@ -1,13 +1,16 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
+
 use std::process::Command;
 use std::process::Output;
 
-use integration_tests::ensure_release_binary_built;
-use integration_tests::run_solution_checker;
-use integration_tests::run_solver;
-use integration_tests::Checker;
-use integration_tests::CheckerOutput;
-use integration_tests::Files;
+mod helpers;
+
+use helpers::run_solution_checker;
+use helpers::run_solver;
+use helpers::verify_proof;
+use helpers::Checker;
+use helpers::CheckerOutput;
+use helpers::Files;
 
 macro_rules! test_cnf_instance {
     ($name:ident) => {
@@ -18,7 +21,7 @@ macro_rules! test_cnf_instance {
     };
 }
 
-// test_cnf_instance!(add128);
+test_cnf_instance!(add128);
 test_cnf_instance!(add16);
 test_cnf_instance!(add32);
 test_cnf_instance!(add4);
@@ -52,10 +55,10 @@ test_cnf_instance!(prime25);
 test_cnf_instance!(prime289);
 test_cnf_instance!(prime361);
 test_cnf_instance!(prime4);
-// test_cnf_instance!(prime4294967297);
+test_cnf_instance!(prime4294967297);
 test_cnf_instance!(prime49);
 test_cnf_instance!(prime529);
-// test_cnf_instance!(prime65537);
+test_cnf_instance!(prime65537);
 test_cnf_instance!(prime841);
 test_cnf_instance!(prime9);
 test_cnf_instance!(prime961);
@@ -126,15 +129,12 @@ impl Checker for CnfChecker {
         }
     }
 
-    fn after_checking_action(&self, _files: Files, _output: &Output) {
-        // todo: bring back the proof logging
-        // verify_proof(files, output).unwrap()
+    fn after_checking_action(&self, files: Files, output: &Output) {
+        verify_proof(files, output).unwrap()
     }
 }
 
 fn run_cnf_test(instance_name: &str) {
-    ensure_release_binary_built();
-
     let instance_path = format!(
         "{}/tests/cnf/{instance_name}.cnf",
         env!("CARGO_MANIFEST_DIR")

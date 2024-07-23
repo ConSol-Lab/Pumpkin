@@ -104,6 +104,10 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         Ok(())
     }
 
+    fn priority(&self) -> u32 {
+        self.propagator.priority()
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conjunction) = self.root_level_inconsistency.take() {
             context.assign_literal(self.reification_literal, false, conjunction)?;

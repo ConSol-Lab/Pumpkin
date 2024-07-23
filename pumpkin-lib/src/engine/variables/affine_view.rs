@@ -157,11 +157,11 @@ where
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        let inverted = self.invert(value, Rounding::Up);
-
         if self.scale >= 0 {
+            let inverted = self.invert(value, Rounding::Up);
             self.inner.set_lower_bound(assignment, inverted, reason)
         } else {
+            let inverted = self.invert(value, Rounding::Down);
             self.inner.set_upper_bound(assignment, inverted, reason)
         }
     }
@@ -172,11 +172,11 @@ where
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
-        let inverted = self.invert(value, Rounding::Down);
-
         if self.scale >= 0 {
+            let inverted = self.invert(value, Rounding::Down);
             self.inner.set_upper_bound(assignment, inverted, reason)
         } else {
+            let inverted = self.invert(value, Rounding::Up);
             self.inner.set_lower_bound(assignment, inverted, reason)
         }
     }
@@ -245,21 +245,21 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
     type Value = Var::Value;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self.invert(bound, Rounding::Up);
-
         if self.scale < 0 {
+            let inverted_bound = self.invert(bound, Rounding::Down);
             self.inner.upper_bound_predicate(inverted_bound)
         } else {
+            let inverted_bound = self.invert(bound, Rounding::Up);
             self.inner.lower_bound_predicate(inverted_bound)
         }
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        let inverted_bound = self.invert(bound, Rounding::Down);
-
         if self.scale < 0 {
+            let inverted_bound = self.invert(bound, Rounding::Up);
             self.inner.lower_bound_predicate(inverted_bound)
         } else {
+            let inverted_bound = self.invert(bound, Rounding::Down);
             self.inner.upper_bound_predicate(inverted_bound)
         }
     }
@@ -297,6 +297,7 @@ enum Rounding {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::predicate;
 
     #[test]
     fn scaling_an_affine_view() {
@@ -323,24 +324,18 @@ mod tests {
         let domain = DomainId::new(0);
         let view = AffineView::new(domain, 2, 0);
 
-        assert_eq!(
-            domain.lower_bound_predicate(1),
-            view.lower_bound_predicate(1)
-        );
+        assert_eq!(predicate!(domain >= 1), predicate!(view >= 1));
+        assert_eq!(predicate!(domain >= -1), predicate!(view >= -3));
+        assert_eq!(predicate!(domain <= 0), predicate!(view <= 1));
+        assert_eq!(predicate!(domain <= -3), predicate!(view <= -5));
+    }
 
-        assert_eq!(
-            domain.lower_bound_predicate(-1),
-            view.lower_bound_predicate(-3)
-        );
+    #[test]
+    fn test_negated_variable_has_bounds_rounded_correctly() {
+        let domain = DomainId::new(0);
+        let view = AffineView::new(domain, -2, 0);
 
-        assert_eq!(
-            domain.upper_bound_predicate(0),
-            view.upper_bound_predicate(1)
-        );
-
-        assert_eq!(
-            domain.upper_bound_predicate(-3),
-            view.upper_bound_predicate(-5)
-        );
+        assert_eq!(predicate!(view <= -3), predicate!(domain >= 2));
+        assert_eq!(predicate!(view >= 5), predicate!(domain <= -3));
     }
 }

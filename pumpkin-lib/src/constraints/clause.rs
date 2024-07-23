@@ -1,5 +1,6 @@
 use super::Constraint;
 use super::NegatableConstraint;
+use crate::predicates::Predicate;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -18,7 +19,7 @@ struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_clause(self.0.into_iter().map(|literal| literal.into()))
+        solver.add_clause(self.0.into_iter().map(Predicate::from))
     }
 
     fn implied_by(
@@ -29,8 +30,8 @@ impl Constraint for Clause {
         solver.add_clause(
             self.0
                 .into_iter()
-                .map(|literal| literal.into())
-                .chain(std::iter::once((!reification_literal).into())),
+                .chain(std::iter::once(!reification_literal))
+                .map(Predicate::from),
         )
     }
 }
@@ -49,7 +50,7 @@ impl Constraint for Conjunction {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         self.0
             .into_iter()
-            .try_for_each(|lit| solver.add_clause([lit.into()]))
+            .try_for_each(|lit| solver.add_clause([Predicate::from(lit)]))
     }
 
     fn implied_by(
@@ -57,9 +58,9 @@ impl Constraint for Conjunction {
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.0
-            .into_iter()
-            .try_for_each(|lit| solver.add_clause([(!reification_literal).into(), lit.into()]))
+        self.0.into_iter().try_for_each(|lit| {
+            solver.add_clause([Predicate::from(!reification_literal), Predicate::from(lit)])
+        })
     }
 }
 

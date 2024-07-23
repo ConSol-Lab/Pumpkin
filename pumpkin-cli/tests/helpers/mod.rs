@@ -1,6 +1,7 @@
 //! Crate to run integration tests for the solver.
+#![allow(dead_code)]
 
-pub mod flatzinc;
+pub(crate) mod flatzinc;
 
 use std::fs::File;
 use std::path::Path;
@@ -10,20 +11,19 @@ use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
 
+use flatzinc::Solutions;
 use wait_timeout::ChildExt;
 
-use crate::flatzinc::Solutions;
-
 #[derive(Debug)]
-pub struct Files {
-    pub instance_file: PathBuf,
-    pub proof_file: PathBuf,
-    pub log_file: PathBuf,
-    pub err_file: PathBuf,
+pub(crate) struct Files {
+    pub(crate) instance_file: PathBuf,
+    pub(crate) proof_file: PathBuf,
+    pub(crate) log_file: PathBuf,
+    pub(crate) err_file: PathBuf,
 }
 
 impl Files {
-    pub fn cleanup(self) -> std::io::Result<()> {
+    pub(crate) fn cleanup(self) -> std::io::Result<()> {
         std::fs::remove_file(self.log_file)?;
         std::fs::remove_file(self.err_file)?;
 
@@ -35,11 +35,11 @@ impl Files {
     }
 }
 
-pub fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> Files {
+pub(crate) fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> Files {
     run_solver_with_options(instance_path, with_proof, std::iter::empty())
 }
 
-pub fn run_solver_with_options<'a>(
+pub(crate) fn run_solver_with_options<'a>(
     instance_path: impl AsRef<Path>,
     with_proof: bool,
     args: impl IntoIterator<Item = &'a str>,
@@ -48,10 +48,7 @@ pub fn run_solver_with_options<'a>(
 
     let instance_path = instance_path.as_ref();
 
-    let solver = get_executable(format!(
-        "{}/../target/release/pumpkin-cli",
-        env!("CARGO_MANIFEST_DIR")
-    ));
+    let solver = PathBuf::from(env!("CARGO_BIN_EXE_pumpkin-cli"));
 
     let log_file_path = instance_path.with_extension("log");
     let err_file_path = instance_path.with_extension("err");
@@ -60,7 +57,7 @@ pub fn run_solver_with_options<'a>(
     let mut command = Command::new(solver);
 
     if with_proof {
-        let _ = command.arg("--proof").arg(&proof_file_path);
+        let _ = command.arg("--proof-path").arg(&proof_file_path);
     }
 
     for arg in args {
@@ -79,12 +76,10 @@ pub fn run_solver_with_options<'a>(
         .spawn()
         .expect("Failed to run solver.");
 
-    println!("{command:?}");
-
     match child.wait_timeout(TEST_TIMEOUT) {
         Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
         Ok(Some(status)) if status.success() => {}
-        Ok(Some(e)) => panic!("error solving instance: {e}"),
+        Ok(Some(_)) => panic!("error solving instance"),
         Err(e) => panic!("error starting solver: {e}"),
     }
 
@@ -96,24 +91,7 @@ pub fn run_solver_with_options<'a>(
     }
 }
 
-pub fn ensure_release_binary_built() {
-    let working_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../pumpkin-cli");
-
-    let compile_status = Command::new("cargo")
-        .arg("build")
-        .arg("--release")
-        .arg("-q")
-        .current_dir(working_dir)
-        .stdout(Stdio::null())
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .expect("Failed to execute command to compile solver.");
-
-    assert!(compile_status.success(), "Failed to compile solver.");
-}
-
-pub fn get_executable(path: impl AsRef<Path>) -> PathBuf {
+pub(crate) fn get_executable(path: impl AsRef<Path>) -> PathBuf {
     if cfg!(windows) {
         path.as_ref().with_extension("exe")
     } else {
@@ -122,12 +100,12 @@ pub fn get_executable(path: impl AsRef<Path>) -> PathBuf {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum CheckerOutput {
+pub(crate) enum CheckerOutput {
     Panic,
     Acceptable,
 }
 
-pub trait Checker {
+pub(crate) trait Checker {
     fn executable_name(&self) -> &'static str;
 
     fn prepare_command(&self, cmd: &mut Command, files: &Files);
@@ -139,7 +117,7 @@ pub trait Checker {
     }
 }
 
-pub fn run_solution_checker(files: Files, checker: impl Checker) {
+pub(crate) fn run_solution_checker(files: Files, checker: impl Checker) {
     let checker_exe = get_executable(format!("{}/{}", env!("OUT_DIR"), checker.executable_name()));
 
     let mut command = Command::new(checker_exe);
@@ -170,7 +148,7 @@ pub fn run_solution_checker(files: Files, checker: impl Checker) {
     }
 }
 
-pub fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()> {
+pub(crate) fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()> {
     if checker_output.status.code().unwrap() == 0 {
         return Ok(());
     }
@@ -192,9 +170,7 @@ pub fn verify_proof(files: Files, checker_output: &Output) -> std::io::Result<()
     files.cleanup()
 }
 
-pub fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
-    ensure_release_binary_built();
-
+pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
     let instance_path = format!(
         "{}/tests/{folder_name}/{instance_name}.fzn",
         env!("CARGO_MANIFEST_DIR")
