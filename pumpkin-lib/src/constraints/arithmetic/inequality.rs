@@ -1,6 +1,7 @@
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
+use crate::propagators::linear_less_or_equal::linear_less_or_equal_constructor::IncrementalLinearLessOrEqual;
+use crate::propagators::linear_less_or_equal::linear_less_or_equal_constructor::LinearLessOrEqual;
 use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -37,9 +38,19 @@ struct Inequality<Var> {
     rhs: i32,
 }
 
+/// If the number of terms in an [`Inequality`] is larger than this threshold, the
+/// [`IncrementalLinearLessOrEqual`] propagator is used, otherwise the [`LinearLessOrEqual`]
+/// propagator is used.
+const TERM_THRESHOLD: usize = 30;
+
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms, self.rhs).post(solver)
+        if self.terms.len() >= TERM_THRESHOLD {
+            // Heuristic way in which to select the propagator to post
+            IncrementalLinearLessOrEqual::new(self.terms, self.rhs).post(solver)
+        } else {
+            LinearLessOrEqual::new(self.terms, self.rhs).post(solver)
+        }
     }
 
     fn implied_by(
@@ -47,8 +58,13 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         solver: &mut Solver,
         reification_literal: crate::variables::Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms, self.rhs)
-            .implied_by(solver, reification_literal)
+        if self.terms.len() >= TERM_THRESHOLD {
+            // Heuristic way in which to select the propagator to post
+            IncrementalLinearLessOrEqual::new(self.terms, self.rhs)
+                .implied_by(solver, reification_literal)
+        } else {
+            LinearLessOrEqual::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        }
     }
 }
 

@@ -114,6 +114,6 @@ use crate::engine::DomainEvents;
 #[cfg(doc)]
 use crate::propagators;
 #[cfg(doc)]
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
+use crate::propagators::linear_less_or_equal::linear_less_or_equal_constructor::LinearLessOrEqualConstructor;
 #[cfg(doc)]
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
+use crate::propagators::linear_less_or_equal::linear_less_or_equal_regular::LinearLessOrEqualPropagator;

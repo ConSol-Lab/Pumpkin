@@ -1,3 +1,5 @@
+use super::linear_less_or_equal_constructor::LinearLessOrEqualConstructor;
+use super::linear_less_or_equal_regular::propagate_linear_less_or_equal_from_scratch;
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -16,18 +18,6 @@ use crate::predicate;
 use crate::propagators::SparseSet;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
-
-#[derive(Debug)]
-pub(crate) struct LinearLessOrEqualConstructor<Var> {
-    pub(crate) x: Box<[Var]>,
-    pub(crate) c: i32,
-}
-
-impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
-    pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
-        LinearLessOrEqualConstructor { x, c }
-    }
-}
 
 /// Propagator for the constraint `reif => \sum x_i <= rhs`.
 ///
@@ -64,7 +54,7 @@ impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
 /// implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 /// (TRICS), 2013, pp. 1–10.
 #[derive(Debug)]
-pub(crate) struct LinearLessOrEqualPropagator<Var> {
+pub(crate) struct IncrementalLinearLessOrEqualPropagator<Var> {
     /// The terms in the linear inequality (also called the left-hand side), often represented by
     /// `x_i`.
     terms: Box<[Var]>,
@@ -90,13 +80,17 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     /// The upper-bound of the left-hand side (i.e. the [`LinearLessOrEqualPropagator::terms`]) of
     /// the linear inequality. Used to determine when the inequality is trivially satisfied.
     ub_lhs: i32,
+    /// Indicates whether backtracking has occurred; this variable is kept to determine when to
+    /// recalculate from scratch but it lazily performs this operation.
+    should_recalculate: bool,
 }
 
-impl<Var> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
+impl<Var> PropagatorConstructor
+    for LinearLessOrEqualConstructor<Var, IncrementalLinearLessOrEqualPropagator<Var>>
 where
-    Var: IntegerVariable,
+    Var: IntegerVariable + 'static,
 {
-    type Propagator = LinearLessOrEqualPropagator<Var>;
+    type Propagator = IncrementalLinearLessOrEqualPropagator<Var>;
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let x: Box<[_]> = self
@@ -108,7 +102,7 @@ where
             })
             .collect();
 
-        LinearLessOrEqualPropagator::<Var> {
+        IncrementalLinearLessOrEqualPropagator::<Var> {
             terms: x,
             rhs: self.c,
 
@@ -120,24 +114,24 @@ where
             ),
             bounds: vec![(i32::MIN, i32::MAX); self.x.len()],
             lb_lhs: 0,
+            ub_lhs: 0,
             slacks: vec![i32::MIN; self.x.len()],
             maximum_slack: i32::MIN,
-
-            ub_lhs: 0,
+            should_recalculate: false,
         }
     }
 }
 
-impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
+impl<Var> Propagator for IncrementalLinearLessOrEqualPropagator<Var>
 where
-    Var: IntegerVariable,
+    Var: IntegerVariable + 'static,
 {
     fn priority(&self) -> u32 {
         0
     }
 
     fn name(&self) -> &str {
-        "LinearLeq"
+        "IncrementalLinearLeq"
     }
 
     fn initialise_at_root(
@@ -151,9 +145,8 @@ where
         Ok(())
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
-        self.create_bounds_lhs_and_set_known_bounds(context);
-        self.calculate_slack();
+    fn synchronise(&mut self, _context: &PropagationContext) {
+        self.should_recalculate = true;
     }
 
     fn notify(
@@ -162,6 +155,10 @@ where
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
+        if self.should_recalculate {
+            // We have synchronized and need to recalculate
+            return EnqueueDecision::Enqueue;
+        }
         if self.ub_lhs <= self.rhs {
             // The upper-bound of the left-hand side can never reach the value of the right-hand
             // side, we do not need to be enqueued
@@ -273,6 +270,12 @@ where
                     .sum::<i32>()
         );
 
+        if self.should_recalculate {
+            self.should_recalculate = false;
+            self.create_bounds_lhs_and_set_known_bounds(&context.as_readonly());
+            self.calculate_slack();
+        }
+
         if self.ub_lhs <= self.rhs {
             // The upper-bound of the left-hand side can never reach the value of the right-hand
             // side, we do not need to propagate
@@ -347,46 +350,11 @@ where
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        let lb_lhs = self
-            .terms
-            .iter()
-            .map(|var| context.lower_bound(var))
-            .sum::<i32>();
-        if self.rhs < lb_lhs {
-            let reason: PropositionalConjunction = self
-                .terms
-                .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .collect();
-            return Err(reason.into());
-        }
-
-        for (i, x_i) in self.terms.iter().enumerate() {
-            let bound = self.rhs - (lb_lhs - context.lower_bound(x_i));
-
-            if context.upper_bound(x_i) > bound {
-                let reason: PropositionalConjunction = self
-                    .terms
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(j, x_j)| {
-                        if j != i {
-                            Some(predicate![x_j >= context.lower_bound(x_j)])
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                context.set_upper_bound(x_i, bound, reason)?;
-            }
-        }
-
-        Ok(())
+        propagate_linear_less_or_equal_from_scratch(&self.terms, &mut context, self.rhs)
     }
 }
 
-impl<Var: IntegerVariable> LinearLessOrEqualPropagator<Var> {
+impl<Var: IntegerVariable> IncrementalLinearLessOrEqualPropagator<Var> {
     /// Determines whether a conflict has occurred and calculates the reason for the conflict.
     fn check_for_conflict(
         &mut self,
@@ -460,6 +428,7 @@ mod tests {
     use super::*;
     use crate::conjunction;
     use crate::engine::test_helper::TestSolver;
+    use crate::propagators::linear_less_or_equal::linear_less_or_equal_constructor::IncrementalLinearLessOrEqual;
 
     #[test]
     fn test_bounds_are_propagated() {
@@ -468,7 +437,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
+            .new_propagator(IncrementalLinearLessOrEqual::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -484,7 +453,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
+            .new_propagator(IncrementalLinearLessOrEqual::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
