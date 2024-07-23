@@ -53,7 +53,7 @@ impl<
     ///
     /// The time-complexity of this operation is O(1)
     pub(crate) fn peek_max(&self) -> Option<(&Key, &Value)> {
-        if self.is_empty() {
+        if self.has_no_nonremoved_elements() {
             None
         } else {
             Some((
@@ -78,7 +78,7 @@ impl<
     ///
     ///  The time-complexity of this operation is O(logn).
     pub(crate) fn pop_max(&mut self) -> Option<Key> {
-        if !self.is_empty() {
+        if !self.has_no_nonremoved_elements() {
             let best_key = self.map_position_to_key[0];
             pumpkin_assert_moderate!(0 == self.map_key_to_position[best_key]);
             // pumpkin_assert_extreme!(self.is_max_at_top());
@@ -155,7 +155,7 @@ impl<
     }
 
     /// Returns whether there are elements left in the heap (excluding the "removed" values)
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(crate) fn has_no_nonremoved_elements(&self) -> bool {
         self.num_nonremoved_elements() == 0
     }
 
@@ -353,7 +353,7 @@ mod test {
         let mut heap: KeyValueHeap<usize, usize> = KeyValueHeap::default();
         heap.grow(0, 5);
         assert_eq!(heap.pop_max(), Some(0));
-        assert!(heap.is_empty());
+        assert!(heap.has_no_nonremoved_elements());
         assert_eq!(heap.pop_max(), None);
     }
 

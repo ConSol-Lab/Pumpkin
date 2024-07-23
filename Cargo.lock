@@ -213,11 +213,11 @@ dependencies = [
 
 [[package]]
 name = "flatzinc"
-version = "0.3.19"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8da4a88a7a2675bacc9928ef11cb7b96bb2de7e52f1a85d09a652959d78d265"
+checksum = "a8da356bba2a92df296eaa40446bd58adc6fb3a75ae9ebdbadd65c7036bd37c4"
 dependencies = [
- "nom",
+ "winnow",
 ]
 
 [[package]]
@@ -618,3 +618,12 @@ name = "windows_x86_64_msvc"
 version = "0.52.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bec47e5bfd1bff0eeaf6d8b485cc1074891a197ab4225d504cb7a1ab88b02bf0"
+
+[[package]]
+name = "winnow"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557404e450152cd6795bb558bca69e43c585055f4606e3bcae5894fc6dac9ba0"
+dependencies = [
+ "memchr",
+]
