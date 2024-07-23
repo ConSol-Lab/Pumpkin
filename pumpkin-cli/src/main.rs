@@ -27,6 +27,8 @@ use pumpkin_lib::asserts::pumpkin_assert_simple;
 use pumpkin_lib::options::RestartOptions;
 use pumpkin_lib::options::SequenceGeneratorType;
 use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::proof::Format;
+use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
@@ -468,23 +470,17 @@ fn run() -> PumpkinResult<()> {
     //     ..Default::default()
     // };
 
-    // todo: disabled proof logging
-    // let proof_log = if let Some(path_buf) = args.proof {
-    //     match file_format {
-    //         FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
-    //         FileFormat::WcnfDimacsPLine => {
-    //             return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
-    //         }
-    //         FileFormat::MaxSAT2022 => {
-    //             return Err(PumpkinError::ProofGenerationNotSupported(
-    //                 "maxsat".to_owned(),
-    //             ))
-    //         }
-    //         FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
-    //     }
-    // } else {
-    //     ProofLog::default()
-    // };
+    let proof_log = if let Some(path_buf) = args.proof_path {
+        match file_format {
+            FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
+            FileFormat::WcnfDimacsPLine => {
+                return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
+            }
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+        }
+    } else {
+        ProofLog::default()
+    };
 
     let solver_options = SolverOptions {
         restart_options: RestartOptions {
@@ -499,6 +495,7 @@ fn run() -> PumpkinResult<()> {
         },
         learning_clause_minimisation: args.learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
+        proof_log,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

@@ -515,7 +515,7 @@ impl DimacsSink for SolverDimacsSink {
 
         let mut solver = Solver::with_options(solver_options);
         let variables = (0..num_variables)
-            .map(|_| solver.new_literal())
+            .map(|code| solver.new_named_literal(format!("{}", code + 1)))
             .collect::<Vec<_>>();
 
         SolverDimacsSink { solver, variables }

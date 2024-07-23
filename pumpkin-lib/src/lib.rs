@@ -297,6 +297,7 @@ use crate::termination::TerminationCondition;
 
 pub mod branching;
 pub mod constraints;
+pub mod proof;
 
 // We declare a private module with public use, so that all exports from API are exports directly
 // from the crate.

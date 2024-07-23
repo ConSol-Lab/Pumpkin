@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::time::Instant;
 
+use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -46,6 +47,7 @@ use crate::engine::IntDomainEvent;
 use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
+use crate::proof::ProofLog;
 use crate::propagators::nogood::NogoodPropagator;
 use crate::propagators::nogood::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
@@ -195,6 +197,8 @@ pub struct SatisfactionSolverOptions {
     pub learning_clause_minimisation: bool,
     /// A random number generator which is used by the [`Solver`] to determine randomised values.
     pub random_generator: SmallRng,
+    /// The proof log for the solver.
+    pub proof_log: ProofLog,
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -203,6 +207,7 @@ impl Default for SatisfactionSolverOptions {
             restart_options: RestartOptions::default(),
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
+            proof_log: ProofLog::default(),
         }
     }
 }
@@ -592,6 +597,33 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
+    /// Conclude the proof with the unsatisfiable claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_unsat(&mut self) {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        if let Err(write_error) = proof.unsat(&self.variable_names) {
+            warn!(
+                "Failed to update the certificate file, error message: {}",
+                write_error
+            );
+        }
+    }
+
+    /// Conclude the proof with the optimality claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_optimal(&mut self, bound: Predicate) {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+
+        if let Err(write_error) = proof.optimal(bound, &self.variable_names) {
+            warn!(
+                "Failed to update the certificate file, error message: {}",
+                write_error
+            );
+        }
+    }
+
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         if self.assignments.get_decision_level() != 0 {
             self.backtrack(0, brancher);
@@ -814,17 +846,20 @@ impl ConstraintSatisfactionSolver {
         // backjump or restart
         // ask the nogood propagator to add this nogood and propagate
 
-        // todo: log the nogood
-        // if let Err(write_error) = self
-        // .internal_parameters
-        // .proof_log
-        // .log_learned_clause(learned_clause_equivalent)
-        // {
-        // warn!(
-        // "Failed to update the certificate file, error message: {}",
-        // write_error
-        // );
-        // }
+        let learned_clause = learned_nogood
+            .predicates
+            .iter()
+            .map(|&predicate| !predicate);
+        if let Err(write_error) = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(learned_clause, &self.variable_names)
+        {
+            warn!(
+                "Failed to update the certificate file, error message: {}",
+                write_error
+            );
+        }
 
         // todo: I am not sure we need to treat unit nogoods in a special way? Simply backtrack and
         // post? The only issue may be that backtracking to 0 is not the same as a restart since

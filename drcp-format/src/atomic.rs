@@ -42,19 +42,15 @@ impl Display for IntAtomicConstraint<'_> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Comparison {
-    GreaterThanEqual,
     LessThanEqual,
     Equal,
-    NotEqual,
 }
 
 impl Display for Comparison {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let symbol = match self {
-            Comparison::GreaterThanEqual => ">=",
             Comparison::LessThanEqual => "<=",
             Comparison::Equal => "==",
-            Comparison::NotEqual => "!=",
         };
 
         write!(f, "{symbol}")
