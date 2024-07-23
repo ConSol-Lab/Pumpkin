@@ -1,0 +1,6 @@
+% Merging `SparseDomain` with `IntervalDomain`, this could lead to memory issues depending on the implementation
+x = 1;
+----------
+x = 3;
+----------
+==========

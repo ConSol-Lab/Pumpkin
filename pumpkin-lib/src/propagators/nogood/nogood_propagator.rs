@@ -220,6 +220,32 @@ impl NogoodPropagator {
         lbd_helper: &mut SparseSet<u32>,
         assignments: &Assignments,
     ) -> u32 {
+        for predicate in predicates.iter().enumerate() {
+            if assignments
+                .get_decision_level_for_predicate(predicate.1)
+                .is_none()
+            {
+                println!("slice size: {}, idx: {}", predicates.len(), predicate.0);
+                println!("DEC LEVEL VIOL: {}", assignments.get_decision_level());
+                println!(
+                    "\t pred eva: T{} F{} dec{}",
+                    assignments.is_predicate_satisfied(*predicate.1),
+                    assignments.is_predicate_falsified(*predicate.1),
+                    assignments.is_decision_predicate(predicate.1)
+                );
+
+                if assignments.is_predicate_falsified(*predicate.1) {
+                    println!(
+                        "false dec lvl: {}",
+                        assignments
+                            .get_decision_level_for_predicate(&!*predicate.1)
+                            .unwrap()
+                    );
+                    println!("pred: {}", *predicate.1);
+                }
+            }
+        }
+
         lbd_helper.clear();
         lbd_helper.accommodate(&(assignments.get_decision_level() as u32));
         for predicate in predicates {
@@ -268,9 +294,12 @@ impl NogoodPropagator {
         self.add_watcher(self.nogoods[new_id].predicates[0], new_id);
         self.add_watcher(self.nogoods[new_id].predicates[1], new_id);
 
-        // todo: this propagation can be done properly.
-        self.debug_propagate_nogood_from_scratch(new_id, context)
-            .expect("Do not expect to fail propagating learned nogood.");
+        let reason = Reason::DynamicLazy {
+            code: new_id.id as u64,
+        };
+        context
+            .post_predicate(!self.nogoods[new_id].predicates[0], reason)
+            .expect("Cannot fail to add the asserting predicate.");
 
         if lbd <= self.parameters.lbd_threshold {
             self.learned_nogood_ids.low_lbd.push(new_id);
@@ -607,6 +636,59 @@ impl NogoodPropagator {
         })
     }
 
+    fn remove_nogood_from_watch_list(
+        watch_lists: &mut KeyedVec<DomainId, WatchList>,
+        watching_predicate: Predicate,
+        id: NogoodId,
+    ) {
+        match watching_predicate {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => {
+                let position = watch_lists[domain_id]
+                    .lower_bound
+                    .iter()
+                    .position(|w| w.right_hand_side == lower_bound && w.nogood_id == id)
+                    .expect("LB watcher must be present.");
+                let _ = watch_lists[domain_id].lower_bound.swap_remove(position);
+            }
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => {
+                let position = watch_lists[domain_id]
+                    .upper_bound
+                    .iter()
+                    .position(|w| w.right_hand_side == upper_bound && w.nogood_id == id)
+                    .expect("UB watcher must be present.");
+                let _ = watch_lists[domain_id].upper_bound.swap_remove(position);
+            }
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                let position = watch_lists[domain_id]
+                    .hole
+                    .iter()
+                    .position(|w| w.right_hand_side == not_equal_constant && w.nogood_id == id)
+                    .expect("NE watcher must be present.");
+                let _ = watch_lists[domain_id].hole.swap_remove(position);
+            }
+            Predicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                let position = watch_lists[domain_id]
+                    .equals
+                    .iter()
+                    .position(|w| w.right_hand_side == equality_constant && w.nogood_id == id)
+                    .expect("Assignment watcher must be present.");
+                let _ = watch_lists[domain_id].equals.swap_remove(position);
+            }
+        }
+    }
+
     fn remove_high_lbd_nogoods(&mut self, context: &PropagationContext) {
         // Currently we only remove at the root level for simplicity, but we could consider
         // otherwise.
@@ -635,10 +717,18 @@ impl NogoodPropagator {
             }
 
             // Remove the nogood from the watch list.
-            // clausal_propagator.remove_clause_from_consideration(
-            //     clause_allocator[clause_reference].get_literal_slice(),
-            //    clause_reference,
-            // );
+            // todo: could be potentially done more efficiently,
+            // although currently this is not a bottleneck.
+            Self::remove_nogood_from_watch_list(
+                &mut self.watch_lists,
+                self.nogoods[id].predicates[0],
+                id,
+            );
+            Self::remove_nogood_from_watch_list(
+                &mut self.watch_lists,
+                self.nogoods[id].predicates[1],
+                id,
+            );
 
             // Delete the nogood.
             // Note that the deleted nogood is still kept in the database but it will not be used

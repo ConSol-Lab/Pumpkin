@@ -1,0 +1,2 @@
+c 2024-07-23T07:58:45Z WARN [pumpkin-lib\src\branching\variable_selection\input_order.rs:17] The InputOrder variable selector was not provided with any variables
+s UNSATISFIABLE
