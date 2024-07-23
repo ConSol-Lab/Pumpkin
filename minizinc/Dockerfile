@@ -8,7 +8,7 @@
 FROM rust:latest AS builder
 
 # Copy the project source to the Docker image.
-COPY ./ /pumpkin-src
+COPY . /pumpkin-src
 
 WORKDIR /pumpkin-src
 
@@ -22,10 +22,10 @@ FROM minizinc/mznc2024:latest
 COPY --from=builder /pumpkin-src/target/release/pumpkin-cli /pumpkin/pumpkin-cli
 
 # Copy the MiniZinc library
-COPY --from=builder /pumpkin-src/pumpkin-cli/minizinc/ /pumpkin/
+COPY --from=builder /pumpkin-src/minizinc/ /pumpkin/
 
 # Change the path to the solver executable to be the correct one.
-RUN sed -i 's/..\/..\/target\/release\/pumpkin-cli/pumpkin-cli/' /pumpkin/pumpkin.msc
+RUN sed -i 's/..\/target\/release\/pumpkin-cli/pumpkin-cli/' /pumpkin/pumpkin.msc
 
 # Add Pumpkin to the MiniZinc search path and set it as the default solver.
 #
