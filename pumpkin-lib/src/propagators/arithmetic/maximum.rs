@@ -87,8 +87,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         let mut max_ub = context.upper_bound(&self.array[0]);
         let mut max_lb = context.lower_bound(&self.array[0]);
         let mut lb_reason = predicate![self.array[0] >= max_lb];
-        // Note the skip(1), since we already took the zeroth element into account above.
-        for var in self.array.iter().skip(1) {
+        for var in self.array.iter() {
             // Rule 1.
             context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
 
