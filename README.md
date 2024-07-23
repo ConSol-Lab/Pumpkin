@@ -21,7 +21,7 @@ The solver currently supports integer variables and a number of (global) constra
 
 - [Cumulative global constraint](./pumpkin-lib/src/propagators/cumulative/).
 - [Element global constraint](./pumpkin-lib/src/propagators/element.rs).
-- [Arithmetic constraints](./pumpkin-lib/src/propagators/arithmetic/): [linear integer (in)equalities](./pumpkin-lib/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](./pumpkin-lib/src/propagators/arithmetic/division.rs), [integer multiplication](./pumpkin-lib/src/propagators/arithmetic/integer_multiplication.rs), [maximum](./pumpkin-lib/src/propagators/arithmetic/maximum.rs), [absolute value](./pumpkin-lib/src/propagators/arithmetic/absolute_value.rs).
+- [Arithmetic constraints](./pumpkin-lib/src/propagators/arithmetic/): [linear integer (in)equalities](./pumpkin-lib/src/propagators/arithmetic/linear_less_or_equal/), [integer division](./pumpkin-lib/src/propagators/arithmetic/division.rs), [integer multiplication](./pumpkin-lib/src/propagators/arithmetic/integer_multiplication.rs), [maximum](./pumpkin-lib/src/propagators/arithmetic/maximum.rs), [absolute value](./pumpkin-lib/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
