@@ -78,13 +78,28 @@ impl ResolutionNogoodConflictAnalyser {
 
                 let trail_position = assignments.get_trail_position(&predicate).unwrap();
 
+                // The goal is to traverse predicate in reverse order of the trail.
+                // However some predicates may share the trail position. For example, if a predicate
+                // that was posted to trail resulted in some other predicates being true, then all
+                // these predicates would have the same trail position. When considering the
+                // predicates in reverse order of the trail, the implicitly set predicates are
+                // posted after the explicitly set one, but they all have the same trail position.
+                // To remedy this, we make a tie-breaking scheme to prioritise implied predicates
+                // over explicit predicates. This is done by assigning explicitly set predicates the
+                // value 2*trail_position, whereas implied predicates get 2*trail_position + 1.
+                let heap_value = if assignments.trail[trail_position].predicate == predicate {
+                    trail_position * 2
+                } else {
+                    trail_position * 2 + 1
+                };
+
                 self.heap_current_decision_level.restore_key(predicate_id);
                 self.heap_current_decision_level
-                    .increment(predicate_id, trail_position as u32);
+                    .increment(predicate_id, heap_value as u32);
 
                 // todo: I think this is not needed, but double check.
                 if *self.heap_current_decision_level.get_value(predicate_id)
-                    != trail_position.try_into().unwrap()
+                    != heap_value.try_into().unwrap()
                 {
                     self.heap_current_decision_level.delete_key(predicate_id);
                 }

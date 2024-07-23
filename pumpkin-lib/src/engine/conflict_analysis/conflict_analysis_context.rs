@@ -106,7 +106,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // extract_reason_from_trail(&trail_entry)
         // );
 
-        // We distinguish between two cases:
+        // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
             // We can simply return the reason given on the trail.
@@ -120,9 +120,41 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
             reason_store
                 .get_or_compute_new(reason_ref, &propagation_context, propagators)
                 .expect("reason reference should not be stale")
+        // The predicate is implicitly due as a result of a decision.
         }
-        // 2) The predicate is true, but not explicitly on the trail. It is necessary to further
-        // analyse what was the reason for setting the predicate true.
+        /*else if trail_entry.reason.is_none() {
+            // Equality needs to be treated in a special way since it is decomposed on the trail
+            // into the bound predicates.
+            match predicate {
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => todo!(),
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => todo!(),
+                Predicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                } => todo!(),
+                Predicate::Equal {
+                    domain_id,
+                    equality_constant,
+                } => {
+                    reason_store.helper.clear();
+                    reason_store
+                        .helper
+                        .push(predicate!(domain_id >= equality_constant));
+                    reason_store
+                        .helper
+                        .push(predicate!(domain_id <= equality_constant));
+                    reason_store.helper.as_slice()
+                }
+            }
+        }*/
+        // 3) The predicate is true due to a propagation, and not explicitly on the trail.
+        // It is necessary to further analyse what was the reason for setting the predicate true.
         else {
             // The reason for propagation depends on:
             // 1) The predicate on the trail at the moment the input predicate became true, and
@@ -150,17 +182,21 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 // extract_reason_from_trail(&trail_entry)
                                 let propagation_context = PropagationContext::new(assignments);
 
-                                let reason_ref = trail_entry
-                                    .reason
-                                    .expect("Cannot be a null reason for propagation.");
-
-                                reason_store
-                                    .get_or_compute_new(
-                                        reason_ref,
-                                        &propagation_context,
-                                        propagators,
-                                    )
-                                    .expect("reason reference should not be stale")
+                                if let Some(reason_ref) = trail_entry.reason {
+                                    reason_store
+                                        .get_or_compute_new(
+                                            reason_ref,
+                                            &propagation_context,
+                                            propagators,
+                                        )
+                                        .expect("reason reference should not be stale")
+                                }
+                                // Otherwise the predicate is implicitly set due to a decision
+                                else {
+                                    reason_store.helper.clear();
+                                    reason_store.helper.push(trail_entry.predicate);
+                                    reason_store.helper.as_slice()
+                                }
                             }
                             // Otherwise, the input bound is strictly greater than the trailed
                             // bound. This means the reason is due to holes in the domain.
@@ -219,13 +255,21 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // extract_reason_from_trail(&trail_entry)
                             let propagation_context = PropagationContext::new(assignments);
 
-                            let reason_ref = trail_entry
-                                .reason
-                                .expect("Cannot be a null reason for propagation.");
-
-                            reason_store
-                                .get_or_compute_new(reason_ref, &propagation_context, propagators)
-                                .expect("reason reference should not be stale")
+                            if let Some(reason_ref) = trail_entry.reason {
+                                reason_store
+                                    .get_or_compute_new(
+                                        reason_ref,
+                                        &propagation_context,
+                                        propagators,
+                                    )
+                                    .expect("reason reference should not be stale")
+                            }
+                            // Otherwise the not equals predicate is due to a decision.
+                            else {
+                                reason_store.helper.clear();
+                                reason_store.helper.push(trail_entry.predicate);
+                                reason_store.helper.as_slice()
+                            }
                         }
                         Predicate::Equal {
                             domain_id,
@@ -287,13 +331,19 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // extract_reason_from_trail(&trail_entry)
                             let propagation_context = PropagationContext::new(assignments);
 
-                            let reason_ref = trail_entry
-                                .reason
-                                .expect("Cannot be a null reason for propagation.");
-
-                            reason_store
-                                .get_or_compute_new(reason_ref, &propagation_context, propagators)
-                                .expect("reason reference should not be stale")
+                            if let Some(reason_ref) = trail_entry.reason {
+                                reason_store
+                                    .get_or_compute_new(
+                                        reason_ref,
+                                        &propagation_context,
+                                        propagators,
+                                    )
+                                    .expect("reason reference should not be stale")
+                            } else {
+                                reason_store.helper.clear();
+                                reason_store.helper.push(trail_entry.predicate);
+                                reason_store.helper.as_slice()
+                            }
                         } else {
                             // I think it cannot be that the bounds are equal, since otherwise we
                             // would have found the predicate explicitly on the trail.
@@ -334,14 +384,15 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // reason. todo: can do lifting here.
                         // extract_reason_from_trail(&trail_entry)
                         let propagation_context = PropagationContext::new(assignments);
-
-                        let reason_ref = trail_entry
-                            .reason
-                            .expect("Cannot be a null reason for propagation.");
-
-                        reason_store
-                            .get_or_compute_new(reason_ref, &propagation_context, propagators)
-                            .expect("reason reference should not be stale")
+                        if let Some(reason_ref) = trail_entry.reason {
+                            reason_store
+                                .get_or_compute_new(reason_ref, &propagation_context, propagators)
+                                .expect("reason reference should not be stale")
+                        } else {
+                            reason_store.helper.clear();
+                            reason_store.helper.push(trail_entry.predicate);
+                            reason_store.helper.as_slice()
+                        }
                     }
                     Predicate::Equal {
                         domain_id,

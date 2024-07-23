@@ -263,6 +263,8 @@ impl NogoodPropagator {
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) {
+        // println!("nogood: {:?}", nogood);
+
         if nogood.len() == 1 {
             self.add_permanent_nogood(nogood, context)
                 .expect("Unit learned nogoods cannot fail.");

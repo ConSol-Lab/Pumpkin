@@ -189,6 +189,7 @@ impl Assignments {
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.get_trail_position(predicate) {
             self.trail[trail_position].reason.is_none()
+                && self.trail[trail_position].predicate == *predicate
         } else {
             false
         }
