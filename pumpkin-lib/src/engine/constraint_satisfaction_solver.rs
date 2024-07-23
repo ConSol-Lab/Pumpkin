@@ -1183,15 +1183,21 @@ impl ConstraintSatisfactionSolver {
             self.get_decision_level() == 0,
             "Clauses can only be added in the root"
         );
+
         // todo: took as input literals, but now we have nogoods?
         // also remove the add_clause with add_nogood
         // Imko: I think we can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`
+        let mut are_all_falsified_at_root = true;
         let predicates = predicates
             .into_iter()
-            .map(|predicate| !predicate)
+            .map(|predicate| {
+                are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
+                !predicate
+            })
             .collect::<Vec<_>>();
+
         if predicates.is_empty() {
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
@@ -1199,6 +1205,15 @@ impl ConstraintSatisfactionSolver {
                 ));
             return Err(ConstraintOperationError::InfeasibleClause);
         }
+
+        if are_all_falsified_at_root {
+            self.state
+                .declare_conflict(StoredConflictInfo::RootLevelConflict(
+                    ConstraintOperationError::InfeasibleClause,
+                ));
+            return Err(ConstraintOperationError::InfeasibleClause);
+        }
+
         if let Err(constraint_operation_error) = self.add_nogood(predicates) {
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
