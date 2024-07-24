@@ -70,27 +70,15 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // This is the constraint that is being propagated:
-        // max(a0, a1, ..., an-1) = rhs
-
-        // Propagate bounds on the variables based on the rhs:
-        // Rule 1.
-        // UB(a_i) <= UB(rhs)
-
-        // Propagate bounds on the rhs variable:
-        // Rule 2.
-        // LB(rhs) >= max{LB(a_i)}.
-        // Rule 3.
-        // max_ub = max{UB(a_i)}.
-        // if all UB(a_i) <= max_ub, then UB(rhs) <= max_ub.
+        // max(a_0, a_1, ..., a_{n-1}) = rhs
 
         let rhs_ub = context.upper_bound(&self.rhs);
-
-        // Assume the variable at index zero is the minimum/maximum.
         let mut max_ub = context.upper_bound(&self.array[0]);
         let mut max_lb = context.lower_bound(&self.array[0]);
         let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
             // Rule 1.
+            // UB(a_i) <= UB(rhs)
             context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
 
             let var_lb = context.lower_bound(var);
@@ -106,9 +94,13 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
             }
         }
         // Rule 2.
+        // LB(rhs) >= max{LB(a_i)}.
         context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::from(lb_reason))?;
 
         // Rule 3.
+        // UB(rhs) <= max{UB(a_i)}.
+        // Note that this implicitly also covers the rule:
+        // 'if LB(rhs) > UB(a_i) for all i, then conflict'.
         if rhs_ub > max_ub {
             let ub_reason: PropositionalConjunction = self
                 .array
@@ -119,10 +111,6 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         }
 
         // Rule 4.
-        // if LB(rhs) > UB(a_i) for all i, then conflict.
-        // This rule can be skipped because the previous rules establish UB(rhs) <= max{UB(a_i)}.
-
-        // Rule 5.
         // If there is only one variable with UB(a_i) >= LB(rhs),
         // then the bounds for rhs and that variable should be intersected.
         let rhs_lb = context.lower_bound(&self.rhs);
