@@ -382,7 +382,7 @@ mod tests {
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(3);
+        let _ = assignments.synchronise(3, usize::MAX, false);
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
@@ -391,7 +391,7 @@ mod tests {
         assert!(decision.is_none());
         assert!(brancher.dormant_predicates.contains(&predicate));
 
-        let _ = assignments.synchronise(0);
+        let _ = assignments.synchronise(0, usize::MAX, false);
         brancher.synchronise(&assignments);
 
         let decision = brancher.next_decision(&mut SelectionContext::new(
@@ -431,7 +431,7 @@ mod tests {
 
         brancher.on_solution(SolutionReference::new(&assignments));
 
-        let _ = assignments.synchronise(0);
+        let _ = assignments.synchronise(0, usize::MAX, false);
 
         assert_eq!(
             predicate!(x >= 5),

@@ -175,6 +175,11 @@ impl IntegerVariable for Literal {
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         event.unwrap()
     }
+
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+        let domain = self.predicate.get_domain();
+        watchers.watch_all_backtrack(domain, events)
+    }
 }
 
 impl PredicateConstructor for Literal {

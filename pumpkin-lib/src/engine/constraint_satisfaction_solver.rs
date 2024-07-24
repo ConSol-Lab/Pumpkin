@@ -157,6 +157,10 @@ pub struct ConstraintSatisfactionSolver {
     /// Used as a helper storage vector to avoid reallocation, and to take away ownership from the
     /// events in assignments.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
+    /// Contains events that need to be processed to notify propagators of backtrack
+    /// [`IntDomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
+    backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
+    last_notified_cp_trail_index: usize,
     /// A set of counters updated during the search.
     counters: Counters,
     /// Miscellaneous constant parameters used by the solver.
@@ -218,6 +222,31 @@ impl Default for SatisfactionSolverOptions {
 impl ConstraintSatisfactionSolver {
     fn get_nogood_propagator_id() -> PropagatorId {
         PropagatorId(0)
+    }
+    fn process_backtrack_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            self.backtrack_event_drain
+                .extend(self.assignments.drain_backtrack_domain_events());
+
+            if self.backtrack_event_drain.is_empty() {
+                return false;
+            }
+
+            for (event, domain) in self.backtrack_event_drain.drain(..) {
+                for propagator_var in self
+                    .watch_list_cp
+                    .get_backtrack_affected_propagators(event, domain)
+                {
+                    let propagator = &mut self.propagators[propagator_var.propagator.0 as usize];
+                    let context = PropagationContext::new(&self.assignments);
+
+                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                }
+            }
+        }
+        true
     }
 
     fn notify_nogood_propagator(
@@ -299,6 +328,7 @@ impl ConstraintSatisfactionSolver {
                 );
             }
         }
+        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
     }
 
     /// This is a temporary accessor to help refactoring.
@@ -321,6 +351,7 @@ impl ConstraintSatisfactionSolver {
 impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> ConstraintSatisfactionSolver {
         let mut csp_solver = ConstraintSatisfactionSolver {
+            last_notified_cp_trail_index: 0,
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
             assignments: Assignments::default(),
@@ -329,6 +360,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: ReasonStore::default(),
             event_drain: vec![],
             conflict_nogood_analyser: ResolutionNogoodConflictAnalyser::default(),
+            backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: vec![],
             counters: Counters::default(),
@@ -959,11 +991,16 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
         self.assignments
-            .synchronise(backtrack_level)
+            .synchronise(
+                backtrack_level,
+                self.last_notified_cp_trail_index,
+                self.watch_list_cp.is_watching_any_backtrack_events(),
+            )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
+        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
         self.propagator_queue.clear();
@@ -977,6 +1014,8 @@ impl ConstraintSatisfactionSolver {
         }
 
         brancher.synchronise(&self.assignments);
+
+        let _ = self.process_backtrack_events();
 
         self.event_drain.clear();
     }

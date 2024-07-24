@@ -16,6 +16,7 @@ pub struct Assignments {
     pub(crate) trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: KeyedVec<DomainId, IntegerDomain>,
     events: EventSink,
+    backtrack_events: EventSink,
 
     /// The number of values that have been pruned from the domain.
     pruned_values: u64,
@@ -27,6 +28,7 @@ impl Default for Assignments {
             trail: Default::default(),
             domains: Default::default(),
             events: Default::default(),
+            backtrack_events: Default::default(),
             pruned_values: 0,
         };
 
@@ -116,6 +118,7 @@ impl Assignments {
             .push(IntegerDomain::new(lower_bound, upper_bound, id));
 
         self.events.grow();
+        self.backtrack_events.grow();
 
         id
     }
@@ -124,6 +127,12 @@ impl Assignments {
         &mut self,
     ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain()
+    }
+
+    pub(crate) fn drain_backtrack_domain_events(
+        &mut self,
+    ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
+        self.backtrack_events.drain()
     }
 
     pub(crate) fn debug_create_empty_clone(&self) -> Self {
@@ -137,6 +146,7 @@ impl Assignments {
             trail: Default::default(),
             domains,
             events: event_sink,
+            backtrack_events: EventSink::default(),
             pruned_values: self.pruned_values,
         }
     }
@@ -679,9 +689,16 @@ impl Assignments {
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
     /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
-    pub(crate) fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
+    pub(crate) fn synchronise(
+        &mut self,
+        new_decision_level: usize,
+        last_notified_trail_index: usize,
+        is_watching_any_backtrack_events: bool,
+    ) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
-        self.trail.synchronise(new_decision_level).for_each(|entry| {
+        let num_trail_entries_before_synchronisation = self.num_trail_entries();
+
+        self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
             pumpkin_assert_moderate!(
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
@@ -689,11 +706,13 @@ impl Assignments {
 
             // Calculate how many values are re-introduced into the domain.
             let domain_id = entry.predicate.get_domain();
-            let current_lower_bound = self.domains[domain_id].lower_bound();
-            let current_upper_bound = self.domains[domain_id].upper_bound();
+            let lower_bound_before = self.domains[domain_id].lower_bound();
+            let upper_bound_before = self.domains[domain_id].upper_bound();
 
-            let add_on_upper_bound = entry.old_upper_bound.abs_diff(current_upper_bound) as u64;
-            let add_on_lower_bound = current_lower_bound.abs_diff(entry.old_lower_bound) as u64;
+            let trail_index = num_trail_entries_before_synchronisation - index - 1;
+
+            let add_on_upper_bound = entry.old_upper_bound.abs_diff(upper_bound_before) as u64;
+            let add_on_lower_bound = lower_bound_before.abs_diff(entry.old_lower_bound) as u64;
             self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
 
             if let Predicate::NotEqual { .. } = entry.predicate {
@@ -704,10 +723,27 @@ impl Assignments {
 
             let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
             self.domains[domain_id].undo_trail_entry(&entry);
+if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
+                if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
+                    // This `domain_id` was unassigned while backtracking
+                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
+                }
 
-            if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
                 // Variable used to be fixed but is not after backtracking
-                unfixed_variables.push((domain_id, current_lower_bound));
+                unfixed_variables.push((domain_id, lower_bound_before));
+            }
+
+            if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
+                // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
+                if lower_bound_before != self.domains[domain_id].lower_bound() {
+                    self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
+                }
+                if upper_bound_before != self.domains[domain_id].upper_bound() {
+                    self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
+                }
+                if matches!(entry.predicate, Predicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
+                    self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
+                }
             }
         });
         // Drain does not remove the events from the internal data structure. Elements are removed
@@ -1554,7 +1590,7 @@ mod tests {
             .remove_value_from_domain(d1, 5, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, usize::MAX, false);
 
         assert_eq!(5, assignment.get_upper_bound(d1));
     }
@@ -1755,7 +1791,7 @@ mod tests {
 
         assert_eq!(assignment.get_lower_bound(domain_id1), 7);
 
-        let _ = assignment.synchronise(1);
+        let _ = assignment.synchronise(1, usize::MAX, false);
 
         assert_eq!(assignment.get_lower_bound(domain_id1), 2);
     }

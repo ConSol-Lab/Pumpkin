@@ -190,6 +190,19 @@ where
         self.inner.watch_all(watchers, events);
     }
 
+    fn watch_all_backtrack(
+        &self,
+        watchers: &mut Watchers<'_>,
+        mut events: EnumSet<IntDomainEvent>,
+    ) {
+        let bound = IntDomainEvent::LowerBound | IntDomainEvent::UpperBound;
+        let intersection = events.intersection(bound);
+        if intersection.len() == 1 && self.scale.is_negative() {
+            events = events.symmetrical_difference(bound);
+        }
+        self.inner.watch_all_backtrack(watchers, events);
+    }
+
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         if self.scale.is_negative() {
             match self.inner.unpack_event(event) {
