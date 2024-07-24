@@ -38,7 +38,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 
         let rhs = context.register(
             self.rhs,
-            DomainEvents::UPPER_BOUND,
+            DomainEvents::BOUNDS,
             LocalId::from(array.len() as u32),
         );
 
