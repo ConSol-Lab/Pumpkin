@@ -160,9 +160,11 @@ pub struct ConstraintSatisfactionSolver {
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis
     pub(crate) reason_store: ReasonStore,
-    /// Contains events that need to be processe to notify propagators of event occurrences.
+    /// Contains events that need to be processed to notify propagators of [`IntDomainEvent`]
+    /// occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
-
+    /// Contains events that need to be processed to notify propagators of backtrack
+    /// [`IntDomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
     backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
     pub(crate) variable_literal_mappings: VariableLiteralMappings,
@@ -1218,7 +1220,10 @@ impl ConstraintSatisfactionSolver {
             self.assignments_propositional.num_trail_entries(),
         );
         self.assignments_integer
-            .synchronise(backtrack_level)
+            .synchronise(
+                backtrack_level,
+                self.watch_list_cp.is_watching_any_backtrack_events(),
+            )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)

@@ -353,7 +353,11 @@ impl AssignmentsInteger {
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
     /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
-    pub fn synchronise(&mut self, new_decision_level: usize) -> Vec<(DomainId, i32)> {
+    pub fn synchronise(
+        &mut self,
+        new_decision_level: usize,
+        is_watching_any_backtrack_events: bool,
+    ) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
         self.trail.synchronise(new_decision_level).for_each(|entry| {
             pumpkin_assert_moderate!(
@@ -365,12 +369,16 @@ impl AssignmentsInteger {
                 let value_before = self.domains[domain_id].lower_bound;
                 self.domains[domain_id].undo_trail_entry(&entry);
                 if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
-                    // This `domain_id` was unassigned while backtracking
-                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
+                    if is_watching_any_backtrack_events {
+                        // This `domain_id` was unassigned while backtracking
+                        self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
+                    }
+
                     // Variable used to be fixed but is not after backtracking
                     unfixed_variables.push((domain_id, value_before));
                 }
 
+                if is_watching_any_backtrack_events {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 match entry.predicate {
                     IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
@@ -386,6 +394,8 @@ impl AssignmentsInteger {
                         // This case has been handled before this
                     },
                 }
+                }
+
         });
         unfixed_variables
     }
@@ -595,7 +605,7 @@ mod tests {
             .tighten_lower_bound(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, true);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -616,7 +626,7 @@ mod tests {
             .tighten_upper_bound(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, true);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -637,7 +647,7 @@ mod tests {
             .remove_value_from_domain(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, true);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -658,7 +668,7 @@ mod tests {
             .make_assignment(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, true);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -863,7 +873,7 @@ mod tests {
             .remove_value_from_domain(d1, 5, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0);
+        let _ = assignment.synchronise(0, false);
 
         assert_eq!(5, assignment.get_upper_bound(d1));
     }
