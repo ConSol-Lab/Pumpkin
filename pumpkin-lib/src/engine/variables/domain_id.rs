@@ -75,6 +75,10 @@ impl IntegerVariable for DomainId {
         watchers.watch_all(*self, events);
     }
 
+    fn watch_all_backtrack(&self, watchers: &mut Watchers<'_>, events: EnumSet<IntDomainEvent>) {
+        watchers.watch_all_backtrack(*self, events);
+    }
+
     fn unpack_event(&self, event: OpaqueDomainEvent) -> IntDomainEvent {
         event.unwrap()
     }

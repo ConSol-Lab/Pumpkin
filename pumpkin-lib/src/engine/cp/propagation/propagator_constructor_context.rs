@@ -42,11 +42,12 @@ impl PropagatorConstructorContext<'_> {
     /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.
     /// The [`LocalId`] is internal information related to the propagator,
     /// which is used when calling [`Propagator::notify()`] to identify the variable.
+    ///
     /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
     /// variable in the internal array of variables.
     ///
-    /// Note that the [`LocalId`] is used since internally the propagator variable is a wrapper
-    /// around a variable 'view'.
+    /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
+    /// [`AffineView`]s.
     pub fn register<Var: IntegerVariable>(
         &mut self,
         var: Var,
@@ -62,6 +63,38 @@ impl PropagatorConstructorContext<'_> {
 
         let mut watchers = Watchers::new(propagator_var, self.watch_list);
         var.watch_all(&mut watchers, domain_events.get_int_events());
+
+        var
+    }
+
+    /// Subscribes the propagator to the given [`DomainEvents`] when they are undone during
+    /// backtracking. This method is complementary to [`PropagatorConstructorContext::register`],
+    /// the [`LocalId`]s provided to both of these method should be the same for the same variable.
+    ///
+    /// The domain events determine when [`Propagator::notify_backtrack()`] will be called on the
+    /// propagator. The [`LocalId`] is internal information related to the propagator,
+    /// which is used when calling [`Propagator::notify_backtrack()`] to identify the variable.
+    ///
+    /// Each variable *must* have a unique [`LocalId`]. Most often this would be its index of the
+    /// variable in the internal array of variables.
+    ///
+    /// Note that the [`LocalId`] is used to differentiate between [`DomainId`]s and
+    /// [`AffineView`]s.
+    pub fn register_for_backtrack_events<Var: IntegerVariable>(
+        &mut self,
+        var: Var,
+        domain_events: DomainEvents,
+        local_id: LocalId,
+    ) -> Var {
+        let propagator_var = PropagatorVarId {
+            propagator: self.propagator_id,
+            variable: local_id,
+        };
+
+        self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
+
+        let mut watchers = Watchers::new(propagator_var, self.watch_list);
+        var.watch_all_backtrack(&mut watchers, domain_events.get_int_events());
 
         var
     }

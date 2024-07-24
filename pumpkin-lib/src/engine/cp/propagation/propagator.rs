@@ -90,6 +90,27 @@ pub trait Propagator {
         EnqueueDecision::Enqueue
     }
 
+    /// Called when an event happens to one of the variables the propagator is subscribed to. This
+    /// method is called during backtrack when the domain of a variable has been undone.
+    ///
+    /// This can be used to incrementally maintain data structures or perform propagations, and
+    /// should only be used for computationally cheap logic. Expensive computation should be
+    /// performed in the [`Propagator::propagate`] method.
+    ///
+    /// By default the propagator does nothing when this method is called. Not all propagators will
+    /// benefit from implementing this, so it is not required to do so.
+    ///
+    /// Note that the variables and events to which the propagator is subscribed to are determined
+    /// upon propagator construction via [`PropagatorConstructor`],
+    /// by creating [`PropagatorVariable`]s using [`PropagatorConstructorContext::register()`].
+    fn notify_backtrack(
+        &mut self,
+        _context: &PropagationContext,
+        _local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) {
+    }
+
     /// Notifies the propagator when the domain of a literal has changed (i.e. it is assigned). See
     /// [`Propagator::notify`] for a more general explanation.
     ///

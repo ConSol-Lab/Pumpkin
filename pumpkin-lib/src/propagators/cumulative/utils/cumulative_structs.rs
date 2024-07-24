@@ -119,7 +119,6 @@ pub(crate) type TimeTableOverIntervalIncremental<Var> =
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
 #[derive(Debug)]
-#[allow(dead_code)] // Temporary until the structure is used
 pub(crate) struct UpdatedTaskInfo<Var> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
