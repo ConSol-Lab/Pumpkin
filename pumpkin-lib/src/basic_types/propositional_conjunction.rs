@@ -25,6 +25,10 @@ impl PropositionalConjunction {
     pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
         self.predicates_in_conjunction.iter()
     }
+
+    pub fn pop(&mut self) -> Option<Predicate> {
+        self.predicates_in_conjunction.pop()
+    }
 }
 
 impl FromIterator<Predicate> for PropositionalConjunction {
