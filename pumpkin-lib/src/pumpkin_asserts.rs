@@ -1,5 +1,5 @@
 #[cfg(all(not(test), not(feature = "debug-checks")))]
-pub const PUMPKIN_ASSERT_LEVEL_DEFINITION: u8 = PUMPKIN_ASSERT_EXTREME;
+pub const PUMPKIN_ASSERT_LEVEL_DEFINITION: u8 = PUMPKIN_ASSERT_SIMPLE;
 
 #[cfg(any(test, feature = "debug-checks"))]
 pub const PUMPKIN_ASSERT_LEVEL_DEFINITION: u8 = PUMPKIN_ASSERT_EXTREME;
