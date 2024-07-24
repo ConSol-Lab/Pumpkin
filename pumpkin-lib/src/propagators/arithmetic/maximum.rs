@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
@@ -121,8 +123,8 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         // This rule can be skipped because the previous rules establish UB(rhs) <= max{UB(a_i)}.
 
         // Rule 5.
-        // If there is only one variable with UB(a_i) >= LB(rhs), then the bounds for rhs and that
-        // variable should be intersected.
+        // If there is only one variable with UB(a_i) >= LB(rhs),
+        // then the bounds for rhs and that variable should be intersected.
         let rhs_lb = context.lower_bound(&self.rhs);
         let mut propagating_variable: Option<&ElementVar> = None;
         let mut propagation_reason = PropositionalConjunction::default();
@@ -144,29 +146,41 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         if let Some(propagating_variable) = propagating_variable {
             // Constrain the lower bound.
             let var_lb = context.lower_bound(propagating_variable);
-            if var_lb > rhs_lb {
-                propagation_reason.add(predicate![propagating_variable >= var_lb]);
-                context.set_lower_bound(&self.rhs, var_lb, propagation_reason.clone())?;
-                let _ = propagation_reason.pop();
-            } else if var_lb < rhs_lb {
-                propagation_reason.add(predicate![self.rhs >= rhs_lb]);
-                context.set_lower_bound(
-                    propagating_variable,
-                    rhs_lb,
-                    propagation_reason.clone(),
-                )?;
-                let _ = propagation_reason.pop();
+            match var_lb.cmp(&rhs_lb) {
+                Ordering::Less => {
+                    propagation_reason.add(predicate![self.rhs >= rhs_lb]);
+                    context.set_lower_bound(
+                        propagating_variable,
+                        rhs_lb,
+                        propagation_reason.clone(),
+                    )?;
+                    let _ = propagation_reason.pop();
+                }
+                Ordering::Greater => {
+                    propagation_reason.add(predicate![propagating_variable >= var_lb]);
+                    context.set_lower_bound(&self.rhs, var_lb, propagation_reason.clone())?;
+                    let _ = propagation_reason.pop();
+                }
+                Ordering::Equal => {
+                    // Do nothing.
+                }
             }
 
             // Constrain the upper bound.
             let var_ub = context.upper_bound(propagating_variable);
             let rhs_ub = context.upper_bound(&self.rhs);
-            if var_ub < rhs_ub {
-                propagation_reason.add(predicate![propagating_variable <= var_ub]);
-                context.set_upper_bound(&self.rhs, var_ub, propagation_reason)?;
-            } else if var_ub > rhs_ub {
-                propagation_reason.add(predicate![self.rhs <= rhs_ub]);
-                context.set_lower_bound(propagating_variable, rhs_ub, propagation_reason)?;
+            match var_ub.cmp(&rhs_ub) {
+                Ordering::Less => {
+                    propagation_reason.add(predicate![propagating_variable <= var_ub]);
+                    context.set_upper_bound(&self.rhs, var_ub, propagation_reason)?;
+                }
+                Ordering::Greater => {
+                    propagation_reason.add(predicate![self.rhs <= rhs_ub]);
+                    context.set_lower_bound(propagating_variable, rhs_ub, propagation_reason)?;
+                }
+                Ordering::Equal => {
+                    // Do nothing.
+                }
             }
         }
 
