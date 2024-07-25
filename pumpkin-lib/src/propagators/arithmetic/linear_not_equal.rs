@@ -129,7 +129,7 @@ where
         if (self.number_of_fixed_terms as usize == self.terms.len() - 1
             && !self.unfixed_variable_has_been_updated)
             || (self.number_of_fixed_terms as usize == self.terms.len()
-                && (self.fixed_lhs == self.rhs || self.should_recalculate_lhs))
+                && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs))
         {
             EnqueueDecision::Enqueue
         } else {
@@ -176,8 +176,11 @@ where
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        // If the left-hand side is out of date then we simply recalculate from scratch
-        if self.should_recalculate_lhs {
+        // If the left-hand side is out of date then we simply recalculate from scratch; we only do
+        // this when we check for a conflict
+        if self.should_recalculate_lhs
+            && self.number_of_fixed_terms as usize >= self.terms.len() - 1
+        {
             self.recalculate_fixed_variables(&context.as_readonly());
             self.should_recalculate_lhs = false;
         }
@@ -185,6 +188,8 @@ where
 
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms as usize == self.terms.len() - 1 {
+            pumpkin_assert_simple!(!self.should_recalculate_lhs);
+
             // We keep track of whether we have removed the value which could cause a conflict from
             // the unfixed variable
             self.unfixed_variable_has_been_updated = true;
@@ -216,7 +221,8 @@ where
                         .collect()
                 },
             )?;
-        } else {
+        } else if self.number_of_fixed_terms as usize == self.terms.len() {
+            pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
             self.check_for_conflict(&context.as_readonly())?;
         }
@@ -337,18 +343,19 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
                 .iter()
                 .filter(|&x_i| context.is_fixed(x_i))
                 .count()
-            && self.fixed_lhs
-                == self
-                    .terms
-                    .iter()
-                    .filter_map(|x_i| {
-                        if context.is_fixed(x_i) {
-                            Some(context.lower_bound(x_i))
-                        } else {
-                            None
-                        }
-                    })
-                    .sum()
+            && (self.should_recalculate_lhs
+                || self.fixed_lhs
+                    == self
+                        .terms
+                        .iter()
+                        .filter_map(|x_i| {
+                            if context.is_fixed(x_i) {
+                                Some(context.lower_bound(x_i))
+                            } else {
+                                None
+                            }
+                        })
+                        .sum())
     }
 }
 
