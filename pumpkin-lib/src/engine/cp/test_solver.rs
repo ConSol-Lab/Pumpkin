@@ -255,6 +255,20 @@ impl TestSolver {
             .expect("reason_ref should not be stale")
     }
 
+    pub(crate) fn get_reason_int_new<'a>(
+        &'a mut self,
+        predicate: Predicate,
+        propagators: &'a mut Vec<Box<(dyn Propagator + 'static)>>,
+    ) -> &[Predicate] {
+        let reason_ref = self
+            .assignments
+            .get_reason_for_predicate_brute_force(predicate);
+        let context = PropagationContext::new(&self.assignments);
+        self.reason_store
+            .get_or_compute_new(reason_ref, &context, propagators)
+            .expect("reason_ref should not be stale")
+    }
+
     pub(crate) fn get_reason_bool(
         &mut self,
         literal: Literal,
