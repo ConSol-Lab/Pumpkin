@@ -1,7 +1,7 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::basic_types::StorageKey;
+use crate::containers::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;

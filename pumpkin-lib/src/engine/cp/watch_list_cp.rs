@@ -3,7 +3,7 @@ use std::fmt::Display;
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
-use crate::basic_types::KeyedVec;
+use crate::containers::KeyedVec;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
 

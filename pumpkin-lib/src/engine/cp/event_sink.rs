@@ -1,6 +1,6 @@
 use enumset::EnumSet;
 
-use crate::basic_types::KeyedVec;
+use crate::containers::KeyedVec;
 use crate::engine::cp::IntDomainEvent;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]

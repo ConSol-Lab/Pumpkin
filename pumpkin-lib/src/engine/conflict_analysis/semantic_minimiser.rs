@@ -1,11 +1,11 @@
 use std::cmp;
 
 use crate::basic_types::HashSet;
-use crate::basic_types::KeyedVec;
+use crate::containers::KeyedVec;
+use crate::containers::SparseSet;
 use crate::engine::Assignments;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::propagators::SparseSet;
 use crate::variables::DomainId;
 
 #[derive(Clone, Debug)]

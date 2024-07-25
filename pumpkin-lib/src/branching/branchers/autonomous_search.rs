@@ -1,13 +1,13 @@
 use super::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::basic_types::KeyValueHeap;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::basic_types::StorageKey;
 use crate::branching::Brancher;
 use crate::branching::InDomainRandom;
 use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
+use crate::containers::KeyValueHeap;
+use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;

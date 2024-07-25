@@ -1,5 +1,5 @@
 use super::HashMap;
-use super::StorageKey;
+use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::pumpkin_assert_moderate;
 

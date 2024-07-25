@@ -9,6 +9,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use crate::basic_types::Inconsistency;
+use crate::containers::SparseSet;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
@@ -20,7 +21,6 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::propagators::CumulativeParameters;
-use crate::propagators::SparseSet;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
