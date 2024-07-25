@@ -1,4 +1,5 @@
 use super::ConflictAnalysisContext;
+use super::SemanticMinimiser;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::HashMap;
@@ -38,6 +39,7 @@ pub(crate) struct ResolutionConflictAnalyser {
     num_minimisation_calls: usize,
     num_literals_removed_total: usize,
     num_literals_seen_total: usize,
+    semantic_minimiser: SemanticMinimiser,
 }
 
 impl ResolutionConflictAnalyser {
@@ -220,6 +222,33 @@ impl ResolutionConflictAnalyser {
         if context.internal_parameters.learning_clause_minimisation {
             pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
             self.remove_dominated_literals(context);
+
+            let number_of_literals_before_semantic_minimisation =
+                self.analysis_result.learned_literals.len();
+            let mut minimised_clause = self.semantic_minimiser.minimise(
+                self.analysis_result.learned_literals.iter().copied(),
+                context.assignments_integer,
+                context.assignments_propositional,
+                context.variable_literal_mappings,
+            );
+            minimised_clause.sort_by(|a, b| {
+                context
+                    .assignments_propositional
+                    .get_literal_assignment_level(*b)
+                    .cmp(
+                        &context
+                            .assignments_propositional
+                            .get_literal_assignment_level(*a),
+                    )
+            });
+            self.analysis_result.learned_literals = minimised_clause;
+            context
+                .counters
+                .average_number_of_removed_literals_semantic
+                .add_term(
+                    (number_of_literals_before_semantic_minimisation
+                        - self.analysis_result.learned_literals.len()) as u64,
+                );
         }
 
         context
@@ -744,6 +773,10 @@ impl ResolutionConflictAnalyser {
         let num_literals_removed =
             num_literals_before_minimisation - self.analysis_result.learned_literals.len();
         self.num_literals_removed_total += num_literals_removed;
+        context
+            .counters
+            .average_number_of_removed_literals_recursive
+            .add_term(num_literals_removed as u64);
     }
 
     fn compute_label(&mut self, input_literal: Literal, context: &mut ConflictAnalysisContext) {

@@ -38,7 +38,7 @@
 /// \[1\] V. le C. de Saint-Marcq, P. Schaus, C. Solnon, and C. Lecoutre, ‘Sparse-sets for domain
 /// implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 /// (TRICS), 2013, pp. 1–10.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct SparseSet<T> {
     /// The number of elements which are currently in the domain
     size: usize,
@@ -99,7 +99,53 @@ impl<T> SparseSet<T> {
             // The element is part of the domain and should be removed
             self.size -= 1;
             self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+            let _ = self.domain.pop().expect("Has to have something to pop.");
+            self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
+    }
+
+    pub(crate) fn contains(&self, element: &T) -> bool {
+        (self.mapping)(element) < self.indices.len()
+            && self.indices[(self.mapping)(element)] < self.size
+    }
+
+    pub(crate) fn accommodate(&mut self, element: &T) {
+        let index = (self.mapping)(element);
+        if self.indices.len() <= index {
+            self.indices.resize(index + 1, usize::MAX);
+        }
+    }
+
+    pub(crate) fn insert(&mut self, element: T) {
+        if !self.contains(&element) {
+            self.accommodate(&element);
+
+            self.indices[(self.mapping)(&element)] = self.size;
+            self.domain.push(element);
+            self.size += 1;
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.size = 0;
+        for element in &self.domain {
+            self.indices[(self.mapping)(element)] = usize::MAX;
+        }
+        self.domain.clear();
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
+        self.domain[..self.size].iter()
+    }
+}
+
+impl<T> IntoIterator for SparseSet<T> {
+    type Item = T;
+
+    type IntoIter = std::iter::Take<std::vec::IntoIter<T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.domain.into_iter().take(self.size)
     }
 }
 
