@@ -2,7 +2,6 @@ use enumset::EnumSet;
 
 use super::TransformableVariable;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::Assignments;
@@ -43,13 +42,8 @@ pub trait IntegerVariable:
         trail_position: usize,
     ) -> bool;
 
-    /// Get a predicate description (bounds + holes) of the domain of this variable.
-    /// N.B. can be very expensive with large domains, and very large with holey domains
-    ///
-    /// This should not be used to explicitly check for holes in the domain, but only to build
-    /// explanations. If views change the observed domain, they will not change this description,
-    /// because it should be a description of the domain in the solver.
-    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate>;
+    /// Iterate over the values of the domain.
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32>;
 
     /// Remove a value from the domain of this variable.
     fn remove(
