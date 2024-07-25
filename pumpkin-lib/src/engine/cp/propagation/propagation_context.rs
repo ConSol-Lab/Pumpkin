@@ -67,7 +67,6 @@ impl<'a> PropagationContextMut<'a> {
         self.reification_literal = Some(reification_literal);
     }
 
-    #[allow(dead_code)]
     fn build_reason(&self, reason: Reason) -> Reason {
         if let Some(reification_literal) = self.reification_literal {
             match reason {
@@ -199,8 +198,9 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if var.contains(self.assignments, value) {
-            let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.remove(self.assignments, value, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.remove(self.assignments, value, Some(reason_ref));
         }
         Ok(())
     }
@@ -212,8 +212,9 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound < var.upper_bound(self.assignments) {
-            let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.set_upper_bound(self.assignments, bound, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.set_upper_bound(self.assignments, bound, Some(reason_ref));
         }
         Ok(())
     }
@@ -225,9 +226,11 @@ impl PropagationContextMut<'_> {
         reason: R,
     ) -> Result<(), EmptyDomain> {
         if bound > var.lower_bound(self.assignments) {
-            let reason = self.reason_store.push(self.propagator_id, reason.into());
-            return var.set_lower_bound(self.assignments, bound, Some(reason));
+            let reason = self.build_reason(reason.into());
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.set_lower_bound(self.assignments, bound, Some(reason_ref));
         }
+
         Ok(())
     }
 
