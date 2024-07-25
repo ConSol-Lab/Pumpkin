@@ -22,6 +22,10 @@ pub(crate) struct CompilationContext<'a> {
     /// Identifiers of variables that are outputs.
     pub(crate) outputs: Vec<Output>,
 
+    /// Literal which is always true
+    pub(crate) true_literal: Literal,
+    /// Literal which is always false
+    pub(crate) false_literal: Literal,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
@@ -65,8 +69,8 @@ pub(crate) enum Set {
 
 impl CompilationContext<'_> {
     pub(crate) fn new(solver: &mut Solver) -> CompilationContext<'_> {
-        // let true_literal = solver.get_true_literal();
-        // let false_literal = solver.get_false_literal();
+        let true_literal = solver.get_true_literal();
+        let false_literal = solver.get_false_literal();
 
         CompilationContext {
             solver,
@@ -74,6 +78,8 @@ impl CompilationContext<'_> {
 
             outputs: Default::default(),
 
+            true_literal,
+            false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_map: Default::default(),
