@@ -1,5 +1,8 @@
 use std::cmp;
 
+use super::ConflictAnalysisContext;
+use super::ConflictAnalysisResult;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashSet;
 use crate::basic_types::KeyedVec;
 use crate::engine::AssignmentsInteger;
@@ -49,12 +52,41 @@ impl Default for SemanticMinimiser {
 }
 
 impl SemanticMinimiser {
-    pub(crate) fn minimise_clause(
+    /// Minimises the learned literals in the provided [`ConflictAnalysisResult`] using semantic
+    /// minimization. See [`SemanticMinimiser`] for more information.
+    pub(crate) fn minimise(
+        &mut self,
+        context: &mut ConflictAnalysisContext,
+        analysis_result: &mut ConflictAnalysisResult,
+    ) {
+        let number_of_literals_before_semantic_minimisation =
+            analysis_result.learned_literals.len();
+        let mut minimised_clause = self.minimise_clause(
+            analysis_result.learned_literals.iter().copied(),
+            context.assignments_integer,
+            context.assignments_propositional,
+            context.variable_literal_mappings,
+        );
+
+        SemanticMinimiser::recompute_invariant_learned_clause(&mut minimised_clause, context);
+
+        analysis_result.learned_literals = minimised_clause;
+
+        context
+            .counters
+            .average_number_of_removed_literals_semantic
+            .add_term(
+                (number_of_literals_before_semantic_minimisation
+                    - analysis_result.learned_literals.len()) as u64,
+            );
+    }
+
+    fn minimise_clause(
         &mut self,
         learned_clause: impl Iterator<Item = Literal>,
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
-        variable_literal_mapping: &VariableLiteralMappings,
+        variable_literal_mappings: &VariableLiteralMappings,
     ) -> Vec<Literal> {
         // We get a clause and we turn it into a nogood by negating
         let nogood = learned_clause.map(|literal| !literal).collect();
@@ -65,7 +97,11 @@ impl SemanticMinimiser {
         self.clean_up();
 
         // Now we apply all of the predicates to our pseudo-domain
-        self.apply_predicates(&nogood, variable_literal_mapping, assignments_propositional);
+        self.apply_predicates(
+            &nogood,
+            variable_literal_mappings,
+            assignments_propositional,
+        );
 
         // Then we go over every domain present in the nogood
         for domain_id in self.present_ids.iter() {
@@ -80,7 +116,7 @@ impl SemanticMinimiser {
                 *domain_id,
                 &self.original_domains[domain_id],
                 &mut self.final_nogood,
-                variable_literal_mapping,
+                variable_literal_mappings,
                 assignments_propositional,
                 assignments_integer,
             );
@@ -91,6 +127,63 @@ impl SemanticMinimiser {
             .iter()
             .map(|literal| !(*literal))
             .collect::<Vec<_>>()
+    }
+
+    /// Recomputes the invariant of the learned clause (i.e. that the literal of the current
+    /// decision level should be in the first position and the literal of the next highest decision
+    /// level should be in the second position); note that some of the literals in the
+    /// learned clause can be unassigned in case there was a conflict -> there should only be 1 such
+    /// literal.
+    fn recompute_invariant_learned_clause(
+        learned_clause: &mut [Literal],
+        context: &ConflictAnalysisContext,
+    ) {
+        // We only recompute in case it is a non-unit learned clause
+        if learned_clause.len() > 1 {
+            let mut found_unassigned_literal = false;
+            let mut maximum_decision_level = 0;
+            let mut index = 0;
+
+            // We go through all the literals of the learned clause
+            while index < learned_clause.len() {
+                let literal = learned_clause[index];
+
+                if context
+                    .assignments_propositional
+                    .is_literal_assigned(literal)
+                {
+                    // If the literal has a decision level then we check whether it should be placed
+                    // at the first or second position of the learned clause
+                    if context
+                        .assignments_propositional
+                        .get_literal_assignment_level(literal)
+                        == context.assignments_propositional.get_decision_level()
+                    {
+                        // Should be placed at the first position
+                        learned_clause.swap(0, index);
+                    } else if context
+                        .assignments_propositional
+                        .get_literal_assignment_level(literal)
+                        > maximum_decision_level
+                    {
+                        // Should be placed at the second position
+                        maximum_decision_level = context
+                            .assignments_propositional
+                            .get_literal_assignment_level(literal);
+                        learned_clause.swap(1, index);
+                    }
+                } else {
+                    // We have found an unassigned literal, we first check whether no such literal
+                    // has been found previously.
+                    pumpkin_assert_simple!(!found_unassigned_literal);
+                    found_unassigned_literal = true;
+
+                    // Then we place it at the first position
+                    learned_clause.swap(0, index);
+                }
+                index += 1;
+            }
+        }
     }
 
     /// Applies the [`IntegerPredicate`]s which are given in the `nogood` to [`Self::domains`]. If
