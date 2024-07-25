@@ -444,6 +444,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                self.satisfaction_solver.conclude_proof_unsat();
                 return OptimisationResult::Unsatisfiable;
             }
             CSPSolverExecutionFlag::Timeout => {
