@@ -104,11 +104,13 @@ impl<T> SparseSet<T> {
         }
     }
 
+    /// Determines whehter the `element` is contained in the domain of the sparse-set.
     pub(crate) fn contains(&self, element: &T) -> bool {
         (self.mapping)(element) < self.indices.len()
             && self.indices[(self.mapping)(element)] < self.size
     }
 
+    /// Accomodates the `element`.
     pub(crate) fn accommodate(&mut self, element: &T) {
         let index = (self.mapping)(element);
         if self.indices.len() <= index {
@@ -116,6 +118,7 @@ impl<T> SparseSet<T> {
         }
     }
 
+    /// Inserts the element if it is not already contained in the sparse set.
     pub(crate) fn insert(&mut self, element: T) {
         if !self.contains(&element) {
             self.accommodate(&element);
@@ -126,14 +129,7 @@ impl<T> SparseSet<T> {
         }
     }
 
-    pub(crate) fn clear(&mut self) {
-        self.size = 0;
-        for element in &self.domain {
-            self.indices[(self.mapping)(element)] = usize::MAX;
-        }
-        self.domain.clear();
-    }
-
+    /// Returns an iterator which goes over the values in the domain of the sparse-set
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.domain[..self.size].iter()
     }

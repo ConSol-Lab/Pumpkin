@@ -225,22 +225,16 @@ impl ResolutionConflictAnalyser {
 
             let number_of_literals_before_semantic_minimisation =
                 self.analysis_result.learned_literals.len();
-            let mut minimised_clause = self.semantic_minimiser.minimise(
+            let mut minimised_clause = self.semantic_minimiser.minimise_clause(
                 self.analysis_result.learned_literals.iter().copied(),
                 context.assignments_integer,
                 context.assignments_propositional,
                 context.variable_literal_mappings,
             );
-            minimised_clause.sort_by(|a, b| {
-                context
-                    .assignments_propositional
-                    .get_literal_assignment_level(*b)
-                    .cmp(
-                        &context
-                            .assignments_propositional
-                            .get_literal_assignment_level(*a),
-                    )
-            });
+            ResolutionConflictAnalyser::recompute_invariant_learned_clause(
+                &mut minimised_clause,
+                context,
+            );
             self.analysis_result.learned_literals = minimised_clause;
             context
                 .counters
@@ -258,6 +252,63 @@ impl ResolutionConflictAnalyser {
         pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
         // the return value is stored in the input 'analysis_result'
         self.analysis_result.clone()
+    }
+
+    /// Recomputes the invariant of the learned clause (i.e. that the literal of the current
+    /// decision level should be in the first position and the literal of the next highest decision
+    /// level should be in the second position); note that some of the literals in the
+    /// learned clause can be unassigned in case there was a conflict -> there should only be 1 such
+    /// literal.
+    fn recompute_invariant_learned_clause(
+        learned_clause: &mut [Literal],
+        context: &ConflictAnalysisContext,
+    ) {
+        // We only recompute in case it is a non-unit learned clause
+        if learned_clause.len() > 1 {
+            let mut found_unassigned_literal = false;
+            let mut maximum_decision_level = 0;
+            let mut index = 0;
+
+            // We go through all the literals of the learned clause
+            while index < learned_clause.len() {
+                let literal = learned_clause[index];
+
+                if context
+                    .assignments_propositional
+                    .is_literal_assigned(literal)
+                {
+                    // If the literal has a decision level then we check whether it should be placed
+                    // at the first or second position of the learned clause
+                    if context
+                        .assignments_propositional
+                        .get_literal_assignment_level(literal)
+                        == context.assignments_propositional.get_decision_level()
+                    {
+                        // Should be placed at the first position
+                        learned_clause.swap(0, index);
+                    } else if context
+                        .assignments_propositional
+                        .get_literal_assignment_level(literal)
+                        > maximum_decision_level
+                    {
+                        // Should be placed at the second position
+                        maximum_decision_level = context
+                            .assignments_propositional
+                            .get_literal_assignment_level(literal);
+                        learned_clause.swap(1, index);
+                    }
+                } else {
+                    // We have found an unassigned literal, we first check whether no such literal
+                    // has been found previously.
+                    pumpkin_assert_simple!(!found_unassigned_literal);
+                    found_unassigned_literal = true;
+
+                    // Then we place it at the first position
+                    learned_clause.swap(0, index);
+                }
+                index += 1;
+            }
+        }
     }
 
     // computes the learned clause containing only decision literals and stores it in

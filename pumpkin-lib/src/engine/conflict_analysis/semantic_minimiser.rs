@@ -49,7 +49,7 @@ impl Default for SemanticMinimiser {
 }
 
 impl SemanticMinimiser {
-    pub(crate) fn minimise(
+    pub(crate) fn minimise_clause(
         &mut self,
         learned_clause: impl Iterator<Item = Literal>,
         assignments_integer: &AssignmentsInteger,
@@ -58,17 +58,24 @@ impl SemanticMinimiser {
     ) -> Vec<Literal> {
         // We get a clause and we turn it into a nogood by negating
         let nogood = learned_clause.map(|literal| !literal).collect();
+
+        // Then we ensure that any newly defined variables are added to our structures
         self.accommodate(assignments_integer);
+        // We clean up from the previous invocation
         self.clean_up();
+
+        // Now we apply all of the predicates to our pseudo-domain
         self.apply_predicates(&nogood, variable_literal_mapping, assignments_propositional);
 
-        // Compile the nogood based on the internal state.
-        // Add domain description to the helper.
+        // Then we go over every domain present in the nogood
         for domain_id in self.present_ids.iter() {
-            // If at least one domain is inconsistent, we can stop.
+            // As soon as one domain is inconsistent, we know that we can stop
             if self.domains[domain_id].inconsistent {
                 return vec![assignments_propositional.true_literal];
             }
+
+            // Then we add the predicates which describe the current domain; note that this removes
+            // any implied predicates
             self.domains[domain_id].add_domain_description_to_vector(
                 *domain_id,
                 &self.original_domains[domain_id],
@@ -79,13 +86,16 @@ impl SemanticMinimiser {
             );
         }
 
-        // We store a nogood in the helper and we turn it into a clause by negating
+        // We turn the final nogood into a clause by negating it
         self.final_nogood
             .iter()
             .map(|literal| !(*literal))
             .collect::<Vec<_>>()
     }
 
+    /// Applies the [`IntegerPredicate`]s which are given in the `nogood` to [`Self::domains`]. If
+    /// the [`Literal`] in the nogood has no corresponding [`IntegerPredicate`] then it is directly
+    /// added to the nogood as we have no semantic information concerning it.
     fn apply_predicates(
         &mut self,
         nogood: &Vec<Literal>,
@@ -93,10 +103,13 @@ impl SemanticMinimiser {
         assignments_propositional: &AssignmentsPropositional,
     ) {
         // Apply the predicates to the domains in a straight-forward way.
-        // Later we will take into account the effect of holes on the domain.
+        // Note that we take into account the effect of holes on the upper/lower bound after this
+        // loop.
         for literal in nogood {
             let predicate = variable_literal_mapping.get_predicates(*literal).next();
             if let Some(predicate) = predicate {
+                // If there is a corresponding predicate then we add it to the domain of that domain
+                // id
                 self.present_ids.insert(predicate.get_domain());
 
                 match predicate {
@@ -128,10 +141,17 @@ impl SemanticMinimiser {
             } else if *literal != assignments_propositional.true_literal
                 && *literal != assignments_propositional.false_literal
             {
+                // If it is a non-trivial literal then we add it to the nogood
                 self.final_nogood.push(*literal);
             }
         }
 
+        // For every integer variable which is now present we do the following:
+        // - Propagate the lower-bound based on holes
+        // - Propagate the upper-bound based on holes
+        // - Remove holes which are not part of the domain description; e.g. the hole `[x != 5]` is
+        //   redundant if `[x >= 7]`
+        // - Check the final consistency of the domains
         for domain_id in self.present_ids.iter() {
             self.domains[*domain_id].propagate_holes_on_lower_bound();
             self.domains[*domain_id].propagate_holes_on_upper_bound();
@@ -140,6 +160,7 @@ impl SemanticMinimiser {
         }
     }
 
+    /// Accomodates the variables which have been newly defined in the provided `assignments`.
     fn accommodate(&mut self, assignments: &AssignmentsInteger) {
         pumpkin_assert_simple!(self.domains.len() == self.original_domains.len());
 
@@ -154,6 +175,8 @@ impl SemanticMinimiser {
         }
     }
 
+    /// Adds a new [`SimpleIntegerDomain`] with lower-bound `lower-bound`, upper-bound `upper-bound`
+    /// and initial holes in the domain `holes`.
     fn grow(&mut self, lower_bound: i32, upper_bound: i32, holes: Vec<i32>) {
         let initial_domain = SimpleIntegerDomain {
             lower_bound,
@@ -165,17 +188,24 @@ impl SemanticMinimiser {
         self.domains.push(initial_domain);
     }
 
+    /// Cleans up the internal structures such that a new iteration can take place; it performs the
+    /// following:
+    /// - We reset the domains of the present ids
+    /// - We remove all of the present ids
+    /// - We clear the final nogood
     fn clean_up(&mut self) {
         // Remove the domain ids from the present domain ids.
         let vals: Vec<DomainId> = self.present_ids.iter().copied().collect();
-        self.present_ids.clear();
+
         for domain_id in vals {
             self.domains[domain_id] = self.original_domains[domain_id].clone();
+            self.present_ids.remove(&domain_id)
         }
         self.final_nogood.clear();
     }
 }
 
+/// A simple representation of a domain.
 #[derive(Clone, Default, Debug)]
 struct SimpleIntegerDomain {
     lower_bound: i32,
@@ -193,10 +223,10 @@ impl SimpleIntegerDomain {
         self.upper_bound = cmp::min(self.upper_bound, upper_bound);
     }
 
+    /// Add the hole if it is within the domain.
+    /// Note that we do not adjust bounds due to holes being at the border. This is taken care of
+    /// by other functions (propagate bounds based on holes).
     fn add_hole(&mut self, hole: i32) {
-        // Add the hole if it is within the domain.
-        // Note that we do not adjust bounds due to holes being at the border. This is taken care of
-        // by other functions (propagate bounds based on holes).
         if self.lower_bound <= hole && hole <= self.upper_bound {
             let _ = self.holes.insert(hole);
         }
@@ -249,6 +279,7 @@ impl SimpleIntegerDomain {
             .retain(|hole| self.lower_bound < *hole && *hole < self.upper_bound);
     }
 
+    /// Adds the description of the `domain_id` to the `description`.
     fn add_domain_description_to_vector(
         &self,
         domain_id: DomainId,
@@ -258,7 +289,7 @@ impl SimpleIntegerDomain {
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) {
-        // If the domain assigned at a nonroot level, this is just one predicate.
+        // We add an assignment predicate if the variable is not assigned at the root
         if self.lower_bound == self.upper_bound
             && self.lower_bound != original_domain.lower_bound
             && self.upper_bound != original_domain.upper_bound
@@ -275,7 +306,7 @@ impl SimpleIntegerDomain {
             return;
         }
 
-        // Add bounds but avoid root assignments.
+        // Add the lower-bound to the description if it is different from the root-level bound
         if self.lower_bound != original_domain.lower_bound {
             description.push(
                 variable_literal_mappings.get_literal(
@@ -288,6 +319,7 @@ impl SimpleIntegerDomain {
             );
         }
 
+        // Add the upper-bound to the description if it is different from the root-level bound
         if self.upper_bound != original_domain.upper_bound {
             description.push(
                 variable_literal_mappings.get_literal(
@@ -300,12 +332,11 @@ impl SimpleIntegerDomain {
             );
         }
 
-        // Add nonroot holes.
+        // Add holes to the description if they were not there at the root-level
         for hole in self.holes.iter() {
-            // Only record holes that are within the lower and upper bound,
-            // that are not root assignments.
-            // Since bound values cannot be in the holes,
-            // we can use '<' or '>'.
+            // Only record holes that are within the lower and upper bound, that are not root
+            // assignments.
+            // Since bound values cannot be in the holes, we can use '<' or '>'.
             if self.lower_bound < *hole
                 && *hole < self.upper_bound
                 && !original_domain.holes.contains(hole)
@@ -455,7 +486,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let p = p.minimise(
+        let p = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -479,7 +510,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let p = p.minimise(
+        let p = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -508,7 +539,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let p = p.minimise(
+        let p = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -533,7 +564,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let p = p.minimise(
+        let p = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -558,14 +589,14 @@ mod tests {
             &assignments_propositional,
         );
 
-        let _ = p.minimise(
+        let _ = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
             &variable_literal_mappings,
         );
 
-        let p = p.minimise(
+        let p = p.minimise_clause(
             vec![].into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -595,7 +626,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -640,7 +671,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -689,7 +720,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -741,7 +772,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -778,7 +809,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -815,7 +846,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
@@ -853,7 +884,7 @@ mod tests {
             &assignments_propositional,
         );
 
-        let literals = p.minimise(
+        let literals = p.minimise_clause(
             learned_clause.into_iter(),
             &assignments_integer,
             &assignments_propositional,
