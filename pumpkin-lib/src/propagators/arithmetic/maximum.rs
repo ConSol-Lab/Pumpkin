@@ -129,46 +129,13 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
             }
         }
         // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is be
-        // Some. In that case, intersect the bounds of that variable and the rhs.
-        // This means taking the stronger lower and upper bound, and applying it to both variables.
+        // Some. In that case, intersect the bounds of that variable and the rhs. Given previous
+        // rules, only the lower bound of the propagated variable needs to be propagated.
         if let Some(propagating_variable) = propagating_variable {
-            // Constrain the lower bound.
             let var_lb = context.lower_bound(propagating_variable);
-            match var_lb.cmp(&rhs_lb) {
-                Ordering::Less => {
-                    propagation_reason.add(predicate![self.rhs >= rhs_lb]);
-                    context.set_lower_bound(
-                        propagating_variable,
-                        rhs_lb,
-                        propagation_reason.clone(),
-                    )?;
-                    let _ = propagation_reason.pop();
-                }
-                Ordering::Greater => {
-                    propagation_reason.add(predicate![propagating_variable >= var_lb]);
-                    context.set_lower_bound(&self.rhs, var_lb, propagation_reason.clone())?;
-                    let _ = propagation_reason.pop();
-                }
-                Ordering::Equal => {
-                    // Do nothing.
-                }
-            }
-
-            // Constrain the upper bound.
-            let var_ub = context.upper_bound(propagating_variable);
-            let rhs_ub = context.upper_bound(&self.rhs);
-            match var_ub.cmp(&rhs_ub) {
-                Ordering::Less => {
-                    propagation_reason.add(predicate![propagating_variable <= var_ub]);
-                    context.set_upper_bound(&self.rhs, var_ub, propagation_reason)?;
-                }
-                Ordering::Greater => {
-                    propagation_reason.add(predicate![self.rhs <= rhs_ub]);
-                    context.set_lower_bound(propagating_variable, rhs_ub, propagation_reason)?;
-                }
-                Ordering::Equal => {
-                    // Do nothing.
-                }
+            if var_lb < rhs_lb {
+                propagation_reason.add(predicate![self.rhs >= rhs_lb]);
+                context.set_lower_bound(propagating_variable, rhs_lb, propagation_reason)?;
             }
         }
 
