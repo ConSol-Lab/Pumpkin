@@ -183,7 +183,7 @@ where
             self.recalculate_fixed_variables(&context.as_readonly());
             self.should_recalculate_lhs = false;
         }
-        pumpkin_assert_extreme!(self.is_propagator_state_consistent(&context.as_readonly()));
+        pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
 
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms as usize == self.terms.len() - 1 {
@@ -335,7 +335,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Checks whether the number of fixed terms is equal to the number of fixed terms in the
     /// provided [`PropagationContext`] and whether the value of the fixed lhs is the same as in the
     /// provided [`PropagationContext`].
-    fn is_propagator_state_consistent(&self, context: &PropagationContext) -> bool {
+    fn is_propagator_state_consistent(&self, context: PropagationContext) -> bool {
         self.number_of_fixed_terms as usize
             == self
                 .terms
