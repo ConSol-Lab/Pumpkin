@@ -46,7 +46,7 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
 
     /// The number of fixed terms; note that this constraint can only propagate when there is a
     /// single unfixed variable and can only detect conflicts if all variables are designed
-    number_of_fixed_terms: u32,
+    number_of_fixed_terms: usize,
     /// The sum of the values of the fixed terms
     fixed_lhs: i32,
     /// Indicates whether the single unfixed variable has been updated; if this is the case then
@@ -121,13 +121,13 @@ where
         // Either the number of fixed variables is the number of terms - 1 in which case we can
         // propagate if it has not been updated before; if it has been updated then we don't need to
         // remove the value from its domain again.
-        let can_propagate = self.number_of_fixed_terms as usize == self.terms.len() - 1
+        let can_propagate = self.number_of_fixed_terms == self.terms.len() - 1
             && !self.unfixed_variable_has_been_updated;
         // Otherwise the number of fixed variables is equal to the number of terms in the following
         // cases:
         // - Either we can report a conflict
         // - Or the sum of the values of the left-hand side is inaccurate and we should recalculate
-        let is_conflicting_or_outdated = self.number_of_fixed_terms as usize == self.terms.len()
+        let is_conflicting_or_outdated = self.number_of_fixed_terms == self.terms.len()
             && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs);
         if can_propagate || is_conflicting_or_outdated {
             EnqueueDecision::Enqueue
@@ -177,16 +177,14 @@ where
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
-        if self.should_recalculate_lhs
-            && self.number_of_fixed_terms as usize >= self.terms.len() - 1
-        {
+        if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
             self.recalculate_fixed_variables(context.as_readonly());
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
 
         // If there is only 1 unfixed variable, then we can propagate
-        if self.number_of_fixed_terms as usize == self.terms.len() - 1 {
+        if self.number_of_fixed_terms == self.terms.len() - 1 {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
 
             // We keep track of whether we have removed the value which could cause a conflict from
@@ -219,7 +217,7 @@ where
                         .collect()
                 },
             )?;
-        } else if self.number_of_fixed_terms as usize == self.terms.len() {
+        } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
             self.check_for_conflict(context.as_readonly())?;
@@ -297,20 +295,20 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
     fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
-        self.fixed_lhs = 0;
         self.unfixed_variable_has_been_updated = false;
-        self.number_of_fixed_terms = self
-            .terms
-            .iter()
-            .map(|term| {
-                if context.is_fixed(term) {
-                    self.fixed_lhs += context.lower_bound(term);
-                    1
-                } else {
-                    0
-                }
-            })
-            .sum();
+        (self.fixed_lhs, self.number_of_fixed_terms) =
+            self.terms
+                .iter()
+                .fold((0, 0), |(fixed_lhs, number_of_fixed_terms), term| {
+                    if context.is_fixed(term) {
+                        (
+                            fixed_lhs + context.lower_bound(term),
+                            number_of_fixed_terms + 1,
+                        )
+                    } else {
+                        (fixed_lhs, number_of_fixed_terms)
+                    }
+                })
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
@@ -319,7 +317,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
         context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
-        if self.number_of_fixed_terms as usize == self.terms.len() && self.fixed_lhs == self.rhs {
+        if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
             let failure_reason: PropositionalConjunction = self
                 .terms
                 .iter()
@@ -335,25 +333,29 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// provided [`PropagationContext`] and whether the value of the fixed lhs is the same as in the
     /// provided [`PropagationContext`].
     fn is_propagator_state_consistent(&self, context: PropagationContext) -> bool {
-        self.number_of_fixed_terms as usize
-            == self
-                .terms
-                .iter()
-                .filter(|&x_i| context.is_fixed(x_i))
-                .count()
-            && (self.should_recalculate_lhs
-                || self.fixed_lhs
-                    == self
-                        .terms
-                        .iter()
-                        .filter_map(|x_i| {
-                            if context.is_fixed(x_i) {
-                                Some(context.lower_bound(x_i))
-                            } else {
-                                None
-                            }
-                        })
-                        .sum())
+        let expected_number_of_fixed_terms = self
+            .terms
+            .iter()
+            .filter(|&x_i| context.is_fixed(x_i))
+            .count();
+        let number_of_fixed_terms_is_correct =
+            self.number_of_fixed_terms == expected_number_of_fixed_terms;
+
+        let expected_fixed_lhs = self
+            .terms
+            .iter()
+            .filter_map(|x_i| {
+                if context.is_fixed(x_i) {
+                    Some(context.lower_bound(x_i))
+                } else {
+                    None
+                }
+            })
+            .sum();
+        let lhs_is_outdated_or_correct =
+            self.should_recalculate_lhs || self.fixed_lhs == expected_fixed_lhs;
+
+        number_of_fixed_terms_is_correct && lhs_is_outdated_or_correct
     }
 }
 
