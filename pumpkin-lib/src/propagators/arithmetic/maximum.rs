@@ -126,7 +126,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
                 propagation_reason.add(predicate![var <= rhs_lb - 1]);
             }
         }
-        // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is be
+        // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is
         // Some. In that case, intersect the bounds of that variable and the rhs. Given previous
         // rules, only the lower bound of the propagated variable needs to be propagated.
         if let Some(propagating_variable) = propagating_variable {
