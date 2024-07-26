@@ -652,26 +652,22 @@ impl Solver {
 
 /// Proof logging methods
 impl Solver {
-    // todo: add proof logging
-    // #[doc(hidden)]
-    // /// Conclude the proof with the unsatisfiable claim.
-    // ///
-    // /// This method will finish the proof. Any new operation will not be logged to the proof.
-    // pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
-    //     self.satisfaction_solver.conclude_proof_unsat()
-    // }
+    #[doc(hidden)]
+    /// Conclude the proof with the unsatisfiable claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_unsat(&mut self) {
+        self.satisfaction_solver.conclude_proof_unsat()
+    }
 
-    // #[doc(hidden)]
-    // /// Conclude the proof with the optimality claim.
-    // ///
-    // /// This method will finish the proof. Any new operation will not be logged to the proof.
-    // pub fn conclude_proof_optimal(&mut self, bound: Literal) -> std::io::Result<()> {
-    //     self.satisfaction_solver.conclude_proof_optimal(bound)
-    // }
-    //
-    // pub(crate) fn into_satisfaction_solver(self) -> ConstraintSatisfactionSolver {
-    //     self.satisfaction_solver
-    // }
+    #[doc(hidden)]
+    /// Conclude the proof with the optimality claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_optimal(&mut self, bound: Literal) {
+        self.satisfaction_solver
+            .conclude_proof_optimal(bound.into())
+    }
 }
 
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
