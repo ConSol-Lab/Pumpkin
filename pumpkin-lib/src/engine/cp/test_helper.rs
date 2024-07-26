@@ -123,16 +123,6 @@ impl TestSolver {
         )
     }
 
-    pub(crate) fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments_integer
-            .tighten_lower_bound(var, bound, None)
-    }
-
-    pub(crate) fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments_integer
-            .tighten_upper_bound(var, bound, None)
-    }
-
     pub(crate) fn set_literal(&mut self, var: Literal, val: bool) {
         self.assignments_propositional
             .enqueue_decision_literal(if val { var } else { !var });
@@ -205,19 +195,6 @@ impl TestSolver {
                 let _ = propagator.notify(context, propagator_var.variable, event.into());
             }
         }
-    }
-
-    pub(crate) fn notify(
-        &mut self,
-        propagator: &mut BoxedPropagator,
-        event: OpaqueDomainEvent,
-        local_id: LocalId,
-    ) -> EnqueueDecision {
-        propagator.notify(
-            PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
-            local_id,
-            event,
-        )
     }
 
     pub(crate) fn get_reason_int(
