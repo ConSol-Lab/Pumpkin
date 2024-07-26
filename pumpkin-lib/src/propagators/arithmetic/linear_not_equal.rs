@@ -121,16 +121,15 @@ where
         // Either the number of fixed variables is the number of terms - 1 in which case we can
         // propagate if it has not been updated before; if it has been updated then we don't need to
         // remove the value from its domain again.
-        //
+        let can_propagate = self.number_of_fixed_terms as usize == self.terms.len() - 1
+            && !self.unfixed_variable_has_been_updated;
         // Otherwise the number of fixed variables is equal to the number of terms in the following
         // cases:
         // - Either we can report a conflict
         // - Or the sum of the values of the left-hand side is inaccurate and we should recalculate
-        if (self.number_of_fixed_terms as usize == self.terms.len() - 1
-            && !self.unfixed_variable_has_been_updated)
-            || (self.number_of_fixed_terms as usize == self.terms.len()
-                && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs))
-        {
+        let is_conflicting_or_outdated = self.number_of_fixed_terms as usize == self.terms.len()
+            && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs);
+        if can_propagate || is_conflicting_or_outdated {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
