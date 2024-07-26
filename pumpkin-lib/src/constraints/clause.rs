@@ -4,12 +4,16 @@ use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the constraint `\/ literals`
+/// Creates the [`NegatableConstraint`] `\/ literal`
+///
+/// Its negation is `/\ !literal`
 pub fn clause(literals: impl Into<Vec<Literal>>) -> impl NegatableConstraint {
     Clause(literals.into())
 }
 
-/// Creates the constraint `/\ literals`
+/// Creates the [`NegatableConstraint`] `/\ literal`
+///
+/// Its negation is `\/ !literal`
 pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstraint {
     Conjunction(literals.into())
 }

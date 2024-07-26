@@ -9,7 +9,7 @@ use crate::variables::TransformableVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the constraint `\sum weights_i * bools_i <= rhs`.
+/// Creates the [`Constraint`] `\sum weights_i * bools_i <= rhs`.
 pub fn boolean_less_than_or_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Literal]>>,
@@ -22,7 +22,7 @@ pub fn boolean_less_than_or_equals(
     }
 }
 
-/// Creates the constraint `\sum weights_i * bools_i == rhs`.
+/// Creates the [`Constraint`] `\sum weights_i * bools_i == rhs`.
 pub fn boolean_equals(
     weights: impl Into<Box<[i32]>>,
     bools: impl Into<Box<[Literal]>>,
