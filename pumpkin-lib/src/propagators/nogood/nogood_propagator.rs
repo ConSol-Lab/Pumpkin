@@ -7,8 +7,8 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::containers::KeyedVec;
-use crate::containers::SparseSet;
 use crate::containers::StorageKey;
+use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
@@ -108,7 +108,7 @@ pub(crate) struct NogoodPropagator {
     // todo: could improve the data structure for watching.
     watch_lists: KeyedVec<DomainId, WatchList>,
     enqueued_updates: EventSink,
-    lbd_helper: SparseSet<u32>,
+    lbd_helper: Lbd,
     activity_bump_increment: f32,
     parameters: LearningOptions,
 }
@@ -158,7 +158,6 @@ impl std::fmt::Display for LearnedNogoodSortingStrategy {
 
 impl Default for NogoodPropagator {
     fn default() -> Self {
-        let mapping = |x: &u32| *x as usize;
         Self {
             nogoods: Default::default(),
             permanent_nogoods: Default::default(),
@@ -168,7 +167,7 @@ impl Default for NogoodPropagator {
             is_in_infeasible_state: Default::default(),
             watch_lists: Default::default(),
             enqueued_updates: Default::default(),
-            lbd_helper: SparseSet::new(vec![], mapping),
+            lbd_helper: Lbd::default(),
             parameters: LearningOptions::default(),
             activity_bump_increment: 1.0,
         }
@@ -215,48 +214,6 @@ impl NogoodPropagator {
         // Done with preprocessing, the result is stored in the input nogood.
     }
 
-    fn compute_lbd(
-        predicates: &[Predicate],
-        lbd_helper: &mut SparseSet<u32>,
-        assignments: &Assignments,
-    ) -> u32 {
-        for predicate in predicates.iter().enumerate() {
-            if assignments
-                .get_decision_level_for_predicate(predicate.1)
-                .is_none()
-            {
-                println!("slice size: {}, idx: {}", predicates.len(), predicate.0);
-                println!("DEC LEVEL VIOL: {}", assignments.get_decision_level());
-                println!(
-                    "\t pred eva: T{} F{} dec{}",
-                    assignments.is_predicate_satisfied(*predicate.1),
-                    assignments.is_predicate_falsified(*predicate.1),
-                    assignments.is_decision_predicate(predicate.1)
-                );
-
-                if assignments.is_predicate_falsified(*predicate.1) {
-                    println!(
-                        "false dec lvl: {}",
-                        assignments
-                            .get_decision_level_for_predicate(&!*predicate.1)
-                            .unwrap()
-                    );
-                    println!("pred: {}", *predicate.1);
-                }
-            }
-        }
-
-        lbd_helper.clear();
-        lbd_helper.accommodate(&(assignments.get_decision_level() as u32));
-        for predicate in predicates {
-            let decision_level = assignments
-                .get_decision_level_for_predicate(predicate)
-                .unwrap() as u32;
-            lbd_helper.insert(decision_level);
-        }
-        lbd_helper.len() as u32
-    }
-
     // Learned nogood during search.
     pub(crate) fn add_asserting_nogood(
         &mut self,
@@ -273,11 +230,9 @@ impl NogoodPropagator {
 
         // Skip the zero-th predicate since it is unassigned,
         // but will be assigned at the level of the predicate at index one.
-        let lbd = Self::compute_lbd(
-            &nogood.as_slice()[1..],
-            &mut self.lbd_helper,
-            context.assignments(),
-        );
+        let lbd = self
+            .lbd_helper
+            .compute_lbd(&nogood.as_slice()[1..], context.assignments());
 
         // Add the nogood to the database.
         // If there is an available nogood id, use it, otherwise allocate a fresh id.
@@ -1810,11 +1765,10 @@ impl Propagator for NogoodPropagator {
             // LBD update.
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.
-            let current_lbd = Self::compute_lbd(
-                &self.nogoods[id].predicates.as_slice()[1..],
-                &mut self.lbd_helper,
-                assignments,
-            );
+            let current_lbd = self
+                .lbd_helper
+                .compute_lbd(&self.nogoods[id].predicates.as_slice()[1..], assignments);
+
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogoods[id].lbd {
                 self.nogoods[id].lbd = current_lbd;
