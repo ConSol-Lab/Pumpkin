@@ -163,9 +163,9 @@ mod tests {
     fn removal() {
         let mut sparse_set = SparseSet::new(vec![0, 1, 2], mapping_function);
         sparse_set.remove(&1);
-        assert_eq!(sparse_set.domain, vec![0, 2, 1]);
+        assert_eq!(sparse_set.domain, vec![0, 2]);
         assert_eq!(sparse_set.size, 2);
-        assert_eq!(sparse_set.indices, vec![0, 2, 1]);
+        assert_eq!(sparse_set.indices, vec![0, usize::MAX, 1]);
     }
 
     #[test]
