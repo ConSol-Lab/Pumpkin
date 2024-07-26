@@ -218,7 +218,7 @@ impl TestSolver {
         Ok(())
     }
 
-    fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
+    pub(crate) fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
         let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
         let context = PropagationContext::new(&self.assignments);
         for (event, domain) in events {

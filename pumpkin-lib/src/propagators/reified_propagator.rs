@@ -11,6 +11,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::DomainEvents;
 use crate::predicates::PropositionalConjunction;
+use crate::pumpkin_assert_simple;
 use crate::variables::Literal;
 
 /// Propagator constructor for [`ReifiedPropagator`].
@@ -76,11 +77,12 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        if local_id <= self.reification_literal_id {
+        if local_id < self.reification_literal_id {
             let decision = self.propagator.notify(context, local_id, event);
             self.filter_enqueue_decision(context, decision)
         } else {
-            panic!("no integer variables are registered beyond those from the wrapped propagator")
+            pumpkin_assert_simple!(local_id == self.reification_literal_id);
+            EnqueueDecision::Enqueue
         }
     }
 
@@ -93,7 +95,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         if local_id <= self.reification_literal_id {
             self.propagator.notify_backtrack(context, local_id, event)
         } else {
-            panic!("no integer variables are registered beyond those from the wrapped propagator")
+            pumpkin_assert_simple!(local_id == self.reification_literal_id);
         }
     }
 

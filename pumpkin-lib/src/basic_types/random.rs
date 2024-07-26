@@ -173,14 +173,20 @@ pub(crate) mod tests {
         }
 
         fn generate_f64(&mut self) -> f64 {
-            todo!()
+            // TODO: implement properly here
+            1.0
         }
 
         fn weighted_choice_domain_id(
             &mut self,
-            _items_with_weights: Vec<(DomainId, i32)>,
+            items_with_weights: Vec<(DomainId, i32)>,
         ) -> Option<DomainId> {
-            todo!()
+            // TODO: implement properly here
+            if items_with_weights.is_empty() {
+                None
+            } else {
+                Some(items_with_weights[0].0)
+            }
         }
     }
 }
