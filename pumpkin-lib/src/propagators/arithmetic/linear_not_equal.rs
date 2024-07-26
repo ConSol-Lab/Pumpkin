@@ -176,7 +176,7 @@ where
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
-        // this when we check for a conflict
+        // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs
             && self.number_of_fixed_terms as usize >= self.terms.len() - 1
         {
