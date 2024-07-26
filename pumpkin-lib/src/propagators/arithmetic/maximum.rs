@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
