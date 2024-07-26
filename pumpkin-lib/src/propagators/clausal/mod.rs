@@ -11,7 +11,6 @@
 //! propagator in the code. As such, its usage is mainly for testing purposes.
 
 mod basic_clausal;
-mod binary_inline_clausal;
 mod clausal_propagator;
 
 pub(crate) use basic_clausal::BasicClausalPropagator;

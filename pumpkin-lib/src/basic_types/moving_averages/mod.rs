@@ -1,5 +1,4 @@
 pub(crate) mod cumulative_moving_average;
-pub(crate) mod exponential_moving_average;
 pub(crate) mod moving_average;
 pub(crate) mod windowed_moving_average;
 
