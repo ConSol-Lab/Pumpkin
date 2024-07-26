@@ -158,7 +158,7 @@ impl ResolutionNogoodConflictAnalyser {
         self.remove_dominated_predicates(&mut clean_nogood, context);
 
         clean_nogood = context.semantic_minimiser.minimise(
-            &self.predicates_lower_decision_level,
+            &clean_nogood,
             context.assignments,
             Mode::EnableEqualityMerging,
         );
