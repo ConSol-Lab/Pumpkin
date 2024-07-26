@@ -183,7 +183,7 @@ impl TestSolver {
         Ok(())
     }
 
-    fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
+    pub(crate) fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
         let events = self
             .assignments_integer
             .drain_domain_events()
