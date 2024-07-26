@@ -36,6 +36,7 @@ impl LinearSearch {
         let mut best_solution: Solution = initial_solution;
         let mut best_objective_value = objective_function.evaluate_assignment(&best_solution);
 
+        solver.log_statistics_with_objective(best_objective_value as i64);
         println!("o {}", best_objective_value);
         info!(
             "Current objective is {} after {} seconds ({} ms)",
@@ -86,6 +87,7 @@ impl LinearSearch {
                     best_objective_value = new_objective_value;
                     best_solution = solution;
 
+                    solver.log_statistics_with_objective(best_objective_value as i64);
                     println!("o {}", best_objective_value);
                     info!(
                         "Current objective is {} after {} seconds ({} ms)",
