@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use bitfield::Bit;
-use bitfield::BitMut;
 use bitfield::BitRange;
 
 use crate::basic_types::ConstraintReference;
@@ -55,9 +54,12 @@ impl ClauseReference {
         ClauseReference { code: id }
     }
 
+    #[cfg(test)]
     /// Creates the reference to indicate that propagation was due to the input literal as part of
     ///  a binary clause.
     pub(crate) fn create_virtual_binary_clause_reference(literal: Literal) -> ClauseReference {
+        use bitfield::BitMut;
+
         pumpkin_assert_moderate!(!literal.to_u32().bit(31));
         let mut code = literal.to_u32();
         code.set_bit(31, true);
