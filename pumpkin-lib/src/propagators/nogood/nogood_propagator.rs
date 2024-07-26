@@ -9,7 +9,6 @@ use crate::conjunction;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
 use crate::containers::StorageKey;
-use crate::engine::conflict_analysis::Mode;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
@@ -69,6 +68,7 @@ struct Nogood {
     lbd: u32,
     is_protected: bool,
     is_deleted: bool,
+    block_bumps: bool,
     activity: f32,
 }
 
@@ -81,6 +81,7 @@ impl Nogood {
             activity: 0.0,
             is_deleted: false,
             is_protected: false,
+            block_bumps: false,
         }
     }
 
@@ -92,6 +93,7 @@ impl Nogood {
             activity: 0.0,
             is_deleted: false,
             is_protected: false,
+            block_bumps: false,
         }
     }
 }
@@ -112,6 +114,7 @@ pub(crate) struct NogoodPropagator {
     lbd_helper: SparseSet<u32>,
     activity_bump_increment: f32,
     parameters: LearningOptions,
+    bumped_nogoods: Vec<NogoodId>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -172,6 +175,7 @@ impl Default for NogoodPropagator {
             lbd_helper: SparseSet::new(vec![], mapping),
             parameters: LearningOptions::default(),
             activity_bump_increment: 1.0,
+            bumped_nogoods: Default::default(),
         }
     }
 }
@@ -195,11 +199,9 @@ impl NogoodPropagator {
 
         // Semantic minimisation will take care of removing duplicate predicates, conflicting
         // nogoods, and may result in few predicates since it removes redundancies.
-        *nogood = context.semantic_minimiser.minimise(
-            nogood,
-            context.assignments,
-            Mode::EnableEqualityMerging,
-        );
+        *nogood = context
+            .semantic_minimiser
+            .minimise(nogood, context.assignments);
 
         // Check if the nogood cannot be violated, i.e., it has a falsified predicate.
         if nogood.is_empty() || nogood.iter().any(|p| context.is_predicate_falsified(*p)) {
@@ -781,6 +783,10 @@ impl NogoodPropagator {
 
     pub(crate) fn decay_nogood_activities(&mut self) {
         self.activity_bump_increment /= self.parameters.activity_decay_factor;
+        for &id in &self.bumped_nogoods {
+            self.nogoods[id].block_bumps = false;
+        }
+        self.bumped_nogoods.clear();
     }
 }
 
@@ -1809,7 +1815,12 @@ impl Propagator for NogoodPropagator {
         let id = NogoodId { id: code as u32 };
         // Update the LBD and activity of the nogood, if appropriate.
         // Note that low lbd nogoods are kept permanently, so these are not updated.
-        if self.nogoods[id].is_learned && self.nogoods[id].lbd > self.parameters.lbd_threshold {
+        if !self.nogoods[id].block_bumps
+            && self.nogoods[id].is_learned
+            && self.nogoods[id].lbd > self.parameters.lbd_threshold
+        {
+            self.nogoods[id].block_bumps = true;
+            self.bumped_nogoods.push(id);
             // LBD update.
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.

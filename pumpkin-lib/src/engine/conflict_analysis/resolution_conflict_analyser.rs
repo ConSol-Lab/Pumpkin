@@ -409,7 +409,7 @@ impl ResolutionNogoodConflictAnalyser {
 
         // Due to ownership rules, we retrieve the reason each time we need it, and then drop it.
         // Here we retrieve the reason and just record the length, dropping the ownership of the
-        // reason. Todo: this may cause undesired (?) bumps for lazy explanations.
+        // reason.
         let reason_size = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
             input_predicate,
             context.assignments,
