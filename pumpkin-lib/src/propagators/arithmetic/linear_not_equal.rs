@@ -205,8 +205,7 @@ where
                 .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
 
-            // Then we remove the conflicting value from the unfixed variable using a lazy reason
-            // which only creates the reason if it is used
+            // Then we remove the conflicting value from the unfixed variable
             let terms = Rc::clone(&self.terms);
             context.remove(
                 &self.terms[unfixed_x_i],
