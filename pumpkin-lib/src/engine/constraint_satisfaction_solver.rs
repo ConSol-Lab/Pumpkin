@@ -613,10 +613,10 @@ impl ConstraintSatisfactionSolver {
     ///
     /// *Notes:*
     ///   - If the solver is not in an unsatisfied state, this method will panic.
-    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions,
-    ///   this will return an empty vector.
-    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error
-    ///   is returned, with the literal being one of the inconsistent assumptions.
+    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions, this
+    ///     will return an empty vector.
+    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error is
+    ///     returned, with the literal being one of the inconsistent assumptions.
     ///
     /// # Example usage
     /// ```rust
