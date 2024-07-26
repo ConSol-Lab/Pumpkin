@@ -28,11 +28,18 @@ impl Default for SemanticMinimiser {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Mode {
+    EnableEqualityMerging,
+    DisableEqualityMerging,
+}
+
 impl SemanticMinimiser {
     pub fn minimise(
         &mut self,
         nogood: &Vec<Predicate>,
         assignments: &Assignments,
+        mode: Mode,
     ) -> Vec<Predicate> {
         self.accommodate(assignments);
         self.clean_up();
@@ -49,6 +56,7 @@ impl SemanticMinimiser {
                 *domain_id,
                 &self.original_domains[domain_id],
                 &mut self.helper,
+                mode.clone(),
             );
         }
         self.helper.clone()
@@ -210,14 +218,17 @@ impl SimpleIntegerDomain {
         domain_id: DomainId,
         original_domain: &SimpleIntegerDomain,
         description: &mut Vec<Predicate>,
+        mode: Mode,
     ) {
-        // If the domain assigned at a nonroot level, this is just one predicate.
-        if self.lower_bound == self.upper_bound
-            && self.lower_bound != original_domain.lower_bound
-            && self.upper_bound != original_domain.upper_bound
-        {
-            description.push(predicate![domain_id == self.lower_bound]);
-            return;
+        if let Mode::EnableEqualityMerging = mode {
+            // If the domain assigned at a nonroot level, this is just one predicate.
+            if self.lower_bound == self.upper_bound
+                && self.lower_bound != original_domain.lower_bound
+                && self.upper_bound != original_domain.upper_bound
+            {
+                description.push(predicate![domain_id == self.lower_bound]);
+                return;
+            }
         }
 
         // Add bounds but avoid root assignments.
@@ -248,6 +259,7 @@ impl SimpleIntegerDomain {
 #[cfg(test)]
 mod tests {
     use crate::conjunction;
+    use crate::engine::conflict_analysis::semantic_minimiser::Mode;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::Assignments;
     use crate::predicate;
@@ -261,7 +273,7 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         let nogood: Vec<Predicate> = vec![predicate!(domain_id >= 0), predicate!(domain_id <= 10)];
 
-        let p = p.minimise(&nogood, &assignments);
+        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert!(p.is_empty());
     }
@@ -273,7 +285,7 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         let nogood: Vec<Predicate> = vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
 
-        let p = p.minimise(&nogood, &assignments);
+        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(p.len(), 1);
         assert_eq!(p[0], Predicate::trivially_false());
@@ -290,7 +302,7 @@ mod tests {
             predicate!(domain_id <= 5),
         ];
 
-        let p = p.minimise(&nogood, &assignments);
+        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(p.len(), 1);
         assert_eq!(p[0], Predicate::trivially_false());
@@ -303,7 +315,7 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        let p = p.minimise(&nogood, &assignments);
+        let p = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(p.len(), 1);
         assert_eq!(p[0], Predicate::trivially_false());
@@ -316,9 +328,9 @@ mod tests {
         let domain_id = assignments.grow(0, 10);
         let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
 
-        let _ = p.minimise(&nogood, &assignments);
+        let _ = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
-        let p = p.minimise(&vec![], &assignments);
+        let p = p.minimise(&vec![], &assignments, Mode::EnableEqualityMerging);
 
         assert!(p.is_empty());
     }
@@ -334,7 +346,7 @@ mod tests {
             conjunction!([domain_0 >= 5] & [domain_0 <= 9] & [domain_1 >= 0] & [domain_1 <= 4])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 3);
         assert_eq!(
@@ -355,7 +367,7 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 4);
         assert_eq!(
@@ -383,7 +395,7 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 6);
         assert_eq!(
@@ -419,12 +431,41 @@ mod tests {
         )
         .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 2);
         assert_eq!(
             PropositionalConjunction::from(predicates),
             conjunction!([domain_0 == 5] & [domain_1 <= 4])
+        );
+    }
+
+    #[test]
+    fn simple_assign_no_equality() {
+        let mut p = SemanticMinimiser::default();
+        let mut assignments = Assignments::default();
+        let domain_0 = assignments.grow(0, 10);
+        let domain_1 = assignments.grow(0, 5);
+
+        let nogood = conjunction!(
+            [domain_0 >= 5]
+                & [domain_0 <= 9]
+                & [domain_1 >= 0]
+                & [domain_1 <= 4]
+                & [domain_0 != 7]
+                & [domain_0 != 7]
+                & [domain_0 != 6]
+                & [domain_0 == 5]
+                & [domain_0 != 7]
+        )
+        .into();
+
+        let predicates = p.minimise(&nogood, &assignments, Mode::DisableEqualityMerging);
+
+        assert_eq!(predicates.len(), 3);
+        assert_eq!(
+            PropositionalConjunction::from(predicates),
+            conjunction!([domain_0 >= 5] & [domain_0 <= 5] & [domain_1 <= 4])
         );
     }
 
@@ -436,7 +477,7 @@ mod tests {
 
         let nogood = conjunction!([domain_0 >= 2] & [domain_0 >= 1] & [domain_0 >= 5]).into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 1);
         assert_eq!(predicates[0], predicate!(domain_0 >= 5));
@@ -452,7 +493,7 @@ mod tests {
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 5] & [domain_0 >= 1])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 1);
         assert_eq!(
@@ -471,7 +512,7 @@ mod tests {
             conjunction!([domain_0 != 2] & [domain_0 != 3] & [domain_0 >= 1] & [domain_0 != 1])
                 .into();
 
-        let predicates = p.minimise(&nogood, &assignments);
+        let predicates = p.minimise(&nogood, &assignments, Mode::EnableEqualityMerging);
 
         assert_eq!(predicates.len(), 1);
         assert_eq!(predicates[0], predicate![domain_0 >= 4]);

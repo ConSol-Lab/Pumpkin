@@ -7,6 +7,7 @@ use crate::basic_types::PredicateIdGenerator;
 use crate::branching::Brancher;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
+use crate::engine::conflict_analysis::semantic_minimiser::Mode;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::pumpkin_assert_advanced;
@@ -148,15 +149,19 @@ impl ResolutionNogoodConflictAnalyser {
         let last_predicate = self.pop_predicate_from_conflict_nogood();
         self.predicates_lower_decision_level.push(last_predicate);
 
-        let mut temp = self.predicates_lower_decision_level.clone();
-        self.remove_dominated_predicates(&mut temp, context);
-        self.predicates_lower_decision_level = temp;
+        let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
+            &self.predicates_lower_decision_level,
+            context.assignments,
+            Mode::DisableEqualityMerging,
+        );
 
-        let mut clean_nogood: Vec<Predicate> = context
-            .semantic_minimiser
-            .minimise(&self.predicates_lower_decision_level, context.assignments);
+        self.remove_dominated_predicates(&mut clean_nogood, context);
 
-        // todo: clause minimisation based on the implication graph?
+        clean_nogood = context.semantic_minimiser.minimise(
+            &self.predicates_lower_decision_level,
+            context.assignments,
+            Mode::EnableEqualityMerging,
+        );
 
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions

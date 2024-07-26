@@ -8,4 +8,5 @@ mod semantic_minimiser;
 pub(crate) use conflict_analysis_context::ConflictAnalysisNogoodContext;
 pub(crate) use resolution_conflict_analyser::LearnedNogood;
 pub(crate) use resolution_conflict_analyser::ResolutionNogoodConflictAnalyser;
+pub(crate) use semantic_minimiser::Mode;
 pub(crate) use semantic_minimiser::SemanticMinimiser;
