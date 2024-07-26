@@ -114,11 +114,7 @@ struct Args {
     /// If this flag is present then the minimisation is turned off.
     ///
     /// Possible values: bool
-    #[arg(
-        long = "no-learning-minimise",
-        default_value_t = true,
-        verbatim_doc_comment
-    )]
+    #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
     no_learning_clause_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
