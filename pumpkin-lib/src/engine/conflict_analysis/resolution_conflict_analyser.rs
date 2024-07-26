@@ -1,6 +1,7 @@
 use super::ConflictAnalysisNogoodContext;
-use super::SemanticMinimiser;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::HashMap;
+use crate::basic_types::HashSet;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::branching::Brancher;
@@ -9,6 +10,8 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ResolutionNogoodConflictAnalyser {
@@ -20,6 +23,14 @@ pub(crate) struct ResolutionNogoodConflictAnalyser {
     /// Vector containing predicates above the current decision level.
     /// The vector may contain duplicates, but will be removed at the end.
     predicates_lower_decision_level: Vec<Predicate>,
+
+    // data structures used for clause minimisation after conflict analysis
+    current_depth: usize,
+    allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
+    label_assignments: HashMap<Predicate, Option<Label>>,
+    num_minimisation_calls: usize,
+    num_predicates_removed_total: usize,
+    num_literals_seen_total: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -127,9 +138,7 @@ impl ResolutionNogoodConflictAnalyser {
 
     fn extract_final_nogood(
         &mut self,
-        assignments: &Assignments,
-        semantic_minimiser: &mut SemanticMinimiser,
-        brancher: &mut dyn Brancher,
+        context: &mut ConflictAnalysisNogoodContext,
     ) -> LearnedNogood {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
@@ -138,20 +147,27 @@ impl ResolutionNogoodConflictAnalyser {
         // We reuse the vector with lower decision levels for simplicity.
         let last_predicate = self.pop_predicate_from_conflict_nogood();
         self.predicates_lower_decision_level.push(last_predicate);
-        let mut clean_nogood: Vec<Predicate> =
-            semantic_minimiser.minimise(&self.predicates_lower_decision_level, assignments);
+
+        let mut temp = self.predicates_lower_decision_level.clone();
+        self.remove_dominated_predicates(&mut temp, context);
+        self.predicates_lower_decision_level = temp;
+
+        let mut clean_nogood: Vec<Predicate> = context
+            .semantic_minimiser
+            .minimise(&self.predicates_lower_decision_level, context.assignments);
 
         // todo: clause minimisation based on the implication graph?
 
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions
         // to be properly sorted.
-        clean_nogood.sort_by_key(|p| assignments.get_trail_position(p).unwrap());
+        clean_nogood.sort_by_key(|p| context.assignments.get_trail_position(p).unwrap());
         clean_nogood.reverse();
         // The second highest decision level predicate is at position one.
         // This is the backjump level.
         let backjump_level = if clean_nogood.len() > 1 {
-            assignments
+            context
+                .assignments
                 .get_decision_level_for_predicate(&clean_nogood[1])
                 .unwrap()
         }
@@ -159,13 +175,16 @@ impl ResolutionNogoodConflictAnalyser {
         else {
             0
         };
+
         pumpkin_assert_advanced!(clean_nogood[1..]
             .iter()
-            .all(|p| assignments.is_predicate_satisfied(*p)));
+            .all(|p| context.assignments.is_predicate_satisfied(*p)));
 
         // todo: asserting predicate may be bumped twice, probably not a problem.
         for predicate in clean_nogood.iter() {
-            brancher.on_appearance_in_conflict_predicate(*predicate);
+            context
+                .brancher
+                .on_appearance_in_conflict_predicate(*predicate);
         }
 
         LearnedNogood {
@@ -281,10 +300,264 @@ impl ResolutionNogoodConflictAnalyser {
                 );
             }
         }
-        self.extract_final_nogood(
-            context.assignments,
-            context.semantic_minimiser,
-            context.brancher,
-        )
+        self.extract_final_nogood(context)
     }
+}
+
+// clause minimisation
+impl ResolutionNogoodConflictAnalyser {
+    /// Removes redundant literals from the learned clause.
+    /// Redundancy is detected by looking at the implication graph:
+    /// * a literal is redundant/dominated if a subset of the other
+    /// literals in the learned clause imply that literal.
+    ///
+    /// The function assumes that the learned clause is stored internally
+    /// in `analysis_result`, and that the first literal is
+    /// asserting. The asserting literal cannot be removed.
+    ///
+    /// The implementation is based on the algorithm from the papers:
+    ///
+    /// \[1\] A. Van Gelder, ‘Improved conflict-clause minimization leads
+    /// to improved propositional proof traces’. SAT'09.
+    ///
+    /// \[2\] N. Sörensson and A. Biere, ‘Minimizing learned clauses’. SAT'09
+    pub(crate) fn remove_dominated_predicates(
+        &mut self,
+        nogood: &mut Vec<Predicate>,
+        context: &mut ConflictAnalysisNogoodContext,
+    ) {
+        self.num_minimisation_calls += 1;
+        self.num_literals_seen_total += nogood.len();
+        let num_literals_before_minimisation = nogood.len();
+
+        self.initialise_minimisation_data_structures(nogood, context.assignments);
+
+        // Iterate over each predicate and check whether it is a dominated predicate.
+        let mut end_position: usize = 0;
+        let initial_nogood_size = nogood.len();
+        for i in 0..initial_nogood_size {
+            let learned_predicate = nogood[i];
+
+            self.compute_label(learned_predicate, context);
+
+            let label = self.get_predicate_label(learned_predicate);
+            // Keep the predicate in case it was not deemed deemed redundant.
+            // Note that in other cases, since 'end_position' is not incremented,
+            // the predicate is effectively removed.
+            if label == Label::Poison || label == Label::Keep {
+                nogood[end_position] = learned_predicate;
+                end_position += 1;
+            }
+        }
+
+        nogood.truncate(end_position);
+
+        self.clean_up_minimisation();
+
+        let num_predicates_removed = num_literals_before_minimisation - nogood.len();
+        self.num_predicates_removed_total += num_predicates_removed;
+    }
+
+    fn compute_label(
+        &mut self,
+        input_predicate: Predicate,
+        context: &mut ConflictAnalysisNogoodContext,
+    ) {
+        pumpkin_assert_moderate!(context.assignments.is_predicate_satisfied(input_predicate));
+
+        self.current_depth += 1;
+
+        if self.is_predicate_label_already_computed(input_predicate) {
+            self.current_depth -= 1;
+            return;
+        }
+
+        // Stop analysis when too deep in the recursion.
+        if self.is_at_max_allowed_depth() {
+            self.assign_predicate_label(input_predicate, Label::Poison);
+            self.current_depth -= 1;
+            return;
+        }
+
+        // At this point the predicate is either SEEN ('present') or unlabelled.
+        // If the predicate is a decision predicate, it cannot be a predicate from the original
+        // learned nogood since those are labelled as part of initialisation.
+        // Therefore the decision literal is labelled as poison and then return.
+        if context.assignments.is_decision_predicate(&input_predicate) {
+            self.assign_predicate_label(input_predicate, Label::Poison);
+            self.current_depth -= 1;
+            return;
+        }
+
+        // A predicate that is not part of the allowed decision levels
+        // (levels from the original learned clause) cannot be removed.
+        if !self.is_decision_level_allowed(
+            context
+                .assignments
+                .get_decision_level_for_predicate(&input_predicate)
+                .unwrap(),
+        ) {
+            self.assign_predicate_label(input_predicate, Label::Poison);
+            self.current_depth -= 1;
+            return;
+        }
+
+        // Due to ownership rules, we retrieve the reason each time we need it, and then drop it.
+        // Here we retrieve the reason and just record the length, dropping the ownership of the
+        // reason. Todo: this may cause undesired (?) bumps for lazy explanations.
+        let reason_size = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+            input_predicate,
+            context.assignments,
+            context.reason_store,
+            context.propagators,
+        )
+        .len();
+
+        for i in 0..reason_size {
+            let antecedent_predicate = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                input_predicate,
+                context.assignments,
+                context.reason_store,
+                context.propagators,
+            )[i];
+
+            // Root assignments can be safely ignored.
+            if context
+                .assignments
+                .get_decision_level_for_predicate(&antecedent_predicate)
+                .unwrap()
+                == 0
+            {
+                continue;
+            }
+
+            // Compute the label of the antecedent predicate.
+            self.compute_label(antecedent_predicate, context);
+
+            // In case one of the antecedents is Poison,
+            // the input predicate is not deemed redundant.
+            if self.get_predicate_label(antecedent_predicate) == Label::Poison {
+                // Determine whether the input predicate will be labelled as Keep or Poison.
+
+                // If the input predicate is part of the original learned nogood,
+                // the predicate is Keep.
+                if self.is_predicate_assigned_seen(input_predicate) {
+                    self.assign_predicate_label(input_predicate, Label::Keep);
+                    self.current_depth -= 1;
+                    return;
+                }
+                // Otherwise, the input predicate is not part of the original nogood,
+                // so it cannot be Keep but is labelled Poison instead.
+                else {
+                    self.assign_predicate_label(input_predicate, Label::Poison);
+                    self.current_depth -= 1;
+                    return;
+                }
+            }
+        }
+        // If the code reaches this part (it did not get into one of the previous 'return'
+        // statements, so all antecedents of the literal are either KEEP or REMOVABLE),
+        // meaning this literal is REMOVABLE.
+        self.assign_predicate_label(input_predicate, Label::Removable);
+        self.current_depth -= 1;
+    }
+
+    fn is_decision_level_allowed(&self, decision_level: usize) -> bool {
+        self.allowed_decision_levels.contains(&decision_level)
+    }
+
+    fn mark_decision_level_as_allowed(&mut self, decision_level: usize) {
+        let _ = self.allowed_decision_levels.insert(decision_level);
+    }
+
+    fn is_predicate_assigned_seen(&self, predicate: Predicate) -> bool {
+        let entry = self.label_assignments.get(&predicate);
+        if let Some(label) = entry {
+            label.expect("Stored label is None, error?") == Label::Seen
+        } else {
+            false
+        }
+    }
+
+    fn get_predicate_label(&self, predicate: Predicate) -> Label {
+        self.label_assignments
+            .get(&predicate)
+            .expect("Cannot ask for a label of an unlabelled literal?")
+            .expect("Stored label is None, error?")
+    }
+
+    fn assign_predicate_label(&mut self, predicate: Predicate, label: Label) {
+        pumpkin_assert_moderate!(
+            !self.label_assignments.contains_key(&predicate)
+                || self.is_predicate_assigned_seen(predicate),
+            "Cannot assign the label of an already labelled literal"
+        );
+        let _ = self.label_assignments.insert(predicate, Some(label));
+    }
+
+    #[allow(dead_code)]
+    fn is_predicate_label_already_computed(&self, predicate: Predicate) -> bool {
+        let entry = self.label_assignments.get(&predicate);
+        if let Some(label) = entry {
+            label.expect("Stored label is None, error?") != Label::Seen
+        } else {
+            false
+        }
+    }
+
+    fn initialise_minimisation_data_structures(
+        &mut self,
+        nogood: &Vec<Predicate>,
+        assignments: &Assignments,
+    ) {
+        pumpkin_assert_simple!(self.current_depth == 0);
+
+        // Mark literals from the initial learned nogood.
+        for &predicate in nogood {
+            // Predicates from the current decision level are always kept.
+            // This is the analogue of asserting literals.
+            if assignments
+                .get_decision_level_for_predicate(&predicate)
+                .unwrap()
+                == assignments.get_decision_level()
+            {
+                let _ = self.label_assignments.insert(nogood[0], Some(Label::Keep));
+                continue;
+            }
+
+            // Decision predicate must be kept.
+            if assignments.is_decision_predicate(&predicate) {
+                self.assign_predicate_label(predicate, Label::Keep);
+            } else {
+                self.assign_predicate_label(predicate, Label::Seen);
+            }
+
+            self.mark_decision_level_as_allowed(
+                assignments
+                    .get_decision_level_for_predicate(&predicate)
+                    .unwrap(),
+            );
+        }
+    }
+
+    fn clean_up_minimisation(&mut self) {
+        pumpkin_assert_simple!(self.current_depth == 0);
+
+        self.allowed_decision_levels.clear();
+        self.label_assignments.clear();
+    }
+
+    #[allow(dead_code)]
+    fn is_at_max_allowed_depth(&self) -> bool {
+        pumpkin_assert_moderate!(self.current_depth <= 500);
+        self.current_depth == 500
+    }
+}
+
+#[derive(PartialEq, Copy, Clone, Debug)]
+enum Label {
+    Seen, //'Present'
+    Poison,
+    Removable,
+    Keep,
 }
