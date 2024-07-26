@@ -582,7 +582,7 @@ impl ConstraintSatisfactionSolver {
                 next_idx += 1;
             } else {
                 self.assignments_integer
-                    .remove_value_from_domain(domain_id, value, None)
+                    .remove_initial_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
                 self.assignments_propositional.enqueue_decision_literal(
                     self.variable_literal_mappings.get_inequality_literal(
@@ -1553,6 +1553,8 @@ pub(crate) struct Counters {
     average_learned_clause_length: CumulativeMovingAverage,
     time_spent_in_solver: u64,
     average_backtrack_amount: CumulativeMovingAverage,
+    pub(crate) average_number_of_removed_literals_recursive: CumulativeMovingAverage,
+    pub(crate) average_number_of_removed_literals_semantic: CumulativeMovingAverage,
 }
 
 impl Counters {
@@ -1573,6 +1575,14 @@ impl Counters {
         log_statistic(
             "averageBacktrackAmount",
             self.average_backtrack_amount.value(),
+        );
+        log_statistic(
+            "averageNumberOfRemovedLiteralsRecursive",
+            self.average_number_of_removed_literals_recursive.value(),
+        );
+        log_statistic(
+            "averageNumberOfRemovedLiteralsSemantic",
+            self.average_number_of_removed_literals_semantic.value(),
         );
     }
 }

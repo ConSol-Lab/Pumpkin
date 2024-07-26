@@ -138,6 +138,13 @@ impl AssignmentsInteger {
         self.domains[domain_id].initial_upper_bound
     }
 
+    pub fn get_initial_holes(&self, domain_id: DomainId) -> impl Iterator<Item = i32> + '_ {
+        self.domains[domain_id]
+            .initial_removed_values
+            .iter()
+            .copied()
+    }
+
     pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
         self.domains[domain_id].lower_bound
@@ -260,6 +267,37 @@ impl AssignmentsInteger {
         }
 
         self.domains[domain_id].verify_consistency()
+    }
+
+    pub fn remove_initial_value_from_domain(
+        &mut self,
+        domain_id: DomainId,
+        removed_value_from_domain: i32,
+        reason: Option<ReasonRef>,
+    ) -> Result<(), EmptyDomain> {
+        if !self.domains[domain_id].contains(removed_value_from_domain) {
+            return self.domains[domain_id].verify_consistency();
+        }
+
+        let predicate = IntegerPredicate::NotEqual {
+            domain_id,
+            not_equal_constant: removed_value_from_domain,
+        };
+
+        let old_lower_bound = self.get_lower_bound(domain_id);
+        let old_upper_bound = self.get_upper_bound(domain_id);
+
+        self.trail.push(ConstraintProgrammingTrailEntry {
+            predicate,
+            old_lower_bound,
+            old_upper_bound,
+            reason,
+        });
+
+        let domain = &mut self.domains[domain_id];
+        domain.remove_initial_value(removed_value_from_domain, &mut self.events);
+
+        domain.verify_consistency()
     }
 
     pub fn remove_value_from_domain(
@@ -445,6 +483,7 @@ struct IntegerDomainExplicit {
     upper_bound: i32,
     initial_lower_bound: i32,
     initial_upper_bound: i32,
+    initial_removed_values: Vec<i32>,
 
     offset: i32,
 
@@ -464,6 +503,7 @@ impl IntegerDomainExplicit {
             id,
             lower_bound,
             upper_bound,
+            initial_removed_values: vec![],
             initial_lower_bound: lower_bound,
             initial_upper_bound: upper_bound,
             offset,
@@ -475,6 +515,11 @@ impl IntegerDomainExplicit {
         let idx = self.get_index(value);
 
         self.lower_bound <= value && value <= self.upper_bound && self.is_value_in_domain[idx]
+    }
+
+    fn remove_initial_value(&mut self, value: i32, events: &mut EventSink) {
+        self.initial_removed_values.push(value);
+        self.remove_value(value, events)
     }
 
     fn remove_value(&mut self, value: i32, events: &mut EventSink) {
