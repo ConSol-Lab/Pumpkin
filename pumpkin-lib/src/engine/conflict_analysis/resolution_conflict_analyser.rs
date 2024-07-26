@@ -505,8 +505,9 @@ impl ResolutionConflictAnalyser {
     ///  2. Propagated, unless the [`Literal`] is the decision [`Literal`] of the current decision
     ///     level
     ///  3. Not root assignments
-    /// Failing any of the conditions above means something went wrong with the conflict
-    /// analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
+    ///
+    /// Failing any of the conditions above means something went wrong with the conflict analysis,
+    /// e.g., some explanation was faulty and caused the solver to overrun the trail
     ///
     /// Note that in the first iteration, the `next_literal` will be set to [`None`],
     /// so we can skip this check
