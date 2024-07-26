@@ -45,7 +45,7 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
     rhs: i32,
 
     /// The number of fixed terms; note that this constraint can only propagate when there is a
-    /// single unfixed variable and can only detect conflicts if all variables are designed
+    /// single unfixed variable and can only detect conflicts if all variables are assigned
     number_of_fixed_terms: usize,
     /// The sum of the values of the fixed terms
     fixed_lhs: i32,
