@@ -265,9 +265,9 @@ mod tests {
     #[test]
     fn test_size_and_align() {
         // these should be static asserts
-        assert_eq!(std::mem::size_of::<ClauseInlined>(), 8);
-        assert_eq!(std::mem::align_of::<ClauseInlined>(), 4);
-        assert_eq!(std::mem::size_of::<Literal>(), 4);
+        assert_eq!(size_of::<ClauseInlined>(), 8);
+        assert_eq!(align_of::<ClauseInlined>(), 4);
+        assert_eq!(size_of::<Literal>(), 4);
     }
 
     #[ignore]
