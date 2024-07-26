@@ -169,8 +169,8 @@ where
         &mut self,
         context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
-        self.recalculate_fixed_variables(&context);
-        self.check_for_conflict(&context)?;
+        self.recalculate_fixed_variables(context);
+        self.check_for_conflict(context)?;
         Ok(())
     }
 
@@ -180,7 +180,7 @@ where
         if self.should_recalculate_lhs
             && self.number_of_fixed_terms as usize >= self.terms.len() - 1
         {
-            self.recalculate_fixed_variables(&context.as_readonly());
+            self.recalculate_fixed_variables(context.as_readonly());
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
@@ -222,7 +222,7 @@ where
         } else if self.number_of_fixed_terms as usize == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(&context.as_readonly())?;
+            self.check_for_conflict(context.as_readonly())?;
         }
 
         Ok(())
@@ -296,7 +296,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: &PropagationContext) {
+    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
         self.fixed_lhs = 0;
         self.unfixed_variable_has_been_updated = false;
         self.number_of_fixed_terms = self
@@ -316,7 +316,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
     fn check_for_conflict(
         &self,
-        context: &PropagationContext,
+        context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms as usize == self.terms.len() && self.fixed_lhs == self.rhs {
