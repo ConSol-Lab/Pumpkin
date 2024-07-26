@@ -131,10 +131,10 @@ where
         }
     }
 
-    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate> {
-        // The description should not actually change. It is a description of the domain as seen by
-        // the solver, not as seen by the user of this view.
-        self.inner.describe_domain(assignment)
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+        self.inner
+            .iterate_domain(assignment)
+            .map(|value| self.map(value))
     }
 
     fn remove(

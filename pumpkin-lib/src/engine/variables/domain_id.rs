@@ -3,7 +3,6 @@ use enumset::EnumSet;
 use super::TransformableVariable;
 use crate::containers::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
@@ -65,8 +64,8 @@ impl IntegerVariable for DomainId {
         assignment.is_value_in_domain_at_trail_position(*self, value, trail_position)
     }
 
-    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate> {
-        assignment.get_domain_description(*self)
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+        assignment.get_domain_iterator(*self)
     }
 
     fn remove(
