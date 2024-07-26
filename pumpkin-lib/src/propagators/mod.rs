@@ -5,7 +5,6 @@
 pub(crate) mod arithmetic;
 pub(crate) mod clausal;
 mod cumulative;
-mod difference_logic;
 pub(crate) mod element;
 mod reified_propagator;
 

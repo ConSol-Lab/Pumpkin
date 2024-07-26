@@ -503,8 +503,9 @@ impl ResolutionConflictAnalyser {
     ///  2. Propagated, unless the [`Literal`] is the decision [`Literal`] of the current decision
     ///     level
     ///  3. Not root assignments
-    /// Failing any of the conditions above means something went wrong with the conflict
-    /// analysis, e.g., some explanation was faulty and caused the solver to overrun the trail
+    ///
+    /// Failing any of the conditions above means something went wrong with the conflict analysis,
+    /// e.g., some explanation was faulty and caused the solver to overrun the trail
     ///
     /// Note that in the first iteration, the `next_literal` will be set to [`None`],
     /// so we can skip this check
@@ -680,8 +681,8 @@ impl ResolutionConflictAnalyser {
 impl ResolutionConflictAnalyser {
     /// Removes redundant literals from the learned clause.
     /// Redundancy is detected by looking at the implication graph:
-    /// * a literal is redundant/dominated if a subset of the other
-    /// literals in the learned clause imply that literal.
+    /// * A literal is redundant/dominated if a subset of the other literals in the learned clause
+    ///   imply that literal.
     ///
     /// The function assumes that the learned clause is stored internally
     /// in `analysis_result`, and that the first literal is
