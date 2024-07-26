@@ -16,6 +16,9 @@ pub struct Assignments {
     pub(crate) trail: Trail<ConstraintProgrammingTrailEntry>,
     domains: KeyedVec<DomainId, IntegerDomain>,
     events: EventSink,
+
+    /// The number of values that have been pruned from the domain.
+    pruned_values: u64,
 }
 
 impl Default for Assignments {
@@ -24,6 +27,7 @@ impl Default for Assignments {
             trail: Default::default(),
             domains: Default::default(),
             events: Default::default(),
+            pruned_values: 0,
         };
 
         // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
@@ -96,6 +100,14 @@ impl Assignments {
     // necessary for the solver apart from the domain when creating a new integer variable, use
     // create_new_domain_id in the ConstraintSatisfactionSolver
     pub(crate) fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
+        // This is necessary for the metric that maintains relative domain size. It is only updated
+        // when values are removed at levels beyond the root, and then it becomes a tricky value to
+        // update when a fresh domain needs to be considered.
+        pumpkin_assert_simple!(
+            self.get_decision_level() == 0,
+            "can only create variables at the root"
+        );
+
         let id = DomainId {
             id: self.num_domains(),
         };
@@ -120,10 +132,12 @@ impl Assignments {
         self.trail.iter().rev().for_each(|entry| {
             domains[entry.predicate.get_domain()].undo_trail_entry(entry);
         });
+
         Assignments {
             trail: Default::default(),
             domains,
             events: event_sink,
+            pruned_values: self.pruned_values,
         }
     }
 }
@@ -355,6 +369,8 @@ impl Assignments {
             &mut self.events,
         );
 
+        self.pruned_values += domain.lower_bound().abs_diff(old_lower_bound) as u64;
+
         domain.verify_consistency()
     }
 
@@ -396,6 +412,8 @@ impl Assignments {
             trail_position,
             &mut self.events,
         );
+
+        self.pruned_values += old_upper_bound.abs_diff(domain.upper_bound()) as u64;
 
         domain.verify_consistency()
     }
@@ -457,6 +475,15 @@ impl Assignments {
             trail_position,
             &mut self.events,
         );
+
+        let changed_lower_bound = domain.lower_bound().abs_diff(old_lower_bound) as u64;
+        let changed_upper_bound = old_upper_bound.abs_diff(domain.upper_bound()) as u64;
+
+        if changed_lower_bound + changed_upper_bound > 0 {
+            self.pruned_values += changed_upper_bound + changed_lower_bound;
+        } else {
+            self.pruned_values += 1;
+        }
 
         domain.verify_consistency()
     }
@@ -659,14 +686,29 @@ impl Assignments {
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
+
+            // Calculate how many values are re-introduced into the domain.
             let domain_id = entry.predicate.get_domain();
-            let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
-                let value_before = self.domains[domain_id].lower_bound();
-                self.domains[domain_id].undo_trail_entry(&entry);
-                if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
-                    // Variable used to be fixed but is not after backtracking
-                    unfixed_variables.push((domain_id, value_before));
+            let current_lower_bound = self.domains[domain_id].lower_bound();
+            let current_upper_bound = self.domains[domain_id].upper_bound();
+
+            let add_on_upper_bound = entry.old_upper_bound.abs_diff(current_upper_bound) as u64;
+            let add_on_lower_bound = current_lower_bound.abs_diff(entry.old_lower_bound) as u64;
+            self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
+
+            if let Predicate::NotEqual { .. } = entry.predicate {
+                if add_on_lower_bound + add_on_upper_bound == 0 {
+                    self.pruned_values -= 1;
                 }
+            }
+
+            let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
+            self.domains[domain_id].undo_trail_entry(&entry);
+
+            if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
+                // Variable used to be fixed but is not after backtracking
+                unfixed_variables.push((domain_id, current_lower_bound));
+            }
         });
         // Drain does not remove the events from the internal data structure. Elements are removed
         // lazily, as the iterator gets executed. For this reason we go through the entire iterator.
@@ -687,6 +729,11 @@ impl Assignments {
         // );
         let domain_id = entry.predicate.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
+    }
+
+    /// Get the number of values pruned from all the domains.
+    pub(crate) fn get_pruned_value_count(&self) -> u64 {
+        self.pruned_values
     }
 }
 

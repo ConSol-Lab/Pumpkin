@@ -470,8 +470,8 @@ impl VariableEquivalences {
     ///
     /// We distinguish between the following edge cases:
     ///  - The two variables are already in the same equivalence class: this is a no-op.
-    ///  - One of the variables, or both, do not belong to an equivalence class. In this case
-    ///  the method will panic.
+    ///  - One of the variables, or both, do not belong to an equivalence class. In this case the
+    ///    method will panic.
     pub(crate) fn merge(&mut self, variable_1: Rc<str>, variable_2: Rc<str>) {
         let equiv_1_idx = self.belongs_to.get(&variable_1).copied().unwrap();
         let equiv_2_idx = self.belongs_to.get(&variable_2).copied().unwrap();

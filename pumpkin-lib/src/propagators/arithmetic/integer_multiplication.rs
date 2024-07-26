@@ -196,6 +196,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 ///     - Propagating a based on b and c
 ///         - If b is negative and c is positive then a is negative
 ///         - If b is positive and c is negative then a is negative
+///
 /// Note that this method does not propagate a value if 0 is in the domain as, for example, 0 * -3 =
 /// 0 and 0 * 3 = 0 are both equally valid.
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
