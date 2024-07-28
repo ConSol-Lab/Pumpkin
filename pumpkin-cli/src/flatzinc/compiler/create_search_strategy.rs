@@ -4,6 +4,7 @@ use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::Brancher;
 use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
 
 use super::context::CompilationContext;
 use crate::flatzinc::ast::FlatZincAst;
@@ -41,10 +42,11 @@ fn create_from_search_strategy(
                 other => panic!("Expected string or expression but got {other:?}"),
             };
 
-            DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
-                variable_selection_strategy.create_from_literals(&search_variables),
-                value_selection_strategy.create_for_literals(),
-            ))])
+            create_search_over_propositional_variables(
+                &search_variables,
+                variable_selection_strategy,
+                value_selection_strategy,
+            )
         }
         Search::Int(SearchStrategy {
             variables,
@@ -77,6 +79,7 @@ fn create_from_search_strategy(
                 })
                 .collect::<Vec<_>>(),
         ),
+
         Search::Unspecified => {
             assert!(
                 append_default_search,
@@ -87,6 +90,7 @@ fn create_from_search_strategy(
             DynamicBrancher::new(vec![])
         }
     };
+
     if append_default_search {
         // MiniZinc specification specifies that we need to ensure that all variables are
         // fixed; we ensure this by adding a brancher after the
@@ -106,5 +110,16 @@ fn create_search_over_domains(
     DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
         variable_selection_strategy.create_from_domains(search_variables),
         value_selection_strategy.create_for_domains(),
+    ))])
+}
+
+fn create_search_over_propositional_variables(
+    search_variables: &[Literal],
+    variable_selection_strategy: &VariableSelectionStrategy,
+    value_selection_strategy: &ValueSelectionStrategy,
+) -> DynamicBrancher {
+    DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
+        variable_selection_strategy.create_from_literals(search_variables),
+        value_selection_strategy.create_for_literals(),
     ))])
 }
