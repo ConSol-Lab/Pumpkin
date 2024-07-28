@@ -18,12 +18,13 @@ pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context)
+    create_from_search_strategy(&ast.search, context, true)
 }
 
 fn create_from_search_strategy(
     strategy: &Search,
     context: &mut CompilationContext,
+    append_default_search: bool,
 ) -> Result<DynamicBrancher, FlatZincError> {
     match strategy {
         Search::Bool(SearchStrategy {
@@ -50,14 +51,18 @@ fn create_from_search_strategy(
                 variable_selection_strategy,
                 value_selection_strategy,
             );
-            // MiniZinc specification specifies that we need to ensure that all variables are fixed;
-            // we ensure this by adding a brancher after the user-provided search which searches
-            // over the remainder of the variables
-            brancher.add_brancher(Box::new(
-                context
-                    .solver
-                    .default_brancher_over_all_propositional_variables(),
-            ));
+
+            if append_default_search {
+                // MiniZinc specification specifies that we need to ensure that all variables are
+                // fixed; we ensure this by adding a brancher after the
+                // user-provided search which searches over the remainder of the
+                // variables
+                brancher.add_brancher(Box::new(
+                    context
+                        .solver
+                        .default_brancher_over_all_propositional_variables(),
+                ));
+            }
 
             Ok(brancher)
         }
@@ -80,36 +85,46 @@ fn create_from_search_strategy(
                 value_selection_strategy,
             );
 
-            // MiniZinc specification specifies that we need to ensure that all variables are fixed;
-            // we ensure this by adding a brancher after the user-provided search which searches
-            // over the remainder of the variables
-            brancher.add_brancher(Box::new(
-                context
-                    .solver
-                    .default_brancher_over_all_propositional_variables(),
-            ));
+            if append_default_search {
+                // MiniZinc specification specifies that we need to ensure that all variables are
+                // fixed; we ensure this by adding a brancher after the
+                // user-provided search which searches over the remainder of the
+                // variables
+                brancher.add_brancher(Box::new(
+                    context
+                        .solver
+                        .default_brancher_over_all_propositional_variables(),
+                ));
+            }
+
             Ok(brancher)
         }
         Search::Seq(search_strategies) => {
             // MiniZinc specification specifies that we need to ensure that all variables are fixed;
             // we ensure this by adding a brancher after the user-provided search which searches
             // over the remainder of the variables
-            let brancher_over_all_variables: Box<dyn Brancher> = Box::new(
-                context
-                    .solver
-                    .default_brancher_over_all_propositional_variables(),
-            );
+            let brancher_over_all_variables: Option<Box<dyn Brancher>> = if append_default_search {
+                Some(Box::new(
+                    context
+                        .solver
+                        .default_brancher_over_all_propositional_variables(),
+                ))
+            } else {
+                None
+            };
+
             let brancher = DynamicBrancher::new(
                 search_strategies
                     .iter()
                     .map(|strategy| {
-                        let downcast: Box<dyn Brancher> =
-                            Box::new(create_from_search_strategy(strategy, context).expect(
+                        let downcast: Box<dyn Brancher> = Box::new(
+                            create_from_search_strategy(strategy, context, false).expect(
                                 "Expected nested sequential strategy to be able to be created",
-                            ));
+                            ),
+                        );
                         downcast
                     })
-                    .chain(std::iter::once(brancher_over_all_variables))
+                    .chain(brancher_over_all_variables)
                     .collect::<Vec<_>>(),
             );
             Ok(brancher)
