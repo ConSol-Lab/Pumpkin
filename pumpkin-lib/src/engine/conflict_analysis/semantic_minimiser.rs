@@ -56,7 +56,7 @@ impl SemanticMinimiser {
                 *domain_id,
                 &self.original_domains[domain_id],
                 &mut self.helper,
-                mode.clone(),
+                mode,
             );
         }
         self.helper.clone()

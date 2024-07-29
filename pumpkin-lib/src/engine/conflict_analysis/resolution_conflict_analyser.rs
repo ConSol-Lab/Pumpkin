@@ -163,6 +163,68 @@ impl ResolutionNogoodConflictAnalyser {
             Mode::EnableEqualityMerging,
         );
 
+        let num_predicates_from_current_decision_level = |nogood: &Vec<Predicate>| -> usize {
+            nogood
+                .iter()
+                .filter(|p| {
+                    context
+                        .assignments
+                        .get_decision_level_for_predicate(p)
+                        .unwrap()
+                        == context.assignments.get_decision_level()
+                })
+                .count()
+        };
+
+        // Due to reasoning with holes, it can be the case that we learn a nogood with multiple
+        // predicates from the current decision level. This does not interact well with the
+        // expectations of the solver (each nogood has an asserting predicate), so for now we work
+        // around this issue by making the nogood less general.
+        // The code below is not very elegant, but works ok as a temporary workaround.
+        if num_predicates_from_current_decision_level(&clean_nogood) > 1 {
+            let mut current_lvl_predicates: Vec<Predicate> = vec![];
+            clean_nogood.retain(|p| {
+                if context
+                    .assignments
+                    .get_decision_level_for_predicate(p)
+                    .unwrap()
+                    == context.assignments.get_decision_level()
+                {
+                    current_lvl_predicates.push(*p);
+                    false
+                } else {
+                    true
+                }
+            });
+
+            let mut revised_version: Vec<Predicate> = vec![];
+            for p in current_lvl_predicates {
+                let p_replacement = if !context.assignments.is_decision_predicate(&p) {
+                    let m = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                        p,
+                        context.assignments,
+                        context.reason_store,
+                        context.propagators,
+                    );
+                    // We expect only expect single-reason substitutions, since the problem comes
+                    // from assigning a [x = v] as a decision.
+                    assert!(m.len() == 1);
+                    m[0]
+                } else {
+                    p
+                };
+                revised_version.push(p_replacement);
+            }
+
+            let decision_level_predicate = context.semantic_minimiser.minimise(
+                &revised_version,
+                context.assignments,
+                Mode::EnableEqualityMerging,
+            );
+            assert!(decision_level_predicate.len() == 1);
+            clean_nogood.push(decision_level_predicate[0]);
+        }
+
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions
         // to be properly sorted.
@@ -282,7 +344,20 @@ impl ResolutionNogoodConflictAnalyser {
                 // decision predicate.
                 while self.heap_current_decision_level.num_nonremoved_elements() != 1 {
                     let p = self.pop_predicate_from_conflict_nogood();
-                    self.predicates_lower_decision_level.push(p);
+                    let p_replacement = if context.assignments.is_decision_predicate(&p) {
+                        p
+                    } else {
+                        let m = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                            p,
+                            context.assignments,
+                            context.reason_store,
+                            context.propagators,
+                        );
+                        // We expect only not equals predicates here, which just have one reason.
+                        assert!(m.len() == 1);
+                        m[0]
+                    };
+                    self.predicates_lower_decision_level.push(p_replacement);
                 }
 
                 self.predicates_lower_decision_level.push(next_predicate);
@@ -526,7 +601,7 @@ impl ResolutionNogoodConflictAnalyser {
                 .unwrap()
                 == assignments.get_decision_level()
             {
-                let _ = self.label_assignments.insert(nogood[0], Some(Label::Keep));
+                let _ = self.label_assignments.insert(predicate, Some(Label::Keep));
                 continue;
             }
 

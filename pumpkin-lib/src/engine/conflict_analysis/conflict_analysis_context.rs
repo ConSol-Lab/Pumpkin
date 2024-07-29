@@ -122,38 +122,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 .expect("reason reference should not be stale")
         // The predicate is implicitly due as a result of a decision.
         }
-        /*else if trail_entry.reason.is_none() {
-            // Equality needs to be treated in a special way since it is decomposed on the trail
-            // into the bound predicates.
-            match predicate {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => todo!(),
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => todo!(),
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => todo!(),
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => {
-                    reason_store.helper.clear();
-                    reason_store
-                        .helper
-                        .push(predicate!(domain_id >= equality_constant));
-                    reason_store
-                        .helper
-                        .push(predicate!(domain_id <= equality_constant));
-                    reason_store.helper.as_slice()
-                }
-            }
-        }*/
-        // 3) The predicate is true due to a propagation, and not explicitly on the trail.
+        // 2) The predicate is true due to a propagation, and not explicitly on the trail.
         // It is necessary to further analyse what was the reason for setting the predicate true.
         else {
             // The reason for propagation depends on:
