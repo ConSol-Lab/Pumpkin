@@ -4,6 +4,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use super::SparseSet;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
@@ -118,7 +119,7 @@ pub(crate) type TimeTableOverIntervalIncremental<Var> =
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct UpdatedTaskInfo<Var> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
@@ -154,11 +155,18 @@ pub(crate) struct CumulativeParameters<Var> {
     pub(crate) bounds: Vec<(i32, i32)>,
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
-    pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
+    pub(crate) updates: Vec<Vec<UpdateType<Var>>>,
+    pub(crate) updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
     /// false then it will only adjust the bounds when appropriate rather than removing values from
     /// the domain
     pub(crate) allow_holes_in_domain: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum UpdateType<Var> {
+    Addition(UpdatedTaskInfo<Var>),
+    Removal(UpdatedTaskInfo<Var>),
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
@@ -167,15 +175,20 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
         capacity: i32,
         allow_holes_in_domain: bool,
     ) -> CumulativeParameters<Var> {
+        let tasks = tasks
+            .into_iter()
+            .map(Rc::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let mut updated_tasks = SparseSet::new(tasks.to_vec(), Task::get_id);
+        updated_tasks.set_to_empty();
         CumulativeParameters {
-            tasks: tasks
-                .into_iter()
-                .map(Rc::new)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            tasks: tasks.clone(),
             capacity,
             bounds: Vec::new(),
-            updated: Vec::new(),
+            updates: vec![vec![]; tasks.len()],
+            updated_tasks,
             allow_holes_in_domain,
         }
     }

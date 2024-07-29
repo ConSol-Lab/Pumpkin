@@ -71,7 +71,7 @@ where
     type Propagator = TimeTableOverIntervalPropagator<Var>;
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context);
+        let tasks = create_tasks(&self.tasks, context, false);
         TimeTableOverIntervalPropagator::new(CumulativeParameters::new(
             tasks,
             self.capacity,
@@ -102,12 +102,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(
-            context,
-            &mut self.parameters.updated,
-            &mut self.parameters.bounds,
-            &self.parameters.tasks,
-        );
+        reset_bounds_clear_updated(context, &mut self.parameters);
     }
 
     fn notify(

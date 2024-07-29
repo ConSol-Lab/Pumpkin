@@ -3,6 +3,7 @@
 //! input parameters.
 use std::rc::Rc;
 
+use super::CumulativeParameters;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -14,6 +15,19 @@ use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
+use crate::pumpkin_assert_advanced;
+
+pub(crate) fn clean_updated<Var: IntegerVariable + 'static>(
+    parameters: &mut CumulativeParameters<Var>,
+) {
+    while !parameters.updated_tasks.is_empty() {
+        let updated_task = Rc::clone(parameters.updated_tasks.get(0));
+        let updated_task_index = updated_task.id.unpack() as usize;
+
+        parameters.updated_tasks.remove(&updated_task);
+        parameters.updates[updated_task_index].clear()
+    }
+}
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
@@ -41,6 +55,7 @@ pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
     context: &mut PropagatorConstructorContext<'_>,
+    register_backtrack: bool,
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
@@ -62,6 +77,13 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
                 });
+                if register_backtrack {
+                    let _ = context.register_for_backtrack_events(
+                        x.start_time.clone(),
+                        DomainEvents::BOUNDS,
+                        LocalId::from(id),
+                    );
+                }
                 id += 1;
                 return_value
             } else {
@@ -90,14 +112,12 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
 /// This method is currently used during bactracking/synchronisation
 pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
-    updated: &mut Vec<UpdatedTaskInfo<Var>>,
-    bounds: &mut Vec<(i32, i32)>,
-    tasks: &[Rc<Task<Var>>],
+    parameters: &mut CumulativeParameters<Var>,
 ) {
-    updated.clear();
-    bounds.clear();
-    for task in tasks.iter() {
-        bounds.push((
+    clean_updated(parameters);
+    parameters.bounds.clear();
+    for task in parameters.tasks.iter() {
+        parameters.bounds.push((
             context.lower_bound(&task.start_variable),
             context.upper_bound(&task.start_variable),
         ))

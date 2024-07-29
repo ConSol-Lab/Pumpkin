@@ -68,6 +68,12 @@ impl<T> SparseSet<T> {
         }
     }
 
+    pub(crate) fn set_to_empty(&mut self) {
+        self.indices = vec![usize::MAX; self.domain.len()];
+        self.domain.clear();
+        self.size = 0;
+    }
+
     /// Determines whether the domain represented by the [`SparseSet`] is empty
     pub(crate) fn is_empty(&self) -> bool {
         self.size == 0

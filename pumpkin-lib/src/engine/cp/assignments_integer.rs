@@ -403,36 +403,36 @@ impl AssignmentsInteger {
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
             let domain_id = entry.predicate.get_domain();
-            let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
-                let value_before = self.domains[domain_id].lower_bound;
-                self.domains[domain_id].undo_trail_entry(&entry);
-                if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
-                    if is_watching_any_backtrack_events {
-                        // This `domain_id` was unassigned while backtracking
-                        self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
-                    }
 
-                    // Variable used to be fixed but is not after backtracking
-                    unfixed_variables.push((domain_id, value_before));
-                }
+            let lower_bound_before = self.domains[domain_id].lower_bound;
+            let upper_bound_before = self.domains[domain_id].upper_bound;
+            let fixed_before = upper_bound_before == lower_bound_before;
 
+
+            self.domains[domain_id].undo_trail_entry(&entry);
+
+            if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
                 if is_watching_any_backtrack_events {
+                    // This `domain_id` was unassigned while backtracking
+                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
+                }
+
+                // Variable used to be fixed but is not after backtracking
+                unfixed_variables.push((domain_id, lower_bound_before));
+            }
+
+            if is_watching_any_backtrack_events {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
-                match entry.predicate {
-                    IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
-                    },
-                    IntegerPredicate::UpperBound { domain_id, upper_bound: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
-                    },
-                    IntegerPredicate::NotEqual { domain_id, not_equal_constant: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
-                    },
-                    IntegerPredicate::Equal { domain_id: _, equality_constant: _ } => {
-                        // This case has been handled before this
-                    },
+                if lower_bound_before != self.domains[domain_id].lower_bound {
+                    self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
+                } 
+                if upper_bound_before != self.domains[domain_id].upper_bound {
+                    self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
                 }
+                if matches!(entry.predicate, IntegerPredicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
+                    self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
                 }
+            }
 
         });
         unfixed_variables
