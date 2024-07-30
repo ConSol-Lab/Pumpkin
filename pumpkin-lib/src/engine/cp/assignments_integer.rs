@@ -425,7 +425,7 @@ impl AssignmentsInteger {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 if lower_bound_before != self.domains[domain_id].lower_bound {
                     self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
-                } 
+                }
                 if upper_bound_before != self.domains[domain_id].upper_bound {
                     self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
                 }

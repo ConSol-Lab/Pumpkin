@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use super::Constraint;
 use crate::propagators::ArgTask;
 use crate::propagators::TimeTableOverIntervalIncremental;
-use crate::propagators::TimeTablePerPointIncremental;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 

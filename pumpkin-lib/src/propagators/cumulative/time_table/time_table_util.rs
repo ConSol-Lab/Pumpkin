@@ -526,6 +526,16 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     parameters: &mut CumulativeParameters<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
+    if parameters.bounds[updated_task.id.unpack() as usize]
+        == (
+            context.lower_bound(&updated_task.start_variable),
+            context.upper_bound(&updated_task.start_variable),
+        )
+        || parameters.bounds[updated_task.id.unpack() as usize].1
+            >= parameters.bounds[updated_task.id.unpack() as usize].0 + updated_task.processing_time
+    {
+        return;
+    }
     parameters.updated_tasks.insert(Rc::clone(updated_task));
     parameters.updates[updated_task.id.unpack() as usize].push(UpdateType::Removal(
         UpdatedTaskInfo {

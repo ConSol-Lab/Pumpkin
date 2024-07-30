@@ -5,6 +5,7 @@ use std::rc::Rc;
 use super::debug_propagate_from_scratch_time_table_interval;
 use super::mandatory_part_addition::generate_update_range;
 use super::mandatory_part_removal::generate_removal_range;
+use super::time_table_util::backtrack_update;
 use super::time_table_util::has_overlap_with_interval;
 use super::time_table_util::insert_update;
 use super::time_table_util::should_enqueue;
@@ -26,7 +27,6 @@ use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::clean_updated;
 use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
-use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
@@ -135,11 +135,13 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                         self.parameters.capacity,
                     );
                     if let Err(conflict_tasks) = result {
-                        conflict = Some(Err(create_propositional_conjunction(
-                            &context.as_readonly(),
-                            &conflict_tasks,
-                        )
-                        .into()));
+                        if conflict.is_none() {
+                            conflict = Some(Err(create_propositional_conjunction(
+                                &context.as_readonly(),
+                                &conflict_tasks,
+                            )
+                            .into()));
+                        }
                     }
                 }
                 Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
@@ -201,8 +203,6 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             "Bounds were not equal when propagating"
         );
 
-        println!("Reached");
-
         while !self.parameters.updated_tasks.is_empty() {
             let updated_task = Rc::clone(self.parameters.updated_tasks.get(0));
 
@@ -233,14 +233,6 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         propagate_based_on_timetable(&mut context, self.time_table.iter(), &self.parameters)
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(context, &mut self.parameters);
-        // If the time-table is already empty then backtracking will not cause it to become outdated
-        if !self.time_table.is_empty() {
-            self.time_table_outdated = true;
-        }
-    }
-
     fn notify(
         &mut self,
         context: PropagationContext,
@@ -268,6 +260,19 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
         update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
         result.decision
+    }
+
+    fn notify_backtrack(
+        &mut self,
+        context: &PropagationContext,
+        local_id: LocalId,
+        _event: OpaqueDomainEvent,
+    ) {
+        let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
+
+        backtrack_update(context, &mut self.parameters, &updated_task);
+
+        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
     }
 
     fn priority(&self) -> u32 {
@@ -413,6 +418,7 @@ mod insertion {
     use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
     use crate::propagators::OverIntervalTimeTableType;
     use crate::propagators::Task;
+    use crate::pumpkin_assert_extreme;
     use crate::pumpkin_assert_moderate;
     use crate::variables::IntegerVariable;
 
@@ -436,6 +442,8 @@ mod insertion {
         // one and determine which one need to be updated
         for current_index in start_index..=end_index {
             let profile = &time_table[current_index];
+
+            pumpkin_assert_extreme!(!profile.profile_tasks.contains(updated_task));
 
             // Check whether there is a new profile before the first overlapping
             // profile
@@ -479,7 +487,7 @@ mod insertion {
                 updated_task,
                 capacity,
             );
-            if result.is_err() {
+            if result.is_err() && conflict.is_none() {
                 conflict = Some(result)
             }
 
@@ -664,6 +672,9 @@ mod removal {
         to_add: &mut Vec<ResourceProfile<Var>>,
         updated_task: &Rc<Task<Var>>,
     ) {
+        if profile.height - updated_task.resource_usage == 0 {
+            return;
+        }
         // Now we create a new profile which consists of the part of the
         // profile covered by the update range
         // This means that we are removing the contribution of the updated
@@ -911,6 +922,8 @@ mod checks {
 
 /// Contains functions related to debugging
 mod debug {
+    use std::fmt::Debug;
+
     use crate::basic_types::HashSet;
     use crate::engine::propagation::PropagationContext;
     use crate::propagators::create_time_table_over_interval_from_scratch;
@@ -930,7 +943,7 @@ mod debug {
     ///      - The heights are the same
     ///      - The profile tasks should be the same; note that we do not check whether the order is
     ///        the same!
-    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
+    pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static + Debug>(
         context: &PropagationContext,
         time_table: &OverIntervalTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,

@@ -139,7 +139,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                 .profile_tasks
                 .push(Rc::clone(&updated_task_info.task));
 
-            if current_profile.height > self.parameters.capacity {
+            if current_profile.height > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
                 conflict = Some(Err(create_propositional_conjunction(
                     &context.as_readonly(),

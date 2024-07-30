@@ -14,8 +14,6 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
-use crate::propagators::UpdatedTaskInfo;
-use crate::pumpkin_assert_advanced;
 
 pub(crate) fn clean_updated<Var: IntegerVariable + 'static>(
     parameters: &mut CumulativeParameters<Var>,
