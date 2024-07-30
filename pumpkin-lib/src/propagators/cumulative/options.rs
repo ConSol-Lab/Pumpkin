@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::CumulativeExplanationType;
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -9,13 +11,45 @@ pub struct CumulativeOptions {
     /// The type of explanation which is used by the cumulative to explain propagations and
     /// conflicts.
     pub(crate) explanation_type: CumulativeExplanationType,
+    pub(crate) propagation_method: CumulativePropagationMethod,
 }
 
 impl CumulativeOptions {
-    pub fn new(allow_holes_in_domain: bool, explanation_type: CumulativeExplanationType) -> Self {
+    pub fn new(
+        allow_holes_in_domain: bool,
+        explanation_type: CumulativeExplanationType,
+        propagation_method: CumulativePropagationMethod,
+    ) -> Self {
         Self {
             allow_holes_in_domain,
             explanation_type,
+            propagation_method,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum CumulativePropagationMethod {
+    TimeTablePerPoint,
+    TimeTablePerPointIncremental,
+    TimeTableOverInterval,
+    #[default]
+    TimeTableOverIntervalIncremental,
+}
+
+impl Display for CumulativePropagationMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "TimeTablePerPoint"),
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                write!(f, "TimeTablePerPointIncremental")
+            }
+            CumulativePropagationMethod::TimeTableOverInterval => {
+                write!(f, "TimeTableOverInterval")
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                write!(f, "TimeTableOverIntervalIncremental")
+            }
         }
     }
 }

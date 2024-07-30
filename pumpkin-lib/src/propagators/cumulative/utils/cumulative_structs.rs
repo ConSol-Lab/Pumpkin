@@ -91,14 +91,13 @@ impl<Var, T> CumulativeConstructor<Var, T> {
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
 /// method for each type `T`
-#[allow(unused)]
 pub(crate) type TimeTablePerPoint<Var> =
     CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
 
 /// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
 /// type of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
 /// `new` method for each type `T`
-#[allow(unused)]
+
 pub(crate) type TimeTablePerPointIncremental<Var> =
     CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>;
 

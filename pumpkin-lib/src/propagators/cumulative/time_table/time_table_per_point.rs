@@ -224,6 +224,7 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::options::CumulativePropagationMethod;
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativeExplanationType;
@@ -256,6 +257,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -290,6 +292,7 @@ mod tests {
             CumulativeOptions {
                 allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
+                propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
             },
         ));
         assert!(match result {
@@ -335,6 +338,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -394,6 +398,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -426,6 +431,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -473,6 +479,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -546,6 +553,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -628,6 +636,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -678,6 +687,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -733,6 +743,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");
@@ -783,6 +794,7 @@ mod tests {
                 CumulativeOptions {
                     allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
                 },
             ))
             .expect("No conflict");

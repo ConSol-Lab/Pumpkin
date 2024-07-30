@@ -3,9 +3,16 @@ use std::fmt::Debug;
 use super::Constraint;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
+use crate::propagators::CumulativePropagationMethod;
+use crate::propagators::TimeTableOverInterval;
 use crate::propagators::TimeTableOverIntervalIncremental;
+use crate::propagators::TimeTablePerPoint;
+use crate::propagators::TimeTablePerPointIncremental;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
+use crate::ConstraintOperationError;
+use crate::Solver;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
 /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
@@ -122,7 +129,7 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
 same!car"
     );
 
-    TimeTableOverIntervalIncremental::new(
+    CumulativeConstraint::new(
         start_times
             .iter()
             .zip(durations)
@@ -256,7 +263,7 @@ pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
 same!car"
     );
 
-    TimeTableOverIntervalIncremental::new(
+    CumulativeConstraint::new(
         start_times
             .iter()
             .zip(durations)
@@ -270,4 +277,78 @@ same!car"
         resource_capacity,
         options,
     )
+}
+
+struct CumulativeConstraint<Var> {
+    tasks: Vec<ArgTask<Var>>,
+    capacity: i32,
+    options: CumulativeOptions,
+}
+
+impl<Var> CumulativeConstraint<Var> {
+    fn new(tasks: Vec<ArgTask<Var>>, capacity: i32, options: CumulativeOptions) -> Self {
+        Self {
+            tasks,
+            capacity,
+            options,
+        }
+    }
+}
+
+impl<Var> Constraint for CumulativeConstraint<Var>
+where
+    Var: IntegerVariable + Debug + 'static,
+{
+    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        match self.options.propagation_method {
+            CumulativePropagationMethod::TimeTablePerPoint => {
+                TimeTablePerPoint::new(self.tasks.into(), self.capacity, self.options).post(solver)
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                TimeTablePerPointIncremental::new(self.tasks.into(), self.capacity, self.options)
+                    .post(solver)
+            }
+            CumulativePropagationMethod::TimeTableOverInterval => {
+                TimeTableOverInterval::new(self.tasks.into(), self.capacity, self.options)
+                    .post(solver)
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                TimeTableOverIntervalIncremental::new(
+                    self.tasks.into(),
+                    self.capacity,
+                    self.options,
+                )
+                .post(solver)
+            }
+        }
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+    ) -> Result<(), ConstraintOperationError> {
+        match self.options.propagation_method {
+            CumulativePropagationMethod::TimeTablePerPoint => {
+                TimeTablePerPoint::new(self.tasks.into(), self.capacity, self.options)
+                    .implied_by(solver, reification_literal)
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                TimeTablePerPointIncremental::new(self.tasks.into(), self.capacity, self.options)
+                    .implied_by(solver, reification_literal)
+            }
+            CumulativePropagationMethod::TimeTableOverInterval => {
+                TimeTableOverInterval::new(self.tasks.into(), self.capacity, self.options)
+                    .implied_by(solver, reification_literal)
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                TimeTableOverIntervalIncremental::new(
+                    self.tasks.into(),
+                    self.capacity,
+                    self.options,
+                )
+                .implied_by(solver, reification_literal)
+            }
+        }
+    }
 }

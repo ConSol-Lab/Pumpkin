@@ -5,7 +5,6 @@ use std::rc::Rc;
 use pumpkin_lib::constraints;
 use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::constraints::NegatableConstraint;
-use pumpkin_lib::options::CumulativeOptions;
 use pumpkin_lib::predicate;
 use pumpkin_lib::variables::AffineView;
 use pumpkin_lib::variables::DomainId;
@@ -242,10 +241,7 @@ fn compile_cumulative(
         &durations,
         &resource_requirements,
         resource_capacity,
-        CumulativeOptions::new(
-            options.cumulative_allow_holes,
-            options.cumulative_explanation_type,
-        ),
+        options.cumulative_options,
     )
     .post(context.solver);
     Ok(post_result.is_ok())
