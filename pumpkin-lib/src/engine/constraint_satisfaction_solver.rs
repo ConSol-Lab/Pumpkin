@@ -12,6 +12,7 @@ use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
 use super::conflict_analysis::SemanticMinimiser;
+use super::nogoods::Lbd;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
@@ -162,6 +163,8 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     variable_names: VariableNames,
+    /// Computes the LBD for nogoods.
+    lbd_helper: Lbd,
 }
 
 impl Debug for ConstraintSatisfactionSolver {
@@ -332,6 +335,7 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
+            lbd_helper: Lbd::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -469,10 +473,10 @@ impl ConstraintSatisfactionSolver {
     ///
     /// *Notes:*
     ///   - If the solver is not in an unsatisfied state, this method will panic.
-    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions,
-    ///   this will return an empty vector.
-    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error
-    ///   is returned, with the literal being one of the inconsistent assumptions.
+    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions, this
+    ///     will return an empty vector.
+    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error is
+    ///     returned, with the literal being one of the inconsistent assumptions.
     ///
     /// # Example usage
     /// ```rust
@@ -877,8 +881,9 @@ impl ConstraintSatisfactionSolver {
         // the trail -> although in the current version this does nothing but notify that a conflict
         // happened
         self.restart_strategy.notify_conflict(
-            learned_nogood.predicates.len() as u32,
-            self.assignments.num_trail_entries(),
+            self.lbd_helper
+                .compute_lbd(&learned_nogood.predicates, &self.assignments),
+            self.assignments.get_pruned_value_count(),
         );
 
         self.counters

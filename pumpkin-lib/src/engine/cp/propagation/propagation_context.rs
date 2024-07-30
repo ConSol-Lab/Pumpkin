@@ -183,8 +183,8 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.contains(self.assignments(), value)
     }
 
-    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<Predicate> {
-        var.describe_domain(self.assignments())
+    fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
+        var.iterate_domain(self.assignments())
     }
 }
 

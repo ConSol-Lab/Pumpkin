@@ -10,6 +10,7 @@
 //! The parameters are not independent, but satisfy the following conditions:
 //! - `bk = vr`
 //! - `l(v - 1) = r(k - 1)`
+//!
 //! Hence, the problem is defined in terms of v, k, and l.
 
 use pumpkin_lib::constraints;

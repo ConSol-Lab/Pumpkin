@@ -112,8 +112,11 @@ impl IntegerVariable for Literal {
         }
     }
 
-    fn describe_domain(&self, assignment: &Assignments) -> Vec<Predicate> {
-        assignment.get_domain_description(self.predicate.get_domain())
+    fn iterate_domain(&self, _assignment: &Assignments) -> impl Iterator<Item = i32> {
+        todo!("domain iterator for literals");
+
+        #[allow(unreachable_code)]
+        std::iter::empty()
     }
 
     fn remove(

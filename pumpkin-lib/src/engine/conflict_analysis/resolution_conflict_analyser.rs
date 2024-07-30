@@ -388,8 +388,8 @@ impl ResolutionNogoodConflictAnalyser {
 impl ResolutionNogoodConflictAnalyser {
     /// Removes redundant literals from the learned clause.
     /// Redundancy is detected by looking at the implication graph:
-    /// * a literal is redundant/dominated if a subset of the other
-    /// literals in the learned clause imply that literal.
+    /// * a literal is redundant/dominated if a subset of the other literals in the learned clause
+    ///   imply that literal.
     ///
     /// The function assumes that the learned clause is stored internally
     /// in `analysis_result`, and that the first literal is

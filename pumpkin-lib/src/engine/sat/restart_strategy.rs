@@ -189,18 +189,15 @@ impl RestartStrategy {
     pub(crate) fn should_restart(&self) -> bool {
         // Do not restart until a certain number of conflicts take place before the first restart
         // this is done to collect some early runtime statistics for the restart strategy
-        if self.number_of_restarts == 0
-            && self.number_of_conflicts_encountered_since_restart
-                < self.minimum_number_of_conflicts_before_first_restart
-        {
+        if self.should_restart_first_time() {
             return false;
         }
+
         // Do not restart until a minimum number of conflicts took place after the last restart
-        if self.number_of_conflicts_encountered_since_restart
-            < self.number_of_conflicts_until_restart
-        {
+        if !self.should_trigger_later_restart() {
             return false;
         }
+
         // Restarts can now be considered!
         // Only restart if the solver is learning "bad" clauses, this is the case if the long-term
         // average lbd multiplied by the `lbd_coefficient` is lower than the short-term average lbd
@@ -208,35 +205,51 @@ impl RestartStrategy {
             <= self.lbd_short_term_moving_average.value()
     }
 
+    fn should_restart_first_time(&self) -> bool {
+        self.number_of_restarts == 0
+            && self.number_of_conflicts_encountered_since_restart
+                < self.minimum_number_of_conflicts_before_first_restart
+    }
+
     /// Notifies the restart strategy that a conflict has taken place so that it can adjust its
     /// internal values, this method has the additional responsibility of checking whether a restart
     /// should be blocked based on whether the solver is "sufficiently close" to finding a solution.
-    pub(crate) fn notify_conflict(&mut self, lbd: u32, num_literals_on_trail: usize) {
+    pub(crate) fn notify_conflict(&mut self, lbd: u32, number_of_pruned_values: u64) {
         // Update moving averages
         self.number_of_assigned_variables_moving_average
-            .add_term(num_literals_on_trail as u64);
+            .add_term(number_of_pruned_values);
         self.lbd_short_term_moving_average.add_term(lbd as u64);
         self.lbd_long_term_moving_average.add_term(lbd as u64);
 
         // Increase the number of conflicts encountered since the last restart
         self.number_of_conflicts_encountered_since_restart += 1;
 
-        // If the solver has more variables assigned now than in the recent past, then block the
-        // restart. The idea is that the solver is 'closer' to finding a solution and restarting
-        // could be harmful to the performance
-        if (self.number_of_restarts > 0
-            || self.number_of_conflicts_encountered_since_restart
-                >= self.minimum_number_of_conflicts_before_first_restart)
-            && self.number_of_conflicts_until_restart
-                <= self.number_of_conflicts_encountered_since_restart
-            && num_literals_on_trail as f64
-                > self.number_of_assigned_variables_moving_average.value()
-                    * self.number_of_variables_coefficient
-        {
+        if self.should_block_restart(number_of_pruned_values) {
             // Restart has been blocked
             self.number_of_blocked_restarts += 1;
             self.reset_values()
         }
+    }
+
+    fn should_block_restart(&self, number_of_pruned_values: u64) -> bool {
+        // If the solver has more variables assigned now than in the recent past, then block the
+        // restart. The idea is that the solver is 'closer' to finding a solution and restarting
+        // could be harmful to the performance
+
+        if self.should_restart_first_time() {
+            // Don't block the first restart.
+            return false;
+        }
+
+        let close_to_solution = number_of_pruned_values as f64
+            > self.number_of_assigned_variables_moving_average.value()
+                * self.number_of_variables_coefficient;
+
+        self.should_trigger_later_restart() && close_to_solution
+    }
+
+    fn should_trigger_later_restart(&self) -> bool {
+        self.number_of_conflicts_until_restart <= self.number_of_conflicts_encountered_since_restart
     }
 
     /// Notifies the restart strategy that a restart has taken place so that it can adjust its

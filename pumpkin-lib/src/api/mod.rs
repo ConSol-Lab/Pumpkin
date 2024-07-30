@@ -9,6 +9,7 @@ pub mod results {
     //! - For a **satisfaction** problem using **assumptions**
     //!   ([`SatisfactionResultUnderAssumptions`])
     //! - For an **optimisation** problem ([`OptimisationResult`])
+    //!
     //! On these results, different methods can be called which ensure that the solver is in the
     //! right state for these operations. For example,
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract

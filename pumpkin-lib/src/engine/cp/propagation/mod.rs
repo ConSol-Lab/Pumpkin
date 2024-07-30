@@ -49,24 +49,23 @@
 //!
 //! We recommend the following workflow:
 //! 1. Implement a propagator struct that implements the [`Propagator`] trait. For now only
-//!    implement
-//!   the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
-//!   [`Propagator::name`].
+//!    implement the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
+//!    [`Propagator::name`].
 //! 2. Implement a struct that implements the [`PropagatorConstructor`] trait, which contains
-//!   necessary information to create the propagator. It is also responsible for registering the
-//!   variables and corresponding [`DomainEvents`] with the solver, so that the solver can notify
-//!   the propagator once an event happens that relates to one of the variables of the propagator.
+//!    necessary information to create the propagator. It is also responsible for registering the
+//!    variables and corresponding [`DomainEvents`] with the solver, so that the solver can notify
+//!    the propagator once an event happens that relates to one of the variables of the propagator.
 //!     * For example, the struct implementing [`PropagatorConstructor`] may contain an array of raw
 //!       [`IntegerVariable`]s and parameters that will be used to initialise the propagator.
 //! 3. Following the procedure above gives an initial version of the propagator that is likely not
-//!   efficient, but has an important role for testing. Now is a good time to write tests which use
-//!   the [`TestSolver`]. **We strongly discourage skipping this step**.
+//!    efficient, but has an important role for testing. Now is a good time to write tests which use
+//!    the [`TestSolver`]. **We strongly discourage skipping this step**.
 //!     * For example, see the tests in [`crate::propagators::arithmetic::absolute_value`].
 //! 4. Implement [`Propagator::notify`]. Depending on the concrete propagator, this may only make
 //!    sense when done together with the next step.
 //! 5. Implement the remaining functions, i.e., [`Propagator::propagate`],
-//!   [`Propagator::synchronise`], and [`Propagator::initialise_at_root`]. These are all
-//!   interdependent.
+//!    [`Propagator::synchronise`], and [`Propagator::initialise_at_root`]. These are all
+//!    interdependent.
 //! 6. Decide on the priortiy of the propagator, i.e., implement [`Propagator::priority`].
 //! 7. Make sure to write new tests and run all tests throughout the process.
 //! 8. The propagator implementation is now done!
