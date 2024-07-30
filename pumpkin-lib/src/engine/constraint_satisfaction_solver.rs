@@ -255,6 +255,10 @@ impl ConstraintSatisfactionSolver {
         // If there are no variables being watched then there is no reason to perform these
         // operations
         if self.watch_list_cp.is_watching_any_backtrack_events() {
+            // First we make sure that all of the domain events have been processed before we start
+            // backtracking
+            let _ = self.process_domain_events();
+
             self.backtrack_event_drain
                 .extend(self.assignments_integer.drain_backtrack_domain_events());
 
