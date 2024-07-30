@@ -160,8 +160,12 @@ pub struct ConstraintSatisfactionSolver {
     /// Handles storing information about propagation reasons, which are used later to construct
     /// explanations during conflict analysis
     pub(crate) reason_store: ReasonStore,
-    /// Contains events that need to be processe to notify propagators of event occurrences.
+    /// Contains events that need to be processed to notify propagators of [`IntDomainEvent`]
+    /// occurrences.
     event_drain: Vec<(IntDomainEvent, DomainId)>,
+    /// Contains events that need to be processed to notify propagators of backtrack
+    /// [`IntDomainEvent`] occurrences (i.e. [`IntDomainEvent`]s being undone).
+    backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
     /// Holds information needed to map atomic constraints (e.g., [x >= 5]) to literals
     pub(crate) variable_literal_mappings: VariableLiteralMappings,
     /// Used during synchronisation of the propositional and integer trail.
@@ -247,6 +251,35 @@ impl Default for SatisfactionSolverOptions {
 }
 
 impl ConstraintSatisfactionSolver {
+    fn process_backtrack_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            self.backtrack_event_drain
+                .extend(self.assignments_integer.drain_backtrack_domain_events());
+
+            if self.backtrack_event_drain.is_empty() {
+                return false;
+            }
+
+            for (event, domain) in self.backtrack_event_drain.drain(..) {
+                for propagator_var in self
+                    .watch_list_cp
+                    .get_backtrack_affected_propagators(event, domain)
+                {
+                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                    let context = PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
+                    );
+
+                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                }
+            }
+        }
+        true
+    }
+
     /// Process the stored domain events. If no events were present, this returns false. Otherwise,
     /// true is returned.
     fn process_domain_events(&mut self) -> bool {
@@ -399,6 +432,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
             event_drain: vec![],
+            backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
@@ -548,7 +582,7 @@ impl ConstraintSatisfactionSolver {
                 next_idx += 1;
             } else {
                 self.assignments_integer
-                    .remove_value_from_domain(domain_id, value, None)
+                    .remove_initial_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
                 self.assignments_propositional.enqueue_decision_literal(
                     self.variable_literal_mappings.get_inequality_literal(
@@ -579,10 +613,10 @@ impl ConstraintSatisfactionSolver {
     ///
     /// *Notes:*
     ///   - If the solver is not in an unsatisfied state, this method will panic.
-    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions,
-    ///   this will return an empty vector.
-    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error
-    ///   is returned, with the literal being one of the inconsistent assumptions.
+    ///   - If the solver is in an unsatisfied state, but solving was done without assumptions, this
+    ///     will return an empty vector.
+    ///   - If the assumptions are inconsistent, i.e. both literal x and !x are assumed, an error is
+    ///     returned, with the literal being one of the inconsistent assumptions.
     ///
     /// # Example usage
     /// ```rust
@@ -1186,7 +1220,10 @@ impl ConstraintSatisfactionSolver {
             self.assignments_propositional.num_trail_entries(),
         );
         self.assignments_integer
-            .synchronise(backtrack_level)
+            .synchronise(
+                backtrack_level,
+                self.watch_list_cp.is_watching_any_backtrack_events(),
+            )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
@@ -1206,6 +1243,8 @@ impl ConstraintSatisfactionSolver {
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
             self.cp_propagators[propagator_id].synchronise(&context);
         }
+
+        let _ = self.process_backtrack_events();
     }
 
     /// Main propagation loop.
@@ -1514,6 +1553,8 @@ pub(crate) struct Counters {
     average_learned_clause_length: CumulativeMovingAverage,
     time_spent_in_solver: u64,
     average_backtrack_amount: CumulativeMovingAverage,
+    pub(crate) average_number_of_removed_literals_recursive: CumulativeMovingAverage,
+    pub(crate) average_number_of_removed_literals_semantic: CumulativeMovingAverage,
 }
 
 impl Counters {
@@ -1534,6 +1575,14 @@ impl Counters {
         log_statistic(
             "averageBacktrackAmount",
             self.average_backtrack_amount.value(),
+        );
+        log_statistic(
+            "averageNumberOfRemovedLiteralsRecursive",
+            self.average_number_of_removed_literals_recursive.value(),
+        );
+        log_statistic(
+            "averageNumberOfRemovedLiteralsSemantic",
+            self.average_number_of_removed_literals_semantic.value(),
         );
     }
 }

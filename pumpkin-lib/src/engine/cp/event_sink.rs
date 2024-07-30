@@ -1,7 +1,7 @@
 use enumset::EnumSet;
 
+use super::IntDomainEvent;
 use crate::basic_types::KeyedVec;
-use crate::engine::cp::IntDomainEvent;
 use crate::engine::variables::DomainId;
 #[cfg(doc)]
 use crate::engine::DomainEvents;
@@ -15,7 +15,7 @@ use crate::propagators;
 /// Triggering any [`DomainEvents`] will also trigger the event [`DomainEvents::ANY_INT`].
 ///
 /// The event sink will ensure duplicate events are ignored.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct EventSink {
     present: KeyedVec<DomainId, EnumSet<IntDomainEvent>>,
     events: Vec<(IntDomainEvent, DomainId)>,
@@ -23,7 +23,7 @@ pub(crate) struct EventSink {
 
 impl EventSink {
     pub(crate) fn new(num_domains: usize) -> Self {
-        let mut event_sink: EventSink = Default::default();
+        let mut event_sink = EventSink::default();
         for _ in 0..num_domains {
             event_sink.grow();
         }
@@ -51,6 +51,7 @@ impl EventSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::IntDomainEvent;
 
     #[test]
     fn the_default_sink_is_empty() {

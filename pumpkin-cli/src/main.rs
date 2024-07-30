@@ -111,13 +111,11 @@ struct Args {
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
     ///
+    /// If this flag is present then the minimisation is turned off.
+    ///
     /// Possible values: bool
-    #[arg(
-        long = "learning-minimise",
-        default_value_t = true,
-        verbatim_doc_comment
-    )]
-    learning_clause_minimisation: bool,
+    #[arg(long = "no-learning-minimise", verbatim_doc_comment)]
+    no_learning_clause_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
     /// - The "constant" approach uses a constant number of conflicts before another restart is
@@ -249,23 +247,13 @@ struct Args {
     /// an optimization problem) see the option "--all-solutions".
     ///
     /// Possible values: bool
-    #[arg(
-        short = 'v',
-        long = "verbose",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(short = 'v', long = "verbose", verbatim_doc_comment)]
     verbose: bool,
 
     /// Enables logging of statistics from the solver.
     ///
     /// Possible values: bool
-    #[arg(
-        short = 's',
-        long = "log-statistics",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(short = 's', long = "log-statistics", verbatim_doc_comment)]
     log_statistics: bool,
 
     /// Instructs the solver to perform free search when solving a MiniZinc model; this flag
@@ -275,12 +263,7 @@ struct Args {
     /// for more information.
     ///
     /// Possible values: bool
-    #[arg(
-        short = 'f',
-        long = "free-search",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(short = 'f', long = "free-search", verbatim_doc_comment)]
     free_search: bool,
 
     /// Instructs the solver to report all solutions in the case of satisfaction problems,
@@ -291,24 +274,19 @@ struct Args {
     /// for more information.
     ///
     /// Possible values: bool
-    #[arg(
-        short = 'a',
-        long = "all-solutions",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(short = 'a', long = "all-solutions", verbatim_doc_comment)]
     all_solutions: bool,
 
     /// If `--verbose` is enabled then this option removes the timestamp information from the log
-    /// messages when set to true.
+    /// messages. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
     /// Possible values: bool
-    #[arg(long = "omit-timestamp", default_value_t = false, verbatim_doc_comment)]
+    #[arg(long = "omit-timestamp", verbatim_doc_comment)]
     omit_timestamp: bool,
 
     /// If `--verbose` is enabled then this option removes the call site information from the log
-    /// messages when set to true. The call site is the file and line from which the message
-    /// originated.
+    /// messages. The call site is the file and line from which the message
+    /// originated. Note that this option will only take affect in the case of a (W)CNF instance.
     ///
     /// Possible values: bool
     #[arg(long = "omit-call-site", default_value_t = false, verbatim_doc_comment)]
@@ -496,7 +474,7 @@ fn run() -> PumpkinResult<()> {
             geometric_coef: args.restart_geometric_coef,
         },
         proof_log,
-        learning_clause_minimisation: args.learning_clause_minimisation,
+        learning_clause_minimisation: !args.no_learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
     };
 
@@ -550,6 +528,7 @@ fn cnf_problem(
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
     match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(solution) => {
+            solver.log_statistics();
             println!("s SATISFIABLE");
             let num_propositional_variables = solution.num_propositional_variables();
             println!(
@@ -558,6 +537,7 @@ fn cnf_problem(
             );
         }
         SatisfactionResult::Unsatisfiable => {
+            solver.log_statistics();
             if solver.conclude_proof_unsat().is_err() {
                 warn!("Failed to log solver conclusion");
             };
@@ -565,6 +545,7 @@ fn cnf_problem(
             println!("s UNSATISFIABLE");
         }
         SatisfactionResult::Unknown => {
+            solver.log_statistics();
             println!("s UNKNOWN");
         }
     };
