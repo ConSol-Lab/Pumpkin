@@ -17,14 +17,15 @@ pub(crate) fn run(
     ast: &FlatZincAst,
     context: &mut CompilationContext,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    create_from_search_strategy(&ast.search, context)
+    create_from_search_strategy(&ast.search, context, true)
 }
 
 fn create_from_search_strategy(
     strategy: &Search,
     context: &mut CompilationContext,
+    append_default_search: bool,
 ) -> Result<DynamicBrancher, FlatZincError> {
-    match strategy {
+    let mut brancher = match strategy {
         Search::Bool(SearchStrategy {
             variables,
             variable_selection_strategy,
@@ -40,18 +41,10 @@ fn create_from_search_strategy(
                 other => panic!("Expected string or expression but got {other:?}"),
             };
 
-            let mut brancher =
-                DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
-                    variable_selection_strategy.create_from_literals(&search_variables),
-                    value_selection_strategy.create_for_literals(),
-                ))]);
-
-            // MiniZinc specification specifies that we need to ensure that all variables are fixed;
-            // we ensure this by adding a brancher after the user-provided search which searches
-            // over the remainder of the variables
-            brancher.add_brancher(Box::new(context.solver.default_brancher()));
-
-            Ok(brancher)
+            DynamicBrancher::new(vec![Box::new(IndependentVariableValueBrancher::new(
+                variable_selection_strategy.create_from_literals(&search_variables),
+                value_selection_strategy.create_for_literals(),
+            ))])
         }
         Search::Int(SearchStrategy {
             variables,
@@ -66,43 +59,43 @@ fn create_from_search_strategy(
                 flatzinc::AnnExpr::Expr(expr) => context.resolve_integer_variable_array(expr)?,
                 other => panic!("Expected string or expression but got {other:?}"),
             };
-            let mut brancher = create_search_over_domains(
+            create_search_over_domains(
                 &search_variables,
                 variable_selection_strategy,
                 value_selection_strategy,
+            )
+        }
+        Search::Seq(search_strategies) => DynamicBrancher::new(
+            search_strategies
+                .iter()
+                .map(|strategy| {
+                    let downcast: Box<dyn Brancher> = Box::new(
+                        create_from_search_strategy(strategy, context, false)
+                            .expect("Expected nested sequential strategy to be able to be created"),
+                    );
+                    downcast
+                })
+                .collect::<Vec<_>>(),
+        ),
+        Search::Unspecified => {
+            assert!(
+                append_default_search,
+                "when no search is specified, we must add a default search"
             );
 
-            // MiniZinc specification specifies that we need to ensure that all variables are fixed;
-            // we ensure this by adding a brancher after the user-provided search which searches
-            // over the remainder of the variables
-            brancher.add_brancher(Box::new(context.solver.default_brancher()));
-            Ok(brancher)
+            // The default search will be added below, so we give an empty brancher here.
+            DynamicBrancher::new(vec![])
         }
-        Search::Seq(search_strategies) => {
-            // MiniZinc specification specifies that we need to ensure that all variables are fixed;
-            // we ensure this by adding a brancher after the user-provided search which searches
-            // over the remainder of the variables
-            let brancher_over_all_variables: Box<dyn Brancher> =
-                Box::new(context.solver.default_brancher());
-            let brancher = DynamicBrancher::new(
-                search_strategies
-                    .iter()
-                    .map(|strategy| {
-                        let downcast: Box<dyn Brancher> =
-                            Box::new(create_from_search_strategy(strategy, context).expect(
-                                "Expected nested sequential strategy to be able to be created",
-                            ));
-                        downcast
-                    })
-                    .chain(std::iter::once(brancher_over_all_variables))
-                    .collect::<Vec<_>>(),
-            );
-            Ok(brancher)
-        }
-        Search::Unspecified => Ok(DynamicBrancher::new(vec![Box::new(
-            context.solver.default_brancher(),
-        )])),
+    };
+    if append_default_search {
+        // MiniZinc specification specifies that we need to ensure that all variables are
+        // fixed; we ensure this by adding a brancher after the
+        // user-provided search which searches over the remainder of the
+        // variables
+        brancher.add_brancher(Box::new(context.solver.default_brancher()));
     }
+
+    Ok(brancher)
 }
 
 fn create_search_over_domains(
