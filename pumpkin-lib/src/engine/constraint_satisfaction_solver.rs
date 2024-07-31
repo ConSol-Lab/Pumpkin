@@ -1234,7 +1234,6 @@ impl ConstraintSatisfactionSolver {
             });
 
         self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
         //  note that variable_literal_mappings sync should be called after the sat/cp data
         // structures backtrack
         self.synchronise_assignments();
@@ -1249,6 +1248,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
     }
 
     /// Main propagation loop.
