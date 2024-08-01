@@ -1,5 +1,7 @@
 use std::cmp;
 
+use log::warn;
+
 use super::ConflictAnalysisContext;
 use super::ConflictAnalysisResult;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -73,6 +75,9 @@ impl SemanticMinimiser {
         recompute_invariant_learned_clause(&mut minimised_clause, context);
 
         if minimised_clause.len() == 1 {
+            if minimised_clause[0] == context.assignments_propositional.true_literal {
+                return;
+            }
             // If the learned clause is unit then we jump back to the root and propagate it there
             analysis_result.backjump_level = 0;
         } else {
@@ -123,6 +128,7 @@ impl SemanticMinimiser {
         for domain_id in self.present_ids.iter() {
             // As soon as one domain is inconsistent, we know that we can stop
             if self.domains[domain_id].inconsistent {
+                warn!("Inconsistent domain found in the semantic minimiser; this should never happen during conflict analysis!");
                 return vec![assignments_propositional.true_literal];
             }
 

@@ -255,6 +255,10 @@ impl ConstraintSatisfactionSolver {
         // If there are no variables being watched then there is no reason to perform these
         // operations
         if self.watch_list_cp.is_watching_any_backtrack_events() {
+            // First we make sure that all of the domain events have been processed before we start
+            // backtracking
+            let _ = self.process_domain_events();
+
             self.backtrack_event_drain
                 .extend(self.assignments_integer.drain_backtrack_domain_events());
 
@@ -1230,7 +1234,6 @@ impl ConstraintSatisfactionSolver {
             });
 
         self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
         //  note that variable_literal_mappings sync should be called after the sat/cp data
         // structures backtrack
         self.synchronise_assignments();
@@ -1245,6 +1248,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
     }
 
     /// Main propagation loop.
