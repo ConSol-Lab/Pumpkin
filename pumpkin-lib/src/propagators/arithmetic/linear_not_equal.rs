@@ -201,19 +201,14 @@ where
                 self.unfixed_variable_has_been_updated = true;
 
                 // Then we remove the conflicting value from the unfixed variable
-                let terms = Rc::clone(&self.terms);
-                context.remove(
-                    &self.terms[unfixed_x_i],
-                    value_to_remove,
-                    move |context: &PropagationContext| {
-                        terms
-                            .iter()
-                            .enumerate()
-                            .filter(|&(i, _)| i != unfixed_x_i)
-                            .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                            .collect()
-                    },
-                )?;
+                let reason = self
+                    .terms
+                    .iter()
+                    .enumerate()
+                    .filter(|&(i, _)| i != unfixed_x_i)
+                    .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                    .collect::<PropositionalConjunction>();
+                context.remove(&self.terms[unfixed_x_i], value_to_remove, reason)?;
             }
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
@@ -257,20 +252,15 @@ where
                 .iter()
                 .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
-            let terms = Rc::clone(&self.terms);
-            context.remove(
-                &self.terms[unfixed_x_i],
-                value_to_remove,
-                move |context: &PropagationContext| {
-                    let predicates = terms
-                        .iter()
-                        .enumerate()
-                        .filter(|&(i, _)| i != unfixed_x_i)
-                        .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                        .collect::<Vec<_>>();
-                    predicates.into()
-                },
-            )?;
+
+            let reason = self
+                .terms
+                .iter()
+                .enumerate()
+                .filter(|&(i, _)| i != unfixed_x_i)
+                .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                .collect::<PropositionalConjunction>();
+            context.remove(&self.terms[unfixed_x_i], value_to_remove, reason)?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
             let failure_reason: PropositionalConjunction = self
                 .terms

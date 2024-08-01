@@ -1,5 +1,7 @@
 use std::cmp;
 
+use log::warn;
+
 use super::ConflictAnalysisContext;
 use super::ConflictAnalysisResult;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -126,6 +128,7 @@ impl SemanticMinimiser {
         for domain_id in self.present_ids.iter() {
             // As soon as one domain is inconsistent, we know that we can stop
             if self.domains[domain_id].inconsistent {
+                warn!("Inconsistent domain found in the semantic minimiser; this should never happen during conflict analysis!");
                 return vec![assignments_propositional.true_literal];
             }
 
