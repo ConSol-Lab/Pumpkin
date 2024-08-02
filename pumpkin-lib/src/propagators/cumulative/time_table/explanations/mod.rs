@@ -1,14 +1,18 @@
 pub(crate) mod big_step;
 pub(crate) mod naive;
 pub(crate) mod pointwise;
-use std::cmp::max;
 use std::fmt::Display;
 use std::rc::Rc;
 
+use big_step::create_big_step_predicate_propagating_task_lower_bound_propagation;
+use big_step::create_big_step_predicate_propagating_task_upper_bound_propagation;
+use naive::create_naive_predicate_propagating_task_lower_bound_propagation;
+use naive::create_naive_predicate_propagating_task_upper_bound_propagation;
+use pointwise::create_pointwise_predicate_propagating_task_lower_bound_propagation;
+use pointwise::create_pointwise_predicate_propagating_task_upper_bound_propagation;
+
 use super::time_table_util::ResourceProfile;
-use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
-use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::Task;
@@ -75,19 +79,13 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
 ) -> Predicate {
     match explanation_type {
         CumulativeExplanationType::Naive => {
-            predicate!(task.start_variable >= context.lower_bound(&task.start_variable))
+            create_naive_predicate_propagating_task_lower_bound_propagation(context, task)
         }
         CumulativeExplanationType::BigStep => {
-            predicate!(task.start_variable >= profile.start + 1 - task.processing_time)
+            create_big_step_predicate_propagating_task_lower_bound_propagation(task, profile)
         }
         CumulativeExplanationType::PointWise => {
-            predicate!(
-                task.start_variable
-                    >= time_point.expect(
-                        "Expected time-point to be provided to pointwise explanation creation"
-                    ) + 1
-                        - task.processing_time
-            )
+            create_pointwise_predicate_propagating_task_lower_bound_propagation(task, time_point)
         }
     }
 }
@@ -123,19 +121,16 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
 ) -> Predicate {
     match explanation_type {
         CumulativeExplanationType::Naive => {
-            predicate!(task.start_variable <= context.upper_bound(&task.start_variable))
+            create_naive_predicate_propagating_task_upper_bound_propagation(context, task)
         }
         CumulativeExplanationType::BigStep => {
-            predicate!(
-                task.start_variable
-                    <= max(context.upper_bound(&task.start_variable), profile.start)
+            create_big_step_predicate_propagating_task_upper_bound_propagation(
+                task, profile, context,
             )
         }
-        CumulativeExplanationType::PointWise => predicate!(
-            task.start_variable
-                <= time_point
-                    .expect("Expected time-point to be provided to pointwise explanation creation")
-        ),
+        CumulativeExplanationType::PointWise => {
+            create_pointwise_predicate_propagating_task_upper_bound_propagation(task, time_point)
+        }
     }
 }
 
