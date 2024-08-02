@@ -3,7 +3,6 @@
 //! [`should_enqueue`] or [`propagate_based_on_timetable`].
 
 use std::cmp::max;
-use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -17,7 +16,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::EmptyDomain;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
@@ -330,40 +328,176 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
         "The provided time-table did not adhere to the invariants"
     );
-
-    let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
     let mut propagation_handler =
         CumulativePropagationHandler::new(parameters.options.explanation_type);
-    'profile_loop: for profile in time_table {
-        // Then we go over all the different tasks
-        let mut task_index = 0;
-        propagation_handler.next_profile();
-        while task_index < tasks_to_consider.len() {
-            let task = Rc::clone(tasks_to_consider.get(task_index));
-            if context.is_fixed(&task.start_variable)
-                || profile.start > context.upper_bound(&task.start_variable) + task.processing_time
-            {
-                // Task is fixed or the start of the current profile is necessarily after the latest
-                // completion time of the task under consideration The profiles are
-                // sorted by start time (and non-overlapping) so we can remove the task from
-                // consideration
-                tasks_to_consider.remove(&task);
-                if tasks_to_consider.is_empty() {
-                    // There are no tasks left to consider, we can exit the loop
-                    break 'profile_loop;
-                }
+
+    if parameters.options.generate_sequence {
+        let time_table = time_table.collect::<Vec<_>>();
+        for task in parameters.tasks.iter() {
+            if context.is_fixed(&task.start_variable) {
                 continue;
             }
-            task_index += 1;
-            check_whether_task_can_be_updated_by_profile(
-                context,
-                &task,
-                profile,
-                parameters,
-                &mut propagation_handler,
-            )?;
+            let mut profile_index = 0;
+            'profile_loop: while profile_index < time_table.len() {
+                let profile = time_table[profile_index];
+                if profile.start > context.upper_bound(&task.start_variable) + task.processing_time
+                {
+                    break 'profile_loop;
+                }
+
+                // Task does not use enough resources to overflow together with the profile or has a
+                // mandatory part in the interval
+                if !can_be_updated_by_profile(
+                    &context.as_readonly(),
+                    task,
+                    profile,
+                    parameters.capacity,
+                ) {
+                    profile_index += 1;
+                    continue;
+                }
+
+                let mut new_profile_index = profile_index;
+
+                if lower_bound_can_be_propagated_by_profile(
+                    &context.as_readonly(),
+                    task,
+                    profile,
+                    parameters.capacity,
+                ) {
+                    let first_index = profile_index;
+                    let mut last_index = profile_index + 1;
+                    while last_index < time_table.len() {
+                        let next_profile = time_table[last_index];
+                        if next_profile.start - time_table[last_index - 1].end
+                            >= task.processing_time
+                            || !can_be_updated_by_profile(
+                                &context.as_readonly(),
+                                task,
+                                next_profile,
+                                parameters.capacity,
+                            )
+                            || !lower_bound_can_be_propagated_by_profile(
+                                &context.as_readonly(),
+                                task,
+                                next_profile,
+                                parameters.capacity,
+                            )
+                        {
+                            break;
+                        }
+                        last_index += 1;
+                    }
+                    propagation_handler.propagate_chain_of_lower_bounds_with_explanations(
+                        context,
+                        &time_table[first_index..last_index],
+                        task,
+                    )?;
+                    new_profile_index = max(last_index, profile_index + 1);
+                }
+
+                if upper_bound_can_be_propagated_by_profile(
+                    &context.as_readonly(),
+                    task,
+                    profile,
+                    parameters.capacity,
+                ) {
+                    let last_index = profile_index;
+                    if last_index != 0 {
+                        let mut first_index = last_index - 1;
+                        loop {
+                            let previous_profile = time_table[first_index];
+                            if time_table[first_index + 1].start - previous_profile.end
+                                >= task.processing_time
+                                || !can_be_updated_by_profile(
+                                    &context.as_readonly(),
+                                    task,
+                                    previous_profile,
+                                    parameters.capacity,
+                                )
+                                || !upper_bound_can_be_propagated_by_profile(
+                                    &context.as_readonly(),
+                                    task,
+                                    previous_profile,
+                                    parameters.capacity,
+                                )
+                            {
+                                first_index += 1;
+                                break;
+                            }
+
+                            if first_index == 0 {
+                                break;
+                            } else {
+                                first_index -= 1;
+                            }
+                        }
+                        propagation_handler.propagate_chain_of_upper_bounds_with_explanations(
+                            context,
+                            &time_table[first_index..=last_index],
+                            task,
+                        )?;
+                    } else {
+                        propagation_handler
+                            .propagate_upper_bound_with_explanations(context, profile, task)?;
+                    }
+                    new_profile_index = max(new_profile_index, profile_index + 1);
+                }
+
+                if parameters.options.allow_holes_in_domain {
+                    propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                    new_profile_index = max(new_profile_index, profile_index + 1);
+                }
+
+                profile_index = max(new_profile_index, profile_index + 1);
+            }
+        }
+    } else {
+        let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
+        'profile_loop: for profile in time_table {
+            // Then we go over all the different tasks
+            let mut task_index = 0;
+            propagation_handler.next_profile();
+            while task_index < tasks_to_consider.len() {
+                let task = Rc::clone(tasks_to_consider.get(task_index));
+                if context.is_fixed(&task.start_variable)
+                    || profile.start
+                        > context.upper_bound(&task.start_variable) + task.processing_time
+                {
+                    // Task is fixed or the start of the current profile is necessarily after the
+                    // latest completion time of the task under consideration
+                    // The profiles are sorted by start time (and
+                    // non-overlapping) so we can remove the task from
+                    // consideration
+                    tasks_to_consider.remove(&task);
+                    if tasks_to_consider.is_empty() {
+                        // There are no tasks left to consider, we can exit the loop
+                        break 'profile_loop;
+                    }
+                    continue;
+                }
+                task_index += 1;
+                let possible_updates = find_possible_updates(context, &task, profile, parameters);
+                for possible_update in possible_updates {
+                    match possible_update {
+                        CanUpdate::LowerBound => {
+                            propagation_handler
+                                .propagate_lower_bound_with_explanations(context, profile, &task)?;
+                        }
+                        CanUpdate::UpperBound => {
+                            propagation_handler
+                                .propagate_upper_bound_with_explanations(context, profile, &task)?;
+                        }
+                        CanUpdate::Holes => {
+                            propagation_handler
+                                .propagate_holes_in_domain(context, profile, &task)?;
+                        }
+                    }
+                }
+            }
         }
     }
+
     Ok(())
 }
 
@@ -408,40 +542,47 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
         && context.upper_bound(&task.start_variable) <= profile.end
 }
 
+fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+    context: &PropagationContext,
+    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var>,
+    capacity: i32,
+) -> bool {
+    profile.height + task.resource_usage > capacity
+        && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
+        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+}
+
+enum CanUpdate {
+    LowerBound,
+    UpperBound,
+    Holes,
+}
+
 /// The method checks whether the current task can be propagated by the provided profile and (if
 /// appropriate) performs the propagation. It then returns whether any of the propagations led to a
 /// conflict or whether all propagations were succesful.
 ///
 /// Note that this method can only find [`Inconsistency::EmptyDomain`] conflicts which means that we
 /// handle that error in the parent function
-fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+fn find_possible_updates<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
-    propagation_handler: &mut CumulativePropagationHandler,
-) -> Result<(), EmptyDomain> {
-    if profile.height + task.resource_usage <= parameters.capacity
-        || has_mandatory_part_in_interval(&context.as_readonly(), task, profile.start, profile.end)
-    {
-        // The task cannot be propagated due to its resource usage being too low or it is part of
-        // the interval which means that it cannot be updated at all
-        return Ok(());
-    } else if task_has_overlap_with_interval(
-        &context.as_readonly(),
-        task,
-        profile.start,
-        profile.end,
-    ) {
-        // The current task has an overlap with the current resource profile (i.e. it could be
-        // propagated by the current profile)
+) -> Vec<CanUpdate> {
+    if !can_be_updated_by_profile(&context.as_readonly(), task, profile, parameters.capacity) {
+        vec![]
+    } else {
+        let mut result = vec![];
+
         if lower_bound_can_be_propagated_by_profile(
             &context.as_readonly(),
             task,
             profile,
             parameters.capacity,
         ) {
-            propagation_handler.propagate_lower_bound_with_explanations(context, profile, task)?;
+            result.push(CanUpdate::LowerBound)
         }
         if upper_bound_can_be_propagated_by_profile(
             &context.as_readonly(),
@@ -449,35 +590,11 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             profile,
             parameters.capacity,
         ) {
-            propagation_handler.propagate_upper_bound_with_explanations(context, profile, task)?;
+            result.push(CanUpdate::UpperBound)
         }
         if parameters.options.allow_holes_in_domain {
-            // We go through all of the time-points which cause `task` to overlap with the resource
-            // profile
-
-            // There are two options for determining the lowest value to remove from the domain:
-            // - We remove all time-points from `profile.start - duration + 1` (i.e. the earliest
-            //   time-point such that `task` necessarily overlaps with the profile).
-            // - It could be the case that the lower-bound is larger than the previous earliest
-            //   time-point in which case we simply start from the lower-bound of the task.
-            let lower_bound_removed_time_points = max(
-                context.lower_bound(&task.start_variable),
-                profile.start - task.processing_time + 1,
-            );
-
-            // There are also two options for determine the highest value to remove from the domain:
-            // - We remove all time-points up-and-until the end of the profile (i.e. the latest
-            //   time-point which would result in the `task` overlapping with the profile)
-            // - It could be the case that the upper-bound is smaller than the previous later
-            //   time-point in case we remove all time-points up-and-until the upper-bound of the
-            //   task.
-            let upper_bound_removed_time_points =
-                min(context.upper_bound(&task.start_variable), profile.end);
-
-            for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
-                propagation_handler.propagate_hole_in_domain(context, profile, task, time_point)?;
-            }
+            result.push(CanUpdate::Holes)
         }
+        result
     }
-    Ok(())
 }

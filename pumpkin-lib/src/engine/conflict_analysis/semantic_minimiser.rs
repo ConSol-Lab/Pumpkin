@@ -97,7 +97,7 @@ impl SemanticMinimiser {
             );
     }
 
-    fn minimise_clause(
+    pub(crate) fn minimise_clause(
         &mut self,
         learned_clause: impl Iterator<Item = Literal>,
         assignments_integer: &AssignmentsInteger,

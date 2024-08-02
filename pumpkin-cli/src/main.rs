@@ -326,6 +326,12 @@ struct Args {
     /// Possible values: ["naive", "big-step", "pointwise"]
     #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
     cumulative_explanation_type: CumulativeExplanationType,
+
+    /// Determines whether a sequence of profiles is generated when explaning a propagation.
+    ///
+    /// Possible values: bool
+    #[arg(long = "cumulative-generate-sequence")]
+    cumulative_generate_sequence: bool,
 }
 
 fn configure_logging(
@@ -502,8 +508,11 @@ fn run() -> PumpkinResult<()> {
             FlatZincOptions {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
-                cumulative_allow_holes: args.cumulative_allow_holes,
-                cumulative_explanation_type: args.cumulative_explanation_type,
+                cumulative_options: CumulativeOptions::new(
+                    args.cumulative_allow_holes,
+                    args.cumulative_explanation_type,
+                    args.cumulative_generate_sequence,
+                ),
             },
         )?,
     }

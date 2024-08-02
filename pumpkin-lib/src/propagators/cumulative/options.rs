@@ -9,13 +9,19 @@ pub struct CumulativeOptions {
     /// The type of explanation which is used by the cumulative to explain propagations and
     /// conflicts.
     pub(crate) explanation_type: CumulativeExplanationType,
+    pub(crate) generate_sequence: bool,
 }
 
 impl CumulativeOptions {
-    pub fn new(allow_holes_in_domain: bool, explanation_type: CumulativeExplanationType) -> Self {
+    pub fn new(
+        allow_holes_in_domain: bool,
+        explanation_type: CumulativeExplanationType,
+        generate_sequence: bool,
+    ) -> Self {
         Self {
             allow_holes_in_domain,
             explanation_type,
+            generate_sequence,
         }
     }
 }

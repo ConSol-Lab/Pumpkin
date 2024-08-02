@@ -1,3 +1,4 @@
+use super::HashSet;
 use crate::engine::predicates::predicate::Predicate;
 
 /// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
@@ -22,8 +23,32 @@ impl PropositionalConjunction {
         self.predicates_in_conjunction.push(predicate);
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Predicate> {
+    pub fn iter(&self) -> impl Iterator<Item = &Predicate> + '_ {
         self.predicates_in_conjunction.iter()
+    }
+
+    pub fn extend_and_remove_duplicates(
+        mut self,
+        additional_elements: impl Iterator<Item = Predicate>,
+    ) -> PropositionalConjunction {
+        self.predicates_in_conjunction = self
+            .predicates_in_conjunction
+            .into_iter()
+            .chain(additional_elements)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        self
+    }
+}
+
+impl IntoIterator for PropositionalConjunction {
+    type Item = Predicate;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.predicates_in_conjunction.into_iter()
     }
 }
 
