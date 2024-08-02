@@ -9,6 +9,7 @@ pub struct CumulativeOptions {
     /// The type of explanation which is used by the cumulative to explain propagations and
     /// conflicts.
     pub(crate) explanation_type: CumulativeExplanationType,
+    /// Determines whether a sequence of profiles is generated when explaining a propagation.
     pub(crate) generate_sequence: bool,
 }
 

@@ -327,7 +327,8 @@ struct Args {
     #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
     cumulative_explanation_type: CumulativeExplanationType,
 
-    /// Determines whether a sequence of profiles is generated when explaning a propagation.
+    /// Determines whether a sequence of profiles is generated when explaining a propagation for
+    /// the cumulative constraint.
     ///
     /// Possible values: bool
     #[arg(long = "cumulative-generate-sequence")]

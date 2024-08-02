@@ -44,7 +44,6 @@
 //! # use pumpkin_lib::constraints;
 //! # use pumpkin_lib::constraints::Constraint;
 //! # use crate::pumpkin_lib::results::ProblemSolution;
-//! # use pumpkin_lib::options::CumulativeExplanationType;
 //! let mut solver = Solver::default();
 //!
 //! let start_0 = solver.new_bounded_integer(0, 4);
