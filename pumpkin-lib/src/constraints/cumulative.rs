@@ -185,8 +185,8 @@ same!car"
 ///         &resource_requirements,
 ///         resource_capacity,
 ///         // Instructs the solver to allow the cumulative to create holes in the
-///         // domain and to use the big-step explanation
-///         CumulativeOptions::new(true, CumulativeExplanationType::BigStep),
+///         // domain and to use the big-step explanation without generating sequences
+///         CumulativeOptions::new(true, CumulativeExplanationType::BigStep, false),
 ///     ))
 ///     .post();
 ///
