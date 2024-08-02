@@ -43,6 +43,8 @@ impl CumulativePropagationHandler {
         }
     }
 
+    /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
+    /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<
         Var: IntegerVariable + 'static,
     >(
@@ -145,7 +147,8 @@ impl CumulativePropagationHandler {
         }
     }
 
-    /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
+    /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
+    /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<
         Var: IntegerVariable + 'static,
     >(
