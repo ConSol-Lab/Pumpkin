@@ -13,11 +13,13 @@ use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use super::time_table_util::ResourceProfile;
 use super::CumulativeExplanationType;
+use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::Task;
+use crate::pumpkin_assert_advanced;
 use crate::variables::IntegerVariable;
 
 /// Structure for handling the creation of propagations and their explanations.
@@ -38,35 +40,6 @@ impl CumulativePropagationHandler {
         }
     }
 
-    /// Signifies that we are moving to another profile and we cannot re-use the cached explanation
-    /// of [`CumulativePropagationHandler::stored_profile_explanation`].
-    pub(crate) fn next_profile(&mut self) {
-        self.stored_profile_explanation = OnceCell::new();
-    }
-
-    /// Either we get the stored stored profile explanation or we initialize it.
-    fn get_stored_profile_explanation_or_init<Var: IntegerVariable + 'static>(
-        &mut self,
-        context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
-    ) -> Rc<PropositionalConjunction> {
-        Rc::clone(self.stored_profile_explanation.get_or_init(|| {
-            Rc::new(
-                match self.explanation_type {
-                    CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, &context.as_readonly())
-                    },
-                    CumulativeExplanationType::BigStep => {
-                        create_big_step_propagation_explanation(profile)
-                    },
-                    CumulativeExplanationType::PointWise => {
-                        unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
-                    },
-                }
-            )
-        }))
-    }
-
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
     pub(crate) fn propagate_lower_bound_with_explanations<Var: IntegerVariable + 'static>(
         &mut self,
@@ -74,6 +47,10 @@ impl CumulativePropagationHandler {
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_advanced!(
+            context.lower_bound(&propagating_task.start_variable) < profile.end + 1
+        );
+
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                 // We use the same procedure for the explanation using naive and bigstep, note that
@@ -150,6 +127,11 @@ impl CumulativePropagationHandler {
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain> {
+        pumpkin_assert_advanced!(
+            context.upper_bound(&propagating_task.start_variable)
+                > profile.start - propagating_task.processing_time
+        );
+
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                 // We use the same procedure for the explanation using naive and bigstep, note that
@@ -226,6 +208,10 @@ impl CumulativePropagationHandler {
         propagating_task: &Rc<Task<Var>>,
         time_point: i32,
     ) -> Result<(), EmptyDomain> {
+        if !context.contains(&propagating_task.start_variable, time_point) {
+            return Ok(());
+        }
+
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
                 // We use the same procedure for the explanation using naive and bigstep, note that
@@ -239,10 +225,55 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                let explanation = create_pointwise_propagation_explanation(time_point, profile);
+                // We split into two cases when determining the explanation of the profile
+                // - Either the time-point is before the start of the profile; in which case the
+                //   explanation for the removal of this time-point is that there is a profile at
+                //   the point `time_point + propagating_task.processing_time - 1`
+                // - Or the time-point is after the start of the profile in which case the
+                //   explanation is simply that there is a profile at this time-point (which
+                //   together with the propagating task would overflow the capacity)
+                let corresponding_profile_explanation_point = if time_point < profile.start {
+                    time_point + propagating_task.processing_time - 1
+                } else {
+                    time_point
+                };
+
+                let explanation = create_pointwise_propagation_explanation(
+                    corresponding_profile_explanation_point,
+                    profile,
+                );
                 context.remove(&propagating_task.start_variable, time_point, explanation)
             }
         }
+    }
+
+    /// Signifies that we are moving to another profile and we cannot re-use the cached explanation
+    /// of [`CumulativePropagationHandler::stored_profile_explanation`].
+    pub(crate) fn next_profile(&mut self) {
+        self.stored_profile_explanation = OnceCell::new();
+    }
+
+    /// Either we get the stored stored profile explanation or we initialize it.
+    fn get_stored_profile_explanation_or_init<Var: IntegerVariable + 'static>(
+        &mut self,
+        context: &mut PropagationContextMut,
+        profile: &ResourceProfile<Var>,
+    ) -> Rc<PropositionalConjunction> {
+        Rc::clone(self.stored_profile_explanation.get_or_init(|| {
+            Rc::new(
+                match self.explanation_type {
+                    CumulativeExplanationType::Naive => {
+                        create_naive_propagation_explanation(profile, &context.as_readonly())
+                    },
+                    CumulativeExplanationType::BigStep => {
+                        create_big_step_propagation_explanation(profile)
+                    },
+                    CumulativeExplanationType::PointWise => {
+                        unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
+                    },
+                }
+            )
+        }))
     }
 }
 

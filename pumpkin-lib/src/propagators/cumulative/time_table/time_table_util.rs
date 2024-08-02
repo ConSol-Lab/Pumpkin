@@ -460,7 +460,6 @@ fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
             //   time-point such that `task` necessarily overlaps with the profile).
             // - It could be the case that the lower-bound is larger than the previous earliest
             //   time-point in which case we simply start from the lower-bound of the task.
-
             let lower_bound_removed_time_points = max(
                 context.lower_bound(&task.start_variable),
                 profile.start - task.processing_time + 1,

@@ -1,6 +1,13 @@
+use std::cmp::max;
+use std::rc::Rc;
+
+use crate::engine::cp::propagation::propagation_context::ReadDomains;
+use crate::engine::propagation::PropagationContext;
 use crate::predicate;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the big-step approach (see
@@ -40,4 +47,23 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
             ]
         })
         .collect()
+}
+
+pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<
+    Var: IntegerVariable + 'static,
+>(
+    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var>,
+) -> Predicate {
+    predicate!(task.start_variable >= profile.start + 1 - task.processing_time)
+}
+
+pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<
+    Var: IntegerVariable + 'static,
+>(
+    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var>,
+    context: &PropagationContext,
+) -> Predicate {
+    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.start))
 }
