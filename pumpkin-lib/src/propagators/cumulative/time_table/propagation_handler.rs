@@ -1,4 +1,5 @@
 use std::cell::OnceCell;
+use std::cmp::min;
 use std::rc::Rc;
 
 use super::explanations::add_propagating_task_predicate_lower_bound;
@@ -227,13 +228,19 @@ impl CumulativePropagationHandler {
             CumulativeExplanationType::PointWise => {
                 // We split into two cases when determining the explanation of the profile
                 // - Either the time-point is before the start of the profile; in which case the
-                //   explanation for the removal of this time-point is that there is a profile at
-                //   the point `time_point + propagating_task.processing_time - 1`
+                //   explanation for the removal of this time-point is that there is a profile point
+                //   at the point `profile.start..time_point + propagating_task.processing_time -
+                //   1`. In this case, we pick the time point plus the processing time value until
+                //   we reach the middle point of the profile in which case we always pick the
+                //   middle point (this is an untested heuristic in terms of performance).
                 // - Or the time-point is after the start of the profile in which case the
                 //   explanation is simply that there is a profile at this time-point (which
                 //   together with the propagating task would overflow the capacity)
                 let corresponding_profile_explanation_point = if time_point < profile.start {
-                    time_point + propagating_task.processing_time - 1
+                    min(
+                        time_point + propagating_task.processing_time - 1,
+                        (profile.end - profile.start) / 2 + profile.start,
+                    )
                 } else {
                     time_point
                 };
