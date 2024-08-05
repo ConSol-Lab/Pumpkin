@@ -1200,6 +1200,10 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            let _ = self.process_domain_events();
+        }
+
         let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
 
         unassigned_literals.for_each(|literal| {

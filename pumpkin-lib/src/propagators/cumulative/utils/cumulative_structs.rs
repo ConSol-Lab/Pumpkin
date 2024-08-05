@@ -156,6 +156,7 @@ pub(crate) struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updates: Vec<Vec<UpdateType<Var>>>,
+    /// The tasks which have been updated since the last iteration
     pub(crate) updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
     /// false then it will only adjust the bounds when appropriate rather than removing values from

@@ -108,7 +108,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
 
     fn add_to_time_table(
         &mut self,
-        context: &mut PropagationContextMut,
+        context: &PropagationContext,
         updated_task_info: &UpdatedTaskInfo<Var>,
     ) -> PropagationStatusCP {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
@@ -142,7 +142,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
             if current_profile.height > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
                 conflict = Some(Err(create_propositional_conjunction(
-                    &context.as_readonly(),
+                    context,
                     &current_profile.profile_tasks,
                 )
                 .into()));
@@ -196,6 +196,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        let mut found_conflict = false;
         while !self.parameters.updated_tasks.is_empty() {
             let updated_task = Rc::clone(self.parameters.updated_tasks.get(0));
 
@@ -204,19 +205,39 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                 let element = self.parameters.updates[updated_task.id.unpack() as usize].remove(0);
                 match element {
                     UpdateType::Addition(addition) => {
-                        let result = self.add_to_time_table(context, &addition);
-                        if result.is_err() {
-                            self.parameters.updated_tasks.remove(&updated_task);
-                            result?
-                        }
+                        let result = self.add_to_time_table(&context.as_readonly(), &addition);
+                        found_conflict |= result.is_err();
                     }
                     UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
                 }
             }
-
             self.parameters.updated_tasks.remove(&updated_task);
         }
 
+        if found_conflict {
+            let conflicting_profile = self
+                .time_table
+                .values()
+                .find(|profile| profile.height > self.parameters.capacity);
+            if let Some(conflicting_profile) = conflicting_profile {
+                pumpkin_assert_extreme!(
+                        create_time_table_per_point_from_scratch(
+                            &context.as_readonly(),
+                            &self.parameters
+                        )
+                        .is_err(),
+                        "Time-table from scratch could not find conflict - Reported {conflicting_profile:#?}"
+                    );
+
+                // TODO: could decide which tasks to choose from the profile to explain the
+                // conflict
+                return Err(create_propositional_conjunction(
+                    &context.as_readonly(),
+                    &conflicting_profile.profile_tasks,
+                )
+                .into());
+            }
+        }
         Ok(())
     }
 }

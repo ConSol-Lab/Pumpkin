@@ -117,7 +117,7 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+         same!"
     );
 
     TimeTableOverIntervalIncremental::new(

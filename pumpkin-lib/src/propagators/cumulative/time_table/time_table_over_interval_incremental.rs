@@ -95,7 +95,7 @@ where
     }
 }
 
-impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub(crate) fn new(
         parameters: CumulativeParameters<Var>,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
@@ -188,6 +188,58 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
             }
         }
     }
+
+    /// Updates the stored time-table based on the updates stored in
+    /// [`CumulativeParameters::updated`]. If the time-table is outdated then this method will
+    /// simply calculate it from scratch.
+    ///
+    /// An error is returned if an overflow of the resource occurs while updating the time-table.
+    fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        let mut found_conflict = false;
+        while !self.parameters.updated_tasks.is_empty() {
+            let updated_task = Rc::clone(self.parameters.updated_tasks.get(0));
+
+            // TODO: this could take quadratic time, refactor
+            while !self.parameters.updates[updated_task.id.unpack() as usize].is_empty() {
+                let element = self.parameters.updates[updated_task.id.unpack() as usize].remove(0);
+                match element {
+                    UpdateType::Addition(addition) => {
+                        let result = self.add_to_time_table(context, &addition);
+                        found_conflict |= result.is_err();
+                    }
+                    UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
+                }
+            }
+            self.parameters.updated_tasks.remove(&updated_task);
+        }
+
+        if found_conflict {
+            // TODO: should find a better way to do this
+            let conflicting_profile = self
+                .time_table
+                .iter()
+                .find(|profile| profile.height > self.parameters.capacity);
+            if let Some(conflicting_profile) = conflicting_profile {
+                pumpkin_assert_extreme!(
+                        create_time_table_over_interval_from_scratch(
+                            &context.as_readonly(),
+                            &self.parameters
+                        )
+                        .is_err(),
+                        "Time-table from scratch could not find conflict - Reported {conflicting_profile:#?}"
+                    );
+
+                // TODO: could decide which tasks to choose from the profile to explain the
+                // conflict
+                return Err(create_propositional_conjunction(
+                    &context.as_readonly(),
+                    &conflicting_profile.profile_tasks,
+                )
+                .into());
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<Var: IntegerVariable + 'static + Debug> Propagator
@@ -203,28 +255,12 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             "Bounds were not equal when propagating"
         );
 
-        while !self.parameters.updated_tasks.is_empty() {
-            let updated_task = Rc::clone(self.parameters.updated_tasks.get(0));
+        self.update_time_table(&mut context)?;
 
-            // TODO: this could take quadratic time, refactor
-            while !self.parameters.updates[updated_task.id.unpack() as usize].is_empty() {
-                let element = self.parameters.updates[updated_task.id.unpack() as usize].remove(0);
-                match element {
-                    UpdateType::Addition(addition) => {
-                        let result = self.add_to_time_table(&context, &addition);
-                        if result.is_err() {
-                            self.parameters.updated_tasks.remove(&updated_task);
-                            result?
-                        }
-                    }
-                    UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
-                }
-            }
-
-            self.parameters.updated_tasks.remove(&updated_task);
-        }
-
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_interval(&context.as_readonly(), &self.time_table, &self.parameters), "The profiles were not the same between the incremental and the non-incremental version");
+        pumpkin_assert_extreme!(
+            debug::time_tables_are_the_same_interval(&context.as_readonly(), &self.time_table, &self.parameters),
+            "The profiles were not the same between the incremental and the non-incremental version"
+        );
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
