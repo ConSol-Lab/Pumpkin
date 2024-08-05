@@ -1201,6 +1201,9 @@ impl ConstraintSatisfactionSolver {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
         if self.watch_list_cp.is_watching_any_backtrack_events() {
+            // First we make sure that all of the domain events have been processed before we start
+            // backtracking; we do this using the original assignments before backtracking since
+            // that is the state in which the events occurred!
             let _ = self.process_domain_events();
         }
 
@@ -1234,7 +1237,6 @@ impl ConstraintSatisfactionSolver {
             });
 
         self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
         //  note that variable_literal_mappings sync should be called after the sat/cp data
         // structures backtrack
         self.synchronise_assignments();
@@ -1249,6 +1251,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
     }
 
     /// Main propagation loop.
