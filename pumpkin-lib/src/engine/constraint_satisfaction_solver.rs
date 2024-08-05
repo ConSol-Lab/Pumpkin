@@ -602,7 +602,8 @@ impl ConstraintSatisfactionSolver {
         domain_id
     }
 
-    /// Returns an unsatisfiable core.
+    /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
+    /// with one another ([`Err`] then contain the [`Literal`] which was conflicting).
     ///
     /// We define an unsatisfiable core as a clause containing only negated assumption literals,
     /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
@@ -658,11 +659,11 @@ impl ConstraintSatisfactionSolver {
     ///         assert_eq!(
     ///             core.len(),
     ///             assumptions.len(),
-    ///             "the core has the length of the number of assumptions"
+    ///             "The core has the length of the number of assumptions"
     ///         );
     ///         assert!(
     ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///             "all literals in the core are negated assumptions"
+    ///             "All literals in the core are negated assumptions"
     ///         );
     ///     }
     /// }
@@ -1988,13 +1989,27 @@ mod tests {
     }
 
     #[test]
+    fn core_extraction_unit_core() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let _ = solver.add_clause(vec![lit1]);
+
+        run_test(
+            solver,
+            vec![!lit1],
+            CSPSolverExecutionFlag::Infeasible,
+            Ok(vec![lit1]),
+        )
+    }
+
+    #[test]
     fn simple_core_extraction_1_1() {
         let (solver, lits) = create_instance1();
         run_test(
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0]]),
+            Ok(vec![lits[0]]),
         )
     }
 
@@ -2005,7 +2020,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]),
+            Ok(vec![lits[1]]),
         );
     }
 
@@ -2028,7 +2043,7 @@ mod tests {
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
+            Ok(vec![lits[1]]), // The core gets computed before inconsistency is detected
         );
     }
 

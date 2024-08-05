@@ -463,26 +463,26 @@ impl ResolutionConflictAnalyser {
             .assignments_propositional
             .is_literal_root_assignment(violated_assumption)
         {
-            // self.restore_state_at_root(brancher);
-            Ok(vec![violated_assumption])
+            Ok(vec![!violated_assumption])
         }
-        // Case two: the assumption is inconsistent with other assumptions
-        //  i.e., the assumptions contain both literal 'x' and '~x'
-        //  not sure what would be the best output in this case, possibly a special flag?
-        //      for now we return the reason (x && ~x)
+        // Case two: the assumption is inconsistent with other assumptions (i.e. the assumptions
+        // contain both literal 'x' and '!x')
+        //
+        // We return the literal which has conflicting assumptions
         else if !context
             .assignments_propositional
             .is_literal_propagated(violated_assumption)
         {
-            // self.restore_state_at_root(brancher);
             Err(violated_assumption)
         }
-        // Case three: the standard case, proceed with core extraction
-        // performs resolution on all implied assumptions until only decision assumptions are left
-        //  the violating assumption is used as the starting point
-        //  at this point, any reason clause encountered will contains only assumptions, but some
-        // assumptions might be implied  this corresponds to the all-decision CDCL learning
-        // scheme
+        // Case three: the standard case - proceed with core extraction
+        //
+        // Performs resolution on all implied assumptions until only decision assumptions are left.
+        // The violating assumption is used as the starting point at this point, any reason
+        // clause encountered will contains only assumptions, but some assumptions might be
+        // implied.
+        //
+        // This corresponds to the all-decision CDCL learning scheme
         else {
             self.compute_all_decision_learning_helper(
                 Some(!violated_assumption),
@@ -494,7 +494,6 @@ impl ResolutionConflictAnalyser {
                 .learned_literals
                 .push(!violated_assumption);
             pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption, context));
-            // self.restore_state_at_root(brancher);
             Ok(self.analysis_result.learned_literals.clone())
         }
     }
