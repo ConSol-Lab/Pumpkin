@@ -255,10 +255,6 @@ impl ConstraintSatisfactionSolver {
         // If there are no variables being watched then there is no reason to perform these
         // operations
         if self.watch_list_cp.is_watching_any_backtrack_events() {
-            // First we make sure that all of the domain events have been processed before we start
-            // backtracking
-            let _ = self.process_domain_events();
-
             self.backtrack_event_drain
                 .extend(self.assignments_integer.drain_backtrack_domain_events());
 
@@ -1203,6 +1199,13 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
+
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            // First we make sure that all of the domain events have been processed before we start
+            // backtracking; we do this using the original assignments before backtracking since
+            // that is the state in which the events occurred!
+            let _ = self.process_domain_events();
+        }
 
         let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
 
