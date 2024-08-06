@@ -104,10 +104,32 @@ impl<T> SparseSet<T> {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;
-            self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+            self.swap(
+                self.indices[(self.mapping)(to_remove)],
+                self.domain.len() - 1,
+            );
+            let _ = self.domain.pop().expect("Has to have something to pop.");
+            self.indices[(self.mapping)(to_remove)] = usize::MAX;
+        } else if self.indices[(self.mapping)(to_remove)] < self.domain.len() {
+            self.swap(
+                self.indices[(self.mapping)(to_remove)],
+                self.domain.len() - 1,
+            );
             let _ = self.domain.pop().expect("Has to have something to pop.");
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
+    }
+
+    pub(crate) fn remove_temporarily(&mut self, to_remove: &T) {
+        if self.indices[(self.mapping)(to_remove)] < self.size {
+            // The element is part of the domain and should be removed
+            self.size -= 1;
+            self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+        }
+    }
+
+    pub(crate) fn restore_temporarily_removed(&mut self) {
+        self.size = self.domain.len();
     }
 
     /// Determines whehter the `element` is contained in the domain of the sparse-set.
@@ -129,7 +151,7 @@ impl<T> SparseSet<T> {
         if !self.contains(&element) {
             self.accommodate(&element);
 
-            self.indices[(self.mapping)(&element)] = self.size;
+            self.indices[(self.mapping)(&element)] = self.domain.len();
             self.domain.push(element);
             self.size += 1;
         }

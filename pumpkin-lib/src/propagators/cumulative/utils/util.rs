@@ -3,7 +3,8 @@
 //! input parameters.
 use std::rc::Rc;
 
-use super::CumulativeParameters;
+use enumset::enum_set;
+
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
@@ -11,21 +12,10 @@ use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
-
-pub(crate) fn clean_updated<Var: IntegerVariable + 'static>(
-    parameters: &mut CumulativeParameters<Var>,
-) {
-    while !parameters.updated_tasks.is_empty() {
-        let updated_task = Rc::clone(parameters.updated_tasks.get(0));
-        let updated_task_index = updated_task.id.unpack() as usize;
-
-        parameters.updated_tasks.remove(&updated_task);
-        parameters.updates[updated_task_index].clear()
-    }
-}
 
 /// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
 /// [`Task`]s
@@ -68,7 +58,11 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                 let return_value = Some(Task {
                     start_variable: context.register(
                         x.start_time.clone(),
-                        DomainEvents::BOUNDS,
+                        DomainEvents::create_with_int_events(enum_set!(
+                            IntDomainEvent::LowerBound
+                                | IntDomainEvent::UpperBound
+                                | IntDomainEvent::Assign
+                        )),
                         LocalId::from(id),
                     ), // Subscribe to all domain events concerning the current variable
                     processing_time: x.processing_time,
@@ -78,7 +72,11 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                 if register_backtrack {
                     let _ = context.register_for_backtrack_events(
                         x.start_time.clone(),
-                        DomainEvents::BOUNDS,
+                        DomainEvents::create_with_int_events(enum_set!(
+                            IntDomainEvent::LowerBound
+                                | IntDomainEvent::UpperBound
+                                | IntDomainEvent::Assign
+                        )),
                         LocalId::from(id),
                     );
                 }
@@ -102,24 +100,6 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
         context.lower_bound(&task.start_variable),
         context.upper_bound(&task.start_variable),
     );
-}
-
-/// Clears the provided `updated` and resets **all** bounds to those stored in
-/// `context`.
-///
-/// This method is currently used during bactracking/synchronisation
-pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
-    parameters: &mut CumulativeParameters<Var>,
-) {
-    clean_updated(parameters);
-    parameters.bounds.clear();
-    for task in parameters.tasks.iter() {
-        parameters.bounds.push((
-            context.lower_bound(&task.start_variable),
-            context.upper_bound(&task.start_variable),
-        ))
-    }
 }
 
 /// Determines whether the stored bounds are equal when propagation occurs

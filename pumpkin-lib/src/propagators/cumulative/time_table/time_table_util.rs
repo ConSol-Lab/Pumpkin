@@ -21,7 +21,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::propagators::CumulativeParameters;
-use crate::propagators::SparseSet;
+use crate::propagators::DynamicStructures;
 use crate::propagators::Task;
 use crate::propagators::UpdateType;
 use crate::propagators::UpdatedTaskInfo;
@@ -76,13 +76,14 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 /// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
+    dynamic_structures: &DynamicStructures<Var>,
     updated_task: &Rc<Task<Var>>,
     context: &PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
-        context.lower_bound(&updated_task.start_variable) > parameters.bounds[updated_task.id.unpack() as usize].0
-            || parameters.bounds[updated_task.id.unpack() as usize].1
+        context.lower_bound(&updated_task.start_variable) > dynamic_structures.get_stored_lower_bound(updated_task)
+            || dynamic_structures.get_stored_upper_bound(updated_task)
                 >= context.upper_bound(&updated_task.start_variable)
         , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound,
            this either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates
@@ -94,8 +95,8 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         update: None,
     };
 
-    let old_lower_bound = parameters.bounds[updated_task.id.unpack() as usize].0;
-    let old_upper_bound = parameters.bounds[updated_task.id.unpack() as usize].1;
+    let old_lower_bound = dynamic_structures.get_stored_lower_bound(updated_task);
+    let old_upper_bound = dynamic_structures.get_stored_upper_bound(updated_task);
 
     // We check whether a mandatory part was extended/introduced
     if has_mandatory_part(context, updated_task) {
@@ -112,7 +113,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // If there are updates then propagations might occur due to new mandatory parts being
         // added. However, if there are no updates then because we allow holes in the domain, no
         // updates can occur so we can skip propagation!
-        if !parameters.updates.is_empty() || result.update.is_some() {
+        if dynamic_structures.has_updates() || result.update.is_some() {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -124,7 +125,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // been no updates since it could be the case that a task which has been updated can
         // now propagate due to an existing profile (this is due to the fact that we only
         // propagate bounds and (currently) do not create holes in the domain!).
-        if !empty_time_table || !parameters.updated_tasks.is_empty() || result.update.is_some() {
+        if !empty_time_table || dynamic_structures.has_updates() || result.update.is_some() {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -231,43 +232,62 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
+    dynamic_structures: &mut DynamicStructures<Var>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
         "The provided time-table did not adhere to the invariants"
     );
+    pumpkin_assert_extreme!(
+        dynamic_structures
+            .get_unfixed_tasks()
+            .all(|unfixed_task| !context.is_fixed(&unfixed_task.start_variable)),
+        "All of the unfixed tasks should not be fixed at this point"
+    );
 
-    let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
     'profile_loop: for profile in time_table {
         // Then we go over all the different tasks
         let mut task_index = 0;
         let mut profile_explanation = OnceCell::new();
-        while task_index < tasks_to_consider.len() {
-            let task = Rc::clone(tasks_to_consider.get(task_index));
-            if context.is_fixed(&task.start_variable)
-                || profile.start > context.upper_bound(&task.start_variable) + task.processing_time
-            {
-                // Task is fixed or the start of the current profile is necessarily after the latest
-                // completion time of the task under consideration The profiles are
-                // sorted by start time (and non-overlapping) so we can remove the task from
-                // consideration
-                tasks_to_consider.remove(&task);
-                if tasks_to_consider.is_empty() {
+        while task_index < dynamic_structures.number_of_unfixed_tasks() {
+            let task = dynamic_structures.get_unfixed_task_at_index(task_index);
+            if context.is_fixed(&task.start_variable) {
+                // The task is currently fixed after propagating
+                dynamic_structures.fix_task(&task);
+                if dynamic_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
                 }
                 continue;
             }
+            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+                // The start of the current profile is necessarily after the latest
+                // completion time of the task under consideration The profiles are
+                // sorted by start time (and non-overlapping) so we can remove the task from
+                // consideration
+                dynamic_structures.temporarily_remove_task_from_unfixed(&task);
+                if dynamic_structures.has_no_unfixed_tasks() {
+                    // There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
+                }
+                continue;
+            }
+
             task_index += 1;
-            check_whether_task_can_be_updated_by_profile(
+            let result = check_whether_task_can_be_updated_by_profile(
                 context,
                 &task,
                 profile,
                 parameters,
                 &mut profile_explanation,
-            )?;
+            );
+            if result.is_err() {
+                dynamic_structures.restore_temporarily_removed();
+                result?;
+            }
         }
     }
+    dynamic_structures.restore_temporarily_removed();
     Ok(())
 }
 
@@ -511,39 +531,45 @@ fn create_profile_explanation<Var: IntegerVariable + 'static>(
 
 pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     updated_task: &Rc<Task<Var>>,
-    parameters: &mut CumulativeParameters<Var>,
+    dynamic_structures: &mut DynamicStructures<Var>,
     potential_update: Option<UpdatedTaskInfo<Var>>,
 ) {
-    let updated_task_index = updated_task.id.unpack() as usize;
     if let Some(update) = potential_update {
-        parameters.updated_tasks.insert(Rc::clone(updated_task));
-        parameters.updates[updated_task_index].push(UpdateType::Addition(update));
+        dynamic_structures.task_has_been_updated(updated_task);
+        dynamic_structures.insert_update_for_task(updated_task, UpdateType::Addition(update));
     }
 }
 
 pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
-    parameters: &mut CumulativeParameters<Var>,
+    dynamic_structures: &mut DynamicStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
-    if parameters.bounds[updated_task.id.unpack() as usize]
-        == (
-            context.lower_bound(&updated_task.start_variable),
-            context.upper_bound(&updated_task.start_variable),
-        )
-        || parameters.bounds[updated_task.id.unpack() as usize].1
-            >= parameters.bounds[updated_task.id.unpack() as usize].0 + updated_task.processing_time
+    // If the stored bounds are already the same or the previous stored bounds did not include a
+    // mandatory part (which means that this task will also not have mandatory part after
+    // backtracking)
+    if (dynamic_structures.get_stored_lower_bound(updated_task)
+        == context.lower_bound(&updated_task.start_variable)
+        && dynamic_structures.get_stored_upper_bound(updated_task)
+            == context.upper_bound(&updated_task.start_variable))
+        || dynamic_structures.get_stored_upper_bound(updated_task)
+            >= dynamic_structures.get_stored_lower_bound(updated_task)
+                + updated_task.processing_time
     {
         return;
     }
-    parameters.updated_tasks.insert(Rc::clone(updated_task));
-    parameters.updates[updated_task.id.unpack() as usize].push(UpdateType::Removal(
-        UpdatedTaskInfo {
+
+    // We insert this task into the updated category
+    dynamic_structures.task_has_been_updated(updated_task);
+    // And we add the type of update
+    dynamic_structures.insert_update_for_task(
+        updated_task,
+        UpdateType::Removal(UpdatedTaskInfo {
             task: Rc::clone(updated_task),
-            old_lower_bound: parameters.bounds[updated_task.id.unpack() as usize].0,
-            old_upper_bound: parameters.bounds[updated_task.id.unpack() as usize].1,
+            old_lower_bound: dynamic_structures.get_stored_lower_bound(updated_task),
+            old_upper_bound: dynamic_structures.get_stored_upper_bound(updated_task),
             new_lower_bound: context.lower_bound(&updated_task.start_variable),
             new_upper_bound: context.upper_bound(&updated_task.start_variable),
-        },
-    ));
+        }),
+    );
 }

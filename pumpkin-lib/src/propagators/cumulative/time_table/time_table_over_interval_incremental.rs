@@ -10,7 +10,6 @@ use super::time_table_util::has_overlap_with_interval;
 use super::time_table_util::insert_update;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -20,16 +19,17 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::clean_updated;
 use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
+use crate::propagators::DynamicStructures;
 use crate::propagators::OverIntervalTimeTableType;
 #[cfg(doc)]
 use crate::propagators::TimeTableOverIntervalPropagator;
@@ -67,15 +67,9 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     time_table: OverIntervalTimeTableType<Var>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
-    /// Keeps track of whether the current state of the
-    /// [`TimeTableOverIntervalIncrementalPropagator::time_table`] is outdated (i.e. whether it
-    /// needs to be recalculated from scratch). This can occur due to backtracking.
-    ///
-    /// Imagine the situation where a synchronisation takes place and the propagator eagerly
-    /// recalculates the time-table but then another propagator finds a conflict and the
-    /// time-table calculation was superfluous; this flag ensures that the recalculation is
-    /// done lazily, only when required.
-    time_table_outdated: bool,
+    /// Stores structures which change during the search; either to store bounds or when applying
+    /// incrementality
+    dynamic_structures: DynamicStructures<Var>,
 }
 
 impl<Var> PropagatorConstructor
@@ -87,22 +81,22 @@ where
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context, true);
-        TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.allow_holes_in_domain,
-        ))
+        let parameters =
+            CumulativeParameters::new(tasks, self.capacity, self.allow_holes_in_domain);
+        let dynamic_structures = DynamicStructures::new(&parameters);
+        TimeTableOverIntervalIncrementalPropagator::new(parameters, dynamic_structures)
     }
 }
 
 impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub(crate) fn new(
         parameters: CumulativeParameters<Var>,
+        dynamic_structures: DynamicStructures<Var>,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
         TimeTableOverIntervalIncrementalPropagator {
             time_table: Default::default(),
             parameters,
-            time_table_outdated: false,
+            dynamic_structures,
         }
     }
 
@@ -196,12 +190,11 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPro
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let mut found_conflict = false;
-        while !self.parameters.updated_tasks.is_empty() {
-            let updated_task = Rc::clone(self.parameters.updated_tasks.get(0));
-
-            // TODO: this could take quadratic time, refactor
-            while !self.parameters.updates[updated_task.id.unpack() as usize].is_empty() {
-                let element = self.parameters.updates[updated_task.id.unpack() as usize].remove(0);
+        while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
+            while let Some(element) = self
+                .dynamic_structures
+                .pop_next_update_for_task(&updated_task)
+            {
                 match element {
                     UpdateType::Addition(addition) => {
                         let result = self.add_to_time_table(context, &addition);
@@ -210,7 +203,6 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPro
                     UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
                 }
             }
-            self.parameters.updated_tasks.remove(&updated_task);
         }
 
         if found_conflict {
@@ -250,7 +242,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             check_bounds_equal_at_propagation(
                 &context.as_readonly(),
                 &self.parameters.tasks,
-                &self.parameters.bounds,
+                self.dynamic_structures.get_stored_bounds(),
             ),
             "Bounds were not equal when propagating"
         );
@@ -266,14 +258,19 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 resource profile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(&mut context, self.time_table.iter(), &self.parameters)
+        propagate_based_on_timetable(
+            &mut context,
+            self.time_table.iter(),
+            &self.parameters,
+            &mut self.dynamic_structures,
+        )
     }
 
     fn notify(
         &mut self,
         context: PropagationContext,
         local_id: LocalId,
-        _event: OpaqueDomainEvent,
+        event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that we do not take into account the fact that the time-table could be outdated
@@ -285,6 +282,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         // after backtracking but has not been recalculated yet.
         let result = should_enqueue(
             &self.parameters,
+            &self.dynamic_structures,
             &updated_task,
             &context,
             self.time_table.is_empty(),
@@ -292,9 +290,21 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
         // If there is a task which now has a mandatory part then we store it and process it when
         // the `propagate` method is called
-        insert_update(&updated_task, &mut self.parameters, result.update);
+        insert_update(&updated_task, &mut self.dynamic_structures, result.update);
 
-        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(
+            &context,
+            self.dynamic_structures.get_stored_bounds_mut(),
+            &updated_task,
+        );
+
+        if matches!(
+            updated_task.start_variable.unpack_event(event),
+            IntDomainEvent::Assign
+        ) {
+            self.dynamic_structures.fix_task(&updated_task)
+        }
+
         result.decision
     }
 
@@ -302,13 +312,25 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         &mut self,
         context: &PropagationContext,
         local_id: LocalId,
-        _event: OpaqueDomainEvent,
+        event: OpaqueDomainEvent,
     ) {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        backtrack_update(context, &mut self.parameters, &updated_task);
+        backtrack_update(context, &mut self.dynamic_structures, &updated_task);
 
-        update_bounds_task(context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(
+            context,
+            self.dynamic_structures.get_stored_bounds_mut(),
+            &updated_task,
+        );
+
+        if matches!(
+            updated_task.start_variable.unpack_event(event),
+            IntDomainEvent::Assign
+        ) {
+            // The start variable of the task has been unassigned, we should restore it to unfixed
+            self.dynamic_structures.unfix_task(updated_task);
+        }
     }
 
     fn priority(&self) -> u32 {
@@ -324,17 +346,12 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
         // First we store the bounds in the parameters
-        for task in self.parameters.tasks.iter() {
-            self.parameters.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ))
-        }
-        clean_updated(&mut self.parameters);
+        self.dynamic_structures
+            .reset_all_bounds_and_remove_fixed(&context, &self.parameters);
+        self.dynamic_structures.clean_updated();
 
         // Then we do normal propagation
         self.time_table = create_time_table_over_interval_from_scratch(&context, &self.parameters)?;
-        self.time_table_outdated = false;
         Ok(())
     }
 
@@ -343,7 +360,11 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTableOverInterval`
-        debug_propagate_from_scratch_time_table_interval(&mut context, &self.parameters)
+        debug_propagate_from_scratch_time_table_interval(
+            &mut context,
+            &self.parameters,
+            &self.dynamic_structures,
+        )
     }
 }
 

@@ -22,10 +22,10 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
-use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::CumulativeConstructor;
 use crate::propagators::CumulativeParameters;
+use crate::propagators::DynamicStructures;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -46,6 +46,8 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
+    /// Stores structures which change during the search; used to store the bounds
+    dynamic_structures: DynamicStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -65,19 +67,22 @@ where
 
     fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
         let tasks = create_tasks(&self.tasks, context, false);
-        TimeTablePerPointPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.allow_holes_in_domain,
-        ))
+        let parameters =
+            CumulativeParameters::new(tasks, self.capacity, self.allow_holes_in_domain);
+        let dynamic_structures = DynamicStructures::new(&parameters);
+        TimeTablePerPointPropagator::new(parameters, dynamic_structures)
     }
 }
 
 impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
-    pub(crate) fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
+    pub(crate) fn new(
+        parameters: CumulativeParameters<Var>,
+        dynamic_structures: DynamicStructures<Var>,
+    ) -> TimeTablePerPointPropagator<Var> {
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
             parameters,
+            dynamic_structures,
         }
     }
 }
@@ -89,11 +94,17 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(&mut context, time_table.values(), &self.parameters)
+        propagate_based_on_timetable(
+            &mut context,
+            time_table.values(),
+            &self.parameters,
+            &mut self.dynamic_structures,
+        )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(context, &mut self.parameters);
+        self.dynamic_structures
+            .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }
 
     fn notify(
@@ -110,6 +121,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         // will never return `true` when the time-table is not empty.
         let result = should_enqueue(
             &self.parameters,
+            &self.dynamic_structures,
             &updated_task,
             &context,
             self.is_time_table_empty,
@@ -117,7 +129,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
-        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(
+            &context,
+            self.dynamic_structures.get_stored_bounds_mut(),
+            &updated_task,
+        );
         result.decision
     }
 
@@ -133,19 +149,21 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         &mut self,
         context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
-        // First we store the bounds in the parameters
-        for task in self.parameters.tasks.iter() {
-            self.parameters.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ));
-        }
+        self.dynamic_structures
+            .reset_all_bounds(&context, &self.parameters);
 
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_point(context, &self.parameters)
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
+        debug_propagate_from_scratch_time_table_point(
+            &mut context,
+            &self.parameters,
+            &self.dynamic_structures,
+        )
     }
 }
 
@@ -200,14 +218,20 @@ pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 's
 }
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    mut context: PropagationContextMut,
+    context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
+    dynamic_structures: &DynamicStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
     let time_table = create_time_table_per_point_from_scratch(&context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
-    propagate_based_on_timetable(&mut context, time_table.values(), parameters)
+    propagate_based_on_timetable(
+        context,
+        time_table.values(),
+        parameters,
+        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+    )
 }
 
 #[cfg(test)]
