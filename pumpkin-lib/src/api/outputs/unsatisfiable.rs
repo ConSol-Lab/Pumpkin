@@ -1,8 +1,8 @@
 //! Contains the representation of a unsatisfiable solution.
 
 use crate::branching::Brancher;
-use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+pub use crate::engine::Core;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -33,7 +33,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///
     /// In an assumption-based solver, a core is defined as a (sub)set of assumptions which, given a
     /// set of constraints, when set together will lead to an unsatisfiable instance. For
-    /// example, if we two variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
+    /// example, if we have three variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
     /// `all-different(x, y, z)` then the assumptions `[[x = 1], [y <= 1], [y != 0]]` would
     /// constitute an unsatisfiable core since the constraint and the assumptions can never be
     /// satisfied at the same time.
@@ -80,13 +80,27 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// ) = result
     /// {
     ///     {
+    ///         // We get a core from the unsatisfiable instance
     ///         let core = unsatisfiable.extract_core();
     ///
-    ///         // In this case, the core should be equal to the negation of all literals in the
-    ///         // assumptions
+    ///         // We know that the core is non-empty, non-unit and not at the root-level
+    ///         assert!(!core.is_empty());
+    ///         assert!(!core.is_unit());
+    ///         assert!(!core.is_a_root_level_core());
+    ///
+    ///         // There is two ways to check the contents of the core, first we take a look
+    ///         // at the negated assumption literals
+    ///         let core_negated_assumption_literals = core.get_negated_assumption_literals();
     ///         assert!(assumptions
-    ///             .into_iter()
-    ///             .all(|literal| core.contains(&(!literal))));
+    ///             .iter()
+    ///             .cloned()
+    ///             .all(|assumption| { core_negated_assumption_literals.contains(&(!assumption)) }));
+    ///
+    ///         // Then we check the original core
+    ///         let core = core.get_core();
+    ///         assert!(assumptions
+    ///             .iter()
+    ///             .all(|assumption| core.contains(assumption)));
     ///     }
     /// }
     ///  ```
@@ -99,11 +113,10 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// search for CP’, in Integration of Constraint Programming, Artificial Intelligence, and
     /// Operations Research: 17th International Conference, CPAIOR 2020, Vienna, Austria, September
     /// 21--24, 2020, Proceedings 17, 2020, pp. 205–221.
-    pub fn extract_core(&mut self) -> Box<[Literal]> {
+    pub fn extract_core(&mut self) -> Core {
         self.solver
             .extract_clausal_core(self.brancher)
             .expect("expected consistent assumptions")
-            .into()
     }
 }
 
