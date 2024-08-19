@@ -8,11 +8,77 @@
 
     "extraFlags": [
         [
+            "--learning-max-num-clauses",
+            "\tThe number of high lbd learned clauses that are kept in the database. \n\n\tLearned clauses are kept based on the tiered system introduced in 'Improving SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)'",
+            "int:0:18446744073709551615",
+            "4000"
+        ],
+        [
+            "--learning-lbd-threshold",
+            "\tLearned clauses with this threshold LBD or lower are kept permanently.\n\n\tLearned clauses are kept based on the tiered system introduced 'Improving SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)'",
+            "int:0:4294967295",
+            "5"
+        ],
+        [
+            "--learning-sorting-strategy",
+            "\tDecides which clauses will be removed when cleaning up the learned clauses.\n\n\tCan either be based on the LBD of a clause (the number of different decision levels) or on the activity of a clause (how often it is used in conflict analysis).\n\n\tPossible values: ['lbd', 'activity']",
+            "string",
+            "activity"
+        ],
+        [
+            "--no-learning-minimise",
+            "\tDecides whether learned clauses are minimised as a post-processing step after computing the 1-UIP Minimisation is done.\n\n\tThis is done according to the idea proposed in 'Generalized Conflict-Clause Strengthening for Satisfiability Solvers - Allen van Gelder (2011)'."
+            "bool",
+            "false",
+        ],
+        [
+            "--restart-sequence",
+            "\tDecides the sequence based on which the restarts are performed.\n\t- The 'constant' approach uses a constant number of conflicts before another restart is triggered\n\t- The 'geometric' approach uses a geometrically increasing sequence\n\t- The 'luby' approach uses a recursive sequence of the form 1, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8, 1, 1, 2.... (see 'Optimal speedup of Las Vegas algorithms - Luby et al.(1993)')\n\n\tTo be used in combination with '--restarts-base-interval'.\n\n\tPossible values: ['constant', 'geometric', 'luby']",
+            "string",
+            "constant"
+        ],
+        [
+            "--restart-base-interval",
+            "\tThe base interval length is used as a multiplier to the restart sequence.\n\t- In the case of the 'constant' restart sequence this argument indicates the constant which is used to determine when a restart occurs\n\t- For the 'geometric' approach this argument indicates the starting value of the sequence\n\t- For the 'luby' approach, the sequence is multiplied by this value\n\n\tFor example, constant restarts with base interval 50 means a restart is triggered every 50 conflicts.",
+            "int:0:18446744073709551615",
+            "50",
+        ]
+        [
+            "--restart-min-initial-conflicts",
+            "\tIndicates the minimum number of initial conflicts before the first restart can occur.\n\tThis allows the solver to learn some things about the problem before a restart is allowed to occur.",
+            "int:0:18446744073709551615",
+            "10000"
+        ],
+        [
+            "--restart-lbd-coef",
+            "\tUsed to determine if a restart should be forced (see 'Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)').\n\n\tThe state is 'bad' if the current LBD value is much greater than the global LBD average.\n\tA greater (lower) value for lbd-coef means a less (more) frequent restart policy.\n\n\tIf the long-term average LBD multiplied by this coefficient is lower than the short-term average LBD then a restart is performed.",
+            "float",
+            "1.25"
+        ]
+        [
+            "--restart-num-assigned-coef",
+            "\tUsed to determine if a restart should be blocked (see 'Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)').\n\n\tTo be used in combination with '--restarts-num-assigned-window'.\n\n\tA restart is blocked if the number of assigned propositional variables is much greater than the average number of assigned variables in the recent past.\n\tA greater (lower) value for '--restart-num-assigned-coef' means fewer (more) blocked restarts.",
+            "float",
+            "1.4",
+        ],
+        [
+            "--restart-num-assigned-window",
+            "\tUsed to determine the length of the recent past that should be considered when deciding on blocking restarts (see 'Refining Restarts Strategies for SAT and UNSAT - Audemard and Simon (2012)').\n\n\tThe solver considers the last '--restart_num_assigned_window' conflicts as the referencepoint for the number of assigned variables.",
+            "int:0:18446744073709551615",
+            "5000"
+        ],
+        [
+            "--restart-geometric-coef",
+            "\tThe coefficient in the geometric sequence\n\t\t`x_i = x_{i-1} * '--restart-geometric-coef'`\n\t where\n\t\t`x_1 = '--restarts-base-interval'`\n\n\tUsed only if '--restarts-sequence-generator'is assigned to 'geometric'.",
+            "float",
+            "1.0"
+        ],
+        [
             "--cumulative-allow-holes",
-            "Whether to allow the cumulative propagator(s) to create holes in the domain rather than only propagating the bounds",
+            "\tWhether to allow the cumulative propagator(s) to create holes in the domain rather than only propagating the bounds",
             "bool",
             "false"
-        ]
+        ],
     ],
 
     "tags": ["cp", "lcg", "int"]
