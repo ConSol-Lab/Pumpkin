@@ -20,9 +20,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         "maxsat-checker",
     )?;
 
-    println!("cargo:rerun-if-changed=tests/**/*.c");
-    println!("cargo:rerun-if-changed=tests/**/*.h");
-    println!("cargo:rerun-if-changed=tests/**/*.cc");
+    println!("cargo:rerun-if-changed=tests/cnf/checkers/");
+    println!("cargo:rerun-if-changed=tests/wcnf/checkers/");
+
     println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
