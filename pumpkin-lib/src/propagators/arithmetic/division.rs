@@ -71,12 +71,10 @@ where
         &mut self,
         context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
-        if context.contains(&self.denominator, 0) {
-            pumpkin_assert_simple!(
-                !context.contains(&self.denominator, 0),
-                "Denominator cannot contain 0"
-            );
-        }
+        pumpkin_assert_simple!(
+            !context.contains(&self.denominator, 0),
+            "Denominator cannot contain 0"
+        );
 
         Ok(())
     }
