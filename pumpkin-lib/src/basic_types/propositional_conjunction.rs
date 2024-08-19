@@ -48,6 +48,10 @@ impl PropositionalConjunction {
     pub fn swap(&mut self, a: usize, b: usize) {
         self.predicates_in_conjunction.swap(a, b)
     }
+
+    pub fn pop(&mut self) -> Option<Predicate> {
+        self.predicates_in_conjunction.pop()
+    }
 }
 
 impl Index<usize> for PropositionalConjunction {
