@@ -81,6 +81,10 @@ pub trait Propagator {
     ///
     /// Note that the variables and events to which the propagator is subscribed to are determined
     /// upon propagator construction via [`PropagatorConstructor`].
+    ///
+    /// Additionally, it could be the case that the [`PropagationContext`] passed to this method
+    /// could be conflicting, this should be handled by the propagator itself
+    /// (for more information see [here](https://github.com/ConSol-Lab/Pumpkin/issues/25)).
     fn notify(
         &mut self,
         _context: PropagationContext,
