@@ -49,21 +49,69 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
         .collect()
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<
-    Var: IntegerVariable + 'static,
->(
+pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<Var>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
-) -> Predicate {
+) -> Predicate
+where
+    Var: IntegerVariable + 'static,
+{
     predicate!(task.start_variable >= profile.start + 1 - task.processing_time)
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<
-    Var: IntegerVariable + 'static,
->(
+pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     context: &PropagationContext,
-) -> Predicate {
-    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.start))
+) -> Predicate
+where
+    Var: IntegerVariable + 'static,
+{
+    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::options::CumulativeExplanationType;
+    use crate::predicate;
+    use crate::predicates::PropositionalConjunction;
+    use crate::propagators::cumulative::time_table::propagation_handler::test_propagation_handler::TestPropagationHandler;
+
+    #[test]
+    fn test_big_step_explanation_lower_bound() {
+        let mut propagation_handler =
+            TestPropagationHandler::new(CumulativeExplanationType::BigStep);
+        let (reason, x, y) = propagation_handler.set_up_example_lower_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x >= 10),
+            predicate!(y >= 14),
+            predicate!(y <= 15),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_big_step_explanation_upper_bound() {
+        let mut propagation_handler =
+            TestPropagationHandler::new(CumulativeExplanationType::BigStep);
+        let (reason, x, y) = propagation_handler.set_up_example_upper_bound();
+        let expected_reason: PropositionalConjunction = vec![
+            predicate!(x <= 17),
+            predicate!(y >= 14),
+            predicate!(y <= 15),
+        ]
+        .into();
+        assert_eq!(reason, expected_reason);
+    }
+
+    #[test]
+    fn test_conflict_big_step() {
+        let mut propagation_handler =
+            TestPropagationHandler::new(CumulativeExplanationType::BigStep);
+        let (reason, y) = propagation_handler.set_up_conflict_example();
+        let expected_reason: PropositionalConjunction =
+            vec![predicate!(y >= 14), predicate!(y <= 15)].into();
+        assert_eq!(reason, expected_reason);
+    }
 }

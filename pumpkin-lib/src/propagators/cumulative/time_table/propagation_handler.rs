@@ -45,14 +45,15 @@ impl CumulativePropagationHandler {
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<
-        Var: IntegerVariable + 'static,
-    >(
+    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomain>
+    where
+        Var: IntegerVariable + 'static,
+    {
         pumpkin_assert_simple!(!profiles.is_empty());
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
@@ -149,14 +150,15 @@ impl CumulativePropagationHandler {
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<
-        Var: IntegerVariable + 'static,
-    >(
+    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profiles: &[&ResourceProfile<Var>],
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomain>
+    where
+        Var: IntegerVariable + 'static,
+    {
         pumpkin_assert_simple!(!profiles.is_empty());
 
         match self.explanation_type {
@@ -250,12 +252,15 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_lower_bound_with_explanations<Var: IntegerVariable + 'static>(
+    pub(crate) fn propagate_lower_bound_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomain>
+    where
+        Var: IntegerVariable + 'static,
+    {
         pumpkin_assert_advanced!(
             context.lower_bound(&propagating_task.start_variable) < profile.end + 1
         );
@@ -330,12 +335,15 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_upper_bound_with_explanations<Var: IntegerVariable + 'static>(
+    pub(crate) fn propagate_upper_bound_with_explanations<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomain>
+    where
+        Var: IntegerVariable + 'static,
+    {
         pumpkin_assert_advanced!(
             context.upper_bound(&propagating_task.start_variable)
                 > profile.start - propagating_task.processing_time
@@ -410,12 +418,15 @@ impl CumulativePropagationHandler {
 
     /// Propagates a hole in the domain; note that this explanation does not contain any of the
     /// bounds of `propagating_task`.
-    pub(crate) fn propagate_holes_in_domain<Var: IntegerVariable + 'static>(
+    pub(crate) fn propagate_holes_in_domain<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
         propagating_task: &Rc<Task<Var>>,
-    ) -> Result<(), EmptyDomain> {
+    ) -> Result<(), EmptyDomain>
+    where
+        Var: IntegerVariable + 'static,
+    {
         // We go through all of the time-points which cause `task` to overlap
         // with the resource profile
 
@@ -498,11 +509,14 @@ impl CumulativePropagationHandler {
     }
 
     /// Either we get the stored stored profile explanation or we initialize it.
-    fn get_stored_profile_explanation_or_init<Var: IntegerVariable + 'static>(
+    fn get_stored_profile_explanation_or_init<Var>(
         &mut self,
         context: &mut PropagationContextMut,
         profile: &ResourceProfile<Var>,
-    ) -> Rc<PropositionalConjunction> {
+    ) -> Rc<PropositionalConjunction>
+    where
+        Var: IntegerVariable + 'static,
+    {
         Rc::clone(self.stored_profile_explanation.get_or_init(|| {
             Rc::new(
                 match self.explanation_type {
@@ -523,11 +537,14 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_conflict_explanation<Var>(
     context: &PropagationContext,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
-) -> PropositionalConjunction {
+) -> PropositionalConjunction
+where
+    Var: IntegerVariable + 'static,
+{
     match explanation_type {
         CumulativeExplanationType::Naive => {
             create_naive_conflict_explanation(conflict_profile, context)
@@ -542,8 +559,7 @@ pub(crate) fn create_conflict_explanation<Var: IntegerVariable + 'static>(
 }
 
 #[cfg(test)]
-mod tests {
-
+pub(crate) mod test_propagation_handler {
     use std::rc::Rc;
 
     use super::create_conflict_explanation;
@@ -563,15 +579,15 @@ mod tests {
     use crate::propagators::Task;
     use crate::variables::DomainId;
 
-    struct PropagationHandler {
+    pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,
         reason_store: ReasonStore,
         assignments_integer: AssignmentsInteger,
         assignments_propositional: AssignmentsPropositional,
     }
 
-    impl PropagationHandler {
-        fn new(explanation_type: CumulativeExplanationType) -> Self {
+    impl TestPropagationHandler {
+        pub(crate) fn new(explanation_type: CumulativeExplanationType) -> Self {
             let propagation_handler = CumulativePropagationHandler::new(explanation_type);
 
             let reason_store = ReasonStore::default();
@@ -585,7 +601,7 @@ mod tests {
             }
         }
 
-        fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
+        pub(crate) fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
             let y = self.assignments_integer.grow(15, 16);
 
             let profile_task = Task {
@@ -614,7 +630,9 @@ mod tests {
             (reason, y)
         }
 
-        fn set_up_example(&mut self) -> (PropositionalConjunction, DomainId, DomainId) {
+        pub(crate) fn set_up_example_lower_bound(
+            &mut self,
+        ) -> (PropositionalConjunction, DomainId, DomainId) {
             let x = self.assignments_integer.grow(11, 20);
             let y = self.assignments_integer.grow(15, 16);
 
@@ -659,7 +677,54 @@ mod tests {
             (reason, x, y)
         }
 
-        fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
+        pub(crate) fn set_up_example_upper_bound(
+            &mut self,
+        ) -> (PropositionalConjunction, DomainId, DomainId) {
+            let x = self.assignments_integer.grow(5, 16);
+            let y = self.assignments_integer.grow(15, 16);
+
+            let propagating_task = Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            };
+
+            let profile_task = Task {
+                start_variable: y,
+                processing_time: 4,
+                resource_usage: 1,
+                id: LocalId::from(1),
+            };
+
+            let profile = ResourceProfile {
+                start: 15,
+                end: 17,
+                profile_tasks: vec![Rc::new(profile_task)],
+                height: 1,
+            };
+
+            let result = self
+                .propagation_handler
+                .propagate_upper_bound_with_explanations(
+                    &mut PropagationContextMut::new(
+                        &mut self.assignments_integer,
+                        &mut self.reason_store,
+                        &mut self.assignments_propositional,
+                        PropagatorId(0),
+                    ),
+                    &profile,
+                    &Rc::new(propagating_task),
+                );
+            assert!(result.is_ok());
+            assert_eq!(self.assignments_integer.get_upper_bound(x), 9);
+
+            let reason = self.get_reason_for(predicate!(x <= 9));
+
+            (reason, x, y)
+        }
+
+        pub(crate) fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
             let reason_ref = self
                 .assignments_integer
                 .get_reason_for_predicate(predicate.try_into().unwrap());
@@ -671,80 +736,5 @@ mod tests {
                 .expect("reason_ref should not be stale");
             reason.clone()
         }
-    }
-
-    #[test]
-    fn test_naive_explanation() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::Naive);
-        let (reason, x, y) = propagation_handler.set_up_example();
-        let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 11),
-            predicate!(y >= 15),
-            predicate!(y <= 16),
-        ]
-        .into();
-        assert_eq!(reason, expected_reason);
-    }
-
-    #[test]
-    fn test_big_step_explanation() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::BigStep);
-        let (reason, x, y) = propagation_handler.set_up_example();
-        let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 10),
-            predicate!(y >= 14),
-            predicate!(y <= 15),
-        ]
-        .into();
-        assert_eq!(reason, expected_reason);
-    }
-
-    #[test]
-    fn test_pointwise_explanation() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::PointWise);
-        let (reason_last_propagation, x, y) = propagation_handler.set_up_example();
-        let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 12),
-            predicate!(y >= 14),
-            predicate!(y <= 17),
-        ]
-        .into();
-        assert_eq!(reason_last_propagation, expected_reason);
-
-        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x >= 16));
-        let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 10),
-            predicate!(y >= 12),
-            predicate!(y <= 15),
-        ]
-        .into();
-        assert_eq!(reason_first_propagation, expected_reason);
-    }
-
-    #[test]
-    fn test_conflict_naive() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::Naive);
-        let (reason, y) = propagation_handler.set_up_conflict_example();
-        let expected_reason: PropositionalConjunction =
-            vec![predicate!(y >= 15), predicate!(y <= 16)].into();
-        assert_eq!(reason, expected_reason);
-    }
-
-    #[test]
-    fn test_conflict_big_step() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::BigStep);
-        let (reason, y) = propagation_handler.set_up_conflict_example();
-        let expected_reason: PropositionalConjunction =
-            vec![predicate!(y >= 14), predicate!(y <= 15)].into();
-        assert_eq!(reason, expected_reason);
-    }
-
-    #[test]
-    fn test_conflict_point_wise() {
-        let mut propagation_handler = PropagationHandler::new(CumulativeExplanationType::PointWise);
-        let (reason, y) = propagation_handler.set_up_conflict_example();
-        let expected_reason: PropositionalConjunction =
-            vec![predicate!(y >= 13), predicate!(y <= 16)].into();
-        assert_eq!(reason, expected_reason);
     }
 }
