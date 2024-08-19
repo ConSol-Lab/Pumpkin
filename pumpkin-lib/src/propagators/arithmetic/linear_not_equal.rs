@@ -437,4 +437,25 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
     }
+
+    #[test]
+    fn explanation_for_propagation_conflict() {
+        let mut solver = TestSolver::default();
+        let x = solver.new_variable(2, 2).scaled(1);
+        let y = solver.new_variable(1, 5).scaled(-1);
+
+        let _ = solver
+            .new_propagator(LinearNotEqualConstructor::new(
+                [x.clone(), y.clone()].into(),
+                0,
+            ))
+            .expect("non-empty domain");
+
+        let result = solver.increase_lower_bound(&x, 3);
+        assert!(result.is_err());
+
+        let reason = solver.get_reason_int(predicate![y != -2].try_into().unwrap());
+
+        assert_eq!(conjunction!([x == 2]), *reason);
+    }
 }

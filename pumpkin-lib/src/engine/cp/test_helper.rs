@@ -97,6 +97,14 @@ impl TestSolver {
         self.assignments_integer.get_lower_bound(var)
     }
 
+    pub(crate) fn increase_lower_bound<Var: IntegerVariable + 'static>(
+        &mut self,
+        var: &Var,
+        value: i32,
+    ) -> Result<(), EmptyDomain> {
+        var.set_lower_bound(&mut self.assignments_integer, value, None)
+    }
+
     pub(crate) fn increase_lower_bound_and_notify(
         &mut self,
         propagator: &mut BoxedPropagator,
