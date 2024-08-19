@@ -33,7 +33,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///
     /// In an assumption-based solver, a core is defined as a (sub)set of assumptions which, given a
     /// set of constraints, when set together will lead to an unsatisfiable instance. For
-    /// example, if we two variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
+    /// example, if we three variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
     /// `all-different(x, y, z)` then the assumptions `[[x = 1], [y <= 1], [y != 0]]` would
     /// constitute an unsatisfiable core since the constraint and the assumptions can never be
     /// satisfied at the same time.
@@ -82,11 +82,10 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     {
     ///         let core = unsatisfiable.extract_core();
     ///
-    ///         // In this case, the core should be equal to the negation of all literals in the
-    ///         // assumptions
+    ///         // In this case, the core should be equal to all assumption literals
     ///         assert!(assumptions
     ///             .into_iter()
-    ///             .all(|literal| core.contains(&(!literal))));
+    ///             .all(|literal| core.contains(&literal)));
     ///     }
     /// }
     ///  ```

@@ -463,7 +463,7 @@ impl ResolutionConflictAnalyser {
             .assignments_propositional
             .is_literal_root_assignment(violated_assumption)
         {
-            Ok(vec![!violated_assumption])
+            Ok(vec![violated_assumption])
         }
         // Case two: the assumption is inconsistent with other assumptions (i.e. the assumptions
         // contain both literal 'x' and '!x')
@@ -494,7 +494,12 @@ impl ResolutionConflictAnalyser {
                 .learned_literals
                 .push(!violated_assumption);
             pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption, context));
-            Ok(self.analysis_result.learned_literals.clone())
+            Ok(self
+                .analysis_result
+                .learned_literals
+                .iter()
+                .map(|negated_assumption| !(*negated_assumption))
+                .collect())
         }
     }
 

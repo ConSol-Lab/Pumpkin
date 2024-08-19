@@ -662,8 +662,8 @@ impl ConstraintSatisfactionSolver {
     ///             "The core has the length of the number of assumptions"
     ///         );
     ///         assert!(
-    ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///             "All literals in the core are negated assumptions"
+    ///             core.iter().all(|&lit| assumptions.contains(&lit)),
+    ///             "All literals in the core are assumptions"
     ///         );
     ///     }
     /// }
@@ -1998,7 +1998,7 @@ mod tests {
             solver,
             vec![!lit1],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lit1]),
+            Ok(vec![!lit1]),
         )
     }
 
@@ -2009,7 +2009,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0]]),
+            Ok(vec![!lits[0]]),
         )
     }
 
@@ -2020,7 +2020,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[1]]),
+            Ok(vec![!lits[1]]),
         );
     }
 
@@ -2043,7 +2043,7 @@ mod tests {
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[1]]), // The core gets computed before inconsistency is detected
+            Ok(vec![!lits[1]]), // The core gets computed before inconsistency is detected
         );
     }
 
@@ -2065,7 +2065,7 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]),
+            Ok(vec![!lits[0], lits[1], !lits[2]]),
         );
     }
 
@@ -2076,9 +2076,9 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
-                                                   * however inconsistency will not be detected
-                                                   * given the order of the assumptions */
+            Ok(vec![!lits[0], lits[1], !lits[2]]), /* could return inconsistent assumptions,
+                                                    * however inconsistency will not be detected
+                                                    * given the order of the assumptions */
         );
     }
 
@@ -2109,7 +2109,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], lits[1], lits[2]]),
+            Ok(vec![!lits[0], !lits[1], !lits[2]]),
         );
     }
 
