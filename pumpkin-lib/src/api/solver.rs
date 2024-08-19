@@ -79,8 +79,7 @@ use crate::variables::PropositionalVariable;
 /// ```
 ///
 /// # Using the Solver
-/// For examples on how to use the solver, see the [root-level crate documentation](crate) or the
-/// examples in the repository at `pumpkin-lib/examples`.
+/// For examples on how to use the solver, see the [root-level crate documentation](crate) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/master/pumpkin-lib/examples).
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     satisfaction_solver: ConstraintSatisfactionSolver,
@@ -428,10 +427,12 @@ impl Solver {
         }
     }
 
-    /// Solver the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is minmised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// Solves the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is minimised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn minimise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -443,8 +444,10 @@ impl Solver {
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn maximise(
         &mut self,
         brancher: &mut impl Brancher,
