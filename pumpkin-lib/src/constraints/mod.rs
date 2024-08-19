@@ -1,8 +1,20 @@
-//! Defines the constraints which Pumpkin provides out of the box. To add constraints to the
-//! solver, look at [`Solver::add_constraint`] for an example.
+//! Defines the constraints that Pumpkin provides out of the box which can be added to the
+//! [`Solver`].
 //!
 //! A constraint is a relation over variables. In the solver, constraints are enforced through
 //! propagators, and therefore constraints can be viewed as a collection of propagators.
+//!
+//! # Example
+//! ```
+//! # use pumpkin_lib::constraints;
+//! # use pumpkin_lib::Solver;
+//! let mut solver = Solver::default();
+//!
+//! let a = solver.new_bounded_integer(0, 3);
+//! let b = solver.new_bounded_integer(0, 3);
+//!
+//! solver.add_constraint(constraints::equals([a, b], 0)).post();
+//! ```
 //!
 //! # Note
 //! At the moment, the API for posting propagators is not yet publicly accessible as it is
@@ -38,11 +50,17 @@ use crate::Solver;
 /// For example, the constraint `a = b` over two variables `a` and `b` only allows assignments to
 /// `a` and `b` of the same value, and rejects any assignment where `a` and `b` differ.
 pub trait Constraint {
-    /// Add the constraint to the solver.
+    /// Add the [`Constraint`] to the [`Solver`].
+    ///
+    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
+    /// to a root-level conflict.
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
 
-    /// Add the half-reified version of the constraint to the solver. I.e. post the constraint
-    /// `r -> Self` where `r` is a reification literal.
+    /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
+    /// constraint `r -> constraint` where `r` is a reification literal.
+    ///
+    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
+    /// to a root-level conflict.
     fn implied_by(
         self,
         solver: &mut Solver,
@@ -86,15 +104,22 @@ impl<C: Constraint> Constraint for Vec<C> {
     }
 }
 
-/// A [`Constraint`] which has a well-defined negation. Having a negation means the constraint can
-/// be fully reified. I.e., a constraint `C` can be turned into `r <-> C` for a Boolean `r`.
+/// A [`Constraint`] which has a well-defined negation.
+///
+/// Having a negation means the [`Constraint`] can be fully reified; i.e., a constraint `C` can be
+/// turned into `r <-> C` where `r` is a reification literal.
+///
+/// For example, the negation of the [`Constraint`] `a = b` is (well-)defined as `a != b`.
 pub trait NegatableConstraint: Constraint {
     type NegatedConstraint: NegatableConstraint + 'static;
 
     fn negation(&self) -> Self::NegatedConstraint;
 
-    /// Add the reified version of the constraint to the solver. I.e. post the constraint
-    /// `r <-> Self` where `r` is a reification literal.
+    /// Add the reified version of the [`Constraint`] to the [`Solver`]; i.e. post the constraint
+    /// `r <-> constraint` where `r` is a reification literal.
+    ///
+    /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
+    /// to a root-level conflict.
     fn reify(
         self,
         solver: &mut Solver,

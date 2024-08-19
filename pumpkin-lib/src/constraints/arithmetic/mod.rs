@@ -11,12 +11,12 @@ use crate::propagators::integer_multiplication::IntegerMultiplicationConstructor
 use crate::propagators::maximum::MaximumConstructor;
 use crate::variables::IntegerVariable;
 
-/// Creates the constraint `a + b = c`.
+/// Creates the [`Constraint`] `a + b = c`.
 pub fn plus<Var: IntegerVariable + 'static>(a: Var, b: Var, c: Var) -> impl Constraint {
     equals([a.scaled(1), b.scaled(1), c.scaled(-1)], 0)
 }
 
-/// Creates the constraint `a * b = c`.
+/// Creates the [`Constraint`] `a * b = c`.
 pub fn times(
     a: impl IntegerVariable + 'static,
     b: impl IntegerVariable + 'static,
@@ -25,8 +25,12 @@ pub fn times(
     IntegerMultiplicationConstructor { a, b, c }
 }
 
-/// Creates the constraint `numerator / denominator = rhs`. Note that this
-/// constraint models truncating division (i.e. rounding towards 0).
+/// Creates the [`Constraint`] `numerator / denominator = rhs`.
+///
+/// Note that this [`Constraint`] models truncating division (i.e. rounding towards 0).
+///
+/// The `denominator` should not contain the value 0 in its domain; if this is the case then the
+/// solver will panic.
 pub fn division(
     numerator: impl IntegerVariable + 'static,
     denominator: impl IntegerVariable + 'static,
@@ -39,7 +43,7 @@ pub fn division(
     }
 }
 
-/// Creates the constraint `|signed| = absolute`.
+/// Creates the [`Constraint`] `|signed| = absolute`.
 pub fn absolute(
     signed: impl IntegerVariable + 'static,
     absolute: impl IntegerVariable + 'static,
@@ -47,7 +51,7 @@ pub fn absolute(
     AbsoluteValueConstructor { signed, absolute }
 }
 
-/// Creates the constraint `max(array) = m`.
+/// Creates the [`Constraint`] `max(array) = m`.
 pub fn maximum<Var: IntegerVariable + 'static>(
     array: impl Into<Box<[Var]>>,
     rhs: impl IntegerVariable + 'static,
@@ -58,7 +62,7 @@ pub fn maximum<Var: IntegerVariable + 'static>(
     }
 }
 
-/// Creates the constraint `min(array) = m`.
+/// Creates the [`Constraint`] `min(array) = m`.
 pub fn minimum<Var: IntegerVariable + 'static>(
     array: impl IntoIterator<Item = Var>,
     rhs: impl IntegerVariable + 'static,

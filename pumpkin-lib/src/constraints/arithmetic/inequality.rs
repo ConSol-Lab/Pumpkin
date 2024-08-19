@@ -5,7 +5,9 @@ use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Create the constraint `\sum terms_i <= rhs`.
+/// Create the [`NegatableConstraint`] `\sum terms_i <= rhs`.
+///
+/// Its negation is `\sum terms_i > rhs`
 pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -16,7 +18,9 @@ pub fn less_than_or_equals<Var: IntegerVariable + 'static>(
     }
 }
 
-/// Creates the constraint `lhs <= rhs`.
+/// Creates the [`NegatableConstraint`] `lhs <= rhs`.
+///
+/// Its negation is `lhs > rhs`.
 pub fn binary_less_than_or_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
@@ -24,7 +28,9 @@ pub fn binary_less_than_or_equals<Var: IntegerVariable + 'static>(
     less_than_or_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
 }
 
-/// Creates the constraint `lhs < rhs`.
+/// Creates the [`NegatableConstraint`] `lhs < rhs`.
+///
+/// Its negation is `lhs >= rhs`.
 pub fn binary_less_than<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
