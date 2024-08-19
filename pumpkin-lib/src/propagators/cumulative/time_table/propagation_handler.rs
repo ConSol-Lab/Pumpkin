@@ -187,7 +187,7 @@ impl CumulativePropagationHandler {
                     self.explanation_type,
                     &context.as_readonly(),
                     propagating_task,
-                    profiles[0],
+                    profiles[profiles.len() - 1],
                     None,
                 );
                 context.set_upper_bound(
@@ -677,6 +677,66 @@ pub(crate) mod test_propagation_handler {
             (reason, x, y)
         }
 
+        pub(crate) fn set_up_example_sequence_lower_bound(
+            &mut self,
+        ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
+            let x = self.assignments_integer.grow(11, 25);
+            let y = self.assignments_integer.grow(15, 16);
+            let z = self.assignments_integer.grow(15, 19);
+
+            let propagating_task = Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            };
+
+            let profile_task_y = Task {
+                start_variable: y,
+                processing_time: 4,
+                resource_usage: 1,
+                id: LocalId::from(1),
+            };
+            let profile_y = ResourceProfile {
+                start: 16,
+                end: 18,
+                profile_tasks: vec![Rc::new(profile_task_y)],
+                height: 1,
+            };
+
+            let profile_task_z = Task {
+                start_variable: z,
+                processing_time: 7,
+                resource_usage: 1,
+                id: LocalId::from(2),
+            };
+            let profile_z = ResourceProfile {
+                start: 19,
+                end: 21,
+                profile_tasks: vec![Rc::new(profile_task_z)],
+                height: 1,
+            };
+
+            let result = self
+                .propagation_handler
+                .propagate_chain_of_lower_bounds_with_explanations(
+                    &mut PropagationContextMut::new(
+                        &mut self.assignments_integer,
+                        &mut self.reason_store,
+                        &mut self.assignments_propositional,
+                        PropagatorId(0),
+                    ),
+                    &[&profile_y, &profile_z],
+                    &Rc::new(propagating_task),
+                );
+            assert!(result.is_ok());
+            assert_eq!(self.assignments_integer.get_lower_bound(x), 22);
+
+            let reason = self.get_reason_for(predicate!(x >= 22));
+
+            (reason, x, y, z)
+        }
+
         pub(crate) fn set_up_example_upper_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId) {
@@ -722,6 +782,66 @@ pub(crate) mod test_propagation_handler {
             let reason = self.get_reason_for(predicate!(x <= 10));
 
             (reason, x, y)
+        }
+
+        pub(crate) fn set_up_example_sequence_upper_bound(
+            &mut self,
+        ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
+            let x = self.assignments_integer.grow(0, 16);
+            let y = self.assignments_integer.grow(15, 16);
+            let z = self.assignments_integer.grow(7, 9);
+
+            let propagating_task = Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            };
+
+            let profile_task_y = Task {
+                start_variable: y,
+                processing_time: 4,
+                resource_usage: 1,
+                id: LocalId::from(1),
+            };
+            let profile_y = ResourceProfile {
+                start: 16,
+                end: 18,
+                profile_tasks: vec![Rc::new(profile_task_y)],
+                height: 1,
+            };
+
+            let profile_task_z = Task {
+                start_variable: z,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(2),
+            };
+            let profile_z = ResourceProfile {
+                start: 9,
+                end: 12,
+                profile_tasks: vec![Rc::new(profile_task_z)],
+                height: 1,
+            };
+
+            let result = self
+                .propagation_handler
+                .propagate_chain_of_upper_bounds_with_explanations(
+                    &mut PropagationContextMut::new(
+                        &mut self.assignments_integer,
+                        &mut self.reason_store,
+                        &mut self.assignments_propositional,
+                        PropagatorId(0),
+                    ),
+                    &[&profile_z, &profile_y],
+                    &Rc::new(propagating_task),
+                );
+            assert!(result.is_ok());
+            assert_eq!(self.assignments_integer.get_upper_bound(x), 3);
+
+            let reason = self.get_reason_for(predicate!(x <= 3));
+
+            (reason, x, y, z)
         }
 
         pub(crate) fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
