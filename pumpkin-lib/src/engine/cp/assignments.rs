@@ -723,7 +723,7 @@ impl Assignments {
 
             let fixed_before = self.domains[domain_id].lower_bound() == self.domains[domain_id].upper_bound();
             self.domains[domain_id].undo_trail_entry(&entry);
-if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
+            if fixed_before && self.domains[domain_id].lower_bound() != self.domains[domain_id].upper_bound() {
                 if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
                     // This `domain_id` was unassigned while backtracking
                     self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
@@ -1392,6 +1392,122 @@ impl Iterator for IntegerDomainIterator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {
+        let mut assignment = Assignments::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 1, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, usize::MAX, true);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 3);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_assign_event_backtrack() {
+        let mut assignment = Assignments::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 2, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 4, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+        let _ = assignment.remove_value_from_domain(d1, 1, None);
+
+        let _ = assignment.synchronise(0, usize::MAX, true);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 4);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Assign]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_upper_bound_event_backtrack() {
+        let mut assignment = Assignments::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 4, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, usize::MAX, true);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_lower_bound_event_backtrack() {
+        let mut assignment = Assignments::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 2, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 1, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, usize::MAX, true);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
 
     #[test]
     fn lower_bound_change_lower_bound_event() {
