@@ -97,18 +97,18 @@ mod tests {
             TestPropagationHandler::new(CumulativeExplanationType::PointWise);
         let (reason_last_propagation, x, y) = propagation_handler.set_up_example_lower_bound();
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 12),
-            predicate!(y >= 14),
-            predicate!(y <= 17),
+            predicate!(x >= 13),
+            predicate!(y >= 15),
+            predicate!(y <= 18),
         ]
         .into();
         assert_eq!(reason_last_propagation, expected_reason);
 
-        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x >= 16));
+        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x >= 17));
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 10),
-            predicate!(y >= 12),
-            predicate!(y <= 15),
+            predicate!(x >= 11),
+            predicate!(y >= 13),
+            predicate!(y <= 16),
         ]
         .into();
         assert_eq!(reason_first_propagation, expected_reason);
@@ -120,18 +120,18 @@ mod tests {
             TestPropagationHandler::new(CumulativeExplanationType::PointWise);
         let (reason_last_propagation, x, y) = propagation_handler.set_up_example_upper_bound();
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x <= 15),
-            predicate!(y >= 12),
-            predicate!(y <= 15),
+            predicate!(x <= 16),
+            predicate!(y >= 13),
+            predicate!(y <= 16),
         ]
         .into();
         assert_eq!(reason_last_propagation, expected_reason);
 
-        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x <= 11));
+        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x <= 12));
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x <= 17),
-            predicate!(y >= 14),
-            predicate!(y <= 17),
+            predicate!(x <= 18),
+            predicate!(y >= 15),
+            predicate!(y <= 18),
         ]
         .into();
         assert_eq!(reason_first_propagation, expected_reason);

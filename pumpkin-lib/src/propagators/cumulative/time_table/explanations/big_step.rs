@@ -83,9 +83,9 @@ mod tests {
             TestPropagationHandler::new(CumulativeExplanationType::BigStep);
         let (reason, x, y) = propagation_handler.set_up_example_lower_bound();
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x >= 10),
-            predicate!(y >= 14),
-            predicate!(y <= 15),
+            predicate!(x >= 11),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
         ]
         .into();
         assert_eq!(reason, expected_reason);
@@ -97,9 +97,9 @@ mod tests {
             TestPropagationHandler::new(CumulativeExplanationType::BigStep);
         let (reason, x, y) = propagation_handler.set_up_example_upper_bound();
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x <= 17),
-            predicate!(y >= 14),
-            predicate!(y <= 15),
+            predicate!(x <= 18),
+            predicate!(y >= 15),
+            predicate!(y <= 16),
         ]
         .into();
         assert_eq!(reason, expected_reason);

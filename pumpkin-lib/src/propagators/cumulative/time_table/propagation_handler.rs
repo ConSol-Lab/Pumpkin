@@ -651,8 +651,8 @@ pub(crate) mod test_propagation_handler {
             };
 
             let profile = ResourceProfile {
-                start: 15,
-                end: 17,
+                start: 16,
+                end: 18,
                 profile_tasks: vec![Rc::new(profile_task)],
                 height: 1,
             };
@@ -670,9 +670,9 @@ pub(crate) mod test_propagation_handler {
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_lower_bound(x), 18);
+            assert_eq!(self.assignments_integer.get_lower_bound(x), 19);
 
-            let reason = self.get_reason_for(predicate!(x >= 18));
+            let reason = self.get_reason_for(predicate!(x >= 19));
 
             (reason, x, y)
         }
@@ -698,8 +698,8 @@ pub(crate) mod test_propagation_handler {
             };
 
             let profile = ResourceProfile {
-                start: 15,
-                end: 17,
+                start: 16,
+                end: 18,
                 profile_tasks: vec![Rc::new(profile_task)],
                 height: 1,
             };
@@ -717,9 +717,9 @@ pub(crate) mod test_propagation_handler {
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_upper_bound(x), 9);
+            assert_eq!(self.assignments_integer.get_upper_bound(x), 10);
 
-            let reason = self.get_reason_for(predicate!(x <= 9));
+            let reason = self.get_reason_for(predicate!(x <= 10));
 
             (reason, x, y)
         }
