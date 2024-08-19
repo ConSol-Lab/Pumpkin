@@ -5,7 +5,6 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::KeyedVec;
 use crate::engine::clause_allocators::ClauseInterface;
-use crate::engine::core::Core;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -444,11 +443,11 @@ impl ResolutionConflictAnalyser {
     pub(crate) fn compute_clausal_core(
         &mut self,
         context: &mut ConflictAnalysisContext,
-    ) -> Result<Core, Literal> {
+    ) -> Result<Vec<Literal>, Literal> {
         pumpkin_assert_simple!(self.debug_check_core_extraction(context));
 
         if context.solver_state.is_infeasible() {
-            return Ok(Core::Empty);
+            return Ok(vec![]);
         }
 
         let violated_assumption = context.solver_state.get_violated_assumption();
@@ -464,9 +463,7 @@ impl ResolutionConflictAnalyser {
             .assignments_propositional
             .is_literal_root_assignment(violated_assumption)
         {
-            Ok(Core::RootLevel {
-                root_level_assumption_literal: violated_assumption,
-            })
+            Ok(vec![!violated_assumption])
         }
         // Case two: the assumption is inconsistent with other assumptions (i.e. the assumptions
         // contain both literal 'x' and '!x')
@@ -497,9 +494,7 @@ impl ResolutionConflictAnalyser {
                 .learned_literals
                 .push(!violated_assumption);
             pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption, context));
-            Ok(Core::Standard {
-                negated_assumption_literals: self.analysis_result.learned_literals.clone(),
-            })
+            Ok(self.analysis_result.learned_literals.clone())
         }
     }
 

@@ -19,5 +19,3 @@ pub(crate) use debug_helper::DebugHelper;
 pub(crate) use domain_events::DomainEvents;
 pub(crate) use preprocessor::Preprocessor;
 pub use sat::*;
-pub(crate) mod core;
-pub use core::Core;

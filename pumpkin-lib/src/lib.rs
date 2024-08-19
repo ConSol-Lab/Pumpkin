@@ -272,27 +272,13 @@
 //! ) = result
 //! {
 //!     {
-//!         // We get a core from the unsatisfiable instance
 //!         let core = unsatisfiable.extract_core();
 //!
-//!         // We know that the core is non-empty, non-unit and not at the root-level
-//!         assert!(!core.is_empty());
-//!         assert!(!core.is_unit());
-//!         assert!(!core.is_a_root_level_core());
-//!
-//!         // There is two ways to check the contents of the core, first we take a look
-//!         // at the negated assumption literals
-//!         let core_negated_assumption_literals = core.get_negated_assumption_literals();
+//!         // In this case, the core should be equal to the negation of all literals in the
+//!         // assumptions
 //!         assert!(assumptions
-//!             .iter()
-//!             .cloned()
-//!             .all(|assumption| { core_negated_assumption_literals.contains(&(!assumption)) }));
-//!
-//!         // Then we check the original core
-//!         let core = core.get_core();
-//!         assert!(assumptions
-//!             .iter()
-//!             .all(|assumption| core.contains(assumption)));
+//!             .into_iter()
+//!             .all(|literal| core.contains(&(!literal))));
 //!     }
 //! }
 //!  ```
