@@ -41,7 +41,7 @@ impl ValueSelector<PropositionalVariable> for InDomainRandom {
     }
 
     fn is_static(&self) -> bool {
-        true
+        false
     }
 }
 
