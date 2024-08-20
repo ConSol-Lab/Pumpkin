@@ -2,6 +2,8 @@ use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::KeyedVec;
 use crate::basic_types::Trail;
+#[cfg(doc)]
+use crate::branching::Brancher;
 #[cfg(test)]
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::Literal;
@@ -221,12 +223,29 @@ impl AssignmentsPropositional {
         self.assignment_info[variable] = PropositionalAssignmentInfo::Unassigned;
     }
 
+    /// Enqueues a [`Literal`] which was the result of a decision by a [`Brancher`].
     pub fn enqueue_decision_literal(&mut self, decision_literal: Literal) {
         pumpkin_assert_simple!(!self.is_literal_assigned(decision_literal));
 
         let _ = self.make_assignment(decision_literal, ConstraintReference::NULL);
     }
 
+    /// Enqueues a definition literal.
+    ///
+    /// For example, when creating a variable `x in {1, 3, 4}` we create a variable `x in [1, 4]`
+    /// and set the definition literal corresponding to `[x != 2]`.
+    pub fn enqueue_definition_literal(&mut self, definition_literal: Literal) {
+        // We simply set the assignment info and nothing else
+        self.assignment_info[definition_literal.get_propositional_variable()] =
+            PropositionalAssignmentInfo::Assigned {
+                truth_value: definition_literal.is_positive(),
+                decision_level: self.get_decision_level(),
+                constraint_reference: ConstraintReference::NULL,
+            };
+    }
+
+    /// Enqueues a propagated [`Literal`]; i.e. a [`Literal`] which was determined to be true by the
+    /// logic of a [`Propagator`].
     pub fn enqueue_propagated_literal(
         &mut self,
         propagated_literal: Literal,
