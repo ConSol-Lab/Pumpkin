@@ -144,6 +144,10 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
         );
         self.update(lit.get_propositional_variable(), lit.is_positive())
     }
+
+    fn is_static(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

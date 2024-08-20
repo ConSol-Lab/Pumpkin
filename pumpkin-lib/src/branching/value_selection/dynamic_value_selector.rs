@@ -47,4 +47,8 @@ impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
     fn on_unassign_literal(&mut self, literal: Literal) {
         self.selector.on_unassign_literal(literal)
     }
+
+    fn is_static(&self) -> bool {
+        self.selector.is_static()
+    }
 }

@@ -104,4 +104,12 @@ impl Brancher for DynamicBrancher {
             .iter_mut()
             .for_each(|brancher| brancher.on_solution(solution));
     }
+
+    fn is_static(&self) -> bool {
+        // We return whether all of the branchers up and until this one are static; if this is not
+        // the case then restarting could be useful!
+        self.branchers[..=self.brancher_index]
+            .iter()
+            .all(|brancher| brancher.is_static())
+    }
 }

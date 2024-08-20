@@ -1,4 +1,6 @@
 use crate::basic_types::SolutionReference;
+#[cfg(doc)]
+use crate::branching::value_selection::InDomainRandom;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
@@ -32,4 +34,11 @@ pub trait ValueSelector<Var> {
     /// the case of a satisfiable problem or on solutions of increasing quality when solving an
     /// optimisation problem.
     fn on_solution(&mut self, _solution: SolutionReference) {}
+
+    /// This method returns whether the [`ValueSelector`] changes throughout the search process.
+    ///
+    /// For example, this method should return false for the [`InDomainRandom`] [`ValueSelector`].
+    fn is_static(&self) -> bool {
+        true
+    }
 }

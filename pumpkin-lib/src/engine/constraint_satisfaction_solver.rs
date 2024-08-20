@@ -1187,10 +1187,18 @@ impl ConstraintSatisfactionSolver {
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
+        if brancher.is_static() {
+            // If the brancher is static then there is no point in restarting as it would make the
+            // exact same decision
+            return;
+        }
+
         // no point backtracking past the assumption level
         if self.get_decision_level() <= self.assumptions.len() {
             return;
         }
+
+        self.counters.num_restarts += 1;
 
         self.backtrack(0, brancher);
 
@@ -1547,6 +1555,7 @@ impl ConstraintSatisfactionSolver {
 pub(crate) struct Counters {
     pub(crate) num_decisions: u64,
     pub(crate) num_conflicts: u64,
+    num_restarts: u64,
     pub(crate) average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
     num_unit_clauses_learned: u64,
@@ -1561,6 +1570,7 @@ impl Counters {
     fn log_statistics(&self) {
         log_statistic("numberOfDecisions", self.num_decisions);
         log_statistic("numberOfConflicts", self.num_conflicts);
+        log_statistic("numberOfRestarts", self.num_restarts);
         log_statistic(
             "averageSizeOfConflictExplanation",
             self.average_conflict_size.value(),

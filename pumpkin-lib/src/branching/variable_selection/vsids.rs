@@ -187,6 +187,10 @@ impl VariableSelector<DomainId> for Vsids<DomainId> {
     fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
         self.bump_activity(variable)
     }
+
+    fn is_static(&self) -> bool {
+        false
+    }
 }
 
 impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
@@ -214,6 +218,10 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
 
     fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
         self.bump_activity(literal.get_propositional_variable())
+    }
+
+    fn is_static(&self) -> bool {
+        false
     }
 }
 

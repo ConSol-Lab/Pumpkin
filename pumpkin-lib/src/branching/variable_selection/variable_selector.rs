@@ -1,4 +1,6 @@
 use crate::branching::SelectionContext;
+#[cfg(doc)]
+use crate::branching::Vsids;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 #[cfg(doc)]
@@ -36,4 +38,11 @@ pub trait VariableSelector<Var> {
 
     /// A function which is called when a variable appears in a conflict during conflict analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
+
+    /// This method returns whether the [`VariableSelector`] changes throughout the search process.
+    ///
+    /// For example, this method should return false for the [`Vsids`] [`VariableSelector`].
+    fn is_static(&self) -> bool {
+        true
+    }
 }

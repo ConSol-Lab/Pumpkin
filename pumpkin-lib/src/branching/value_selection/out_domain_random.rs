@@ -23,6 +23,10 @@ impl ValueSelector<DomainId> for OutDomainRandom {
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable != values_in_domain[random_index])
     }
+
+    fn is_static(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

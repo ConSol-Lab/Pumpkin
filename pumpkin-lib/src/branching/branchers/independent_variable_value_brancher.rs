@@ -92,4 +92,8 @@ where
     fn on_solution(&mut self, solution: SolutionReference) {
         self.value_selector.on_solution(solution);
     }
+
+    fn is_static(&self) -> bool {
+        self.variable_selector.is_static() && self.value_selector.is_static()
+    }
 }

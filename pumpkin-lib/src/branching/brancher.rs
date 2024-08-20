@@ -7,6 +7,8 @@ use crate::branching;
 use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
+#[cfg(doc)]
+use crate::branching::variable_selection::Vsids;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
@@ -68,4 +70,11 @@ pub trait Brancher {
 
     /// This method is called whenever a restart is performed.
     fn on_restart(&mut self) {}
+
+    /// This method returns whether the [`Brancher`] changes throughout the search process.
+    ///
+    /// For example, if a [`Brancher`] makes use of [`Vsids`] then this method should return false.
+    fn is_static(&self) -> bool {
+        true
+    }
 }
