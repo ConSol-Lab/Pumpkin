@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use super::Constraint;
 use crate::propagators::ArgTask;
-use crate::propagators::TimeTableOverIntervalIncremental;
+use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -120,8 +120,8 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
 same!car"
     );
 
-    TimeTableOverIntervalIncremental::new(
-        start_times
+    TimeTableOverIntervalIncrementalPropagator::new(
+        &start_times
             .iter()
             .zip(durations)
             .zip(resource_requirements)
@@ -130,7 +130,7 @@ same!car"
                 processing_time: *duration,
                 resource_usage: *resource_requirement,
             })
-            .collect(),
+            .collect::<Vec<_>>(),
         resource_capacity,
         allow_holes_in_domain,
     )

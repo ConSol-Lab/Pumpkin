@@ -1,3 +1,4 @@
+use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -8,7 +9,7 @@ use crate::engine::propagation::propagation_context::PropagationContextMut;
 #[cfg(doc)]
 use crate::engine::propagation::PropagatorConstructor;
 #[cfg(doc)]
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::BooleanDomainEvent;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
@@ -155,7 +156,7 @@ pub trait Propagator {
     /// The solver will call this before any call to [`Propagator::propagate`] is made.
     fn initialise_at_root(
         &mut self,
-        _: PropagationContext,
+        _: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         Ok(())
     }
