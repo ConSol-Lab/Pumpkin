@@ -584,7 +584,7 @@ impl ConstraintSatisfactionSolver {
                 self.assignments_integer
                     .remove_initial_value_from_domain(domain_id, value, None)
                     .expect("the domain should not be empty");
-                self.assignments_propositional.enqueue_definition_literal(
+                self.assignments_propositional.enqueue_decision_literal(
                     self.variable_literal_mappings.get_inequality_literal(
                         domain_id,
                         value,
@@ -598,6 +598,9 @@ impl ConstraintSatisfactionSolver {
             next_idx == values.len(),
             "Expected all values to have been processed"
         );
+
+        self.propagate_enqueued();
+        pumpkin_assert_simple!(!self.is_conflicting());
 
         domain_id
     }
