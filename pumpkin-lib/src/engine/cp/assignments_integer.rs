@@ -395,28 +395,37 @@ impl AssignmentsInteger {
         &mut self,
         new_decision_level: usize,
         is_watching_any_backtrack_events: bool,
+        last_notified_trail_index: usize,
     ) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
-        self.trail.synchronise(new_decision_level).for_each(|entry| {
+
+        // Used to calculate the index on the trail of the current entry; we only create the
+        // backtrack events for entries for which the notification of the "forward" event has
+        // occurred.
+        let num_trail_entries_before_synchronisation = self.num_trail_entries();
+
+        self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
             pumpkin_assert_moderate!(
                 !entry.predicate.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
             let domain_id = entry.predicate.get_domain();
             let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
-                let value_before = self.domains[domain_id].lower_bound;
-                self.domains[domain_id].undo_trail_entry(&entry);
-                if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
-                    if is_watching_any_backtrack_events {
-                        // This `domain_id` was unassigned while backtracking
-                        self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
-                    }
+            let trail_index = num_trail_entries_before_synchronisation - index - 1;
 
-                    // Variable used to be fixed but is not after backtracking
-                    unfixed_variables.push((domain_id, value_before));
+            self.domains[domain_id].undo_trail_entry(&entry);
+
+            if fixed_before && self.domains[domain_id].lower_bound != self.domains[domain_id].upper_bound {
+                if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
+                    // This `domain_id` was unassigned while backtracking
+                    self.backtrack_events.event_occurred(IntDomainEvent::Assign, domain_id);
                 }
 
-                if is_watching_any_backtrack_events {
+                // Variable used to be fixed but is not after backtracking
+                unfixed_variables.push((domain_id, self.domains[domain_id].lower_bound));
+            }
+
+            if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
                 match entry.predicate {
                     IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
@@ -432,7 +441,7 @@ impl AssignmentsInteger {
                         // This case has been handled before this
                     },
                 }
-                }
+            }
 
         });
         unfixed_variables
@@ -650,7 +659,7 @@ mod tests {
             .tighten_lower_bound(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0, true);
+        let _ = assignment.synchronise(0, true, usize::MAX);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -671,7 +680,7 @@ mod tests {
             .tighten_upper_bound(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0, true);
+        let _ = assignment.synchronise(0, true, usize::MAX);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -692,7 +701,7 @@ mod tests {
             .remove_value_from_domain(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0, true);
+        let _ = assignment.synchronise(0, true, usize::MAX);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -713,7 +722,7 @@ mod tests {
             .make_assignment(d1, 2, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0, true);
+        let _ = assignment.synchronise(0, true, usize::MAX);
 
         let events = assignment
             .drain_backtrack_domain_events()
@@ -918,7 +927,7 @@ mod tests {
             .remove_value_from_domain(d1, 5, None)
             .expect("non-empty domain");
 
-        let _ = assignment.synchronise(0, false);
+        let _ = assignment.synchronise(0, false, usize::MAX);
 
         assert_eq!(5, assignment.get_upper_bound(d1));
     }

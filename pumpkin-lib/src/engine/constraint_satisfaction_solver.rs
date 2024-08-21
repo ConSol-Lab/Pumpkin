@@ -152,9 +152,12 @@ pub struct ConstraintSatisfactionSolver {
     /// of the clausal propagator.
     watch_list_propositional: WatchListPropositional,
     /// Used in combination with the propositional watch list
-    /// Indicates the next literal on the propositional trail that need to be inspected to notify
-    /// subscribed propagators.
+    /// Indicates the next literal on the propositional trail that needs to be inspected to notify
+    /// subscribed propagator(s).
     propositional_trail_index: usize,
+    /// Indicates the next entry on the CP trail that needs to be inspected to notify the
+    /// subscribed propagator(s).
+    cp_trail_index: usize,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -313,6 +316,7 @@ impl ConstraintSatisfactionSolver {
                     }
                 }
             }
+            self.cp_trail_index = self.assignments_integer.num_trail_entries();
         }
         // If there are no literals being watched then there is no reason to perform these
         // operations
@@ -431,6 +435,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
+            cp_trail_index: 0,
             event_drain: vec![],
             backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
@@ -1216,7 +1221,6 @@ impl ConstraintSatisfactionSolver {
 
         self.clausal_propagator
             .synchronise(self.assignments_propositional.num_trail_entries());
-
         pumpkin_assert_simple!(
             self.assignments_propositional.get_decision_level()
                 < self.assignments_integer.get_decision_level(),
@@ -1226,15 +1230,20 @@ impl ConstraintSatisfactionSolver {
             self.propositional_trail_index,
             self.assignments_propositional.num_trail_entries(),
         );
+
         self.assignments_integer
             .synchronise(
                 backtrack_level,
                 self.watch_list_cp.is_watching_any_backtrack_events(),
+                self.cp_trail_index,
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
+        self.cp_trail_index = self
+            .cp_trail_index
+            .min(self.assignments_integer.num_trail_entries());
 
         self.reason_store.synchronise(backtrack_level);
         //  note that variable_literal_mappings sync should be called after the sat/cp data
@@ -1314,6 +1323,17 @@ impl ConstraintSatisfactionSolver {
                     break;
                 }
             } // end match
+        }
+
+        if self.state.conflicting() {
+            // If a conflict has been found then we clear all of the accumulated events since we do
+            // not need to process them anyways
+            if self.watch_list_cp.is_watching_anything() {
+                pumpkin_assert_simple!(self.event_drain.is_empty());
+                self.assignments_integer
+                    .drain_domain_events()
+                    .for_each(drop);
+            }
         }
 
         self.counters.num_conflicts += self.state.conflicting() as u64;
