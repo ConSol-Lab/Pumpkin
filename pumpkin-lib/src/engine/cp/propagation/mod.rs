@@ -24,20 +24,16 @@
 //!
 //! # Practical
 //!
-//! Each concrete propagator is associated with two traits:
-//! - [`Propagator`]: contains the propagator logic.
-//! - [`PropagatorConstructor`]: provides the functionality to register variables for their
-//!   corresponding [`DomainEvents`] with the solver. Note that structs implementing this trait do
-//!   not directly communicate with the solver, but rather use the [`PropagatorConstructorContext`]
-//!   as a communication point during creation to get access to variables. *Note that this trait is
-//!   **not** implemented on the propagator struct itself but rather on another struct holding the
-//!   arguments necessary for creating the propagator; for an example, see
-//!   [`LinearLessOrEqualConstructor`] and [`LinearLessOrEqualPropagator`]!*
+//! Each concrete propagator is associated with one trait; [`Propagator`]: contains the propagator
+//! logic.
 //!
-//! When domain changes happen for a variable outside the propagator, the propagator will receive
-//! information that its variable with a specific [`LocalId`] has changed (see
-//! [`Propagator::notify`]). The idea behind using the structs apart from Propagator is to support
-//! views \[2\] on variables.
+//! A [`Propagator`] can be notified of different domain changes to a variable by registering
+//! variables using [`PropagatorInitialisationContext::register`] (and
+//! [`PropagatorInitialisationContext::register_literal`]) which are provided when
+//! [`Propagator::initialise_at_root`] is called. When domain changes happen for a variable outside
+//! the propagator, the propagator will receive information that its variable with a specific
+//! [`LocalId`] has changed (see [`Propagator::notify`]). The idea behind using the structs apart
+//! from [`Propagator`] is to support views \[2\] (e.g. see [`AffineView`]) on variables.
 //!
 //! We do not require propagators to be idempotent (see the previous section for a
 //! definition) and it can be assumed that if a propagator is not at fix-point after propagating
@@ -51,12 +47,10 @@
 //! 1. Implement a propagator struct that implements the [`Propagator`] trait. For now only
 //!    implement the required functions, i.e., [`Propagator::debug_propagate_from_scratch`] and
 //!    [`Propagator::name`].
-//! 2. Implement a struct that implements the [`PropagatorConstructor`] trait, which contains
-//!    necessary information to create the propagator. It is also responsible for registering the
-//!    variables and corresponding [`DomainEvents`] with the solver, so that the solver can notify
-//!    the propagator once an event happens that relates to one of the variables of the propagator.
-//!     * For example, the struct implementing [`PropagatorConstructor`] may contain an array of raw
-//!       [`IntegerVariable`]s and parameters that will be used to initialise the propagator.
+//! 2. Implement the [`Propagator::initialise_at_root`] function which detects root-level
+//!    inconsistencies and is also responsible for registering the variables and corresponding
+//!    [`DomainEvents`] with the solver, so that the solver can notify the propagator once an event
+//!    happens that relates to one of the variables of the propagator.
 //! 3. Following the procedure above gives an initial version of the propagator that is likely not
 //!    efficient, but has an important role for testing. Now is a good time to write tests which use
 //!    the [`TestSolver`]. **We strongly discourage skipping this step**.
@@ -70,8 +64,7 @@
 //! 7. Make sure to write new tests and run all tests throughout the process.
 //! 8. The propagator implementation is now done!
 //!
-//! The propagator is added to the solver through [`ConstraintSatisfactionSolver::add_propagator`]
-//! by passing the [`PropagatorConstructor`] as an argument.
+//! The propagator is added to the solver through [`ConstraintSatisfactionSolver::add_propagator`].
 //!
 //! # Bibliography
 //!
@@ -109,7 +102,5 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainEvents;
 #[cfg(doc)]
 use crate::propagators;
-#[cfg(doc)]
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
 #[cfg(doc)]
 use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
