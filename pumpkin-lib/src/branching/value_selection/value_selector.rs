@@ -1,5 +1,7 @@
 use crate::basic_types::SolutionReference;
 #[cfg(doc)]
+use crate::branching::value_selection::InDomainMin;
+#[cfg(doc)]
 use crate::branching::value_selection::InDomainRandom;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -35,9 +37,11 @@ pub trait ValueSelector<Var> {
     /// optimisation problem.
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
-    /// This method returns whether the [`ValueSelector`] changes throughout the search process.
+    /// This method returns whether a restart is *currently* pointless for the [`ValueSelector`].
     ///
-    /// For example, this method should return false for the [`InDomainRandom`] [`ValueSelector`].
+    /// For example, if a [`ValueSelector`] is using a static strategy (e.g. [`InDomainMin`]) then a
+    /// restart is pointless; however, for a [`ValueSelector`] like [`InDomainRandom`] which changes
+    /// throughout the search process restarting is not pointless.
     fn is_static(&self) -> bool {
         true
     }

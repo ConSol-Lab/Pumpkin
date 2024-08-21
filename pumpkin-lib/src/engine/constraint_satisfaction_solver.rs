@@ -1187,7 +1187,7 @@ impl ConstraintSatisfactionSolver {
             "Sanity check: restarts should not trigger whilst assigning assumptions"
         );
 
-        if brancher.is_static() {
+        if brancher.is_restart_pointless() {
             // If the brancher is static then there is no point in restarting as it would make the
             // exact same decision
             return;

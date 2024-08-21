@@ -144,11 +144,11 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         if self.is_using_default_brancher {
-            self.default_brancher.is_static()
+            self.default_brancher.is_restart_pointless()
         } else {
-            self.other_brancher.is_static()
+            self.other_brancher.is_restart_pointless()
         }
     }
 }

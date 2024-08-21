@@ -1,3 +1,5 @@
+#[cfg(doc)]
+use crate::branching::variable_selection::Smallest;
 use crate::branching::SelectionContext;
 #[cfg(doc)]
 use crate::branching::Vsids;
@@ -39,10 +41,12 @@ pub trait VariableSelector<Var> {
     /// A function which is called when a variable appears in a conflict during conflict analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
 
-    /// This method returns whether the [`VariableSelector`] changes throughout the search process.
+    /// This method returns whether a restart is *currently* pointless for the [`VariableSelector`].
     ///
-    /// For example, this method should return false for the [`Vsids`] [`VariableSelector`].
-    fn is_static(&self) -> bool {
+    /// For example, if a [`VariableSelector`] is using a static strategy (e.g. [`Smallest`]) then a
+    /// restart is pointless; however, for a [`VariableSelector`] like [`Vsids`] which
+    /// changes throughout the search process restarting is not pointless.
+    fn is_restart_pointless(&self) -> bool {
         true
     }
 }

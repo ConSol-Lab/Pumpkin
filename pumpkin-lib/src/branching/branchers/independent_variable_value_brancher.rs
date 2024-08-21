@@ -93,7 +93,7 @@ where
         self.value_selector.on_solution(solution);
     }
 
-    fn is_static(&self) -> bool {
-        self.variable_selector.is_static() && self.value_selector.is_static()
+    fn is_restart_pointless(&self) -> bool {
+        self.variable_selector.is_restart_pointless() && self.value_selector.is_static()
     }
 }

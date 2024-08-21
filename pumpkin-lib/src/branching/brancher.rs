@@ -71,10 +71,12 @@ pub trait Brancher {
     /// This method is called whenever a restart is performed.
     fn on_restart(&mut self) {}
 
-    /// This method returns whether the [`Brancher`] changes throughout the search process.
+    /// This method returns whether a restart is *currently* pointless for the [`Brancher`].
     ///
-    /// For example, if a [`Brancher`] makes use of [`Vsids`] then this method should return false.
-    fn is_static(&self) -> bool {
+    /// For example, if a [`Brancher`] is using a static search strategy then a restart is
+    /// pointless; however, if a [`Brancher`] is using a variable selector like [`Vsids`] which
+    /// changes throughout the search process then restarting is not pointless.
+    fn is_restart_pointless(&self) -> bool {
         true
     }
 }

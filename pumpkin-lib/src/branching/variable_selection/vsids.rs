@@ -188,7 +188,7 @@ impl VariableSelector<DomainId> for Vsids<DomainId> {
         self.bump_activity(variable)
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         false
     }
 }
@@ -220,7 +220,7 @@ impl VariableSelector<PropositionalVariable> for Vsids<PropositionalVariable> {
         self.bump_activity(literal.get_propositional_variable())
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         false
     }
 }
