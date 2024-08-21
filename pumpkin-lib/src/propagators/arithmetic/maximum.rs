@@ -150,10 +150,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumPropagator {
-                array: [a, b, c].into(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 1, 5);
@@ -173,10 +170,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumPropagator {
-                array: [a, b, c].into(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 5, 10);
@@ -196,10 +190,7 @@ mod tests {
         let rhs = solver.new_variable(1, 3);
 
         let _ = solver
-            .new_propagator(MaximumPropagator {
-                array: array.clone(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
             .expect("no empty domain");
 
         for var in array.iter() {
@@ -220,10 +211,7 @@ mod tests {
         let rhs = solver.new_variable(45, 60);
 
         let _ = solver
-            .new_propagator(MaximumPropagator {
-                array: array.clone(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(*array.last().unwrap(), 45, 51);

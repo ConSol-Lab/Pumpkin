@@ -331,11 +331,8 @@ mod tests {
         let denominator = solver.new_variable(2, 2);
         let rhs = solver.new_variable(2, 2);
 
-        let propagator = solver.new_propagator(DivisionPropagator {
-            numerator,
-            denominator,
-            rhs,
-        });
+        let propagator =
+            solver.new_propagator(DivisionPropagator::new(numerator, denominator, rhs));
 
         assert!(propagator.is_err());
     }

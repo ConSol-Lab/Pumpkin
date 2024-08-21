@@ -131,7 +131,7 @@ mod tests {
         let absolute = solver.new_variable(-2, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -145,7 +145,7 @@ mod tests {
         let absolute = solver.new_variable(0, 3);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -159,7 +159,7 @@ mod tests {
         let absolute = solver.new_variable(0, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -173,7 +173,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -187,7 +187,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -201,7 +201,7 @@ mod tests {
         let absolute = solver.new_variable(3, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValuePropagator { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);

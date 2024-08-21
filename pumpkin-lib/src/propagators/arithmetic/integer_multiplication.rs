@@ -301,7 +301,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -331,7 +331,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -358,7 +358,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationPropagator { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
