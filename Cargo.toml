@@ -16,7 +16,6 @@ missing_copy_implementations = "warn"
 missing_debug_implementations = "warn"
 # missing_docs = "warn" # temporarily off until all warnings are fixed
 non_ascii_idents = "deny"
-pointer_structural_match = "deny"
 trivial_casts = "warn"
 trivial_numeric_casts = "warn"
 # unnameable_types = "warn" # https://github.com/rust-lang/rust/issues/48054

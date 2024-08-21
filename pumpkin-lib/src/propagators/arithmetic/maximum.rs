@@ -36,7 +36,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
 
         let rhs = context.register(
             self.rhs,
-            DomainEvents::UPPER_BOUND,
+            DomainEvents::BOUNDS,
             LocalId::from(array.len() as u32),
         );
 
@@ -67,23 +67,75 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
+        // This is the constraint that is being propagated:
+        // max(a_0, a_1, ..., a_{n-1}) = rhs
+
         let rhs_ub = context.upper_bound(&self.rhs);
-        let mut max_ub = i32::MIN;
-        let mut max_lb = i32::MIN;
-        let mut lb_reason = vec![];
-        let mut ub_reason = vec![];
-
+        let mut max_ub = context.upper_bound(&self.array[0]);
+        let mut max_lb = context.lower_bound(&self.array[0]);
+        let mut lb_reason = predicate![self.array[0] >= max_lb];
         for var in self.array.iter() {
+            // Rule 1.
+            // UB(a_i) <= UB(rhs)
             context.set_upper_bound(var, rhs_ub, conjunction!([self.rhs <= rhs_ub]))?;
-            lb_reason.push(predicate![var >= context.lower_bound(var)]);
-            ub_reason.push(predicate![var <= context.upper_bound(var)]);
 
-            max_ub = i32::max(context.upper_bound(var), max_ub);
-            max_lb = i32::max(context.lower_bound(var), max_lb);
+            let var_lb = context.lower_bound(var);
+            let var_ub = context.upper_bound(var);
+
+            if var_lb > max_lb {
+                max_lb = var_lb;
+                lb_reason = predicate![var >= var_lb];
+            }
+
+            if var_ub > max_ub {
+                max_ub = var_ub;
+            }
+        }
+        // Rule 2.
+        // LB(rhs) >= max{LB(a_i)}.
+        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::from(lb_reason))?;
+
+        // Rule 3.
+        // UB(rhs) <= max{UB(a_i)}.
+        // Note that this implicitly also covers the rule:
+        // 'if LB(rhs) > UB(a_i) for all i, then conflict'.
+        if rhs_ub > max_ub {
+            let ub_reason: PropositionalConjunction = self
+                .array
+                .iter()
+                .map(|var| predicate![var <= max_ub])
+                .collect();
+            context.set_upper_bound(&self.rhs, max_ub, ub_reason)?;
         }
 
-        context.set_upper_bound(&self.rhs, max_ub, PropositionalConjunction::new(ub_reason))?;
-        context.set_lower_bound(&self.rhs, max_lb, PropositionalConjunction::new(lb_reason))?;
+        // Rule 4.
+        // If there is only one variable with UB(a_i) >= LB(rhs),
+        // then the bounds for rhs and that variable should be intersected.
+        let rhs_lb = context.lower_bound(&self.rhs);
+        let mut propagating_variable: Option<&ElementVar> = None;
+        let mut propagation_reason = PropositionalConjunction::default();
+        for var in self.array.iter() {
+            if context.upper_bound(var) >= rhs_lb {
+                if propagating_variable.is_none() {
+                    propagating_variable = Some(var);
+                } else {
+                    propagating_variable = None;
+                    break;
+                }
+            } else {
+                propagation_reason.add(predicate![var <= rhs_lb - 1]);
+            }
+        }
+        // If there is exactly one variable UB(a_i) >= LB(rhs), then the propagating variable is
+        // Some. In that case, intersect the bounds of that variable and the rhs. Given previous
+        // rules, only the lower bound of the propagated variable needs to be propagated.
+        if let Some(propagating_variable) = propagating_variable {
+            let var_lb = context.lower_bound(propagating_variable);
+            if var_lb < rhs_lb {
+                propagation_reason.add(predicate![self.rhs >= rhs_lb]);
+                context.set_lower_bound(propagating_variable, rhs_lb, propagation_reason)?;
+            }
+        }
 
         Ok(())
     }
@@ -114,7 +166,7 @@ mod tests {
         solver.assert_bounds(rhs, 1, 5);
 
         let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
-        assert_eq!(conjunction!([a <= 3] & [b <= 4] & [c <= 5]), reason.clone());
+        assert_eq!(conjunction!([a <= 5] & [b <= 5] & [c <= 5]), reason.clone());
     }
 
     #[test]
@@ -137,7 +189,7 @@ mod tests {
         solver.assert_bounds(rhs, 5, 10);
 
         let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
-        assert_eq!(conjunction!([a >= 3] & [b >= 4] & [c >= 5]), reason.clone());
+        assert_eq!(conjunction!([c >= 5]), reason.clone());
     }
 
     #[test]
@@ -162,5 +214,26 @@ mod tests {
             let reason = solver.get_reason_int(predicate![var <= 3].try_into().unwrap());
             assert_eq!(conjunction!([rhs <= 3]), reason.clone());
         }
+    }
+
+    #[test]
+    fn single_variable_propagate() {
+        let mut solver = TestSolver::default();
+
+        let array = (1..=5)
+            .map(|idx| solver.new_variable(1, 1 + 10 * idx))
+            .collect::<Box<_>>();
+
+        let rhs = solver.new_variable(45, 60);
+
+        let _ = solver
+            .new_propagator(MaximumConstructor {
+                array: array.clone(),
+                rhs,
+            })
+            .expect("no empty domain");
+
+        solver.assert_bounds(*array.last().unwrap(), 45, 51);
+        solver.assert_bounds(rhs, 45, 51);
     }
 }

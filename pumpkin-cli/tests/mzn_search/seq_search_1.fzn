@@ -1,0 +1,10 @@
+var 1..10: x :: output_var;
+var 1..10: y :: output_var;
+var bool: p :: output_var;
+var bool: q :: output_var;
+
+constraint int_lin_ne([1,-1],[x,y],0);
+constraint int_le_reif(6,x,p):: defines_var(p);
+constraint int_le_reif(6,y,q):: defines_var(q);
+
+solve :: seq_search([bool_search([p,q],input_order,indomain_max,complete),int_search([x,y],input_order,indomain_min,complete)]) satisfy;

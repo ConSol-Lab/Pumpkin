@@ -85,6 +85,19 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         }
     }
 
+    fn notify_backtrack(
+        &mut self,
+        context: &PropagationContext,
+        local_id: LocalId,
+        event: OpaqueDomainEvent,
+    ) {
+        if local_id < self.reification_literal_id {
+            self.propagator.notify_backtrack(context, local_id, event)
+        } else {
+            panic!("no integer variables are registered beyond those from the wrapped propagator")
+        }
+    }
+
     fn notify_literal(
         &mut self,
         context: PropagationContext,
