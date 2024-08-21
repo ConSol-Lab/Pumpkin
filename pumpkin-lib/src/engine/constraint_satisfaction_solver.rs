@@ -223,6 +223,23 @@ impl Default for ConstraintSatisfactionSolver {
     }
 }
 
+/// The result of [`ConstraintSatisfactionSolver::extract_clausal_core`]; there are 2 cases:
+/// 1. In the case of [`CoreExtractionResult::ConflictingAssumption`], two assumptions have been
+///    given which directly conflict with one another; e.g. if the assumptions `[x, !x]` have been
+///    given then the result of [`ConstraintSatisfactionSolver::extract_clausal_core`] will be a
+///    [`CoreExtractionResult::ConflictingAssumption`] containing `!x`.
+/// 2. The standard case is when a [`CoreExtractionResult::Core`] is returned which contains (a
+///    subset of) the assumptions which led to conflict.
+#[derive(Debug, Clone)]
+pub enum CoreExtractionResult {
+    /// Conflicting assumptions were provided; e.g. in the case of the assumptions `[x, !x]`, this
+    /// result will contain `!x`
+    ConflictingAssumption(Literal),
+    /// The standard case where this result contains the core consisting of (a
+    ///    subset of) the assumptions which led to conflict.
+    Core(Vec<Literal>),
+}
+
 /// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
@@ -668,10 +685,7 @@ impl ConstraintSatisfactionSolver {
     ///     }
     /// }
     /// ```
-    pub fn extract_clausal_core(
-        &mut self,
-        brancher: &mut impl Brancher,
-    ) -> Result<Vec<Literal>, Literal> {
+    pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
@@ -1717,6 +1731,7 @@ impl CSPSolverState {
 #[cfg(test)]
 mod tests {
     use super::ConstraintSatisfactionSolver;
+    use super::CoreExtractionResult;
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::PropagationStatusCP;
     use crate::basic_types::PropositionalConjunction;
@@ -1871,26 +1886,24 @@ mod tests {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
-    fn is_result_the_same(
-        res1: &Result<Vec<Literal>, Literal>,
-        res2: &Result<Vec<Literal>, Literal>,
-    ) -> bool {
-        // if the two results disagree on the outcome, can already return false
-        if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
-            println!("diff");
-            println!("{:?}", res1.clone().unwrap());
-            false
-        }
-        // if both results are errors, check if the two errors are the same
-        else if res1.is_err() {
-            println!("err");
-            res1.clone().unwrap_err().get_propositional_variable()
-                == res2.clone().unwrap_err().get_propositional_variable()
-        }
-        // otherwise the two results are both ok
-        else {
-            println!("ok");
-            is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
+    fn is_result_the_same(res1: &CoreExtractionResult, res2: &CoreExtractionResult) -> bool {
+        match (res1, res2) {
+            (
+                CoreExtractionResult::ConflictingAssumption(literal1),
+                CoreExtractionResult::ConflictingAssumption(literal2),
+            ) => {
+                // The results are both conflicting assumptions, we check whether it is the same
+                // assumption
+                literal1 == literal2
+            }
+            (CoreExtractionResult::Core(core1), CoreExtractionResult::Core(core2)) => {
+                // The results are both cores, we check whether they are the same
+                is_same_core(core1, core2)
+            }
+            _ => {
+                // The results are different
+                false
+            }
         }
     }
 
@@ -1898,7 +1911,7 @@ mod tests {
         mut solver: ConstraintSatisfactionSolver,
         assumptions: Vec<Literal>,
         expected_flag: CSPSolverExecutionFlag,
-        expected_result: Result<Vec<Literal>, Literal>,
+        expected_result: CoreExtractionResult,
     ) {
         let mut brancher = solver.default_brancher_over_all_propositional_variables();
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
@@ -1998,7 +2011,7 @@ mod tests {
             solver,
             vec![!lit1],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lit1]),
+            CoreExtractionResult::Core(vec![!lit1]),
         )
     }
 
@@ -2009,7 +2022,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0]]),
+            CoreExtractionResult::Core(vec![!lits[0]]),
         )
     }
 
@@ -2020,7 +2033,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]),
+            CoreExtractionResult::Core(vec![!lits[1]]),
         );
     }
 
@@ -2032,7 +2045,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![]),
+            CoreExtractionResult::Core(vec![]),
         );
     }
 
@@ -2043,7 +2056,8 @@ mod tests {
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]), // The core gets computed before inconsistency is detected
+            CoreExtractionResult::Core(vec![!lits[1]]), /* The core gets computed before
+                                                         * inconsistency is detected */
         );
     }
 
@@ -2065,7 +2079,7 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0], lits[1], !lits[2]]),
+            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]),
         );
     }
 
@@ -2076,9 +2090,12 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0], lits[1], !lits[2]]), /* could return inconsistent assumptions,
-                                                    * however inconsistency will not be detected
-                                                    * given the order of the assumptions */
+            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]), /* could return
+                                                                            * inconsistent
+                                                                            * assumptions,
+                                                                            * however inconsistency will not be detected
+                                                                            * given the order of
+                                                                            * the assumptions */
         );
     }
 
@@ -2089,7 +2106,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Err(lits[0]),
+            CoreExtractionResult::ConflictingAssumption(lits[0]),
         );
     }
 
@@ -2109,7 +2126,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0], !lits[1], !lits[2]]),
+            CoreExtractionResult::Core(vec![!lits[0], !lits[1], !lits[2]]),
         );
     }
 
@@ -2120,7 +2137,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Feasible,
-            Ok(vec![]), // will be ignored in the test
+            CoreExtractionResult::Core(vec![]), // will be ignored in the test
         );
     }
 
