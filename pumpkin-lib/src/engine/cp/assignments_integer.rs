@@ -410,7 +410,11 @@ impl AssignmentsInteger {
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
             let domain_id = entry.predicate.get_domain();
-            let fixed_before = self.domains[domain_id].lower_bound == self.domains[domain_id].upper_bound;
+
+            let lower_bound_before = self.domains[domain_id].lower_bound;
+            let upper_bound_before = self.domains[domain_id].upper_bound;
+            let fixed_before = upper_bound_before == lower_bound_before;
+
             let trail_index = num_trail_entries_before_synchronisation - index - 1;
 
             self.domains[domain_id].undo_trail_entry(&entry);
@@ -422,24 +426,19 @@ impl AssignmentsInteger {
                 }
 
                 // Variable used to be fixed but is not after backtracking
-                unfixed_variables.push((domain_id, self.domains[domain_id].lower_bound));
+                unfixed_variables.push((domain_id, lower_bound_before));
             }
 
             if is_watching_any_backtrack_events && trail_index < last_notified_trail_index {
                 // Now we add the remaining events which can occur while backtracking, note that the case of equality has already been handled!
-                match entry.predicate {
-                    IntegerPredicate::LowerBound { domain_id, lower_bound: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
-                    },
-                    IntegerPredicate::UpperBound { domain_id, upper_bound: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
-                    },
-                    IntegerPredicate::NotEqual { domain_id, not_equal_constant: _ } => {
-                        self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
-                    },
-                    IntegerPredicate::Equal { domain_id: _, equality_constant: _ } => {
-                        // This case has been handled before this
-                    },
+                if lower_bound_before != self.domains[domain_id].lower_bound {
+                    self.backtrack_events.event_occurred(IntDomainEvent::LowerBound, domain_id)
+                }
+                if upper_bound_before != self.domains[domain_id].upper_bound {
+                    self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
+                }
+                if matches!(entry.predicate, IntegerPredicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
+                    self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
                 }
             }
 
@@ -647,6 +646,122 @@ impl IntegerDomainExplicit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jump_in_bound_change_lower_and_upper_bound_event_backtrack() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 1, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, true, usize::MAX);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 3);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_assign_event_backtrack() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 2, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 4, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+        let _ = assignment.remove_value_from_domain(d1, 1, None);
+
+        let _ = assignment.synchronise(0, true, usize::MAX);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 4);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Assign]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_upper_bound_event_backtrack() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 4, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 5, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, true, usize::MAX);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::UpperBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
+
+    #[test]
+    fn jump_in_bound_change_lower_bound_event_backtrack() {
+        let mut assignment = AssignmentsInteger::default();
+        let d1 = assignment.grow(1, 5);
+
+        assignment.increase_decision_level();
+
+        assignment
+            .remove_value_from_domain(d1, 3, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 2, None)
+            .expect("non-empty domain");
+        assignment
+            .remove_value_from_domain(d1, 1, None)
+            .expect("non-empty domain");
+
+        let _ = assignment.synchronise(0, true, usize::MAX);
+
+        let events = assignment
+            .drain_backtrack_domain_events()
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+
+        assert_contains_events(&events, d1, [IntDomainEvent::LowerBound]);
+        assert_contains_events(&events, d1, [IntDomainEvent::Removal]);
+    }
 
     #[test]
     fn lower_bound_change_lower_bound_event_backtrack() {
