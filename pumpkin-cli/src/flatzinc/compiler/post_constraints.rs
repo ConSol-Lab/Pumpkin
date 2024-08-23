@@ -505,7 +505,7 @@ fn compile_array_var_bool_element(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, name);
 
-    let index = context.resolve_integer_variable(&exprs[0])?;
+    let index = context.resolve_integer_variable(&exprs[0])?.offset(-1);
     let array = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_bool_variable(&exprs[2])?;
 
