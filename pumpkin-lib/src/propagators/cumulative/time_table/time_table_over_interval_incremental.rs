@@ -611,9 +611,10 @@ mod checks {
         // are only looking at the part where there is overlap between the
         // current profile and the update range)
         let new_profile_upper_bound = min(profile.end, update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
-        let mut new_profile_tasks = profile.profile_tasks.clone();
-        new_profile_tasks.push(Rc::clone(task));
         if new_profile_upper_bound >= new_profile_lower_bound {
+            let mut new_profile_tasks = profile.profile_tasks.clone();
+            new_profile_tasks.push(Rc::clone(task));
+
             let updated_profile = ResourceProfile {
                 start: new_profile_lower_bound,
                 end: new_profile_upper_bound,
