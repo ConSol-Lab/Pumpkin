@@ -21,7 +21,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LinearNotEqualConstructor<Var> {
     /// The terms which sum to the left-hand side.
     terms: Box<[Var]>,
@@ -411,10 +411,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
-                [x.clone(), y.clone()].into(),
-                0,
-            ))
+            .new_propagator(LinearNotEqualConstructor::new([x, y].into(), 0))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");

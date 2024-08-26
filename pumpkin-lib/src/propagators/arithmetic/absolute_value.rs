@@ -9,7 +9,7 @@ use crate::engine::propagation::PropagatorConstructor;
 use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct AbsoluteValueConstructor<VA, VB> {
     /// The side of the equality where the sign matters.
     pub(crate) signed: VA,

@@ -20,7 +20,7 @@ pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     c: VC,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct IntegerMultiplicationConstructor<VA, VB, VC> {
     pub(crate) a: VA,
     pub(crate) b: VB,

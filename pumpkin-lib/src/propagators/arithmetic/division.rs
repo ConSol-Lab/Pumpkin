@@ -25,7 +25,7 @@ pub(crate) struct DivisionPropagator<VA, VB, VC> {
     rhs: VC,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct DivisionConstructor<VA, VB, VC> {
     pub(crate) numerator: VA,
     pub(crate) denominator: VB,

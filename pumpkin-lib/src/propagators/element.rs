@@ -16,6 +16,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
+#[derive(Clone, Debug)]
 pub(crate) struct ElementConstructor<VX, VI, VE> {
     pub(crate) array: Box<[VX]>,
     pub(crate) index: VI,

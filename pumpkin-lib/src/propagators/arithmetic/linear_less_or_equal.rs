@@ -10,7 +10,7 @@ use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LinearLessOrEqualConstructor<Var> {
     pub(crate) x: Box<[Var]>,
     pub(crate) c: i32,

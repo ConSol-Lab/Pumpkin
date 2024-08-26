@@ -58,7 +58,7 @@ pub(crate) struct ArgTask<Var> {
 }
 
 /// The arguments which are required to create the constraint/propagators
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct CumulativeConstructor<Var, T> {
     /// A box containing all of the [`ArgTask`]s
     pub(crate) tasks: Box<[ArgTask<Var>]>,
@@ -72,6 +72,17 @@ pub(crate) struct CumulativeConstructor<Var, T> {
     /// false then it will only adjust the bounds when appropriate rather than removing values from
     /// the domain
     pub(crate) allow_holes_in_domain: bool,
+}
+
+impl<Var: Clone, T> Clone for CumulativeConstructor<Var, T> {
+    fn clone(&self) -> Self {
+        CumulativeConstructor {
+            tasks: self.tasks.clone(),
+            capacity: self.capacity,
+            propagator_type: PhantomData,
+            allow_holes_in_domain: self.allow_holes_in_domain,
+        }
+    }
 }
 
 impl<Var, T> CumulativeConstructor<Var, T> {
