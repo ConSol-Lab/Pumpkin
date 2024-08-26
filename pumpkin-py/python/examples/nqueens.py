@@ -1,26 +1,23 @@
 from argparse import ArgumentParser
 
 from pumpkin_py import constraints, SatisfactionResult, Solver
-from pumpkin_py.termination import Indefinite
-
 
 def main(n: int):
     assert n > 0, "Please provide a positive non-zero 'n'"
 
     solver = Solver()
 
-    variables = [solver.new_bounded_integer(0, n - 1) for _ in range(n)]
+    variables = [solver.new_variable(0, n - 1) for _ in range(n)]
 
-    solver.add_constraint(constraints.all_different(variables)).post()
+    solver.post(constraints.all_different(variables))
 
     diag1 = [var.offset(i) for (i, var) in enumerate(variables)]
     diag2 = [var.offset(-i) for (i, var) in enumerate(variables)]
 
-    solver.add_constraint(constraints.all_different(diag1)).post()
-    solver.add_constraint(constraints.all_different(diag2)).post()
+    solver.post(constraints.all_different(diag1))
+    solver.post(constraints.all_different(diag2))
 
-    brancher = solver.default_brancher()
-    match solver.satisfy(brancher, Indefinite()):
+    match solver.satisfy():
         case SatisfactionResult.Satisfiable(solution):
             row_separator = "+---" * n + "+"
 
