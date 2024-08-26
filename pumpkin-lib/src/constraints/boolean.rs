@@ -42,14 +42,14 @@ struct BooleanLessThanOrEqual {
 }
 
 impl Constraint for BooleanLessThanOrEqual {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains(solver);
 
         less_than_or_equals(domains, self.rhs).post(solver)
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
@@ -91,14 +91,14 @@ struct BooleanEqual {
 }
 
 impl Constraint for BooleanEqual {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         let domains = self.create_domains(solver);
 
         equals(domains, 0).post(solver)
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {

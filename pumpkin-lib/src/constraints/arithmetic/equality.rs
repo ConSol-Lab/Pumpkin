@@ -59,7 +59,7 @@ impl<Var> Constraint for EqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         less_than_or_equals(self.terms.clone(), self.rhs).post(solver)?;
 
         let negated = self
@@ -73,7 +73,7 @@ where
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
@@ -114,16 +114,17 @@ impl<Var> Constraint for NotEqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).post(solver)
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        LinearNotEqualConstructor::new(self.terms.clone(), self.rhs).post(solver)
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        LinearNotEqualConstructor::new(self.terms.clone(), self.rhs)
+            .implied_by(solver, reification_literal)
     }
 }
 

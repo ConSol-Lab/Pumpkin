@@ -256,7 +256,7 @@ fn compile_array_int_maximum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(constraints::maximum(array.as_ref(), rhs)
+    Ok(constraints::maximum(array.as_ref().to_owned(), rhs)
         .post(context.solver)
         .is_ok())
 }
@@ -270,9 +270,11 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(constraints::minimum(array.iter().copied(), rhs)
-        .post(context.solver)
-        .is_ok())
+    Ok(
+        constraints::minimum(array.iter().copied().collect::<Box<_>>(), rhs)
+            .post(context.solver)
+            .is_ok(),
+    )
 }
 
 fn compile_set_in_reif(
@@ -354,7 +356,7 @@ fn compile_array_var_int_element(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
-    Ok(constraints::element(index, array.as_ref(), rhs)
+    Ok(constraints::element(index, array.as_ref().to_owned(), rhs)
         .post(context.solver)
         .is_ok())
 }
@@ -672,7 +674,7 @@ fn compile_bool_lin_eq_predicate(
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
     Ok(
-        constraints::boolean_equals(weights.as_ref(), bools.as_ref(), rhs)
+        constraints::boolean_equals(weights.as_ref().to_owned(), bools.as_ref().to_owned(), rhs)
             .post(context.solver)
             .is_ok(),
     )
@@ -688,11 +690,13 @@ fn compile_bool_lin_le_predicate(
     let bools = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_integer_constant_from_expr(&exprs[2])?;
 
-    Ok(
-        constraints::boolean_less_than_or_equals(weights.as_ref(), bools.as_ref(), rhs)
-            .post(context.solver)
-            .is_ok(),
+    Ok(constraints::boolean_less_than_or_equals(
+        weights.as_ref().to_owned(),
+        bools.as_ref().to_owned(),
+        rhs,
     )
+    .post(context.solver)
+    .is_ok())
 }
 
 fn compile_all_different(

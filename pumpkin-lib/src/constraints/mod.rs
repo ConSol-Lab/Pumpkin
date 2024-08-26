@@ -54,7 +54,7 @@ pub trait Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
@@ -62,7 +62,7 @@ pub trait Constraint {
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError>;
@@ -70,36 +70,36 @@ pub trait Constraint {
 
 impl<Constructor> Constraint for Constructor
 where
-    Constructor: PropagatorConstructor,
+    Constructor: PropagatorConstructor + Clone,
     Constructor::Propagator: 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self)
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(self.clone())
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
         solver.add_propagator(ReifiedPropagatorConstructor {
-            propagator: self,
+            propagator: self.clone(),
             reification_literal,
         })
     }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.into_iter().try_for_each(|c| c.post(solver))
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        self.iter().try_for_each(|c| c.post(solver))
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        self.into_iter()
+        self.iter()
             .try_for_each(|c| c.implied_by(solver, reification_literal))
     }
 }

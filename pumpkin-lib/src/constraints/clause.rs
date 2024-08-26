@@ -21,18 +21,19 @@ pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstrain
 struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_clause(self.0)
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        solver.add_clause(self.0.clone())
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
         solver.add_clause(
             self.0
-                .into_iter()
+                .iter()
+                .copied()
                 .chain(std::iter::once(!reification_literal)),
         )
     }
@@ -49,19 +50,21 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>);
 
 impl Constraint for Conjunction {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         self.0
-            .into_iter()
+            .iter()
+            .copied()
             .try_for_each(|lit| solver.add_clause([lit]))
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
         self.0
-            .into_iter()
+            .iter()
+            .copied()
             .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
     }
 }

@@ -44,16 +44,16 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms, self.rhs).post(solver)
+    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+        LinearLessOrEqualConstructor::new(self.terms.clone(), self.rhs).post(solver)
     }
 
     fn implied_by(
-        self,
+        &self,
         solver: &mut Solver,
         reification_literal: crate::variables::Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms, self.rhs)
+        LinearLessOrEqualConstructor::new(self.terms.clone(), self.rhs)
             .implied_by(solver, reification_literal)
     }
 }
