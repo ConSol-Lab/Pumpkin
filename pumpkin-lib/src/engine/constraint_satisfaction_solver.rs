@@ -1205,11 +1205,13 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        if self.watch_list_cp.is_watching_any_backtrack_events() {
-            // First we make sure that all of the domain events have been processed before we start
-            // backtracking; we do this using the original assignments before backtracking since
-            // that is the state in which the events occurred!
-            let _ = self.process_domain_events();
+        // We clear all of the unprocessed events from the watch list since synchronisation, we do
+        // not need to process these events
+        if self.watch_list_cp.is_watching_anything() {
+            pumpkin_assert_simple!(self.event_drain.is_empty());
+            self.assignments_integer
+                .drain_domain_events()
+                .for_each(drop);
         }
 
         let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
@@ -1241,9 +1243,8 @@ impl ConstraintSatisfactionSolver {
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
-        self.cp_trail_index = self
-            .cp_trail_index
-            .min(self.assignments_integer.num_trail_entries());
+        pumpkin_assert_simple!(self.cp_trail_index >= self.assignments_integer.num_trail_entries());
+        self.cp_trail_index = self.assignments_integer.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
         //  note that variable_literal_mappings sync should be called after the sat/cp data
@@ -1323,17 +1324,6 @@ impl ConstraintSatisfactionSolver {
                     break;
                 }
             } // end match
-        }
-
-        if self.state.conflicting() {
-            // If a conflict has been found then we clear all of the accumulated events since we do
-            // not need to process them anyways
-            if self.watch_list_cp.is_watching_anything() {
-                pumpkin_assert_simple!(self.event_drain.is_empty());
-                self.assignments_integer
-                    .drain_domain_events()
-                    .for_each(drop);
-            }
         }
 
         self.counters.num_conflicts += self.state.conflicting() as u64;
