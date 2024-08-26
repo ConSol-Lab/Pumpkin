@@ -1,0 +1,37 @@
+use pumpkin_lib::constraints::Constraint;
+use pumpkin_lib::constraints::{self};
+use pyo3::prelude::*;
+
+use crate::core::Variable;
+
+#[pyclass(unsendable)]
+pub struct ConstraintDefinition(pub(crate) Box<dyn Constraint>);
+
+impl Constraint for &ConstraintDefinition {
+    fn post(
+        &self,
+        solver: &mut pumpkin_lib::Solver,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        self.0.post(solver)
+    }
+
+    fn implied_by(
+        &self,
+        solver: &mut pumpkin_lib::Solver,
+        reification_literal: pumpkin_lib::variables::Literal,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        self.0.implied_by(solver, reification_literal)
+    }
+}
+
+#[pyfunction]
+fn all_different(variables: Vec<Variable>) -> ConstraintDefinition {
+    let variables = variables.into_iter().map(|var| var.0).collect::<Vec<_>>();
+    ConstraintDefinition(Box::new(constraints::all_different(variables)))
+}
+
+pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(all_different, m)?)?;
+    m.add_class::<ConstraintDefinition>()?;
+    Ok(())
+}

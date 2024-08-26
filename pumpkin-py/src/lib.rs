@@ -1,14 +1,35 @@
+mod constraints;
+mod core;
+mod solver;
+
 use pyo3::prelude::*;
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
+macro_rules! submodule {
+    ($module:ident, $python:ident, $m:ident) => {{
+        let submodule = PyModule::new_bound($m.py(), stringify!($module))?;
+
+        // See https://github.com/PyO3/pyo3/issues/1517#issuecomment-808664021
+        pyo3::py_run!(
+            $python,
+            submodule,
+            &format!(
+                "import sys; sys.modules['pumpkin_py.{}'] = submodule",
+                stringify!($module)
+            )
+        );
+
+        $module::register(&submodule)?;
+    }};
 }
 
-/// A Python module implemented in Rust.
 #[pymodule]
-fn pumpkin_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<core::Variable>()?;
+    m.add_class::<solver::Solver>()?;
+    m.add_class::<solver::SatisfactionResult>()?;
+    m.add_class::<solver::Solution>()?;
+
+    submodule!(constraints, python, m);
+
     Ok(())
 }

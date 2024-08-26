@@ -401,6 +401,7 @@ dependencies = [
 name = "pumpkin-py"
 version = "0.1.0"
 dependencies = [
+ "pumpkin-lib",
  "pyo3",
 ]
 
