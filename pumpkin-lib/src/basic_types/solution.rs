@@ -1,10 +1,10 @@
 use crate::engine::propagation::propagation_context::HasAssignments;
-use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::pumpkin_assert_moderate;
+use crate::variables::IntegerVariable;
 
 /// A trait which specifies the common behaviours of [`Solution`] and [`SolutionReference`].
 pub trait ProblemSolution: HasAssignments {
@@ -14,7 +14,7 @@ pub trait ProblemSolution: HasAssignments {
             .num_propositional_variables() as usize
     }
 
-    /// Returns the number of defined [`DomainId`]s.
+    /// Returns the number of domains.
     fn num_domains(&self) -> usize {
         self.assignments_integer().num_domains() as usize
     }
@@ -44,13 +44,17 @@ pub trait ProblemSolution: HasAssignments {
             .is_literal_assigned_true(literal)
     }
 
-    /// Returns the assigned integer value of the provided [`DomainId`].
-    fn get_integer_value(&self, domain: DomainId) -> i32 {
+    /// Returns the assigned integer value of the provided variable.
+    fn get_integer_value(&self, variable: impl IntegerVariable) -> i32 {
+        let lower_bound = variable.lower_bound(self.assignments_integer());
+        let upper_bound = variable.upper_bound(self.assignments_integer());
+
         pumpkin_assert_moderate!(
-            self.assignments_integer().is_domain_assigned(domain),
+            lower_bound == upper_bound,
             "Expected retrieved integer variable from solution to be assigned"
         );
-        self.assignments_integer().get_assigned_value(domain)
+
+        lower_bound
     }
 }
 
@@ -80,7 +84,7 @@ impl<'a> SolutionReference<'a> {
 impl<'a> ProblemSolution for SolutionReference<'a> {}
 
 /// A solution which takes ownership of its inner structures.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Solution {
     assignments_propositional: AssignmentsPropositional,
     assignments_integer: AssignmentsInteger,
