@@ -26,7 +26,7 @@ impl<Var> DynamicVariableSelector<Var> {
 }
 
 impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<Var> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.selector.select_variable(context)
     }
 

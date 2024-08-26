@@ -13,6 +13,7 @@ mod largest;
 mod max_regret;
 mod most_constrained;
 mod occurrence;
+mod proportional_domain_size;
 mod smallest;
 mod variable_selector;
 
@@ -24,5 +25,6 @@ pub use largest::*;
 pub use max_regret::*;
 pub use most_constrained::*;
 pub use occurrence::*;
+pub use proportional_domain_size::*;
 pub use smallest::*;
 pub use variable_selector::VariableSelector;

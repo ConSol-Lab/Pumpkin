@@ -4,7 +4,7 @@ use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::InDomainRandom;
-use crate::branching::InputOrder;
+use crate::branching::ProportionalDomainSize;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
@@ -92,15 +92,15 @@ const DEFAULT_VSIDS_VALUE: f64 = 0.0;
 
 impl
     AutonomousSearch<
-        IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainRandom>,
+        IndependentVariableValueBrancher<DomainId, ProportionalDomainSize, InDomainRandom>,
     >
 {
     /// Creates a new instance with default values for
     /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
-    /// If there are no more predicates left to select, this [`Brancher`] switches to [`InputOrder`]
-    /// with [`InDomainRandom`].
+    /// If there are no more predicates left to select, this [`Brancher`] switches to
+    /// [`ProportionalDomainSize`] with [`InDomainRandom`].
     pub fn default_over_all_variables(assignments: &Assignments) -> Self {
         let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
@@ -112,7 +112,7 @@ impl
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                InputOrder::new(&variables),
+                ProportionalDomainSize::new(&variables),
                 InDomainRandom,
             ),
         }

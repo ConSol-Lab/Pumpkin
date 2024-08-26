@@ -12,7 +12,7 @@ pub trait VariableSelector<Var> {
     /// Should only return [`None`] when all variables which have been passed to the
     /// [`VariableSelector`] have been assigned. Otherwise it should return the variable to
     /// branch on next.
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<Var>;
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var>;
 
     /// A function which is called after a conflict has been found and processed but (currently)
     /// does not provide any additional information.

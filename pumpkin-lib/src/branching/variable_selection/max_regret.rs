@@ -71,7 +71,7 @@ impl<TieBreaking> VariableSelector<DomainId> for MaxRegret<DomainId, TieBreaking
 where
     TieBreaking: TieBreaker<DomainId, i32>,
 {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))
@@ -109,9 +109,9 @@ mod tests {
         let _ = assignments.remove_value_from_domain(integer_variables[1], 6, None);
 
         {
-            let context = SelectionContext::new(&assignments, &mut test_rng);
+            let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-            let selected = strategy.select_variable(&context);
+            let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
@@ -119,9 +119,9 @@ mod tests {
         let _ = assignments.remove_value_from_domain(integer_variables[0], 1, None);
         let _ = assignments.remove_value_from_domain(integer_variables[0], 2, None);
 
-        let context = SelectionContext::new(&assignments, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0])
     }
@@ -130,11 +130,11 @@ mod tests {
     fn fixed_variables_are_not_selected() {
         let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(&assignments, &mut test_rng);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = MaxRegret::new(&integer_variables);
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
     }
 }
