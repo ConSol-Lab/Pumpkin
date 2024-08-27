@@ -21,10 +21,10 @@ use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
 ///
-/// The only required functions are [`Propagator::debug_propagate_from_scratch`] and
-/// [`Propagator::name`], all other functions have default implementations. For initial development,
-/// the required functions are enough, but a more mature implementation consider all functions in
-/// most cases.
+/// The only required functions are [`Propagator::name`],
+/// [`Propagator::initialise_at_root`], and [`Propagator::debug_propagate_from_scratch`]; all other
+/// functions have default implementations. For initial development, the required functions are
+/// enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
 pub trait Propagator {
