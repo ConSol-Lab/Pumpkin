@@ -156,9 +156,7 @@ pub trait Propagator {
     fn initialise_at_root(
         &mut self,
         _: &mut PropagatorInitialisationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        Ok(())
-    }
+    ) -> Result<(), PropositionalConjunction>;
 
     /// A check whether this propagator can detect an inconsistency.
     ///

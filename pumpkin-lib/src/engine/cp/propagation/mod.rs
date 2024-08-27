@@ -24,8 +24,9 @@
 //!
 //! # Practical
 //!
-//! Each concrete propagator is associated with one trait; [`Propagator`]: contains the propagator
-//! logic.
+//! Each concrete propagator is associated with one trait: [`Propagator`]. This trait contains the
+//! functions which are required to be implemented by the propagator such as
+//! [`Propagator::propagate`], [`Propagator::initialise_at_root`], and [`Propagator::notify`].
 //!
 //! A [`Propagator`] can be notified of different domain changes to a variable by registering
 //! variables using [`PropagatorInitialisationContext::register`] (and
