@@ -20,7 +20,7 @@ the python module. This is not the case for the python code. Changes to that
 are immediately visible in the environment, without needing to run `maturin`
 again.
 
-Then, the tests can be ran with
+Then, the examples (for example `nqueens`) can be run with 
 ```
-pytest
+python python/examples/nqueens.py 5
 ```
