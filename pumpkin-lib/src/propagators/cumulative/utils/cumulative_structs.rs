@@ -1,15 +1,10 @@
 //! Stores structures related for the Cumulative constraint such as the [`Task`]s or the
 //! [`CumulativeParameters`].
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
-use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
-use crate::propagators::TimeTableOverIntervalPropagator;
-use crate::propagators::TimeTablePerPointIncrementalPropagator;
-use crate::propagators::TimeTablePerPointPropagator;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
@@ -56,65 +51,6 @@ pub(crate) struct ArgTask<Var> {
     /// How much of the resource the given task uses during its non-preemptive execution
     pub(crate) resource_usage: i32,
 }
-
-/// The arguments which are required to create the constraint/propagators
-#[derive(Debug, Clone)]
-pub(crate) struct CumulativeConstructor<Var, T> {
-    /// A box containing all of the [`ArgTask`]s
-    pub(crate) tasks: Box<[ArgTask<Var>]>,
-    /// The capacity of the resource
-    pub(crate) capacity: i32,
-    /// We use [`PhantomData`] to differentiate between the different types of propagators;
-    /// without this field we would need to create a new argument struct for each cumulative
-    /// propagator
-    propagator_type: PhantomData<T>,
-    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
-    /// false then it will only adjust the bounds when appropriate rather than removing values from
-    /// the domain
-    pub(crate) allow_holes_in_domain: bool,
-}
-
-impl<Var, T> CumulativeConstructor<Var, T> {
-    pub(crate) fn new(
-        tasks: Box<[ArgTask<Var>]>,
-        capacity: i32,
-        allow_holes_in_domain: bool,
-    ) -> Self {
-        CumulativeConstructor {
-            tasks,
-            capacity,
-            propagator_type: PhantomData,
-            allow_holes_in_domain,
-        }
-    }
-}
-
-/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
-/// type of [`TimeTablePerPointPropagator`]; this is used to prevent creating a different `new`
-/// method for each type `T`
-#[allow(unused)]
-pub(crate) type TimeTablePerPoint<Var> =
-    CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>;
-
-/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
-/// type of [`TimeTablePerPointIncrementalPropagator`]; this is used to prevent creating a different
-/// `new` method for each type `T`
-#[allow(unused)]
-pub(crate) type TimeTablePerPointIncremental<Var> =
-    CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>;
-
-/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
-/// type of [`TimeTableOverIntervalPropagator`]; this is used to prevent creating a different
-/// `new` method for each type `T`
-#[allow(unused)]
-pub(crate) type TimeTableOverInterval<Var> =
-    CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>;
-
-/// An alias used for calling the [`CumulativeConstructor::new`] method with the concrete propagator
-/// type of [`TimeTableOverIntervalIncrementalPropagator`]; this is used to prevent creating a
-/// different `new` method for each type `T`
-pub(crate) type TimeTableOverIntervalIncremental<Var> =
-    CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>;
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.

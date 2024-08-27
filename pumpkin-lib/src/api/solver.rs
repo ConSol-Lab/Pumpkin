@@ -16,7 +16,7 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::Propagator;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -658,15 +658,11 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub(crate) fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
-        self.satisfaction_solver.add_propagator(constructor)
+        propagator: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver.add_propagator(propagator)
     }
 }
 
