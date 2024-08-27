@@ -94,6 +94,6 @@ where
     }
 
     fn is_restart_pointless(&self) -> bool {
-        self.variable_selector.is_restart_pointless() && self.value_selector.is_static()
+        self.variable_selector.is_restart_pointless() && self.value_selector.is_restart_pointless()
     }
 }

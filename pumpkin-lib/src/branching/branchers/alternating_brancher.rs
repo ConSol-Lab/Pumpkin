@@ -145,10 +145,24 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     }
 
     fn is_restart_pointless(&self) -> bool {
-        if self.is_using_default_brancher {
-            self.default_brancher.is_restart_pointless()
-        } else {
-            self.other_brancher.is_restart_pointless()
+        match self.strategy {
+            AlternatingStrategy::EveryRestart => {
+                // In the case of the `EveryRestart` strategy, note that we switch to the other
+                // strategy and then the restart is performed so we check whether restarting for the
+                // other brancher is pointless
+                if self.is_using_default_brancher {
+                    self.other_brancher.is_restart_pointless()
+                } else {
+                    self.default_brancher.is_restart_pointless()
+                }
+            }
+            _ => {
+                if self.is_using_default_brancher {
+                    self.default_brancher.is_restart_pointless()
+                } else {
+                    self.other_brancher.is_restart_pointless()
+                }
+            }
         }
     }
 }

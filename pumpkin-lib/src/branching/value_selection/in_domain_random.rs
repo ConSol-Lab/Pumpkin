@@ -26,7 +26,7 @@ impl ValueSelector<DomainId> for InDomainRandom {
         predicate!(decision_variable == values_in_domain[random_index])
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         false
     }
 }
@@ -40,7 +40,7 @@ impl ValueSelector<PropositionalVariable> for InDomainRandom {
         Literal::new(decision_variable, context.random().generate_bool(0.5)).into()
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         false
     }
 }

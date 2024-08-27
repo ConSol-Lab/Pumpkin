@@ -120,8 +120,8 @@ where
         self.backup_selector.on_solution(solution)
     }
 
-    fn is_static(&self) -> bool {
-        self.backup_selector.is_static()
+    fn is_restart_pointless(&self) -> bool {
+        self.backup_selector.is_restart_pointless()
     }
 }
 

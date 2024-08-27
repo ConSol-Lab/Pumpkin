@@ -24,7 +24,7 @@ impl ValueSelector<DomainId> for OutDomainRandom {
         predicate!(decision_variable != values_in_domain[random_index])
     }
 
-    fn is_static(&self) -> bool {
+    fn is_restart_pointless(&self) -> bool {
         false
     }
 }
