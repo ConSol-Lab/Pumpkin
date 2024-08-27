@@ -270,11 +270,9 @@ fn compile_array_int_minimum(
     let rhs = context.resolve_integer_variable(&exprs[0])?;
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
-    Ok(
-        constraints::minimum(array.iter().copied().collect::<Box<_>>(), rhs)
-            .post(context.solver)
-            .is_ok(),
-    )
+    Ok(constraints::minimum(array.as_ref().to_owned(), rhs)
+        .post(context.solver)
+        .is_ok())
 }
 
 fn compile_set_in_reif(
