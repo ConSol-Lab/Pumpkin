@@ -1,3 +1,4 @@
+use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -5,10 +6,6 @@ use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
-#[cfg(doc)]
-use crate::engine::propagation::PropagatorConstructor;
-#[cfg(doc)]
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::BooleanDomainEvent;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
@@ -24,10 +21,10 @@ use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
 /// regards to propagation, detecting conflicts, and providing explanations.
 ///
-/// The only required functions are [`Propagator::debug_propagate_from_scratch`] and
-/// [`Propagator::name`], all other functions have default implementations. For initial development,
-/// the required functions are enough, but a more mature implementation consider all functions in
-/// most cases.
+/// The only required functions are [`Propagator::name`],
+/// [`Propagator::initialise_at_root`], and [`Propagator::debug_propagate_from_scratch`]; all other
+/// functions have default implementations. For initial development, the required functions are
+/// enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
 pub trait Propagator {
@@ -80,7 +77,8 @@ pub trait Propagator {
     /// benefit from implementing this, so it is not required to do so.
     ///
     /// Note that the variables and events to which the propagator is subscribed to are determined
-    /// upon propagator construction via [`PropagatorConstructor`].
+    /// upon propagator initialisation via [`Propagator::initialise_at_root`] by calling
+    /// [`PropagatorInitialisationContext::register()`].
     fn notify(
         &mut self,
         _context: PropagationContext,
@@ -101,8 +99,8 @@ pub trait Propagator {
     /// benefit from implementing this, so it is not required to do so.
     ///
     /// Note that the variables and events to which the propagator is subscribed to are determined
-    /// upon propagator construction via [`PropagatorConstructor`],
-    /// by creating [`PropagatorVariable`]s using [`PropagatorConstructorContext::register()`].
+    /// upon propagator initialisation via [`Propagator::initialise_at_root`] by calling
+    /// [`PropagatorInitialisationContext::register()`].
     fn notify_backtrack(
         &mut self,
         _context: &PropagationContext,
@@ -150,15 +148,15 @@ pub trait Propagator {
     /// by the [`ConstraintSatisfactionSolver`] when the propagator is added using
     /// [`ConstraintSatisfactionSolver::add_propagator`].
     ///
-    /// The method can be used to detect root-level inconsistencies.
+    /// The method can be used to detect root-level inconsistencies and to register variables used
+    /// for notifications (see [`Propagator::notify`]) by calling
+    /// [`PropagatorInitialisationContext::register`].
     ///
     /// The solver will call this before any call to [`Propagator::propagate`] is made.
     fn initialise_at_root(
         &mut self,
-        _: PropagationContext,
-    ) -> Result<(), PropositionalConjunction> {
-        Ok(())
-    }
+        _: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction>;
 
     /// A check whether this propagator can detect an inconsistency.
     ///

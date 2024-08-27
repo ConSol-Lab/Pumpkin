@@ -6,43 +6,9 @@ use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
-
-/// Bounds-consistent propagator which enforces `max(array) = rhs`.
-#[derive(Debug)]
-pub(crate) struct MaximumConstructor<ElementVar, Rhs> {
-    pub(crate) array: Box<[ElementVar]>,
-    pub(crate) rhs: Rhs,
-}
-
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> PropagatorConstructor
-    for MaximumConstructor<ElementVar, Rhs>
-{
-    type Propagator = MaximumPropagator<ElementVar, Rhs>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let array = self
-            .array
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(idx, var)| {
-                context.register(var, DomainEvents::BOUNDS, LocalId::from(idx as u32))
-            })
-            .collect::<Box<_>>();
-
-        let rhs = context.register(
-            self.rhs,
-            DomainEvents::BOUNDS,
-            LocalId::from(array.len() as u32),
-        );
-
-        MaximumPropagator { array, rhs }
-    }
-}
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumConstructor`].
@@ -52,9 +18,36 @@ pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     rhs: Rhs,
 }
 
+impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> MaximumPropagator<ElementVar, Rhs> {
+    pub(crate) fn new(array: Box<[ElementVar]>, rhs: Rhs) -> Self {
+        MaximumPropagator { array, rhs }
+    }
+}
+
 impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        self.array
+            .iter()
+            .cloned()
+            .enumerate()
+            .for_each(|(idx, var)| {
+                let _ =
+                    context.register(var.clone(), DomainEvents::BOUNDS, LocalId::from(idx as u32));
+            });
+        let _ = context.register(
+            self.rhs.clone(),
+            DomainEvents::BOUNDS,
+            LocalId::from(self.array.len() as u32),
+        );
+
+        Ok(())
+    }
+
     fn priority(&self) -> u32 {
         0
     }
@@ -157,10 +150,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumConstructor {
-                array: [a, b, c].into(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 1, 5);
@@ -180,10 +170,7 @@ mod tests {
         let rhs = solver.new_variable(1, 10);
 
         let _ = solver
-            .new_propagator(MaximumConstructor {
-                array: [a, b, c].into(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new([a, b, c].into(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(rhs, 5, 10);
@@ -203,10 +190,7 @@ mod tests {
         let rhs = solver.new_variable(1, 3);
 
         let _ = solver
-            .new_propagator(MaximumConstructor {
-                array: array.clone(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
             .expect("no empty domain");
 
         for var in array.iter() {
@@ -227,10 +211,7 @@ mod tests {
         let rhs = solver.new_variable(45, 60);
 
         let _ = solver
-            .new_propagator(MaximumConstructor {
-                array: array.clone(),
-                rhs,
-            })
+            .new_propagator(MaximumPropagator::new(array.clone(), rhs))
             .expect("no empty domain");
 
         solver.assert_bounds(*array.last().unwrap(), 45, 51);

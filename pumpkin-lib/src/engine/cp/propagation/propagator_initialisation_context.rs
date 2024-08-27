@@ -1,3 +1,4 @@
+use super::PropagationContext;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -6,34 +7,43 @@ use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
+use crate::engine::AssignmentsInteger;
+use crate::engine::AssignmentsPropositional;
 use crate::engine::WatchListCP;
 use crate::engine::WatchListPropositional;
 use crate::engine::Watchers;
 use crate::engine::WatchersPropositional;
 
-/// [`PropagatorConstructorContext`] is used by when adding propagators to the solver.
-/// It represents a communication point between the solver and the propagator.
-/// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
-/// of variables.
+/// [`PropagatorInitialisationContext`] is used when [`Propagator`]s are initialised after creation.
+///
+/// It represents a communication point between the [`Solver`] and the [`Propagator`].
+/// Propagators use the [`PropagatorInitialisationContext`] to register to domain changes
+/// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
-pub struct PropagatorConstructorContext<'a> {
+pub struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
     watch_list_propositional: &'a mut WatchListPropositional,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
+
+    context: PropagationContext<'a>,
 }
 
-impl PropagatorConstructorContext<'_> {
+impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
         watch_list_propositional: &'a mut WatchListPropositional,
         propagator_id: PropagatorId,
-    ) -> PropagatorConstructorContext<'a> {
-        PropagatorConstructorContext {
+        assignments_integer: &'a AssignmentsInteger,
+        assignments_propositional: &'a AssignmentsPropositional,
+    ) -> PropagatorInitialisationContext<'a> {
+        PropagatorInitialisationContext {
             watch_list,
             watch_list_propositional,
             propagator_id,
             next_local_id: LocalId::from(0),
+
+            context: PropagationContext::new(assignments_integer, assignments_propositional),
         }
     }
 
@@ -121,5 +131,20 @@ impl PropagatorConstructorContext<'_> {
 
     pub fn get_next_local_id(&self) -> LocalId {
         self.next_local_id
+    }
+}
+
+mod private {
+    use super::*;
+    use crate::engine::propagation::propagation_context::HasAssignments;
+
+    impl HasAssignments for PropagatorInitialisationContext<'_> {
+        fn assignments_integer(&self) -> &AssignmentsInteger {
+            self.context.assignments_integer()
+        }
+
+        fn assignments_propositional(&self) -> &AssignmentsPropositional {
+            self.context.assignments_propositional()
+        }
     }
 }
