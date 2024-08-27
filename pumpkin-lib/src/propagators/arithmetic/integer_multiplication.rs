@@ -5,8 +5,7 @@ use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::pumpkin_assert_simple;
 
@@ -20,31 +19,18 @@ pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     c: VC,
 }
 
-#[derive(Debug)]
-pub(crate) struct IntegerMultiplicationConstructor<VA, VB, VC> {
-    pub(crate) a: VA,
-    pub(crate) b: VB,
-    pub(crate) c: VC,
-}
-
 const ID_A: LocalId = LocalId::from(0);
 const ID_B: LocalId = LocalId::from(1);
 const ID_C: LocalId = LocalId::from(2);
 
-impl<VA, VB, VC> PropagatorConstructor for IntegerMultiplicationConstructor<VA, VB, VC>
+impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC>
 where
     VA: IntegerVariable + 'static,
     VB: IntegerVariable + 'static,
     VC: IntegerVariable + 'static,
 {
-    type Propagator = IntegerMultiplicationPropagator<VA, VB, VC>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        IntegerMultiplicationPropagator {
-            a: context.register(self.a, DomainEvents::ANY_INT, ID_A),
-            b: context.register(self.b, DomainEvents::ANY_INT, ID_B),
-            c: context.register(self.c, DomainEvents::ANY_INT, ID_C),
-        }
+    pub(crate) fn new(a: VA, b: VB, c: VC) -> Self {
+        IntegerMultiplicationPropagator { a, b, c }
     }
 }
 
@@ -55,6 +41,17 @@ where
     VB: IntegerVariable,
     VC: IntegerVariable,
 {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), crate::predicates::PropositionalConjunction> {
+        let _ = context.register(self.a.clone(), DomainEvents::ANY_INT, ID_A);
+        let _ = context.register(self.b.clone(), DomainEvents::ANY_INT, ID_B);
+        let _ = context.register(self.c.clone(), DomainEvents::ANY_INT, ID_C);
+
+        Ok(())
+    }
+
     fn priority(&self) -> u32 {
         0
     }
@@ -305,7 +302,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -335,7 +332,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -362,7 +359,7 @@ mod tests {
         let c = solver.new_variable(2, 12);
 
         let mut propagator = solver
-            .new_propagator(IntegerMultiplicationConstructor { a, b, c })
+            .new_propagator(IntegerMultiplicationPropagator::new(a, b, c))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");

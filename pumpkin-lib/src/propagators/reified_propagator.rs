@@ -6,50 +6,12 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::DomainEvents;
 use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_assert_simple;
 use crate::variables::Literal;
-
-/// Propagator constructor for [`ReifiedPropagator`].
-pub(crate) struct ReifiedPropagatorConstructor<WrappedPropagatorConstructor> {
-    /// The propagator to reify.
-    pub(crate) propagator: WrappedPropagatorConstructor,
-    /// The reification literal to reify with.
-    pub(crate) reification_literal: Literal,
-}
-
-impl<WrappedPropagatorConstructor: PropagatorConstructor> PropagatorConstructor
-    for ReifiedPropagatorConstructor<WrappedPropagatorConstructor>
-{
-    type Propagator = ReifiedPropagator<WrappedPropagatorConstructor::Propagator>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let propagator = self.propagator.create(context);
-
-        let reification_literal_id = context.get_next_local_id();
-
-        let reification_literal = context.register(
-            self.reification_literal,
-            DomainEvents::BOUNDS, /* If the lower-bound of the reification variable changes
-                                   * then this means that it's been assigned true */
-            reification_literal_id,
-        );
-
-        let name = format!("Reified({})", propagator.name());
-
-        ReifiedPropagator {
-            reification_literal,
-            propagator,
-            root_level_inconsistency: None,
-            name,
-            reification_literal_id,
-        }
-    }
-}
 
 /// Propagator for the constraint `r -> p`, where `r` is a Boolean literal and `p` is an arbitrary
 /// propagator.
@@ -68,6 +30,20 @@ pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
     /// registered ids of the wrapped propagator.
     reification_literal_id: LocalId,
+}
+
+impl<WrappedPropagator: Propagator> ReifiedPropagator<WrappedPropagator> {
+    pub(crate) fn new(propagator: WrappedPropagator, reification_literal: Literal) -> Self {
+        let name = format!("Reified({})", propagator.name());
+        ReifiedPropagator {
+            reification_literal,
+            propagator,
+            root_level_inconsistency: None,
+            name,
+            reification_literal_id: LocalId::from(0), /* Place-holder, will be set in
+                                                       * `initialise_at_root` */
+        }
+    }
 }
 
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
@@ -92,7 +68,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
-        if local_id <= self.reification_literal_id {
+        if local_id < self.reification_literal_id {
             self.propagator.notify_backtrack(context, local_id, event)
         } else {
             pumpkin_assert_simple!(local_id == self.reification_literal_id);
@@ -101,7 +77,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         // Since we cannot propagate here, we store a conflict which the wrapped propagator
         // identifies at the root, and propagate the reification literal to false in the
@@ -109,6 +85,14 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         if let Err(conjunction) = self.propagator.initialise_at_root(context) {
             self.root_level_inconsistency = Some(conjunction);
         }
+
+        self.reification_literal_id = context.get_next_local_id();
+
+        let _ = context.register(
+            self.reification_literal,
+            DomainEvents::BOUNDS,
+            self.reification_literal_id,
+        );
 
         Ok(())
     }
@@ -222,14 +206,14 @@ mod tests {
         let t2 = triggered_conflict.clone();
 
         let _ = solver
-            .new_propagator(ReifiedPropagatorConstructor {
+            .new_propagator(ReifiedPropagator::new(
+                GenericPropagator::new(
+                    move |_: PropagationContextMut| Err(t1.clone().into()),
+                    move |_: PropagationContext| Some(t2.clone()),
+                    |_: &mut PropagatorInitialisationContext| Ok(()),
+                ),
                 reification_literal,
-                propagator: GenericArgs {
-                    propagation: move |_: PropagationContextMut| Err(t1.clone().into()),
-                    consistency_check: move |_: PropagationContext| Some(t2.clone()),
-                    init: |_: PropagationContext| Ok(()),
-                },
-            })
+            ))
             .expect("no conflict");
 
         assert!(solver.is_literal_false(reification_literal));
@@ -246,17 +230,17 @@ mod tests {
         let var = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator(ReifiedPropagatorConstructor {
-                reification_literal,
-                propagator: GenericArgs {
-                    propagation: move |mut ctx: PropagationContextMut| {
+            .new_propagator(ReifiedPropagator::new(
+                GenericPropagator::new(
+                    move |mut ctx: PropagationContextMut| {
                         ctx.set_lower_bound(&var, 3, conjunction!())?;
                         Ok(())
                     },
-                    consistency_check: |_: PropagationContext| None,
-                    init: |_: PropagationContext| Ok(()),
-                },
-            })
+                    |_: PropagationContext| None,
+                    |_: &mut PropagatorInitialisationContext| Ok(()),
+                ),
+                reification_literal,
+            ))
             .expect("no conflict");
 
         solver.assert_bounds(var, 1, 5);
@@ -282,16 +266,14 @@ mod tests {
         let var = solver.new_variable(1, 1);
 
         let inconsistency = solver
-            .new_propagator(ReifiedPropagatorConstructor {
+            .new_propagator(ReifiedPropagator::new(
+                GenericPropagator::new(
+                    move |_: PropagationContextMut| Err(conjunction!([var >= 1]).into()),
+                    |_: PropagationContext| None,
+                    |_: &mut PropagatorInitialisationContext| Ok(()),
+                ),
                 reification_literal,
-                propagator: GenericArgs {
-                    propagation: move |_: PropagationContextMut| {
-                        Err(conjunction!([var >= 1]).into())
-                    },
-                    consistency_check: |_: PropagationContext| None,
-                    init: |_: PropagationContext| Ok(()),
-                },
-            })
+            ))
             .expect_err("eagerly triggered the conflict");
 
         match inconsistency {
@@ -317,14 +299,14 @@ mod tests {
         let var = solver.new_variable(1, 1);
 
         let _ = solver
-            .new_propagator(ReifiedPropagatorConstructor {
+            .new_propagator(ReifiedPropagator::new(
+                GenericPropagator::new(
+                    |_: PropagationContextMut| Ok(()),
+                    |_: PropagationContext| None,
+                    move |_: &mut PropagatorInitialisationContext| Err(conjunction!([var >= 0])),
+                ),
                 reification_literal,
-                propagator: GenericArgs {
-                    propagation: |_: PropagationContextMut| Ok(()),
-                    consistency_check: |_: PropagationContext| None,
-                    init: move |_: PropagationContext| Err(conjunction!([var >= 0])),
-                },
-            })
+            ))
             .expect("eagerly triggered the conflict");
 
         assert!(solver.is_literal_false(reification_literal));
@@ -341,7 +323,8 @@ mod tests {
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
         ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction> + 'static,
-        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction> + 'static,
+        Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>
+            + 'static,
     {
         fn name(&self) -> &str {
             "Failing Propagator"
@@ -363,32 +346,27 @@ mod tests {
 
         fn initialise_at_root(
             &mut self,
-            context: PropagationContext,
+            context: &mut PropagatorInitialisationContext,
         ) -> Result<(), PropositionalConjunction> {
             (self.init)(context)
         }
     }
 
-    struct GenericArgs<Propagation, ConsistencyCheck, Init> {
-        propagation: Propagation,
-        consistency_check: ConsistencyCheck,
-        init: Init,
-    }
-
-    impl<Propagation, ConsistencyCheck, Init> PropagatorConstructor
-        for GenericArgs<Propagation, ConsistencyCheck, Init>
+    impl<Propagation, ConsistencyCheck, Init> GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
-        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
-        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction> + 'static,
-        Init: Fn(PropagationContext) -> Result<(), PropositionalConjunction> + 'static,
+        Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
+        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
+        Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>,
     {
-        type Propagator = GenericPropagator<Propagation, ConsistencyCheck, Init>;
-
-        fn create(self, _: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
+        pub(crate) fn new(
+            propagation: Propagation,
+            consistency_check: ConsistencyCheck,
+            init: Init,
+        ) -> Self {
             GenericPropagator {
-                propagation: self.propagation,
-                consistency_check: self.consistency_check,
-                init: self.init,
+                propagation,
+                consistency_check,
+                init,
             }
         }
     }

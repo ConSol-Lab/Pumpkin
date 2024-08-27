@@ -37,9 +37,8 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
@@ -50,7 +49,6 @@ use crate::engine::RestartStrategy;
 use crate::predicate;
 use crate::proof::ProofLog;
 use crate::propagators::nogood::NogoodPropagator;
-use crate::propagators::nogood::NogoodPropagatorConstructor;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -380,7 +378,7 @@ impl ConstraintSatisfactionSolver {
             .variable_names
             .add_integer(dummy_id, "Dummy".to_owned());
 
-        let _ = csp_solver.add_propagator(NogoodPropagatorConstructor);
+        let _ = csp_solver.add_propagator(NogoodPropagator::default());
 
         assert!(dummy_id.id == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
@@ -1151,23 +1149,15 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator<Constructor>(
+    pub fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
+        propagator_to_add: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
         let new_propagator_id = PropagatorId(self.propagators.len() as u32);
-        let mut constructor_context =
-            PropagatorConstructorContext::new(&mut self.watch_list_cp, new_propagator_id);
-
-        let propagator_to_add = constructor.create_boxed(&mut constructor_context);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1176,11 +1166,19 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.propagators.push(propagator_to_add);
+        self.propagators.push(Box::new(propagator_to_add));
 
         let new_propagator = &mut self.propagators[new_propagator_id];
-        let context = PropagationContext::new(&self.assignments);
-        if new_propagator.initialise_at_root(context).is_err() {
+
+        let mut initialisation_context = PropagatorInitialisationContext::new(
+            &mut self.watch_list_cp,
+            new_propagator_id,
+            &self.assignments,
+        );
+
+        let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
+
+        if initialisation_status.is_err() {
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {

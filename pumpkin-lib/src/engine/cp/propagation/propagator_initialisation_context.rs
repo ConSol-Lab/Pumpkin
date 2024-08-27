@@ -1,3 +1,4 @@
+use super::PropagationContext;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -5,29 +6,36 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::Assignments;
 use crate::engine::WatchListCP;
 use crate::engine::Watchers;
 
-/// [`PropagatorConstructorContext`] is used by when adding propagators to the solver.
-/// It represents a communication point between the solver and the propagator.
-/// Propagators use the [`PropagatorConstructorContext`] to register to domain changes
-/// of variables.
+/// [`PropagatorInitialisationContext`] is used when [`Propagator`]s are initialised after creation.
+///
+/// It represents a communication point between the [`Solver`] and the [`Propagator`].
+/// Propagators use the [`PropagatorInitialisationContext`] to register to domain changes
+/// of variables and to retrieve the current bounds of variables.
 #[derive(Debug)]
-pub struct PropagatorConstructorContext<'a> {
+pub struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
+
+    context: PropagationContext<'a>,
 }
 
-impl PropagatorConstructorContext<'_> {
-    pub(crate) fn new(
-        watch_list: &mut WatchListCP,
+impl PropagatorInitialisationContext<'_> {
+    pub(crate) fn new<'a>(
+        watch_list: &'a mut WatchListCP,
         propagator_id: PropagatorId,
-    ) -> PropagatorConstructorContext {
-        PropagatorConstructorContext {
+        assignments: &'a Assignments,
+    ) -> PropagatorInitialisationContext<'a> {
+        PropagatorInitialisationContext {
             watch_list,
             propagator_id,
             next_local_id: LocalId::from(0),
+
+            context: PropagationContext::new(assignments),
         }
     }
 
@@ -95,5 +103,16 @@ impl PropagatorConstructorContext<'_> {
 
     pub fn get_next_local_id(&self) -> LocalId {
         self.next_local_id
+    }
+}
+
+mod private {
+    use super::*;
+    use crate::engine::propagation::propagation_context::HasAssignments;
+
+    impl HasAssignments for PropagatorInitialisationContext<'_> {
+        fn assignments(&self) -> &Assignments {
+            self.context.assignments
+        }
     }
 }

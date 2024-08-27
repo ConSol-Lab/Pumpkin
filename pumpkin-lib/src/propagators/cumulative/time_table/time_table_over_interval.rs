@@ -10,16 +10,16 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::CumulativeConstructor;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
 #[cfg(doc)]
@@ -51,6 +51,7 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -64,29 +65,17 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
-impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTableOverIntervalPropagator<Var>>
-where
-    Var: IntegerVariable + 'static,
-{
-    type Propagator = TimeTableOverIntervalPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context);
-        TimeTableOverIntervalPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.allow_holes_in_domain,
-        ))
-    }
-}
-
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
+    #[allow(unused)]
     pub(crate) fn new(
-        parameters: CumulativeParameters<Var>,
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
+        allow_holes_in_domain: bool,
     ) -> TimeTableOverIntervalPropagator<Var> {
+        let tasks = create_tasks(arg_tasks);
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
-            parameters,
+            parameters: CumulativeParameters::new(tasks, capacity, allow_holes_in_domain),
         }
     }
 }
@@ -142,8 +131,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        register_tasks(&self.parameters.tasks, context);
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
                 context.lower_bound(&task.start_variable),
@@ -172,8 +162,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// The result of this method is either the time-table of type
 /// [`OverIntervalTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`Inconsistency`].
-pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+pub(crate) fn create_time_table_over_interval_from_scratch<
+    Var: IntegerVariable + 'static,
+    Context: ReadDomains,
+>(
+    context: &Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
@@ -190,8 +183,8 @@ pub(crate) fn create_time_table_over_interval_from_scratch<Var: IntegerVariable 
 /// is resolved by placing the events which signify the ends of mandatory parts first (if the
 /// tie is between events of the same type then the tie-breaking is done on the id in
 /// non-decreasing order).
-fn create_events<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
+    context: &Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<Event<Var>> {
     // First we create a list of events with which we will create the time-table
@@ -250,9 +243,9 @@ fn create_events<Var: IntegerVariable + 'static>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static>(
+fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
     events: Vec<Event<Var>>,
-    context: &PropagationContext,
+    context: &Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
     pumpkin_assert_extreme!(
@@ -404,7 +397,7 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::TimeTableOverInterval;
+    use crate::propagators::TimeTableOverIntervalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -413,8 +406,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -427,7 +420,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -444,8 +437,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTableOverInterval::new(
-            [
+        let result = solver.new_propagator(TimeTableOverIntervalPropagator::new(
+            &[
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -458,7 +451,7 @@ mod tests {
                 },
             ]
             .into_iter()
-            .collect(),
+            .collect::<Vec<_>>(),
             1,
             false,
         ));
@@ -492,8 +485,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -506,7 +499,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -528,8 +521,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -562,7 +555,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -577,8 +570,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -591,7 +584,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -621,8 +614,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -635,7 +628,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -667,8 +660,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -701,7 +694,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -741,8 +734,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -780,7 +773,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -813,8 +806,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -827,7 +820,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -856,8 +849,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -875,7 +868,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -905,8 +898,8 @@ mod tests {
         let s2 = solver.new_variable(0, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverInterval::new(
-                [
+            .new_propagator(TimeTableOverIntervalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -919,7 +912,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 true,
             ))

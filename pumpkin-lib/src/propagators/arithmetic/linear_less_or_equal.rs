@@ -5,22 +5,9 @@ use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
-
-#[derive(Debug)]
-pub(crate) struct LinearLessOrEqualConstructor<Var> {
-    pub(crate) x: Box<[Var]>,
-    pub(crate) c: i32,
-}
-
-impl<Var: IntegerVariable + 'static> LinearLessOrEqualConstructor<Var> {
-    pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
-        LinearLessOrEqualConstructor { x, c }
-    }
-}
 
 /// Propagator for the constraint `reif => \sum x_i <= c`.
 #[derive(Debug)]
@@ -29,26 +16,12 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     c: i32,
 }
 
-impl<Var: 'static> PropagatorConstructor for LinearLessOrEqualConstructor<Var>
+impl<Var> LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
-    type Propagator = LinearLessOrEqualPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let x: Box<[_]> = self
-            .x
-            .iter()
-            .enumerate()
-            .map(|(i, x_i)| {
-                context.register(
-                    x_i.clone(),
-                    DomainEvents::LOWER_BOUND,
-                    LocalId::from(i as u32),
-                )
-            })
-            .collect();
-        LinearLessOrEqualPropagator::<Var> { x, c: self.c }
+    pub(crate) fn new(x: Box<[Var]>, c: i32) -> Self {
+        LinearLessOrEqualPropagator::<Var> { x, c }
     }
 }
 
@@ -56,6 +29,21 @@ impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        self.x.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(
+                x_i.clone(),
+                DomainEvents::LOWER_BOUND,
+                LocalId::from(i as u32),
+            );
+        });
+
+        Ok(())
+    }
+
     fn priority(&self) -> u32 {
         0
     }
@@ -128,7 +116,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -144,7 +132,7 @@ mod tests {
         let y = solver.new_variable(0, 10);
 
         let mut propagator = solver
-            .new_propagator(LinearLessOrEqualConstructor::new([x, y].into(), 7))
+            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("non-empty domain");

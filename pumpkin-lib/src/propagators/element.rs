@@ -7,20 +7,13 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::LazyReason;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 use crate::predicates::PredicateConstructor;
 use crate::predicates::PropositionalConjunction;
-
-pub(crate) struct ElementConstructor<VX, VI, VE> {
-    pub(crate) array: Box<[VX]>,
-    pub(crate) index: VI,
-    pub(crate) rhs: VE,
-}
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
@@ -32,41 +25,21 @@ pub(crate) struct ElementPropagator<VX, VI, VE> {
     rhs: VE,
 }
 
+impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
+    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
+        Self {
+            array: array.into(),
+            index,
+            rhs,
+        }
+    }
+}
+
 const ID_INDEX: LocalId = LocalId::from(0);
 const ID_RHS: LocalId = LocalId::from(1);
 
 // local ids of array vars are shifted by ID_X_OFFSET
 const ID_X_OFFSET: u32 = 2;
-
-impl<VX, VI, VE> PropagatorConstructor for ElementConstructor<VX, VI, VE>
-where
-    VX: IntegerVariable + 'static,
-    VI: IntegerVariable + 'static,
-    VE: IntegerVariable + 'static,
-{
-    type Propagator = ElementPropagator<VX, VI, VE>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        // local ids of array vars are shifted by ID_X_OFFSET
-        let array = self
-            .array
-            .iter()
-            .enumerate()
-            .map(|(i, x_i)| {
-                context.register(
-                    x_i.clone(),
-                    DomainEvents::ANY_INT,
-                    LocalId::from(i as u32 + ID_X_OFFSET),
-                )
-            })
-            .collect();
-        ElementPropagator {
-            array,
-            index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX),
-            rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS),
-        }
-    }
-}
 
 impl<VX, VI, VE> Propagator for ElementPropagator<VX, VI, VE>
 where
@@ -97,6 +70,22 @@ where
             self.propagate_equality(&mut context, idx)?;
         }
 
+        Ok(())
+    }
+
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        self.array.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        });
+        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
         Ok(())
     }
 }
@@ -261,7 +250,7 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementConstructor {
+            .new_propagator(ElementPropagator {
                 array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
@@ -294,7 +283,7 @@ mod tests {
         let rhs = solver.new_variable(0, 20);
 
         let _ = solver
-            .new_propagator(ElementConstructor {
+            .new_propagator(ElementPropagator {
                 array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
@@ -327,7 +316,7 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementConstructor {
+            .new_propagator(ElementPropagator {
                 array: vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,

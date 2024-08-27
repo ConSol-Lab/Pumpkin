@@ -18,8 +18,7 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::variables::DomainId;
@@ -50,17 +49,6 @@ use crate::pumpkin_assert_simple;
 // A is a list of pairs (bound, nogood)
 
 // Todo: the way the hashmap is used is not efficient.
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct NogoodPropagatorConstructor;
-
-impl PropagatorConstructor for NogoodPropagatorConstructor {
-    type Propagator = NogoodPropagator;
-
-    fn create(self, mut _context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        NogoodPropagator::default()
-    }
-}
 
 #[derive(Default, Clone, Debug)]
 struct Nogood {
@@ -1812,6 +1800,15 @@ impl Propagator for NogoodPropagator {
         // update LBD, so we need code plus assignments as input.
         &self.nogoods[id].predicates.as_slice()[1..]
     }
+
+    fn initialise_at_root(
+        &mut self,
+        _context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        // There should be no nogoods yet
+        pumpkin_assert_simple!(self.nogoods.len() == 0);
+        Ok(())
+    }
 }
 
 /// The watch list is specific to a domain id.
@@ -1884,7 +1881,6 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::propagators::nogood::NogoodPropagatorConstructor;
 
     fn downcast_to_nogood_propagator(
         nogood_propagator: &mut Box<dyn Propagator>,
@@ -1904,7 +1900,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(NogoodPropagatorConstructor)
+            .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, dummy.id as i32, dummy, 1);
@@ -1944,7 +1940,7 @@ mod tests {
         let c = solver.new_variable(-10, 20);
 
         let mut propagator = solver
-            .new_propagator(NogoodPropagatorConstructor {})
+            .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);

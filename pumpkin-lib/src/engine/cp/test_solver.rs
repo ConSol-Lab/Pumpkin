@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use super::propagation::EnqueueDecision;
+use super::propagation::PropagatorInitialisationContext;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::conflict_analysis::SemanticMinimiser;
@@ -14,8 +15,6 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
@@ -71,24 +70,19 @@ impl TestSolver {
         Literal::new(predicate!(domain_id == 1))
     }
 
-    pub(crate) fn new_propagator<Constructor>(
+    pub(crate) fn new_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<BoxedPropagator, Inconsistency>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
+        propagator: impl Propagator + 'static,
+    ) -> Result<BoxedPropagator, Inconsistency> {
         let id = PropagatorId(self.next_propagator_id);
         self.next_propagator_id += 1;
 
-        let mut propagator = constructor.create_boxed(&mut PropagatorConstructorContext::new(
+        let mut propagator: Box<dyn Propagator> = Box::new(propagator);
+        propagator.initialise_at_root(&mut PropagatorInitialisationContext::new(
             &mut self.watch_list,
             id,
-        ));
-
-        propagator.initialise_at_root(PropagationContext::new(&self.assignments))?;
-
+            &self.assignments,
+        ))?;
         self.propagate(&mut propagator)?;
 
         Ok(propagator)

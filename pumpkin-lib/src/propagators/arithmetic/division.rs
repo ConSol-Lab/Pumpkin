@@ -2,11 +2,9 @@ use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::predicates::PropositionalConjunction;
@@ -25,30 +23,16 @@ pub(crate) struct DivisionPropagator<VA, VB, VC> {
     rhs: VC,
 }
 
-#[derive(Debug)]
-pub(crate) struct DivisionConstructor<VA, VB, VC> {
-    pub(crate) numerator: VA,
-    pub(crate) denominator: VB,
-    pub(crate) rhs: VC,
-}
-
 const ID_NUMERATOR: LocalId = LocalId::from(0);
 const ID_DENOMINATOR: LocalId = LocalId::from(1);
 const ID_RHS: LocalId = LocalId::from(2);
 
-impl<VA, VB, VC> PropagatorConstructor for DivisionConstructor<VA, VB, VC>
-where
-    VA: IntegerVariable + 'static,
-    VB: IntegerVariable + 'static,
-    VC: IntegerVariable + 'static,
-{
-    type Propagator = DivisionPropagator<VA, VB, VC>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
+impl<VA, VB, VC> DivisionPropagator<VA, VB, VC> {
+    pub(crate) fn new(numerator: VA, denominator: VB, rhs: VC) -> Self {
         DivisionPropagator {
-            numerator: context.register(self.numerator, DomainEvents::BOUNDS, ID_NUMERATOR),
-            denominator: context.register(self.denominator, DomainEvents::BOUNDS, ID_DENOMINATOR),
-            rhs: context.register(self.rhs, DomainEvents::BOUNDS, ID_RHS),
+            numerator,
+            denominator,
+            rhs,
         }
     }
 }
@@ -69,12 +53,19 @@ where
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(
             !context.contains(&self.denominator, 0),
             "Denominator cannot contain 0"
         );
+        let _ = context.register(self.numerator.clone(), DomainEvents::BOUNDS, ID_NUMERATOR);
+        let _ = context.register(
+            self.denominator.clone(),
+            DomainEvents::BOUNDS,
+            ID_DENOMINATOR,
+        );
+        let _ = context.register(self.rhs.clone(), DomainEvents::BOUNDS, ID_RHS);
 
         Ok(())
     }
@@ -340,11 +331,8 @@ mod tests {
         let denominator = solver.new_variable(2, 2);
         let rhs = solver.new_variable(2, 2);
 
-        let propagator = solver.new_propagator(DivisionConstructor {
-            numerator,
-            denominator,
-            rhs,
-        });
+        let propagator =
+            solver.new_propagator(DivisionPropagator::new(numerator, denominator, rhs));
 
         assert!(propagator.is_err());
     }

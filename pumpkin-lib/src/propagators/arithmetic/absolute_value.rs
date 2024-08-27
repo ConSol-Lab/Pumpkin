@@ -5,30 +5,8 @@ use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-
-#[derive(Debug)]
-pub(crate) struct AbsoluteValueConstructor<VA, VB> {
-    /// The side of the equality where the sign matters.
-    pub(crate) signed: VA,
-    /// The absolute of `signed`.
-    pub(crate) absolute: VB,
-}
-
-impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> PropagatorConstructor
-    for AbsoluteValueConstructor<VA, VB>
-{
-    type Propagator = AbsoluteValuePropagator<VA, VB>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let signed = context.register(self.signed, DomainEvents::BOUNDS, LocalId::from(0));
-        let absolute = context.register(self.absolute, DomainEvents::BOUNDS, LocalId::from(1));
-
-        AbsoluteValuePropagator { signed, absolute }
-    }
-}
 
 /// Propagator for `absolute = |signed|`, where `absolute` and `signed` are integer variables.
 ///
@@ -40,9 +18,29 @@ pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     absolute: VB,
 }
 
+impl<VA, VB> AbsoluteValuePropagator<VA, VB> {
+    pub(crate) fn new(signed: VA, absolute: VB) -> Self {
+        AbsoluteValuePropagator { signed, absolute }
+    }
+}
+
 impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
     for AbsoluteValuePropagator<VA, VB>
 {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), crate::predicates::PropositionalConjunction> {
+        let _ = context.register(self.signed.clone(), DomainEvents::BOUNDS, LocalId::from(0));
+        let _ = context.register(
+            self.absolute.clone(),
+            DomainEvents::BOUNDS,
+            LocalId::from(1),
+        );
+
+        Ok(())
+    }
+
     fn priority(&self) -> u32 {
         0
     }
@@ -135,7 +133,7 @@ mod tests {
         let absolute = solver.new_variable(-2, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 0, 4);
@@ -149,7 +147,7 @@ mod tests {
         let absolute = solver.new_variable(0, 3);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -3, 3);
@@ -163,7 +161,7 @@ mod tests {
         let absolute = solver.new_variable(0, 10);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 6);
@@ -177,7 +175,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(absolute, 3, 5);
@@ -191,7 +189,7 @@ mod tests {
         let absolute = solver.new_variable(1, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, -5, -1);
@@ -205,7 +203,7 @@ mod tests {
         let absolute = solver.new_variable(3, 5);
 
         let _ = solver
-            .new_propagator(AbsoluteValueConstructor { signed, absolute })
+            .new_propagator(AbsoluteValuePropagator::new(signed, absolute))
             .expect("no empty domains");
 
         solver.assert_bounds(signed, 3, 5);
