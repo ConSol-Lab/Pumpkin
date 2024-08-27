@@ -13,8 +13,7 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
@@ -23,9 +22,10 @@ use crate::propagators::cumulative::time_table::time_table_util::propagate_based
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::CumulativeConstructor;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 #[cfg(doc)]
@@ -73,30 +73,16 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     time_table_outdated: bool,
 }
 
-impl<Var> PropagatorConstructor
-    for CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
-where
-    Var: IntegerVariable + 'static + Debug,
-{
-    type Propagator = TimeTableOverIntervalIncrementalPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context);
-        TimeTableOverIntervalIncrementalPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.allow_holes_in_domain,
-        ))
-    }
-}
-
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub(crate) fn new(
-        parameters: CumulativeParameters<Var>,
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
+        allow_holes_in_domain: bool,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
+        let tasks = create_tasks(arg_tasks);
         TimeTableOverIntervalIncrementalPropagator {
             time_table: Default::default(),
-            parameters,
+            parameters: CumulativeParameters::new(tasks, capacity, allow_holes_in_domain),
             time_table_outdated: false,
         }
     }
@@ -224,8 +210,10 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        register_tasks(&self.parameters.tasks, context);
+
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -236,7 +224,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         self.parameters.updated.clear();
 
         // Then we do normal propagation
-        self.time_table = create_time_table_over_interval_from_scratch(&context, &self.parameters)?;
+        self.time_table = create_time_table_over_interval_from_scratch(context, &self.parameters)?;
         self.time_table_outdated = false;
         Ok(())
     }
@@ -861,7 +849,7 @@ mod tests {
     use crate::engine::test_helper::TestSolver;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::TimeTableOverIntervalIncremental;
+    use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -870,8 +858,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -884,7 +872,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -901,8 +889,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTableOverIntervalIncremental::new(
-            [
+        let result = solver.new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+            &[
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -915,7 +903,7 @@ mod tests {
                 },
             ]
             .into_iter()
-            .collect(),
+            .collect::<Vec<_>>(),
             1,
             false,
         ));
@@ -943,8 +931,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -957,7 +945,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -979,8 +967,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1013,7 +1001,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -1028,8 +1016,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -1042,7 +1030,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -1072,8 +1060,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1086,7 +1074,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -1120,8 +1108,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1154,7 +1142,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -1194,8 +1182,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1233,7 +1221,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 false,
             ))
@@ -1266,8 +1254,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1280,7 +1268,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))
@@ -1311,8 +1299,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -1330,7 +1318,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 false,
             ))

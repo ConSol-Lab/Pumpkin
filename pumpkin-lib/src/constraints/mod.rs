@@ -38,8 +38,8 @@ pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
 
-use crate::engine::propagation::PropagatorConstructor;
-use crate::propagators::ReifiedPropagatorConstructor;
+use crate::engine::propagation::Propagator;
+use crate::propagators::ReifiedPropagator;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -68,10 +68,9 @@ pub trait Constraint {
     ) -> Result<(), ConstraintOperationError>;
 }
 
-impl<Constructor> Constraint for Constructor
+impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    Constructor: PropagatorConstructor,
-    Constructor::Propagator: 'static,
+    ConcretePropagator: Propagator + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         solver.add_propagator(self)
@@ -82,10 +81,7 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagatorConstructor {
-            propagator: self,
-            reification_literal,
-        })
+        solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
     }
 }
 

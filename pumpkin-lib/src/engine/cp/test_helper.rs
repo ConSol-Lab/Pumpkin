@@ -15,9 +15,8 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -62,24 +61,19 @@ impl TestSolver {
         Literal::new(PropositionalVariable::new(new_variable_index), true)
     }
 
-    pub(crate) fn new_propagator<Constructor>(
+    pub(crate) fn new_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<BoxedPropagator, Inconsistency>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
+        propagator: impl Propagator + 'static,
+    ) -> Result<BoxedPropagator, Inconsistency> {
         let id = PropagatorId(self.next_id);
         self.next_id += 1;
 
-        let mut propagator = constructor.create_boxed(&mut PropagatorConstructorContext::new(
+        let mut propagator: Box<dyn Propagator> = Box::new(propagator);
+
+        propagator.initialise_at_root(&mut PropagatorInitialisationContext::new(
             &mut self.watch_list,
             &mut self.watch_list_propositional,
             id,
-        ));
-
-        propagator.initialise_at_root(PropagationContext::new(
             &self.assignments_integer,
             &self.assignments_propositional,
         ))?;

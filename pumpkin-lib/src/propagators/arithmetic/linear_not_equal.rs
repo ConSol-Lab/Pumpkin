@@ -12,28 +12,13 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicate;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-
-#[derive(Debug)]
-pub(crate) struct LinearNotEqualConstructor<Var> {
-    /// The terms which sum to the left-hand side.
-    terms: Box<[Var]>,
-    /// The right-hand side.
-    rhs: i32,
-}
-
-impl<Var> LinearNotEqualConstructor<Var> {
-    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNotEqualConstructor { terms, rhs }
-    }
-}
 
 /// Propagator for the constraint `\sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
@@ -57,32 +42,14 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
     should_recalculate_lhs: bool,
 }
 
-impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>
+impl<Var> LinearNotEqualPropagator<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type Propagator = LinearNotEqualPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let x: Rc<[_]> = self
-            .terms
-            .iter()
-            .enumerate()
-            .map(|(i, x_i)| {
-                let _ =
-                    context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
-                context.register_for_backtrack_events(
-                    x_i.clone(),
-                    DomainEvents::create_with_int_events(enum_set!(
-                        IntDomainEvent::Assign | IntDomainEvent::Removal
-                    )),
-                    LocalId::from(i as u32),
-                )
-            })
-            .collect();
+    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
         LinearNotEqualPropagator {
-            terms: x,
-            rhs: self.rhs,
+            terms: terms.into(),
+            rhs,
             number_of_fixed_terms: 0,
             fixed_lhs: 0,
             unfixed_variable_has_been_updated: false,
@@ -167,8 +134,19 @@ where
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        self.terms.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            let _ = context.register_for_backtrack_events(
+                x_i.clone(),
+                DomainEvents::create_with_int_events(enum_set!(
+                    IntDomainEvent::Assign | IntDomainEvent::Removal
+                )),
+                LocalId::from(i as u32),
+            );
+        });
+
         self.recalculate_fixed_variables(context);
         self.check_for_conflict(context)?;
         Ok(())
@@ -178,7 +156,7 @@ where
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
-            self.recalculate_fixed_variables(context.as_readonly());
+            self.recalculate_fixed_variables(&context.as_readonly());
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
@@ -217,7 +195,7 @@ where
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(context.as_readonly())?;
+            self.check_for_conflict(&context.as_readonly())?;
         }
 
         Ok(())
@@ -286,7 +264,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
+    fn recalculate_fixed_variables<Context: ReadDomains>(&mut self, context: &Context) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -304,9 +282,9 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict(
+    fn check_for_conflict<Context: ReadDomains>(
         &self,
-        context: PropagationContext,
+        context: &Context,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
@@ -366,7 +344,7 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
@@ -386,7 +364,7 @@ mod tests {
         let y = solver.new_variable(2, 2);
 
         let err = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
@@ -403,7 +381,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.clone(), y.clone()].into(),
                 0,
             ))
@@ -423,7 +401,7 @@ mod tests {
         let y = solver.new_variable(0, 3);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
@@ -449,7 +427,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let _ = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.clone(), y.clone()].into(),
                 0,
             ))
