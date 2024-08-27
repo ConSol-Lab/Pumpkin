@@ -16,7 +16,7 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::Propagator;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -79,8 +79,7 @@ use crate::variables::PropositionalVariable;
 /// ```
 ///
 /// # Using the Solver
-/// For examples on how to use the solver, see the [root-level crate documentation](crate) or the
-/// examples in the repository at `pumpkin-lib/examples`.
+/// For examples on how to use the solver, see the [root-level crate documentation](crate) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/master/pumpkin-lib/examples).
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     satisfaction_solver: ConstraintSatisfactionSolver,
@@ -428,10 +427,12 @@ impl Solver {
         }
     }
 
-    /// Solver the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is minmised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// Solves the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is minimised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn minimise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -443,8 +444,10 @@ impl Solver {
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn maximise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -655,15 +658,11 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub(crate) fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
-        self.satisfaction_solver.add_propagator(constructor)
+        propagator: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver.add_propagator(propagator)
     }
 }
 

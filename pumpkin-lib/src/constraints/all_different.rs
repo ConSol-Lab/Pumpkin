@@ -2,7 +2,7 @@ use super::binary_not_equals;
 use super::Constraint;
 use crate::variables::IntegerVariable;
 
-/// Creates the constraint that enforces that all the given variables are distinct.
+/// Creates the [`Constraint`] that enforces that all the given `variables` are distinct.
 pub fn all_different<Var: IntegerVariable + 'static>(
     variables: impl Into<Box<[Var]>>,
 ) -> impl Constraint {

@@ -1,13 +1,15 @@
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
+use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the constraint `\sum terms_i = rhs`.
+/// Creates the [`NegatableConstraint`] `\sum terms_i = rhs`.
+///
+/// Its negation is [`not_equals`].
 pub fn equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -18,7 +20,9 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
     }
 }
 
-/// Creates the constraint `lhs = rhs`.
+/// Creates the [`NegatableConstraint`] `lhs = rhs`.
+///
+/// Its negation is [`binary_not_equals`].
 pub fn binary_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
@@ -26,7 +30,9 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
     equals([lhs.scaled(1), rhs.scaled(-1)], 0)
 }
 
-/// Create the constraint `\sum terms_i != rhs`.
+/// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
+///
+/// Its negation is [`equals`].
 pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -34,7 +40,9 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     equals(terms, rhs).negation()
 }
 
-/// Creates the constraint `lhs != rhs`.
+/// Creates the [`NegatableConstraint`] `lhs != rhs`.
+///
+/// Its negation is [`binary_equals`].
 pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
@@ -107,7 +115,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).post(solver)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver)
     }
 
     fn implied_by(
@@ -115,7 +123,7 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(solver, reification_literal)
     }
 }
 

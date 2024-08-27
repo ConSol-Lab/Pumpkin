@@ -49,9 +49,8 @@ use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
@@ -1446,26 +1445,15 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator<Constructor>(
+    pub fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
+        propagator_to_add: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
-        let mut constructor_context = PropagatorConstructorContext::new(
-            &mut self.watch_list_cp,
-            &mut self.watch_list_propositional,
-            new_propagator_id,
-        );
-
-        let propagator_to_add = constructor.create_boxed(&mut constructor_context);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1474,13 +1462,19 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.cp_propagators.push(propagator_to_add);
+        self.cp_propagators.push(Box::new(propagator_to_add));
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let initialisation_status = new_propagator.initialise_at_root(PropagationContext::new(
+
+        let mut initialisation_context = PropagatorInitialisationContext::new(
+            &mut self.watch_list_cp,
+            &mut self.watch_list_propositional,
+            new_propagator_id,
             &self.assignments_integer,
             &self.assignments_propositional,
-        ));
+        );
+
+        let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
         if initialisation_status.is_err() {
             self.state.declare_infeasible();
@@ -1744,53 +1738,14 @@ mod tests {
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
-    use crate::engine::propagation::PropagatorConstructor;
-    use crate::engine::propagation::PropagatorConstructorContext;
     use crate::engine::propagation::PropagatorId;
+    use crate::engine::propagation::PropagatorInitialisationContext;
     use crate::engine::reason::ReasonRef;
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
     use crate::predicate;
-
-    /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
-    /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),
-    /// and conflicts (also in the form of [`PropositionalConjunction`]s).
-    struct TestPropagatorConstructor {
-        propagations: Vec<(Predicate, PropositionalConjunction)>,
-        conflicts: Vec<PropositionalConjunction>,
-    }
-
-    impl PropagatorConstructor for TestPropagatorConstructor {
-        type Propagator = TestPropagator;
-
-        fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
-                .propagations
-                .iter()
-                .enumerate()
-                .rev()
-                .map(|(index, variable)| {
-                    (
-                        context.register(
-                            variable.0.get_domain().unwrap(),
-                            DomainEvents::BOUNDS,
-                            LocalId::from(index as u32),
-                        ),
-                        variable.0,
-                        variable.1.clone(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            TestPropagator {
-                original_propagations: propagations.clone(),
-                propagations,
-                conflicts: self.conflicts.into_iter().rev().collect::<Vec<_>>(),
-                is_in_root: true,
-            }
-        }
-    }
 
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
@@ -1805,7 +1760,49 @@ mod tests {
         is_in_root: bool,
     }
 
+    impl TestPropagator {
+        pub(crate) fn new(
+            propagations: Vec<(Predicate, PropositionalConjunction)>,
+            conflicts: Vec<PropositionalConjunction>,
+        ) -> Self {
+            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = propagations
+                .iter()
+                .rev()
+                .map(|variable| {
+                    (
+                        variable.0.get_domain().unwrap(),
+                        variable.0,
+                        variable.1.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            TestPropagator {
+                original_propagations: propagations.clone(),
+                propagations,
+                conflicts: conflicts.into_iter().rev().collect::<Vec<_>>(),
+                is_in_root: true,
+            }
+        }
+    }
+
     impl Propagator for TestPropagator {
+        fn initialise_at_root(
+            &mut self,
+            context: &mut PropagatorInitialisationContext,
+        ) -> Result<(), PropositionalConjunction> {
+            self.propagations
+                .iter()
+                .enumerate()
+                .for_each(|(index, variable)| {
+                    let _ = context.register(
+                        variable.0,
+                        DomainEvents::BOUNDS,
+                        LocalId::from(index as u32),
+                    );
+                });
+            Ok(())
+        }
+
         fn name(&self) -> &str {
             "TestPropagator"
         }
@@ -1949,16 +1946,16 @@ mod tests {
 
         // We create a test solver which propagates such that there is a jump across a hole in the
         // domain and then we report a conflict based on the assigned values.
-        let propagator_constructor = TestPropagatorConstructor {
-            propagations: vec![
+        let propagator_constructor = TestPropagator::new(
+            vec![
                 (predicate!(variable != 2), conjunction!()),
                 (predicate!(variable <= 3), conjunction!()),
                 (predicate!(variable != 3), conjunction!()),
                 (predicate!(other_variable != 4), conjunction!()),
                 (predicate!(other_variable <= 4), conjunction!()),
             ],
-            conflicts: vec![conjunction!([other_variable == 3] & [variable == 1])],
-        };
+            vec![conjunction!([other_variable == 3] & [variable == 1])],
+        );
 
         let result = solver.add_propagator(propagator_constructor);
         assert!(result.is_ok());
