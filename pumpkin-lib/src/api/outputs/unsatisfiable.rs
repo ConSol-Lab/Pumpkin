@@ -1,6 +1,7 @@
 //! Contains the representation of a unsatisfiable solution.
 
 use crate::branching::Brancher;
+use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 #[cfg(doc)]
@@ -33,7 +34,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///
     /// In an assumption-based solver, a core is defined as a (sub)set of assumptions which, given a
     /// set of constraints, when set together will lead to an unsatisfiable instance. For
-    /// example, if we two variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
+    /// example, if we three variables `x, y, z ∈ {0, 1, 2}` and we have the constraint
     /// `all-different(x, y, z)` then the assumptions `[[x = 1], [y <= 1], [y != 0]]` would
     /// constitute an unsatisfiable core since the constraint and the assumptions can never be
     /// satisfied at the same time.
@@ -82,11 +83,10 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     {
     ///         let core = unsatisfiable.extract_core();
     ///
-    ///         // In this case, the core should be equal to the negation of all literals in the
-    ///         // assumptions
+    ///         // In this case, the core should be equal to all assumption literals
     ///         assert!(assumptions
     ///             .into_iter()
-    ///             .all(|literal| core.contains(&(!literal))));
+    ///             .all(|literal| core.contains(&literal)));
     ///     }
     /// }
     ///  ```
@@ -100,10 +100,12 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// Operations Research: 17th International Conference, CPAIOR 2020, Vienna, Austria, September
     /// 21--24, 2020, Proceedings 17, 2020, pp. 205–221.
     pub fn extract_core(&mut self) -> Box<[Literal]> {
-        self.solver
-            .extract_clausal_core(self.brancher)
-            .expect("expected consistent assumptions")
-            .into()
+        match self.solver.extract_clausal_core(self.brancher) {
+            CoreExtractionResult::ConflictingAssumption(conflicting_assumption) => {
+                panic!("Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}", !conflicting_assumption)
+            }
+            CoreExtractionResult::Core(core) => core.into(),
+        }
     }
 }
 
