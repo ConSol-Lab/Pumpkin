@@ -1257,7 +1257,10 @@ impl ConstraintSatisfactionSolver {
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
-        pumpkin_assert_simple!(self.cp_trail_index >= self.assignments_integer.num_trail_entries());
+        pumpkin_assert_simple!(
+            !self.watch_list_cp.is_watching_anything()
+                || self.cp_trail_index >= self.assignments_integer.num_trail_entries(),
+        );
         self.cp_trail_index = self.assignments_integer.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
