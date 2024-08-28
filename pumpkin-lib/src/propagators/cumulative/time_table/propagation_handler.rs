@@ -537,8 +537,8 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var>(
-    context: &PropagationContext,
+pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
+    context: &Context,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
 ) -> PropositionalConjunction

@@ -16,15 +16,16 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::options::CumulativeOptions;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::CumulativeConstructor;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::pumpkin_assert_extreme;
 
@@ -41,6 +42,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct TimeTablePerPointPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -57,27 +59,17 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
 /// start time and they are non-overlapping
 pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
 
-impl<Var> PropagatorConstructor for CumulativeConstructor<Var, TimeTablePerPointPropagator<Var>>
-where
-    Var: IntegerVariable + 'static + std::fmt::Debug,
-{
-    type Propagator = TimeTablePerPointPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context);
-        TimeTablePerPointPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.options,
-        ))
-    }
-}
-
 impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
-    pub(crate) fn new(parameters: CumulativeParameters<Var>) -> TimeTablePerPointPropagator<Var> {
+    #[allow(unused)]
+    pub(crate) fn new(
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
+        cumulative_options: CumulativeOptions,
+    ) -> TimeTablePerPointPropagator<Var> {
+        let tasks = create_tasks(arg_tasks);
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
-            parameters,
+            parameters: CumulativeParameters::new(tasks, capacity, cumulative_options),
         }
     }
 }
@@ -136,8 +128,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        register_tasks(&self.parameters.tasks, context);
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -162,8 +155,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// The result of this method is either the time-table of type
 /// [`PerPointTimeTableType`] or the tasks responsible for the
 /// conflict in the form of an [`Inconsistency`].
-pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+pub(crate) fn create_time_table_per_point_from_scratch<
+    Var: IntegerVariable + 'static,
+    Context: ReadDomains,
+>(
+    context: &Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
     let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
@@ -200,7 +196,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<Var: IntegerVariable + 's
         time_table
             .values()
             .all(|profile| profile.start == profile.end),
-        "The TimeTablePerPoint method should only create profiles where `start == end`"
+        "The TimeTablePerPointPropagator method should only create profiles where `start == end`"
     );
     Ok(time_table)
 }
@@ -224,11 +220,11 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::options::CumulativeExplanationType;
+    use crate::options::CumulativeOptions;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativeOptions;
-    use crate::propagators::TimeTablePerPoint;
+    use crate::propagators::TimeTablePerPointPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -237,8 +233,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -251,7 +247,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -272,8 +268,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTablePerPoint::new(
-            [
+        let result = solver.new_propagator(TimeTablePerPointPropagator::new(
+            &[
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -286,7 +282,7 @@ mod tests {
                 },
             ]
             .into_iter()
-            .collect(),
+            .collect::<Vec<_>>(),
             1,
             CumulativeOptions {
                 allow_holes_in_domain: false,
@@ -318,8 +314,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -332,7 +328,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -358,8 +354,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -392,7 +388,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -411,8 +407,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -425,7 +421,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -459,8 +455,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -473,7 +469,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -513,8 +509,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -547,7 +543,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -591,8 +587,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -630,7 +626,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -667,8 +663,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -681,7 +677,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -718,8 +714,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -737,7 +733,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
@@ -774,8 +770,8 @@ mod tests {
         let s2 = solver.new_variable(0, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPoint::new(
-                [
+            .new_propagator(TimeTablePerPointPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -788,7 +784,7 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: true,

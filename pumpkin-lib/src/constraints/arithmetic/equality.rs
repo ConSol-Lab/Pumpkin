@@ -1,7 +1,7 @@
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
+use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
@@ -115,7 +115,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).post(solver)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver)
     }
 
     fn implied_by(
@@ -123,7 +123,7 @@ where
         solver: &mut Solver,
         reification_literal: Literal,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(solver, reification_literal)
     }
 }
 

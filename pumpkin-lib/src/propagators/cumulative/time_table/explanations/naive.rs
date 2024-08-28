@@ -35,10 +35,14 @@ pub(crate) fn create_naive_propagation_explanation<'a, Var: IntegerVariable + 's
 
 /// Creates the conflict explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_conflict_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_naive_conflict_explanation<Var, Context>(
     conflict_profile: &ResourceProfile<Var>,
-    context: &PropagationContext,
-) -> PropositionalConjunction {
+    context: &Context,
+) -> PropositionalConjunction
+where
+    Var: IntegerVariable + 'static,
+    Context: ReadDomains,
+{
     conflict_profile
         .profile_tasks
         .iter()
