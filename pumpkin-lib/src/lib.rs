@@ -274,11 +274,10 @@
 //!     {
 //!         let core = unsatisfiable.extract_core();
 //!
-//!         // In this case, the core should be equal to the negation of all literals in the
-//!         // assumptions
+//!         // In this case, the core should be equal to all of the assumption literals
 //!         assert!(assumptions
 //!             .into_iter()
-//!             .all(|literal| core.contains(&(!literal))));
+//!             .all(|literal| core.contains(&literal)));
 //!     }
 //! }
 //!  ```

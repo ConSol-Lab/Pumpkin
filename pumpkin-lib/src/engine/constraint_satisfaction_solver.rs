@@ -193,6 +193,23 @@ impl Default for ConstraintSatisfactionSolver {
     }
 }
 
+/// The result of [`ConstraintSatisfactionSolver::extract_clausal_core`]; there are 2 cases:
+/// 1. In the case of [`CoreExtractionResult::ConflictingAssumption`], two assumptions have been
+///    given which directly conflict with one another; e.g. if the assumptions `[x, !x]` have been
+///    given then the result of [`ConstraintSatisfactionSolver::extract_clausal_core`] will be a
+///    [`CoreExtractionResult::ConflictingAssumption`] containing `!x`.
+/// 2. The standard case is when a [`CoreExtractionResult::Core`] is returned which contains (a
+///    subset of) the assumptions which led to conflict.
+#[derive(Debug, Clone)]
+pub enum CoreExtractionResult {
+    /// Conflicting assumptions were provided; e.g. in the case of the assumptions `[x, !x]`, this
+    /// result will contain `!x`
+    ConflictingAssumption(Literal),
+    /// The standard case where this result contains the core consisting of (a
+    ///    subset of) the assumptions which led to conflict.
+    Core(Vec<Literal>),
+}
+
 /// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
@@ -492,7 +509,8 @@ impl ConstraintSatisfactionSolver {
         domain_id
     }
 
-    /// Returns an unsatisfiable core.
+    /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
+    /// with one another ([`Err`] then contain the [`Literal`] which was conflicting).
     ///
     /// We define an unsatisfiable core as a clause containing only negated assumption literals,
     /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
@@ -548,45 +566,32 @@ impl ConstraintSatisfactionSolver {
     ///         assert_eq!(
     ///             core.len(),
     ///             assumptions.len(),
-    ///             "the core has the length of the number of assumptions"
+    ///             "The core has the length of the number of assumptions"
     ///         );
     ///         assert!(
-    ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///             "all literals in the core are negated assumptions"
+    ///             core.iter().all(|&lit| assumptions.contains(&lit)),
+    ///             "All literals in the core are assumptions"
     ///         );
     ///     }
     /// }
     /// ```
-    pub fn extract_clausal_core(
-        &mut self,
-        _brancher: &mut impl Brancher,
-    ) -> Result<Vec<Predicate>, Predicate> {
-        todo!();
+    pub fn extract_clausal_core(&mut self, _brancher: &mut impl Brancher) -> CoreExtractionResult {
         // let mut conflict_analysis_context = ConflictAnalysisContext {
-        // assumptions: &self.assumptions,
-        // clausal_propagator: &self.clausal_propagator,
-        // assignments: &self.assignments,
-        // assignments_propositional: &self.assignments_propositional,
-        // internal_parameters: &self.internal_parameters,
-        // solver_state: &mut self.state,
-        // brancher,
-        // clause_allocator: &mut self.clause_allocator,
-        // explanation_clause_manager: &mut self.explanation_clause_manager,
-        // reason_store: &mut self.reason_store,
-        // counters: &mut self.counters,
-        // learned_clause_manager: &mut self.learned_clause_manager,
-        // restart_strategy: &mut self.restart_strategy,
-        // };
-        //
-        // let core = self
-        // .conflict_analyser
-        // .compute_clausal_core(&mut conflict_analysis_context);
-        //
-        // if !self.state.is_infeasible() {
-        // self.restore_state_at_root(brancher);
-        // }
-        //
-        // core
+        //    assumptions: &self.assumptions,
+        //    clausal_propagator: &self.clausal_propagator,
+        //    variable_literal_mappings: &self.variable_literal_mappings,
+        //    assignments_integer: &self.assignments_integer,
+        //    assignments_propositional: &self.assignments_propositional,
+        //    internal_parameters: &self.internal_parameters,
+        //    solver_state: &mut self.state,
+        //    brancher,
+        //    clause_allocator: &mut self.clause_allocator,
+        //    explanation_clause_manager: &mut self.explanation_clause_manager,
+        //    reason_store: &mut self.reason_store,
+        //    counters: &mut self.counters,
+        //    learned_clause_manager: &mut self.learned_clause_manager,
+        //};
+        todo!()
     }
 
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
@@ -1515,61 +1520,57 @@ impl CSPSolverState {
 
 #[cfg(test)]
 mod tests {
-    use super::ConstraintSatisfactionSolver;
-    use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::termination::indefinite::Indefinite;
 
     #[allow(dead_code)]
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
-    #[allow(dead_code)]
-    fn is_result_the_same(
-        res1: &Result<Vec<Predicate>, Predicate>,
-        res2: &Result<Vec<Predicate>, Predicate>,
-    ) -> bool {
-        // if the two results disagree on the outcome, can already return false
-        if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
-            println!("diff");
-            println!("{:?}", res1.clone().unwrap());
-            false
-        }
-        // if both results are errors, check if the two errors are the same
-        else if res1.is_err() {
-            println!("err");
-            res1.clone().unwrap_err() == res2.clone().unwrap_err()
-        }
-        // otherwise the two results are both ok
-        else {
-            println!("ok");
-            is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
-        }
-    }
-
-    #[allow(dead_code)]
-    fn run_test(
-        mut solver: ConstraintSatisfactionSolver,
-        assumptions: Vec<Predicate>,
-        expected_flag: CSPSolverExecutionFlag,
-        expected_result: Result<Vec<Predicate>, Predicate>,
-    ) {
-        let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
-        let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
-        assert!(flag == expected_flag, "The flags do not match.");
-
-        if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
-            assert!(
-                is_result_the_same(
-                    &solver.extract_clausal_core(&mut brancher),
-                    &expected_result
-                ),
-                "The result is not the same"
-            );
-        }
-    }
+    //#[allow(dead_code)]
+    // fn is_result_the_same(
+    //    res1: &Result<Vec<Predicate>, Predicate>,
+    //    res2: &Result<Vec<Predicate>, Predicate>,
+    //) -> bool {
+    //    // if the two results disagree on the outcome, can already return false
+    //    if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
+    //        println!("diff");
+    //        println!("{:?}", res1.clone().unwrap());
+    //        false
+    //    }
+    //    // if both results are errors, check if the two errors are the same
+    //    else if res1.is_err() {
+    //        println!("err");
+    //        res1.clone().unwrap_err() == res2.clone().unwrap_err()
+    //    }
+    //    // otherwise the two results are both ok
+    //    else {
+    //        println!("ok");
+    //        is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
+    //    }
+    //}
+    //
+    //#[allow(dead_code)]
+    // fn run_test(
+    //    mut solver: ConstraintSatisfactionSolver,
+    //    assumptions: Vec<Predicate>,
+    //    expected_flag: CSPSolverExecutionFlag,
+    //    expected_result: Result<Vec<Predicate>, Predicate>,
+    //) {
+    //    let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
+    //    let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
+    //    assert!(flag == expected_flag, "The flags do not match.");
+    //
+    //    if matches!(flag, CSPSolverExecutionFlag::Infeasible) {
+    //        assert!(
+    //            is_result_the_same(
+    //                &solver.extract_clausal_core(&mut brancher),
+    //                &expected_result
+    //            ),
+    //            "The result is not the same"
+    //        );
+    //    }
+    //}
 
     // TODO: readd this
     // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
