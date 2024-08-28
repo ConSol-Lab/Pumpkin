@@ -5,6 +5,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::KeyedVec;
 use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
@@ -443,11 +444,11 @@ impl ResolutionConflictAnalyser {
     pub(crate) fn compute_clausal_core(
         &mut self,
         context: &mut ConflictAnalysisContext,
-    ) -> Result<Vec<Literal>, Literal> {
+    ) -> CoreExtractionResult {
         pumpkin_assert_simple!(self.debug_check_core_extraction(context));
 
         if context.solver_state.is_infeasible() {
-            return Ok(vec![]);
+            return CoreExtractionResult::Core(vec![]);
         }
 
         let violated_assumption = context.solver_state.get_violated_assumption();
@@ -463,26 +464,26 @@ impl ResolutionConflictAnalyser {
             .assignments_propositional
             .is_literal_root_assignment(violated_assumption)
         {
-            // self.restore_state_at_root(brancher);
-            Ok(vec![violated_assumption])
+            CoreExtractionResult::Core(vec![violated_assumption])
         }
-        // Case two: the assumption is inconsistent with other assumptions
-        //  i.e., the assumptions contain both literal 'x' and '~x'
-        //  not sure what would be the best output in this case, possibly a special flag?
-        //      for now we return the reason (x && ~x)
+        // Case two: the assumption is inconsistent with other assumptions (i.e. the assumptions
+        // contain both literal 'x' and '!x')
+        //
+        // We return the literal which has conflicting assumptions
         else if !context
             .assignments_propositional
             .is_literal_propagated(violated_assumption)
         {
-            // self.restore_state_at_root(brancher);
-            Err(violated_assumption)
+            CoreExtractionResult::ConflictingAssumption(violated_assumption)
         }
-        // Case three: the standard case, proceed with core extraction
-        // performs resolution on all implied assumptions until only decision assumptions are left
-        //  the violating assumption is used as the starting point
-        //  at this point, any reason clause encountered will contains only assumptions, but some
-        // assumptions might be implied  this corresponds to the all-decision CDCL learning
-        // scheme
+        // Case three: the standard case - proceed with core extraction
+        //
+        // Performs resolution on all implied assumptions until only decision assumptions are left.
+        // The violating assumption is used as the starting point at this point, any reason
+        // clause encountered will contains only assumptions, but some assumptions might be
+        // implied.
+        //
+        // This corresponds to the all-decision CDCL learning scheme
         else {
             self.compute_all_decision_learning_helper(
                 Some(!violated_assumption),
@@ -494,8 +495,13 @@ impl ResolutionConflictAnalyser {
                 .learned_literals
                 .push(!violated_assumption);
             pumpkin_assert_moderate!(self.debug_check_clausal_core(violated_assumption, context));
-            // self.restore_state_at_root(brancher);
-            Ok(self.analysis_result.learned_literals.clone())
+            CoreExtractionResult::Core(
+                self.analysis_result
+                    .learned_literals
+                    .iter()
+                    .map(|negated_assumption| !(*negated_assumption))
+                    .collect(),
+            )
         }
     }
 
