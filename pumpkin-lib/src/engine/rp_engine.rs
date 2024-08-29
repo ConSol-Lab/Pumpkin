@@ -1,3 +1,5 @@
+//! An API to verify the RP property of clauses.
+//!
 //! Reverse propagation (RP) is a generalization of Reverse Unit Propagation (RUP). In the latter
 //! case, a clause `c` is RUP with respect to a clause database `F` when `¬c ∧ F ⟹ false` and this
 //! conflict can be detected through clausal (aka unit) propagation.
@@ -9,7 +11,7 @@
 //!
 //! Since validating the RP property of a clause of predicates requires a CP propagation engine,
 //! and given that Pumpkin implements such an engine, the [`RpEngine`] exposes an API to verify the
-//! RP property of of clauses.
+//! RP property of clauses.
 
 use log::warn;
 

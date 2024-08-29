@@ -8,8 +8,9 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
-
+#[allow(clippy::too_long_first_doc_paragraph)]
 /// A [`ValueSelector`] which implements [phase saving \[1\]](https://www.researchgate.net/profile/Thammanit-Pipatsrisawat/publication/220944633_A_Lightweight_Component_Caching_Scheme_for_Satisfiability_Solvers/links/0f31753c48ffead666000000/A-Lightweight-Component-Caching-Scheme-for-Satisfiability-Solvers.pdf).
+///
 /// During the search process, values of variables are saved whenever they are assigned and the
 /// search process will attempt to assign to these values whenever possible. After a variable has
 /// been fixed, its value will be saved as the previous value and the search will continue.

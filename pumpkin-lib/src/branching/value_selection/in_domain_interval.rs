@@ -5,11 +5,13 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
 
-/// If the domain consists of several intervals (e.g. a variable with the domain {0, 1, 4, 5, 6, 9,
-/// 10} consists of the interval {[0-1], [4-6], [9-10]}), then this [`ValueSelector`] will reduce
-/// the domain to the first interval (e.g. to {0, 1} in the previous example). Otherwise (i.e. if
-/// the domain is one continuous interval) then it will bisect the domain in the same manner as
-/// [`InDomainSplit`].
+/// If the domain consists of several intervals then it reduces the domain to the first interval.
+///
+/// More specifically, If the domain consists of several intervals (e.g. a variable with the domain
+/// {0, 1, 4, 5, 6, 9, 10} consists of the interval {[0-1], [4-6], [9-10]}), then this
+/// [`ValueSelector`] will reduce the domain to the first interval (e.g. to {0, 1} in the previous
+/// example). Otherwise (i.e. if the domain is one continuous interval) then it will bisect the
+/// domain in the same manner as [`InDomainSplit`].
 #[derive(Debug, Copy, Clone)]
 pub struct InDomainInterval;
 

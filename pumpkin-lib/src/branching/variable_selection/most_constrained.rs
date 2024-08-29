@@ -13,8 +13,10 @@ use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 
 /// A [`VariableSelector`] which selects the variable with the smallest domain (similar to
-/// [`FirstFail`]) which breaks ties according to the number of attached
-/// constraints (giving priority to variable with more attached constraints).
+/// [`FirstFail`]).
+///
+/// Ties are broken according to the number of attached constraints (giving priority to variable
+/// with more attached constraints).
 pub struct MostConstrained<Var, TieBreaking> {
     variables: Vec<Var>,
     tie_breaker: TieBreaking,

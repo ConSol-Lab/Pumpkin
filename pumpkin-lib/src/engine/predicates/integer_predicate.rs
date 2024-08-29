@@ -3,9 +3,11 @@ use thiserror::Error;
 use super::predicate::Predicate;
 use crate::engine::variables::DomainId;
 
-/// Representation of a domain operation, it can either be in the form of atomic constraints over
-/// [`DomainId`]s (in the form of [`IntegerPredicate::LowerBound`],
-/// [`IntegerPredicate::UpperBound`], [`IntegerPredicate::NotEqual`] or [`IntegerPredicate::Equal`])
+/// Representation of a domain operation over integers.
+///
+/// It is in the form of atomic constraints over [`DomainId`]s (in the form of
+/// [`IntegerPredicate::LowerBound`], [`IntegerPredicate::UpperBound`],
+/// [`IntegerPredicate::NotEqual`] or [`IntegerPredicate::Equal`])
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub enum IntegerPredicate {
     LowerBound {
