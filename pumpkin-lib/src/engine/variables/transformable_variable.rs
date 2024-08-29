@@ -1,4 +1,6 @@
-/// Trait for transforming a variable, at the moment this allows creating a scaled version of a
+/// Trait for transforming a variable.
+///
+/// At the moment this allows creating a scaled version of a
 /// variable using [`TransformableVariable::scaled`] or creating a variable with a constant offset
 /// based on the original variable using [`TransformableVariable::offset`].
 pub trait TransformableVariable<View> {

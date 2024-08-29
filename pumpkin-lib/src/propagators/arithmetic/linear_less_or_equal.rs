@@ -74,8 +74,11 @@ fn perform_propagation<Var: IntegerVariable>(
     x: &[Var],
     c: i32,
 ) -> PropagationStatusCP {
-    let lb_lhs = x.iter().map(|var| context.lower_bound(var)).sum::<i32>();
-    if c < lb_lhs {
+    let lb_lhs = x
+        .iter()
+        .map(|var| context.lower_bound(var) as i64)
+        .sum::<i64>();
+    if (c as i64) < lb_lhs {
         let reason: PropositionalConjunction = x
             .iter()
             .map(|var| predicate![var >= context.lower_bound(var)])
@@ -84,9 +87,9 @@ fn perform_propagation<Var: IntegerVariable>(
     }
 
     for (i, x_i) in x.iter().enumerate() {
-        let bound = c - (lb_lhs - context.lower_bound(x_i));
+        let bound = c as i64 - (lb_lhs - context.lower_bound(x_i) as i64);
 
-        if context.upper_bound(x_i) > bound {
+        if context.upper_bound(x_i) as i64 > bound {
             let reason: PropositionalConjunction = x
                 .iter()
                 .enumerate()
@@ -99,7 +102,13 @@ fn perform_propagation<Var: IntegerVariable>(
                 })
                 .collect();
 
-            context.set_upper_bound(x_i, bound, reason)?;
+            context.set_upper_bound(
+                x_i,
+                bound
+                    .try_into()
+                    .expect("Expected to be able to fit the new bound into i32 but could not"),
+                reason,
+            )?;
         }
     }
 

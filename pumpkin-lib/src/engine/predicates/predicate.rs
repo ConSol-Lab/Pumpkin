@@ -1,6 +1,8 @@
 use crate::engine::variables::DomainId;
 
-/// Representation of a domain operation, it can either be in the form of atomic constraints over
+/// Representation of a domain operation.
+///
+/// It can either be in the form of atomic constraints over
 /// [`DomainId`]s (in the form of [`Predicate::LowerBound`],
 /// [`Predicate::UpperBound`], [`Predicate::NotEqual`] or [`Predicate::Equal`])
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]

@@ -9,10 +9,12 @@ use crate::engine::variables::DomainId;
 use crate::DefaultBrancher;
 use crate::Solver;
 
-/// Determines which alternation strategy is used by the [`AlternatingBrancher`]. Currently we allow
-/// switching every time a solution is found ([`AlternatingStrategy::EverySolution`]), after every
-/// other solution ([`AlternatingStrategy::EveryOtherSolution`]), switching to [`DefaultBrancher`]
-/// after the first solution is found and switching strategy upon restart.
+/// Determines which alternation strategy is used by the [`AlternatingBrancher`].
+///
+/// Currently we allow switching every time a solution is found
+/// ([`AlternatingStrategy::EverySolution`]), after every other solution
+/// ([`AlternatingStrategy::EveryOtherSolution`]), switching to [`DefaultBrancher`] after the first
+/// solution is found and switching strategy upon restart.
 #[derive(Debug, Clone, Copy)]
 pub enum AlternatingStrategy {
     /// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
@@ -30,7 +32,9 @@ pub enum AlternatingStrategy {
 }
 
 /// A [`Brancher`] which switches between its provided brancher and [`DefaultBrancher`] based on the
-/// provided [`AlternatingStrategy`]. Note that the [`DefaultBrancher`] is informed of every
+/// provided [`AlternatingStrategy`].
+///
+/// Note that the [`DefaultBrancher`] is informed of every
 /// conflict and unassignment even if it is not currently utilised as [`Brancher`].
 ///
 /// Note that this brancher starts out by using the provided [`Brancher`] and then switches based on

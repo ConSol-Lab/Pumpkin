@@ -91,15 +91,15 @@ where
             .iter()
             .map(|var| {
                 if context.is_fixed(var) {
-                    context.lower_bound(var)
+                    context.lower_bound(var) as i64
                 } else {
                     0
                 }
             })
-            .sum::<i32>();
+            .sum::<i64>();
 
         if num_fixed == self.terms.len() - 1 {
-            let value_to_remove = self.rhs - lhs;
+            let value_to_remove = self.rhs as i64 - lhs;
 
             let unfixed_x_i = self
                 .terms
@@ -109,7 +109,9 @@ where
             let terms = Rc::clone(&self.terms);
             context.remove(
                 &self.terms[unfixed_x_i],
-                value_to_remove,
+                value_to_remove
+                    .try_into()
+                    .expect("Expected to be able to fit the new bound into i32 but could not"),
                 move |context: &PropagationContext| {
                     let predicates = terms
                         .iter()
@@ -120,7 +122,7 @@ where
                     predicates.into()
                 },
             )?;
-        } else if num_fixed == self.terms.len() && lhs == self.rhs {
+        } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
             // Conflict was found, either the constraint is not reified or the reification
             // variable is already true
 
