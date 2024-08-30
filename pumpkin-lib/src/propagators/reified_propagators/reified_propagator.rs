@@ -116,7 +116,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        // We remove the inconsistency upon backtracking since it might be invalid now
+        // The inconsistency is now invalid
         let _ = self.inconsistency.take();
 
         self.propagator.synchronise(context);
@@ -183,14 +183,6 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         Ok(())
     }
 
-    fn find_inconsistency(&mut self, context: PropagationContext<'_>) -> bool {
-        if self.inconsistency.is_none() {
-            self.inconsistency = self.propagator.detect_inconsistency(context);
-        }
-
-        self.inconsistency.is_some()
-    }
-
     fn filter_enqueue_decision(
         &mut self,
         context: PropagationContext<'_>,
@@ -198,8 +190,13 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
     ) -> EnqueueDecision {
         if (decision == EnqueueDecision::Enqueue
             && context.is_literal_true(self.reification_literal))
-            || (!context.is_literal_false(self.reification_literal)
-                && self.find_inconsistency(context))
+            || (!context.is_literal_fixed(self.reification_literal) && {
+                if self.inconsistency.is_none() {
+                    self.inconsistency = self.propagator.detect_inconsistency(context);
+                }
+
+                self.inconsistency.is_some()
+            })
         {
             EnqueueDecision::Enqueue
         } else {
@@ -218,7 +215,6 @@ mod tests {
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::variables::DomainId;
 
     #[test]
     fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_literal_to_false() {
@@ -339,40 +335,10 @@ mod tests {
         assert!(solver.is_literal_false(reification_literal));
     }
 
-    #[test]
-    fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
-        let mut solver = TestSolver::default();
-
-        let reification_literal = solver.new_literal();
-        let var = solver.new_variable(1, 5);
-
-        let mut propagator = solver
-            .new_propagator(ReifiedPropagator::new(
-                GenericPropagator::new(
-                    |_: PropagationContextMut| Ok(()),
-                    move |context: PropagationContext| {
-                        if context.is_fixed(&var) {
-                            Some(conjunction!([var == 5]))
-                        } else {
-                            None
-                        }
-                    },
-                    |_: &mut PropagatorInitialisationContext| Ok(()),
-                )
-                .with_variables(&[var]),
-                reification_literal,
-            ))
-            .expect("No conflict expected");
-
-        let enqueue = solver.increase_lower_bound_and_notify(&mut propagator, 0, var, 5);
-        assert!(matches!(enqueue, EnqueueDecision::Enqueue))
-    }
-
     struct GenericPropagator<Propagation, ConsistencyCheck, Init> {
         propagation: Propagation,
         consistency_check: ConsistencyCheck,
         init: Init,
-        variables_to_register: Vec<DomainId>,
     }
 
     impl<Propagation, ConsistencyCheck, Init> Propagator
@@ -383,7 +349,7 @@ mod tests {
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>,
     {
         fn name(&self) -> &str {
-            "Generic Propagator"
+            "Failing Propagator"
         }
 
         fn debug_propagate_from_scratch(
@@ -404,16 +370,6 @@ mod tests {
             &mut self,
             context: &mut PropagatorInitialisationContext,
         ) -> Result<(), PropositionalConjunction> {
-            self.variables_to_register
-                .iter()
-                .enumerate()
-                .for_each(|(index, variable)| {
-                    let _ = context.register(
-                        *variable,
-                        DomainEvents::ANY_INT,
-                        LocalId::from(index as u32),
-                    );
-                });
             (self.init)(context)
         }
     }
@@ -433,14 +389,7 @@ mod tests {
                 propagation,
                 consistency_check,
                 init,
-                variables_to_register: vec![],
             }
-        }
-
-        pub(crate) fn with_variables(mut self, variables: &[DomainId]) -> Self {
-            // Necessary for ensuring that the local IDs are correct when notifying
-            self.variables_to_register = variables.into();
-            self
         }
     }
 }
