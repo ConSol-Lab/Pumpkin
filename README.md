@@ -12,7 +12,7 @@ Pumpkin is a combinatorial optimisation solver developed by the ConSol Lab at TU
 
 Our goal is to keep the solver efficient, easy-to-use, and well-documented. The solver is written in pure Rust and follows Rust best practices. As a result, downloading and compiling Pumpkin is straight-forward!
 
-A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See [our CP’24 paper](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2024.11) for more details.
+A unique feature of Pumpkin is that it can produce a certificate of unsatisfiability. See our CP’24 paper for more details.
 </p>
 
 <br clear="left"/>

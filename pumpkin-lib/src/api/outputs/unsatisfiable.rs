@@ -8,9 +8,8 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::Solver;
 
 /// A struct which allows the retrieval of an unsatisfiable core consisting of the provided
-/// assumptions passed to the initial [`Solver::satisfy_under_assumptions`].
-///
-/// Note that when this struct is dropped (using [`Drop`]) then the [`Solver`] is reset.
+/// assumptions passed to the initial [`Solver::satisfy_under_assumptions`]. Note that when this
+/// struct is dropped (using [`Drop`]) then the [`Solver`] is reset.
 #[derive(Debug)]
 pub struct UnsatisfiableUnderAssumptions<'solver, 'brancher, B: Brancher> {
     pub(crate) solver: &'solver mut ConstraintSatisfactionSolver,

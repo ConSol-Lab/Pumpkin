@@ -13,13 +13,11 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
-/// sequentially applies [`Brancher::next_decision`] until all of them return [`None`].
-///
-///  Once all of the stored branchers return [`None`] then this [`Brancher`] will also return
-/// [`None`] in its [`DynamicBrancher::next_decision`] method. For any other method in [`Brancher`]
-/// it will simply pass it along to all of the provided `Box<dyn Brancher>`s. This structure should
-/// be used if you want to use dynamic [`Brancher`]s but require a [`Sized`] object (e.g. when a
-/// function takes as input `impl Brancher`).
+/// sequentially applies [`Brancher::next_decision`] until all of them return [`None`] in which case
+/// this [`Brancher`] will also return [`None`] in its [`DynamicBrancher::next_decision`] method.
+/// For any other method in [`Brancher`] it will simply pass it along to all of the provided
+/// `Box<dyn Brancher>`s. This structure should be used if you want to use dynamic [`Brancher`]s but
+/// require a [`Sized`] object (e.g. when a function takes as input `impl Brancher`).
 ///
 /// # Note
 /// It is important that the methods [`DynamicBrancher::on_conflict`] and

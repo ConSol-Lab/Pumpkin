@@ -9,10 +9,9 @@ pub(crate) mod statistic_logger {
     static AFTER_STATISTICS: OnceLock<Option<&str>> = OnceLock::new();
     static LOG_STATISTICS: OnceLock<bool> = OnceLock::new();
 
-    /// Configures the statistic logger to use a certain prefix and (an optional) closing line.
-    ///
-    /// The closing line can be printed after all of the statistics have been logged. Statistics
-    /// will only be printed if `log_statistics` is true.
+    /// Configures the statistic logger to use a certain prefix and (an optional) closing line which
+    /// can be printed after all of the statistics have been logged. Statistics will only be printed
+    /// if `log_statistics` is true.
     pub fn configure(log_statistics: bool, prefix: &'static str, after: Option<&'static str>) {
         let _ = LOG_STATISTICS.get_or_init(|| log_statistics);
         if log_statistics {
@@ -34,8 +33,6 @@ pub(crate) mod statistic_logger {
         }
     }
 
-    /// Log the postfix which hs been registered in [`configure`].
-    ///
     /// Certain formats (e.g. the [MiniZinc](https://www.minizinc.org/doc-2.7.6/en/fzn-spec.html#statistics-output)
     /// output format) require that a block of statistics is followed by a closing line; this
     /// function outputs this closing line **if** it is configued.

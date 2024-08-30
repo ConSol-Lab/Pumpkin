@@ -6,9 +6,8 @@ use crate::engine::variables::Literal;
 #[cfg(doc)]
 use crate::engine::VariableLiteralMappings;
 
-/// This structure is oftentimes used to represent propagations, explanations or decisions.
-///
-/// It can either represent an [`IntegerPredicate`], a [`Literal`] which is linked to an
+/// This structure is oftentimes used to represent propagations, explanations or decisions. It can
+/// either represent an [`IntegerPredicate`], a [`Literal`] which is linked to an
 /// [`IntegerPredicate`], or a domain operation which is always true (false) using
 /// [`Predicate::True`] ([`Predicate::False`]).
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
