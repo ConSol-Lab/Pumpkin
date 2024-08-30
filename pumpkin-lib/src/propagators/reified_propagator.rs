@@ -196,10 +196,10 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         context: PropagationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
-        if (decision == EnqueueDecision::Enqueue
-            && context.is_literal_true(self.reification_literal))
-            || (!context.is_literal_false(self.reification_literal)
-                && self.find_inconsistency(context))
+        if decision == EnqueueDecision::Enqueue
+            && (context.is_literal_true(self.reification_literal)
+                || (!context.is_literal_false(self.reification_literal)
+                    && self.find_inconsistency(context)))
         {
             EnqueueDecision::Enqueue
         } else {
