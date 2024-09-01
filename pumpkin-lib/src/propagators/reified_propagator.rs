@@ -117,7 +117,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
     fn synchronise(&mut self, context: &PropagationContext) {
         // We remove the inconsistency upon backtracking since it might be invalid now
-        let _ = self.inconsistency.take();
+        self.inconsistency = None;
 
         self.propagator.synchronise(context);
     }
@@ -196,15 +196,24 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         context: PropagationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
-        if decision == EnqueueDecision::Enqueue
-            && (context.is_literal_true(self.reification_literal)
-                || (!context.is_literal_false(self.reification_literal)
-                    && self.find_inconsistency(context)))
-        {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
+        if decision == EnqueueDecision::Skip {
+            // If the original propagator skips then we always skip
+            return EnqueueDecision::Skip;
         }
+
+        if context.is_literal_true(self.reification_literal) {
+            // If the propagator would have enqueued and the literal is true then the reified
+            // propagator is also enqueued
+            return EnqueueDecision::Enqueue;
+        }
+
+        if !context.is_literal_false(self.reification_literal) && self.find_inconsistency(context) {
+            // Or the literal is not false already and there the propagator has found an
+            // inconsistency (i.e. we should and can propagate the reification variable)
+            return EnqueueDecision::Enqueue;
+        }
+
+        EnqueueDecision::Skip
     }
 }
 
