@@ -42,7 +42,7 @@ pub trait ValueSelector<Var> {
     /// For example, if a [`ValueSelector`] is using a static strategy (e.g. [`InDomainMin`]) then a
     /// restart is pointless; however, for a [`ValueSelector`] like [`InDomainRandom`] which changes
     /// throughout the search process restarting is not pointless.
-    fn is_restart_pointless(&self) -> bool {
+    fn is_restart_pointless(&mut self) -> bool {
         true
     }
 }

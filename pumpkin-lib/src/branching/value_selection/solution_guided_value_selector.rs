@@ -120,7 +120,7 @@ where
         self.backup_selector.on_solution(solution)
     }
 
-    fn is_restart_pointless(&self) -> bool {
+    fn is_restart_pointless(&mut self) -> bool {
         self.backup_selector.is_restart_pointless()
     }
 }

@@ -50,7 +50,7 @@ impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
         self.selector.on_unassign_literal(literal)
     }
 
-    fn is_restart_pointless(&self) -> bool {
+    fn is_restart_pointless(&mut self) -> bool {
         self.selector.is_restart_pointless()
     }
 }

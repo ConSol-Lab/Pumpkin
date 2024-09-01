@@ -26,7 +26,7 @@ impl ValueSelector<DomainId> for InDomainSplitRandom {
         }
     }
 
-    fn is_restart_pointless(&self) -> bool {
+    fn is_restart_pointless(&mut self) -> bool {
         false
     }
 }
