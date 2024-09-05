@@ -334,8 +334,15 @@ struct Args {
     ///
     /// Possible values: ["TimeTablePerPoint", "TimeTablePerPointIncremental",
     /// "TimeTableOverInterval", "TimeTableOverIntervalIncremental"]
+
     #[arg(long = "cumulative-propagation-method", value_parser = cumulative_propagation_method_parser, default_value_t = CumulativePropagationMethod::default())]
-    cumulative_propagtion_method: CumulativePropagationMethod,
+    cumulative_propagation_method: CumulativePropagationMethod,
+    /// Determines whether a sequence of profiles is generated when explaining a propagation for
+    /// the cumulative constraint.
+    ///
+    /// Possible values: bool
+    #[arg(long = "cumulative-generate-sequence")]
+    cumulative_generate_sequence: bool,
 }
 
 fn configure_logging(
@@ -515,7 +522,8 @@ fn run() -> PumpkinResult<()> {
                 cumulative_options: CumulativeOptions::new(
                     args.cumulative_allow_holes,
                     args.cumulative_explanation_type,
-                    args.cumulative_propagtion_method,
+                    args.cumulative_propagation_method,
+                    args.cumulative_generate_sequence,
                 ),
             },
         )?,

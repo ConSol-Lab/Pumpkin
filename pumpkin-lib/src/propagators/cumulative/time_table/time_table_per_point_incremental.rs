@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use super::create_time_table_per_point_from_scratch;
@@ -12,9 +11,9 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::options::CumulativeOptions;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::cumulative::time_table::time_table_util::generate_update_range;
@@ -22,9 +21,10 @@ use crate::propagators::cumulative::time_table::time_table_util::propagate_based
 use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
 use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::CumulativeConstructor;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 #[cfg(doc)]
@@ -54,6 +54,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
@@ -72,30 +73,17 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     time_table_outdated: bool,
 }
 
-impl<Var> PropagatorConstructor
-    for CumulativeConstructor<Var, TimeTablePerPointIncrementalPropagator<Var>>
-where
-    Var: IntegerVariable + 'static + std::fmt::Debug,
-{
-    type Propagator = TimeTablePerPointIncrementalPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context);
-        TimeTablePerPointIncrementalPropagator::new(CumulativeParameters::new(
-            tasks,
-            self.capacity,
-            self.options,
-        ))
-    }
-}
-
 impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var> {
+    #[allow(unused)]
     pub(crate) fn new(
-        parameters: CumulativeParameters<Var>,
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
+        cumulative_options: CumulativeOptions,
     ) -> TimeTablePerPointIncrementalPropagator<Var> {
+        let tasks = create_tasks(arg_tasks);
         TimeTablePerPointIncrementalPropagator {
-            time_table: BTreeMap::new(),
-            parameters,
+            time_table: Default::default(),
+            parameters: CumulativeParameters::new(tasks, capacity, cumulative_options),
             time_table_outdated: false,
         }
     }
@@ -232,8 +220,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        register_tasks(&self.parameters.tasks, context);
         // First we store the bounds in the parameters
         for task in self.parameters.tasks.iter() {
             self.parameters.bounds.push((
@@ -244,7 +233,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         self.parameters.updated.clear();
 
         // Then we do normal propagation
-        self.time_table = create_time_table_per_point_from_scratch(&context, &self.parameters)?;
+        self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
         self.time_table_outdated = false;
         Ok(())
     }
@@ -263,12 +252,12 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::options::CumulativeExplanationType;
+    use crate::options::CumulativeOptions;
     use crate::options::CumulativePropagationMethod;
     use crate::predicate;
+    use crate::propagators::cumulative::time_table::time_table_per_point_incremental::TimeTablePerPointIncrementalPropagator;
     use crate::propagators::ArgTask;
-    use crate::propagators::CumulativeExplanationType;
-    use crate::propagators::CumulativeOptions;
-    use crate::propagators::TimeTablePerPointIncremental;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -277,8 +266,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -291,12 +280,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -312,8 +302,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTablePerPointIncremental::new(
-            [
+        let result = solver.new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            &[
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -326,12 +316,13 @@ mod tests {
                 },
             ]
             .into_iter()
-            .collect(),
+            .collect::<Vec<_>>(),
             1,
             CumulativeOptions {
                 allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
                 propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                generate_sequence: false,
             },
         ));
         assert!(match result {
@@ -358,8 +349,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -372,12 +363,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -398,8 +390,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -432,12 +424,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -451,8 +444,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -465,12 +458,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -499,8 +493,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -513,12 +507,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -553,8 +548,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -587,12 +582,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -631,8 +627,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -670,12 +666,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -707,8 +704,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -721,12 +718,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");
@@ -758,8 +756,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncremental::new(
-                [
+            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -777,12 +775,13 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
                 CumulativeOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     propagation_method: CumulativePropagationMethod::TimeTablePerPointIncremental,
+                    generate_sequence: false,
                 },
             ))
             .expect("No conflict");

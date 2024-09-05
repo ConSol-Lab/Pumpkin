@@ -7,7 +7,7 @@ use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
-use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
+use crate::engine::propagation::propagator_initialisation_context::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
@@ -19,7 +19,6 @@ use crate::propagators::UpdatedTaskInfo;
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
-    context: &mut PropagatorConstructorContext<'_>,
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
@@ -32,11 +31,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
             // We only add tasks which have a non-zero resource usage
             if x.resource_usage > 0 {
                 let return_value = Some(Task {
-                    start_variable: context.register(
-                        x.start_time.clone(),
-                        DomainEvents::BOUNDS,
-                        LocalId::from(id),
-                    ), // Subscribe to all domain events concerning the current variable
+                    start_variable: x.start_time.clone(),
                     processing_time: x.processing_time,
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
@@ -48,6 +43,15 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
             }
         })
         .collect::<Vec<Task<Var>>>()
+}
+
+pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
+    tasks: &[Rc<Task<Var>>],
+    context: &mut PropagatorInitialisationContext<'_>,
+) {
+    tasks.iter().for_each(|task| {
+        let _ = context.register(task.start_variable.clone(), DomainEvents::BOUNDS, task.id);
+    })
 }
 
 /// Updates the bounds of the provided [`Task`] to those stored in

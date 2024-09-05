@@ -1,20 +1,20 @@
 use std::fmt::Debug;
 
 use super::Constraint;
+use crate::options::CumulativePropagationMethod;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
-use crate::propagators::CumulativePropagationMethod;
-use crate::propagators::TimeTableOverInterval;
-use crate::propagators::TimeTableOverIntervalIncremental;
-use crate::propagators::TimeTablePerPoint;
-use crate::propagators::TimeTablePerPointIncremental;
+use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
+use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::propagators::TimeTablePerPointIncrementalPropagator;
+use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint.
+/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
 /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
 /// exceeds `bound`.
 ///
@@ -126,7 +126,7 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+same!"
     );
 
     CumulativeConstraint::new(
@@ -139,31 +139,19 @@ same!car"
                 processing_time: *duration,
                 resource_usage: *resource_requirement,
             })
-            .collect(),
+            .collect::<Vec<_>>(),
         resource_capacity,
         CumulativeOptions::default(),
     )
 }
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint with the provided [`CumulativeOptions`].
-/// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
-/// exceeds `bound`.
-///
-/// The implementation uses a form of time-table reasoning (for an example of this type of
-/// reasoning, see \[1], note that it does **not** implement the specific algorithm in the paper
-/// but that the reasoning used is the same).
-///
-/// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
-/// this is not the case then this method will panic.
+/// See the documentation of [`cumulative`] for more information about the constraint.
 ///
 /// # Example
+/// The constraint can be created with options in the following way (see [`cumulative`] for a full
+/// example):
 /// ```rust
-/// // We construct three tasks for a resource with capacity 2:
-/// // - Task 0: Start times: [0, 5], Processing time: 4, Resource usage: 1
-/// // - Task 1: Start times: [0, 5], Processing time: 2, Resource usage: 1
-/// // - Task 2: Start times: [0, 5], Processing time: 4, Resource usage: 2
-/// // We can infer that Task 0 and Task 1 execute at the same time
-/// // while Task 2 will start after them
 /// # use pumpkin_lib::termination::Indefinite;
 /// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::results::SatisfactionResult;
@@ -172,19 +160,15 @@ same!car"
 /// # use crate::pumpkin_lib::results::ProblemSolution;
 /// # use pumpkin_lib::options::CumulativeExplanationType;
 /// # use pumpkin_lib::options::CumulativeOptions;
-/// let solver = Solver::default();
-///
-/// let mut solver = Solver::default();
-///
-/// let start_0 = solver.new_bounded_integer(0, 4);
-/// let start_1 = solver.new_bounded_integer(0, 4);
-/// let start_2 = solver.new_bounded_integer(0, 5);
-///
-/// let start_times = [start_0, start_1, start_2];
-/// let durations = [5, 2, 5];
-/// let resource_requirements = [1, 1, 2];
-/// let resource_capacity = 2;
-///
+/// # let solver = Solver::default();
+/// # let mut solver = Solver::default();
+/// # let start_0 = solver.new_bounded_integer(0, 4);
+/// # let start_1 = solver.new_bounded_integer(0, 4);
+/// # let start_2 = solver.new_bounded_integer(0, 5);
+/// # let start_times = [start_0, start_1, start_2];
+/// # let durations = [5, 2, 5];
+/// # let resource_requirements = [1, 1, 2];
+/// # let resource_capacity = 2;
 /// solver
 ///     .add_constraint(constraints::cumulative_with_options(
 ///         &start_times,
@@ -192,57 +176,15 @@ same!car"
 ///         &resource_requirements,
 ///         resource_capacity,
 ///         // Instructs the solver to allow the cumulative to create holes in the
-///         // domain and to use the big-step explanation
-///         CumulativeOptions::new(true, CumulativeExplanationType::BigStep),
+///         // domain and to use the big-step explanation without generating sequences
+///         // for the explanation
+///         CumulativeOptions {
+///             allow_holes_in_domain: true,
+///             explanation_type: CumulativeExplanationType::BigStep,
+///             generate_sequence: false,
+///         },
 ///     ))
 ///     .post();
-///
-/// let mut termination = Indefinite;
-/// let mut brancher = solver.default_brancher_over_all_propositional_variables();
-///
-/// let result = solver.satisfy(&mut brancher, &mut termination);
-///
-/// // We check whether the result was feasible
-/// if let SatisfactionResult::Satisfiable(solution) = result {
-///     let horizon = durations.iter().sum::<i32>();
-///     let start_times = [start_0, start_1, start_2];
-///
-///     // Now we check whether the resource constraint is satisfied at each time-point t
-///     assert!((0..=horizon).all(|t| {
-///         // We gather all of the resource usages at the current time t
-///         let resource_usage_at_t = start_times
-///             .iter()
-///             .enumerate()
-///             .filter_map(|(task_index, start_time)| {
-///                 if solution.get_integer_value(*start_time) <= t
-///                     && solution.get_integer_value(*start_time) + durations[task_index] > t
-///                 {
-///                     Some(resource_requirements[task_index])
-///                 } else {
-///                     None
-///                 }
-///             })
-///             .sum::<i32>();
-///         // Then we check whether the resource usage at the current time point is lower than
-///         // the resource capacity
-///         resource_usage_at_t <= resource_capacity
-///     }));
-///
-///     // Finally we check whether Task 2 starts after Task 0 and Task 1 and that Task 0 and
-///     // Task 1 overlap
-///     assert!(
-///         solution.get_integer_value(start_2)
-///             >= solution.get_integer_value(start_0) + durations[0]
-///             && solution.get_integer_value(start_2)
-///                 >= solution.get_integer_value(start_1) + durations[1]
-///     );
-///     assert!(
-///         solution.get_integer_value(start_0)
-///             < solution.get_integer_value(start_1) + durations[1]
-///             && solution.get_integer_value(start_1)
-///                 < solution.get_integer_value(start_0) + durations[0]
-///     );
-/// }
 /// ```
 ///
 /// # Bibliography
@@ -260,7 +202,7 @@ pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+same!"
     );
 
     CumulativeConstraint::new(
@@ -273,7 +215,7 @@ same!car"
                 processing_time: *duration,
                 resource_usage: *resource_requirement,
             })
-            .collect(),
+            .collect::<Vec<_>>(),
         resource_capacity,
         options,
     )
@@ -302,19 +244,24 @@ where
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPoint::new(self.tasks.into(), self.capacity, self.options).post(solver)
-            }
-            CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncremental::new(self.tasks.into(), self.capacity, self.options)
+                TimeTablePerPointPropagator::new(&self.tasks, self.capacity, self.options)
                     .post(solver)
             }
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                TimeTablePerPointIncrementalPropagator::new(
+                    &self.tasks,
+                    self.capacity,
+                    self.options,
+                )
+                .post(solver)
+            }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverInterval::new(self.tasks.into(), self.capacity, self.options)
+                TimeTableOverIntervalPropagator::new(&self.tasks, self.capacity, self.options)
                     .post(solver)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncremental::new(
-                    self.tasks.into(),
+                TimeTableOverIntervalIncrementalPropagator::new(
+                    &self.tasks,
                     self.capacity,
                     self.options,
                 )
@@ -330,20 +277,24 @@ where
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPoint::new(self.tasks.into(), self.capacity, self.options)
+                TimeTablePerPointPropagator::new(&self.tasks, self.capacity, self.options)
                     .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncremental::new(self.tasks.into(), self.capacity, self.options)
-                    .implied_by(solver, reification_literal)
+                TimeTablePerPointIncrementalPropagator::new(
+                    &self.tasks,
+                    self.capacity,
+                    self.options,
+                )
+                .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverInterval::new(self.tasks.into(), self.capacity, self.options)
+                TimeTableOverIntervalPropagator::new(&self.tasks, self.capacity, self.options)
                     .implied_by(solver, reification_literal)
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncremental::new(
-                    self.tasks.into(),
+                TimeTableOverIntervalIncrementalPropagator::new(
+                    &self.tasks,
                     self.capacity,
                     self.options,
                 )
