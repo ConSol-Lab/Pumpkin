@@ -62,8 +62,8 @@ pub(crate) fn run_solver_with_options<'a>(
     };
 
     let log_file_path = add_extension("log");
-    let err_file_path = add_extension("log");
-    let proof_file_path = add_extension("log");
+    let err_file_path = add_extension("err");
+    let proof_file_path = add_extension("proof");
 
     let mut command = Command::new(solver);
 

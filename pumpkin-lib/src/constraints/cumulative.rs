@@ -152,6 +152,7 @@ same!"
 /// The constraint can be created with options in the following way (see [`cumulative`] for a full
 /// example):
 /// ```rust
+/// # use pumpkin_lib::options::CumulativePropagationMethod;
 /// # use pumpkin_lib::termination::Indefinite;
 /// # use pumpkin_lib::Solver;
 /// # use pumpkin_lib::results::SatisfactionResult;
@@ -176,13 +177,14 @@ same!"
 ///         &resource_requirements,
 ///         resource_capacity,
 ///         // Instructs the solver to allow the cumulative to create holes in the
-///         // domain and to use the big-step explanation without generating sequences
-///         // for the explanation
-///         CumulativeOptions {
-///             allow_holes_in_domain: true,
-///             explanation_type: CumulativeExplanationType::BigStep,
-///             generate_sequence: false,
-///         },
+///         // domain and to use the big-step explanation, generating sequences
+///         // for the explanation, and specifying the method of propagation
+///         CumulativeOptions::new(
+///             true,
+///             CumulativeExplanationType::BigStep,
+///             CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+///             false,
+///         ),
 ///     ))
 ///     .post();
 /// ```
