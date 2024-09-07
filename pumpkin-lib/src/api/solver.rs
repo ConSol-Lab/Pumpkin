@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -649,7 +651,9 @@ impl Solver {
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return a [`ConstraintOperationError`].
+    /// through propagation, this will return a [`ConstraintOperationError`]. A tag can be
+    /// provided which will be used to identify what constraint caused an inference in the proof
+    /// log.
     ///
     /// The caller should ensure the solver is in the root state before calling this, either
     /// because no call to [`Self::solve()`] has been made, or because
@@ -661,8 +665,9 @@ impl Solver {
     pub(crate) fn add_propagator(
         &mut self,
         propagator: impl Propagator + 'static,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(propagator)
+        self.satisfaction_solver.add_propagator(propagator, tag)
     }
 }
 

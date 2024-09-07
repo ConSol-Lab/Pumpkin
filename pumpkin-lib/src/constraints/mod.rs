@@ -30,6 +30,8 @@ mod constraint_poster;
 mod cumulative;
 mod element;
 
+use std::num::NonZero;
+
 pub use all_different::*;
 pub use arithmetic::*;
 pub use boolean::*;
@@ -54,7 +56,11 @@ pub trait Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError>;
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
@@ -65,6 +71,7 @@ pub trait Constraint {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
 }
 
@@ -72,31 +79,41 @@ impl<ConcretePropagator> Constraint for ConcretePropagator
 where
     ConcretePropagator: Propagator + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self)
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        solver.add_propagator(self, tag)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
+        solver.add_propagator(ReifiedPropagator::new(self, reification_literal), tag)
     }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.into_iter().try_for_each(|c| c.post(solver))
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.into_iter().try_for_each(|c| c.post(solver, tag))
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         self.into_iter()
-            .try_for_each(|c| c.implied_by(solver, reification_literal))
+            .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
     }
 }
 
@@ -120,13 +137,14 @@ pub trait NegatableConstraint: Constraint {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>
     where
         Self: Sized,
     {
         let negation = self.negation();
 
-        self.implied_by(solver, reification_literal)?;
-        negation.implied_by(solver, !reification_literal)
+        self.implied_by(solver, reification_literal, tag)?;
+        negation.implied_by(solver, !reification_literal, tag)
     }
 }
