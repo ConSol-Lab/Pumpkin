@@ -121,18 +121,10 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
         "The number of start variables, durations and resource requirements should be the
 same!"
     );
-
-    TimeTableOverIntervalIncrementalPropagator::new(
-        &start_times
-            .iter()
-            .zip(durations)
-            .zip(resource_requirements)
-            .map(|((start_time, duration), resource_requirement)| ArgTask {
-                start_time: start_time.clone(),
-                processing_time: *duration,
-                resource_usage: *resource_requirement,
-            })
-            .collect::<Vec<_>>(),
+    cumulative_with_options(
+        start_times,
+        durations,
+        resource_requirements,
         resource_capacity,
         CumulativeOptions::default(),
     )
