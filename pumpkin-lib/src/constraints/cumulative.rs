@@ -116,11 +116,6 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     resource_requirements: &[i32],
     resource_capacity: i32,
 ) -> impl Constraint {
-    pumpkin_assert_simple!(
-        start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
-        "The number of start variables, durations and resource requirements should be the
-same!"
-    );
     cumulative_with_options(
         start_times,
         durations,
