@@ -56,6 +56,9 @@ pub trait Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
     fn post(
         self,
         solver: &mut Solver,
@@ -67,6 +70,9 @@ pub trait Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
     fn implied_by(
         self,
         solver: &mut Solver,
@@ -141,6 +147,9 @@ pub trait NegatableConstraint: Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
     fn reify(
         self,
         solver: &mut Solver,
