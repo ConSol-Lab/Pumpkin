@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use super::Constraint;
 use crate::propagators::ArgTask;
+use crate::propagators::CumulativeOptions;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
@@ -16,6 +17,9 @@ use crate::variables::IntegerVariable;
 ///
 /// The length of `start_times`, `durations` and `resource_requirements` should be the same; if
 /// this is not the case then this method will panic.
+///
+/// It is possible to specify certain options for the cumulative (such as whether to allow holes in
+/// the domain or the type of explanation) using [`cumulative_with_options`].
 ///
 /// # Example
 /// ```rust
@@ -50,7 +54,6 @@ use crate::variables::IntegerVariable;
 ///         &durations,
 ///         &resource_requirements,
 ///         resource_capacity,
-///         false,
 ///     ))
 ///     .post();
 ///
@@ -112,12 +115,29 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     durations: &[i32],
     resource_requirements: &[i32],
     resource_capacity: i32,
-    allow_holes_in_domain: bool,
+) -> impl Constraint {
+    cumulative_with_options(
+        start_times,
+        durations,
+        resource_requirements,
+        resource_capacity,
+        CumulativeOptions::default(),
+    )
+}
+
+/// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint with the provided [`CumulativeOptions`].
+/// See the documentation of [`cumulative`] for more information about the constraint.
+pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
+    start_times: &[Var],
+    durations: &[i32],
+    resource_requirements: &[i32],
+    resource_capacity: i32,
+    options: CumulativeOptions,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+same!"
     );
 
     TimeTableOverIntervalIncrementalPropagator::new(
@@ -132,6 +152,6 @@ same!car"
             })
             .collect::<Vec<_>>(),
         resource_capacity,
-        allow_holes_in_domain,
+        options,
     )
 }

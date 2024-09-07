@@ -319,6 +319,20 @@ struct Args {
         verbatim_doc_comment
     )]
     cumulative_allow_holes: bool,
+
+    /// Determines the type of explanation used by the cumulative propagator(s) to explain
+    /// propagations/conflicts.
+    ///
+    /// Possible values: ["naive", "big-step", "pointwise"]
+    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
+    cumulative_explanation_type: CumulativeExplanationType,
+
+    /// Determines whether a sequence of profiles is generated when explaining a propagation for
+    /// the cumulative constraint.
+    ///
+    /// Possible values: bool
+    #[arg(long = "cumulative-generate-sequence")]
+    cumulative_generate_sequence: bool,
 }
 
 fn configure_logging(
@@ -495,7 +509,11 @@ fn run() -> PumpkinResult<()> {
             FlatZincOptions {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
-                cumulative_allow_holes: args.cumulative_allow_holes,
+                cumulative_options: CumulativeOptions {
+                    allow_holes_in_domain: args.cumulative_allow_holes,
+                    explanation_type: args.cumulative_explanation_type,
+                    generate_sequence: args.cumulative_generate_sequence,
+                },
             },
         )?,
     }
@@ -593,5 +611,16 @@ fn sequence_generator_parser(s: &str) -> Result<SequenceGeneratorType, String> {
         "geometric" => Ok(SequenceGeneratorType::Geometric),
         "luby" => Ok(SequenceGeneratorType::Luby),
         value => Err(format!("'{value}' is not a valid sequence generator. Possible values: ['constant', 'geometric', 'luby'].")),
+    }
+}
+
+fn cumulative_explanation_type_parser(s: &str) -> Result<CumulativeExplanationType, String> {
+    match s {
+        "naive" => Ok(CumulativeExplanationType::Naive),
+        "big-step" => Ok(CumulativeExplanationType::BigStep),
+        "pointwise" => Ok(CumulativeExplanationType::PointWise),
+        value => Err(format!(
+            "'{value}' is not a valid cumulative explanation type. Possible values: ['naive', 'big-step', 'pointwise']"
+        )),
     }
 }
