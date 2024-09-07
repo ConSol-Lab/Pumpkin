@@ -619,6 +619,9 @@ impl ConstraintSatisfactionSolver {
             "Expected all values to have been processed"
         );
 
+        self.propagate_enqueued();
+        pumpkin_assert_simple!(!self.is_conflicting());
+
         domain_id
     }
 

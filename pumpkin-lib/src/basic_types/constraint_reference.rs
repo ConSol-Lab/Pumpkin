@@ -1,6 +1,3 @@
-// reason code -> constraint reference?
-// change reason code names in assignments for instance
-
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -9,32 +6,47 @@ use bitfield::BitMut;
 use bitfield::BitRange;
 
 use crate::basic_types::ClauseReference;
+#[cfg(doc)]
+use crate::basic_types::ConflictInfo;
 use crate::engine::reason::ReasonRef;
 use crate::pumpkin_assert_moderate;
 
+// TODO: Point 2 and 3 can be improved, there is no need to allocate an entire bit for CP
+// propagators; instead a maximum propagator value could be used, and the solver can simply
+// determine whether the code is smaller than that value this was done in the code before
+// introducing binary clauses
+
+/// A [`ConstraintReference`] may refer to:
+/// - a Virtual Binary Clause
+/// - an Allocated Clause
+/// - a Propagator
+///
+/// Note that the user can only distinguish between a [`ConstraintReference`] to a clause and a
+/// propagator (but not whether a virtual or allocated clause).
+///
+/// The idea is to pack all this information into 32 bits which is done in the following way:
+/// 1. Virtual Binary Clause: the 31st bit is one (31st bit -> most significant bit); the remaining
+///    31 bits encode a [`Literal`] that is part of the binary clause while the other literal of the
+///    binary clause is to be recovered from the data structure that stores this constraint
+///    reference.
+///
+///    For example, if [`ConstraintReference`] `r` is used as the reason for propagating variable
+///    `x`, then the binary clause is `(x v r)`.
+/// 2. Propagator: the 31st bit is zero, and the 30th bit is one; the remaining 30 bits encode the
+///    reason reference.
+/// 3. Allocated Clause: both the 31st and 30th bit are zero; the remaining 30 bits encode the
+///    clause ID.
+///
+///    This system is used for simplicity of implementation, however, the drawback of the
+///    simplification is that we can store less clauses since we can only go up to 2^30.
+///
+///    There is potential of almost doubling this number with proper care
+///
+/// Note: having both the 30th and 31st bit set to one cannot take occur: this combination could be
+/// used in the future for some other indicator but in that case then the binary
+/// clause will only have 30 bits to work with, whereas currently it has 31 bits
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ConstraintReference {
-    // the constraint reference may refer to a virtual binary clause, an allocated clause, or a
-    // propagator  note that the user can only distinguish between a clause and a propagator
-    // (bu not whether a virtual or allocated clause) the idea is to pack all this information
-    // into 32 bits this is done in the following way
-    // 1. binary clause: the 31st bit is one (31st bit -> most significant bit) the remaining 31
-    //    bits encode a literal that is part of the binary clause the other literal of the binary
-    //    clause is to be recovered from the data structure that stores this constraint reference
-    //    e.g., if ref 'r' is used as the reason for propagating variable x, then the binary clause
-    //    is (x v r)
-    // 2. reason_ref: the 31st bit is zero, and the 30th bit is one the remaining 30 bit encode the
-    //    reason reference
-    // 3. Allocated clause: both the 31st and 30th bit are zero the remaining 30 bits encode the
-    //    clause id todo: this can be improved, there is no need to allocate an entire bit for CP
-    //    propagators instead a maximum propagator value could be used, and the solver can simply
-    //    determine whether the code is smaller than that value this was done in the code before
-    //    introducing binary clauses - we switched to this system for simplicity of implementation
-    //    the drawback of the simplification is that we can store less clauses since we can only go
-    //    up to 2^30 there is potential of almost doubling this number with proper care
-    // note: having both 31st and 30th bit set to one cannot take place, this combination could be
-    // used in the future for some other indicator          but in that case then the binary
-    // clause will only have 30 bits to work with, whereas currently it has 31 bits
     code: u32,
 }
 
@@ -57,7 +69,7 @@ impl Debug for ConstraintReference {
     }
 }
 
-// methods to create a constraint reference
+/// Methods to create a constraint reference
 impl ConstraintReference {
     // TODO: replace with a NonZeroU32 and Option
     pub const NULL: ConstraintReference = ConstraintReference { code: 0 };
@@ -76,7 +88,7 @@ impl ConstraintReference {
     }
 }
 
-// methods to retrieve information stored in the constraint reference
+/// Methods to retrieve information stored in the constraint reference
 impl ConstraintReference {
     pub fn is_null(&self) -> bool {
         self.code == 0

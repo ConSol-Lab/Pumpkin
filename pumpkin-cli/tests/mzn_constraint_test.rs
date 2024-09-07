@@ -92,6 +92,7 @@ mzn_test!(bool_not);
 
 mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
+mzn_test!(bool_clause);
 
 cumulative_test!(time_table_per_point, cumulative, TimeTablePerPoint);
 cumulative_test!(

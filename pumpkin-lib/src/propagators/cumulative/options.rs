@@ -10,29 +10,13 @@ pub struct CumulativeOptions {
     pub allow_holes_in_domain: bool,
     /// The type of explanation which is used by the cumulative to explain propagations and
     /// conflicts.
-    pub(crate) explanation_type: CumulativeExplanationType,
+    pub explanation_type: CumulativeExplanationType,
     /// The propagation method which is used for the cumulative constraints; currently all of them
     /// are variations of time-tabling. The default is incremental time-tabling reasoning over
     /// intervals.
-    pub(crate) propagation_method: CumulativePropagationMethod,
+    pub propagation_method: CumulativePropagationMethod,
     /// Determines whether a sequence of profiles is generated when explaining a propagation.
     pub generate_sequence: bool,
-}
-
-impl CumulativeOptions {
-    pub fn new(
-        allow_holes_in_domain: bool,
-        explanation_type: CumulativeExplanationType,
-        propagation_method: CumulativePropagationMethod,
-        generate_sequence: bool,
-    ) -> Self {
-        Self {
-            allow_holes_in_domain,
-            explanation_type,
-            propagation_method,
-            generate_sequence,
-        }
-    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]

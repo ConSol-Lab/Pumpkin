@@ -4,6 +4,7 @@ use super::Constraint;
 use crate::options::CumulativePropagationMethod;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
+use crate::propagators::ReifiedPropagator;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::propagators::TimeTablePerPointIncrementalPropagator;
@@ -123,23 +124,10 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     resource_requirements: &[i32],
     resource_capacity: i32,
 ) -> impl Constraint {
-    pumpkin_assert_simple!(
-        start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
-        "The number of start variables, durations and resource requirements should be the
-same!"
-    );
-
-    CumulativeConstraint::new(
-        start_times
-            .iter()
-            .zip(durations)
-            .zip(resource_requirements)
-            .map(|((start_time, duration), resource_requirement)| ArgTask {
-                start_time: start_time.clone(),
-                processing_time: *duration,
-                resource_usage: *resource_requirement,
-            })
-            .collect::<Vec<_>>(),
+    cumulative_with_options(
+        start_times,
+        durations,
+        resource_requirements,
         resource_capacity,
         CumulativeOptions::default(),
     )
@@ -147,53 +135,6 @@ same!"
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint with the provided [`CumulativeOptions`].
 /// See the documentation of [`cumulative`] for more information about the constraint.
-///
-/// # Example
-/// The constraint can be created with options in the following way (see [`cumulative`] for a full
-/// example):
-/// ```rust
-/// # use pumpkin_lib::options::CumulativePropagationMethod;
-/// # use pumpkin_lib::termination::Indefinite;
-/// # use pumpkin_lib::Solver;
-/// # use pumpkin_lib::results::SatisfactionResult;
-/// # use pumpkin_lib::constraints;
-/// # use pumpkin_lib::constraints::Constraint;
-/// # use crate::pumpkin_lib::results::ProblemSolution;
-/// # use pumpkin_lib::options::CumulativeExplanationType;
-/// # use pumpkin_lib::options::CumulativeOptions;
-/// # let solver = Solver::default();
-/// # let mut solver = Solver::default();
-/// # let start_0 = solver.new_bounded_integer(0, 4);
-/// # let start_1 = solver.new_bounded_integer(0, 4);
-/// # let start_2 = solver.new_bounded_integer(0, 5);
-/// # let start_times = [start_0, start_1, start_2];
-/// # let durations = [5, 2, 5];
-/// # let resource_requirements = [1, 1, 2];
-/// # let resource_capacity = 2;
-/// solver
-///     .add_constraint(constraints::cumulative_with_options(
-///         &start_times,
-///         &durations,
-///         &resource_requirements,
-///         resource_capacity,
-///         // Instructs the solver to allow the cumulative to create holes in the
-///         // domain and to use the big-step explanation, generating sequences
-///         // for the explanation, and specifying the method of propagation
-///         CumulativeOptions::new(
-///             true,
-///             CumulativeExplanationType::BigStep,
-///             CumulativePropagationMethod::TimeTableOverIntervalIncremental,
-///             false,
-///         ),
-///     ))
-///     .post();
-/// ```
-///
-/// # Bibliography
-/// \[1\] S. Gay, R. Hartert, and P. Schaus, ‘Simple and scalable time-table filtering for the
-/// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
-/// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
-/// 21, 2015, pp. 149–157.
 pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
     start_times: &[Var],
     durations: &[i32],
@@ -208,7 +149,7 @@ same!"
     );
 
     CumulativeConstraint::new(
-        start_times
+        &start_times
             .iter()
             .zip(durations)
             .zip(resource_requirements)
@@ -225,49 +166,46 @@ same!"
 
 struct CumulativeConstraint<Var> {
     tasks: Vec<ArgTask<Var>>,
-    capacity: i32,
+    resource_capacity: i32,
     options: CumulativeOptions,
 }
 
-impl<Var> CumulativeConstraint<Var> {
-    fn new(tasks: Vec<ArgTask<Var>>, capacity: i32, options: CumulativeOptions) -> Self {
+impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
+    fn new(tasks: &[ArgTask<Var>], resource_capacity: i32, options: CumulativeOptions) -> Self {
         Self {
-            tasks,
-            capacity,
+            tasks: tasks.into(),
+            resource_capacity,
             options,
         }
     }
 }
 
-impl<Var> Constraint for CumulativeConstraint<Var>
-where
-    Var: IntegerVariable + Debug + 'static,
-{
+impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
     fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
-            CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPointPropagator::new(&self.tasks, self.capacity, self.options)
-                    .post(solver)
-            }
+            CumulativePropagationMethod::TimeTablePerPoint => solver.add_propagator(
+                TimeTablePerPointPropagator::new(&self.tasks, self.resource_capacity, self.options),
+            ),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::new(
+                solver.add_propagator(TimeTablePerPointIncrementalPropagator::new(
                     &self.tasks,
-                    self.capacity,
+                    self.resource_capacity,
                     self.options,
-                )
-                .post(solver)
+                ))
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverIntervalPropagator::new(&self.tasks, self.capacity, self.options)
-                    .post(solver)
+                solver.add_propagator(TimeTableOverIntervalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options,
+                ))
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncrementalPropagator::new(
+                solver.add_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                     &self.tasks,
-                    self.capacity,
+                    self.resource_capacity,
                     self.options,
-                )
-                .post(solver)
+                ))
             }
         }
     }
@@ -279,28 +217,44 @@ where
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
             CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPointPropagator::new(&self.tasks, self.capacity, self.options)
-                    .implied_by(solver, reification_literal)
+                solver.add_propagator(ReifiedPropagator::new(
+                    TimeTablePerPointPropagator::new(
+                        &self.tasks,
+                        self.resource_capacity,
+                        self.options,
+                    ),
+                    reification_literal,
+                ))
             }
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::new(
-                    &self.tasks,
-                    self.capacity,
-                    self.options,
-                )
-                .implied_by(solver, reification_literal)
+                solver.add_propagator(ReifiedPropagator::new(
+                    TimeTablePerPointIncrementalPropagator::new(
+                        &self.tasks,
+                        self.resource_capacity,
+                        self.options,
+                    ),
+                    reification_literal,
+                ))
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                TimeTableOverIntervalPropagator::new(&self.tasks, self.capacity, self.options)
-                    .implied_by(solver, reification_literal)
+                solver.add_propagator(ReifiedPropagator::new(
+                    TimeTableOverIntervalPropagator::new(
+                        &self.tasks,
+                        self.resource_capacity,
+                        self.options,
+                    ),
+                    reification_literal,
+                ))
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                TimeTableOverIntervalIncrementalPropagator::new(
-                    &self.tasks,
-                    self.capacity,
-                    self.options,
-                )
-                .implied_by(solver, reification_literal)
+                solver.add_propagator(ReifiedPropagator::new(
+                    TimeTableOverIntervalIncrementalPropagator::new(
+                        &self.tasks,
+                        self.resource_capacity,
+                        self.options,
+                    ),
+                    reification_literal,
+                ))
             }
         }
     }
