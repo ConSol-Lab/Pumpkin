@@ -717,7 +717,9 @@ impl Solver {
 }
 
 /// The type of [`Brancher`] which is created by
-/// [`Solver::default_brancher_over_all_propositional_variables`]. It consists of the value selector
+/// [`Solver::default_brancher_over_all_propositional_variables`].
+///
+/// It consists of the value selector
 /// [`Vsids`] in combination with a [`SolutionGuidedValueSelector`] with as backup [`PhaseSaving`].
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,
