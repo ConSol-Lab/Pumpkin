@@ -119,7 +119,7 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+same!"
     );
 
     TimeTableOverIntervalIncrementalPropagator::new(
@@ -140,51 +140,6 @@ same!car"
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint with the provided [`CumulativeOptions`].
 /// See the documentation of [`cumulative`] for more information about the constraint.
-///
-/// # Example
-/// The constraint can be created with options in the following way (see [`cumulative`] for a full
-/// example):
-/// ```rust
-/// # use pumpkin_lib::termination::Indefinite;
-/// # use pumpkin_lib::Solver;
-/// # use pumpkin_lib::results::SatisfactionResult;
-/// # use pumpkin_lib::constraints;
-/// # use pumpkin_lib::constraints::Constraint;
-/// # use crate::pumpkin_lib::results::ProblemSolution;
-/// # use pumpkin_lib::options::CumulativeExplanationType;
-/// # use pumpkin_lib::options::CumulativeOptions;
-/// # let solver = Solver::default();
-/// # let mut solver = Solver::default();
-/// # let start_0 = solver.new_bounded_integer(0, 4);
-/// # let start_1 = solver.new_bounded_integer(0, 4);
-/// # let start_2 = solver.new_bounded_integer(0, 5);
-/// # let start_times = [start_0, start_1, start_2];
-/// # let durations = [5, 2, 5];
-/// # let resource_requirements = [1, 1, 2];
-/// # let resource_capacity = 2;
-/// solver
-///     .add_constraint(constraints::cumulative_with_options(
-///         &start_times,
-///         &durations,
-///         &resource_requirements,
-///         resource_capacity,
-///         // Instructs the solver to allow the cumulative to create holes in the
-///         // domain and to use the big-step explanation without generating sequences
-///         // for the explanation
-///         CumulativeOptions {
-///             allow_holes_in_domain: true,
-///             explanation_type: CumulativeExplanationType::BigStep,
-///             generate_sequence: false,
-///         },
-///     ))
-///     .post();
-/// ```
-///
-/// # Bibliography
-/// \[1\] S. Gay, R. Hartert, and P. Schaus, ‘Simple and scalable time-table filtering for the
-/// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
-/// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
-/// 21, 2015, pp. 149–157.
 pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
     start_times: &[Var],
     durations: &[i32],
@@ -195,7 +150,7 @@ pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
-same!car"
+same!"
     );
 
     TimeTableOverIntervalIncrementalPropagator::new(
