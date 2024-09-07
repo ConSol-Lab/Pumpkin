@@ -662,9 +662,7 @@ impl Solver {
     }
 
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
-    /// through propagation, this will return a [`ConstraintOperationError`]. A tag can be
-    /// provided which will be used to identify what constraint caused an inference in the proof
-    /// log.
+    /// through propagation, this will return a [`ConstraintOperationError`].
     ///
     /// The caller should ensure the solver is in the root state before calling this, either
     /// because no call to [`Self::solve()`] has been made, or because
