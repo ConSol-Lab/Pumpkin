@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
+use crate::options::CumulativeOptions;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
@@ -91,28 +92,27 @@ pub(crate) struct CumulativeParameters<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
-    /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
-    /// false then it will only adjust the bounds when appropriate rather than removing values from
-    /// the domain
-    pub(crate) allow_holes_in_domain: bool,
+    /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
+    pub(crate) options: CumulativeOptions,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
     pub(crate) fn new(
         tasks: Vec<Task<Var>>,
         capacity: i32,
-        allow_holes_in_domain: bool,
+        options: CumulativeOptions,
     ) -> CumulativeParameters<Var> {
+        let tasks = tasks
+            .into_iter()
+            .map(Rc::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         CumulativeParameters {
-            tasks: tasks
-                .into_iter()
-                .map(Rc::new)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            tasks: tasks.clone(),
             capacity,
             bounds: Vec::new(),
             updated: Vec::new(),
-            allow_holes_in_domain,
+            options,
         }
     }
 }
