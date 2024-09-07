@@ -650,6 +650,17 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
+    /// Adds a propagator with a tag, which is used to identify inferences made by this propagator
+    /// in the proof log.
+    pub(crate) fn add_tagged_propagator(
+        &mut self,
+        propagator: impl Propagator + 'static,
+        tag: NonZero<u32>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver
+            .add_propagator(propagator, Some(tag))
+    }
+
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`]. A tag can be
     /// provided which will be used to identify what constraint caused an inference in the proof
@@ -665,9 +676,8 @@ impl Solver {
     pub(crate) fn add_propagator(
         &mut self,
         propagator: impl Propagator + 'static,
-        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        self.satisfaction_solver.add_propagator(propagator, tag)
+        self.satisfaction_solver.add_propagator(propagator, None)
     }
 }
 

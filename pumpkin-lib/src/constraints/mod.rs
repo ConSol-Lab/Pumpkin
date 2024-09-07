@@ -84,7 +84,11 @@ where
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self, tag)
+        if let Some(tag) = tag {
+            solver.add_tagged_propagator(self, tag)
+        } else {
+            solver.add_propagator(self)
+        }
     }
 
     fn implied_by(
@@ -93,7 +97,11 @@ where
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagator::new(self, reification_literal), tag)
+        if let Some(tag) = tag {
+            solver.add_tagged_propagator(ReifiedPropagator::new(self, reification_literal), tag)
+        } else {
+            solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
+        }
     }
 }
 
