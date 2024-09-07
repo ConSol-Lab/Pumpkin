@@ -16,6 +16,7 @@ use crate::ConstraintOperationError;
 use crate::Solver;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
+///
 /// This constraint ensures that at no point in time, the cumulative resource usage of the tasks
 /// exceeds `bound`.
 ///
