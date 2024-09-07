@@ -12,6 +12,7 @@ use std::time::Duration;
 use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_lib::options::CumulativeOptions;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
 use pumpkin_lib::results::solution_iterator::IteratedSolution;
@@ -42,8 +43,7 @@ pub(crate) struct FlatZincOptions {
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
 
-    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain
-    pub(crate) cumulative_allow_holes: bool,
+    pub(crate) cumulative_options: CumulativeOptions,
 }
 
 #[cfg(test)]
@@ -53,7 +53,7 @@ impl Default for FlatZincOptions {
         Self {
             free_search: false,
             all_solutions: false,
-            cumulative_allow_holes: false,
+            cumulative_options: CumulativeOptions::default(),
         }
     }
 }
