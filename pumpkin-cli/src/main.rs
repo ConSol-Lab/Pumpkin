@@ -324,7 +324,7 @@ struct Args {
     /// propagations/conflicts.
     ///
     /// Possible values: ["naive", "big-step", "pointwise"]
-    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser)]
+    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
     cumulative_explanation_type: CumulativeExplanationType,
 
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
