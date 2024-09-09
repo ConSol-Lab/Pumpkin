@@ -109,6 +109,10 @@ where
             self.terms[local_id.unpack() as usize].unpack_event(event),
             IntDomainEvent::Assign
         ) {
+            pumpkin_assert_simple!(
+                self.number_of_fixed_terms >= 1,
+                "The number of fixed terms should never be negative"
+            );
             // An assign has been undone, we can decrease the
             // number of fixed variables
             self.number_of_fixed_terms -= 1;
@@ -179,14 +183,19 @@ where
                 self.unfixed_variable_has_been_updated = true;
 
                 // Then we remove the conflicting value from the unfixed variable
-                let reason = self
-                    .terms
-                    .iter()
-                    .enumerate()
-                    .filter(|&(i, _)| i != unfixed_x_i)
-                    .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                    .collect::<PropositionalConjunction>();
-                context.remove(&self.terms[unfixed_x_i], value_to_remove, reason)?;
+                let terms = Rc::clone(&self.terms);
+                context.remove(
+                    &self.terms[unfixed_x_i],
+                    value_to_remove,
+                    move |context: &PropagationContext| {
+                        terms
+                            .iter()
+                            .enumerate()
+                            .filter(|&(i, _)| i != unfixed_x_i)
+                            .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                            .collect()
+                    },
+                )?;
             }
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
