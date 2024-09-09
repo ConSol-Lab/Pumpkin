@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
@@ -59,15 +61,19 @@ impl<Var> Constraint for EqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs).post(solver)?;
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        less_than_or_equals(self.terms.clone(), self.rhs).post(solver, tag)?;
 
         let negated = self
             .terms
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).post(solver)?;
+        less_than_or_equals(negated, -self.rhs).post(solver, tag)?;
 
         Ok(())
     }
@@ -76,16 +82,20 @@ where
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs)
-            .implied_by(solver, reification_literal)?;
+        less_than_or_equals(self.terms.clone(), self.rhs).implied_by(
+            solver,
+            reification_literal,
+            tag,
+        )?;
 
         let negated = self
             .terms
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal)?;
+        less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal, tag)?;
 
         Ok(())
     }
@@ -114,16 +124,25 @@ impl<Var> Constraint for NotEqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver)
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(
+            solver,
+            reification_literal,
+            tag,
+        )
     }
 }
 

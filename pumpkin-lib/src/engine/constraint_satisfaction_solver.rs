@@ -2,6 +2,7 @@
 //! using a Lazy Clause Generation approach.
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::num::NonZero;
 use std::time::Instant;
 
 use log::warn;
@@ -395,7 +396,7 @@ impl ConstraintSatisfactionSolver {
             .variable_names
             .add_integer(dummy_id, "Dummy".to_owned());
 
-        let _ = csp_solver.add_propagator(NogoodPropagator::default());
+        let _ = csp_solver.add_propagator(NogoodPropagator::default(), None);
 
         assert!(dummy_id.id == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);
@@ -1160,6 +1161,7 @@ impl ConstraintSatisfactionSolver {
     pub fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
+        _tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
