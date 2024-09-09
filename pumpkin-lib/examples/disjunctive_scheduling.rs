@@ -58,12 +58,12 @@ fn main() {
             // literal => s_y - s_x <= -p_y)
             let _ =
                 constraints::less_than_or_equals(variables.clone(), -(processing_times[y] as i32))
-                    .implied_by(&mut solver, literal);
+                    .implied_by(&mut solver, literal, None);
 
             //-literal => -s_y + s_x <= p_y)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
             let _ = constraints::less_than_or_equals(variables.clone(), processing_times[y] as i32)
-                .implied_by(&mut solver, literal);
+                .implied_by(&mut solver, literal, None);
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([literal, precedence_literals[y][x]]);

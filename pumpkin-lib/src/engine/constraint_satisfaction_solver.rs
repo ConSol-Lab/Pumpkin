@@ -5,6 +5,7 @@ use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
+use std::num::NonZero;
 use std::time::Instant;
 
 use log::warn;
@@ -1451,6 +1452,7 @@ impl ConstraintSatisfactionSolver {
     pub fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
+        _tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
@@ -1960,7 +1962,7 @@ mod tests {
             vec![conjunction!([other_variable == 3] & [variable == 1])],
         );
 
-        let result = solver.add_propagator(propagator_constructor);
+        let result = solver.add_propagator(propagator_constructor, None);
         assert!(result.is_ok());
 
         // We add the clause that will lead to the conflict in the SAT-solver
