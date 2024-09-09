@@ -152,9 +152,15 @@ pub struct ConstraintSatisfactionSolver {
     /// of the clausal propagator.
     watch_list_propositional: WatchListPropositional,
     /// Used in combination with the propositional watch list
-    /// Indicates the next literal on the propositional trail that need to be inspected to notify
-    /// subscribed propagators.
+    /// Indicates the next literal on the propositional trail that needs to be inspected to notify
+    /// subscribed propagator(s).
     propositional_trail_index: usize,
+    /// Indicates the next entry on the CP trail that needs to be inspected to notify the
+    /// subscribed propagator(s).
+    ///
+    /// This variable is used to prevent propagators from being notified from backtrack events
+    /// while they have not been notified of the "forward" event.
+    last_notified_cp_trail_index: usize,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -330,6 +336,7 @@ impl ConstraintSatisfactionSolver {
                     }
                 }
             }
+            self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
         }
         // If there are no literals being watched then there is no reason to perform these
         // operations
@@ -448,6 +455,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
+            last_notified_cp_trail_index: 0,
             event_drain: vec![],
             backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
@@ -1218,37 +1226,58 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
+        // We clear all of the unprocessed events from the watch list since synchronisation, we do
+        // not need to process these events
+        if self.watch_list_cp.is_watching_anything() {
+            pumpkin_assert_simple!(self.event_drain.is_empty());
+            self.assignments_integer
+                .drain_domain_events()
+                .for_each(drop);
+        }
 
+        // We synchronise the assignments propositional and for each unassigned literal, we notify
+        // the brancher that it has been unassigned
+        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
         unassigned_literals.for_each(|literal| {
             brancher.on_unassign_literal(literal);
-            // TODO: We should also backtrack on the integer variables here
         });
 
+        // We synchronise the clausal propagator which sets the next variable on the trail to
+        // propagate
         self.clausal_propagator
             .synchronise(self.assignments_propositional.num_trail_entries());
-
         pumpkin_assert_simple!(
             self.assignments_propositional.get_decision_level()
                 < self.assignments_integer.get_decision_level(),
             "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
         );
+
+        // We also set the last processed trail entry of the propositional trail
         self.propositional_trail_index = min(
             self.propositional_trail_index,
             self.assignments_propositional.num_trail_entries(),
         );
+
+        // We synchronise the assignments integer and for each of the unassigned integer variables,
+        // we notify the brancher that it has been unassigned
         self.assignments_integer
             .synchronise(
                 backtrack_level,
                 self.watch_list_cp.is_watching_any_backtrack_events(),
+                self.last_notified_cp_trail_index,
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
+        pumpkin_assert_simple!(
+            !self.watch_list_cp.is_watching_anything()
+                || self.last_notified_cp_trail_index
+                    >= self.assignments_integer.num_trail_entries(),
+        );
+        self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
         //  note that variable_literal_mappings sync should be called after the sat/cp data
         // structures backtrack
         self.synchronise_assignments();
@@ -1263,6 +1292,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
     }
 
     /// Main propagation loop.
