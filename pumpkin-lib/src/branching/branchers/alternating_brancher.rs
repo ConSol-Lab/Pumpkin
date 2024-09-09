@@ -55,6 +55,9 @@ pub struct AlternatingBrancher<OtherBrancher> {
     default_brancher: DefaultBrancher,
     /// The strategy used to determine when to switch between the two branchers.
     strategy: AlternatingStrategy,
+    /// Indicates that the [`AlternatingBrancher`] has considered a restart; note that this
+    /// variable is only used in the context of [`ÀlternatingStrategy::EveryRestart`].
+    has_considered_restart: bool,
 }
 
 impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
@@ -69,6 +72,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             other_brancher,
             default_brancher: solver.default_brancher_over_all_propositional_variables(),
             strategy,
+            has_considered_restart: false,
         }
     }
 
@@ -80,6 +84,14 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        // If we have considered a restart and the AlternatingStrategy relies on restarts then we
+        // toggle the brancher and set the variable to false
+        if self.has_considered_restart && matches!(self.strategy, AlternatingStrategy::EveryRestart)
+        {
+            self.has_considered_restart = false;
+            self.toggle_brancher();
+        }
+
         if self.is_using_default_brancher {
             self.default_brancher.next_decision(context)
         } else {
@@ -143,8 +155,8 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 
     fn on_restart(&mut self) {
         if let AlternatingStrategy::EveryRestart = self.strategy {
-            // Switch whenever a restart occurs
-            self.toggle_brancher()
+            // We have considered a restart and we should switch
+            self.has_considered_restart = true;
         }
     }
 
@@ -159,12 +171,10 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
                 } else {
                     self.default_brancher.is_restart_pointless()
                 };
+                // We indicate that we have considered a restart, this can then be used by the
+                // EveryRestart AlternatingStrategy to determine when to switch
+                self.has_considered_restart = true;
 
-                // If the restart is pointless then the on_restart method will not be called so we
-                // manually toggle between branchers
-                if is_restart_pointless {
-                    self.toggle_brancher();
-                }
                 is_restart_pointless
             }
             _ => {
