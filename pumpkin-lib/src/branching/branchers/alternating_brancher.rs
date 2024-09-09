@@ -192,7 +192,9 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
+    use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
+    use crate::branching::SelectionContext;
     use crate::engine::AssignmentsInteger;
     use crate::engine::AssignmentsPropositional;
     use crate::results::SolutionReference;
@@ -269,6 +271,9 @@ mod tests {
 
     #[test]
     fn test_every_other_restart() {
+        let assignments_integer = AssignmentsInteger::default();
+        let assignments_propositional = AssignmentsPropositional::default();
+
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
@@ -278,10 +283,29 @@ mod tests {
 
         assert!(!brancher.is_using_default_brancher);
         brancher.on_restart();
+        // next_decision is called to ensure that the brancher has actually switched
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut TestRandom::default(),
+        ));
         assert!(brancher.is_using_default_brancher);
+
         brancher.on_restart();
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut TestRandom::default(),
+        ));
         assert!(!brancher.is_using_default_brancher);
+
         brancher.on_restart();
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments_integer,
+            &assignments_propositional,
+            &mut TestRandom::default(),
+        ));
+
         assert!(brancher.is_using_default_brancher);
     }
 }
