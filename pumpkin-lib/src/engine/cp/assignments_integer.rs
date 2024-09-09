@@ -391,6 +391,9 @@ impl AssignmentsInteger {
     /// backtracking to `new_decision_level` is taking place. This method returns the list of
     /// [`DomainId`]s and their values which were fixed (i.e. domain of size one) before
     /// backtracking and are unfixed (i.e. domain of two or more values) after synchronisation.
+    ///
+    /// The `last_notified_trail_index` is used to only create backtrack events for events for
+    /// which the propagators have been notified of the "forward" event.
     pub fn synchronise(
         &mut self,
         new_decision_level: usize,

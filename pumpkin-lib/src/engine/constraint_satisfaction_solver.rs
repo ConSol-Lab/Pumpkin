@@ -1234,13 +1234,15 @@ impl ConstraintSatisfactionSolver {
                 .for_each(drop);
         }
 
+        // We synchronise the assignments propositional and for each unassigned literal, we notify
+        // the brancher that it has been unassigned
         let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
-
         unassigned_literals.for_each(|literal| {
             brancher.on_unassign_literal(literal);
-            // TODO: We should also backtrack on the integer variables here
         });
 
+        // We synchronise the clausal propagator which sets the next variable on the trail to
+        // propagate
         self.clausal_propagator
             .synchronise(self.assignments_propositional.num_trail_entries());
         pumpkin_assert_simple!(
@@ -1248,11 +1250,15 @@ impl ConstraintSatisfactionSolver {
                 < self.assignments_integer.get_decision_level(),
             "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
         );
+
+        // We also set the last processed trail entry of the propositional trail
         self.propositional_trail_index = min(
             self.propositional_trail_index,
             self.assignments_propositional.num_trail_entries(),
         );
 
+        // We synchronise the assignments integer and for each of the unassigned integer variables,
+        // we notify the brancher that it has been unassigned
         self.assignments_integer
             .synchronise(
                 backtrack_level,
