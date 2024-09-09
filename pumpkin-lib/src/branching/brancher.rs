@@ -76,6 +76,11 @@ pub trait Brancher {
     /// For example, if a [`Brancher`] is using a static search strategy then a restart is
     /// pointless; however, if a [`Brancher`] is using a variable selector like [`Vsids`] which
     /// changes throughout the search process then restarting is not pointless.
+    ///
+    /// Note that even if the [`Brancher`] has indicated that a restart is pointless, it could be
+    /// that the restart is still performed (e.g. if this [`Brancher`] is a subcomponent of another
+    /// [`Brancher`] and it is not the only `is_restart_pointless` response which is taken into
+    /// account).
     fn is_restart_pointless(&mut self) -> bool {
         true
     }
