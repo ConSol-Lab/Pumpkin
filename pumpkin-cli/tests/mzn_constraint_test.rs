@@ -50,6 +50,7 @@ mzn_test!(bool_not);
 
 mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
+mzn_test!(bool_clause);
 
 mzn_test!(cumulative);
 mzn_test!(all_different);

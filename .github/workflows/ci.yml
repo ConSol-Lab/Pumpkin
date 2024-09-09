@@ -63,7 +63,7 @@ jobs:
       with:
         components: clippy, rustfmt
     - run: cargo +nightly fmt --check
-    - run: cargo clippy --all-targets
+    - run: cargo +nightly clippy --all-targets
     
   licenses:
     name: Dependency Licensing

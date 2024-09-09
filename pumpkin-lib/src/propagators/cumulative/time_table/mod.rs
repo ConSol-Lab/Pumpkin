@@ -69,11 +69,14 @@
 //! Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings 21, 2015, pp.
 //! 149–157.
 
+mod explanations;
+mod propagation_handler;
 mod time_table_over_interval;
 mod time_table_over_interval_incremental;
 mod time_table_per_point;
 mod time_table_per_point_incremental;
 mod time_table_util;
+pub use explanations::CumulativeExplanationType;
 pub(crate) use time_table_over_interval::*;
 pub(crate) use time_table_over_interval_incremental::*;
 pub(crate) use time_table_per_point::*;

@@ -9,8 +9,9 @@ use crate::engine::variables::Literal;
 use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_eq_simple;
 
-/// A [`VariableSelector`] which implements [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
-/// which determines which variables should be branched on based on how often it appears in
+/// A [`VariableSelector`] which implements [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017).
+///
+/// This selctor determines which variables should be branched on based on how often it appears in
 /// conflicts.
 ///
 /// Intuitively, the more often a variable appears in *recent* conflicts, the more "important" it is

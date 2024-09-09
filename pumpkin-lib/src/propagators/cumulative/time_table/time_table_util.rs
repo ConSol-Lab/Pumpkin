@@ -2,16 +2,13 @@
 //! reasoning (see [`crate::propagators::cumulative::time_table`] for more information) such as
 //! [`should_enqueue`] or [`propagate_based_on_timetable`].
 
-use std::cell::OnceCell;
 use std::cmp::max;
-use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -19,15 +16,14 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::EmptyDomain;
-use crate::predicate;
+use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::SparseSet;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
-use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
 
 /// Structures used for storing the data related to resource profiles;
 /// A [`ResourceProfile`] represents a rectangle where the height is the cumulative mandatory
@@ -110,7 +106,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         });
     }
 
-    result.decision = if parameters.allow_holes_in_domain {
+    result.decision = if parameters.options.allow_holes_in_domain {
         // If there are updates then propagations might occur due to new mandatory parts being
         // added. However, if there are no updates then because we allow holes in the domain, no
         // updates can occur so we can skip propagation!
@@ -171,6 +167,7 @@ impl AddedMandatoryConsumption {
                     .collect()
             }
             AddedMandatoryConsumption::FullyNewMandatoryPart(added_mandatory_part) => {
+                pumpkin_assert_simple!(!added_mandatory_part.is_empty());
                 vec![added_mandatory_part.clone()]
             }
         }
@@ -239,7 +236,7 @@ pub(crate) fn generate_update_range<Var: IntegerVariable + 'static>(
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
 pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -256,7 +253,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
 pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -315,7 +312,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
     sorted_profiles && non_overlapping_profiles
 }
 
-/// Checks whether propagations should occur based on the current state of the time-table
+/// Checks whether propagations should occur based on the current state of the time-table.
 ///
 /// It goes over all profiles and all tasks and determines which ones should be propagated;
 /// Note that this method is not idempotent and that it assumes that the [`ResourceProfile`]s are
@@ -331,20 +328,54 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
         "The provided time-table did not adhere to the invariants"
     );
+    if parameters.options.generate_sequence {
+        propagate_sequence_of_profiles(context, time_table, parameters)?;
+    } else {
+        propagate_single_profiles(context, time_table, parameters)?;
+    }
 
+    Ok(())
+}
+
+/// For each profile in chronological order, this method goes through the tasks and checks whether
+/// the profile can propagate the domain of the task.
+///
+/// If it can then it will immediately propagate it even if this propagation would cause subsequent
+/// propagations by the next profile. For a method which propagates based on a sequence of profiles
+/// see [`propagate_sequence_of_profiles`].
+///
+/// This type of propagation is likely to be less beneficial for the explanation
+/// [`CumulativeExplanationType::Pointwise`].
+fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    // We create the structure responsible for propagations and explanations
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type);
+
+    // We create a structure which keeps track of which tasks are fixed so that we don't traverse
+    // them further
     let mut tasks_to_consider = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
+
+    // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
+        // We indicate to the propagation handler that we cannot re-use an existing profile
+        // explanation
+        propagation_handler.next_profile();
+
         // Then we go over all the different tasks
         let mut task_index = 0;
-        let mut profile_explanation = OnceCell::new();
         while task_index < tasks_to_consider.len() {
             let task = Rc::clone(tasks_to_consider.get(task_index));
             if context.is_fixed(&task.start_variable)
                 || profile.start > context.upper_bound(&task.start_variable) + task.processing_time
             {
-                // Task is fixed or the start of the current profile is necessarily after the latest
-                // completion time of the task under consideration The profiles are
-                // sorted by start time (and non-overlapping) so we can remove the task from
+                // Task is fixed or the start of the current profile is necessarily after the
+                // latest completion time of the task under consideration
+                // The profiles are sorted by start time (and
+                // non-overlapping) so we can remove the task from
                 // consideration
                 tasks_to_consider.remove(&task);
                 if tasks_to_consider.is_empty() {
@@ -354,16 +385,214 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
                 continue;
             }
             task_index += 1;
-            check_whether_task_can_be_updated_by_profile(
-                context,
-                &task,
-                profile,
-                parameters,
-                &mut profile_explanation,
-            )?;
+
+            // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
+            // update or a hole in the domain)
+            let possible_updates = find_possible_updates(context, &task, profile, parameters);
+            for possible_update in possible_updates {
+                // For every possible update we let the propagation handler propagate
+                match possible_update {
+                    CanUpdate::LowerBound => {
+                        propagation_handler
+                            .propagate_lower_bound_with_explanations(context, profile, &task)?;
+                    }
+                    CanUpdate::UpperBound => {
+                        propagation_handler
+                            .propagate_upper_bound_with_explanations(context, profile, &task)?;
+                    }
+                    CanUpdate::Holes => {
+                        propagation_handler.propagate_holes_in_domain(context, profile, &task)?;
+                    }
+                }
+            }
         }
     }
     Ok(())
+}
+
+/// For each task this method goes through the profiles in chronological order to find one which can
+/// update the task's bounds.
+///
+/// If it can find such a profile then it proceeds to generate a sequence of profiles
+/// which can propagate the bound of the task and uses these to explain the propagation rather than
+/// the individual profiles (for propagating individual profiles see [`propagate_single_profiles`]).
+///
+/// Especially in the case of [`CumulativeExplanationType::Pointwise`] this is likely to be
+/// beneficial.
+fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    // We create the structure responsible for propagations and explanations
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type);
+
+    // We collect the time-table since we will need to index into it
+    let time_table = time_table.collect::<Vec<_>>();
+
+    // Then we go over all the possible tasks
+    for task in parameters.tasks.iter() {
+        if context.is_fixed(&task.start_variable) {
+            // If the task is fixed then we are not able to propagate it further
+            continue;
+        }
+
+        // Then we go over all the different profiles
+        let mut profile_index = 0;
+        'profile_loop: while profile_index < time_table.len() {
+            let profile = time_table[profile_index];
+
+            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+                // The profiles are sorted, if we cannot update using this one then we cannot update
+                // using the subsequent profiles, we can break from the loop
+                break 'profile_loop;
+            }
+
+            if !can_be_updated_by_profile(
+                &context.as_readonly(),
+                task,
+                profile,
+                parameters.capacity,
+            ) {
+                // The task cannot be propagate by the profile so we move to the next one
+                profile_index += 1;
+                continue;
+            }
+
+            // Keep track of the next profile index to use after we generate the sequence of
+            // profiles
+            let mut new_profile_index = profile_index;
+
+            // Then we check what propagations can be performed
+            if lower_bound_can_be_propagated_by_profile(
+                &context.as_readonly(),
+                task,
+                profile,
+                parameters.capacity,
+            ) {
+                // We find the index (non-inclusive) of the last profile in the chain of lower-bound
+                // propagations
+                let last_index = find_index_last_profile_which_propagates_lower_bound(
+                    profile_index,
+                    &time_table,
+                    &context.as_readonly(),
+                    task,
+                    parameters.capacity,
+                );
+
+                // Then we provide the propagation handler with the chain of profiles and propagate
+                // all of them
+                propagation_handler.propagate_chain_of_lower_bounds_with_explanations(
+                    context,
+                    &time_table[profile_index..last_index],
+                    task,
+                )?;
+
+                // Then we set the new profile index to the last index, note that this index (since
+                // it is non-inclusive) will always be larger than the current profile index
+                new_profile_index = last_index;
+            }
+
+            if upper_bound_can_be_propagated_by_profile(
+                &context.as_readonly(),
+                task,
+                profile,
+                parameters.capacity,
+            ) {
+                // We find the index (inclusive) of the last profile in the chain of upper-bound
+                // propagations (note that the index of this last profile in the chain is `<=
+                // profile_index`)
+                let first_index = find_index_last_profile_which_propagates_upper_bound(
+                    profile_index,
+                    &time_table,
+                    &context.as_readonly(),
+                    task,
+                    parameters.capacity,
+                );
+                // Then we provide the propagation handler with the chain of profiles and propagate
+                // all of them
+                propagation_handler.propagate_chain_of_upper_bounds_with_explanations(
+                    context,
+                    &time_table[first_index..=profile_index],
+                    task,
+                )?;
+
+                // Then we set the new profile index to maximum of the previous value of the new
+                // profile index and the next profile index
+                new_profile_index = max(new_profile_index, profile_index + 1);
+            }
+
+            if parameters.options.allow_holes_in_domain {
+                // If we allow the propagation of holes in the domain then we simply let the
+                // propagation handler handle it
+                propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+
+                // Then we set the new profile index to maximum of the previous value of the new
+                // profile index and the next profile index
+                new_profile_index = max(new_profile_index, profile_index + 1);
+            }
+
+            // Finally, we simply set the profile index to the index of the new profile
+            profile_index = new_profile_index;
+        }
+    }
+    Ok(())
+}
+
+/// Returns the index of the profile which cannot propagate the lower-bound of the provided task any
+/// further based on the propagation of the upper-bound due to `time_table[profile_index]`.
+fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + 'static>(
+    profile_index: usize,
+    time_table: &[&ResourceProfile<Var>],
+    context: &PropagationContext,
+    task: &Rc<Task<Var>>,
+    capacity: i32,
+) -> usize {
+    let mut last_index = profile_index + 1;
+    while last_index < time_table.len() {
+        let next_profile = time_table[last_index];
+        if next_profile.start - time_table[last_index - 1].end >= task.processing_time
+            || !can_be_updated_by_profile(context, task, next_profile, capacity)
+            || !lower_bound_can_be_propagated_by_profile(context, task, next_profile, capacity)
+        {
+            break;
+        }
+        last_index += 1;
+    }
+    last_index
+}
+
+/// Returns the index of the last profile which could propagate the upper-bound of the task based on
+/// the propagation of the upper-bound due to `time_table[profile_index]`.
+fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + 'static>(
+    profile_index: usize,
+    time_table: &[&ResourceProfile<Var>],
+    context: &PropagationContext,
+    task: &Rc<Task<Var>>,
+    capacity: i32,
+) -> usize {
+    if profile_index == 0 {
+        return 0;
+    }
+    let mut first_index = profile_index - 1;
+    loop {
+        let previous_profile = time_table[first_index];
+        if time_table[first_index + 1].start - previous_profile.end >= task.processing_time
+            || !can_be_updated_by_profile(context, task, previous_profile, capacity)
+            || !upper_bound_can_be_propagated_by_profile(context, task, previous_profile, capacity)
+        {
+            first_index += 1;
+            break;
+        }
+
+        if first_index == 0 {
+            break;
+        } else {
+            first_index -= 1;
+        }
+    }
+    first_index
 }
 
 /// Determines whether the lower bound of a task can be propagated by a [`ResourceProfile`] with the
@@ -375,7 +604,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -395,7 +624,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
 fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContextMut,
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -407,86 +636,29 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
         && context.upper_bound(&task.start_variable) <= profile.end
 }
 
-/// Propagates the lower-bound of the task to avoid overlap with the [`ResourceProfile`] `profile`
-fn propagate_lower_bound_task_by_profile<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
+/// Returns whether the provided `task` can be updated by the profile by checking the following:
+/// 1. Whether the task and the profile together would overflow the resource capacity
+/// 2. Whether the task has a mandatory part in the profile
+/// 3. Whether the bounds of the task overlap with the profile
+///
+/// If the first condition is true, the second false and the third true then this method returns
+/// true (otherwise it returns false)
+fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+    context: &PropagationContext,
     task: &Rc<Task<Var>>,
-    parameters: &CumulativeParameters<Var>,
     profile: &ResourceProfile<Var>,
-    explanation: Rc<Vec<Predicate>>,
-) -> Result<(), EmptyDomain> {
-    pumpkin_assert_advanced!(
-        lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
-        "Lower-bound of task is being propagated by profile while the conditions do not hold"
-    );
-    // The new value to which the lower-bound of `task` will be propagated
-    let new_lower_bound_value = profile.end + 1;
-
-    // Create the predicate which is used in the "lazy" explanation
-    // Note that this is not the value to which the lower-bound is propagated but rather the
-    // predicate which ensures that `task` has the most general bound possible such that
-    // this propagation would have taken place.
-    let general_explanation_lower_bound_predicate =
-        predicate!(task.start_variable >= max(0, profile.start - task.processing_time + 1));
-    // Then we perform the actual propagation using this bound and the responsible tasks
-    // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
-    // scratch but we only clone the underlying structure when it is used in an explanation; this
-    // prevents creating (possibly a very similar) explanation for every propagation which we do
-    context.set_lower_bound(
-        &task.start_variable,
-        new_lower_bound_value,
-        move |_context: &PropagationContext| {
-            // We clone the underlying Vec in the Rc and adjust it to include the appropriate
-            // predicate for the type of propagation (using the
-            // `general_explanation_lower_bound_predicate` which we constructed earlier)
-            let mut reason = (*explanation).clone();
-            reason.push(general_explanation_lower_bound_predicate);
-            reason.into()
-        },
-    )
+    capacity: i32,
+) -> bool {
+    profile.height + task.resource_usage > capacity
+        && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
+        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
 }
 
-/// Propagates the upper-bound of the task to avoid overlap with the [`ResourceProfile`] `profile`
-fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
-    task: &Rc<Task<Var>>,
-    parameters: &CumulativeParameters<Var>,
-    profile: &ResourceProfile<Var>,
-    explanation: Rc<Vec<Predicate>>,
-) -> Result<(), EmptyDomain> {
-    pumpkin_assert_advanced!(
-        upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity),
-        "Upper-bound of task is being propagated by profile while the conditions do not hold"
-    );
-    // The new value to which the upper-bound of `task` will be propagated.
-    // The new upper-bound is set such that if the task is started at its latest starting time, it
-    // will never overlap with the profile
-    let new_upper_bound_value = profile.start - task.processing_time;
-
-    // Create the predicate which is used in the "lazy" explanation
-    // Note that this is not the value to which the upper-bound is propagated but rather the
-    // predicate which ensures that `task` has the most general bound possible such that
-    // this propagation would have taken place.
-    let general_explanation_upper_bound_predicate = predicate!(
-        task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end)
-    );
-
-    // Then we perform the actual propagation using this bound and the responsible tasks
-    // Note that this is a semi-lazy explanation, we do not recalculate the entire explanation from
-    // scratch but we only clone the underlying structure when it is used in an explanation; this
-    // prevents creating (possibly a very similar) explanation for every propagation which we do
-    context.set_upper_bound(
-        &task.start_variable,
-        new_upper_bound_value,
-        move |_context: &PropagationContext| {
-            // We clone the underlying Vec in the Rc and adjust it to include the appropriate
-            // predicate for the type of propagation (using the
-            // `general_explanation_upper_bound_predicate` which we constructed earlier)
-            let mut reason = (*explanation).clone();
-            reason.push(general_explanation_upper_bound_predicate);
-            reason.into()
-        },
-    )
+/// An enum which represents which values can be updated by a profile
+enum CanUpdate {
+    LowerBound,
+    UpperBound,
+    Holes,
 }
 
 /// The method checks whether the current task can be propagated by the provided profile and (if
@@ -495,111 +667,41 @@ fn propagate_upper_bound_task_by_profile<Var: IntegerVariable + 'static>(
 ///
 /// Note that this method can only find [`Inconsistency::EmptyDomain`] conflicts which means that we
 /// handle that error in the parent function
-fn check_whether_task_can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+fn find_possible_updates<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
-    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
-) -> Result<(), EmptyDomain> {
-    if profile.height + task.resource_usage <= parameters.capacity
-        || has_mandatory_part_in_interval(context, task, profile.start, profile.end)
-    {
-        // The task cannot be propagated due to its resource usage being too low or it is part of
-        // the interval which means that it cannot be updated at all
-        return Ok(());
-    } else if task_has_overlap_with_interval(context, task, profile.start, profile.end) {
-        // The current task has an overlap with the current resource profile (i.e. it could be
-        // propagated by the current profile)
-        if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            let explanation = create_profile_explanation(context, profile, profile_explanation);
-            propagate_lower_bound_task_by_profile(context, task, parameters, profile, explanation)?;
+) -> Vec<CanUpdate> {
+    if !can_be_updated_by_profile(&context.as_readonly(), task, profile, parameters.capacity) {
+        // If the task cannot be updated by the profile then we simply return the empty list
+        vec![]
+    } else {
+        // The task could be updated by the profile!
+        let mut result = vec![];
+
+        if lower_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity,
+        ) {
+            // The lower-bound of the task can be updated by the profile
+            result.push(CanUpdate::LowerBound)
         }
-        if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
-            let explanation = create_profile_explanation(context, profile, profile_explanation);
-            propagate_upper_bound_task_by_profile(context, task, parameters, profile, explanation)?;
+        if upper_bound_can_be_propagated_by_profile(
+            &context.as_readonly(),
+            task,
+            profile,
+            parameters.capacity,
+        ) {
+            // The upper-bound of the task can be updated by the profile
+            result.push(CanUpdate::UpperBound)
         }
-        if parameters.allow_holes_in_domain {
-            // We go through all of the time-points which cause `task` to overlap with the resource
-            // profile
-
-            // There are two options for determining the lowest value to remove from the domain:
-            // - We remove all time-points from `profile.start - duration + 1` (i.e. the earliest
-            //   time-point such that `task` necessarily overlaps with the profile).
-            // - It could be the case that the lower-bound is larger than the previous earliest
-            //   time-point in which case we simply start from the lower-bound of the task.
-
-            let lower_bound_removed_time_points = max(
-                context.lower_bound(&task.start_variable),
-                profile.start - task.processing_time + 1,
-            );
-
-            // There are also two options for determine the highest value to remove from the domain:
-            // - We remove all time-points up-and-until the end of the profile (i.e. the latest
-            //   time-point which would result in the `task` overlapping with the profile)
-            // - It could be the case that the upper-bound is smaller than the previous later
-            //   time-point in case we remove all time-points up-and-until the upper-bound of the
-            //   task.
-            let upper_bound_removed_time_points =
-                min(context.upper_bound(&task.start_variable), profile.end);
-            for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
-                let explanation = create_profile_explanation(context, profile, profile_explanation);
-
-                context.remove(
-                    &task.start_variable,
-                    time_point,
-                    move |_context: &PropagationContext| {
-                        // We clone the underlying Vec in the Rc.
-                        //
-                        // Note that we do not need to include any of the information about `task`
-                        // since the explanation for the removal is valid irregardless of the bounds
-                        // of task.
-                        (*explanation).clone().into()
-                    },
-                )?;
-            }
+        if parameters.options.allow_holes_in_domain {
+            // Holes can be created in the domain of the task by the profile
+            result.push(CanUpdate::Holes)
         }
+        result
     }
-    Ok(())
-}
-
-/// Initialises the `profile_explanation` structure with the [`Predicate::lower_bound_predicate`]
-/// and [`Predicate::upper_bound_predicate`] of all of the [`ResourceProfile::profile_tasks`] of the
-/// provided `profile`.
-///
-/// Creates an explanation consisting of all bounds of the variables causing a propagation (See [Section 4.5 of \[1\]](http://cp2013.a4cp.org/sites/default/files/andreas_schutt_-_improving_scheduling_by_learning.pdf)).
-/// Note that this is not necessarily a minimal explanation, it could be the case that some of the
-/// tasks can be removed from the explanation depending on which task is propagated.
-///
-/// Note that this method stores an [`Rc`] in `profile_explanations` and then clones it, this means
-/// that the [`Rc`] is created only once for each profile.
-///
-/// # Bibliography
-/// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
-/// Computer Science and Software Engineering, 2011.
-fn create_profile_explanation<Var: IntegerVariable + 'static>(
-    context: &mut PropagationContextMut,
-    profile: &ResourceProfile<Var>,
-    profile_explanation: &mut OnceCell<Rc<Vec<Predicate>>>,
-) -> Rc<Vec<Predicate>> {
-    Rc::clone(profile_explanation.get_or_init(|| {
-        Rc::new(
-            profile
-                .profile_tasks
-                .iter()
-                .flat_map(|profile_task| {
-                    [
-                        predicate!(
-                            profile_task.start_variable
-                                >= context.lower_bound(&profile_task.start_variable)
-                        ),
-                        predicate!(
-                            profile_task.start_variable
-                                <= context.upper_bound(&profile_task.start_variable)
-                        ),
-                    ]
-                })
-                .collect::<Vec<Predicate>>(),
-        )
-    }))
 }

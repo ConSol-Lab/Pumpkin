@@ -24,8 +24,8 @@ use crate::variables::Literal;
 pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     propagator: WrappedPropagator,
     reification_literal: Literal,
-    /// The inconsistency that is identified by `propagator` during initialisation.
-    root_level_inconsistency: Option<PropositionalConjunction>,
+    /// An inconsistency that is identified by `propagator`.
+    inconsistency: Option<PropositionalConjunction>,
     /// The formatted name of the propagator.
     name: String,
     /// The `LocalId` of the reification literal. Is guaranteed to be a larger ID than any of the
@@ -39,7 +39,7 @@ impl<WrappedPropagator: Propagator> ReifiedPropagator<WrappedPropagator> {
         ReifiedPropagator {
             reification_literal,
             propagator,
-            root_level_inconsistency: None,
+            inconsistency: None,
             name,
             reification_literal_id: LocalId::from(0), /* Place-holder, will be set in
                                                        * `initialise_at_root` */
@@ -97,7 +97,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         // identifies at the root, and propagate the reification literal to false in the
         // `propagate` method.
         if let Err(conjunction) = self.propagator.initialise_at_root(context) {
-            self.root_level_inconsistency = Some(conjunction);
+            self.inconsistency = Some(conjunction);
         }
 
         self.reification_literal_id = context.get_next_local_id();
@@ -116,11 +116,14 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
+        // We remove the inconsistency upon backtracking since it might be invalid now
+        self.inconsistency = None;
+
         self.propagator.synchronise(context);
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        if let Some(conjunction) = self.root_level_inconsistency.take() {
+        if let Some(conjunction) = self.inconsistency.take() {
             context.assign_literal(self.reification_literal, false, conjunction)?;
         }
 
@@ -159,7 +162,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     }
 }
 
-impl<Prop> ReifiedPropagator<Prop> {
+impl<Prop: Propagator> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
         if let Err(Inconsistency::Other(ConflictInfo::Explanation(ref mut conjunction))) = status {
             conjunction.add(self.reification_literal.into());
@@ -180,17 +183,37 @@ impl<Prop> ReifiedPropagator<Prop> {
         Ok(())
     }
 
+    fn find_inconsistency(&mut self, context: PropagationContext<'_>) -> bool {
+        if self.inconsistency.is_none() {
+            self.inconsistency = self.propagator.detect_inconsistency(context);
+        }
+
+        self.inconsistency.is_some()
+    }
+
     fn filter_enqueue_decision(
-        &self,
+        &mut self,
         context: PropagationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
-        if decision == EnqueueDecision::Enqueue && context.is_literal_true(self.reification_literal)
-        {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
+        if decision == EnqueueDecision::Skip {
+            // If the original propagator skips then we always skip
+            return EnqueueDecision::Skip;
         }
+
+        if context.is_literal_true(self.reification_literal) {
+            // If the propagator would have enqueued and the literal is true then the reified
+            // propagator is also enqueued
+            return EnqueueDecision::Enqueue;
+        }
+
+        if !context.is_literal_false(self.reification_literal) && self.find_inconsistency(context) {
+            // Or the literal is not false already and there the propagator has found an
+            // inconsistency (i.e. we should and can propagate the reification variable)
+            return EnqueueDecision::Enqueue;
+        }
+
+        EnqueueDecision::Skip
     }
 }
 
@@ -204,6 +227,7 @@ mod tests {
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
+    use crate::variables::DomainId;
 
     #[test]
     fn a_detected_inconsistency_is_given_as_reason_for_propagating_reification_literal_to_false() {
@@ -324,10 +348,40 @@ mod tests {
         assert!(solver.is_literal_false(reification_literal));
     }
 
+    #[test]
+    fn notify_propagator_is_enqueued_if_inconsistency_can_be_detected() {
+        let mut solver = TestSolver::default();
+
+        let reification_literal = solver.new_literal();
+        let var = solver.new_variable(1, 5);
+
+        let mut propagator = solver
+            .new_propagator(ReifiedPropagator::new(
+                GenericPropagator::new(
+                    |_: PropagationContextMut| Ok(()),
+                    move |context: PropagationContext| {
+                        if context.is_fixed(&var) {
+                            Some(conjunction!([var == 5]))
+                        } else {
+                            None
+                        }
+                    },
+                    |_: &mut PropagatorInitialisationContext| Ok(()),
+                )
+                .with_variables(&[var]),
+                reification_literal,
+            ))
+            .expect("No conflict expected");
+
+        let enqueue = solver.increase_lower_bound_and_notify(&mut propagator, 0, var, 5);
+        assert!(matches!(enqueue, EnqueueDecision::Enqueue))
+    }
+
     struct GenericPropagator<Propagation, ConsistencyCheck, Init> {
         propagation: Propagation,
         consistency_check: ConsistencyCheck,
         init: Init,
+        variables_to_register: Vec<DomainId>,
     }
 
     impl<Propagation, ConsistencyCheck, Init> Propagator
@@ -338,7 +392,7 @@ mod tests {
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>,
     {
         fn name(&self) -> &str {
-            "Failing Propagator"
+            "Generic Propagator"
         }
 
         fn debug_propagate_from_scratch(
@@ -359,6 +413,16 @@ mod tests {
             &mut self,
             context: &mut PropagatorInitialisationContext,
         ) -> Result<(), PropositionalConjunction> {
+            self.variables_to_register
+                .iter()
+                .enumerate()
+                .for_each(|(index, variable)| {
+                    let _ = context.register(
+                        *variable,
+                        DomainEvents::ANY_INT,
+                        LocalId::from(index as u32),
+                    );
+                });
             (self.init)(context)
         }
     }
@@ -378,7 +442,14 @@ mod tests {
                 propagation,
                 consistency_check,
                 init,
+                variables_to_register: vec![],
             }
+        }
+
+        pub(crate) fn with_variables(mut self, variables: &[DomainId]) -> Self {
+            // Necessary for ensuring that the local IDs are correct when notifying
+            self.variables_to_register = variables.into();
+            self
         }
     }
 }

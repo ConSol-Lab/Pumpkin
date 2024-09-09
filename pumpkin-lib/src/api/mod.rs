@@ -68,6 +68,8 @@ pub mod options {
     pub use crate::engine::LearningOptions;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
+    pub use crate::propagators::CumulativeExplanationType;
+    pub use crate::propagators::CumulativeOptions;
     #[cfg(doc)]
     use crate::Solver;
 }
