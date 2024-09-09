@@ -156,7 +156,10 @@ pub struct ConstraintSatisfactionSolver {
     propositional_trail_index: usize,
     /// Indicates the next entry on the CP trail that needs to be inspected to notify the
     /// subscribed propagator(s).
-    cp_trail_index: usize,
+    ///
+    /// This variable is used to prevent propagators from being notified from backtrack events
+    /// while they have not been notified of the "forward" event.
+    last_notified_cp_trail_index: usize,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -332,7 +335,7 @@ impl ConstraintSatisfactionSolver {
                     }
                 }
             }
-            self.cp_trail_index = self.assignments_integer.num_trail_entries();
+            self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
         }
         // If there are no literals being watched then there is no reason to perform these
         // operations
@@ -451,7 +454,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
-            cp_trail_index: 0,
+            last_notified_cp_trail_index: 0,
             event_drain: vec![],
             backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
@@ -1254,7 +1257,7 @@ impl ConstraintSatisfactionSolver {
             .synchronise(
                 backtrack_level,
                 self.watch_list_cp.is_watching_any_backtrack_events(),
-                self.cp_trail_index,
+                self.last_notified_cp_trail_index,
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
@@ -1262,9 +1265,10 @@ impl ConstraintSatisfactionSolver {
             });
         pumpkin_assert_simple!(
             !self.watch_list_cp.is_watching_anything()
-                || self.cp_trail_index >= self.assignments_integer.num_trail_entries(),
+                || self.last_notified_cp_trail_index
+                    >= self.assignments_integer.num_trail_entries(),
         );
-        self.cp_trail_index = self.assignments_integer.num_trail_entries();
+        self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
         //  note that variable_literal_mappings sync should be called after the sat/cp data
