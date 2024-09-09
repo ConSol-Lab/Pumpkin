@@ -30,6 +30,8 @@ mod constraint_poster;
 mod cumulative;
 mod element;
 
+use std::num::NonZero;
+
 pub use all_different::*;
 pub use arithmetic::*;
 pub use boolean::*;
@@ -54,17 +56,28 @@ pub trait Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError>;
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError>;
 
     /// Add the half-reified version of the [`Constraint`] to the [`Solver`]; i.e. post the
     /// constraint `r -> constraint` where `r` is a reification literal.
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
 }
 
@@ -72,31 +85,49 @@ impl<ConcretePropagator> Constraint for ConcretePropagator
 where
     ConcretePropagator: Propagator + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(self)
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        if let Some(tag) = tag {
+            solver.add_tagged_propagator(self, tag)
+        } else {
+            solver.add_propagator(self)
+        }
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
+        if let Some(tag) = tag {
+            solver.add_tagged_propagator(ReifiedPropagator::new(self, reification_literal), tag)
+        } else {
+            solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
+        }
     }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        self.into_iter().try_for_each(|c| c.post(solver))
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.into_iter().try_for_each(|c| c.post(solver, tag))
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         self.into_iter()
-            .try_for_each(|c| c.implied_by(solver, reification_literal))
+            .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
     }
 }
 
@@ -116,17 +147,21 @@ pub trait NegatableConstraint: Constraint {
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
     /// to a root-level conflict.
+    ///
+    /// The `tag` allows inferences to be traced to the constraint that implies them. They will
+    /// show up in the proof log.
     fn reify(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>
     where
         Self: Sized,
     {
         let negation = self.negation();
 
-        self.implied_by(solver, reification_literal)?;
-        negation.implied_by(solver, !reification_literal)
+        self.implied_by(solver, reification_literal, tag)?;
+        negation.implied_by(solver, !reification_literal, tag)
     }
 }
