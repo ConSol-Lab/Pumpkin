@@ -335,6 +335,7 @@ struct Args {
     /// "time-table-over-interval", "time-table-over-interval-incremental"]
     #[arg(long = "cumulative-propagation-method", value_parser = cumulative_propagation_method_parser, default_value_t = CumulativePropagationMethod::default())]
     cumulative_propagation_method: CumulativePropagationMethod,
+
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
     /// the cumulative constraint.
     ///
