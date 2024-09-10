@@ -7,7 +7,9 @@ pub(crate) mod clausal;
 mod cumulative;
 pub(crate) mod element;
 mod reified_propagator;
-
 pub(crate) use arithmetic::*;
+pub use cumulative::CumulativeExplanationType;
+pub use cumulative::CumulativeOptions;
+pub use cumulative::CumulativePropagationMethod;
 pub(crate) use cumulative::*;
 pub(crate) use reified_propagator::*;

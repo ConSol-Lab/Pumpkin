@@ -236,14 +236,14 @@ fn compile_cumulative(
     let resource_requirements = context.resolve_array_integer_constants(&exprs[2])?;
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
-    let post_result = constraints::cumulative(
+    let post_result = constraints::cumulative_with_options(
         &start_times,
         &durations,
         &resource_requirements,
         resource_capacity,
-        options.cumulative_allow_holes,
+        options.cumulative_options,
     )
-    .post(context.solver);
+    .post(context.solver, None);
     Ok(post_result.is_ok())
 }
 
@@ -257,7 +257,7 @@ fn compile_array_int_maximum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     Ok(constraints::maximum(array.as_ref(), rhs)
-        .post(context.solver)
+        .post(context.solver, None)
         .is_ok())
 }
 
@@ -271,7 +271,7 @@ fn compile_array_int_minimum(
     let array = context.resolve_integer_variable_array(&exprs[1])?;
 
     Ok(constraints::minimum(array.iter().copied(), rhs)
-        .post(context.solver)
+        .post(context.solver, None)
         .is_ok())
 }
 
@@ -336,7 +336,7 @@ fn compile_set_in_reif(
                 .collect::<Vec<_>>();
 
             constraints::clause(clause)
-                .reify(context.solver, reif)
+                .reify(context.solver, reif, None)
                 .is_ok()
         }
     };
@@ -355,7 +355,7 @@ fn compile_array_var_int_element(
     let rhs = context.resolve_integer_variable(&exprs[2])?;
 
     Ok(constraints::element(index, array.as_ref(), rhs)
-        .post(context.solver)
+        .post(context.solver, None)
         .is_ok())
 }
 
@@ -480,7 +480,7 @@ fn compile_bool_or(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     Ok(constraints::clause(clause.as_ref())
-        .reify(context.solver, r)
+        .reify(context.solver, r, None)
         .is_ok())
 }
 
@@ -561,7 +561,7 @@ fn compile_array_bool_and(
     let r = context.resolve_bool_variable(&exprs[1])?;
 
     Ok(constraints::conjunction(conjunction.as_ref())
-        .reify(context.solver, r)
+        .reify(context.solver, r, None)
         .is_ok())
 }
 
@@ -579,7 +579,7 @@ fn compile_ternary_int_predicate<C: Constraint>(
     let c = context.resolve_integer_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b, c);
-    Ok(constraint.post(context.solver).is_ok())
+    Ok(constraint.post(context.solver, None).is_ok())
 }
 
 fn compile_binary_int_predicate<C: Constraint>(
@@ -595,7 +595,7 @@ fn compile_binary_int_predicate<C: Constraint>(
     let b = context.resolve_integer_variable(&exprs[1])?;
 
     let constraint = create_constraint(a, b);
-    Ok(constraint.post(context.solver).is_ok())
+    Ok(constraint.post(context.solver, None).is_ok())
 }
 
 fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
@@ -612,7 +612,7 @@ fn compile_reified_binary_int_predicate<C: NegatableConstraint>(
     let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let constraint = create_constraint(a, b);
-    Ok(constraint.reify(context.solver, reif).is_ok())
+    Ok(constraint.reify(context.solver, reif, None).is_ok())
 }
 
 fn weighted_vars(weights: Rc<[i32]>, vars: Rc<[DomainId]>) -> Box<[AffineView<DomainId>]> {
@@ -638,7 +638,7 @@ fn compile_int_lin_predicate<C: Constraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs);
-    Ok(constraint.post(context.solver).is_ok())
+    Ok(constraint.post(context.solver, None).is_ok())
 }
 
 fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
@@ -658,7 +658,7 @@ fn compile_reified_int_lin_predicate<C: NegatableConstraint>(
     let terms = weighted_vars(weights, vars);
 
     let constraint = create_constraint(terms, rhs);
-    Ok(constraint.reify(context.solver, reif).is_ok())
+    Ok(constraint.reify(context.solver, reif, None).is_ok())
 }
 
 fn compile_bool_lin_eq_predicate(
@@ -673,7 +673,7 @@ fn compile_bool_lin_eq_predicate(
 
     Ok(
         constraints::boolean_equals(weights.as_ref(), bools.as_ref(), rhs)
-            .post(context.solver)
+            .post(context.solver, None)
             .is_ok(),
     )
 }
@@ -690,7 +690,7 @@ fn compile_bool_lin_le_predicate(
 
     Ok(
         constraints::boolean_less_than_or_equals(weights.as_ref(), bools.as_ref(), rhs)
-            .post(context.solver)
+            .post(context.solver, None)
             .is_ok(),
     )
 }
@@ -704,6 +704,6 @@ fn compile_all_different(
 
     let variables = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
     Ok(constraints::all_different(variables)
-        .post(context.solver)
+        .post(context.solver, None)
         .is_ok())
 }

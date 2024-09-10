@@ -1,13 +1,17 @@
+use std::num::NonZero;
+
 use super::less_than_or_equals;
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_not_equal::LinearNotEqualConstructor;
+use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
 use crate::variables::IntegerVariable;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the constraint `\sum terms_i = rhs`.
+/// Creates the [`NegatableConstraint`] `\sum terms_i = rhs`.
+///
+/// Its negation is [`not_equals`].
 pub fn equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -18,7 +22,9 @@ pub fn equals<Var: IntegerVariable + Clone + 'static>(
     }
 }
 
-/// Creates the constraint `lhs = rhs`.
+/// Creates the [`NegatableConstraint`] `lhs = rhs`.
+///
+/// Its negation is [`binary_not_equals`].
 pub fn binary_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
@@ -26,7 +32,9 @@ pub fn binary_equals<Var: IntegerVariable + 'static>(
     equals([lhs.scaled(1), rhs.scaled(-1)], 0)
 }
 
-/// Create the constraint `\sum terms_i != rhs`.
+/// Create the [`NegatableConstraint`] `\sum terms_i != rhs`.
+///
+/// Its negation is [`equals`].
 pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     terms: impl Into<Box<[Var]>>,
     rhs: i32,
@@ -34,7 +42,9 @@ pub fn not_equals<Var: IntegerVariable + Clone + 'static>(
     equals(terms, rhs).negation()
 }
 
-/// Creates the constraint `lhs != rhs`.
+/// Creates the [`NegatableConstraint`] `lhs != rhs`.
+///
+/// Its negation is [`binary_equals`].
 pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     lhs: Var,
     rhs: Var,
@@ -51,15 +61,19 @@ impl<Var> Constraint for EqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs).post(solver)?;
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        less_than_or_equals(self.terms.clone(), self.rhs).post(solver, tag)?;
 
         let negated = self
             .terms
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).post(solver)?;
+        less_than_or_equals(negated, -self.rhs).post(solver, tag)?;
 
         Ok(())
     }
@@ -68,16 +82,20 @@ where
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        less_than_or_equals(self.terms.clone(), self.rhs)
-            .implied_by(solver, reification_literal)?;
+        less_than_or_equals(self.terms.clone(), self.rhs).implied_by(
+            solver,
+            reification_literal,
+            tag,
+        )?;
 
         let negated = self
             .terms
             .iter()
             .map(|var| var.scaled(-1))
             .collect::<Box<[_]>>();
-        less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal)?;
+        less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal, tag)?;
 
         Ok(())
     }
@@ -106,16 +124,25 @@ impl<Var> Constraint for NotEqualConstraint<Var>
 where
     Var: IntegerVariable + Clone + 'static,
 {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).post(solver)
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
     }
 
     fn implied_by(
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualConstructor::new(self.terms, self.rhs).implied_by(solver, reification_literal)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(
+            solver,
+            reification_literal,
+            tag,
+        )
     }
 }
 

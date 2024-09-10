@@ -1,7 +1,5 @@
 use std::cmp;
 
-use log::warn;
-
 use super::ConflictAnalysisContext;
 use super::ConflictAnalysisResult;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -75,9 +73,6 @@ impl SemanticMinimiser {
         recompute_invariant_learned_clause(&mut minimised_clause, context);
 
         if minimised_clause.len() == 1 {
-            if minimised_clause[0] == context.assignments_propositional.true_literal {
-                return;
-            }
             // If the learned clause is unit then we jump back to the root and propagate it there
             analysis_result.backjump_level = 0;
         } else {
@@ -128,8 +123,7 @@ impl SemanticMinimiser {
         for domain_id in self.present_ids.iter() {
             // As soon as one domain is inconsistent, we know that we can stop
             if self.domains[domain_id].inconsistent {
-                warn!("Inconsistent domain found in the semantic minimiser; this should never happen during conflict analysis!");
-                return vec![assignments_propositional.true_literal];
+                panic!("It should not be possible to find an inconsistent domain during clause minimisation!");
             }
 
             // Then we add the predicates which describe the current domain; note that this removes
@@ -604,116 +598,6 @@ mod tests {
 
         let p = p.minimise_clause(
             learned_clause.into_iter(),
-            &assignments_integer,
-            &assignments_propositional,
-            &variable_literal_mappings,
-        );
-
-        assert!(p.is_empty());
-    }
-
-    #[test]
-    fn trivial_conflict_bounds() {
-        let mut p = SemanticMinimiser::default();
-        let (assignments_integer, assignments_propositional, variable_literal_mappings) =
-            create_for_testing(1, 0, None);
-        let domain_id = assignments_integer.get_domains().next().unwrap();
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id >= 5), predicate!(domain_id <= 4)];
-        let learned_clause = nogood_to_clause(
-            nogood,
-            &variable_literal_mappings,
-            &assignments_integer,
-            &assignments_propositional,
-        );
-
-        let p = p.minimise_clause(
-            learned_clause.into_iter(),
-            &assignments_integer,
-            &assignments_propositional,
-            &variable_literal_mappings,
-        );
-
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], assignments_propositional.true_literal);
-    }
-
-    #[test]
-    fn trivial_conflict_holes() {
-        let mut p = SemanticMinimiser::default();
-        let (assignments_integer, assignments_propositional, variable_literal_mappings) =
-            create_for_testing(1, 0, None);
-        let domain_id = assignments_integer.get_domains().next().unwrap();
-        let nogood: Vec<Predicate> = vec![
-            predicate!(domain_id != 5),
-            predicate!(domain_id >= 5),
-            predicate!(domain_id <= 5),
-        ];
-        let learned_clause = nogood_to_clause(
-            nogood,
-            &variable_literal_mappings,
-            &assignments_integer,
-            &assignments_propositional,
-        );
-
-        let p = p.minimise_clause(
-            learned_clause.into_iter(),
-            &assignments_integer,
-            &assignments_propositional,
-            &variable_literal_mappings,
-        );
-
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], assignments_propositional.true_literal);
-    }
-
-    #[test]
-    fn trivial_conflict_assignment() {
-        let mut p = SemanticMinimiser::default();
-        let (assignments_integer, assignments_propositional, variable_literal_mappings) =
-            create_for_testing(1, 0, None);
-        let domain_id = assignments_integer.get_domains().next().unwrap();
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
-        let learned_clause = nogood_to_clause(
-            nogood,
-            &variable_literal_mappings,
-            &assignments_integer,
-            &assignments_propositional,
-        );
-
-        let p = p.minimise_clause(
-            learned_clause.into_iter(),
-            &assignments_integer,
-            &assignments_propositional,
-            &variable_literal_mappings,
-        );
-
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0], assignments_propositional.true_literal);
-    }
-
-    #[test]
-    fn trivial_conflict_bounds_reset() {
-        let mut p = SemanticMinimiser::default();
-        let (assignments_integer, assignments_propositional, variable_literal_mappings) =
-            create_for_testing(1, 0, None);
-        let domain_id = assignments_integer.get_domains().next().unwrap();
-        let nogood: Vec<Predicate> = vec![predicate!(domain_id != 5), predicate!(domain_id == 5)];
-        let learned_clause = nogood_to_clause(
-            nogood,
-            &variable_literal_mappings,
-            &assignments_integer,
-            &assignments_propositional,
-        );
-
-        let _ = p.minimise_clause(
-            learned_clause.into_iter(),
-            &assignments_integer,
-            &assignments_propositional,
-            &variable_literal_mappings,
-        );
-
-        let p = p.minimise_clause(
-            vec![].into_iter(),
             &assignments_integer,
             &assignments_propositional,
             &variable_literal_mappings,

@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -16,7 +18,7 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::Propagator;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -79,8 +81,7 @@ use crate::variables::PropositionalVariable;
 /// ```
 ///
 /// # Using the Solver
-/// For examples on how to use the solver, see the [root-level crate documentation](crate) or the
-/// examples in the repository at `pumpkin-lib/examples`.
+/// For examples on how to use the solver, see the [root-level crate documentation](crate) or [one of these examples](https://github.com/ConSol-Lab/Pumpkin/tree/master/pumpkin-lib/examples).
 pub struct Solver {
     /// The internal [`ConstraintSatisfactionSolver`] which is used to solve the problems.
     satisfaction_solver: ConstraintSatisfactionSolver,
@@ -428,10 +429,12 @@ impl Solver {
         }
     }
 
-    /// Solver the model currently in the [`Solver`] to optimality where the provided
-    /// `objective_variable` is minmised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// Solves the model currently in the [`Solver`] to optimality where the provided
+    /// `objective_variable` is minimised (or is indicated to terminate by the provided
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn minimise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -443,8 +446,10 @@ impl Solver {
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]). It returns an [`OptimisationResult`] which can be used to
-    /// retrieve the optimal solution if it exists.
+    /// [`TerminationCondition`]).
+    ///
+    /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
+    /// it exists.
     pub fn maximise(
         &mut self,
         brancher: &mut impl Brancher,
@@ -645,6 +650,17 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
+    /// Adds a propagator with a tag, which is used to identify inferences made by this propagator
+    /// in the proof log.
+    pub(crate) fn add_tagged_propagator(
+        &mut self,
+        propagator: impl Propagator + 'static,
+        tag: NonZero<u32>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver
+            .add_propagator(propagator, Some(tag))
+    }
+
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`].
     ///
@@ -655,15 +671,11 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub(crate) fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
-        self.satisfaction_solver.add_propagator(constructor)
+        propagator: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver.add_propagator(propagator, None)
     }
 }
 
@@ -703,7 +715,9 @@ impl Solver {
 }
 
 /// The type of [`Brancher`] which is created by
-/// [`Solver::default_brancher_over_all_propositional_variables`]. It consists of the value selector
+/// [`Solver::default_brancher_over_all_propositional_variables`].
+///
+/// It consists of the value selector
 /// [`Vsids`] in combination with a [`SolutionGuidedValueSelector`] with as backup [`PhaseSaving`].
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,

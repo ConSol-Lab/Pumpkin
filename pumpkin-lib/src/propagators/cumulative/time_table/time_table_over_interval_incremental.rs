@@ -5,6 +5,7 @@ use std::rc::Rc;
 use super::debug_propagate_from_scratch_time_table_interval;
 use super::mandatory_part_addition::generate_update_range;
 use super::mandatory_part_removal::generate_removal_range;
+use super::propagation_handler::create_conflict_explanation;
 use super::time_table_util::backtrack_update;
 use super::time_table_util::has_overlap_with_interval;
 use super::time_table_util::insert_update;
@@ -16,18 +17,18 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
+use crate::options::CumulativeOptions;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::util::check_bounds_equal_at_propagation;
-use crate::propagators::util::create_propositional_conjunction;
 use crate::propagators::util::create_tasks;
+use crate::propagators::util::register_tasks;
 use crate::propagators::util::update_bounds_task;
-use crate::propagators::CumulativeConstructor;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::DynamicStructures;
 use crate::propagators::OverIntervalTimeTableType;
@@ -72,27 +73,16 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     dynamic_structures: DynamicStructures<Var>,
 }
 
-impl<Var> PropagatorConstructor
-    for CumulativeConstructor<Var, TimeTableOverIntervalIncrementalPropagator<Var>>
-where
-    Var: IntegerVariable + 'static + Debug,
-{
-    type Propagator = TimeTableOverIntervalIncrementalPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let tasks = create_tasks(&self.tasks, context, true);
-        let parameters =
-            CumulativeParameters::new(tasks, self.capacity, self.allow_holes_in_domain);
-        let dynamic_structures = DynamicStructures::new(&parameters);
-        TimeTableOverIntervalIncrementalPropagator::new(parameters, dynamic_structures)
-    }
-}
-
-impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub(crate) fn new(
-        parameters: CumulativeParameters<Var>,
-        dynamic_structures: DynamicStructures<Var>,
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
+        cumulative_options: CumulativeOptions,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
+        let tasks = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let dynamic_structures = DynamicStructures::new(&parameters);
+
         TimeTableOverIntervalIncrementalPropagator {
             time_table: Default::default(),
             parameters,
@@ -130,9 +120,10 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPro
                     );
                     if let Err(conflict_tasks) = result {
                         if conflict.is_none() {
-                            conflict = Some(Err(create_propositional_conjunction(
-                                &context.as_readonly(),
+                            conflict = Some(Err(create_conflict_explanation(
+                                context,
                                 &conflict_tasks,
+                                self.parameters.options.explanation_type,
                             )
                             .into()));
                         }
@@ -213,19 +204,20 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTableOverIntervalIncrementalPro
                 .find(|profile| profile.height > self.parameters.capacity);
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
-                        create_time_table_over_interval_from_scratch(
-                            &context.as_readonly(),
-                            &self.parameters
-                        )
-                        .is_err(),
-                        "Time-table from scratch could not find conflict - Reported {conflicting_profile:#?}"
-                    );
+                    create_time_table_over_interval_from_scratch(
+                        &context.as_readonly(),
+                        &self.parameters
+                    )
+                    .is_err(),
+                    "Time-table from scratch could not find conflict"
+                );
 
                 // TODO: could decide which tasks to choose from the profile to explain the
                 // conflict
-                return Err(create_propositional_conjunction(
-                    &context.as_readonly(),
-                    &conflicting_profile.profile_tasks,
+                return Err(create_conflict_explanation(
+                    context,
+                    conflicting_profile,
+                    self.parameters.options.explanation_type,
                 )
                 .into());
             }
@@ -250,7 +242,11 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(
-            debug::time_tables_are_the_same_interval(&context.as_readonly(), &self.time_table, &self.parameters),
+            debug::time_tables_are_the_same_interval(
+                &context.as_readonly(),
+                &self.time_table,
+                &self.parameters,
+            ),
             "The profiles were not the same between the incremental and the non-incremental version"
         );
 
@@ -343,15 +339,17 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        register_tasks(&self.parameters.tasks, context, true);
+
         // First we store the bounds in the parameters
         self.dynamic_structures
-            .reset_all_bounds_and_remove_fixed(&context, &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context, &self.parameters);
         self.dynamic_structures.clean_updated();
 
         // Then we do normal propagation
-        self.time_table = create_time_table_over_interval_from_scratch(&context, &self.parameters)?;
+        self.time_table = create_time_table_over_interval_from_scratch(context, &self.parameters)?;
         Ok(())
     }
 
@@ -491,7 +489,7 @@ mod insertion {
         update_range: &Range<i32>,
         updated_task: &Rc<Task<Var>>,
         capacity: i32,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), ResourceProfile<Var>> {
         let mut to_add = Vec::new();
 
         let mut conflict = None;
@@ -881,7 +879,7 @@ mod checks {
         to_add: &mut Vec<ResourceProfile<Var>>,
         task: &Rc<Task<Var>>,
         capacity: i32,
-    ) -> Result<(), Vec<Rc<Task<Var>>>> {
+    ) -> Result<(), ResourceProfile<Var>> {
         // Now we create a new profile which consists of the part of the
         // profile covered by the update range
         // This means that we are adding the contribution of the updated
@@ -904,21 +902,28 @@ mod checks {
             let mut new_profile_tasks = profile.profile_tasks.clone();
             new_profile_tasks.push(Rc::clone(task));
 
-            // We thus create a new profile consisting of the combination of
-            // the previous profile and the updated task under consideration
-            to_add.push(ResourceProfile {
+            let new_profile = ResourceProfile {
                 start: new_profile_lower_bound,
                 end: new_profile_upper_bound,
                 profile_tasks: new_profile_tasks.clone(),
                 height: profile.height + task.resource_usage,
-            });
+            };
+
+            // We thus create a new profile consisting of the combination of
+            // the previous profile and the updated task under consideration
+            to_add.push(new_profile);
 
             // A sanity check, there is a new profile to create consisting
             // of a combination of the previous profile and the updated task
-            if profile.height + task.resource_usage > capacity {
+            if profile.height + task.resource_usage + task.resource_usage > capacity {
                 // The addition of the new mandatory part to the profile
                 // caused an overflow of the resource
-                return Err(new_profile_tasks);
+                return Err(ResourceProfile {
+                    start: new_profile_lower_bound,
+                    end: new_profile_upper_bound,
+                    profile_tasks: new_profile_tasks,
+                    height: profile.height + task.resource_usage,
+                });
             }
         }
         Ok(())
@@ -1031,14 +1036,15 @@ mod debug {
                 .iter()
                 .zip(time_table_scratch)
                 .all(|(actual, expected)| {
-                    actual.height == expected.height
+                    let result = actual.height == expected.height
                         && actual.start == expected.start
                         && actual.end == expected.end
                         && actual.profile_tasks.len() == expected.profile_tasks.len()
                         && actual
                             .profile_tasks
                             .iter()
-                            .all(|task| expected.profile_tasks.contains(task))
+                            .all(|task| expected.profile_tasks.contains(task));
+                    result
                 })
     }
 
@@ -1152,9 +1158,12 @@ mod tests {
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
+    use crate::options::CumulativeExplanationType;
+    use crate::options::CumulativeOptions;
+    use crate::options::CumulativePropagationMethod;
     use crate::predicate;
     use crate::propagators::ArgTask;
-    use crate::propagators::TimeTableOverIntervalIncremental;
+    use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -1163,8 +1172,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1177,9 +1186,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -1194,8 +1209,8 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTableOverIntervalIncremental::new(
-            [
+        let result = solver.new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+            &[
                 ArgTask {
                     start_time: s1,
                     processing_time: 4,
@@ -1208,10 +1223,16 @@ mod tests {
                 },
             ]
             .into_iter()
-            .collect(),
+            .collect::<Vec<_>>(),
             1,
-            false,
+            CumulativeOptions {
+                allow_holes_in_domain: false,
+                explanation_type: CumulativeExplanationType::Naive,
+                propagation_method: CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                generate_sequence: false,
+            },
         ));
+        assert!(matches!(result, Err(Inconsistency::Other(_))));
         assert!(match result {
             Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
                 let expected = [
@@ -1236,8 +1257,8 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1250,9 +1271,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -1272,8 +1299,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1306,9 +1333,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -1321,8 +1354,8 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -1335,9 +1368,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -1365,8 +1404,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1379,9 +1418,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 1);
@@ -1394,7 +1439,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 <= 9),
+                predicate!(s2 <= 8),
                 predicate!(s1 >= 6),
                 predicate!(s1 <= 6),
             ]),
@@ -1413,8 +1458,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1447,9 +1492,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1487,8 +1538,8 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: a,
                         processing_time: 2,
@@ -1526,9 +1577,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 5,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::default(),
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1559,8 +1616,8 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 4,
@@ -1573,9 +1630,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -1588,7 +1651,7 @@ mod tests {
             .clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 >= 0),
+                predicate!(s2 >= 1),
                 predicate!(s1 >= 1),
                 predicate!(s1 <= 1),
             ]),
@@ -1604,8 +1667,8 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTableOverIntervalIncremental::new(
-                [
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
                     ArgTask {
                         start_time: s1,
                         processing_time: 2,
@@ -1623,9 +1686,15 @@ mod tests {
                     },
                 ]
                 .into_iter()
-                .collect(),
+                .collect::<Vec<_>>(),
                 1,
-                false,
+                CumulativeOptions {
+                    allow_holes_in_domain: false,
+                    explanation_type: CumulativeExplanationType::Naive,
+                    propagation_method:
+                        CumulativePropagationMethod::TimeTableOverIntervalIncremental,
+                    generate_sequence: false,
+                },
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s3), 7);
@@ -1642,7 +1711,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
                 predicate!(s2 >= 5),
-                predicate!(s3 >= 2),
+                predicate!(s3 >= 5),
             ]),
             reason
         );

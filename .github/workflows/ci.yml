@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,7 +63,7 @@ jobs:
       with:
         components: clippy, rustfmt
     - run: cargo +nightly fmt --check
-    - run: cargo clippy --all-targets
+    - run: cargo +nightly clippy --all-targets
     
   licenses:
     name: Dependency Licensing

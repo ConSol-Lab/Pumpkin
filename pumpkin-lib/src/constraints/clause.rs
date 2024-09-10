@@ -1,15 +1,21 @@
+use std::num::NonZero;
+
 use super::Constraint;
 use super::NegatableConstraint;
 use crate::variables::Literal;
 use crate::ConstraintOperationError;
 use crate::Solver;
 
-/// Creates the constraint `\/ literals`
+/// Creates the [`NegatableConstraint`] `\/ literal`
+///
+/// Its negation is `/\ !literal`
 pub fn clause(literals: impl Into<Vec<Literal>>) -> impl NegatableConstraint {
     Clause(literals.into())
 }
 
-/// Creates the constraint `/\ literals`
+/// Creates the [`NegatableConstraint`] `/\ literal`
+///
+/// Its negation is `\/ !literal`
 pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstraint {
     Conjunction(literals.into())
 }
@@ -17,7 +23,13 @@ pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstrain
 struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         solver.add_clause(self.0)
     }
 
@@ -25,7 +37,10 @@ impl Constraint for Clause {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         solver.add_clause(
             self.0
                 .into_iter()
@@ -45,7 +60,13 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>);
 
 impl Constraint for Conjunction {
-    fn post(self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         self.0
             .into_iter()
             .try_for_each(|lit| solver.add_clause([lit]))
@@ -55,7 +76,10 @@ impl Constraint for Conjunction {
         self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         self.0
             .into_iter()
             .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
