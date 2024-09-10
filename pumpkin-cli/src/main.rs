@@ -332,8 +332,8 @@ struct Args {
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
     ///
-    /// Possible values: ["TimeTablePerPoint", "TimeTablePerPointIncremental",
-    /// "TimeTableOverInterval", "TimeTableOverIntervalIncremental"]
+    /// Possible values: ["time-table-per-point", "time-table-per-point-incremental",
+    /// "time-table-over-interval", "time-table-over-interval-incremental"]
     #[arg(long = "cumulative-propagation-method", value_parser = cumulative_propagation_method_parser, default_value_t = CumulativePropagationMethod::default())]
     cumulative_propagation_method: CumulativePropagationMethod,
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
@@ -518,12 +518,12 @@ fn run() -> PumpkinResult<()> {
             FlatZincOptions {
                 free_search: args.free_search,
                 all_solutions: args.all_solutions,
-                cumulative_options: CumulativeOptions {
-                    allow_holes_in_domain: args.cumulative_allow_holes,
-                    explanation_type: args.cumulative_explanation_type,
-                    propagation_method: args.cumulative_propagation_method,
-                    generate_sequence: args.cumulative_generate_sequence,
-                },
+                cumulative_options: CumulativeOptions::new(
+                    args.cumulative_allow_holes,
+                    args.cumulative_explanation_type,
+                    args.cumulative_generate_sequence,
+                    args.cumulative_propagation_method,
+                ),
             },
         )?,
     }
@@ -637,10 +637,10 @@ fn cumulative_explanation_type_parser(s: &str) -> Result<CumulativeExplanationTy
 
 fn cumulative_propagation_method_parser(s: &str) -> Result<CumulativePropagationMethod, String> {
     match s {
-        "TimeTablePerPoint" => Ok(CumulativePropagationMethod::TimeTablePerPoint),
-        "TimeTablePerPointIncremental" => Ok(CumulativePropagationMethod::TimeTablePerPointIncremental),
-        "TimeTableOverInterval" => Ok(CumulativePropagationMethod::TimeTableOverInterval),
-        "TimeTableOverIntervalIncremental" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncremental),
-        value => Err(format!("'{value}' is not a valid cumulative propagation method. Possible values: ['TimeTablePerPoint', 'TimeTablePerPointIncremental', 'TimeTableOverInterval', 'TimeTableOverIntervalIncremental']"))
+        "time-table-per-point" => Ok(CumulativePropagationMethod::TimeTablePerPoint),
+        "time-table-per-point-incremental" => Ok(CumulativePropagationMethod::TimeTablePerPointIncremental),
+        "time-table-over-interval" => Ok(CumulativePropagationMethod::TimeTableOverInterval),
+        "time-table-over-interval-incremental" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncremental),
+        value => Err(format!("'{value}' is not a valid cumulative propagation method. Possible values: ['time-table-per-point', 'time-table-per-point-incremental', 'time-table-over-interval', 'time-table-over-interval-incremental']"))
     }
 }

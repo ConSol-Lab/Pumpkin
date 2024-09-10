@@ -357,6 +357,7 @@ dependencies = [
  "pumpkin-lib",
  "rand",
  "regex",
+ "stringcase",
  "thiserror",
  "wait-timeout",
 ]
@@ -463,6 +464,12 @@ checksum = "a9e9e0b4211b72e7b8b6e85c807d36c212bdb33ea8587f7569562a84df5465b1"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "stringcase"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04028eeb851ed08af6aba5caa29f2d59a13ed168cee4d6bd753aeefcf1d636b0"
 
 [[package]]
 name = "strsim"

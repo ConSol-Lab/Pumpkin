@@ -2,21 +2,45 @@ use std::fmt::Display;
 
 use super::CumulativeExplanationType;
 
-#[derive(Debug, Copy, Clone, Default)]
-pub struct CumulativeOptions {
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct CumulativePropagatorOptions {
     /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
     /// false then it will only adjust the bounds when appropriate rather than removing values from
     /// the domain
-    pub allow_holes_in_domain: bool,
+    pub(crate) allow_holes_in_domain: bool,
     /// The type of explanation which is used by the cumulative to explain propagations and
     /// conflicts.
-    pub explanation_type: CumulativeExplanationType,
+    pub(crate) explanation_type: CumulativeExplanationType,
+    /// Determines whether a sequence of profiles is generated when explaining a propagation.
+    pub(crate) generate_sequence: bool,
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct CumulativeOptions {
     /// The propagation method which is used for the cumulative constraints; currently all of them
     /// are variations of time-tabling. The default is incremental time-tabling reasoning over
     /// intervals.
-    pub propagation_method: CumulativePropagationMethod,
-    /// Determines whether a sequence of profiles is generated when explaining a propagation.
-    pub generate_sequence: bool,
+    pub(crate) propagation_method: CumulativePropagationMethod,
+    /// The options which are passed to the propagator itself
+    pub(crate) propagator_options: CumulativePropagatorOptions,
+}
+
+impl CumulativeOptions {
+    pub fn new(
+        allow_holes_in_domain: bool,
+        explanation_type: CumulativeExplanationType,
+        generate_sequence: bool,
+        propagation_method: CumulativePropagationMethod,
+    ) -> Self {
+        Self {
+            propagation_method,
+            propagator_options: CumulativePropagatorOptions {
+                allow_holes_in_domain,
+                explanation_type,
+                generate_sequence,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -31,15 +55,15 @@ pub enum CumulativePropagationMethod {
 impl Display for CumulativePropagationMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "TimeTablePerPoint"),
+            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "time-table-per-point"),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                write!(f, "TimeTablePerPointIncremental")
+                write!(f, "time-table-per-point-incremental")
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                write!(f, "TimeTableOverInterval")
+                write!(f, "time-table-over-interval")
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                write!(f, "TimeTableOverIntervalIncremental")
+                write!(f, "time-table-over-interval-incremental")
             }
         }
     }
