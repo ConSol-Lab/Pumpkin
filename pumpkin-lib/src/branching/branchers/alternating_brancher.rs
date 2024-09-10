@@ -18,7 +18,7 @@ use crate::Solver;
 /// ([`AlternatingStrategy::EverySolution`]), after every other solution
 /// ([`AlternatingStrategy::EveryOtherSolution`]), switching to [`DefaultBrancher`] after the first
 /// solution is found and switching strategy upon restart.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlternatingStrategy {
     /// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
     /// the provided brancher every solution.
@@ -86,8 +86,7 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
         // If we have considered a restart and the AlternatingStrategy relies on restarts then we
         // toggle the brancher and set the variable to false
-        if self.has_considered_restart && matches!(self.strategy, AlternatingStrategy::EveryRestart)
-        {
+        if self.has_considered_restart && self.strategy == AlternatingStrategy::EveryRestart {
             self.has_considered_restart = false;
             self.toggle_brancher();
         }
@@ -154,7 +153,7 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     }
 
     fn on_restart(&mut self) {
-        if let AlternatingStrategy::EveryRestart = self.strategy {
+        if self.strategy == AlternatingStrategy::EveryRestart {
             // We have considered a restart and we should switch
             self.has_considered_restart = true;
         }
@@ -163,19 +162,18 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     fn is_restart_pointless(&mut self) -> bool {
         match self.strategy {
             AlternatingStrategy::EveryRestart => {
-                // In the case of the `EveryRestart` strategy, note that we switch to the other
-                // strategy and then the restart is performed so we check whether restarting for the
-                // other brancher is pointless
-                let is_restart_pointless = if self.is_using_default_brancher {
-                    self.other_brancher.is_restart_pointless()
-                } else {
-                    self.default_brancher.is_restart_pointless()
-                };
                 // We indicate that we have considered a restart, this can then be used by the
                 // EveryRestart AlternatingStrategy to determine when to switch
                 self.has_considered_restart = true;
 
-                is_restart_pointless
+                // In the case of the `EveryRestart` strategy, note that we switch to the other
+                // strategy and then the restart is performed so we check whether restarting for the
+                // other brancher is pointless
+                if self.is_using_default_brancher {
+                    self.other_brancher.is_restart_pointless()
+                } else {
+                    self.default_brancher.is_restart_pointless()
+                }
             }
             _ => {
                 if self.is_using_default_brancher {
