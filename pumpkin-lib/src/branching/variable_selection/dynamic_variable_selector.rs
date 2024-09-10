@@ -41,4 +41,8 @@ impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.selector.on_unassign_integer(variable, value)
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        self.selector.is_restart_pointless()
+    }
 }

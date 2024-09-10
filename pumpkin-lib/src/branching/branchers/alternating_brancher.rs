@@ -15,7 +15,7 @@ use crate::Solver;
 /// ([`AlternatingStrategy::EverySolution`]), after every other solution
 /// ([`AlternatingStrategy::EveryOtherSolution`]), switching to [`DefaultBrancher`] after the first
 /// solution is found and switching strategy upon restart.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AlternatingStrategy {
     /// Specifies that the [`AlternatingBrancher`] should switch between [`DefaultBrancher`] and
     /// the provided brancher every solution.
@@ -52,6 +52,9 @@ pub struct AlternatingBrancher<OtherBrancher> {
     default_brancher: DefaultBrancher,
     /// The strategy used to determine when to switch between the two branchers.
     strategy: AlternatingStrategy,
+    /// Indicates that the [`AlternatingBrancher`] has considered a restart; note that this
+    /// variable is only used in the context of [`ÀlternatingStrategy::EveryRestart`].
+    has_considered_restart: bool,
 }
 
 impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
@@ -66,6 +69,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             other_brancher,
             default_brancher: solver.default_brancher(),
             strategy,
+            has_considered_restart: false,
         }
     }
 
@@ -77,6 +81,13 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
+        // If we have considered a restart and the AlternatingStrategy relies on restarts then we
+        // toggle the brancher and set the variable to false
+        if self.has_considered_restart && self.strategy == AlternatingStrategy::EveryRestart {
+            self.has_considered_restart = false;
+            self.toggle_brancher();
+        }
+
         if self.is_using_default_brancher {
             self.default_brancher.next_decision(context)
         } else {
@@ -127,9 +138,35 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     }
 
     fn on_restart(&mut self) {
-        if let AlternatingStrategy::EveryRestart = self.strategy {
-            // Switch whenever a restart occurs
-            self.toggle_brancher()
+        if self.strategy == AlternatingStrategy::EveryRestart {
+            // We have considered a restart and we should switch
+            self.has_considered_restart = true;
+        }
+    }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        match self.strategy {
+            AlternatingStrategy::EveryRestart => {
+                // We indicate that we have considered a restart, this can then be used by the
+                // EveryRestart AlternatingStrategy to determine when to switch
+                self.has_considered_restart = true;
+
+                // In the case of the `EveryRestart` strategy, note that we switch to the other
+                // strategy and then the restart is performed so we check whether restarting for the
+                // other brancher is pointless
+                if self.is_using_default_brancher {
+                    self.other_brancher.is_restart_pointless()
+                } else {
+                    self.default_brancher.is_restart_pointless()
+                }
+            }
+            _ => {
+                if self.is_using_default_brancher {
+                    self.default_brancher.is_restart_pointless()
+                } else {
+                    self.other_brancher.is_restart_pointless()
+                }
+            }
         }
     }
 }
@@ -138,7 +175,9 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 mod tests {
     use super::AlternatingBrancher;
     use super::AlternatingStrategy;
+    use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
+    use crate::branching::SelectionContext;
     use crate::engine::Assignments;
     use crate::results::SolutionReference;
     use crate::Solver;
@@ -208,6 +247,7 @@ mod tests {
 
     #[test]
     fn test_every_other_restart() {
+        let assignments = Assignments::default();
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
@@ -217,10 +257,26 @@ mod tests {
 
         assert!(!brancher.is_using_default_brancher);
         brancher.on_restart();
+        // next_decision is called to ensure that the brancher has actually switched
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
         assert!(brancher.is_using_default_brancher);
+
         brancher.on_restart();
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
         assert!(!brancher.is_using_default_brancher);
+
         brancher.on_restart();
+        let _ = brancher.next_decision(&mut SelectionContext::new(
+            &assignments,
+            &mut TestRandom::default(),
+        ));
+
         assert!(brancher.is_using_default_brancher);
     }
 }

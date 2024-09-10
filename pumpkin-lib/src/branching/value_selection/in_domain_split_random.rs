@@ -25,6 +25,10 @@ impl ValueSelector<DomainId> for InDomainSplitRandom {
             predicate!(decision_variable <= bound)
         }
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

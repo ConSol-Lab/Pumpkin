@@ -296,6 +296,10 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.bump_activity(predicate)
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
