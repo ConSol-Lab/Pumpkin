@@ -47,4 +47,8 @@ impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
     fn on_unassign_literal(&mut self, literal: Literal) {
         self.selector.on_unassign_literal(literal)
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        self.selector.is_restart_pointless()
+    }
 }

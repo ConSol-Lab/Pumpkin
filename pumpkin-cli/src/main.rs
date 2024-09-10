@@ -308,18 +308,17 @@ struct Args {
     )]
     upper_bound_encoding: PseudoBooleanEncoding,
 
-    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain.
-    ///
-    /// If this option is set to false then only the lower- and upper-bounds are updated.
+    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
     ///
     /// Possible values: bool
-    #[arg(
-        long = "cumulative-allow-holes",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
     cumulative_allow_holes: bool,
 
+    /// Determines that no restarts are allowed by the solver.
+    ///
+    /// Possible values: bool
+    #[arg(long = "no-restarts", verbatim_doc_comment)]
+    no_restarts: bool,
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
     ///
@@ -479,6 +478,7 @@ fn run() -> PumpkinResult<()> {
             num_assigned_coef: args.restart_num_assigned_coef,
             num_assigned_window: args.restart_num_assigned_window,
             geometric_coef: args.restart_geometric_coef,
+            no_restarts: args.no_restarts,
         },
         proof_log,
         learning_clause_minimisation: !args.no_learning_clause_minimisation,
