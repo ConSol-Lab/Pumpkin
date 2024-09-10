@@ -25,6 +25,10 @@ impl ValueSelector<DomainId> for InDomainRandom {
             .generate_usize_in_range(0..values_in_domain.len());
         predicate!(decision_variable == values_in_domain[random_index])
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 impl ValueSelector<PropositionalVariable> for InDomainRandom {
@@ -34,6 +38,10 @@ impl ValueSelector<PropositionalVariable> for InDomainRandom {
         decision_variable: PropositionalVariable,
     ) -> Predicate {
         Literal::new(decision_variable, context.random().generate_bool(0.5)).into()
+    }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
     }
 }
 
