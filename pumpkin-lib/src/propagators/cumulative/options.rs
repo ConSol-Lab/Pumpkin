@@ -31,15 +31,15 @@ pub enum CumulativePropagationMethod {
 impl Display for CumulativePropagationMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "TimeTablePerPoint"),
+            CumulativePropagationMethod::TimeTablePerPoint => write!(f, "time-table-per-point"),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                write!(f, "TimeTablePerPointIncremental")
+                write!(f, "time-table-per-point-incremental")
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
-                write!(f, "TimeTableOverInterval")
+                write!(f, "time-table-over-interval")
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
-                write!(f, "TimeTableOverIntervalIncremental")
+                write!(f, "time-table-over-interval-incremental")
             }
         }
     }

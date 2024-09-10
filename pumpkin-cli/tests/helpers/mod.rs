@@ -43,7 +43,7 @@ pub(crate) fn run_solver_with_options<'a>(
     instance_path: impl AsRef<Path>,
     with_proof: bool,
     args: impl IntoIterator<Item = &'a str>,
-    pre_fix: Option<&str>,
+    prefix: Option<&str>,
 ) -> Files {
     let args = args.into_iter().collect::<Vec<_>>();
 
@@ -54,8 +54,8 @@ pub(crate) fn run_solver_with_options<'a>(
     let solver = PathBuf::from(env!("CARGO_BIN_EXE_pumpkin-cli"));
 
     let add_extension = |extension: &str| -> PathBuf {
-        if let Some(pre_fix) = pre_fix {
-            instance_path.with_extension(format!("{pre_fix}.{extension}"))
+        if let Some(prefix) = prefix {
+            instance_path.with_extension(format!("{prefix}.{extension}"))
         } else {
             instance_path.with_extension(extension)
         }
@@ -182,39 +182,14 @@ pub(crate) fn verify_proof(files: Files, checker_output: &Output) -> std::io::Re
 }
 
 pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
-    let instance_path = format!(
-        "{}/tests/{folder_name}/{instance_name}.fzn",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    let snapshot_path = format!(
-        "{}/tests/{folder_name}/{instance_name}.expected",
-        env!("CARGO_MANIFEST_DIR")
-    );
-
-    let files = run_solver_with_options(instance_path, false, ["-a"], None);
-
-    let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
-
-    let expected_file =
-        std::fs::read_to_string(snapshot_path).expect("Failed to read expected solution file.");
-
-    let actual_solutions = output
-        .parse::<Solutions<ORDERED>>()
-        .expect("Valid solution");
-
-    let expected_solutions = expected_file
-        .parse::<Solutions<ORDERED>>()
-        .expect("Valid solution");
-
-    assert_eq!(actual_solutions, expected_solutions, "Did not find the elements {:?} in the expected solution and the expected solution contained {:?} while the actual solution did not.", actual_solutions.assignments.iter().filter(|solution| !expected_solutions.assignments.contains(solution)).collect::<Vec<_>>(), expected_solutions.assignments.iter().filter(|solution| !actual_solutions.assignments.contains(solution)).collect::<Vec<_>>());
+    run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, vec![], "")
 }
 
 pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
     instance_name: &str,
     folder_name: &str,
     mut options: Vec<&str>,
-    pre_fix: Option<&str>,
+    prefix: &str,
 ) {
     let instance_path = format!(
         "{}/tests/{folder_name}/{instance_name}.fzn",
@@ -228,7 +203,7 @@ pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
 
     options.push("-a");
 
-    let files = run_solver_with_options(instance_path, false, options, pre_fix);
+    let files = run_solver_with_options(instance_path, false, options, Some(prefix));
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
 
