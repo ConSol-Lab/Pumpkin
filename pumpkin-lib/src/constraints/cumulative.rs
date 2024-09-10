@@ -190,16 +190,18 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
-            CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPointPropagator::new(&self.tasks, self.resource_capacity, self.options)
-                    .post(solver, tag)
-            }
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
+                &self.tasks,
+                self.resource_capacity,
+                self.options.propagator_options,
+            )
+            .post(solver, tag),
 
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .post(solver, tag)
             }
@@ -207,7 +209,7 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
                 TimeTableOverIntervalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .post(solver, tag)
             }
@@ -215,7 +217,7 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
                 TimeTableOverIntervalIncrementalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .post(solver, tag)
             }
@@ -229,15 +231,17 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         match self.options.propagation_method {
-            CumulativePropagationMethod::TimeTablePerPoint => {
-                TimeTablePerPointPropagator::new(&self.tasks, self.resource_capacity, self.options)
-                    .implied_by(solver, reification_literal, tag)
-            }
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
+                &self.tasks,
+                self.resource_capacity,
+                self.options.propagator_options,
+            )
+            .implied_by(solver, reification_literal, tag),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 TimeTablePerPointIncrementalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .implied_by(solver, reification_literal, tag)
             }
@@ -245,7 +249,7 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
                 TimeTableOverIntervalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .implied_by(solver, reification_literal, tag)
             }
@@ -253,7 +257,7 @@ impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
                 TimeTableOverIntervalIncrementalPropagator::new(
                     &self.tasks,
                     self.resource_capacity,
-                    self.options,
+                    self.options.propagator_options,
                 )
                 .implied_by(solver, reification_literal, tag)
             }

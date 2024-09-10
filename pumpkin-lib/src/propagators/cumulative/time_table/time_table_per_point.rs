@@ -18,7 +18,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::options::CumulativeOptions;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
@@ -27,6 +26,7 @@ use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
+use crate::propagators::CumulativePropagatorOptions;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -64,7 +64,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
-        cumulative_options: CumulativeOptions,
+        cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTablePerPointPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         TimeTablePerPointPropagator {
@@ -221,10 +221,9 @@ mod tests {
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_helper::TestSolver;
     use crate::options::CumulativeExplanationType;
-    use crate::options::CumulativeOptions;
-    use crate::options::CumulativePropagationMethod;
     use crate::predicate;
     use crate::propagators::ArgTask;
+    use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTablePerPointPropagator;
 
     #[test]
@@ -250,10 +249,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -286,10 +285,10 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>(),
             1,
-            CumulativeOptions {
+            CumulativePropagatorOptions {
                 allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
-                propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                 generate_sequence: false,
             },
         ));
@@ -333,10 +332,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -394,10 +393,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -428,10 +427,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -477,10 +476,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -552,10 +551,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -636,10 +635,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -688,10 +687,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -745,10 +744,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
@@ -797,10 +796,10 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
-                    propagation_method: CumulativePropagationMethod::TimeTablePerPoint,
+
                     generate_sequence: false,
                 },
             ))
