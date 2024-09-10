@@ -252,7 +252,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -335,7 +334,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -396,7 +394,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -430,7 +427,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -479,7 +475,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-
                     generate_sequence: false,
                 },
             ))
@@ -554,7 +549,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -638,7 +632,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
-
                     generate_sequence: false,
                 },
             ))
@@ -690,7 +683,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-
                     generate_sequence: false,
                 },
             ))
@@ -747,7 +739,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-
                     generate_sequence: false,
                 },
             ))
@@ -799,7 +790,6 @@ mod tests {
                 CumulativePropagatorOptions {
                     allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
-
                     generate_sequence: false,
                 },
             ))
