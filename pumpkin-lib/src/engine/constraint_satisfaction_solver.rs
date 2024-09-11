@@ -1403,7 +1403,7 @@ impl ConstraintSatisfactionSolver {
             propagator_id,
         );
 
-        match propagator.propagate(context) {
+        let result = match propagator.propagate(context) {
             // An empty domain conflict will be caught by the clausal propagator.
             Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
 
@@ -1428,13 +1428,14 @@ impl ConstraintSatisfactionSolver {
             Ok(()) => {
                 let _ = self.process_domain_events();
 
-                pumpkin_assert_extreme!(
-                    self.debug_check_propagations(num_trail_entries_before, propagator_id)
-                );
-
                 PropagationStatusOneStepCP::PropagationHappened
             }
-        }
+        };
+        pumpkin_assert_extreme!(
+            self.debug_check_propagations(num_trail_entries_before, propagator_id),
+            "Checking the propagations performed by the propagator led to inconsistencies!"
+        );
+        result
     }
 
     fn are_all_assumptions_assigned(&self) -> bool {
