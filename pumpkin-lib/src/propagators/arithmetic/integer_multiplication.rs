@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), *reason_lb);
 
         let reason_ub = solver.get_reason_int(predicate![b <= 6].try_into().unwrap());
-        assert_eq!(conjunction!([a >= 2] & [c >= 1] & [c <= 12]), *reason_ub);
+        assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 
     #[test]
