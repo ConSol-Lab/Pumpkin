@@ -352,6 +352,8 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                let _ = self.satisfaction_solver.conclude_proof_unsat();
+
                 SatisfactionResult::Unsatisfiable
             }
             CSPSolverExecutionFlag::Timeout => {

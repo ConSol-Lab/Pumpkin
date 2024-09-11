@@ -57,7 +57,7 @@ fn main() {
     );
 
     let variables = (0..n)
-        .map(|_| solver.new_bounded_integer(0, n as i32 - 1))
+        .map(|i| solver.new_named_bounded_integer(0, n as i32 - 1, format!("q{i}")))
         .collect::<Vec<_>>();
 
     let _ = solver
