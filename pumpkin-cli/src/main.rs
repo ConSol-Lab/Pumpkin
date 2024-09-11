@@ -71,7 +71,9 @@ struct Args {
     proof_path: Option<PathBuf>,
 
     /// Log a full proof instead of just the scaffold.
-    #[arg(long, default_value_t = false, verbatim_doc_comment)]
+    ///
+    /// If no `proof_path` is provided, then this option is ignored.
+    #[arg(long, verbatim_doc_comment)]
     full_proof: bool,
 
     /// The number of high lbd learned clauses that are kept in the database.

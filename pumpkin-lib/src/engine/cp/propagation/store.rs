@@ -11,7 +11,8 @@ use crate::engine::DebugDyn;
 
 /// A central store for propagators.
 ///
-/// The propagator store associates tags with propagators, if whenever tags are provided.
+/// The propagator store associates tags with propagators, whenever a tag is provided for a
+/// propagator.
 #[derive(Default)]
 pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
@@ -34,11 +35,13 @@ impl PropagatorStore {
         self.tags[propagator_id]
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &dyn Propagator> + '_ {
+    pub(crate) fn iter_propagators(&self) -> impl Iterator<Item = &dyn Propagator> + '_ {
         self.propagators.iter().map(|b| b.as_ref())
     }
 
-    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Propagator>> + '_ {
+    pub(crate) fn iter_propagators_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut Box<dyn Propagator>> + '_ {
         self.propagators.iter_mut()
     }
 }

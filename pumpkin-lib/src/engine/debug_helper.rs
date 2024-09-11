@@ -63,7 +63,7 @@ impl DebugHelper {
         //         may be detected when debug-checking the reason for propagation
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
-        for (propagator_id, propagator) in propagators_cp.iter().enumerate() {
+        for (propagator_id, propagator) in propagators_cp.iter_propagators().enumerate() {
             let num_entries_on_trail_before_propagation =
                 assignments_integer_clone.num_trail_entries();
             let num_entries_on_propositional_trail_before_propagation =

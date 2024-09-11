@@ -33,11 +33,16 @@ pub enum Conclusion<Literal> {
     Optimal(Literal),
 }
 
+/// One inference step in the proof.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Inference<'label, Premises, Propagated> {
+    /// The hint to the constraint which implies the inference.
     pub hint_constraint_id: Option<NonZero<u32>>,
+    /// The hint to the filtering algorithm which identifies the inference.
     pub hint_label: Option<&'label str>,
+    /// The premises of the inference.
     pub premises: Premises,
+    /// The conclusion of the inference.
     pub propagated: Propagated,
 }
 
