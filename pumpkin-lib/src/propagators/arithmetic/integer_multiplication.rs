@@ -98,41 +98,39 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
         context.set_lower_bound(c, new_min_c, conjunction!([a >= a_min] & [b >= b_min]))?;
     }
 
-    if b_min >= 0 && c_min >= 0 {
+    if b_min >= 0 && b_max >= 1 && c_min >= 1 {
         // a >= ceil(c.min / b.max)
-        if b_max >= 1 && c_min >= 1 {
-            let bound = div_ceil_pos(c_min, b_max);
-            if context.lower_bound(a) < bound {
-                context.set_lower_bound(
-                    a,
-                    bound,
-                    conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
-                )?;
-            }
+        let bound = div_ceil_pos(c_min, b_max);
+        if context.lower_bound(a) < bound {
+            context.set_lower_bound(
+                a,
+                bound,
+                conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
+            )?;
         }
+    }
 
+    if b_min >= 1 && c_min >= 0 && c_max >= 1 {
         // a <= floor(c.max / b.min)
-        if b_min >= 1 && c_max >= 1 {
-            let bound = c_max / b_min;
-            if context.upper_bound(a) > bound {
-                context.set_upper_bound(
-                    a,
-                    bound,
-                    conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
-                )?;
-            }
+        let bound = c_max / b_min;
+        if context.upper_bound(a) > bound {
+            context.set_upper_bound(
+                a,
+                bound,
+                conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
+            )?;
         }
+    }
 
+    if a_min >= 1 && c_min >= 0 && c_max >= 1 {
         // b <= floor(c.max / a.min)
-        if a_min >= 1 && c_max >= 1 {
-            let bound = c_max / a_min;
-            if context.upper_bound(b) > bound {
-                context.set_upper_bound(
-                    b,
-                    bound,
-                    conjunction!([c >= 1] & [c <= c_max] & [a >= a_min]),
-                )?;
-            }
+        let bound = c_max / a_min;
+        if context.upper_bound(b) > bound {
+            context.set_upper_bound(
+                b,
+                bound,
+                conjunction!([c >= 1] & [c <= c_max] & [a >= a_min]),
+            )?;
         }
     }
 
@@ -140,13 +138,11 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     if a_max >= 1 && c_min >= 1 {
         let bound = div_ceil_pos(c_min, a_max);
 
-        if context.lower_bound(b) < bound {
-            context.set_lower_bound(
-                b,
-                bound,
-                conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
-            )?;
-        }
+        context.set_lower_bound(
+            b,
+            bound,
+            conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
+        )?;
     }
 
     if context.is_fixed(a)
