@@ -1,0 +1,35 @@
+# See: https://github.com/orgs/community/discussions/17875
+name: Dismiss old reviews when re-requested
+
+on:
+  pull_request:
+    types: [review_requested]
+
+jobs:
+  review_requested:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Dismiss old reviews
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              pull_number: context.payload.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            for (const review of reviews) {
+              if (review.state === 'CHANGES_REQUESTED' && review.user.id === context.payload.requested_reviewer?.id) {
+                console.log('Dismissing re-requested review.');
+                await github.rest.pulls.dismissReview({
+                  pull_number: context.payload.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  review_id: review.id,
+                  message: 'Review re-requested',
+                });
+              }
+            }
