@@ -148,7 +148,6 @@ impl DebugHelper {
         true
     }
 
-    #[allow(unused)]
     pub(crate) fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &PropositionalConjunction,
@@ -156,7 +155,7 @@ impl DebugHelper {
         assignments_propositional: &AssignmentsPropositional,
         variable_literal_mappings: &VariableLiteralMappings,
         propagator: &dyn Propagator,
-        propagator_id: u32,
+        propagator_id: PropagatorId,
     ) -> bool {
         let reason: PropositionalConjunction = reason
             .iter()
@@ -164,36 +163,16 @@ impl DebugHelper {
             .filter(|&predicate| predicate != Predicate::True)
             .collect();
 
-        if reason
-            .iter()
-            .any(|&predicate| predicate == Predicate::False)
-        {
-            panic!(
-                "The reason for propagation should not contain the trivially false predicate.
-                 Propagator: {},
-                 id: {propagator_id},
-                 The reported propagation reason: {reason},
-                 Propagated predicate: {propagated_predicate}",
-                propagator.name(),
-            );
-        }
+        // Note that it could be the case that the reason contains the trivially false predicate in
+        // case of lifting!
+        //
+        // Also note that the reason could contain the integer variable whose domain is propagated
+        // itself
 
-        if reason
-            .iter()
-            .map(|p| p.get_domain())
-            .any(|domain| domain == propagated_predicate.get_domain())
-        {
-            panic!("The reason for propagation should not contain the integer variable that was propagated.
-             Propagator: {propagator_id},
-             id: {reason},
-             The reported propagation reason: {propagated_predicate},
-             Propagated predicate: {}",
-             propagator.name()
-            );
-        }
-
-        // two checks are done
-        //  Check #1. Does setting the predicates from the reason indeed lead to the propagation?
+        // Two checks are done
+        //
+        // Check #1
+        // Does setting the predicates from the reason indeed lead to the propagation?
         {
             let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
             let mut assignments_propositional_clone =
@@ -221,7 +200,7 @@ impl DebugHelper {
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
-                    PropagatorId(propagator_id),
+                    propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
@@ -258,10 +237,12 @@ impl DebugHelper {
             }
         }
 
-        //  Check #2. Does setting the predicates from reason while having the negated propagated
-        // predicate lead to failure?      this idea is by Graeme Gange in the context of
-        // debugging lazy explanations          and is closely related to reverse unit
-        // propagation
+        // Check #2
+        // Does setting the predicates from reason while having the negated propagated predicate
+        // lead to failure?
+        //
+        // This idea is by Graeme Gange in the context of debugging lazy explanations and is closely
+        // related to reverse unit propagation
         {
             let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
 
@@ -293,7 +274,7 @@ impl DebugHelper {
                     &mut assignments_integer_clone,
                     &mut reason_store,
                     &mut assignments_propositional_clone,
-                    PropagatorId(propagator_id),
+                    propagator_id,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 

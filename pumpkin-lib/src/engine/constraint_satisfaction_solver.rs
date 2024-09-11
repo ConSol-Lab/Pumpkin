@@ -1392,6 +1392,8 @@ impl ConstraintSatisfactionSolver {
             return PropagationStatusOneStepCP::FixedPoint;
         }
 
+        let num_trail_entries_before = self.assignments_integer.num_trail_entries();
+
         let propagator_id = self.propagator_queue.pop();
         let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
         let context = PropagationContextMut::new(
@@ -1425,6 +1427,11 @@ impl ConstraintSatisfactionSolver {
 
             Ok(()) => {
                 let _ = self.process_domain_events();
+
+                pumpkin_assert_extreme!(
+                    self.debug_check_propagations(num_trail_entries_before, propagator_id)
+                );
+
                 PropagationStatusOneStepCP::PropagationHappened
             }
         }
@@ -1442,6 +1449,50 @@ impl ConstraintSatisfactionSolver {
             //  note that the decision level is increased before calling branching hence the minus
             // one
             Some(self.assumptions[self.assignments_propositional.get_decision_level() - 1])
+        }
+    }
+
+    /// Checks whether the propagations of the propagator since `num_trail_entries_before` are
+    /// reproducible by performing 2 checks:
+    /// 1. Setting the reason for a propagation should lead to the same propagation when debug
+    ///    propagating from scratch
+    /// 2. Setting the reason for a propagation and the negation of that propagation should lead to
+    ///    failure
+    fn debug_check_propagations(
+        &mut self,
+        num_trail_entries_before: usize,
+        propagator_id: PropagatorId,
+    ) -> bool {
+        {
+            let mut result = true;
+            for trail_index in
+                num_trail_entries_before..self.assignments_integer.num_trail_entries()
+            {
+                let trail_entry = self.assignments_integer.get_trail_entry(trail_index);
+
+                let context = PropagationContext::new(
+                    &self.assignments_integer,
+                    &self.assignments_propositional,
+                );
+
+                let reason = self.reason_store.get_or_compute(
+                    trail_entry
+                        .reason
+                        .expect("Expected checked propagation to have a reason"),
+                    &context,
+                );
+
+                result &= DebugHelper::debug_propagator_reason(
+                    trail_entry.predicate.into(),
+                    reason.expect("Expected reason to exist"),
+                    &self.assignments_integer,
+                    &self.assignments_propositional,
+                    &self.variable_literal_mappings,
+                    self.cp_propagators[propagator_id.0 as usize].as_ref(),
+                    propagator_id,
+                );
+            }
+            result
         }
     }
 }
