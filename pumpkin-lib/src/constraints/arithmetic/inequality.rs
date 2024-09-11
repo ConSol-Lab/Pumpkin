@@ -1,6 +1,8 @@
+use std::num::NonZero;
+
 use crate::constraints::Constraint;
 use crate::constraints::NegatableConstraint;
-use crate::propagators::linear_less_or_equal::LinearLessOrEqualConstructor;
+use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
 use crate::variables::IntegerVariable;
 use crate::ConstraintOperationError;
 use crate::Solver;
@@ -44,17 +46,25 @@ struct Inequality<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
-    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms.clone(), self.rhs).post(solver)
+    fn post(
+        &self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        LinearLessOrEqualPropagator::new(self.terms.clone(), self.rhs).post(solver, tag)
     }
 
     fn implied_by(
         &self,
         solver: &mut Solver,
         reification_literal: crate::variables::Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualConstructor::new(self.terms.clone(), self.rhs)
-            .implied_by(solver, reification_literal)
+        LinearLessOrEqualPropagator::new(self.terms.clone(), self.rhs).implied_by(
+            solver,
+            reification_literal,
+            tag,
+        )
     }
 }
 

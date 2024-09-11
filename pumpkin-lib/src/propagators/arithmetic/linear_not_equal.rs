@@ -12,8 +12,7 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicate;
@@ -21,23 +20,9 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-#[derive(Clone, Debug)]
-pub(crate) struct LinearNotEqualConstructor<Var> {
-    /// The terms which sum to the left-hand side.
-    terms: Box<[Var]>,
-    /// The right-hand side.
-    rhs: i32,
-}
-
-impl<Var> LinearNotEqualConstructor<Var> {
-    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
-        LinearNotEqualConstructor { terms, rhs }
-    }
-}
-
 /// Propagator for the constraint `\sum x_i != rhs`, where `x_i` are
 /// integer variables and `rhs` is an integer constant.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LinearNotEqualPropagator<Var> {
     /// The terms of the sum
     terms: Rc<[Var]>,
@@ -57,32 +42,14 @@ pub(crate) struct LinearNotEqualPropagator<Var> {
     should_recalculate_lhs: bool,
 }
 
-impl<Var> PropagatorConstructor for LinearNotEqualConstructor<Var>
+impl<Var> LinearNotEqualPropagator<Var>
 where
     Var: IntegerVariable + 'static,
 {
-    type Propagator = LinearNotEqualPropagator<Var>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-        let x: Rc<[_]> = self
-            .terms
-            .iter()
-            .enumerate()
-            .map(|(i, x_i)| {
-                let _ =
-                    context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
-                context.register_for_backtrack_events(
-                    x_i.clone(),
-                    DomainEvents::create_with_int_events(enum_set!(
-                        IntDomainEvent::Assign | IntDomainEvent::Removal
-                    )),
-                    LocalId::from(i as u32),
-                )
-            })
-            .collect();
+    pub(crate) fn new(terms: Box<[Var]>, rhs: i32) -> Self {
         LinearNotEqualPropagator {
-            terms: x,
-            rhs: self.rhs,
+            terms: terms.into(),
+            rhs,
             number_of_fixed_terms: 0,
             fixed_lhs: 0,
             unfixed_variable_has_been_updated: false,
@@ -109,14 +76,10 @@ where
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
-        // This assumes that we are notified once of a variable being fixed, it is important that we
-        // do not fix the literals due to propagation anywhere else
-        if context.is_fixed(&self.terms[local_id.unpack() as usize]) {
-            // If the updated term is fixed then we update the number of fixed variables
-            self.number_of_fixed_terms += 1;
-            // We update the value of the left-hand side with the value of the newly fixed variable
-            self.fixed_lhs += context.lower_bound(&self.terms[local_id.unpack() as usize]);
-        }
+        // We update the number of fixed variables
+        self.number_of_fixed_terms += 1;
+        // We update the value of the left-hand side with the value of the newly fixed variable
+        self.fixed_lhs += context.lower_bound(&self.terms[local_id.unpack() as usize]);
 
         // Either the number of fixed variables is the number of terms - 1 in which case we can
         // propagate if it has not been updated before; if it has been updated then we don't need to
@@ -146,6 +109,10 @@ where
             self.terms[local_id.unpack() as usize].unpack_event(event),
             IntDomainEvent::Assign
         ) {
+            pumpkin_assert_simple!(
+                self.number_of_fixed_terms >= 1,
+                "The number of fixed terms should never be negative"
+            );
             // An assign has been undone, we can decrease the
             // number of fixed variables
             self.number_of_fixed_terms -= 1;
@@ -167,8 +134,19 @@ where
 
     fn initialise_at_root(
         &mut self,
-        context: PropagationContext,
+        context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
+        self.terms.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            let _ = context.register_for_backtrack_events(
+                x_i.clone(),
+                DomainEvents::create_with_int_events(enum_set!(
+                    IntDomainEvent::Assign | IntDomainEvent::Removal
+                )),
+                LocalId::from(i as u32),
+            );
+        });
+
         self.recalculate_fixed_variables(context);
         self.check_for_conflict(context)?;
         Ok(())
@@ -178,7 +156,7 @@ where
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
-            self.recalculate_fixed_variables(context.as_readonly());
+            self.recalculate_fixed_variables(&context.as_readonly());
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
@@ -186,10 +164,6 @@ where
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms == self.terms.len() - 1 {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
-
-            // We keep track of whether we have removed the value which could cause a conflict from
-            // the unfixed variable
-            self.unfixed_variable_has_been_updated = true;
 
             // The value which would cause a conflict if the current variable would be set equal to
             // this
@@ -203,24 +177,30 @@ where
                 .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
 
-            // Then we remove the conflicting value from the unfixed variable
-            let terms = Rc::clone(&self.terms);
-            context.remove(
-                &self.terms[unfixed_x_i],
-                value_to_remove,
-                move |context: &PropagationContext| {
-                    terms
-                        .iter()
-                        .enumerate()
-                        .filter(|&(i, _)| i != unfixed_x_i)
-                        .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                        .collect()
-                },
-            )?;
+            if context.contains(&self.terms[unfixed_x_i], value_to_remove) {
+                // We keep track of whether we have removed the value which could cause a conflict
+                // from the unfixed variable
+                self.unfixed_variable_has_been_updated = true;
+
+                // Then we remove the conflicting value from the unfixed variable
+                let terms = Rc::clone(&self.terms);
+                context.remove(
+                    &self.terms[unfixed_x_i],
+                    value_to_remove,
+                    move |context: &PropagationContext| {
+                        terms
+                            .iter()
+                            .enumerate()
+                            .filter(|&(i, _)| i != unfixed_x_i)
+                            .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                            .collect()
+                    },
+                )?;
+            }
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(context.as_readonly())?;
+            self.check_for_conflict(&context.as_readonly())?;
         }
 
         Ok(())
@@ -259,20 +239,15 @@ where
                 .iter()
                 .position(|x_i| !context.is_fixed(x_i))
                 .unwrap();
-            let terms = Rc::clone(&self.terms);
-            context.remove(
-                &self.terms[unfixed_x_i],
-                value_to_remove,
-                move |context: &PropagationContext| {
-                    let predicates = terms
-                        .iter()
-                        .enumerate()
-                        .filter(|&(i, _)| i != unfixed_x_i)
-                        .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
-                        .collect::<Vec<_>>();
-                    predicates.into()
-                },
-            )?;
+
+            let reason = self
+                .terms
+                .iter()
+                .enumerate()
+                .filter(|&(i, _)| i != unfixed_x_i)
+                .map(|(_, x_i)| predicate![x_i == context.lower_bound(x_i)])
+                .collect::<PropositionalConjunction>();
+            context.remove(&self.terms[unfixed_x_i], value_to_remove, reason)?;
         } else if num_fixed == self.terms.len() && lhs == self.rhs {
             let failure_reason: PropositionalConjunction = self
                 .terms
@@ -294,7 +269,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
+    fn recalculate_fixed_variables<Context: ReadDomains>(&mut self, context: &Context) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -312,9 +287,9 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict(
+    fn check_for_conflict<Context: ReadDomains>(
         &self,
-        context: PropagationContext,
+        context: &Context,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {
@@ -374,7 +349,7 @@ mod tests {
         let y = solver.new_variable(1, 5);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
@@ -394,7 +369,7 @@ mod tests {
         let y = solver.new_variable(2, 2);
 
         let err = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
@@ -411,7 +386,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new([x, y].into(), 0))
+            .new_propagator(LinearNotEqualPropagator::new([x, y].into(), 0))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");
@@ -428,7 +403,7 @@ mod tests {
         let y = solver.new_variable(0, 3);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualConstructor::new(
+            .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))

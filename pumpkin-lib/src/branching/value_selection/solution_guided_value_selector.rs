@@ -12,7 +12,8 @@ use crate::engine::variables::PropositionalVariable;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
-/// The [solution-guided \[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf) [`ValueSelector`], in general this method is provided with a solution and it will then search around this existing solution.
+/// The [solution-guided \[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf) [`ValueSelector`], this method searches around the provided solution.
+///
 /// It does this by saving the values found in the solution and assigning to those values
 /// whenever possible, if it is not possible then it will fall back on the provided
 /// `backup_selector`.

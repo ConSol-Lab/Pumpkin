@@ -3,36 +3,15 @@
 //! input parameters.
 use std::rc::Rc;
 
-use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
-use crate::engine::propagation::propagator_constructor_context::PropagatorConstructorContext;
+use crate::engine::propagation::propagator_initialisation_context::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
-use crate::predicate;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
 use crate::propagators::UpdatedTaskInfo;
-
-/// Create the [`Inconsistency`] consisting of the lower- and upper-bounds of the provided conflict
-/// [`Task`]s
-pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
-    conflict_tasks: &[Rc<Task<Var>>],
-) -> PropositionalConjunction {
-    let mut error_clause = Vec::with_capacity(conflict_tasks.len() * 2);
-    for task in conflict_tasks.iter() {
-        error_clause.push(predicate!(
-            task.start_variable <= context.upper_bound(&task.start_variable)
-        ));
-        error_clause.push(predicate!(
-            task.start_variable >= context.lower_bound(&task.start_variable)
-        ));
-    }
-
-    PropositionalConjunction::from(error_clause)
-}
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
 /// registered for [`DomainEvents`].
@@ -40,7 +19,6 @@ pub(crate) fn create_propositional_conjunction<Var: IntegerVariable + 'static>(
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
-    context: &mut PropagatorConstructorContext<'_>,
 ) -> Vec<Task<Var>> {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
@@ -53,11 +31,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
             // We only add tasks which have a non-zero resource usage
             if x.resource_usage > 0 {
                 let return_value = Some(Task {
-                    start_variable: context.register(
-                        x.start_time.clone(),
-                        DomainEvents::BOUNDS,
-                        LocalId::from(id),
-                    ), // Subscribe to all domain events concerning the current variable
+                    start_variable: x.start_time.clone(),
                     processing_time: x.processing_time,
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
@@ -69,6 +43,15 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
             }
         })
         .collect::<Vec<Task<Var>>>()
+}
+
+pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
+    tasks: &[Rc<Task<Var>>],
+    context: &mut PropagatorInitialisationContext<'_>,
+) {
+    tasks.iter().for_each(|task| {
+        let _ = context.register(task.start_variable.clone(), DomainEvents::BOUNDS, task.id);
+    })
 }
 
 /// Updates the bounds of the provided [`Task`] to those stored in

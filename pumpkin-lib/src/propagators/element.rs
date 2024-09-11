@@ -11,22 +11,15 @@ use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
-
-#[derive(Clone, Debug)]
-pub(crate) struct ElementConstructor<VX, VI, VE> {
-    pub(crate) array: Box<[VX]>,
-    pub(crate) index: VI,
-    pub(crate) rhs: VE,
-}
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
 ///
 /// Note that this propagator is 0-indexed
+#[derive(Clone, Debug)]
 pub(crate) struct ElementPropagator<VX, VI, VE> {
     array: Rc<[VX]>,
     index: VI,
@@ -59,29 +52,15 @@ macro_rules! for_domain_values {
     };
 }
 
-impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> PropagatorConstructor
-    for ElementConstructor<VX, VI, VE>
+impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable>
+    ElementPropagator<VX, VI, VE>
 {
-    type Propagator = ElementPropagator<VX, VI, VE>;
-
-    fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
+    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
         // local ids of array vars are shifted by ID_X_OFFSET
-        let array = self
-            .array
-            .iter()
-            .enumerate()
-            .map(|(i, x_i)| {
-                context.register(
-                    x_i.clone(),
-                    DomainEvents::ANY_INT,
-                    LocalId::from(i as u32 + ID_X_OFFSET),
-                )
-            })
-            .collect();
         ElementPropagator {
-            array,
-            index: context.register(self.index, DomainEvents::ANY_INT, ID_INDEX),
-            rhs: context.register(self.rhs, DomainEvents::ANY_INT, ID_RHS),
+            array: array.into(),
+            index,
+            rhs,
         }
     }
 }
@@ -89,6 +68,23 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
 impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
     for ElementPropagator<VX, VI, VE>
 {
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), crate::predicates::PropositionalConjunction> {
+        self.array.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        });
+        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+
+        Ok(())
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         // Ensure index is non-negative
         context.set_lower_bound(&self.index, 0, conjunction!())?;
@@ -268,7 +264,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementConstructor { array, index, rhs })
+            .new_propagator(ElementPropagator::new(array, index, rhs))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -293,7 +289,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementConstructor { array, index, rhs })
+            .new_propagator(ElementPropagator::new(array, index, rhs))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");
@@ -329,7 +325,7 @@ mod tests {
         let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
         let mut propagator = solver
-            .new_propagator(ElementConstructor { array, index, rhs })
+            .new_propagator(ElementPropagator::new(array, index, rhs))
             .expect("no empty domains");
 
         solver.propagate(&mut propagator).expect("no empty domains");

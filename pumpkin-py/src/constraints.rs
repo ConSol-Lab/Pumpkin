@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::constraints::{self};
 use pyo3::prelude::*;
@@ -11,16 +13,18 @@ impl Constraint for &ConstraintDefinition {
     fn post(
         &self,
         solver: &mut pumpkin_lib::Solver,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        self.0.post(solver)
+        self.0.post(solver, tag)
     }
 
     fn implied_by(
         &self,
         solver: &mut pumpkin_lib::Solver,
         reification_literal: pumpkin_lib::variables::Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        self.0.implied_by(solver, reification_literal)
+        self.0.implied_by(solver, reification_literal, tag)
     }
 }
 

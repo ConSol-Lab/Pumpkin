@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -16,7 +18,7 @@ use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::PropagatorConstructor;
+use crate::engine::propagation::Propagator;
 use crate::engine::termination::TerminationCondition;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
@@ -648,6 +650,17 @@ impl Solver {
         self.satisfaction_solver.add_clause(clause)
     }
 
+    /// Adds a propagator with a tag, which is used to identify inferences made by this propagator
+    /// in the proof log.
+    pub(crate) fn add_tagged_propagator(
+        &mut self,
+        propagator: impl Propagator + 'static,
+        tag: NonZero<u32>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver
+            .add_propagator(propagator, Some(tag))
+    }
+
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return a [`ConstraintOperationError`].
     ///
@@ -658,15 +671,11 @@ impl Solver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub(crate) fn add_propagator<Constructor>(
+    pub(crate) fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
-        self.satisfaction_solver.add_propagator(constructor)
+        propagator: impl Propagator + 'static,
+    ) -> Result<(), ConstraintOperationError> {
+        self.satisfaction_solver.add_propagator(propagator, None)
     }
 }
 
@@ -706,7 +715,9 @@ impl Solver {
 }
 
 /// The type of [`Brancher`] which is created by
-/// [`Solver::default_brancher_over_all_propositional_variables`]. It consists of the value selector
+/// [`Solver::default_brancher_over_all_propositional_variables`].
+///
+/// It consists of the value selector
 /// [`Vsids`] in combination with a [`SolutionGuidedValueSelector`] with as backup [`PhaseSaving`].
 pub type DefaultBrancher = IndependentVariableValueBrancher<
     PropositionalVariable,

@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 use super::Constraint;
 use super::NegatableConstraint;
 use crate::variables::Literal;
@@ -21,7 +23,13 @@ pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstrain
 struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
-    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(
+        &self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         solver.add_clause(self.0.clone())
     }
 
@@ -29,7 +37,10 @@ impl Constraint for Clause {
         &self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         solver.add_clause(
             self.0
                 .iter()
@@ -50,7 +61,13 @@ impl NegatableConstraint for Clause {
 struct Conjunction(Vec<Literal>);
 
 impl Constraint for Conjunction {
-    fn post(&self, solver: &mut Solver) -> Result<(), ConstraintOperationError> {
+    fn post(
+        &self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         self.0
             .iter()
             .copied()
@@ -61,7 +78,10 @@ impl Constraint for Conjunction {
         &self,
         solver: &mut Solver,
         reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
+        assert!(tag.is_none(), "tagging clauses is not implemented");
+
         self.0
             .iter()
             .copied()

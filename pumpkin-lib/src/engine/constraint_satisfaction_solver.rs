@@ -5,6 +5,7 @@ use std::cmp::min;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
+use std::num::NonZero;
 use std::time::Instant;
 
 use log::warn;
@@ -49,9 +50,8 @@ use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorConstructor;
-use crate::engine::propagation::PropagatorConstructorContext;
 use crate::engine::propagation::PropagatorId;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
@@ -152,9 +152,15 @@ pub struct ConstraintSatisfactionSolver {
     /// of the clausal propagator.
     watch_list_propositional: WatchListPropositional,
     /// Used in combination with the propositional watch list
-    /// Indicates the next literal on the propositional trail that need to be inspected to notify
-    /// subscribed propagators.
+    /// Indicates the next literal on the propositional trail that needs to be inspected to notify
+    /// subscribed propagator(s).
     propositional_trail_index: usize,
+    /// Indicates the next entry on the CP trail that needs to be inspected to notify the
+    /// subscribed propagator(s).
+    ///
+    /// This variable is used to prevent propagators from being notified from backtrack events
+    /// while they have not been notified of the "forward" event.
+    last_notified_cp_trail_index: usize,
     /// Dictates the order in which propagators will be called to propagate.
     propagator_queue: PropagatorQueue,
     /// Handles storing information about propagation reasons, which are used later to construct
@@ -221,6 +227,23 @@ impl Default for ConstraintSatisfactionSolver {
             SatisfactionSolverOptions::default(),
         )
     }
+}
+
+/// The result of [`ConstraintSatisfactionSolver::extract_clausal_core`]; there are 2 cases:
+/// 1. In the case of [`CoreExtractionResult::ConflictingAssumption`], two assumptions have been
+///    given which directly conflict with one another; e.g. if the assumptions `[x, !x]` have been
+///    given then the result of [`ConstraintSatisfactionSolver::extract_clausal_core`] will be a
+///    [`CoreExtractionResult::ConflictingAssumption`] containing `!x`.
+/// 2. The standard case is when a [`CoreExtractionResult::Core`] is returned which contains (a
+///    subset of) the assumptions which led to conflict.
+#[derive(Debug, Clone)]
+pub enum CoreExtractionResult {
+    /// Conflicting assumptions were provided; e.g. in the case of the assumptions `[x, !x]`, this
+    /// result will contain `!x`
+    ConflictingAssumption(Literal),
+    /// The standard case where this result contains the core consisting of (a
+    ///    subset of) the assumptions which led to conflict.
+    Core(Vec<Literal>),
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
@@ -313,6 +336,7 @@ impl ConstraintSatisfactionSolver {
                     }
                 }
             }
+            self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
         }
         // If there are no literals being watched then there is no reason to perform these
         // operations
@@ -431,6 +455,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             propositional_trail_index: 0,
+            last_notified_cp_trail_index: 0,
             event_drain: vec![],
             backtrack_event_drain: vec![],
             variable_literal_mappings: VariableLiteralMappings::default(),
@@ -599,10 +624,14 @@ impl ConstraintSatisfactionSolver {
             "Expected all values to have been processed"
         );
 
+        self.propagate_enqueued();
+        pumpkin_assert_simple!(!self.is_conflicting());
+
         domain_id
     }
 
-    /// Returns an unsatisfiable core.
+    /// Returns an unsatisfiable core or an [`Err`] if the provided assumptions were conflicting
+    /// with one another ([`Err`] then contain the [`Literal`] which was conflicting).
     ///
     /// We define an unsatisfiable core as a clause containing only negated assumption literals,
     /// which is implied by the formula. Alternatively, it is the negation of a conjunction of
@@ -658,19 +687,16 @@ impl ConstraintSatisfactionSolver {
     ///         assert_eq!(
     ///             core.len(),
     ///             assumptions.len(),
-    ///             "the core has the length of the number of assumptions"
+    ///             "The core has the length of the number of assumptions"
     ///         );
     ///         assert!(
-    ///             core.iter().all(|&lit| assumptions.contains(&!lit)),
-    ///             "all literals in the core are negated assumptions"
+    ///             core.iter().all(|&lit| assumptions.contains(&lit)),
+    ///             "All literals in the core are assumptions"
     ///         );
     ///     }
     /// }
     /// ```
-    pub fn extract_clausal_core(
-        &mut self,
-        brancher: &mut impl Brancher,
-    ) -> Result<Vec<Literal>, Literal> {
+    pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
@@ -1200,37 +1226,58 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
-        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
+        // We clear all of the unprocessed events from the watch list since synchronisation, we do
+        // not need to process these events
+        if self.watch_list_cp.is_watching_anything() {
+            pumpkin_assert_simple!(self.event_drain.is_empty());
+            self.assignments_integer
+                .drain_domain_events()
+                .for_each(drop);
+        }
 
+        // We synchronise the assignments propositional and for each unassigned literal, we notify
+        // the brancher that it has been unassigned
+        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
         unassigned_literals.for_each(|literal| {
             brancher.on_unassign_literal(literal);
-            // TODO: We should also backtrack on the integer variables here
         });
 
+        // We synchronise the clausal propagator which sets the next variable on the trail to
+        // propagate
         self.clausal_propagator
             .synchronise(self.assignments_propositional.num_trail_entries());
-
         pumpkin_assert_simple!(
             self.assignments_propositional.get_decision_level()
                 < self.assignments_integer.get_decision_level(),
             "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
         );
+
+        // We also set the last processed trail entry of the propositional trail
         self.propositional_trail_index = min(
             self.propositional_trail_index,
             self.assignments_propositional.num_trail_entries(),
         );
+
+        // We synchronise the assignments integer and for each of the unassigned integer variables,
+        // we notify the brancher that it has been unassigned
         self.assignments_integer
             .synchronise(
                 backtrack_level,
                 self.watch_list_cp.is_watching_any_backtrack_events(),
+                self.last_notified_cp_trail_index,
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
+        pumpkin_assert_simple!(
+            !self.watch_list_cp.is_watching_anything()
+                || self.last_notified_cp_trail_index
+                    >= self.assignments_integer.num_trail_entries(),
+        );
+        self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
 
         self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
         //  note that variable_literal_mappings sync should be called after the sat/cp data
         // structures backtrack
         self.synchronise_assignments();
@@ -1245,6 +1292,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
     }
 
     /// Main propagation loop.
@@ -1431,26 +1479,16 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator<Constructor>(
+    pub fn add_propagator(
         &mut self,
-        constructor: Constructor,
-    ) -> Result<(), ConstraintOperationError>
-    where
-        Constructor: PropagatorConstructor,
-        Constructor::Propagator: 'static,
-    {
+        propagator_to_add: impl Propagator + 'static,
+        _tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
 
         let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
-        let mut constructor_context = PropagatorConstructorContext::new(
-            &mut self.watch_list_cp,
-            &mut self.watch_list_propositional,
-            new_propagator_id,
-        );
-
-        let propagator_to_add = constructor.create_boxed(&mut constructor_context);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1459,13 +1497,19 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.cp_propagators.push(propagator_to_add);
+        self.cp_propagators.push(Box::new(propagator_to_add));
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
-        let initialisation_status = new_propagator.initialise_at_root(PropagationContext::new(
+
+        let mut initialisation_context = PropagatorInitialisationContext::new(
+            &mut self.watch_list_cp,
+            &mut self.watch_list_propositional,
+            new_propagator_id,
             &self.assignments_integer,
             &self.assignments_propositional,
-        ));
+        );
+
+        let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
         if initialisation_status.is_err() {
             self.state.declare_infeasible();
@@ -1716,6 +1760,7 @@ impl CSPSolverState {
 #[cfg(test)]
 mod tests {
     use super::ConstraintSatisfactionSolver;
+    use super::CoreExtractionResult;
     use crate::basic_types::CSPSolverExecutionFlag;
     use crate::basic_types::PropagationStatusCP;
     use crate::basic_types::PropositionalConjunction;
@@ -1728,53 +1773,14 @@ mod tests {
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::Propagator;
-    use crate::engine::propagation::PropagatorConstructor;
-    use crate::engine::propagation::PropagatorConstructorContext;
     use crate::engine::propagation::PropagatorId;
+    use crate::engine::propagation::PropagatorInitialisationContext;
     use crate::engine::reason::ReasonRef;
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::DomainId;
     use crate::engine::variables::Literal;
     use crate::engine::DomainEvents;
     use crate::predicate;
-
-    /// Constructor for the [`TestPropagator`], it takes as input a list of propagations and their
-    /// explanations (in the forms of tuples of [`Predicate`]s and [`PropositionalConjunction`]s),
-    /// and conflicts (also in the form of [`PropositionalConjunction`]s).
-    struct TestPropagatorConstructor {
-        propagations: Vec<(Predicate, PropositionalConjunction)>,
-        conflicts: Vec<PropositionalConjunction>,
-    }
-
-    impl PropagatorConstructor for TestPropagatorConstructor {
-        type Propagator = TestPropagator;
-
-        fn create(self, context: &mut PropagatorConstructorContext<'_>) -> Self::Propagator {
-            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = self
-                .propagations
-                .iter()
-                .enumerate()
-                .rev()
-                .map(|(index, variable)| {
-                    (
-                        context.register(
-                            variable.0.get_domain().unwrap(),
-                            DomainEvents::BOUNDS,
-                            LocalId::from(index as u32),
-                        ),
-                        variable.0,
-                        variable.1.clone(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            TestPropagator {
-                original_propagations: propagations.clone(),
-                propagations,
-                conflicts: self.conflicts.into_iter().rev().collect::<Vec<_>>(),
-                is_in_root: true,
-            }
-        }
-    }
 
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
@@ -1789,7 +1795,49 @@ mod tests {
         is_in_root: bool,
     }
 
+    impl TestPropagator {
+        pub(crate) fn new(
+            propagations: Vec<(Predicate, PropositionalConjunction)>,
+            conflicts: Vec<PropositionalConjunction>,
+        ) -> Self {
+            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = propagations
+                .iter()
+                .rev()
+                .map(|variable| {
+                    (
+                        variable.0.get_domain().unwrap(),
+                        variable.0,
+                        variable.1.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            TestPropagator {
+                original_propagations: propagations.clone(),
+                propagations,
+                conflicts: conflicts.into_iter().rev().collect::<Vec<_>>(),
+                is_in_root: true,
+            }
+        }
+    }
+
     impl Propagator for TestPropagator {
+        fn initialise_at_root(
+            &mut self,
+            context: &mut PropagatorInitialisationContext,
+        ) -> Result<(), PropositionalConjunction> {
+            self.propagations
+                .iter()
+                .enumerate()
+                .for_each(|(index, variable)| {
+                    let _ = context.register(
+                        variable.0,
+                        DomainEvents::BOUNDS,
+                        LocalId::from(index as u32),
+                    );
+                });
+            Ok(())
+        }
+
         fn name(&self) -> &str {
             "TestPropagator"
         }
@@ -1870,26 +1918,24 @@ mod tests {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
 
-    fn is_result_the_same(
-        res1: &Result<Vec<Literal>, Literal>,
-        res2: &Result<Vec<Literal>, Literal>,
-    ) -> bool {
-        // if the two results disagree on the outcome, can already return false
-        if res1.is_err() && res2.is_ok() || res1.is_ok() && res2.is_err() {
-            println!("diff");
-            println!("{:?}", res1.clone().unwrap());
-            false
-        }
-        // if both results are errors, check if the two errors are the same
-        else if res1.is_err() {
-            println!("err");
-            res1.clone().unwrap_err().get_propositional_variable()
-                == res2.clone().unwrap_err().get_propositional_variable()
-        }
-        // otherwise the two results are both ok
-        else {
-            println!("ok");
-            is_same_core(&res1.clone().unwrap(), &res2.clone().unwrap())
+    fn is_result_the_same(res1: &CoreExtractionResult, res2: &CoreExtractionResult) -> bool {
+        match (res1, res2) {
+            (
+                CoreExtractionResult::ConflictingAssumption(literal1),
+                CoreExtractionResult::ConflictingAssumption(literal2),
+            ) => {
+                // The results are both conflicting assumptions, we check whether it is the same
+                // assumption
+                literal1 == literal2
+            }
+            (CoreExtractionResult::Core(core1), CoreExtractionResult::Core(core2)) => {
+                // The results are both cores, we check whether they are the same
+                is_same_core(core1, core2)
+            }
+            _ => {
+                // The results are different
+                false
+            }
         }
     }
 
@@ -1897,7 +1943,7 @@ mod tests {
         mut solver: ConstraintSatisfactionSolver,
         assumptions: Vec<Literal>,
         expected_flag: CSPSolverExecutionFlag,
-        expected_result: Result<Vec<Literal>, Literal>,
+        expected_result: CoreExtractionResult,
     ) {
         let mut brancher = solver.default_brancher_over_all_propositional_variables();
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
@@ -1935,18 +1981,18 @@ mod tests {
 
         // We create a test solver which propagates such that there is a jump across a hole in the
         // domain and then we report a conflict based on the assigned values.
-        let propagator_constructor = TestPropagatorConstructor {
-            propagations: vec![
+        let propagator_constructor = TestPropagator::new(
+            vec![
                 (predicate!(variable != 2), conjunction!()),
                 (predicate!(variable <= 3), conjunction!()),
                 (predicate!(variable != 3), conjunction!()),
                 (predicate!(other_variable != 4), conjunction!()),
                 (predicate!(other_variable <= 4), conjunction!()),
             ],
-            conflicts: vec![conjunction!([other_variable == 3] & [variable == 1])],
-        };
+            vec![conjunction!([other_variable == 3] & [variable == 1])],
+        );
 
-        let result = solver.add_propagator(propagator_constructor);
+        let result = solver.add_propagator(propagator_constructor, None);
         assert!(result.is_ok());
 
         // We add the clause that will lead to the conflict in the SAT-solver
@@ -1988,13 +2034,27 @@ mod tests {
     }
 
     #[test]
+    fn core_extraction_unit_core() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+        let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+        let _ = solver.add_clause(vec![lit1]);
+
+        run_test(
+            solver,
+            vec![!lit1],
+            CSPSolverExecutionFlag::Infeasible,
+            CoreExtractionResult::Core(vec![!lit1]),
+        )
+    }
+
+    #[test]
     fn simple_core_extraction_1_1() {
         let (solver, lits) = create_instance1();
         run_test(
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[0]]),
+            CoreExtractionResult::Core(vec![!lits[0]]),
         )
     }
 
@@ -2005,7 +2065,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]),
+            CoreExtractionResult::Core(vec![!lits[1]]),
         );
     }
 
@@ -2017,7 +2077,7 @@ mod tests {
             solver,
             vec![!lits[1], !lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![]),
+            CoreExtractionResult::Core(vec![]),
         );
     }
 
@@ -2028,7 +2088,8 @@ mod tests {
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
+            CoreExtractionResult::Core(vec![!lits[1]]), /* The core gets computed before
+                                                         * inconsistency is detected */
         );
     }
 
@@ -2050,7 +2111,7 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]),
+            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]),
         );
     }
 
@@ -2061,9 +2122,12 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
-                                                   * however inconsistency will not be detected
-                                                   * given the order of the assumptions */
+            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]), /* could return
+                                                                            * inconsistent
+                                                                            * assumptions,
+                                                                            * however inconsistency will not be detected
+                                                                            * given the order of
+                                                                            * the assumptions */
         );
     }
 
@@ -2074,7 +2138,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            Err(lits[0]),
+            CoreExtractionResult::ConflictingAssumption(lits[0]),
         );
     }
 
@@ -2094,7 +2158,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1], !lits[2]],
             CSPSolverExecutionFlag::Infeasible,
-            Ok(vec![lits[0], lits[1], lits[2]]),
+            CoreExtractionResult::Core(vec![!lits[0], !lits[1], !lits[2]]),
         );
     }
 
@@ -2105,7 +2169,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[1]],
             CSPSolverExecutionFlag::Feasible,
-            Ok(vec![]), // will be ignored in the test
+            CoreExtractionResult::Core(vec![]), // will be ignored in the test
         );
     }
 

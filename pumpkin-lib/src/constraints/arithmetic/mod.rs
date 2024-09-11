@@ -5,10 +5,10 @@ pub use equality::*;
 pub use inequality::*;
 
 use super::Constraint;
-use crate::propagators::absolute_value::AbsoluteValueConstructor;
-use crate::propagators::division::DivisionConstructor;
-use crate::propagators::integer_multiplication::IntegerMultiplicationConstructor;
-use crate::propagators::maximum::MaximumConstructor;
+use crate::propagators::absolute_value::AbsoluteValuePropagator;
+use crate::propagators::division::DivisionPropagator;
+use crate::propagators::integer_multiplication::IntegerMultiplicationPropagator;
+use crate::propagators::maximum::MaximumPropagator;
 use crate::variables::IntegerVariable;
 
 /// Creates the [`Constraint`] `a + b = c`.
@@ -22,7 +22,7 @@ pub fn times(
     b: impl IntegerVariable + 'static,
     c: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    IntegerMultiplicationConstructor { a, b, c }
+    IntegerMultiplicationPropagator::new(a, b, c)
 }
 
 /// Creates the [`Constraint`] `numerator / denominator = rhs`.
@@ -36,11 +36,7 @@ pub fn division(
     denominator: impl IntegerVariable + 'static,
     rhs: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    DivisionConstructor {
-        numerator,
-        denominator,
-        rhs,
-    }
+    DivisionPropagator::new(numerator, denominator, rhs)
 }
 
 /// Creates the [`Constraint`] `|signed| = absolute`.
@@ -48,18 +44,15 @@ pub fn absolute(
     signed: impl IntegerVariable + 'static,
     absolute: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    AbsoluteValueConstructor { signed, absolute }
+    AbsoluteValuePropagator::new(signed, absolute)
 }
 
 /// Creates the [`Constraint`] `max(array) = m`.
 pub fn maximum<Var: IntegerVariable + 'static>(
-    array: impl Into<Box<[Var]>>,
+    array: impl IntoIterator<Item = Var>,
     rhs: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    MaximumConstructor {
-        array: array.into(),
-        rhs,
-    }
+    MaximumPropagator::new(array.into_iter().collect(), rhs)
 }
 
 /// Creates the [`Constraint`] `min(array) = m`.
@@ -67,9 +60,6 @@ pub fn minimum<Var: IntegerVariable + 'static>(
     array: impl IntoIterator<Item = Var>,
     rhs: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    let array = array
-        .into_iter()
-        .map(|var| var.scaled(-1))
-        .collect::<Box<_>>();
+    let array = array.into_iter().map(|var| var.scaled(-1));
     maximum(array, rhs.scaled(-1))
 }
