@@ -1,29 +1,68 @@
+use std::num::NonZero;
+use std::path::PathBuf;
+
+use clap::Parser;
+use drcp_format::Format;
 use pumpkin_lib::constraints;
+use pumpkin_lib::options::LearningOptions;
+use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::termination::Indefinite;
 use pumpkin_lib::variables::TransformableVariable;
 use pumpkin_lib::Solver;
 
+#[derive(Parser)]
+struct Cli {
+    /// The size of the chess board.
+    n: u32,
+
+    /// The location of the proof.
+    ///
+    /// If a location is given, the full proof will be logged there.
+    #[arg(short, long)]
+    proof: Option<PathBuf>,
+}
+
 fn main() {
-    let n = std::env::args()
-        .nth(1)
-        .expect("Please provide a value for 'n'")
-        .parse::<u32>()
-        .expect("'n' is not a valid unsigned integer");
+    let Cli {
+        n,
+        proof: proof_path,
+    } = Cli::parse();
 
     if n < 2 {
         println!("Please provide an 'n > 1'");
         return;
     }
 
-    let mut solver = Solver::default();
+    let Ok(proof_log) = proof_path
+        .as_ref()
+        .map(|path| ProofLog::cp(path, Format::Text, true))
+        .transpose()
+        .map(|proof| proof.unwrap_or_default())
+    else {
+        eprintln!(
+            "Failed to create proof file at {}",
+            proof_path.unwrap().display()
+        );
+        return;
+    };
+
+    let mut solver = Solver::with_options(
+        LearningOptions::default(),
+        pumpkin_lib::options::SolverOptions {
+            proof_log,
+            ..Default::default()
+        },
+    );
+
     let variables = (0..n)
         .map(|_| solver.new_bounded_integer(0, n as i32 - 1))
         .collect::<Vec<_>>();
 
     let _ = solver
         .add_constraint(constraints::all_different(variables.clone()))
+        .with_tag(NonZero::new(1).unwrap())
         .post();
 
     let diag1 = variables
@@ -41,9 +80,11 @@ fn main() {
 
     let _ = solver
         .add_constraint(constraints::all_different(diag1))
+        .with_tag(NonZero::new(2).unwrap())
         .post();
     let _ = solver
         .add_constraint(constraints::all_different(diag2))
+        .with_tag(NonZero::new(3).unwrap())
         .post();
 
     let mut brancher = solver.default_brancher_over_all_propositional_variables();
