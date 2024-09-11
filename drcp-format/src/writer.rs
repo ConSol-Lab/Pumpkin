@@ -229,7 +229,7 @@ where
             write!(sink, " l:{label}")?;
         }
 
-        writeln!(sink, "")?;
+        writeln!(sink)?;
 
         Ok(())
     }
