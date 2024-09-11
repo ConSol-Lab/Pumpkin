@@ -52,6 +52,10 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.iter()
     }
 
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &'_ mut Value> {
+        self.elements.iter_mut()
+    }
+
     pub(crate) fn swap(&mut self, a: usize, b: usize) {
         self.elements.swap(a, b)
     }

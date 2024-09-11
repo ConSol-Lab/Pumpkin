@@ -3,7 +3,6 @@
 
 use std::cmp::min;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::num::NonZero;
 use std::time::Instant;
@@ -17,6 +16,7 @@ use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
 use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
+use super::propagation::store::PropagatorStore;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
@@ -43,14 +43,12 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::cp::WatchListPropositional;
-use crate::engine::debug_helper::DebugDyn;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::proof::ProofLog;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
@@ -113,6 +111,7 @@ pub(crate) type ClauseAllocator = ClauseAllocatorBasic;
 ///
 /// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
 /// Intelligence, vol. 3, pp. 181–211, 2008.
+#[derive(Debug)]
 pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
@@ -125,7 +124,7 @@ pub struct ConstraintSatisfactionSolver {
     clausal_propagator: ClausalPropagatorType,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
-    cp_propagators: Vec<Box<dyn Propagator>>,
+    cp_propagators: PropagatorStore,
     /// Tracks information about all allocated clauses. All clause allocaton goes exclusively
     /// through the clause allocator. There are two notable exceptions:
     /// - Unit clauses are stored directly on the trail.
@@ -195,29 +194,6 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     variable_names: VariableNames,
-}
-
-impl Debug for ConstraintSatisfactionSolver {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let cp_propagators: Vec<_> = self
-            .cp_propagators
-            .iter()
-            .map(|_| DebugDyn::from("Propagator"))
-            .collect();
-        f.debug_struct("ConstraintSatisfactionSolver")
-            .field("state", &self.state)
-            .field("assumptions", &self.assumptions)
-            .field("clausal_allocator", &self.clause_allocator)
-            .field("assignments_propositional", &self.assignments_propositional)
-            .field("clausal_propagator", &self.clausal_propagator)
-            .field("learned_clause_manager", &self.learned_clause_manager)
-            .field("restart_strategy", &self.restart_strategy)
-            .field("cp_propagators", &cp_propagators)
-            .field("counters", &self.counters)
-            .field("internal_parameters", &self.internal_parameters)
-            .field("analysis_result", &self.analysis_result)
-            .finish()
-    }
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -290,7 +266,7 @@ impl ConstraintSatisfactionSolver {
                     .watch_list_cp
                     .get_backtrack_affected_propagators(event, domain)
                 {
-                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                    let propagator = &mut self.cp_propagators[propagator_var.propagator];
                     let context = PropagationContext::new(
                         &self.assignments_integer,
                         &self.assignments_propositional,
@@ -321,7 +297,7 @@ impl ConstraintSatisfactionSolver {
 
             for (event, domain) in self.event_drain.drain(..) {
                 for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
-                    let propagator = &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                    let propagator = &mut self.cp_propagators[propagator_var.propagator];
                     let context = PropagationContext::new(
                         &self.assignments_integer,
                         &self.assignments_propositional,
@@ -350,8 +326,7 @@ impl ConstraintSatisfactionSolver {
                         .watch_list_propositional
                         .get_affected_propagators(event, affected_literal)
                     {
-                        let propagator =
-                            &mut self.cp_propagators[propagator_var.propagator.0 as usize];
+                        let propagator = &mut self.cp_propagators[propagator_var.propagator];
                         let context = PropagationContext::new(
                             &self.assignments_integer,
                             &self.assignments_propositional,
@@ -468,7 +443,7 @@ impl ConstraintSatisfactionSolver {
             clausal_propagator: ClausalPropagatorType::default(),
             learned_clause_manager: LearnedClauseManager::new(learning_options),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
-            cp_propagators: vec![],
+            cp_propagators: PropagatorStore::default(),
             counters: Counters::default(),
             internal_parameters: solver_options,
             analysis_result: ConflictAnalysisResult::default(),
@@ -698,12 +673,13 @@ impl ConstraintSatisfactionSolver {
     /// ```
     pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
         let mut conflict_analysis_context = ConflictAnalysisContext {
+            propagator_store: &self.cp_propagators,
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
             variable_literal_mappings: &self.variable_literal_mappings,
             assignments_integer: &self.assignments_integer,
             assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
+            internal_parameters: &mut self.internal_parameters,
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
@@ -731,12 +707,13 @@ impl ConstraintSatisfactionSolver {
         on_analysis_step: impl FnMut(AnalysisStep),
     ) {
         let mut conflict_analysis_context = ConflictAnalysisContext {
+            propagator_store: &self.cp_propagators,
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
             variable_literal_mappings: &self.variable_literal_mappings,
             assignments_integer: &self.assignments_integer,
             assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
+            internal_parameters: &mut self.internal_parameters,
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
@@ -1126,12 +1103,13 @@ impl ConstraintSatisfactionSolver {
 
     fn compute_learned_clause(&mut self, brancher: &mut impl Brancher) -> ConflictAnalysisResult {
         let mut conflict_analysis_context = ConflictAnalysisContext {
+            propagator_store: &self.cp_propagators,
             assumptions: &self.assumptions,
             clausal_propagator: &self.clausal_propagator,
             variable_literal_mappings: &self.variable_literal_mappings,
             assignments_integer: &self.assignments_integer,
             assignments_propositional: &self.assignments_propositional,
-            internal_parameters: &self.internal_parameters,
+            internal_parameters: &mut self.internal_parameters,
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
@@ -1285,10 +1263,10 @@ impl ConstraintSatisfactionSolver {
         //  in the future this will be improved in two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for propagator_id in 0..self.cp_propagators.len() {
+        for propagator in self.cp_propagators.iter_mut() {
             let context =
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
-            self.cp_propagators[propagator_id].synchronise(&context);
+            propagator.synchronise(&context);
         }
 
         let _ = self.process_backtrack_events();
@@ -1385,7 +1363,7 @@ impl ConstraintSatisfactionSolver {
         }
 
         let propagator_id = self.propagator_queue.pop();
-        let propagator = &mut self.cp_propagators[propagator_id.0 as usize];
+        let propagator = &mut self.cp_propagators[propagator_id];
         let context = PropagationContextMut::new(
             &mut self.assignments_integer,
             &mut self.reason_store,
@@ -1405,7 +1383,7 @@ impl ConstraintSatisfactionSolver {
                         &self.assignments_propositional,
                         &self.variable_literal_mappings,
                         propositional_conjunction,
-                        propagator.as_ref(),
+                        propagator,
                         propagator_id,
                     ));
                 }
@@ -1482,13 +1460,11 @@ impl ConstraintSatisfactionSolver {
     pub fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
-        _tag: Option<NonZero<u32>>,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
-
-        let new_propagator_id = PropagatorId(self.cp_propagators.len() as u32);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1497,7 +1473,7 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.cp_propagators.push(Box::new(propagator_to_add));
+        let new_propagator_id = self.cp_propagators.alloc(Box::new(propagator_to_add), tag);
 
         let new_propagator = &mut self.cp_propagators[new_propagator_id];
 
