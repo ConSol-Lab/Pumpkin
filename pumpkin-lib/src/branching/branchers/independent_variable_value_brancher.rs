@@ -92,4 +92,8 @@ where
     fn on_solution(&mut self, solution: SolutionReference) {
         self.value_selector.on_solution(solution);
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        self.variable_selector.is_restart_pointless() && self.value_selector.is_restart_pointless()
+    }
 }

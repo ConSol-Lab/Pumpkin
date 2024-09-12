@@ -145,6 +145,10 @@ impl ValueSelector<PropositionalVariable> for PhaseSaving<PropositionalVariable,
         );
         self.update(lit.get_propositional_variable(), lit.is_positive())
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
