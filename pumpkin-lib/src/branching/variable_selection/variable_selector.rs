@@ -1,4 +1,8 @@
+#[cfg(doc)]
+use crate::branching::variable_selection::Smallest;
 use crate::branching::SelectionContext;
+#[cfg(doc)]
+use crate::branching::Vsids;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 #[cfg(doc)]
@@ -36,4 +40,16 @@ pub trait VariableSelector<Var> {
 
     /// A function which is called when a variable appears in a conflict during conflict analysis.
     fn on_appearance_in_conflict_integer(&mut self, _variable: DomainId) {}
+
+    /// This method returns whether a restart is *currently* pointless for the [`VariableSelector`].
+    ///
+    /// For example, if a [`VariableSelector`] is using a static strategy (e.g. [`Smallest`]) then a
+    /// restart is pointless; however, for a [`VariableSelector`] like [`Vsids`] which
+    /// changes throughout the search process restarting is not pointless.
+    ///
+    /// Note that even if the [`VariableSelector`] has indicated that a restart is pointless, it
+    /// could be that the restart is still performed.
+    fn is_restart_pointless(&mut self) -> bool {
+        true
+    }
 }

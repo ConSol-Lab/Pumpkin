@@ -70,6 +70,12 @@ struct Args {
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 
+    /// Log a full proof instead of just the scaffold.
+    ///
+    /// If no `proof_path` is provided, then this option is ignored.
+    #[arg(long, verbatim_doc_comment)]
+    full_proof: bool,
+
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
@@ -308,18 +314,17 @@ struct Args {
     )]
     upper_bound_encoding: PseudoBooleanEncoding,
 
-    /// Determines whether to allow the cumulative propagator(s) to create holes in the domain.
-    ///
-    /// If this option is set to false then only the lower- and upper-bounds are updated.
+    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
     ///
     /// Possible values: bool
-    #[arg(
-        long = "cumulative-allow-holes",
-        default_value_t = false,
-        verbatim_doc_comment
-    )]
+    #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
     cumulative_allow_holes: bool,
 
+    /// Determines that no restarts are allowed by the solver.
+    ///
+    /// Possible values: bool
+    #[arg(long = "no-restarts", verbatim_doc_comment)]
+    no_restarts: bool,
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
     ///
@@ -463,7 +468,7 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text, args.full_proof)?,
         }
     } else {
         ProofLog::default()
@@ -479,6 +484,7 @@ fn run() -> PumpkinResult<()> {
             num_assigned_coef: args.restart_num_assigned_coef,
             num_assigned_window: args.restart_num_assigned_window,
             geometric_coef: args.restart_geometric_coef,
+            no_restarts: args.no_restarts,
         },
         proof_log,
         learning_clause_minimisation: !args.no_learning_clause_minimisation,

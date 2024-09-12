@@ -1,5 +1,6 @@
 use std::io::BufWriter;
 use std::io::Write;
+use std::num::NonZero;
 use std::num::NonZeroI32;
 use std::num::NonZeroU64;
 
@@ -23,14 +24,14 @@ use crate::steps::NogoodId;
 ///
 /// let lit = |num: i32| NonZeroI32::new(num).unwrap();
 /// writer
-///     .log_inference("linear_bound", [lit(4), lit(5)], lit(-2))
+///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], lit(-2))
 ///     .unwrap();
 /// let nogood_id = writer.log_nogood_clause([lit(1), lit(-3), lit(5)]).unwrap();
 /// writer.log_deletion(nogood_id).unwrap();
 /// writer.unsat().unwrap();
 ///
 /// let expected = "
-/// i linear_bound 4 5 0 -2
+/// i 4 5 0 -2 l:linear_bound
 /// n 1 1 -3 5
 /// d 1
 /// c UNSAT
@@ -104,22 +105,28 @@ where
 
     /// Log an inference step.
     ///
+    /// Besides premises and a conclusion, an inference step can optionally include hints regarding
+    /// the constraint that implied the inference, and the label of the filtering algorithm which
+    /// identified the inference.
+    ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
     pub fn log_inference(
         &mut self,
-        label: &str,
+        hint_constraint_id: Option<NonZero<u32>>,
+        hint_label: Option<&str>,
         premises: impl IntoIterator<Item = Literals::Literal>,
         propagated: Literals::Literal,
     ) -> std::io::Result<()> {
         let propagated = self.encountered_literals.to_code(propagated);
 
-        let inference = Inference::new(
-            label,
-            premises
+        let inference = Inference {
+            hint_constraint_id,
+            hint_label,
+            premises: premises
                 .into_iter()
                 .map(|pred| self.encountered_literals.to_code(pred)),
             propagated,
-        );
+        };
 
         inference.write(self.format, &mut self.writer)
     }
@@ -206,13 +213,23 @@ where
     Premises: IntoIterator<Item = NonZeroI32>,
 {
     fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        write!(sink, "i {}", self.label)?;
+        write!(sink, "i")?;
 
         for literal in self.premises {
             write!(sink, " {literal}")?;
         }
 
-        writeln!(sink, " 0 {}", self.propagated)?;
+        write!(sink, " 0 {}", self.propagated)?;
+
+        if let Some(constraint_id) = self.hint_constraint_id {
+            write!(sink, " c:{constraint_id}")?;
+        }
+
+        if let Some(label) = self.hint_label {
+            write!(sink, " l:{label}")?;
+        }
+
+        writeln!(sink)?;
 
         Ok(())
     }
@@ -229,5 +246,74 @@ impl WritableProofStep for Deletion {
 
     fn write_binary(self, _sink: &mut impl Write) -> std::io::Result<()> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_basic_inference() {
+        test_step_serialization(
+            Inference {
+                hint_constraint_id: None,
+                hint_label: None,
+                premises: [lit(2), lit(-3)],
+                propagated: lit(1),
+            },
+            "i 2 -3 0 1\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_with_label() {
+        test_step_serialization(
+            Inference {
+                hint_constraint_id: None,
+                hint_label: Some("inf_label"),
+                premises: [lit(2), lit(-3)],
+                propagated: lit(1),
+            },
+            "i 2 -3 0 1 l:inf_label\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_with_constraint_id() {
+        test_step_serialization(
+            Inference {
+                hint_constraint_id: Some(NonZero::new(1).unwrap()),
+                hint_label: None,
+                premises: [lit(2), lit(-3)],
+                propagated: lit(1),
+            },
+            "i 2 -3 0 1 c:1\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_with_constraint_id_and_label() {
+        test_step_serialization(
+            Inference {
+                hint_constraint_id: Some(NonZero::new(1).unwrap()),
+                hint_label: Some("inf_label"),
+                premises: [lit(2), lit(-3)],
+                propagated: lit(1),
+            },
+            "i 2 -3 0 1 c:1 l:inf_label\n",
+        );
+    }
+
+    fn lit(num: i32) -> NonZero<i32> {
+        NonZero::new(num).unwrap()
+    }
+
+    fn test_step_serialization(step: impl WritableProofStep, expected: &str) {
+        let mut buffer = Vec::new();
+        step.write_string(&mut buffer).expect("no error writing");
+
+        let actual = String::from_utf8(buffer).expect("valid utf8");
+        assert_eq!(expected, actual);
     }
 }

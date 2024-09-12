@@ -1,4 +1,5 @@
 //! The module containing the individual proof steps.
+use std::num::NonZero;
 use std::num::NonZeroU64;
 
 pub type NogoodId = NonZeroU64;
@@ -32,21 +33,17 @@ pub enum Conclusion<Literal> {
     Optimal(Literal),
 }
 
+/// One inference step in the proof.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Inference<'label, Premises, Propagated> {
-    pub label: &'label str,
+    /// The hint to the constraint which implies the inference.
+    pub hint_constraint_id: Option<NonZero<u32>>,
+    /// The hint to the filtering algorithm which identifies the inference.
+    pub hint_label: Option<&'label str>,
+    /// The premises of the inference.
     pub premises: Premises,
+    /// The conclusion of the inference.
     pub propagated: Propagated,
-}
-
-impl<'label, Premises, Propagated> Inference<'label, Premises, Propagated> {
-    pub fn new(label: &'label str, premises: Premises, propagated: Propagated) -> Self {
-        Inference {
-            label,
-            premises,
-            propagated,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

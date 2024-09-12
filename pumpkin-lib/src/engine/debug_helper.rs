@@ -6,6 +6,7 @@ use log::debug;
 use log::warn;
 
 use super::predicates::integer_predicate::IntegerPredicate;
+use super::propagation::store::PropagatorStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
@@ -49,7 +50,7 @@ impl DebugHelper {
         assignments_integer: &AssignmentsInteger,
         assignments_propositional: &AssignmentsPropositional,
         clause_allocator: &ClauseAllocator,
-        propagators_cp: &[Box<dyn Propagator>],
+        propagators_cp: &PropagatorStore,
     ) -> bool {
         let mut assignments_integer_clone = assignments_integer.clone();
         let mut assignments_propostional_clone = assignments_propositional.clone();
@@ -62,7 +63,7 @@ impl DebugHelper {
         //         may be detected when debug-checking the reason for propagation
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
-        for (propagator_id, propagator) in propagators_cp.iter().enumerate() {
+        for (propagator_id, propagator) in propagators_cp.iter_propagators().enumerate() {
             let num_entries_on_trail_before_propagation =
                 assignments_integer_clone.num_trail_entries();
             let num_entries_on_propositional_trail_before_propagation =
