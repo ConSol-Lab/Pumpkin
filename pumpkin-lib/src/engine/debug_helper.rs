@@ -277,23 +277,44 @@ impl DebugHelper {
             if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
                 //  now propagate using the debug propagation method
                 let mut reason_store = Default::default();
-                let context = PropagationContextMut::new(
-                    &mut assignments_integer_clone,
-                    &mut reason_store,
-                    &mut assignments_propositional_clone,
-                    propagator_id,
-                );
-                let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
-                assert!(
-                    debug_propagation_status_cp.is_err(),
-                    "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
-                     Propagator: '{}'\n
-                     Propagator id: '{propagator_id}'.\n
-                     The reported reason: {reason}\n
-                     Reported propagated predicate: {propagated_predicate}",
-                    propagator.name()
-                );
+                // Note that it might take multiple iterations before the conflict is reached due
+                // to the assumption that some propagators make on that they are not idempotent!
+                //
+                // This happened in the cumulative where setting the reason led to a new mandatory
+                // part being created which meant that the same propagation was not performed (i.e.
+                // it did not immediately lead to a conflict) but this new mandatory part would
+                // have led to a new mandatory part in the next call to the propagator
+                loop {
+                    let num_predicates_before = assignments_integer_clone.num_trail_entries();
+
+                    let context = PropagationContextMut::new(
+                        &mut assignments_integer_clone,
+                        &mut reason_store,
+                        &mut assignments_propositional_clone,
+                        propagator_id,
+                    );
+                    let debug_propagation_status_cp =
+                        propagator.debug_propagate_from_scratch(context);
+
+                    // We break if an error was found or if there were no more propagations (i.e.
+                    // fixpoint was reached)
+                    if debug_propagation_status_cp.is_err()
+                        || num_predicates_before != assignments_integer_clone.num_trail_entries()
+                    {
+                        assert!(
+                            debug_propagation_status_cp.is_err(),
+                            "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
+                             Propagator: '{}'\n
+                             Propagator id: '{propagator_id}'.\n
+                             The reported reason: {reason}\n
+                             Reported propagated predicate: {propagated_predicate}",
+                            propagator.name()
+                        );
+
+                        break;
+                    }
+                }
             } else {
                 // Adding the predicates of the reason to the assignments led to failure
                 panic!(
