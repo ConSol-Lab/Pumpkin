@@ -124,30 +124,6 @@ where
     }
 }
 
-impl<C: Constraint> Constraint for Vec<C> {
-    fn post(
-        &self,
-        solver: &mut Solver,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.iter().try_for_each(|c| c.post(solver, tag))
-    }
-
-    fn implied_by(
-        &self,
-        solver: &mut Solver,
-        reification_literal: Literal,
-        tag: Option<NonZero<u32>>,
-    ) -> Result<(), ConstraintOperationError> {
-        self.iter()
-            .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
-    }
-}
-
 /// A [`Constraint`] which has a well-defined negation.
 ///
 /// Having a negation means the [`Constraint`] can be fully reified; i.e., a constraint `C` can be
