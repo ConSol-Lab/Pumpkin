@@ -79,6 +79,12 @@ pub trait Constraint {
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
+
+    /// Clone the constraint as a trait object.
+    ///
+    /// This allows cloning of `Box<dyn Constraint>`, which is not possible through the regular
+    /// `Clone` trait.
+    fn boxed_clone(&self) -> Box<dyn Constraint>;
 }
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
@@ -112,6 +118,10 @@ where
             solver.add_propagator(ReifiedPropagator::new(self.clone(), reification_literal))
         }
     }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
+    }
 }
 
 impl<C: Constraint> Constraint for Vec<C> {
@@ -131,6 +141,10 @@ impl<C: Constraint> Constraint for Vec<C> {
     ) -> Result<(), ConstraintOperationError> {
         self.iter()
             .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
     }
 }
 

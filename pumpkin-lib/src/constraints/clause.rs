@@ -48,6 +48,10 @@ impl Constraint for Clause {
                 .chain(std::iter::once(!reification_literal)),
         )
     }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
+    }
 }
 
 impl NegatableConstraint for Clause {
@@ -86,6 +90,10 @@ impl Constraint for Conjunction {
             .iter()
             .copied()
             .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
     }
 }
 

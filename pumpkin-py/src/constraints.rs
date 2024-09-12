@@ -1,7 +1,7 @@
 use std::num::NonZero;
 
-use pumpkin_lib::constraints::Constraint;
 use pumpkin_lib::constraints::{self};
+use pumpkin_lib::constraints::{Constraint, NegatableConstraint};
 use pyo3::prelude::*;
 
 use crate::core::Variable;
@@ -9,7 +9,13 @@ use crate::core::Variable;
 #[pyclass(unsendable)]
 pub struct ConstraintDefinition(pub(crate) Box<dyn Constraint>);
 
-impl Constraint for &ConstraintDefinition {
+impl Clone for ConstraintDefinition {
+    fn clone(&self) -> Self {
+        ConstraintDefinition(self.0.boxed_clone())
+    }
+}
+
+impl Constraint for ConstraintDefinition {
     fn post(
         &self,
         solver: &mut pumpkin_lib::Solver,
@@ -25,6 +31,10 @@ impl Constraint for &ConstraintDefinition {
         tag: Option<NonZero<u32>>,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
         self.0.implied_by(solver, reification_literal, tag)
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
     }
 }
 

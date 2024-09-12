@@ -99,6 +99,10 @@ where
 
         Ok(())
     }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
+    }
 }
 
 impl<Var> NegatableConstraint for EqualConstraint<Var>
@@ -143,6 +147,10 @@ where
             reification_literal,
             tag,
         )
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
     }
 }
 

@@ -64,6 +64,10 @@ impl Constraint for BooleanLessThanOrEqual {
 
         less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal, tag)
     }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
+    }
 }
 
 impl BooleanLessThanOrEqual {
@@ -117,6 +121,10 @@ impl Constraint for BooleanEqual {
         let domains = self.create_domains(solver);
 
         equals(domains, 0).implied_by(solver, reification_literal, tag)
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
     }
 }
 

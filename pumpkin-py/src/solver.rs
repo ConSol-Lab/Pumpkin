@@ -3,7 +3,7 @@ use pumpkin_lib::termination::Indefinite;
 use pyo3::prelude::*;
 
 use crate::constraints::ConstraintDefinition;
-use crate::core::Variable;
+use crate::core::{Boolean, Variable};
 
 #[pyclass(unsendable)]
 pub struct Solver {
@@ -27,8 +27,15 @@ impl Solver {
         )
     }
 
-    fn post(&mut self, constraint: &ConstraintDefinition) -> bool {
+    fn post(&mut self, constraint: ConstraintDefinition) -> bool {
         self.solver.add_constraint(constraint).post().is_ok()
+    }
+
+    fn imply(&mut self, constraint: ConstraintDefinition, reification: Boolean) -> bool {
+        self.solver
+            .add_constraint(constraint)
+            .implied_by(reification.0)
+            .is_ok()
     }
 
     fn satisfy(&mut self) -> SatisfactionResult {

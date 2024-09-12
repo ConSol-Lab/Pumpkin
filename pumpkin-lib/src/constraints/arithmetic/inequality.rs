@@ -66,6 +66,10 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             tag,
         )
     }
+
+    fn boxed_clone(&self) -> Box<dyn Constraint> {
+        todo!()
+    }
 }
 
 impl<Var: IntegerVariable + 'static> NegatableConstraint for Inequality<Var> {
