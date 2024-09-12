@@ -1,7 +1,7 @@
 use std::num::NonZero;
 
-use pumpkin_lib::constraints::{self};
-use pumpkin_lib::constraints::{Constraint, NegatableConstraint};
+use pumpkin_lib::constraints;
+use pumpkin_lib::constraints::Constraint;
 use pyo3::prelude::*;
 
 use crate::core::Variable;
@@ -34,7 +34,7 @@ impl Constraint for ConstraintDefinition {
     }
 
     fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
+        self.0.boxed_clone()
     }
 }
 
