@@ -26,6 +26,7 @@ use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::options::LearningOptions;
 use crate::options::SolverOptions;
+use crate::predicate;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
@@ -352,6 +353,8 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                let _ = self.satisfaction_solver.conclude_proof_unsat();
+
                 SatisfactionResult::Unsatisfiable
             }
             CSPSolverExecutionFlag::Timeout => {
@@ -484,6 +487,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                let _ = self.satisfaction_solver.conclude_proof_unsat();
                 return OptimisationResult::Unsatisfiable;
             }
             CSPSolverExecutionFlag::Timeout => {
@@ -502,8 +506,19 @@ impl Solver {
             &mut best_solution,
             brancher,
         );
+
         loop {
             self.satisfaction_solver.restore_state_at_root(brancher);
+
+            let objective_bound_predicate = if is_maximising {
+                predicate![objective_variable <= best_objective_value as i32]
+            } else {
+                predicate![objective_variable >= best_objective_value as i32]
+            };
+
+            let objective_bound_literal = self
+                .satisfaction_solver
+                .get_literal(objective_bound_predicate);
 
             if self
                 .strengthen(
@@ -514,6 +529,10 @@ impl Solver {
             {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
+                let _ = self
+                    .satisfaction_solver
+                    .conclude_proof_optimal(objective_bound_literal);
+
                 return OptimisationResult::Optimal(best_solution);
             }
 
@@ -536,6 +555,9 @@ impl Solver {
                     {
                         // Reset the state whenever we return a result
                         self.satisfaction_solver.restore_state_at_root(brancher);
+                        let _ = self
+                            .satisfaction_solver
+                            .conclude_proof_optimal(objective_bound_literal);
                         return OptimisationResult::Optimal(best_solution);
                     }
                 }
