@@ -25,9 +25,7 @@ impl<'a, ConstraintImpl> ConstraintPoster<'a, ConstraintImpl> {
             tag: None,
         }
     }
-}
 
-impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     /// Tag the constraint with an integer. This tag is used in the proof to identify which
     /// constraints trigger particular inferences.
     pub fn with_tag(mut self, tag: NonZero<u32>) -> Self {
@@ -35,7 +33,9 @@ impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
 
         self
     }
+}
 
+impl<ConstraintImpl: Constraint> ConstraintPoster<'_, ConstraintImpl> {
     /// Add the [`Constraint`] to the [`Solver`].
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
