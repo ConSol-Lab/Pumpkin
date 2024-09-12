@@ -1,9 +1,12 @@
+use std::num::NonZero;
+
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::termination::Indefinite;
 use pyo3::prelude::*;
 
 use crate::constraints::ConstraintDefinition;
-use crate::core::{Boolean, Variable};
+use crate::core::Boolean;
+use crate::core::Variable;
 
 #[pyclass(unsendable)]
 pub struct Solver {
@@ -27,15 +30,31 @@ impl Solver {
         )
     }
 
-    fn post(&mut self, constraint: ConstraintDefinition) -> bool {
-        self.solver.add_constraint(constraint).post().is_ok()
+    #[pyo3(signature = (constraint, tag=None))]
+    fn post(&mut self, constraint: ConstraintDefinition, tag: Option<NonZero<u32>>) -> bool {
+        let mut poster = self.solver.add_constraint(constraint);
+
+        if let Some(tag) = tag {
+            poster = poster.with_tag(tag);
+        }
+
+        poster.post().is_ok()
     }
 
-    fn imply(&mut self, constraint: ConstraintDefinition, reification: Boolean) -> bool {
-        self.solver
-            .add_constraint(constraint)
-            .implied_by(reification.0)
-            .is_ok()
+    #[pyo3(signature = (constraint, reification, tag=None))]
+    fn imply(
+        &mut self,
+        constraint: ConstraintDefinition,
+        reification: Boolean,
+        tag: Option<NonZero<u32>>,
+    ) -> bool {
+        let mut poster = self.solver.add_constraint(constraint);
+
+        if let Some(tag) = tag {
+            poster = poster.with_tag(tag);
+        }
+
+        poster.implied_by(reification.0).is_ok()
     }
 
     fn satisfy(&mut self) -> SatisfactionResult {
