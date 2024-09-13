@@ -2,6 +2,7 @@ use pumpkin_lib::constraints;
 use pyo3::pyclass;
 use pyo3::pymethods;
 
+use crate::core::Boolean;
 use crate::core::Variable;
 
 macro_rules! python_constraint {
@@ -157,5 +158,91 @@ python_constraint! {
         a: Variable,
         b: Variable,
         c: Variable,
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub(crate) struct Clause {
+    literals: Vec<Boolean>,
+}
+
+#[pymethods]
+impl Clause {
+    #[new]
+    fn new(literals: Vec<Boolean>) -> Self {
+        Clause { literals }
+    }
+}
+
+impl pumpkin_lib::constraints::Constraint for Clause {
+    fn post(
+        self,
+        solver: &mut pumpkin_lib::Solver,
+        tag: Option<std::num::NonZero<u32>>,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        let clause = self
+            .literals
+            .iter()
+            .map(|boolean| boolean.0)
+            .collect::<Vec<_>>();
+        constraints::clause(clause).post(solver, tag)
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut pumpkin_lib::Solver,
+        reification_literal: pumpkin_lib::variables::Literal,
+        tag: Option<std::num::NonZero<u32>>,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        let clause = self
+            .literals
+            .iter()
+            .map(|boolean| boolean.0)
+            .collect::<Vec<_>>();
+        constraints::clause(clause).implied_by(solver, reification_literal, tag)
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub(crate) struct Conjunction {
+    literals: Vec<Boolean>,
+}
+
+#[pymethods]
+impl Conjunction {
+    #[new]
+    fn new(literals: Vec<Boolean>) -> Self {
+        Conjunction { literals }
+    }
+}
+
+impl pumpkin_lib::constraints::Constraint for Conjunction {
+    fn post(
+        self,
+        solver: &mut pumpkin_lib::Solver,
+        tag: Option<std::num::NonZero<u32>>,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        let conjunction = self
+            .literals
+            .iter()
+            .map(|boolean| boolean.0)
+            .collect::<Vec<_>>();
+        constraints::conjunction(conjunction).post(solver, tag)
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut pumpkin_lib::Solver,
+        reification_literal: pumpkin_lib::variables::Literal,
+        tag: Option<std::num::NonZero<u32>>,
+    ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+        let conjunction = self
+            .literals
+            .iter()
+            .map(|boolean| boolean.0)
+            .collect::<Vec<_>>();
+        constraints::conjunction(conjunction).implied_by(solver, reification_literal, tag)
     }
 }

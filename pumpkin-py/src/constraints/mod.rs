@@ -57,5 +57,7 @@ declare_constraints! {
         NotEquals,
         Plus,
         Times,
+        Clause,
+        Conjunction,
     }
 }
