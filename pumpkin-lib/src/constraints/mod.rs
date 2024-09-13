@@ -83,7 +83,7 @@ pub trait Constraint {
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    ConcretePropagator: Propagator + Clone + 'static,
+    ConcretePropagator: Propagator + 'static,
 {
     fn post(
         self,
@@ -91,9 +91,9 @@ where
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if let Some(tag) = tag {
-            solver.add_tagged_propagator(self.clone(), tag)
+            solver.add_tagged_propagator(self, tag)
         } else {
-            solver.add_propagator(self.clone())
+            solver.add_propagator(self)
         }
     }
 
@@ -104,12 +104,9 @@ where
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if let Some(tag) = tag {
-            solver.add_tagged_propagator(
-                ReifiedPropagator::new(self.clone(), reification_literal),
-                tag,
-            )
+            solver.add_tagged_propagator(ReifiedPropagator::new(self, reification_literal), tag)
         } else {
-            solver.add_propagator(ReifiedPropagator::new(self.clone(), reification_literal))
+            solver.add_propagator(ReifiedPropagator::new(self, reification_literal))
         }
     }
 }

@@ -51,7 +51,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagator::new(self.terms.clone(), self.rhs).post(solver, tag)
+        LinearLessOrEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
     }
 
     fn implied_by(
@@ -60,7 +60,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
         reification_literal: crate::variables::Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearLessOrEqualPropagator::new(self.terms.clone(), self.rhs).implied_by(
+        LinearLessOrEqualPropagator::new(self.terms, self.rhs).implied_by(
             solver,
             reification_literal,
             tag,
