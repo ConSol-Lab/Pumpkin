@@ -9,8 +9,8 @@ use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::termination::Indefinite;
 use pyo3::prelude::*;
 
+use crate::constraints::Constraint;
 use crate::core::Boolean;
-use crate::core::ConstraintDefinition;
 use crate::core::Variable;
 
 #[pyclass(unsendable)]
@@ -65,7 +65,7 @@ impl Solver {
 
     /// Post a constraint to the solver.
     #[pyo3(signature = (constraint, tag=None))]
-    fn post(&mut self, constraint: ConstraintDefinition, tag: Option<NonZero<u32>>) -> bool {
+    fn post(&mut self, constraint: Constraint, tag: Option<NonZero<u32>>) -> bool {
         let mut poster = self.solver.add_constraint(constraint);
 
         if let Some(tag) = tag {
@@ -82,7 +82,7 @@ impl Solver {
     #[pyo3(signature = (constraint, reification, tag=None))]
     fn imply(
         &mut self,
-        constraint: ConstraintDefinition,
+        constraint: Constraint,
         reification: Boolean,
         tag: Option<NonZero<u32>>,
     ) -> bool {

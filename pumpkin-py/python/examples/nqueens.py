@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Optional
 
 from pumpkin_py import constraints, SatisfactionResult, Solver
 
@@ -11,13 +10,13 @@ def main(n: int, proof: Path | None):
 
     variables = [solver.new_variable(0, n - 1, name=f"q{i}") for i in range(n)]
 
-    solver.post(constraints.all_different(variables))
+    solver.post(constraints.AllDifferent(variables))
 
     diag1 = [var.offset(i) for (i, var) in enumerate(variables)]
     diag2 = [var.offset(-i) for (i, var) in enumerate(variables)]
 
-    solver.post(constraints.all_different(diag1))
-    solver.post(constraints.all_different(diag2))
+    solver.post(constraints.AllDifferent(diag1))
+    solver.post(constraints.AllDifferent(diag2))
 
     status = solver.satisfy()
     match status:

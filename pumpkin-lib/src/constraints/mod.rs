@@ -60,7 +60,7 @@ pub trait Constraint {
     /// The `tag` allows inferences to be traced to the constraint that implies them. They will
     /// show up in the proof log.
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
@@ -74,17 +74,11 @@ pub trait Constraint {
     /// The `tag` allows inferences to be traced to the constraint that implies them. They will
     /// show up in the proof log.
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError>;
-
-    /// Clone the constraint as a trait object.
-    ///
-    /// This allows cloning of `Box<dyn Constraint>`, which is not possible through the regular
-    /// `Clone` trait.
-    fn boxed_clone(&self) -> Box<dyn Constraint>;
 }
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
@@ -92,7 +86,7 @@ where
     ConcretePropagator: Propagator + Clone + 'static,
 {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -104,7 +98,7 @@ where
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -118,9 +112,25 @@ where
             solver.add_propagator(ReifiedPropagator::new(self.clone(), reification_literal))
         }
     }
+}
 
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
+impl<C: Constraint> Constraint for Vec<C> {
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.into_iter().try_for_each(|c| c.post(solver, tag))
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        self.into_iter()
+            .try_for_each(|c| c.implied_by(solver, reification_literal, tag))
     }
 }
 
