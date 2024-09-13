@@ -173,7 +173,6 @@ impl PseudoBooleanConstraintEncoder {
             .map(|p| WeightedLiteral {
                 literal: *p.0,
                 weight: *p.1,
-                _bound: None,
             })
             .collect();
 
@@ -341,7 +340,7 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    let result = solver.add_clause([(!term.literal).into()]);
+                    let result = solver.add_clause([(!term.literal).get_true_predicate()]);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }

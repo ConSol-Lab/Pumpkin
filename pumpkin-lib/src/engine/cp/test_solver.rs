@@ -24,7 +24,6 @@ use crate::engine::Assignments;
 use crate::engine::DomainEvents;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
-use crate::predicate;
 
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
@@ -67,7 +66,7 @@ impl TestSolver {
 
     pub(crate) fn new_literal(&mut self) -> Literal {
         let domain_id = self.new_variable(0, 1);
-        Literal::new(predicate!(domain_id == 1))
+        Literal::new(domain_id)
     }
 
     pub(crate) fn new_propagator(
@@ -131,16 +130,9 @@ impl TestSolver {
         )
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn is_literal_assigned(&self, literal: Literal) -> bool {
-        self.assignments
-            .evaluate_predicate(literal.into())
-            .is_some()
-    }
-
     pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
-            .evaluate_predicate(literal.into())
+            .evaluate_predicate(literal.get_true_predicate())
             .is_some_and(|truth_value| !truth_value)
     }
 
@@ -168,8 +160,12 @@ impl TestSolver {
         truth_value: bool,
     ) -> Result<(), EmptyDomain> {
         match truth_value {
-            true => self.assignments.post_predicate(literal.into(), None),
-            false => self.assignments.post_predicate((!literal).into(), None),
+            true => self
+                .assignments
+                .post_predicate(literal.get_true_predicate(), None),
+            false => self
+                .assignments
+                .post_predicate((!literal).get_true_predicate(), None),
         }
     }
 
@@ -269,8 +265,8 @@ impl TestSolver {
         truth_value: bool,
     ) -> &PropositionalConjunction {
         let predicate = match truth_value {
-            true => literal.into(),
-            false => (!literal).into(),
+            true => literal.get_true_predicate(),
+            false => (!literal).get_false_predicate(),
         };
         self.get_reason_int(predicate)
     }

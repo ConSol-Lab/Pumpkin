@@ -203,18 +203,6 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn get_assigned_value_at_trail_position(
-        &self,
-        domain_id: DomainId,
-        trail_position: usize,
-    ) -> Option<i32> {
-        if self.is_domain_assigned_at_trail_position(domain_id, trail_position) {
-            Some(self.domains[domain_id].lower_bound_at_trail_position(trail_position))
-        } else {
-            None
-        }
-    }
-
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.get_trail_position(predicate) {
             self.trail[trail_position].reason.is_none()
@@ -285,15 +273,6 @@ impl Assignments {
 
     pub(crate) fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
         self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
-    }
-
-    pub(crate) fn is_domain_assigned_at_trail_position(
-        &self,
-        domain_id: DomainId,
-        trail_position: usize,
-    ) -> bool {
-        self.get_lower_bound_at_trail_position(domain_id, trail_position)
-            == self.get_upper_bound_at_trail_position(domain_id, trail_position)
     }
 
     /// Returns the index of the trail entry at which point the given predicate became true.
@@ -587,88 +566,6 @@ impl Assignments {
                 // self
                 //.get_assigned_value(domain_id)
                 //.map(|assigned_value| assigned_value == equality_constant),
-            }
-        }
-    }
-
-    pub(crate) fn evaluate_predicate_at_trail_position(
-        &self,
-        predicate: Predicate,
-        trail_position: usize,
-    ) -> Option<bool> {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => {
-                if self.get_lower_bound_at_trail_position(domain_id, trail_position) >= lower_bound
-                {
-                    Some(true)
-                } else if self.get_upper_bound_at_trail_position(domain_id, trail_position)
-                    < lower_bound
-                {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => {
-                if self.get_upper_bound_at_trail_position(domain_id, trail_position) <= upper_bound
-                {
-                    Some(true)
-                } else if self.get_lower_bound_at_trail_position(domain_id, trail_position)
-                    > upper_bound
-                {
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                if !self.is_value_in_domain_at_trail_position(
-                    domain_id,
-                    not_equal_constant,
-                    trail_position,
-                ) {
-                    Some(true)
-                } else if let Some(assigned_value) =
-                    self.get_assigned_value_at_trail_position(domain_id, trail_position)
-                {
-                    // Previous branch concluded the value is not in the domain, so if the variable
-                    // is assigned, then it is assigned to the not equals value.
-                    pumpkin_assert_simple!(assigned_value == not_equal_constant);
-                    Some(false)
-                } else {
-                    None
-                }
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                if !self.is_value_in_domain_at_trail_position(
-                    domain_id,
-                    equality_constant,
-                    trail_position,
-                ) {
-                    Some(false)
-                } else if let Some(assigned_value) =
-                    self.get_assigned_value_at_trail_position(domain_id, trail_position)
-                {
-                    pumpkin_assert_moderate!(assigned_value == equality_constant);
-                    Some(true)
-                } else {
-                    None
-                }
-                // self
-                // .get_assigned_value_at_trail_position(domain_id, trail_position)
-                // .map(|assigned_value| assigned_value == equality_constant),
             }
         }
     }

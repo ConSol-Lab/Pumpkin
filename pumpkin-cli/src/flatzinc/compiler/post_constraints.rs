@@ -9,7 +9,6 @@ use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
 use pumpkin_lib::variables::AffineView;
 use pumpkin_lib::variables::DomainId;
-use pumpkin_lib::variables::Literal;
 use pumpkin_lib::variables::TransformableVariable;
 
 use super::context::CompilationContext;
@@ -284,7 +283,7 @@ fn compile_set_in_reif(
 
     let variable = context.resolve_integer_variable(&exprs[0])?;
     let set = context.resolve_set_constant(&exprs[1])?;
-    let reif: Predicate = context.resolve_bool_variable(&exprs[2])?.into();
+    let reif = context.resolve_bool_variable(&exprs[2])?;
 
     let success = match set {
         Set::Interval {
@@ -295,11 +294,17 @@ fn compile_set_in_reif(
             // Decomposed to `reif -> x >= lb /\ reif -> x <= ub`
             let forward = context
                 .solver
-                .add_clause([!reif, predicate![variable >= lower_bound]])
+                .add_clause([
+                    !reif.get_true_predicate(),
+                    predicate![variable >= lower_bound],
+                ])
                 .is_ok()
                 && context
                     .solver
-                    .add_clause([!reif, !predicate![variable >= upper_bound + 1]])
+                    .add_clause([
+                        !reif.get_true_predicate(),
+                        !predicate![variable >= upper_bound + 1],
+                    ])
                     .is_ok();
 
             // `!reif -> x \notin S`
@@ -307,7 +312,7 @@ fn compile_set_in_reif(
             let backward = context
                 .solver
                 .add_clause([
-                    reif,
+                    reif.get_true_predicate(),
                     !predicate![variable >= lower_bound],
                     predicate![variable >= upper_bound + 1],
                 ])
@@ -319,11 +324,15 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| Literal::new(predicate![variable == value]))
+                .map(|&value| {
+                    context
+                        .solver
+                        .new_literal_for_predicate(predicate![variable == value])
+                })
                 .collect::<Vec<_>>();
 
             constraints::clause(clause)
-                .reify(context.solver, Literal::new(reif), None)
+                .reify(context.solver, reif, None)
                 .is_ok()
         }
     };
@@ -406,9 +415,9 @@ fn compile_bool_clause(
 
     let clause: Vec<Predicate> = clause_1
         .iter()
-        .copied()
-        .chain(clause_2.iter().map(|&literal| !literal))
-        .map(Predicate::from)
+        .cloned()
+        .chain(clause_2.iter().map(|literal| !*literal))
+        .map(|literal| literal.get_true_predicate())
         .collect();
 
     Ok(context.solver.add_clause(clause).is_ok())
@@ -442,11 +451,12 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(
-        constraints::binary_equals(a, Literal::new(predicate![b == 1]))
-            .post(context.solver, None)
-            .is_ok(),
+    Ok(constraints::binary_equals(
+        a,
+        context.solver.new_literal_for_predicate(predicate!(b == 1)),
     )
+    .post(context.solver, None)
+    .is_ok())
 }
 
 fn compile_bool_or(
@@ -469,8 +479,12 @@ fn compile_bool_xor(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a: Predicate = context.resolve_bool_variable(&exprs[0])?.into();
-    let b: Predicate = context.resolve_bool_variable(&exprs[1])?.into();
+    let a = context
+        .resolve_bool_variable(&exprs[0])?
+        .get_true_predicate();
+    let b = context
+        .resolve_bool_variable(&exprs[1])?
+        .get_true_predicate();
 
     let c1 = context.solver.add_clause([!a, !b]).is_ok();
     let c2 = context.solver.add_clause([b, a]).is_ok();

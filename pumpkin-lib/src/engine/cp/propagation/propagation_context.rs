@@ -71,13 +71,13 @@ impl<'a> PropagationContextMut<'a> {
         if let Some(reification_literal) = self.reification_literal {
             match reason {
                 Reason::Eager(mut conjunction) => {
-                    conjunction.add(reification_literal.into());
+                    conjunction.add(reification_literal.get_true_predicate());
                     Reason::Eager(conjunction)
                 }
                 Reason::Lazy(callback) => {
                     Reason::Lazy(Box::new(move |context: &PropagationContext| {
                         let mut conjunction = callback.compute(context);
-                        conjunction.add(reification_literal.into());
+                        conjunction.add(reification_literal.get_true_predicate());
                         conjunction
                     }))
                 }
@@ -135,16 +135,16 @@ pub(crate) trait ReadDomains: HasAssignments {
             .is_some_and(|truth_value| !truth_value)
     }
 
-    fn is_literal_true(&self, literal: Literal) -> bool {
-        self.is_predicate_satisfied(literal.into())
+    fn is_literal_true(&self, literal: &Literal) -> bool {
+        self.is_predicate_satisfied(literal.get_true_predicate())
     }
 
-    fn is_literal_false(&self, literal: Literal) -> bool {
-        self.is_predicate_falsified(literal.into())
+    fn is_literal_false(&self, literal: &Literal) -> bool {
+        self.is_predicate_falsified(literal.get_false_predicate())
     }
 
-    fn is_literal_fixed(&self, literal: Literal) -> bool {
-        self.is_fixed(&literal)
+    fn is_literal_fixed(&self, literal: &Literal) -> bool {
+        self.is_fixed(literal)
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -276,13 +276,13 @@ impl PropagationContextMut<'_> {
 
     pub fn assign_literal<R: Into<Reason> + Clone>(
         &mut self,
-        boolean: Literal,
+        boolean: &Literal,
         truth_value: bool,
         reason: R,
     ) -> Result<(), EmptyDomain> {
         match truth_value {
-            true => self.set_lower_bound(&boolean, 1, reason),
-            false => self.set_upper_bound(&boolean, 0, reason),
+            true => self.set_lower_bound(boolean, 1, reason),
+            false => self.set_upper_bound(boolean, 0, reason),
         }
     }
 }

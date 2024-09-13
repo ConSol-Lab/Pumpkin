@@ -392,10 +392,7 @@ mod tests {
         let y = solver.new_variable(1, 5).scaled(-1);
 
         let mut propagator = solver
-            .new_propagator(LinearNotEqualPropagator::new(
-                [x.clone(), y.clone()].into(),
-                0,
-            ))
+            .new_propagator(LinearNotEqualPropagator::new([x, y].into(), 0))
             .expect("non-empty domain");
 
         solver.propagate(&mut propagator).expect("non-empty domain");

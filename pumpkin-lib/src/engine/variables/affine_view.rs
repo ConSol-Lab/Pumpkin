@@ -17,7 +17,7 @@ use crate::math::num_ext::NumExt;
 
 /// Models the constraint `y = ax + b`, by expressing the domain of `y` as a transformation of the
 /// domain of `x`.
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
     inner: Inner,
     scale: i32,

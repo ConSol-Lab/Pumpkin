@@ -110,12 +110,12 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conjunction) = self.inconsistency.take() {
-            context.assign_literal(self.reification_literal, false, conjunction)?;
+            context.assign_literal(&self.reification_literal, false, conjunction)?;
         }
 
         self.propagate_reification(&mut context)?;
 
-        if context.is_literal_true(self.reification_literal) {
+        if context.is_literal_true(&self.reification_literal) {
             context.with_reification(self.reification_literal);
 
             let result = self.propagator.propagate(context);
@@ -136,7 +136,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     ) -> PropagationStatusCP {
         self.propagate_reification(&mut context)?;
 
-        if context.is_literal_true(self.reification_literal) {
+        if context.is_literal_true(&self.reification_literal) {
             context.with_reification(self.reification_literal);
 
             let result = self.propagator.debug_propagate_from_scratch(context);
@@ -154,7 +154,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
             ref mut conflict_nogood,
         }) = status
         {
-            conflict_nogood.add(self.reification_literal.into());
+            conflict_nogood.add(self.reification_literal.get_true_predicate());
         }
         status
     }
@@ -163,9 +163,9 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
     where
         Prop: Propagator,
     {
-        if !context.is_literal_fixed(self.reification_literal) {
+        if !context.is_literal_fixed(&self.reification_literal) {
             if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
-                context.assign_literal(self.reification_literal, false, conjunction)?;
+                context.assign_literal(&self.reification_literal, false, conjunction)?;
             }
         }
 
@@ -190,13 +190,14 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
             return EnqueueDecision::Skip;
         }
 
-        if context.is_literal_true(self.reification_literal) {
+        if context.is_literal_true(&self.reification_literal) {
             // If the propagator would have enqueued and the literal is true then the reified
             // propagator is also enqueued
             return EnqueueDecision::Enqueue;
         }
 
-        if !context.is_literal_false(self.reification_literal) && self.find_inconsistency(context) {
+        if !context.is_literal_false(&self.reification_literal) && self.find_inconsistency(context)
+        {
             // Or the literal is not false already and there the propagator has found an
             // inconsistency (i.e. we should and can propagate the reification variable)
             return EnqueueDecision::Enqueue;
@@ -213,7 +214,6 @@ mod tests {
     use crate::conjunction;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
-    use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
     use crate::variables::DomainId;
 
@@ -276,7 +276,7 @@ mod tests {
         let reason = solver.get_reason_int(predicate![var >= 3]);
         assert_eq!(
             reason,
-            &PropositionalConjunction::from(Predicate::from(reification_literal))
+            &PropositionalConjunction::from(reification_literal.get_true_predicate())
         );
     }
 
@@ -305,7 +305,7 @@ mod tests {
                 assert_eq!(
                     conflict_nogood,
                     PropositionalConjunction::from(vec![
-                        reification_literal.into(),
+                        reification_literal.get_true_predicate(),
                         predicate![var >= 1]
                     ])
                 )

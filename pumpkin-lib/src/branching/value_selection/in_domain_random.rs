@@ -37,9 +37,9 @@ impl ValueSelector<Literal> for InDomainRandom {
         decision_variable: Literal,
     ) -> Predicate {
         if context.random().generate_bool(0.5) {
-            decision_variable.into()
+            decision_variable.get_true_predicate()
         } else {
-            (!decision_variable).into()
+            (!decision_variable).get_true_predicate()
         }
     }
 

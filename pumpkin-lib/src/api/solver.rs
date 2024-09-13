@@ -87,13 +87,18 @@ pub struct Solver {
     /// The function is called whenever an optimisation function finds a solution; see
     /// [`Solver::with_solution_callback`].
     solution_callback: Box<dyn Fn(&Solution)>,
+    true_literal: Literal,
 }
 
 impl Default for Solver {
     fn default() -> Self {
+        let mut satisfaction_solver = ConstraintSatisfactionSolver::default();
+        let true_literal =
+            satisfaction_solver.create_new_literal_for_predicate(Predicate::trivially_true(), None);
         Self {
-            satisfaction_solver: Default::default(),
+            satisfaction_solver,
             solution_callback: create_empty_function(),
+            true_literal,
         }
     }
 }
@@ -114,9 +119,13 @@ impl std::fmt::Debug for Solver {
 impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
-        Solver {
-            satisfaction_solver: ConstraintSatisfactionSolver::new(solver_options),
+        let mut satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
+        let true_literal =
+            satisfaction_solver.create_new_literal_for_predicate(Predicate::trivially_true(), None);
+        Self {
+            satisfaction_solver,
             solution_callback: create_empty_function(),
+            true_literal,
         }
     }
 
@@ -195,6 +204,11 @@ impl Solver {
         self.satisfaction_solver.create_new_literal(None)
     }
 
+    pub fn new_literal_for_predicate(&mut self, predicate: Predicate) -> Literal {
+        self.satisfaction_solver
+            .create_new_literal_for_predicate(predicate, None)
+    }
+
     /// Create a fresh propositional variable with a given name and return the literal with positive
     /// polarity.
     ///
@@ -213,12 +227,12 @@ impl Solver {
 
     /// Get a literal which is always true.
     pub fn get_true_literal(&self) -> Literal {
-        Literal::new(Predicate::trivially_true())
+        self.true_literal
     }
 
     /// Get a literal which is always false.
     pub fn get_false_literal(&self) -> Literal {
-        Literal::new(Predicate::trivially_false())
+        !self.true_literal
     }
 
     /// Create a new integer variable with the given bounds.
@@ -678,7 +692,7 @@ impl Solver {
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_optimal(&mut self, bound: Literal) {
         self.satisfaction_solver
-            .conclude_proof_optimal(bound.into())
+            .conclude_proof_optimal(bound.get_true_predicate())
     }
 }
 

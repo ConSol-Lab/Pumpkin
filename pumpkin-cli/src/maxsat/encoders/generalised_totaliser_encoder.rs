@@ -65,7 +65,7 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.index_last_added_weighted_literal = i;
 
                 if solver
-                    .add_clause([(!weighted_literals[i].literal).into()])
+                    .add_clause([(!weighted_literals[i].literal).get_true_predicate()])
                     .is_err()
                 {
                     return Err(EncodingError::CannotStrengthen);
@@ -186,7 +186,6 @@ impl GeneralisedTotaliserEncoder {
                     next_layer_node.push(WeightedLiteral {
                         literal,
                         weight: *partial_sum,
-                        _bound: None,
                     });
                 }
 
@@ -197,8 +196,9 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
                     solver
                         .add_clause(vec![
-                            (!weighted_literal.literal).into(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap()).into(),
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
                         ])
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
@@ -208,8 +208,9 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
                     solver
                         .add_clause(vec![
-                            (!weighted_literal.literal).into(),
-                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap()).into(),
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
                         ])
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
@@ -223,9 +224,10 @@ impl GeneralisedTotaliserEncoder {
                         if combined_weight <= k {
                             solver
                                 .add_clause(vec![
-                                    (!wl1.literal).into(),
-                                    (!wl2.literal).into(),
-                                    (*value_to_literal_map.get(&combined_weight).unwrap()).into(),
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                    (*value_to_literal_map.get(&combined_weight).unwrap())
+                                        .get_true_predicate(),
                                 ])
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
@@ -236,7 +238,10 @@ impl GeneralisedTotaliserEncoder {
                         // makes sense      I think it is necessary
                         } else {
                             solver
-                                .add_clause(vec![(!wl1.literal).into(), (!wl2.literal).into()])
+                                .add_clause(vec![
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                ])
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         }

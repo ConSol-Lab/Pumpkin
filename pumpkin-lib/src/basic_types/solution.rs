@@ -20,7 +20,7 @@ pub trait ProblemSolution: HasAssignments {
 
     fn get_literal_value(&self, literal: Literal) -> bool {
         self.assignments()
-            .evaluate_predicate(literal.into())
+            .evaluate_predicate(literal.get_true_predicate())
             .expect("Expected to retrieve concrete truth value from solution to be assigned.")
     }
 }

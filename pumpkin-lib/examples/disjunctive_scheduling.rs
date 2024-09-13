@@ -66,7 +66,10 @@ fn main() {
                 .implied_by(&mut solver, literal, None);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_clause([literal.into(), precedence_literals[y][x].into()]);
+            let _ = solver.add_clause([
+                literal.get_true_predicate(),
+                precedence_literals[y][x].get_true_predicate(),
+            ]);
         }
     }
 

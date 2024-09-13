@@ -36,7 +36,7 @@ impl VariableSelector<Literal> for InputOrder<Literal> {
     fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Literal> {
         self.variables
             .iter()
-            .find(|&&variable| !context.is_predicate_assigned(variable.into()))
+            .find(|&variable| !context.is_predicate_assigned(variable.get_true_predicate()))
             .copied()
     }
 }

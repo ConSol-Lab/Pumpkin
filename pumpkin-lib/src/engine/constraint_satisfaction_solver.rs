@@ -448,7 +448,31 @@ impl ConstraintSatisfactionSolver {
 
     pub fn create_new_literal(&mut self, name: Option<String>) -> Literal {
         let domain_id = self.create_new_integer_variable(0, 1, name);
-        Literal::new(predicate![domain_id == 1])
+        Literal::new(domain_id)
+    }
+
+    pub fn create_new_literal_for_predicate(
+        &mut self,
+        predicate: Predicate,
+        name: Option<String>,
+    ) -> Literal {
+        let literal = self.create_new_literal(name);
+
+        // If literal --> predicate
+        let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
+
+        // If !literal --> !predicate
+        let _ = self.add_clause(vec![!literal.get_false_predicate(), !predicate]);
+
+        literal
+    }
+
+    pub fn link_literal_to_predicate(&mut self, literal: Literal, predicate: Predicate) {
+        // If literal --> predicate
+        let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
+
+        // If !literal --> !predicate
+        let _ = self.add_clause(vec![!literal.get_false_predicate(), !predicate]);
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
@@ -599,8 +623,12 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
-        let literal_is_true = self.assignments.is_predicate_satisfied(literal.into());
-        let opposite_literal_is_true = self.assignments.is_predicate_satisfied((!literal).into());
+        let literal_is_true = self
+            .assignments
+            .is_predicate_satisfied(literal.get_true_predicate());
+        let opposite_literal_is_true = self
+            .assignments
+            .is_predicate_satisfied((!literal).get_true_predicate());
 
         pumpkin_assert_moderate!(!(literal_is_true && opposite_literal_is_true));
 
