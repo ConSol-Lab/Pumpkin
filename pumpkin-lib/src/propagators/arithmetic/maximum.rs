@@ -12,7 +12,7 @@ use crate::predicate;
 
 /// Bounds-consistent propagator which enforces `max(array) = rhs`. Can be constructed through
 /// [`MaximumConstructor`].
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct MaximumPropagator<ElementVar, Rhs> {
     array: Box<[ElementVar]>,
     rhs: Rhs,

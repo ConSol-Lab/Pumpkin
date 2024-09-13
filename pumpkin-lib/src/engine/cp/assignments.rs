@@ -11,6 +11,7 @@ use crate::predicate;
 use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::variables::IntegerVariable;
 
 #[derive(Clone, Debug)]
 pub struct Assignments {
@@ -199,12 +200,11 @@ impl Assignments {
             .collect()
     }
 
-    pub(crate) fn get_assigned_value(&self, domain_id: DomainId) -> Option<i32> {
-        if self.is_domain_assigned(domain_id) {
-            Some(self.domains[domain_id].lower_bound())
-        } else {
-            None
-        }
+    pub(crate) fn get_assigned_value<Var: IntegerVariable + 'static>(
+        &self,
+        var: &Var,
+    ) -> Option<i32> {
+        self.is_domain_assigned(var).then(|| var.lower_bound(self))
     }
 
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
@@ -275,8 +275,8 @@ impl Assignments {
         self.domains[domain_id].contains_at_trail_position(value, trail_position)
     }
 
-    pub(crate) fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
-        self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
+    pub(crate) fn is_domain_assigned<Var: IntegerVariable>(&self, var: &Var) -> bool {
+        var.lower_bound(self) == var.upper_bound(self)
     }
 
     /// Returns the index of the trail entry at which point the given predicate became true.
@@ -551,7 +551,7 @@ impl Assignments {
             } => {
                 if !self.is_value_in_domain(domain_id, not_equal_constant) {
                     Some(true)
-                } else if let Some(assigned_value) = self.get_assigned_value(domain_id) {
+                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
                     // Previous branch concluded the value is not in the domain, so if the variable
                     // is assigned, then it is assigned to the not equals value.
                     pumpkin_assert_simple!(assigned_value == not_equal_constant);
@@ -566,7 +566,7 @@ impl Assignments {
             } => {
                 if !self.is_value_in_domain(domain_id, equality_constant) {
                     Some(false)
-                } else if let Some(assigned_value) = self.get_assigned_value(domain_id) {
+                } else if let Some(assigned_value) = self.get_assigned_value(&domain_id) {
                     pumpkin_assert_moderate!(assigned_value == equality_constant);
                     Some(true)
                 } else {

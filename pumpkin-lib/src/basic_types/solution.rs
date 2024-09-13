@@ -4,6 +4,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
+use crate::variables::IntegerVariable;
 
 /// A trait which specifies the common behaviours of [`Solution`] and [`SolutionReference`].
 pub trait ProblemSolution: HasAssignments {
@@ -12,9 +13,9 @@ pub trait ProblemSolution: HasAssignments {
         self.assignments().num_domains() as usize
     }
 
-    fn get_integer_value(&self, domain: DomainId) -> i32 {
+    fn get_integer_value<Var: IntegerVariable + 'static>(&self, var: Var) -> i32 {
         self.assignments()
-            .get_assigned_value(domain)
+            .get_assigned_value(&var)
             .expect("Expected retrieved integer variable from solution to be assigned")
     }
 
@@ -40,7 +41,7 @@ impl<'a> SolutionReference<'a> {
 impl ProblemSolution for SolutionReference<'_> {}
 
 /// A solution which takes ownership of its inner structures.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Solution {
     assignments: Assignments,
 }

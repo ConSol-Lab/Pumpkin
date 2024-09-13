@@ -16,7 +16,7 @@ use crate::pumpkin_assert_simple;
 /// The propagator assumes that the `denominator` is a (non-zero) number.
 ///
 /// The implementation is ported from [OR-tools](https://github.com/google/or-tools/blob/870edf6f7bff6b8ff0d267d936be7e331c5b8c2d/ortools/sat/integer_expr.cc#L1209C1-L1209C19).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct DivisionPropagator<VA, VB, VC> {
     numerator: VA,
     denominator: VB,

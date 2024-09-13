@@ -82,7 +82,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
                         == self
                             .solver
                             .assignments
-                            .get_assigned_value(variable)
+                            .get_assigned_value(&variable)
                             .expect("Expected every variable to be assigned in a solution")
                 )
             })

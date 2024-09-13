@@ -12,7 +12,7 @@ use crate::pumpkin_assert_simple;
 /// A propagator for maintaining the constraint `a * b = c`. The propagator
 /// (currently) only propagates the signs of the variables, the case where a, b, c >= 0, and detects
 /// a conflict if the variables are fixed.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct IntegerMultiplicationPropagator<VA, VB, VC> {
     a: VA,
     b: VB,

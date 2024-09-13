@@ -262,7 +262,7 @@ impl PropagationContextMut<'_> {
                 if self
                     .assignments
                     .is_value_in_domain(domain_id, equality_constant)
-                    && !self.assignments.is_domain_assigned(domain_id)
+                    && !self.assignments.is_domain_assigned(&domain_id)
                 {
                     let reason = self.reason_store.push(self.propagator_id, reason.into());
                     self.assignments
