@@ -129,7 +129,7 @@ where
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms.clone(), self.rhs).post(solver, tag)
+        LinearNotEqualPropagator::new(self.terms, self.rhs).post(solver, tag)
     }
 
     fn implied_by(
@@ -138,7 +138,7 @@ where
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        LinearNotEqualPropagator::new(self.terms.clone(), self.rhs).implied_by(
+        LinearNotEqualPropagator::new(self.terms, self.rhs).implied_by(
             solver,
             reification_literal,
             tag,
