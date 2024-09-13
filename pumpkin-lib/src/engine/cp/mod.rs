@@ -10,13 +10,13 @@ mod variable_literal_mappings;
 mod watch_list_cp;
 mod watch_list_propositional;
 
-pub(crate) use assignments_integer::AssignmentsInteger;
-pub(crate) use assignments_integer::EmptyDomain;
+pub use assignments_integer::AssignmentsInteger;
+pub use assignments_integer::EmptyDomain;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use variable_literal_mappings::VariableLiteralMappings;
-pub(crate) use watch_list_cp::IntDomainEvent;
+pub use watch_list_cp::IntDomainEvent;
 pub(crate) use watch_list_cp::WatchListCP;
-pub(crate) use watch_list_cp::Watchers;
+pub use watch_list_cp::Watchers;
 pub(crate) use watch_list_propositional::*;
 
 #[cfg(test)]

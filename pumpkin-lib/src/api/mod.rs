@@ -56,6 +56,19 @@ pub mod variables {
     use crate::Solver;
 }
 
+pub mod assignments {
+    pub use crate::engine::cp::opaque_domain_event::OpaqueDomainEvent;
+    pub use crate::engine::cp::reason::ReasonRef;
+    pub use crate::engine::cp::AssignmentsInteger;
+    pub use crate::engine::cp::EmptyDomain;
+    pub use crate::engine::cp::IntDomainEvent;
+    pub use crate::engine::cp::Watchers;
+}
+
+pub mod containers {
+    pub use enumset::EnumSet;
+}
+
 pub mod options {
     //! Contains the options which can be passed to the [`Solver`].
     //!
