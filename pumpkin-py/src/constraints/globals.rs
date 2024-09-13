@@ -8,7 +8,7 @@ macro_rules! python_constraint {
     ($name:ident : $constraint_func:ident { $($field:ident : $type:ty),+ $(,)? }) => {
         #[pyclass]
         #[derive(Clone)]
-        pub struct $name {
+        pub(crate) struct $name {
             $($field: $type),+
         }
 
