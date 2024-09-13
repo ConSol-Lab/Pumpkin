@@ -62,7 +62,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -79,7 +79,7 @@ where
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -98,10 +98,6 @@ where
         less_than_or_equals(negated, -self.rhs).implied_by(solver, reification_literal, tag)?;
 
         Ok(())
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 
@@ -129,7 +125,7 @@ where
     Var: IntegerVariable + Clone + 'static,
 {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -137,7 +133,7 @@ where
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -147,10 +143,6 @@ where
             reification_literal,
             tag,
         )
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 

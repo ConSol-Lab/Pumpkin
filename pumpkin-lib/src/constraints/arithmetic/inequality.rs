@@ -47,7 +47,7 @@ struct Inequality<Var> {
 
 impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -55,7 +55,7 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: crate::variables::Literal,
         tag: Option<NonZero<u32>>,
@@ -65,10 +65,6 @@ impl<Var: IntegerVariable + 'static> Constraint for Inequality<Var> {
             reification_literal,
             tag,
         )
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 

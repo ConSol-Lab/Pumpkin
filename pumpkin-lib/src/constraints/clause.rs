@@ -24,7 +24,7 @@ struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -34,7 +34,7 @@ impl Constraint for Clause {
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -47,10 +47,6 @@ impl Constraint for Clause {
                 .copied()
                 .chain(std::iter::once(!reification_literal)),
         )
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 
@@ -66,7 +62,7 @@ struct Conjunction(Vec<Literal>);
 
 impl Constraint for Conjunction {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -79,7 +75,7 @@ impl Constraint for Conjunction {
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -90,10 +86,6 @@ impl Constraint for Conjunction {
             .iter()
             .copied()
             .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 

@@ -45,7 +45,7 @@ struct BooleanLessThanOrEqual {
 
 impl Constraint for BooleanLessThanOrEqual {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -55,7 +55,7 @@ impl Constraint for BooleanLessThanOrEqual {
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -63,10 +63,6 @@ impl Constraint for BooleanLessThanOrEqual {
         let domains = self.create_domains(solver);
 
         less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal, tag)
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 
@@ -103,7 +99,7 @@ struct BooleanEqual {
 
 impl Constraint for BooleanEqual {
     fn post(
-        &self,
+        self,
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
@@ -113,7 +109,7 @@ impl Constraint for BooleanEqual {
     }
 
     fn implied_by(
-        &self,
+        self,
         solver: &mut Solver,
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
@@ -121,10 +117,6 @@ impl Constraint for BooleanEqual {
         let domains = self.create_domains(solver);
 
         equals(domains, 0).implied_by(solver, reification_literal, tag)
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Constraint> {
-        todo!()
     }
 }
 
