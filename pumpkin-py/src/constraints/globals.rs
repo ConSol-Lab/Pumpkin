@@ -44,8 +44,43 @@ macro_rules! python_constraint {
 }
 
 python_constraint! {
+    Absolute: absolute {
+        signed: Variable,
+        absolute: Variable,
+    }
+}
+
+python_constraint! {
     AllDifferent: all_different {
         variables: Vec<Variable>,
+    }
+}
+
+python_constraint! {
+    BinaryEquals: binary_equals {
+        lhs: Variable,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    BinaryLessThan: binary_less_than {
+        lhs: Variable,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    BinaryLessThanEqual: binary_less_than_or_equals {
+        lhs: Variable,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    BinaryNotEquals: binary_not_equals {
+        lhs: Variable,
+        rhs: Variable,
     }
 }
 
@@ -55,5 +90,72 @@ python_constraint! {
         durations: Vec<i32>,
         resource_requirements: Vec<i32>,
         resource_capacity: i32,
+    }
+}
+
+python_constraint! {
+    Division: division {
+        numerator: Variable,
+        denominator: Variable,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    Element: element {
+        index: Variable,
+        array: Vec<Variable>,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    Equals: equals {
+        terms: Vec<Variable>,
+        rhs: i32,
+    }
+}
+
+python_constraint! {
+    LessThanOrEquals: less_than_or_equals {
+        terms: Vec<Variable>,
+        rhs: i32,
+    }
+}
+
+python_constraint! {
+    Maximum: maximum {
+        choices: Vec<Variable>,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    Minimum: minimum {
+        choices: Vec<Variable>,
+        rhs: Variable,
+    }
+}
+
+python_constraint! {
+    NotEquals: not_equals {
+        terms: Vec<Variable>,
+        rhs: i32,
+    }
+}
+
+python_constraint! {
+    Plus: plus {
+        a: Variable,
+        b: Variable,
+        c: Variable,
+    }
+}
+
+python_constraint! {
+    Times: times {
+        a: Variable,
+        b: Variable,
+        c: Variable,
     }
 }

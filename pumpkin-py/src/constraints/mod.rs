@@ -3,7 +3,7 @@ mod globals;
 use globals::*;
 use pyo3::prelude::*;
 
-macro_rules! declare_constraint_enum {
+macro_rules! declare_constraints {
     ($name:ident { $($constraint:ident),+ $(,)? }) => {
         #[derive(Clone, FromPyObject)]
         pub enum $name {
@@ -32,17 +32,30 @@ macro_rules! declare_constraint_enum {
                 }
             }
         }
+
+        pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+            $(m.add_class::<$constraint>()?;)+
+            Ok(())
+        }
     };
 }
 
-declare_constraint_enum! {
+declare_constraints! {
     Constraint {
+        Absolute,
         AllDifferent,
+        BinaryEquals,
+        BinaryLessThanEqual,
+        BinaryNotEquals,
         Cumulative,
+        Division,
+        Element,
+        Equals,
+        LessThanOrEquals,
+        Maximum,
+        Minimum,
+        NotEquals,
+        Plus,
+        Times,
     }
-}
-
-pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<AllDifferent>()?;
-    Ok(())
 }
