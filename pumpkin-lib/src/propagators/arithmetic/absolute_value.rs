@@ -12,7 +12,7 @@ use crate::engine::variables::IntegerVariable;
 ///
 /// The propagator is bounds consistent wrt signed. That means that if `signed \in {-2, -1, 1, 2}`,
 /// the propagator will not propagate `[absolute >= 1]`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct AbsoluteValuePropagator<VA, VB> {
     signed: VA,
     absolute: VB,
