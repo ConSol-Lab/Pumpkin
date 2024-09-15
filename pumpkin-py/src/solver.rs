@@ -24,7 +24,7 @@ impl Solver {
     #[pyo3(signature = (proof=None))]
     fn new(proof: Option<PathBuf>) -> Self {
         let proof_log = proof
-            .map(|path| ProofLog::cp(&path, Format::Text, true))
+            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
             .transpose()
             .map(|proof| proof.unwrap_or_default())
             .expect("failed to create proof file");

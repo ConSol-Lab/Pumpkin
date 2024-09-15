@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::num::NonZero;
 use std::time::Instant;
 
-use log::warn;
+use drcp_format::steps::StepId;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -27,7 +27,9 @@ use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::ConstraintReference;
+use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -194,6 +196,9 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     variable_names: VariableNames,
+    /// A map from clause references to nogood step ids in the proof.
+    nogood_step_ids: KeyedVec<ClauseReference, Option<StepId>>,
+    unit_nogood_step_ids: HashMap<Literal, StepId>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -395,6 +400,188 @@ impl ConstraintSatisfactionSolver {
         proof.optimal(bound, &self.variable_names, &self.variable_literal_mappings)
     }
 
+    fn complete_proof(&mut self) {
+        pumpkin_assert_simple!(self.is_conflicting());
+
+        let mut unexplained = vec![];
+
+        println!("completing proof {:?}", self.state.get_conflict_info());
+        match self.state.get_conflict_info() {
+            StoredConflictInfo::VirtualBinaryClause { .. } => panic!("should be unused"),
+            StoredConflictInfo::Propagation { reference, literal } => {
+                unexplained.push(!*literal);
+
+                // If the literal is propagated by a clause, we add the propagation to the hint.
+                if reference.is_clause() {
+                    let clause_reference = reference.as_clause_reference();
+                    let nogood_step_id =
+                        self.nogood_step_ids[clause_reference].expect("clause is a logged nogood");
+
+                    self.internal_parameters
+                        .proof_log
+                        .add_propagation(nogood_step_id);
+
+                    // All literals in the clause are false, so we want the explanation for why
+                    // that is the case.
+                    let iter = self.clause_allocator[clause_reference]
+                        .get_literal_slice()
+                        .iter()
+                        .map(|&lit| !lit);
+                    unexplained.extend(iter);
+                } else {
+                    let cp_reason = reference.get_reason_ref();
+                    let constraint_tag = self
+                        .cp_propagators
+                        .get_tag(self.reason_store.get_propagator(cp_reason));
+
+                    let reason = self
+                        .reason_store
+                        .get_or_compute(
+                            cp_reason,
+                            &PropagationContext::new(
+                                &self.assignments_integer,
+                                &self.assignments_propositional,
+                            ),
+                        )
+                        .expect("reason should exist");
+
+                    let literals = reason
+                        .iter()
+                        .map(|&predicate| match predicate {
+                            Predicate::IntegerPredicate(int_predicate) => {
+                                self.variable_literal_mappings.get_literal(
+                                    int_predicate,
+                                    &self.assignments_propositional,
+                                    &self.assignments_integer,
+                                )
+                            }
+                            Predicate::Literal(literal) => literal,
+                            Predicate::False => {
+                                panic!("inference premise contained false predicate")
+                            }
+                            Predicate::True => self.true_literal,
+                        })
+                        .collect::<Vec<_>>();
+
+                    let _ = self.internal_parameters.proof_log.log_inference(
+                        constraint_tag,
+                        literals.iter().copied(),
+                        *literal,
+                    );
+
+                    unexplained.extend(literals);
+                }
+            }
+
+            StoredConflictInfo::Explanation {
+                conjunction,
+                propagator,
+            } => {
+                let constraint_tag = self.cp_propagators.get_tag(*propagator);
+
+                let literals = conjunction
+                    .iter()
+                    .map(|&predicate| match predicate {
+                        Predicate::IntegerPredicate(int_predicate) => {
+                            self.variable_literal_mappings.get_literal(
+                                int_predicate,
+                                &self.assignments_propositional,
+                                &self.assignments_integer,
+                            )
+                        }
+                        Predicate::Literal(literal) => literal,
+                        Predicate::False => panic!("inference premise contained false predicate"),
+                        Predicate::True => self.true_literal,
+                    })
+                    .collect::<Vec<_>>();
+
+                let _ = self.internal_parameters.proof_log.log_inference(
+                    constraint_tag,
+                    literals.iter().copied(),
+                    self.false_literal,
+                );
+
+                unexplained.extend(literals);
+            }
+        }
+
+        dbg!(&unexplained);
+        while let Some(literal) = unexplained.pop() {
+            println!("explaining {literal}");
+            let reference = self
+                .assignments_propositional
+                .get_literal_reason_constraint(literal);
+
+            if reference.is_null() {
+                println!("  is assignment");
+                // If the literal has no reason, then it is an assignment. This means it is either
+                // a root bound, or a learned unit clause.
+                let Some(nogood_step_id) = self.unit_nogood_step_ids.get(&literal) else {
+                    continue;
+                };
+
+                self.internal_parameters
+                    .proof_log
+                    .add_propagation(*nogood_step_id);
+            } else if reference.is_clause() {
+                println!("  is clause");
+                // If the literal is propagated by a clause, we add the propagation to the hint.
+                let clause_reference = reference.as_clause_reference();
+                dbg!(&self.clause_allocator[clause_reference]);
+                let Some(Some(nogood_step_id)) = self.nogood_step_ids.get(clause_reference) else {
+                    continue;
+                };
+
+                self.internal_parameters
+                    .proof_log
+                    .add_propagation(*nogood_step_id);
+            } else {
+                println!("  is propagator");
+                let cp_reason = reference.get_reason_ref();
+                let constraint_tag = self
+                    .cp_propagators
+                    .get_tag(self.reason_store.get_propagator(cp_reason));
+
+                let reason = self
+                    .reason_store
+                    .get_or_compute(
+                        cp_reason,
+                        &PropagationContext::new(
+                            &self.assignments_integer,
+                            &self.assignments_propositional,
+                        ),
+                    )
+                    .expect("reason should exist");
+
+                let literals = reason
+                    .iter()
+                    .map(|&predicate| match predicate {
+                        Predicate::IntegerPredicate(int_predicate) => {
+                            self.variable_literal_mappings.get_literal(
+                                int_predicate,
+                                &self.assignments_propositional,
+                                &self.assignments_integer,
+                            )
+                        }
+                        Predicate::Literal(literal) => literal,
+                        Predicate::False => panic!("inference premise contained false predicate"),
+                        Predicate::True => self.true_literal,
+                    })
+                    .collect::<Vec<_>>();
+
+                let _ = self.internal_parameters.proof_log.log_inference(
+                    constraint_tag,
+                    literals.iter().copied(),
+                    literal,
+                );
+
+                unexplained.extend(literals);
+            }
+        }
+
+        let _ = self.internal_parameters.proof_log.log_learned_clause([]);
+    }
+
     // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
     // pumpkin_assert_simple!(
     // assignments_integer.num_domains() as usize
@@ -448,6 +635,8 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             analysis_result: ConflictAnalysisResult::default(),
             variable_names: VariableNames::default(),
+            nogood_step_ids: KeyedVec::default(),
+            unit_nogood_step_ids: HashMap::default(),
         };
 
         // we introduce a dummy variable set to true at the root level
@@ -687,6 +876,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
 
         let core = self
@@ -721,6 +911,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
 
         self.conflict_analyser
@@ -989,7 +1180,9 @@ impl ConstraintSatisfactionSolver {
             // conflict
             else {
                 if self.assignments_propositional.is_at_the_root_level() {
+                    self.complete_proof();
                     self.state.declare_infeasible();
+
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
@@ -1117,22 +1310,18 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
         self.conflict_analyser
             .compute_1uip(&mut conflict_analysis_context)
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
-        if let Err(write_error) = self
+        let proof_step_id = self
             .internal_parameters
             .proof_log
             .log_learned_clause(self.analysis_result.learned_literals.iter().copied())
-        {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
+            .expect("Failed to write proof log");
 
         // unit clauses are treated in a special way: they are added as root level decisions
         if self.analysis_result.learned_literals.len() == 1 {
@@ -1144,6 +1333,8 @@ impl ConstraintSatisfactionSolver {
             self.backtrack(0, brancher);
 
             let unit_clause = self.analysis_result.learned_literals[0];
+            println!("learned unit clause {unit_clause} with step id {proof_step_id}");
+            let _ = self.unit_nogood_step_ids.insert(unit_clause, proof_step_id);
 
             self.assignments_propositional
                 .enqueue_decision_literal(unit_clause);
@@ -1164,12 +1355,15 @@ impl ConstraintSatisfactionSolver {
                 .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
             self.backtrack(self.analysis_result.backjump_level, brancher);
 
-            self.learned_clause_manager.add_learned_clause(
+            let clause_reference = self.learned_clause_manager.add_learned_clause(
                 self.analysis_result.learned_literals.clone(), // todo not ideal with clone
                 &mut self.clausal_propagator,
                 &mut self.assignments_propositional,
                 &mut self.clause_allocator,
             );
+
+            self.nogood_step_ids.accomodate(clause_reference, None);
+            self.nogood_step_ids[clause_reference] = Some(proof_step_id);
 
             let lbd = self.learned_clause_manager.compute_lbd_for_literals(
                 &self.analysis_result.learned_literals,
@@ -1496,6 +1690,7 @@ impl ConstraintSatisfactionSolver {
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
         if initialisation_status.is_err() {
+            self.complete_proof();
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
@@ -1507,6 +1702,7 @@ impl ConstraintSatisfactionSolver {
             if self.state.no_conflict() {
                 Ok(())
             } else {
+                self.complete_proof();
                 Err(ConstraintOperationError::InfeasiblePropagator)
             }
         }

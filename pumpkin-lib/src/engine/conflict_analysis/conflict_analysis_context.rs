@@ -1,7 +1,11 @@
+use drcp_format::steps::StepId;
+
 use super::AnalysisStep;
 use crate::basic_types::ClauseReference;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
+use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
@@ -32,6 +36,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) internal_parameters: &'a mut SatisfactionSolverOptions,
     pub(crate) propagator_store: &'a PropagatorStore,
     pub(crate) assumptions: &'a Vec<Literal>,
+    pub(crate) nogood_step_ids: &'a KeyedVec<ClauseReference, Option<StepId>>,
 
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) brancher: &'a mut dyn Brancher,
@@ -122,6 +127,14 @@ impl<'a> ConflictAnalysisContext<'a> {
             StoredConflictInfo::Propagation { literal, reference } => {
                 if reference.is_clause() {
                     let clause_ref = reference.as_clause_reference();
+
+                    if self.clause_allocator[clause_ref].is_learned() {
+                        self.internal_parameters.proof_log.add_propagation(
+                            self.nogood_step_ids[clause_ref]
+                                .expect("must be a previously logged proof step"),
+                        );
+                    }
+
                     on_analysis_step(AnalysisStep::AllocatedClause(clause_ref));
                     clause_ref
                 } else {
@@ -156,6 +169,12 @@ impl<'a> ConflictAnalysisContext<'a> {
                             .unwrap(),
                     })
                     .collect();
+
+                let _ = self.internal_parameters.proof_log.log_inference(
+                    self.propagator_store.get_tag(*propagator),
+                    explanation_literals.iter().copied(),
+                    self.assignments_propositional.false_literal,
+                );
 
                 on_analysis_step(AnalysisStep::Propagation {
                     propagator: *propagator,

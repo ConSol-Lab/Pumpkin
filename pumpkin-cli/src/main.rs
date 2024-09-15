@@ -5,6 +5,7 @@ mod parsers;
 mod result;
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use clap::ValueEnum;
 use file_format::FileFormat;
 use log::error;
 use log::info;
@@ -70,11 +72,11 @@ struct Args {
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 
-    /// Log a full proof instead of just the scaffold.
+    /// What type of proof to log.
     ///
-    /// If no `proof_path` is provided, then this option is ignored.
-    #[arg(long, verbatim_doc_comment)]
-    full_proof: bool,
+    /// If the `proof_path` option is not provided, this is ignored.
+    #[arg(long, default_value_t = ProofType::Scaffold)]
+    proof_type: ProofType,
 
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced in "Improving
@@ -468,7 +470,12 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text, args.full_proof)?,
+            FileFormat::FlatZinc => {
+                let log_inferences =
+                    matches!(args.proof_type, ProofType::Full | ProofType::WithHints);
+                let log_hints = matches!(args.proof_type, ProofType::WithHints);
+                ProofLog::cp(&path_buf, Format::Text, log_inferences, log_hints)?
+            }
         }
     } else {
         ProofLog::default()
@@ -628,5 +635,25 @@ fn cumulative_explanation_type_parser(s: &str) -> Result<CumulativeExplanationTy
         value => Err(format!(
             "'{value}' is not a valid cumulative explanation type. Possible values: ['naive', 'big-step', 'pointwise']"
         )),
+    }
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ProofType {
+    /// Log only the proof scaffold.
+    Scaffold,
+    /// Log the full proof without hints.
+    Full,
+    /// Log the full proof with hints.
+    WithHints,
+}
+
+impl Display for ProofType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProofType::Scaffold => write!(f, "scaffold"),
+            ProofType::Full => write!(f, "full"),
+            ProofType::WithHints => write!(f, "with-hints"),
+        }
     }
 }
