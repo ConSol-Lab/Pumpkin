@@ -10,7 +10,7 @@ use crate::steps::Conclusion;
 use crate::steps::Deletion;
 use crate::steps::Inference;
 use crate::steps::Nogood;
-use crate::steps::NogoodId;
+use crate::steps::StepId;
 
 /// Abstraction for writing DRCP proofs.
 ///
@@ -47,8 +47,8 @@ pub struct ProofWriter<W: Write, Literals> {
     /// A container for all the literals which are seen in the proof. Unseen literals need not be
     /// defined in the literal definition file.
     encountered_literals: Literals,
-    /// The id for the next nogood which is logged.
-    next_nogood_id: NogoodId,
+    /// The id for the next step which is logged.
+    next_step_id: StepId,
 }
 
 impl<W: Write, Literals> ProofWriter<W, Literals> {
@@ -59,7 +59,7 @@ impl<W: Write, Literals> ProofWriter<W, Literals> {
             format,
             writer: BufWriter::new(writer),
             encountered_literals,
-            next_nogood_id: NonZeroU64::new(1).unwrap(),
+            next_step_id: NonZeroU64::new(1).unwrap(),
         }
     }
 }
@@ -80,9 +80,8 @@ where
     pub fn log_nogood_clause(
         &mut self,
         nogood: impl IntoIterator<Item = Literals::Literal>,
-    ) -> std::io::Result<NogoodId> {
-        let id = self.next_nogood_id;
-        self.next_nogood_id = self.next_nogood_id.checked_add(1).unwrap();
+    ) -> std::io::Result<StepId> {
+        let id = self.next_step_id();
 
         let nogood = Nogood::new(
             id,
@@ -96,10 +95,16 @@ where
         Ok(id)
     }
 
+    fn next_step_id(&mut self) -> NonZero<u64> {
+        let id = self.next_step_id;
+        self.next_step_id = self.next_step_id.checked_add(1).unwrap();
+        id
+    }
+
     /// Log that the nogood with the given ID can be deleted.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_deletion(&mut self, nogood_id: NogoodId) -> std::io::Result<()> {
+    pub fn log_deletion(&mut self, nogood_id: StepId) -> std::io::Result<()> {
         Deletion::new(nogood_id).write(self.format, &mut self.writer)
     }
 
@@ -116,10 +121,12 @@ where
         hint_label: Option<&str>,
         premises: impl IntoIterator<Item = Literals::Literal>,
         propagated: Literals::Literal,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<StepId> {
         let propagated = self.encountered_literals.to_code(propagated);
+        let id = self.next_step_id();
 
         let inference = Inference {
+            id,
             hint_constraint_id,
             hint_label,
             premises: premises
@@ -128,7 +135,9 @@ where
             propagated,
         };
 
-        inference.write(self.format, &mut self.writer)
+        inference.write(self.format, &mut self.writer)?;
+
+        Ok(id)
     }
 
     /// Conclude with the unsatisfiable claim.
@@ -253,10 +262,15 @@ impl WritableProofStep for Deletion {
 mod tests {
     use super::*;
 
+    // Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
+    // context.
+    const TEST_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+
     #[test]
     fn write_basic_inference() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: None,
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
@@ -270,6 +284,7 @@ mod tests {
     fn write_inference_with_label() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: None,
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],
@@ -283,6 +298,7 @@ mod tests {
     fn write_inference_with_constraint_id() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
@@ -296,6 +312,7 @@ mod tests {
     fn write_inference_with_constraint_id_and_label() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],

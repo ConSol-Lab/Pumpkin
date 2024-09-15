@@ -29,6 +29,11 @@ pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
 }
 
+/// A dummy proof step ID. Used when there is proof logging is not enabled.
+// Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
+// context.
+const DUMMY_STEP_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+
 impl ProofLog {
     /// Create a CP proof logger.
     pub fn cp(file_path: &Path, format: Format, log_inferences: bool) -> std::io::Result<ProofLog> {
@@ -60,18 +65,18 @@ impl ProofLog {
         constraint_tag: Option<NonZero<u32>>,
         premises: impl IntoIterator<Item = Literal>,
         propagated: Literal,
-    ) -> std::io::Result<()> {
-        if let Some(ProofImpl::CpProof {
+    ) -> std::io::Result<NonZeroU64> {
+        let Some(ProofImpl::CpProof {
             writer,
             log_inferences: true,
             ..
         }) = self.internal_proof.as_mut()
-        {
-            // TODO: Log the inference label.
-            writer.log_inference(constraint_tag, None, premises, propagated)?;
-        }
+        else {
+            return Ok(DUMMY_STEP_ID);
+        };
 
-        Ok(())
+        // TODO: Log the inference label.
+        writer.log_inference(constraint_tag, None, premises, propagated)
     }
 
     /// Log a learned clause to the proof.
@@ -79,16 +84,12 @@ impl ProofLog {
         &mut self,
         literals: impl IntoIterator<Item = Literal>,
     ) -> std::io::Result<NonZeroU64> {
-        // Used as a proof clause ID when no proof log is used. This should ideally be a `const`,
-        // but `Option::<T>::unwrap()` is not yet stable in const context.
-        let default_clause_id: NonZeroU64 = NonZeroU64::new(1).unwrap();
-
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof { writer, .. }) => writer.log_nogood_clause(literals),
 
             Some(ProofImpl::DimacsProof(writer)) => writer.learned_clause(literals),
 
-            None => Ok(default_clause_id),
+            None => Ok(DUMMY_STEP_ID),
         }
     }
 
