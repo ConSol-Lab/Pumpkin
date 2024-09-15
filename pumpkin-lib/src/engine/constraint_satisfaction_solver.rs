@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::num::NonZero;
 use std::time::Instant;
 
-use log::warn;
+use drcp_format::steps::StepId;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -28,6 +28,7 @@ use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::KeyedVec;
 use crate::basic_types::PropagationStatusOneStepCP;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -194,6 +195,8 @@ pub struct ConstraintSatisfactionSolver {
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
     variable_names: VariableNames,
+    /// A map from clause references to nogood step ids in the proof.
+    nogood_step_ids: KeyedVec<ClauseReference, Option<StepId>>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -448,6 +451,7 @@ impl ConstraintSatisfactionSolver {
             internal_parameters: solver_options,
             analysis_result: ConflictAnalysisResult::default(),
             variable_names: VariableNames::default(),
+            nogood_step_ids: KeyedVec::default(),
         };
 
         // we introduce a dummy variable set to true at the root level
@@ -687,6 +691,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
 
         let core = self
@@ -721,6 +726,7 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
 
         self.conflict_analyser
@@ -1117,22 +1123,18 @@ impl ConstraintSatisfactionSolver {
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
+            nogood_step_ids: &self.nogood_step_ids,
         };
         self.conflict_analyser
             .compute_1uip(&mut conflict_analysis_context)
     }
 
     fn process_learned_clause(&mut self, brancher: &mut impl Brancher) {
-        if let Err(write_error) = self
+        let proof_step_id = self
             .internal_parameters
             .proof_log
             .log_learned_clause(self.analysis_result.learned_literals.iter().copied())
-        {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
+            .expect("Failed to write proof log");
 
         // unit clauses are treated in a special way: they are added as root level decisions
         if self.analysis_result.learned_literals.len() == 1 {
@@ -1164,12 +1166,15 @@ impl ConstraintSatisfactionSolver {
                 .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
             self.backtrack(self.analysis_result.backjump_level, brancher);
 
-            self.learned_clause_manager.add_learned_clause(
+            let clause_reference = self.learned_clause_manager.add_learned_clause(
                 self.analysis_result.learned_literals.clone(), // todo not ideal with clone
                 &mut self.clausal_propagator,
                 &mut self.assignments_propositional,
                 &mut self.clause_allocator,
             );
+
+            self.nogood_step_ids.accomodate(clause_reference, None);
+            self.nogood_step_ids[clause_reference] = Some(proof_step_id);
 
             let lbd = self.learned_clause_manager.compute_lbd_for_literals(
                 &self.analysis_result.learned_literals,
