@@ -69,8 +69,13 @@ where
     W: Write,
     Literals: LiteralCodeProvider,
 {
-    /// Write a nogood step. A new nogood ID will be generated, which can be given to
-    /// [`Self::log_deletion`] to indicate the nogood is deleted.
+    /// Write a nogood step.
+    ///
+    /// This step can be referenced by the [`StepId`] that is returned. Such a reference may occur
+    /// when the nogood is deleted, or used in the derivation of another nogood as a hint.
+    ///
+    /// The `propagation_hints` can be optionally given to indicate the order in which the given
+    /// steps can be applied to derive the conflict under reverse propagation.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
     ///
@@ -80,15 +85,17 @@ where
     pub fn log_nogood_clause(
         &mut self,
         nogood: impl IntoIterator<Item = Literals::Literal>,
+        propagation_hints: Option<&[StepId]>,
     ) -> std::io::Result<StepId> {
         let id = self.next_step_id();
 
-        let nogood = Nogood::new(
+        let nogood = Nogood {
             id,
-            nogood
+            literals: nogood
                 .into_iter()
                 .map(|pred| self.encountered_literals.to_code(pred)),
-        );
+            hints: propagation_hints,
+        };
 
         nogood.write(self.format, &mut self.writer)?;
 
@@ -183,7 +190,7 @@ trait WritableProofStep: Sized {
     }
 }
 
-impl<Literals> WritableProofStep for Nogood<Literals>
+impl<'a, Literals> WritableProofStep for Nogood<'a, Literals>
 where
     Literals: IntoIterator<Item = NonZeroI32>,
 {
@@ -192,6 +199,14 @@ where
 
         for literal in self.literals {
             write!(sink, " {literal}")?;
+        }
+
+        if let Some(hints) = self.hints {
+            write!(sink, " 0")?;
+
+            for hint in hints {
+                write!(sink, " {hint}")?;
+            }
         }
 
         writeln!(sink)?;
@@ -222,7 +237,7 @@ where
     Premises: IntoIterator<Item = NonZeroI32>,
 {
     fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        write!(sink, "i")?;
+        write!(sink, "i {}", self.id)?;
 
         for literal in self.premises {
             write!(sink, " {literal}")?;

@@ -5,15 +5,10 @@ use std::num::NonZeroU64;
 pub type StepId = NonZeroU64;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Nogood<Literals> {
+pub struct Nogood<'a, Literals> {
     pub id: StepId,
     pub literals: Literals,
-}
-
-impl<Literals> Nogood<Literals> {
-    pub fn new(id: StepId, literals: Literals) -> Self {
-        Nogood { id, literals }
-    }
+    pub hints: Option<&'a [StepId]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +46,7 @@ pub struct Inference<'label, Premises, Propagated> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Step<'a, Literals, Literal> {
     Inference(Inference<'a, Literals, Literal>),
-    Nogood(Nogood<Literals>),
+    Nogood(Nogood<'a, Literals>),
     Delete(Deletion),
     Conclusion(Conclusion<Literal>),
 }
