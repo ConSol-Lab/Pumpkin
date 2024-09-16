@@ -34,6 +34,16 @@ pub struct ConflictAnalysisNogoodContext<'a> {
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
+    pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
+        self.assignments.decisions.last().copied()
+    }
+
+    pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
+        self.assignments
+            .post_predicate(predicate, None)
+            .expect("Expected enqueued predicate to not lead to conflict directly")
+    }
+
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         pumpkin_assert_simple!(backtrack_level < self.assignments.get_decision_level());
 

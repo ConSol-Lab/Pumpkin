@@ -20,6 +20,7 @@ pub struct Assignments {
 
     /// The number of values that have been pruned from the domain.
     pruned_values: u64,
+    pub(crate) decisions: Vec<Predicate>,
 }
 
 impl Default for Assignments {
@@ -30,6 +31,7 @@ impl Default for Assignments {
             events: Default::default(),
             backtrack_events: Default::default(),
             pruned_values: 0,
+            decisions: vec![],
         };
 
         // As a convention, we allocate a dummy domain_id=0, which represents a 0-1 variable that is
@@ -144,6 +146,7 @@ impl Assignments {
 
         Assignments {
             trail: Default::default(),
+            decisions: Default::default(),
             domains,
             events: event_sink,
             backtrack_events: EventSink::default(),
@@ -477,6 +480,11 @@ impl Assignments {
         domain.verify_consistency()
     }
 
+    pub(crate) fn post_decision(&mut self, predicate: Predicate) -> Result<(), EmptyDomain> {
+        self.decisions.push(predicate);
+        self.post_predicate(predicate, None)
+    }
+
     /// Apply the given [`Predicate`] to the integer domains.
     ///
     /// In case where the [`Predicate`] is already true, this does nothing. If instead
@@ -594,6 +602,10 @@ impl Assignments {
     ) -> Vec<(DomainId, i32)> {
         let mut unfixed_variables = Vec::new();
         let num_trail_entries_before_synchronisation = self.num_trail_entries();
+
+        pumpkin_assert_simple!(new_decision_level <= self.decisions.len());
+        self.decisions.truncate(new_decision_level);
+        pumpkin_assert_simple!(self.decisions.len() == new_decision_level);
 
         self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
             pumpkin_assert_moderate!(

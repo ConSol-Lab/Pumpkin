@@ -798,7 +798,7 @@ impl ConstraintSatisfactionSolver {
             if let Some(decision_predicate) = brancher.next_decision(context) {
                 self.counters.num_decisions += 1;
                 self.assignments
-                    .post_predicate(decision_predicate, None)
+                    .post_decision(decision_predicate)
                     .expect("Decisions are expected not to fail.");
                 Ok(())
             }
@@ -821,7 +821,7 @@ impl ConstraintSatisfactionSolver {
         &mut self,
         assumption_predicate: Predicate,
     ) -> Result<(), CSPSolverExecutionFlag> {
-        match self.assignments.post_predicate(assumption_predicate, None) {
+        match self.assignments.post_decision(assumption_predicate) {
             // The assumption is set to true. Note that the predicate may have been already true.
             // This could happen when other assumptions propagated the predicate
             // or the assumption is already set to true at the root level.
