@@ -673,6 +673,10 @@ impl Assignments {
 #[cfg(test)]
 impl Assignments {
     pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
+        println!("Reached");
+        self.trail
+            .iter()
+            .for_each(|trail_entry| println!("{trail_entry:?}"));
         self.trail
             .iter()
             .find_map(|entry| {

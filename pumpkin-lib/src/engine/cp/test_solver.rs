@@ -249,7 +249,7 @@ impl TestSolver {
         &'a mut self,
         predicate: Predicate,
         propagators: &'a mut Vec<Box<(dyn Propagator + 'static)>>,
-    ) -> &[Predicate] {
+    ) -> &'a [Predicate] {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
@@ -266,7 +266,7 @@ impl TestSolver {
     ) -> &PropositionalConjunction {
         let predicate = match truth_value {
             true => literal.get_true_predicate(),
-            false => (!literal).get_false_predicate(),
+            false => (!literal).get_true_predicate(),
         };
         self.get_reason_int(predicate)
     }

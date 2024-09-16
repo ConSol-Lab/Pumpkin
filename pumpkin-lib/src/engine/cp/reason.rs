@@ -124,7 +124,7 @@ impl Reason {
         context: &PropagationContext,
         propagator_id: PropagatorId,
         #[allow(clippy::ptr_arg)] propagators: &'a mut Vec<Box<dyn Propagator>>,
-    ) -> &[Predicate] {
+    ) -> &'a [Predicate] {
         // New tryout version: we do not replace the reason with an eager explanation for dynamic
         // lazy explanations.
         if let Reason::DynamicLazy { code } = self {
