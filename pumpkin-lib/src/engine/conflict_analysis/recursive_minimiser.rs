@@ -1,5 +1,4 @@
 use super::ConflictAnalysisNogoodContext;
-use super::ConflictResolver;
 use super::LearnedNogood;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
@@ -17,23 +16,6 @@ pub(crate) struct RecursiveMinimiser {
     num_minimisation_calls: usize,
     num_predicates_removed_total: usize,
     num_literals_seen_total: usize,
-}
-
-impl ConflictResolver for RecursiveMinimiser {
-    fn resolve_conflict(
-        &mut self,
-        context: &mut ConflictAnalysisNogoodContext,
-    ) -> Option<LearnedNogood> {
-        todo!()
-    }
-
-    fn process(
-        &mut self,
-        context: &mut ConflictAnalysisNogoodContext,
-        learned_nogood: &Option<LearnedNogood>,
-    ) -> Result<(), ()> {
-        todo!()
-    }
 }
 
 impl RecursiveMinimiser {

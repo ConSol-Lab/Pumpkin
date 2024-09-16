@@ -1,5 +1,5 @@
-use super::ConflictAnalysisNogoodContext;
-use super::LearnedNogood;
+use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
+use crate::engine::conflict_analysis::LearnedNogood;
 
 pub(crate) trait ConflictResolver {
     fn resolve_conflict(
@@ -10,6 +10,6 @@ pub(crate) trait ConflictResolver {
     fn process(
         &mut self,
         context: &mut ConflictAnalysisNogoodContext,
-        learned_nogood: &Option<LearnedNogood>,
+        learned_nogood: Option<LearnedNogood>,
     ) -> Result<(), ()>;
 }

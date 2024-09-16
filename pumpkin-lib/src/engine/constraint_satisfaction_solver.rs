@@ -11,7 +11,6 @@ use rand::SeedableRng;
 
 use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
-use super::conflict_analysis::ResolutionNogoodConflictAnalyser;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
 use super::termination::TerminationCondition;
@@ -125,7 +124,6 @@ use crate::Solver;
 ///
 /// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
 /// Intelligence, vol. 3, pp. 181–211, 2008.
-#[allow(dead_code)]
 pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
@@ -140,7 +138,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
     /// Performs conflict analysis, core extraction, and minimisation.
-    conflict_nogood_analyser: ResolutionNogoodConflictAnalyser,
+    conflict_nogood_analyser: ConflictResolverType,
     semantic_minimiser: SemanticMinimiser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments: Assignments,
@@ -188,7 +186,7 @@ impl Debug for ConstraintSatisfactionSolver {
     }
 }
 
-impl Default for ConstraintSatisfactionSolver {
+impl<ConflictResolverType: ConflictResolver> Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
         ConstraintSatisfactionSolver::new(SatisfactionSolverOptions::default())
     }
@@ -235,10 +233,11 @@ impl Default for SatisfactionSolverOptions {
     }
 }
 
-impl ConstraintSatisfactionSolver {
-    fn get_nogood_propagator_id() -> PropagatorId {
+impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+    pub(crate) fn get_nogood_propagator_id() -> PropagatorId {
         PropagatorId(0)
     }
+
     fn process_backtrack_events(&mut self) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
@@ -364,9 +363,9 @@ impl ConstraintSatisfactionSolver {
 }
 
 // methods that offer basic functionality
-impl ConstraintSatisfactionSolver {
-    pub fn new(solver_options: SatisfactionSolverOptions) -> ConstraintSatisfactionSolver {
-        let mut csp_solver = ConstraintSatisfactionSolver {
+impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+    pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
+        let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
             last_notified_cp_trail_index: 0,
             state: CSPSolverState::default(),
             assumptions: Vec::default(),
@@ -375,7 +374,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             event_drain: vec![],
-            conflict_nogood_analyser: ResolutionNogoodConflictAnalyser::default(),
+            conflict_nogood_analyser: ConflictResolverType::default(),
             backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: vec![],
@@ -704,7 +703,7 @@ impl ConstraintSatisfactionSolver {
 }
 
 // methods that serve as the main building blocks
-impl ConstraintSatisfactionSolver {
+impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
     fn initialise(&mut self, assumptions: &[Predicate]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
@@ -725,42 +724,10 @@ impl ConstraintSatisfactionSolver {
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }
-
-            // println!("before prop. {}", self.assignments.get_decision_level());
-            // for t in self.assignments.trail.iter() {
-            // println!("\t{} {}", t.predicate, t.reason.is_none());
-            // }
-            //
-            // for d in self.assignments.get_domains() {
-            // println!(
-            // "{}: [{}, {}]",
-            // d,
-            // self.assignments.get_lower_bound(d),
-            // self.assignments.get_upper_bound(d)
-            // );
-            // }
-
             self.propagate();
-
-            // println!("after prop. {}", self.assignments.get_decision_level());
-            // for t in self.assignments.trail.iter() {
-            // println!("\t{} {}", t.predicate, t.reason.is_none());
-            // }
-            //
-            // for d in self.assignments.get_domains() {
-            // println!(
-            // "{}: [{}, {}]",
-            // d,
-            // self.assignments.get_lower_bound(d),
-            // self.assignments.get_upper_bound(d)
-            // );
-            // }
 
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
-
-                // println!("-------------------\nDEC LVL NEW");
-
                 // Restarts should only occur after a new decision level has been declared to
                 // account for the fact that all assumptions should be assigned when restarts take
                 // place. Since one assumption is posted per decision level, all assumptions are
@@ -776,15 +743,7 @@ impl ConstraintSatisfactionSolver {
                 if let Err(flag) = branching_result {
                     return flag;
                 }
-            }
-            // conflict
-            else {
-                // println!("\tconflict {}", self.assignments.get_decision_level());
-                //
-                // for t in self.assignments.trail.iter() {
-                // println!("\t\t{} {}", t.predicate, t.reason.is_none());
-                // }
-
+            } else {
                 if self.get_decision_level() == 0 {
                     self.state.declare_infeasible();
                     return CSPSolverExecutionFlag::Infeasible;
@@ -889,88 +848,78 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
-        let learned_nogood = self.compute_learned_nogood(brancher);
-        // println!("NOGOOD LEARNING: {:?}", learned_nogood.predicates);
-        self.process_learned_nogood(learned_nogood, brancher);
-        self.state.declare_solving();
-    }
-
-    fn compute_learned_nogood(&mut self, brancher: &mut impl Brancher) -> LearnedNogood {
         let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
-            assignments: &self.assignments,
+            assignments: &mut self.assignments,
             counters: &mut self.counters,
             solver_state: &mut self.state,
             reason_store: &mut self.reason_store,
             brancher,
             semantic_minimiser: &mut self.semantic_minimiser,
             propagators: &mut self.propagators,
+            last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+            watch_list_cp: &mut self.watch_list_cp,
+            propagator_queue: &mut self.propagator_queue,
+            event_drain: &mut self.event_drain,
+            backtrack_event_drain: &mut self.backtrack_event_drain,
         };
-        self.conflict_nogood_analyser
-            .compute_1uip(&mut conflict_analysis_context)
-    }
 
-    fn process_learned_nogood(
-        &mut self,
-        learned_nogood: LearnedNogood,
-        brancher: &mut impl Brancher,
-    ) {
-        // backjump or restart
-        // ask the nogood propagator to add this nogood and propagate
+        let learned_nogood = self
+            .conflict_nogood_analyser
+            .resolve_conflict(&mut conflict_analysis_context);
 
-        let learned_clause = learned_nogood
-            .predicates
-            .iter()
-            .map(|&predicate| !predicate);
-        if let Err(write_error) = self
-            .internal_parameters
-            .proof_log
-            .log_learned_clause(learned_clause, &self.variable_names)
-        {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
+        // important to notify about the conflict _before_ backtracking removes literals from
+        // the trail -> although in the current version this does nothing but notify that a
+        // conflict happened
+        if let Some(learned_nogood) = learned_nogood.as_ref() {
+            self.restart_strategy.notify_conflict(
+                self.lbd_helper.compute_lbd(
+                    &learned_nogood.predicates,
+                    conflict_analysis_context.assignments,
+                ),
+                conflict_analysis_context
+                    .assignments
+                    .get_pruned_value_count(),
             );
         }
 
-        // todo: I am not sure we need to treat unit nogoods in a special way? Simply backtrack and
-        // post? The only issue may be that backtracking to 0 is not the same as a restart since
-        // the restart also notifies the restart strategy, but is this a big difference?
-        // Think about this.
-
-        // Note that previous version of controlling restarts through number of propositional
-        // variables is no longer applicable.
-        // todo add LBD.
-
-        // For now we do it simple -> log some statistical data before posting.
-
-        self.counters.num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
-        // important to notify about the conflict _before_ backtracking removes literals from
-        // the trail -> although in the current version this does nothing but notify that a conflict
-        // happened
-        self.restart_strategy.notify_conflict(
-            self.lbd_helper
-                .compute_lbd(&learned_nogood.predicates, &self.assignments),
-            self.assignments.get_pruned_value_count(),
-        );
-
-        self.counters
-            .average_learned_clause_length
-            .add_term(learned_nogood.predicates.len() as u64);
-
-        if learned_nogood.backjump_level > 0 {
-            self.counters
-                .average_backtrack_amount
-                .add_term((self.get_decision_level() - learned_nogood.backjump_level) as u64);
+        let result = self
+            .conflict_nogood_analyser
+            .process(&mut conflict_analysis_context, &learned_nogood);
+        if result.is_err() {
+            // Root level conflict?
+            self.state.declare_infeasible();
+            return;
         }
 
-        self.backtrack(learned_nogood.backjump_level, brancher);
+        if let Some(learned_nogood) = learned_nogood {
+            let learned_clause = learned_nogood
+                .predicates
+                .iter()
+                .map(|&predicate| !predicate);
+            if let Err(write_error) = self
+                .internal_parameters
+                .proof_log
+                .log_learned_clause(learned_clause, &self.variable_names)
+            {
+                warn!(
+                    "Failed to update the certificate file, error message: {}",
+                    write_error
+                );
+            }
 
-        self.add_learned_nogood(learned_nogood);
+            self.counters.num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
+
+            self.counters
+                .average_learned_clause_length
+                .add_term(learned_nogood.predicates.len() as u64);
+
+            self.add_learned_nogood(learned_nogood);
+        }
+
+        self.state.declare_solving();
     }
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
-        // println!("NOgood {:?}", learned_nogood);
-
         let nogood_propagator_index = self
             .propagators
             .iter()
@@ -983,7 +932,6 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
 
-        // println!("ADDING LEARNED: {:?}", learned_nogood.predicates);
         ConstraintSatisfactionSolver::add_asserting_nogood_to_nogood_propagator(
             &mut self.propagators[nogood_propagator_index],
             learned_nogood.predicates,
@@ -991,7 +939,7 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
-    fn add_asserting_nogood_to_nogood_propagator(
+    pub(crate) fn add_asserting_nogood_to_nogood_propagator(
         nogood_propagator: &mut Box<dyn Propagator>,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
@@ -1183,7 +1131,7 @@ impl ConstraintSatisfactionSolver {
 }
 
 // methods for adding constraints (propagators and clauses)
-impl ConstraintSatisfactionSolver {
+impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///
@@ -1406,10 +1354,10 @@ pub(crate) struct Counters {
     num_restarts: u64,
     pub(crate) average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
-    num_unit_clauses_learned: u64,
-    average_learned_clause_length: CumulativeMovingAverage,
+    pub(crate) num_unit_clauses_learned: u64,
+    pub(crate) average_learned_clause_length: CumulativeMovingAverage,
     time_spent_in_solver: u64,
-    average_backtrack_amount: CumulativeMovingAverage,
+    pub(crate) average_backtrack_amount: CumulativeMovingAverage,
 }
 
 impl Counters {

@@ -8,21 +8,91 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
+use crate::engine::IntDomainEvent;
+use crate::engine::PropagatorQueue;
+use crate::engine::WatchListCP;
 use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 
 // Does not have debug because of the brancher does not support it. Could be thought through later.
 #[allow(missing_debug_implementations)]
 pub(crate) struct ConflictAnalysisNogoodContext<'a> {
-    pub(crate) assignments: &'a Assignments,
+    pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) counters: &'a mut Counters,
     pub(crate) brancher: &'a mut dyn Brancher,
-    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     pub(crate) propagators: &'a mut Vec<Box<dyn Propagator>>,
+    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
+
+    pub(crate) last_notified_cp_trail_index: usize,
+    pub(crate) watch_list_cp: &'a mut WatchListCP,
+    pub(crate) propagator_queue: &'a mut PropagatorQueue,
+    pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+
+    pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
+    pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
+        pumpkin_assert_simple!(backtrack_level < self.assignments.get_decision_level());
+
+        self.assignments
+            .synchronise(
+                backtrack_level,
+                self.last_notified_cp_trail_index,
+                self.watch_list_cp.is_watching_any_backtrack_events(),
+            )
+            .iter()
+            .for_each(|(domain_id, previous_value)| {
+                self.brancher
+                    .on_unassign_integer(*domain_id, *previous_value)
+            });
+        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
+
+        self.reason_store.synchronise(backtrack_level);
+        self.propagator_queue.clear();
+        // For now all propagators are called to synchronise, in the future this will be improved in
+        // two ways:
+        //      + allow incremental synchronisation
+        //      + only call the subset of propagators that were notified since last backtrack
+        for propagator_id in 0..self.propagators.len() {
+            let context = PropagationContext::new(self.assignments);
+            self.propagators[propagator_id].synchronise(&context);
+        }
+
+        self.brancher.synchronise(self.assignments);
+        let _ = self.process_backtrack_events();
+
+        self.event_drain.clear();
+    }
+
+    fn process_backtrack_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            self.backtrack_event_drain
+                .extend(self.assignments.drain_backtrack_domain_events());
+
+            if self.backtrack_event_drain.is_empty() {
+                return false;
+            }
+
+            for (event, domain) in self.backtrack_event_drain.drain(..) {
+                for propagator_var in self
+                    .watch_list_cp
+                    .get_backtrack_affected_propagators(event, domain)
+                {
+                    let propagator = &mut self.propagators[propagator_var.propagator.0 as usize];
+                    let context = PropagationContext::new(self.assignments);
+
+                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                }
+            }
+        }
+        true
+    }
+
     pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
