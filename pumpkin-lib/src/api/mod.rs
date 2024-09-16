@@ -57,6 +57,8 @@ pub mod variables {
 }
 
 pub mod assignments {
+    //! Contains the structures related to implementing new variables (e.g. structures for tracking
+    //! events and assignments)
     pub use crate::engine::cp::opaque_domain_event::OpaqueDomainEvent;
     pub use crate::engine::cp::reason::ReasonRef;
     pub use crate::engine::cp::AssignmentsInteger;
@@ -66,6 +68,7 @@ pub mod assignments {
 }
 
 pub mod containers {
+    /// ! Contains containers which are used by the solver.
     pub use enumset::EnumSet;
 }
 

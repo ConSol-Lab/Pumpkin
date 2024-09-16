@@ -12,7 +12,10 @@ use crate::engine::variables::DomainId;
 use crate::predicate;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+#[cfg(doc)]
+use crate::Solver;
 
+/// A structure which contains info related to the domain of variables.
 #[derive(Clone, Default, Debug)]
 pub struct AssignmentsInteger {
     trail: Trail<ConstraintProgrammingTrailEntry>,
@@ -28,38 +31,49 @@ pub struct AssignmentsInteger {
     backtrack_events: EventSink,
 }
 
+/// A structure which indicates that an empty domain has been encountered; oftentimes returned as
+/// an [`Err`] variant.
 #[derive(Clone, Copy, Debug)]
 pub struct EmptyDomain;
 
 impl AssignmentsInteger {
+    /// Increments the current decision level
     pub fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
 
+    /// Returns the current decision level
     pub fn get_decision_level(&self) -> usize {
         self.trail.get_decision_level()
     }
 
+    /// Returns the number of defined [`DomainId`]s.
     pub fn num_domains(&self) -> u32 {
         self.domains.len() as u32
     }
 
+    /// returns an iterator of all the [`DomainId`]s.
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         DomainGeneratorIterator::new(0, self.num_domains())
     }
 
+    /// Returns the number of entries on the trail.
     pub fn num_trail_entries(&self) -> usize {
         self.trail.len()
     }
 
+    /// Returns the entry at the designated index
     pub fn get_trail_entry(&self, index: usize) -> ConstraintProgrammingTrailEntry {
         self.trail[index]
     }
 
+    /// Returns the last entry on the trail
     pub fn get_last_entry_on_trail(&self) -> ConstraintProgrammingTrailEntry {
         *self.trail.last().unwrap()
     }
 
+    /// Returns the last `num_predicates` predicates on the trail in increasing order based on trail
+    /// index
     pub fn get_last_predicates_on_trail(
         &self,
         num_predicates: usize,
@@ -69,6 +83,8 @@ impl AssignmentsInteger {
             .map(|e| e.predicate)
     }
 
+    /// Returns the last `num_predicates` entries on the trail in
+    /// increasing order based on trail index
     pub fn get_last_entries_on_trail(
         &self,
         num_predicates: usize,
@@ -76,10 +92,13 @@ impl AssignmentsInteger {
         &self.trail[(self.num_trail_entries() - num_predicates)..self.num_trail_entries()]
     }
 
-    // registers the domain of a new integer variable
-    // note that this is an internal method that does _not_ allocate additional information
-    // necessary for the solver apart from the domain when creating a new integer variable, use
-    // create_new_domain_id in the ConstraintSatisfactionSolver
+    /// Registers the domain of a new integer variable
+    ///
+    /// Note that this is an internal method that does _not_ allocate additional information
+    /// necessary for the solver apart from the domain when creating a new integer variable
+    ///
+    /// Use [`Solver::new_bounded_integer`] for creating a variable in the appropriate
+    /// manner.
     pub fn grow(&mut self, lower_bound: i32, upper_bound: i32) -> DomainId {
         let id = DomainId {
             id: self.num_domains(),
@@ -94,10 +113,14 @@ impl AssignmentsInteger {
         id
     }
 
+    /// Returns the domain events which have occurred since the propagators were last notified of
+    /// the events.
     pub fn drain_domain_events(&mut self) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
         self.events.drain()
     }
 
+    /// Returns the domain events which have been undone since the propagators were last notified
+    /// of the events.
     pub fn drain_backtrack_domain_events(
         &mut self,
     ) -> impl Iterator<Item = (IntDomainEvent, DomainId)> + '_ {
@@ -122,22 +145,27 @@ impl AssignmentsInteger {
 
 // methods for getting info about the domains
 impl AssignmentsInteger {
+    /// Returns the lower-bound of the provided [`DomainId`]
     pub fn get_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].lower_bound
     }
 
+    /// Returns the upper-bound of the provided [`DomainId`]
     pub fn get_upper_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].upper_bound
     }
 
+    /// Returns the initial lower-bound of the provided [`DomainId`]
     pub fn get_initial_lower_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].initial_lower_bound
     }
 
+    /// Returns the initial upper-bound of the provided [`DomainId`]
     pub fn get_initial_upper_bound(&self, domain_id: DomainId) -> i32 {
         self.domains[domain_id].initial_upper_bound
     }
 
+    /// Returns the initial holes in the domain of the provided [`DomainId`]
     pub fn get_initial_holes(&self, domain_id: DomainId) -> impl Iterator<Item = i32> + '_ {
         self.domains[domain_id]
             .initial_removed_values
@@ -145,11 +173,14 @@ impl AssignmentsInteger {
             .copied()
     }
 
+    /// Returns the assigned value of the provided [`DomainId`]; this method will panic if the
+    /// [`DomainId`] is not assigned
     pub fn get_assigned_value(&self, domain_id: DomainId) -> i32 {
         pumpkin_assert_simple!(self.is_domain_assigned(domain_id));
         self.domains[domain_id].lower_bound
     }
 
+    /// Returns a description of the provided [`DomainId`] in terms of [`Predicate`]s
     pub fn get_domain_description(&self, domain_id: DomainId) -> Vec<Predicate> {
         let mut predicates = Vec::new();
         let domain = &self.domains[domain_id];
@@ -170,15 +201,18 @@ impl AssignmentsInteger {
         predicates
     }
 
+    /// Returns whether `value` is in the domain of the provided [`DomainId`]
     pub fn is_value_in_domain(&self, domain_id: DomainId, value: i32) -> bool {
         let domain = &self.domains[domain_id];
         domain.contains(value)
     }
 
+    /// Returns whether the provided [`DomainId`] is assigned
     pub fn is_domain_assigned(&self, domain_id: DomainId) -> bool {
         self.get_lower_bound(domain_id) == self.get_upper_bound(domain_id)
     }
 
+    /// Returns whether the provided [`DomainId`] is assigned to `value`
     pub fn is_domain_assigned_to_value(&self, domain_id: DomainId, value: i32) -> bool {
         self.is_domain_assigned(domain_id) && self.get_lower_bound(domain_id) == value
     }
@@ -186,6 +220,13 @@ impl AssignmentsInteger {
 
 // methods to change the domains
 impl AssignmentsInteger {
+    /// Increases the lower-bound of the provided [`DomainId`] to `new_lower_bound` and stores the
+    /// provided `reason` (if given)
+    ///
+    /// If the provided `new_lower_bound` is lower than the current lower-bound then this method
+    /// will not do anything
+    ///
+    /// Returns an [`Err`] in case a the domain became empty
     pub fn tighten_lower_bound(
         &mut self,
         domain_id: DomainId,
@@ -217,6 +258,13 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
+    /// Increases the upper-bound of the provided [`DomainId`] to `new_upper_bound` and stores the
+    /// provided `reason` (if given)
+    ///
+    /// If the provided `new_upper_bound` is higher than the current upper-bound then this method
+    /// will not do anything
+    ///
+    /// Returns an [`Err`] in case a the domain became empty
     pub fn tighten_upper_bound(
         &mut self,
         domain_id: DomainId,
@@ -248,6 +296,10 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
+    /// Sets the lower- and upper-bound of the provided [`DomainId`] to `assigned_value` and stores
+    /// the provided `reason` (if given)
+    ///
+    /// Returns an [`Err`] in case a the domain became empty
     pub fn make_assignment(
         &mut self,
         domain_id: DomainId,
@@ -269,6 +321,10 @@ impl AssignmentsInteger {
         self.domains[domain_id].verify_consistency()
     }
 
+    /// Removes the value `removed_value_from_domain` from the initial domain of the provided
+    /// [`DomainId`]
+    ///
+    /// Returns an [`Err`] in case a the domain became empty
     pub fn remove_initial_value_from_domain(
         &mut self,
         domain_id: DomainId,
@@ -300,6 +356,10 @@ impl AssignmentsInteger {
         domain.verify_consistency()
     }
 
+    /// Removes the value `removed_value_from_domain` from the domain of the provided
+    /// [`DomainId`]
+    ///
+    /// Returns an [`Err`] in case a the domain became empty
     pub fn remove_value_from_domain(
         &mut self,
         domain_id: DomainId,
@@ -468,14 +528,15 @@ impl AssignmentsInteger {
 
 #[derive(Clone, Copy, Debug)]
 pub struct ConstraintProgrammingTrailEntry {
+    /// The [`IntegerPredicate`] which represents the atomic constraint which was applied
     pub predicate: IntegerPredicate,
-    /// Explicitly store the bound before the predicate was applied so that it is easier later on
-    ///  to update the bounds when backtracking.
+    /// The lower-bound before the predicate was applied
     pub old_lower_bound: i32,
+    /// The upper-bound before the predicate was applied
     pub old_upper_bound: i32,
-    /// Stores the a reference to the reason in the `ReasonStore`, only makes sense if a
+    /// Stores the a reference to the reason in the [`ReasonStore`], only makes sense if a
     /// propagation  took place, e.g., does _not_ make sense in the case of a decision or if
-    /// the update was due  to synchronisation from the propositional trail.
+    /// the update was due to synchronisation from the propositional trail.
     pub reason: Option<ReasonRef>,
 }
 

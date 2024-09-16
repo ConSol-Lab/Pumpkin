@@ -14,6 +14,7 @@ pub(crate) struct WatchListCP {
     is_watching_any_backtrack_events: bool,
 }
 
+/// Used to register a propagator for notifications about events to a particular variable
 #[derive(Debug)]
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
