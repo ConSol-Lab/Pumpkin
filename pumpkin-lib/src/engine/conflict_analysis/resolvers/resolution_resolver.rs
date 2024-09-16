@@ -1,10 +1,20 @@
 use super::ConflictResolver;
-use crate::engine::conflict_analysis::learned_nogood;
+use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
+use crate::branching::Brancher;
+use crate::containers::KeyValueHeap;
+use crate::containers::StorageKey;
+use crate::engine::conflict_analysis::recursive_minimiser::RecursiveMinimiser;
 use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
 use crate::engine::conflict_analysis::LearnedNogood;
+use crate::engine::conflict_analysis::Mode;
+use crate::engine::Assignments;
+use crate::predicates::Predicate;
+use crate::pumpkin_assert_advanced;
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct ResolutionNogoodConflictAnalyser {
+pub struct ResolutionResolver {
     /// Heap containing the current decision level predicates.
     /// It sorts the predicates based on trail position.
     heap_current_decision_level: KeyValueHeap<PredicateId, u32>,
@@ -13,9 +23,10 @@ pub(crate) struct ResolutionNogoodConflictAnalyser {
     /// Vector containing predicates above the current decision level.
     /// The vector may contain duplicates, but will be removed at the end.
     predicates_lower_decision_level: Vec<Predicate>,
+    recursive_minimiser: RecursiveMinimiser,
 }
 
-impl ConflictResolver for ResolutionNogoodConflictAnalyser {
+impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(
         &mut self,
         context: &mut ConflictAnalysisNogoodContext,
@@ -139,7 +150,7 @@ impl ConflictResolver for ResolutionNogoodConflictAnalyser {
     fn process(
         &mut self,
         context: &mut ConflictAnalysisNogoodContext,
-        learned_nogood: Option<LearnedNogood>,
+        learned_nogood: &Option<LearnedNogood>,
     ) -> Result<(), ()> {
         let learned_nogood = learned_nogood.as_ref().expect("Expected nogood");
 
@@ -148,7 +159,7 @@ impl ConflictResolver for ResolutionNogoodConflictAnalyser {
     }
 }
 
-impl ResolutionNogoodConflictAnalyser {
+impl ResolutionResolver {
     /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
         self.predicates_lower_decision_level.clear();
@@ -263,7 +274,8 @@ impl ResolutionNogoodConflictAnalyser {
             Mode::DisableEqualityMerging,
         );
 
-        self.remove_dominated_predicates(&mut clean_nogood, context);
+        self.recursive_minimiser
+            .remove_dominated_predicates(&mut clean_nogood, context);
 
         clean_nogood = context.semantic_minimiser.minimise(
             &clean_nogood,

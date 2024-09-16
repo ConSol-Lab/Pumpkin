@@ -16,6 +16,7 @@ use super::nogoods::Lbd;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
+use super::ResolutionResolver;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
@@ -28,6 +29,7 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::engine::conflict_analysis::ConflictResolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::debug_helper::DebugDyn;
@@ -137,8 +139,6 @@ pub struct ConstraintSatisfactionSolver {
     restart_strategy: RestartStrategy,
     /// Holds the assumptions when the solver is queried to solve under assumptions.
     assumptions: Vec<Predicate>,
-    /// Performs conflict analysis, core extraction, and minimisation.
-    conflict_nogood_analyser: ConflictResolverType,
     semantic_minimiser: SemanticMinimiser,
     /// Tracks information related to the assignments of integer variables.
     pub(crate) assignments: Assignments,
@@ -186,7 +186,7 @@ impl Debug for ConstraintSatisfactionSolver {
     }
 }
 
-impl<ConflictResolverType: ConflictResolver> Default for ConstraintSatisfactionSolver {
+impl Default for ConstraintSatisfactionSolver {
     fn default() -> Self {
         ConstraintSatisfactionSolver::new(SatisfactionSolverOptions::default())
     }
@@ -210,7 +210,6 @@ pub enum CoreExtractionResult {
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
-#[derive(Debug)]
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
@@ -220,6 +219,13 @@ pub struct SatisfactionSolverOptions {
     pub random_generator: SmallRng,
     /// The proof log for the solver.
     pub proof_log: ProofLog,
+    pub conflict_resolver: Box<dyn ConflictResolver>,
+}
+
+impl Debug for SatisfactionSolverOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SatisfactionSolverOptions").finish()
+    }
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -229,11 +235,12 @@ impl Default for SatisfactionSolverOptions {
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
+            conflict_resolver: Box::new(ResolutionResolver::default()),
         }
     }
 }
 
-impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+impl ConstraintSatisfactionSolver {
     pub(crate) fn get_nogood_propagator_id() -> PropagatorId {
         PropagatorId(0)
     }
@@ -363,7 +370,7 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
 }
 
 // methods that offer basic functionality
-impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+impl ConstraintSatisfactionSolver {
     pub fn new(solver_options: SatisfactionSolverOptions) -> Self {
         let mut csp_solver: ConstraintSatisfactionSolver = ConstraintSatisfactionSolver {
             last_notified_cp_trail_index: 0,
@@ -374,7 +381,6 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
             propagator_queue: PropagatorQueue::new(5),
             reason_store: ReasonStore::default(),
             event_drain: vec![],
-            conflict_nogood_analyser: ConflictResolverType::default(),
             backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: vec![],
@@ -703,7 +709,7 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
 }
 
 // methods that serve as the main building blocks
-impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+impl ConstraintSatisfactionSolver {
     fn initialise(&mut self, assumptions: &[Predicate]) {
         pumpkin_assert_simple!(
             !self.state.is_infeasible_under_assumptions(),
@@ -864,7 +870,8 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
         };
 
         let learned_nogood = self
-            .conflict_nogood_analyser
+            .internal_parameters
+            .conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
 
         // important to notify about the conflict _before_ backtracking removes literals from
@@ -883,7 +890,8 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
         }
 
         let result = self
-            .conflict_nogood_analyser
+            .internal_parameters
+            .conflict_resolver
             .process(&mut conflict_analysis_context, &learned_nogood);
         if result.is_err() {
             // Root level conflict?
@@ -1131,7 +1139,7 @@ impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
 }
 
 // methods for adding constraints (propagators and clauses)
-impl<ConflictResolverType: ConflictResolver> ConstraintSatisfactionSolver {
+impl ConstraintSatisfactionSolver {
     /// Post a new propagator to the solver. If unsatisfiability can be immediately determined
     /// through propagation, this will return `false`. If not, this returns `true`.
     ///

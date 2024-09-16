@@ -70,6 +70,14 @@ pub mod options {
     use crate::Solver;
 }
 
+pub mod conflict_resolution {
+    pub use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
+    pub use crate::engine::conflict_analysis::ConflictResolver;
+    pub use crate::engine::conflict_analysis::LearnedNogood;
+    pub use crate::engine::conflict_analysis::NoLearningResolver;
+    pub use crate::engine::conflict_analysis::ResolutionResolver;
+}
+
 pub mod termination {
     //! Contains the conditions which are used to determine when the [`Solver`] should terminate
     //! even when the state of the satisfaction/optimization problem is unknown.

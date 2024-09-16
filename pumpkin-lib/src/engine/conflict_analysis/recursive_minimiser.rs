@@ -1,5 +1,4 @@
 use super::ConflictAnalysisNogoodContext;
-use super::LearnedNogood;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::engine::Assignments;
