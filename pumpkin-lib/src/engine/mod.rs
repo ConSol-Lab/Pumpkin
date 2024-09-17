@@ -10,6 +10,9 @@ mod sat;
 pub(crate) mod termination;
 pub(crate) mod variables;
 
+pub use conflict_analysis::ConflictResolver;
+pub use conflict_analysis::NoLearning;
+pub use conflict_analysis::ResolutionConflictAnalyser;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
 pub(crate) use cp::VariableLiteralMappings;

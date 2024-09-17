@@ -1,5 +1,9 @@
+use std::cmp::min;
+
 use super::AnalysisStep;
 use crate::basic_types::ClauseReference;
+use crate::basic_types::ConflictInfo;
+use crate::basic_types::ConstraintReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
@@ -15,22 +19,29 @@ use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
 use crate::engine::ExplanationClauseManager;
+use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
+use crate::engine::PropagatorQueue;
 use crate::engine::SatisfactionSolverOptions;
 use crate::engine::VariableLiteralMappings;
+use crate::engine::WatchListCP;
+use crate::proof::ProofLog;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
+use crate::pumpkin_assert_simple;
+use crate::variables::DomainId;
 
 /// Used during conflict analysis to provide the necessary information.
 /// All fields are made public for the time being for simplicity. In the future that may change.
 #[allow(missing_debug_implementations)]
-pub(crate) struct ConflictAnalysisContext<'a> {
-    pub(crate) clausal_propagator: &'a ClausalPropagatorType,
+pub struct ConflictAnalysisContext<'a> {
+    pub(crate) clausal_propagator: &'a mut ClausalPropagatorType,
     pub(crate) variable_literal_mappings: &'a VariableLiteralMappings,
-    pub(crate) assignments_integer: &'a AssignmentsInteger,
-    pub(crate) assignments_propositional: &'a AssignmentsPropositional,
-    pub(crate) internal_parameters: &'a mut SatisfactionSolverOptions,
-    pub(crate) propagator_store: &'a PropagatorStore,
+    pub(crate) assignments_integer: &'a mut AssignmentsInteger,
+    pub(crate) assignments_propositional: &'a mut AssignmentsPropositional,
+    pub(crate) proof_log: &'a mut ProofLog,
+    pub(crate) learning_clause_minimisation: &'a mut bool,
+    pub(crate) propagator_store: &'a mut PropagatorStore,
     pub(crate) assumptions: &'a Vec<Literal>,
 
     pub(crate) solver_state: &'a mut CSPSolverState,
@@ -40,9 +51,143 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) counters: &'a mut Counters,
     pub(crate) learned_clause_manager: &'a mut LearnedClauseManager,
+
+    pub(crate) propositional_trail_index: &'a mut usize,
+    pub(crate) propagator_queue: &'a mut PropagatorQueue,
+    pub(crate) watch_list_cp: &'a mut WatchListCP,
+    pub(crate) sat_trail_synced_position: &'a mut usize,
+    pub(crate) cp_trail_synced_position: &'a mut usize,
+    pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+
+    pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) last_notified_cp_trail_index: &'a mut usize,
 }
 
 impl<'a> ConflictAnalysisContext<'a> {
+    pub(crate) fn last_decision(&self) -> Option<Literal> {
+        self.assignments_propositional.get_last_decision()
+    }
+
+    pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
+        pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
+
+        // We clear all of the unprocessed events from the watch list since synchronisation, we do
+        // not need to process these events
+        if self.watch_list_cp.is_watching_anything() {
+            pumpkin_assert_simple!(self.event_drain.is_empty());
+            self.assignments_integer
+                .drain_domain_events()
+                .for_each(drop);
+        }
+
+        // We synchronise the assignments propositional and for each unassigned literal, we notify
+        // the brancher that it has been unassigned
+        let unassigned_literals = self.assignments_propositional.synchronise(backtrack_level);
+        unassigned_literals.for_each(|literal| {
+            self.brancher.on_unassign_literal(literal);
+        });
+
+        // We synchronise the clausal propagator which sets the next variable on the trail to
+        // propagate
+        self.clausal_propagator
+            .synchronise(self.assignments_propositional.num_trail_entries());
+        pumpkin_assert_simple!(
+            self.assignments_propositional.get_decision_level()
+                < self.assignments_integer.get_decision_level(),
+            "assignments_propositional must be backtracked _before_ CPEngineDataStructures"
+        );
+
+        // We also set the last processed trail entry of the propositional trail
+        *self.propositional_trail_index = min(
+            *self.propositional_trail_index,
+            self.assignments_propositional.num_trail_entries(),
+        );
+
+        // We synchronise the assignments integer and for each of the unassigned integer variables,
+        // we notify the brancher that it has been unassigned
+        self.assignments_integer
+            .synchronise(
+                backtrack_level,
+                self.watch_list_cp.is_watching_any_backtrack_events(),
+                *self.last_notified_cp_trail_index,
+            )
+            .iter()
+            .for_each(|(domain_id, previous_value)| {
+                self.brancher
+                    .on_unassign_integer(*domain_id, *previous_value)
+            });
+        pumpkin_assert_simple!(
+            !self.watch_list_cp.is_watching_anything()
+                || *self.last_notified_cp_trail_index
+                    >= self.assignments_integer.num_trail_entries(),
+        );
+        *self.last_notified_cp_trail_index = self.assignments_integer.num_trail_entries();
+
+        self.reason_store.synchronise(backtrack_level);
+        //  note that variable_literal_mappings sync should be called after the sat/cp data
+        // structures backtrack
+
+        pumpkin_assert_simple!(
+            *self.sat_trail_synced_position >= self.assignments_propositional.num_trail_entries()
+        );
+        pumpkin_assert_simple!(
+            *self.cp_trail_synced_position >= self.assignments_integer.num_trail_entries()
+        );
+        *self.cp_trail_synced_position = self.assignments_integer.num_trail_entries();
+        *self.sat_trail_synced_position = self.assignments_propositional.num_trail_entries();
+        // for now all propagators are called to synchronise
+        //  in the future this will be improved in two ways:
+        //      + allow incremental synchronisation
+        //      + only call the subset of propagators that were notified since last backtrack
+        for propagator in self.propagator_store.iter_propagators_mut() {
+            let context =
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+            propagator.synchronise(&context);
+        }
+
+        let _ = self.process_backtrack_events();
+        self.propagator_queue.clear();
+    }
+
+    fn process_backtrack_events(&mut self) -> bool {
+        // If there are no variables being watched then there is no reason to perform these
+        // operations
+        if self.watch_list_cp.is_watching_any_backtrack_events() {
+            self.backtrack_event_drain
+                .extend(self.assignments_integer.drain_backtrack_domain_events());
+
+            if self.backtrack_event_drain.is_empty() {
+                return false;
+            }
+
+            for (event, domain) in self.backtrack_event_drain.drain(..) {
+                for propagator_var in self
+                    .watch_list_cp
+                    .get_backtrack_affected_propagators(event, domain)
+                {
+                    let propagator = &mut self.propagator_store[propagator_var.propagator];
+                    let context = PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
+                    );
+
+                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                }
+            }
+        }
+        true
+    }
+
+    pub(crate) fn enqueue_propagated_literal(
+        &mut self,
+        propagated_literal: Literal,
+        constraint_reference: ConstraintReference,
+    ) -> Option<ConflictInfo> {
+        self.assignments_propositional
+            .enqueue_decision_literal(propagated_literal);
+        None
+    }
+
     pub(crate) fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
             self.assignments_propositional.get_decision_level()
@@ -205,7 +350,7 @@ impl<'a> ConflictAnalysisContext<'a> {
             }))
             .collect();
 
-        let _ = self.internal_parameters.proof_log.log_inference(
+        let _ = self.proof_log.log_inference(
             self.propagator_store.get_tag(propagator),
             explanation_literals.iter().skip(1).copied(),
             propagated_literal,

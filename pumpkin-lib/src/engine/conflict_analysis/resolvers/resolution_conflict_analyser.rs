@@ -1,10 +1,11 @@
-use super::ConflictAnalysisContext;
-use super::RecursiveMinimiser;
-use super::SemanticMinimiser;
+use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::KeyedVec;
 use crate::engine::clause_allocators::ClauseInterface;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::conflict_analysis::RecursiveMinimiser;
+use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
@@ -17,7 +18,7 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Default, Debug)]
 /// The outcome of clause learning.
-pub(crate) struct ConflictAnalysisResult {
+pub struct ConflictAnalysisResult {
     /// The new learned clause with the propagating literal after backjumping at index 0 and the
     /// literal with the next highest decision level at index 1.
     pub(crate) learned_literals: Vec<Literal>,
@@ -26,7 +27,7 @@ pub(crate) struct ConflictAnalysisResult {
 }
 
 #[derive(Default, Debug)]
-pub(crate) struct ResolutionConflictAnalyser {
+pub struct ResolutionConflictAnalyser {
     // data structures used for conflict analysis
     seen: KeyedVec<PropositionalVariable, bool>,
     analysis_result: ConflictAnalysisResult,
@@ -38,7 +39,7 @@ pub(crate) struct ResolutionConflictAnalyser {
     semantic_minimiser: SemanticMinimiser,
 }
 
-impl ResolutionConflictAnalyser {
+impl ConflictResolver for ResolutionConflictAnalyser {
     /// Compute the 1-UIP clause based on the current conflict. According to \[1\] a unit
     /// implication point (UIP), "represents an alternative decision assignment at the current
     /// decision level that results in the same conflict" (i.e. no matter what the variable at the
@@ -57,10 +58,10 @@ impl ResolutionConflictAnalyser {
     /// # Bibliography
     /// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
     /// solvers’, in Handbook of satisfiability, IOS press, 2021
-    pub(crate) fn compute_1uip(
+    fn resolve_conflict(
         &mut self,
         context: &mut ConflictAnalysisContext,
-    ) -> ConflictAnalysisResult {
+    ) -> Option<ConflictAnalysisResult> {
         self.seen.resize(
             context
                 .assignments_propositional
@@ -215,7 +216,7 @@ impl ResolutionConflictAnalyser {
             self.seen[literal.get_propositional_variable()] = false;
         }
 
-        if context.internal_parameters.learning_clause_minimisation {
+        if *context.learning_clause_minimisation {
             pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
 
             self.recursive_minimiser
@@ -231,9 +232,19 @@ impl ResolutionConflictAnalyser {
 
         pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
         // the return value is stored in the input 'analysis_result'
-        self.analysis_result.clone()
+        Some(self.analysis_result.clone())
     }
 
+    fn process(
+        &mut self,
+        context: &mut ConflictAnalysisContext,
+        learned_nogood: &Option<ConflictAnalysisResult>,
+    ) -> Result<(), ()> {
+        Ok(())
+    }
+}
+
+impl ResolutionConflictAnalyser {
     // computes the learned clause containing only decision literals and stores it in
     // 'analysis_result'
     #[allow(dead_code)]

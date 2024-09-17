@@ -22,6 +22,8 @@ use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
 use pumpkin_lib::encodings::PseudoBooleanEncoding;
+use pumpkin_lib::learning::NoLearning;
+use pumpkin_lib::learning::ResolutionConflictAnalyser;
 use pumpkin_lib::options::*;
 use pumpkin_lib::proof::Format;
 use pumpkin_lib::proof::ProofLog;
@@ -338,6 +340,12 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-generate-sequence")]
     cumulative_generate_sequence: bool,
+
+    /// Determines whether the solver performs no learning or not
+    ///
+    /// Possible values: bool
+    #[arg(long = "no-learning")]
+    no_learning: bool,
 }
 
 fn configure_logging(
@@ -474,21 +482,42 @@ fn run() -> PumpkinResult<()> {
         ProofLog::default()
     };
 
-    let solver_options = SolverOptions {
-        restart_options: RestartOptions {
-            sequence_generator_type: args.restart_sequence_generator_type,
-            base_interval: args.restart_base_interval,
-            min_num_conflicts_before_first_restart: args
-                .restart_min_num_conflicts_before_first_restart,
-            lbd_coef: args.restart_lbd_coef,
-            num_assigned_coef: args.restart_num_assigned_coef,
-            num_assigned_window: args.restart_num_assigned_window,
-            geometric_coef: args.restart_geometric_coef,
-            no_restarts: args.no_restarts,
-        },
-        proof_log,
-        learning_clause_minimisation: !args.no_learning_clause_minimisation,
-        random_generator: SmallRng::seed_from_u64(args.random_seed),
+    let solver_options = if args.no_learning {
+        SolverOptions {
+            restart_options: RestartOptions {
+                sequence_generator_type: args.restart_sequence_generator_type,
+                base_interval: args.restart_base_interval,
+                min_num_conflicts_before_first_restart: args
+                    .restart_min_num_conflicts_before_first_restart,
+                lbd_coef: args.restart_lbd_coef,
+                num_assigned_coef: args.restart_num_assigned_coef,
+                num_assigned_window: args.restart_num_assigned_window,
+                geometric_coef: args.restart_geometric_coef,
+                no_restarts: args.no_restarts,
+            },
+            proof_log,
+            learning_clause_minimisation: !args.no_learning_clause_minimisation,
+            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            conflict_analyser: Box::new(NoLearning),
+        }
+    } else {
+        SolverOptions {
+            restart_options: RestartOptions {
+                sequence_generator_type: args.restart_sequence_generator_type,
+                base_interval: args.restart_base_interval,
+                min_num_conflicts_before_first_restart: args
+                    .restart_min_num_conflicts_before_first_restart,
+                lbd_coef: args.restart_lbd_coef,
+                num_assigned_coef: args.restart_num_assigned_coef,
+                num_assigned_window: args.restart_num_assigned_window,
+                geometric_coef: args.restart_geometric_coef,
+                no_restarts: args.no_restarts,
+            },
+            proof_log,
+            learning_clause_minimisation: !args.no_learning_clause_minimisation,
+            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            conflict_analyser: Box::new(NoLearning),
+        }
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

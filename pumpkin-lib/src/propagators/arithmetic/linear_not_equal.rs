@@ -294,7 +294,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
                 .iter()
                 .map(|x_i| predicate![x_i == context.lower_bound(x_i)])
                 .collect();
-
+            println!("Reported Failure: {failure_reason:?}");
             return Err(failure_reason);
         }
         Ok(())
