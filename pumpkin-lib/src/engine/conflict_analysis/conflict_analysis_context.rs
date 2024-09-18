@@ -63,7 +63,7 @@ pub struct ConflictAnalysisContext<'a> {
 }
 
 impl<'a> ConflictAnalysisContext<'a> {
-    pub(crate) fn last_decision(&self) -> Option<Literal> {
+    pub(crate) fn last_decision(&self) -> Literal {
         self.assignments_propositional.get_last_decision()
     }
 

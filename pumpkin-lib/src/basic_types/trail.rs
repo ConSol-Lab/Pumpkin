@@ -23,6 +23,11 @@ impl<T> Default for Trail<T> {
 }
 
 impl<T> Trail<T> {
+    pub(crate) fn get_last_decision(&self) -> &T {
+        pumpkin_assert_simple!(self.current_decision_level != 0);
+        &self.trail[self.trail_delimiter[self.current_decision_level - 1]]
+    }
+
     pub(crate) fn increase_decision_level(&mut self) {
         self.current_decision_level += 1;
         self.trail_delimiter.push(self.trail.len());

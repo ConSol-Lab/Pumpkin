@@ -265,11 +265,8 @@ impl AssignmentsPropositional {
         }
     }
 
-    pub(crate) fn get_last_decision(&self) -> Option<Literal> {
-        (0..self.num_trail_entries())
-            .rev()
-            .find(|index| self.is_literal_decision(self.get_trail_entry(*index)))
-            .map(|index| self.get_trail_entry(index))
+    pub(crate) fn get_last_decision(&self) -> Literal {
+        *self.trail.get_last_decision()
     }
 }
 

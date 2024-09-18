@@ -20,13 +20,10 @@ impl ConflictResolver for NoLearning {
         learned_nogood: &Option<ConflictAnalysisResult>,
     ) -> Result<(), ()> {
         pumpkin_assert_simple!(learned_nogood.is_none());
+        let last_decision = context.last_decision();
 
-        if let Some(last_decision) = context.last_decision() {
-            context.backtrack(context.get_decision_level() - 1);
-            context.enqueue_propagated_literal(!last_decision);
-            Ok(())
-        } else {
-            Err(())
-        }
+        context.backtrack(context.get_decision_level() - 1);
+        context.enqueue_propagated_literal(!last_decision);
+        Ok(())
     }
 }
