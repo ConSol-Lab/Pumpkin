@@ -2,7 +2,6 @@ use std::cmp::min;
 
 use super::AnalysisStep;
 use crate::basic_types::ClauseReference;
-use crate::basic_types::ConflictInfo;
 use crate::basic_types::ConstraintReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -22,7 +21,6 @@ use crate::engine::ExplanationClauseManager;
 use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
 use crate::engine::PropagatorQueue;
-use crate::engine::SatisfactionSolverOptions;
 use crate::engine::VariableLiteralMappings;
 use crate::engine::WatchListCP;
 use crate::proof::ProofLog;
@@ -42,6 +40,7 @@ pub struct ConflictAnalysisContext<'a> {
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) learning_clause_minimisation: &'a mut bool,
     pub(crate) propagator_store: &'a mut PropagatorStore,
+    #[allow(dead_code)]
     pub(crate) assumptions: &'a Vec<Literal>,
 
     pub(crate) solver_state: &'a mut CSPSolverState,
@@ -141,7 +140,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagator_store.iter_propagators_mut() {
             let context =
-                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+                PropagationContext::new(self.assignments_integer, self.assignments_propositional);
             propagator.synchronise(&context);
         }
 
@@ -167,8 +166,8 @@ impl<'a> ConflictAnalysisContext<'a> {
                 {
                     let propagator = &mut self.propagator_store[propagator_var.propagator];
                     let context = PropagationContext::new(
-                        &self.assignments_integer,
-                        &self.assignments_propositional,
+                        self.assignments_integer,
+                        self.assignments_propositional,
                     );
 
                     propagator.notify_backtrack(&context, propagator_var.variable, event.into())
@@ -178,14 +177,11 @@ impl<'a> ConflictAnalysisContext<'a> {
         true
     }
 
-    pub(crate) fn enqueue_propagated_literal(
-        &mut self,
-        propagated_literal: Literal,
-        constraint_reference: ConstraintReference,
-    ) -> Option<ConflictInfo> {
-        self.assignments_propositional
-            .enqueue_decision_literal(propagated_literal);
-        None
+    pub(crate) fn enqueue_propagated_literal(&mut self, propagated_literal: Literal) {
+        assert!(self
+            .assignments_propositional
+            .enqueue_propagated_literal(propagated_literal, ConstraintReference::NON_REASON)
+            .is_none());
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {

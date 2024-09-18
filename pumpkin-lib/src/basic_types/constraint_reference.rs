@@ -73,6 +73,7 @@ impl Debug for ConstraintReference {
 impl ConstraintReference {
     // TODO: replace with a NonZeroU32 and Option
     pub const NULL: ConstraintReference = ConstraintReference { code: 0 };
+    pub const NON_REASON: ConstraintReference = ConstraintReference { code: u32::MAX };
 
     pub fn create_standard_clause_reference(clause_id: u32) -> ConstraintReference {
         pumpkin_assert_moderate!(ConstraintReference::is_valid_allocated_clause_id(clause_id));
@@ -94,20 +95,24 @@ impl ConstraintReference {
         self.code == 0
     }
 
+    pub fn is_non_reason(&self) -> bool {
+        self.code == u32::MAX
+    }
+
     pub fn is_clause(&self) -> bool {
-        self.is_virtual_binary_clause() || self.is_allocated_clause()
+        !self.is_non_reason() && (self.is_virtual_binary_clause() || self.is_allocated_clause())
     }
 
     fn is_virtual_binary_clause(&self) -> bool {
-        self.code.bit(31)
+        !self.is_non_reason() && self.code.bit(31)
     }
 
     fn is_allocated_clause(&self) -> bool {
-        ConstraintReference::two_most_significant_bits(self.code) == 0
+        !self.is_non_reason() && ConstraintReference::two_most_significant_bits(self.code) == 0
     }
 
     pub fn is_cp_reason(&self) -> bool {
-        ConstraintReference::two_most_significant_bits(self.code) == 1
+        !self.is_non_reason() && ConstraintReference::two_most_significant_bits(self.code) == 1
     }
 
     pub fn get_reason_ref(&self) -> ReasonRef {

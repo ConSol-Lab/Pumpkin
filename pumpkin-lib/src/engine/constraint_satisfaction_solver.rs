@@ -14,7 +14,6 @@ use rand::SeedableRng;
 use super::clause_allocators::ClauseAllocatorInterface;
 use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
-use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
 use super::propagation::store::PropagatorStore;
 use super::termination::TerminationCondition;
@@ -685,7 +684,7 @@ impl ConstraintSatisfactionSolver {
     /// }
     /// ```
     pub fn extract_clausal_core(&mut self, brancher: &mut impl Brancher) -> CoreExtractionResult {
-        let mut conflict_analysis_context = ConflictAnalysisContext {
+        let _conflict_analysis_context = ConflictAnalysisContext {
             propagator_store: &mut self.cp_propagators,
             assumptions: &self.assumptions,
             clausal_propagator: &mut self.clausal_propagator,
@@ -1009,12 +1008,6 @@ impl ConstraintSatisfactionSolver {
 
             self.propagate_enqueued();
 
-            if self.get_decision_level() == 0
-                && self.assignments_integer.get_upper_bound(DomainId { id: 1 }) < 3
-            {
-                println!("Reached");
-            }
-
             if self.state.no_conflict() {
                 self.declare_new_decision_level();
 
@@ -1035,16 +1028,6 @@ impl ConstraintSatisfactionSolver {
             }
             // conflict
             else {
-                println!(
-                    "- {:?}",
-                    self.assignments_integer
-                        .get_domains()
-                        .map(|domain_id| (
-                            self.assignments_integer.get_lower_bound(domain_id),
-                            self.assignments_integer.get_upper_bound(domain_id)
-                        ))
-                        .collect::<Vec<_>>()
-                );
                 if self.assignments_propositional.is_at_the_root_level() {
                     self.state.declare_infeasible();
                     return CSPSolverExecutionFlag::Infeasible;
@@ -1080,27 +1063,17 @@ impl ConstraintSatisfactionSolver {
                 self.assignments_propositional
                     .enqueue_decision_literal(match predicate {
                         Predicate::IntegerPredicate(integer_predicate) => {
-                            println!("{integer_predicate}");
                             self.variable_literal_mappings.get_literal(
                                 integer_predicate,
                                 &self.assignments_propositional,
                                 &self.assignments_integer,
                             )
                         }
-                        bool_predicate => {
-                            let literal = bool_predicate
-                                .get_literal_of_bool_predicate(
-                                    self.assignments_propositional.true_literal,
-                                )
-                                .unwrap();
-                            println!(
-                                "{:?}",
-                                self.variable_literal_mappings
-                                    .get_predicates(literal)
-                                    .collect::<Vec<_>>()
-                            );
-                            literal
-                        }
+                        bool_predicate => bool_predicate
+                            .get_literal_of_bool_predicate(
+                                self.assignments_propositional.true_literal,
+                            )
+                            .unwrap(),
                     });
                 Ok(())
             } else {
@@ -1189,18 +1162,6 @@ impl ConstraintSatisfactionSolver {
             sat_trail_synced_position: &mut self.sat_trail_synced_position,
             watch_list_cp: &mut self.watch_list_cp,
         };
-        let conflict_reason =
-            conflict_analysis_context.get_conflict_reason_clause_reference(&mut |_| {});
-        println!(
-            "Conflict: {:?}",
-            conflict_analysis_context.clause_allocator[conflict_reason].get_literal_slice()[..]
-                .iter()
-                .map(|literal| conflict_analysis_context
-                    .variable_literal_mappings
-                    .get_predicates(*literal)
-                    .collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-        );
 
         let analysis_result = self
             .internal_parameters
@@ -1627,17 +1588,6 @@ impl ConstraintSatisfactionSolver {
         }
 
         let literals: Vec<Literal> = literals.into_iter().collect();
-
-        println!(
-            "Added clause: {:?}",
-            literals
-                .iter()
-                .map(|literal| self
-                    .variable_literal_mappings
-                    .get_predicates(*literal)
-                    .collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-        );
 
         let result = self.clausal_propagator.add_permanent_clause(
             literals,

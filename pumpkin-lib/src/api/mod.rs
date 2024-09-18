@@ -75,9 +75,10 @@ pub mod options {
 }
 
 pub mod learning {
+    pub use crate::engine::conflict_analysis::ResolutionConflictAnalyser;
+    pub use crate::engine::ConflictAnalysisResult;
     pub use crate::engine::ConflictResolver;
     pub use crate::engine::NoLearning;
-    pub use crate::engine::ResolutionConflictAnalyser;
 }
 
 pub mod termination {

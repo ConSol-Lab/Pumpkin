@@ -1,3 +1,4 @@
+use super::ConflictAnalysisResult;
 use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
@@ -15,16 +16,6 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
-
-#[derive(Clone, Default, Debug)]
-/// The outcome of clause learning.
-pub struct ConflictAnalysisResult {
-    /// The new learned clause with the propagating literal after backjumping at index 0 and the
-    /// literal with the next highest decision level at index 1.
-    pub(crate) learned_literals: Vec<Literal>,
-    /// The decision level to backtrack to.
-    pub(crate) backjump_level: usize,
-}
 
 #[derive(Default, Debug)]
 pub struct ResolutionConflictAnalyser {
@@ -53,7 +44,7 @@ impl ConflictResolver for ResolutionConflictAnalyser {
     /// of [`ConflictAnalysisResult::learned_literals`]); the variable with the second highest
     /// decision level is stored at index 1 in [`ConflictAnalysisResult::learned_literals`] and its
     /// decision level is (redundantly) stored in [`ConflictAnalysisResult::backjump_level`], which
-    /// is used when backtracking in ([`ConstraintSatisfactionSolver`]).
+    /// is used when backtracking.
     ///
     /// # Bibliography
     /// \[1\] J. Marques-Silva, I. Lynce, and S. Malik, ‘Conflict-driven clause learning SAT
@@ -237,8 +228,8 @@ impl ConflictResolver for ResolutionConflictAnalyser {
 
     fn process(
         &mut self,
-        context: &mut ConflictAnalysisContext,
-        learned_nogood: &Option<ConflictAnalysisResult>,
+        _context: &mut ConflictAnalysisContext,
+        _learned_nogood: &Option<ConflictAnalysisResult>,
     ) -> Result<(), ()> {
         Ok(())
     }
@@ -439,6 +430,7 @@ impl ResolutionConflictAnalyser {
         // the return value is stored in the input 'analysis_result'
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_conflict_reasons(
         &mut self,
         context: &mut ConflictAnalysisContext,
@@ -452,6 +444,7 @@ impl ResolutionConflictAnalyser {
         self.compute_all_decision_learning_helper(next_literal, true, context, on_analysis_step);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn compute_clausal_core(
         &mut self,
         context: &mut ConflictAnalysisContext,
