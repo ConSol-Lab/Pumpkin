@@ -1,6 +1,7 @@
 use super::ConflictAnalysisResult;
 use super::ConflictResolver;
 use super::ResolutionConflictAnalyser;
+use crate::basic_types::moving_averages::moving_average::MovingAverage;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::pumpkin_assert_simple;
 
@@ -20,7 +21,14 @@ impl ConflictResolver for NoLearning {
             .next()
             .is_some()
         {
-            let _ = self.resolution.resolve_conflict(context);
+            let analysis_result = self.resolution.resolve_conflict(context).unwrap();
+
+            let lbd = context.learned_clause_manager.compute_lbd_for_literals(
+                &analysis_result.learned_literals,
+                context.assignments_propositional,
+            );
+
+            context.counters.average_lbd.add_term(lbd.into());
         }
         None
     }
