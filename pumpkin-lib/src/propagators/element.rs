@@ -19,6 +19,7 @@ use crate::predicate;
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
 ///
 /// Note that this propagator is 0-indexed
+#[derive(Clone, Debug)]
 pub(crate) struct ElementPropagator<VX, VI, VE> {
     array: Rc<[VX]>,
     index: VI,

@@ -7,6 +7,7 @@ use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
@@ -28,7 +29,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) variable_literal_mappings: &'a VariableLiteralMappings,
     pub(crate) assignments_integer: &'a AssignmentsInteger,
     pub(crate) assignments_propositional: &'a AssignmentsPropositional,
-    pub(crate) internal_parameters: &'a SatisfactionSolverOptions,
+    pub(crate) internal_parameters: &'a mut SatisfactionSolverOptions,
+    pub(crate) propagator_store: &'a PropagatorStore,
     pub(crate) assumptions: &'a Vec<Literal>,
 
     pub(crate) solver_state: &'a mut CSPSolverState,
@@ -202,6 +204,12 @@ impl<'a> ConflictAnalysisContext<'a> {
                 }
             }))
             .collect();
+
+        let _ = self.internal_parameters.proof_log.log_inference(
+            self.propagator_store.get_tag(propagator),
+            explanation_literals.iter().skip(1).copied(),
+            propagated_literal,
+        );
 
         on_analysis_step(AnalysisStep::Propagation {
             propagator,

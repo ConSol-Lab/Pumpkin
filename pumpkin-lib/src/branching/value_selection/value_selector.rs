@@ -1,4 +1,8 @@
 use crate::basic_types::SolutionReference;
+#[cfg(doc)]
+use crate::branching::value_selection::InDomainMin;
+#[cfg(doc)]
+use crate::branching::value_selection::InDomainRandom;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
@@ -32,4 +36,16 @@ pub trait ValueSelector<Var> {
     /// the case of a satisfiable problem or on solutions of increasing quality when solving an
     /// optimisation problem.
     fn on_solution(&mut self, _solution: SolutionReference) {}
+
+    /// This method returns whether a restart is *currently* pointless for the [`ValueSelector`].
+    ///
+    /// For example, if a [`ValueSelector`] is using a static strategy (e.g. [`InDomainMin`]) then a
+    /// restart is pointless; however, for a [`ValueSelector`] like [`InDomainRandom`] which changes
+    /// throughout the search process restarting is not pointless.
+    ///
+    /// Note that even if the [`ValueSelector`] has indicated that a restart is pointless, it could
+    /// be that the restart is still performed.
+    fn is_restart_pointless(&mut self) -> bool {
+        true
+    }
 }
