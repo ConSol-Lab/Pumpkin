@@ -867,6 +867,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
+            lbd_helper: &mut self.lbd_helper,
         };
 
         let learned_nogood = self
@@ -878,11 +879,16 @@ impl ConstraintSatisfactionSolver {
         // the trail -> although in the current version this does nothing but notify that a
         // conflict happened
         if let Some(learned_nogood) = learned_nogood.as_ref() {
+            let lbd = conflict_analysis_context.lbd_helper.compute_lbd(
+                &learned_nogood.predicates,
+                conflict_analysis_context.assignments,
+            );
+            conflict_analysis_context
+                .counters
+                .average_lbd
+                .add_term(lbd.into());
             self.restart_strategy.notify_conflict(
-                self.lbd_helper.compute_lbd(
-                    &learned_nogood.predicates,
-                    conflict_analysis_context.assignments,
-                ),
+                lbd,
                 conflict_analysis_context
                     .assignments
                     .get_pruned_value_count(),
@@ -1366,6 +1372,7 @@ pub(crate) struct Counters {
     pub(crate) average_learned_clause_length: CumulativeMovingAverage,
     time_spent_in_solver: u64,
     pub(crate) average_backtrack_amount: CumulativeMovingAverage,
+    pub(crate) average_lbd: CumulativeMovingAverage,
 }
 
 impl Counters {
@@ -1388,6 +1395,7 @@ impl Counters {
             "averageBacktrackAmount",
             self.average_backtrack_amount.value(),
         );
+        log_statistic("averageLbd", self.average_lbd.value());
     }
 }
 

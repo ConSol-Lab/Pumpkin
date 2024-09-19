@@ -3,6 +3,7 @@ use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
+use crate::engine::nogoods::Lbd;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContext;
@@ -34,6 +35,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
     pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
 
     pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) lbd_helper: &'a mut Lbd,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {

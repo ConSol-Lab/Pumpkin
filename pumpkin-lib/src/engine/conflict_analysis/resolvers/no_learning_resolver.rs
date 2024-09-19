@@ -1,5 +1,6 @@
 use super::ConflictResolver;
 use super::ResolutionResolver;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
 use crate::engine::conflict_analysis::LearnedNogood;
 use crate::pumpkin_assert_simple;
@@ -15,7 +16,15 @@ impl ConflictResolver for NoLearningResolver {
         context: &mut ConflictAnalysisNogoodContext,
     ) -> Option<LearnedNogood> {
         if context.assignments.decisions.len() > 1 {
-            let _ = self.analyser.resolve_conflict(context);
+            let learned_nogood = self
+                .analyser
+                .resolve_conflict(context)
+                .expect("Expected resolution conflict to be able to find a nogood");
+
+            let lbd = context
+                .lbd_helper
+                .compute_lbd(&learned_nogood.predicates, context.assignments);
+            context.counters.average_lbd.add_term(lbd.into());
         }
         None
     }
