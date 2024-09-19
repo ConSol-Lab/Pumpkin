@@ -4,8 +4,11 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
 use crate::engine::IntDomainEvent;
@@ -39,8 +42,19 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
     }
 
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
-        self.assignments
-            .post_predicate(predicate, None)
+        let decision_level = self.assignments.get_decision_level();
+        let mut context = PropagationContextMut::new(
+            self.assignments,
+            self.reason_store,
+            self.semantic_minimiser,
+            PropagatorId(0),
+        );
+        context
+            .post_predicate(predicate, move |context: &PropagationContext| {
+                context.assignments().decisions[..decision_level]
+                    .to_vec()
+                    .into()
+            })
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 

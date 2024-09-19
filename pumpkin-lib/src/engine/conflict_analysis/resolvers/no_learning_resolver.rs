@@ -1,16 +1,22 @@
 use super::ConflictResolver;
+use super::ResolutionResolver;
 use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
 use crate::engine::conflict_analysis::LearnedNogood;
 use crate::pumpkin_assert_simple;
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct NoLearningResolver;
+#[derive(Default, Debug)]
+pub struct NoLearningResolver {
+    analyser: ResolutionResolver,
+}
 
 impl ConflictResolver for NoLearningResolver {
     fn resolve_conflict(
         &mut self,
-        _context: &mut ConflictAnalysisNogoodContext,
+        context: &mut ConflictAnalysisNogoodContext,
     ) -> Option<LearnedNogood> {
+        if context.assignments.decisions.len() > 1 {
+            let _ = self.analyser.resolve_conflict(context);
+        }
         None
     }
 

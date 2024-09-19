@@ -499,7 +499,7 @@ fn run() -> PumpkinResult<()> {
             learning_clause_minimisation: !args.no_learning_clause_minimisation,
             random_generator: SmallRng::seed_from_u64(args.random_seed),
             proof_log,
-            conflict_resolver: Box::new(NoLearningResolver),
+            conflict_resolver: Box::new(NoLearningResolver::default()),
         }
     } else {
         SolverOptions {
