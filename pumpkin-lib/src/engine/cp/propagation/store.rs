@@ -32,6 +32,9 @@ impl PropagatorStore {
     }
 
     pub(crate) fn get_tag(&self, propagator_id: PropagatorId) -> Option<NonZero<u32>> {
+        if propagator_id.index() >= self.tags.len() {
+            return None;
+        }
         self.tags[propagator_id]
     }
 

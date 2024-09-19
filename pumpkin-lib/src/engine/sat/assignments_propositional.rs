@@ -268,6 +268,10 @@ impl AssignmentsPropositional {
     pub(crate) fn get_last_decision(&self) -> Literal {
         *self.trail.get_last_decision()
     }
+
+    pub(crate) fn get_previous_decisions(&self) -> impl Iterator<Item = &Literal> {
+        self.trail.get_previous_decisons()
+    }
 }
 
 #[cfg(test)]

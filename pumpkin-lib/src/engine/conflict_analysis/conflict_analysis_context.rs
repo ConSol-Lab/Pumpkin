@@ -3,6 +3,7 @@ use std::cmp::min;
 use super::AnalysisStep;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConstraintReference;
+use crate::basic_types::StorageKey;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
@@ -12,6 +13,7 @@ use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::Literal;
@@ -238,9 +240,14 @@ impl<'a> ConflictAnalysisContext<'a> {
         // Case 2: the literal was placed on the propositional trail while synchronising the CP
         // trail with the propositional trail
         else {
+            let reason_ref = if constraint_reference.is_non_reason() {
+                ReasonRef(u32::MAX)
+            } else {
+                constraint_reference.get_reason_ref()
+            };
             self.create_clause_from_propagation_reason(
                 propagated_literal,
-                constraint_reference.get_reason_ref(),
+                reason_ref,
                 on_analysis_step,
             )
         }
@@ -266,9 +273,14 @@ impl<'a> ConflictAnalysisContext<'a> {
                     on_analysis_step(AnalysisStep::AllocatedClause(clause_ref));
                     clause_ref
                 } else {
+                    let reason_ref = if reference.is_non_reason() {
+                        ReasonRef(u32::MAX)
+                    } else {
+                        reference.get_reason_ref()
+                    };
                     self.create_clause_from_propagation_reason(
                         *literal,
-                        reference.get_reason_ref(),
+                        reason_ref,
                         on_analysis_step,
                     )
                 }
@@ -320,31 +332,48 @@ impl<'a> ConflictAnalysisContext<'a> {
     ) -> ClauseReference {
         let propagation_context =
             PropagationContext::new(self.assignments_integer, self.assignments_propositional);
-        let propagator = self.reason_store.get_propagator(reason_ref);
-        let reason = self
-            .reason_store
-            .get_or_compute(reason_ref, &propagation_context)
-            .expect("reason reference should not be stale");
+        let propagator = if reason_ref.0 != u32::MAX {
+            self.reason_store.get_propagator(reason_ref)
+        } else {
+            PropagatorId::create_from_index(0)
+        };
         // create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
         //  todo better ways
         // important to keep propagated literal at the zero-th position
-        let explanation_literals: Vec<Literal> = std::iter::once(propagated_literal)
-            .chain(reason.iter().map(|&predicate| {
-                match predicate {
-                    Predicate::IntegerPredicate(integer_predicate) => {
-                        !self.variable_literal_mappings.get_literal(
-                            integer_predicate,
-                            self.assignments_propositional,
-                            self.assignments_integer,
-                        )
+        let explanation_literals: Vec<Literal> = if reason_ref.0 != u32::MAX {
+            let reason = self
+                .reason_store
+                .get_or_compute(reason_ref, &propagation_context)
+                .expect("reason reference should not be stale");
+
+            std::iter::once(propagated_literal)
+                .chain(reason.iter().map(|&predicate| {
+                    match predicate {
+                        Predicate::IntegerPredicate(integer_predicate) => {
+                            !self.variable_literal_mappings.get_literal(
+                                integer_predicate,
+                                self.assignments_propositional,
+                                self.assignments_integer,
+                            )
+                        }
+                        bool_predicate => !bool_predicate
+                            .get_literal_of_bool_predicate(
+                                self.assignments_propositional.true_literal,
+                            )
+                            .unwrap(),
                     }
-                    bool_predicate => !bool_predicate
-                        .get_literal_of_bool_predicate(self.assignments_propositional.true_literal)
-                        .unwrap(),
-                }
-            }))
-            .collect();
+                }))
+                .collect()
+        } else {
+            std::iter::once(propagated_literal)
+                .chain(
+                    self.assignments_propositional
+                        .get_previous_decisions()
+                        .map(|&literal| !literal),
+                )
+                .collect()
+        };
 
         let _ = self.proof_log.log_inference(
             self.propagator_store.get_tag(propagator),

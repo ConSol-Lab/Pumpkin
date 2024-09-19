@@ -56,6 +56,12 @@ impl<T> Trail<T> {
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.trail.get_mut(index)
     }
+
+    pub(crate) fn get_previous_decisons(&self) -> impl Iterator<Item = &T> {
+        pumpkin_assert_simple!(self.current_decision_level != 0);
+        (0..self.current_decision_level - 1)
+            .map(|decision_level| &self.trail[self.trail_delimiter[decision_level]])
+    }
 }
 
 impl<T> Deref for Trail<T> {
