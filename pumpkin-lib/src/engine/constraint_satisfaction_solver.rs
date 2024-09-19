@@ -1231,6 +1231,8 @@ impl ConstraintSatisfactionSolver {
                     &self.assignments_propositional,
                 );
 
+                self.counters.average_lbd.add_term(lbd.into());
+
                 self.restart_strategy
                     .notify_conflict(lbd, *num_variables_assigned_before_conflict);
             }
@@ -1643,6 +1645,7 @@ pub(crate) struct Counters {
     average_backtrack_amount: CumulativeMovingAverage,
     pub(crate) average_number_of_removed_literals_recursive: CumulativeMovingAverage,
     pub(crate) average_number_of_removed_literals_semantic: CumulativeMovingAverage,
+    pub(crate) average_lbd: CumulativeMovingAverage,
 }
 
 impl Counters {
@@ -1673,6 +1676,7 @@ impl Counters {
             "averageNumberOfRemovedLiteralsSemantic",
             self.average_number_of_removed_literals_semantic.value(),
         );
+        log_statistic("averageLbd", self.average_lbd.value());
     }
 }
 
