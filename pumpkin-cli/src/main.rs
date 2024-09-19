@@ -70,6 +70,12 @@ struct Args {
     #[arg(long, verbatim_doc_comment)]
     proof_path: Option<PathBuf>,
 
+    /// Log a full proof instead of just the scaffold.
+    ///
+    /// If no `proof_path` is provided, then this option is ignored.
+    #[arg(long, verbatim_doc_comment)]
+    full_proof: bool,
+
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
@@ -472,7 +478,7 @@ fn run() -> PumpkinResult<()> {
             FileFormat::WcnfDimacsPLine => {
                 return Err(PumpkinError::ProofGenerationNotSupported("wcnf".to_owned()))
             }
-            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text)?,
+            FileFormat::FlatZinc => ProofLog::cp(&path_buf, Format::Text, args.full_proof)?,
         }
     } else {
         ProofLog::default()

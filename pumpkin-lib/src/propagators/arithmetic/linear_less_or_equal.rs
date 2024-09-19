@@ -10,7 +10,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::predicate;
 
 /// Propagator for the constraint `reif => \sum x_i <= c`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LinearLessOrEqualPropagator<Var> {
     x: Box<[Var]>,
     c: i32,

@@ -21,6 +21,7 @@ use crate::variables::Literal;
 /// the propagator implements [`Propagator::detect_inconsistency`], the result of that method may
 /// be used to propagate `r` to false. If that method is not implemented, `r` will never be
 /// propagated to false.
+#[derive(Clone, Debug)]
 pub(crate) struct ReifiedPropagator<WrappedPropagator> {
     propagator: WrappedPropagator,
     reification_literal: Literal,

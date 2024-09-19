@@ -49,10 +49,10 @@ pub fn absolute(
 
 /// Creates the [`Constraint`] `max(array) = m`.
 pub fn maximum<Var: IntegerVariable + 'static>(
-    array: impl Into<Box<[Var]>>,
+    array: impl IntoIterator<Item = Var>,
     rhs: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    MaximumPropagator::new(array.into(), rhs)
+    MaximumPropagator::new(array.into_iter().collect(), rhs)
 }
 
 /// Creates the [`Constraint`] `min(array) = m`.
@@ -60,9 +60,6 @@ pub fn minimum<Var: IntegerVariable + 'static>(
     array: impl IntoIterator<Item = Var>,
     rhs: impl IntegerVariable + 'static,
 ) -> impl Constraint {
-    let array = array
-        .into_iter()
-        .map(|var| var.scaled(-1))
-        .collect::<Box<_>>();
+    let array = array.into_iter().map(|var| var.scaled(-1));
     maximum(array, rhs.scaled(-1))
 }
