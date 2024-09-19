@@ -28,6 +28,10 @@ impl ConflictResolver for NoLearning {
                 context.assignments_propositional,
             );
 
+            context
+                .counters
+                .average_learned_clause_length
+                .add_term(analysis_result.learned_literals.len().try_into().unwrap());
             context.counters.average_lbd.add_term(lbd.into());
         }
         None

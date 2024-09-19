@@ -1640,7 +1640,7 @@ pub(crate) struct Counters {
     pub(crate) average_conflict_size: CumulativeMovingAverage,
     num_propagations: u64,
     num_unit_clauses_learned: u64,
-    average_learned_clause_length: CumulativeMovingAverage,
+    pub(crate) average_learned_clause_length: CumulativeMovingAverage,
     time_spent_in_solver: u64,
     average_backtrack_amount: CumulativeMovingAverage,
     pub(crate) average_number_of_removed_literals_recursive: CumulativeMovingAverage,
