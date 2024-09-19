@@ -25,6 +25,10 @@ impl ConflictResolver for NoLearningResolver {
                 .lbd_helper
                 .compute_lbd(&learned_nogood.predicates, context.assignments);
             context.counters.average_lbd.add_term(lbd.into());
+            context
+                .counters
+                .average_learned_clause_length
+                .add_term(learned_nogood.predicates.len().try_into().unwrap());
         }
         None
     }
