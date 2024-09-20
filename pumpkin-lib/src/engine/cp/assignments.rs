@@ -8,6 +8,7 @@ use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::predicate;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -603,9 +604,9 @@ impl Assignments {
         let mut unfixed_variables = Vec::new();
         let num_trail_entries_before_synchronisation = self.num_trail_entries();
 
-        pumpkin_assert_simple!(new_decision_level <= self.decisions.len());
+        pumpkin_assert_eq_simple!(self.decisions.len(), self.trail.get_decision_level());
+        pumpkin_assert_simple!(new_decision_level <= self.decisions.len(), "Expected the new decision level {new_decision_level} to be less than or equal to the nubmer of decisions {}", self.decisions.len());
         self.decisions.truncate(new_decision_level);
-        pumpkin_assert_simple!(self.decisions.len() == new_decision_level);
 
         self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
             pumpkin_assert_moderate!(
