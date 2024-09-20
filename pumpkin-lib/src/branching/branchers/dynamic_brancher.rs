@@ -3,6 +3,7 @@
 //!
 //! Note that this structure should be used if you want to use dynamic [`Brancher`]s but
 //! require a [`Sized`] object (e.g. when a function takes as input `impl Brancher`).
+use std::cmp::min;
 use std::fmt::Debug;
 
 use crate::basic_types::SolutionReference;
@@ -95,7 +96,8 @@ impl Brancher for DynamicBrancher {
     fn is_restart_pointless(&mut self) -> bool {
         // We return whether all of the branchers up and until this one are static; if this is not
         // the case then restarting could be useful!
-        self.branchers[..=self.brancher_index]
+        let current_branch_index = min(self.brancher_index, self.branchers.len());
+        self.branchers[..=current_branch_index]
             .iter_mut()
             .all(|brancher| brancher.is_restart_pointless())
     }
