@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::ops::Range;
 use std::rc::Rc;
 
 use super::create_time_table_per_point_from_scratch;
 use super::debug_propagate_from_scratch_time_table_point;
-use super::mandatory_part_addition::generate_update_range;
-use super::mandatory_part_removal::generate_removal_range;
 use super::time_table_util::backtrack_update;
 use super::time_table_util::insert_update;
 use super::time_table_util::should_enqueue;
@@ -32,12 +31,9 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::DynamicStructures;
 use crate::propagators::PerPointTimeTableType;
-#[cfg(doc)]
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdateType;
-use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
@@ -74,7 +70,7 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     dynamic_structures: DynamicStructures<Var>,
 }
 
-impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropagator<Var> {
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
@@ -93,24 +89,23 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
     fn add_to_time_table(
         &mut self,
         context: &PropagationContext,
-        updated_task_info: &UpdatedTaskInfo<Var>,
+        added_parts: Vec<Range<i32>>,
+        task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
         // that for each of these tasks, a mandatory part exists, otherwise it would not
         // have been added (see [`should_propagate`]))
-        let added_mandatory_consumption = generate_update_range(
-            &updated_task_info.task,
-            updated_task_info.old_lower_bound,
-            updated_task_info.old_upper_bound,
-            updated_task_info.new_lower_bound,
-            updated_task_info.new_upper_bound,
-        );
         let mut conflict = None;
-        for time_point in added_mandatory_consumption {
+        for time_point in added_parts
+            .iter()
+            .filter(|range| !range.is_empty())
+            .cloned()
+            .flatten()
+        {
             pumpkin_assert_extreme!(
                         !self.time_table.contains_key(&(time_point as u32))
-                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == updated_task_info.task.id.unpack() as usize),
-                        "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", updated_task_info.task.id.unpack() as usize);
+                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
+                        "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
 
             // Add the updated profile to the ResourceProfile at time t
             let current_profile: &mut ResourceProfile<Var> = self
@@ -118,10 +113,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
                 .entry(time_point as u32)
                 .or_insert(ResourceProfile::default(time_point));
 
-            current_profile.height += updated_task_info.task.resource_usage;
-            current_profile
-                .profile_tasks
-                .push(Rc::clone(&updated_task_info.task));
+            current_profile.height += task.resource_usage;
+            current_profile.profile_tasks.push(Rc::clone(task));
 
             if current_profile.height > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
@@ -140,18 +133,16 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
         }
     }
 
-    fn remove_from_time_table(&mut self, updated_task_info: &UpdatedTaskInfo<Var>) {
-        let reduced_mandatory_consumption = generate_removal_range(
-            &updated_task_info.task,
-            updated_task_info.old_lower_bound,
-            updated_task_info.old_upper_bound,
-            updated_task_info.new_lower_bound,
-            updated_task_info.new_upper_bound,
-        );
-        for time_point in reduced_mandatory_consumption {
+    fn remove_from_time_table(&mut self, removed_parts: Vec<Range<i32>>, task: &Rc<Task<Var>>) {
+        for time_point in removed_parts
+            .iter()
+            .filter(|range| !range.is_empty())
+            .cloned()
+            .flatten()
+        {
             pumpkin_assert_extreme!(
-                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == updated_task_info.task.id.unpack() as usize) ,
-                        "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", updated_task_info.task.id.unpack() as usize);
+                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
+                        "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
 
             // Add the updated profile to the ResourceProfile at time t
             let current_profile: &mut ResourceProfile<Var> = self
@@ -159,14 +150,14 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
                 .entry(time_point as u32)
                 .or_insert(ResourceProfile::default(time_point));
 
-            current_profile.height -= updated_task_info.task.resource_usage;
+            current_profile.height -= task.resource_usage;
 
             if current_profile.height != 0 {
                 let _ = current_profile.profile_tasks.remove(
                     current_profile
                         .profile_tasks
                         .iter()
-                        .position(|task| task.id == updated_task_info.task.id)
+                        .position(|profile_task| profile_task.id == task.id)
                         .expect("Task should be present"),
                 );
             } else {
@@ -183,18 +174,23 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointIncrementalPropagator<Var>
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let mut found_conflict = false;
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
-            while let Some(element) = self
-                .dynamic_structures
-                .pop_next_update_for_task(&updated_task)
-            {
-                match element {
-                    UpdateType::Addition(addition) => {
-                        let result = self.add_to_time_table(&context.as_readonly(), &addition);
-                        found_conflict |= result.is_err();
-                    }
-                    UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
+            if let Some(element) = self.dynamic_structures.get_update_for_task(&updated_task) {
+                // println!(
+                //    "Reached -> {:?}",
+                //    self.time_table.values().collect::<Vec<_>>()
+                //);
+                let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
+                if !removed_parts.is_empty() {
+                    self.remove_from_time_table(removed_parts, &updated_task);
+                }
+
+                if !added_parts.is_empty() {
+                    let result =
+                        self.add_to_time_table(&context.as_readonly(), added_parts, &updated_task);
+                    found_conflict |= result.is_err()
                 }
             }
+            self.dynamic_structures.reset_update_for_task(&updated_task);
         }
 
         if found_conflict {

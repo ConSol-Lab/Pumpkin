@@ -20,7 +20,6 @@ use crate::propagators::cumulative::time_table::propagation_handler::CumulativeP
 use crate::propagators::CumulativeParameters;
 use crate::propagators::DynamicStructures;
 use crate::propagators::Task;
-use crate::propagators::UpdateType;
 use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -629,7 +628,7 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
 ) {
     if let Some(update) = potential_update {
         dynamic_structures.task_has_been_updated(updated_task);
-        dynamic_structures.insert_update_for_task(updated_task, UpdateType::Addition(update));
+        dynamic_structures.insert_update_for_task(updated_task, update);
     }
 }
 
@@ -657,12 +656,12 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static + Debug>(
     // And we add the type of update
     dynamic_structures.insert_update_for_task(
         updated_task,
-        UpdateType::Removal(UpdatedTaskInfo {
+        UpdatedTaskInfo {
             task: Rc::clone(updated_task),
             old_lower_bound: dynamic_structures.get_stored_lower_bound(updated_task),
             old_upper_bound: dynamic_structures.get_stored_upper_bound(updated_task),
             new_lower_bound: context.lower_bound(&updated_task.start_variable),
             new_upper_bound: context.upper_bound(&updated_task.start_variable),
-        }),
+        },
     );
 }

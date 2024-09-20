@@ -1,6 +1,8 @@
 //! Stores structures related for the Cumulative constraint such as the [`Task`]s or the
 //! [`CumulativeParameters`].
+use std::cmp::Ordering;
 use std::hash::Hash;
+use std::ops::Range;
 use std::rc::Rc;
 
 use super::SparseSet;
@@ -73,6 +75,71 @@ pub(crate) struct UpdatedTaskInfo<Var> {
     pub(crate) new_upper_bound: i32,
 }
 
+impl<Var> UpdatedTaskInfo<Var> {
+    pub(crate) fn get_removed_and_added_mandatory_parts(
+        &self,
+    ) -> (Vec<Range<i32>>, Vec<Range<i32>>) {
+        let previous_mandatory_part =
+            self.old_upper_bound..self.old_lower_bound + self.task.processing_time;
+        let new_mandatory_part =
+            self.new_upper_bound..self.new_lower_bound + self.task.processing_time;
+
+        if previous_mandatory_part.is_empty() {
+            // There is no previous mandatory part, simply add the new one
+            return (vec![], vec![new_mandatory_part]);
+        }
+        if new_mandatory_part.is_empty() {
+            // There is no new mandatory part, simply remove the old mandatory part
+            return (vec![previous_mandatory_part], vec![]);
+        }
+
+        if previous_mandatory_part.start >= new_mandatory_part.end
+            || new_mandatory_part.start >= previous_mandatory_part.end
+        {
+            // There is no overlap between the parts, we remove the old mandatory part and add the
+            // new
+            return (vec![previous_mandatory_part], vec![new_mandatory_part]);
+        }
+
+        let mut removed_parts = vec![];
+        let mut added_parts = vec![];
+
+        match new_mandatory_part.end.cmp(&previous_mandatory_part.end) {
+            Ordering::Less => {
+                // The new mandatory parts ends before the previous mandatory part
+                // This means that we need to remove from the time-table
+                removed_parts.push(new_mandatory_part.end..previous_mandatory_part.end)
+            }
+            Ordering::Equal => {
+                // Do nothing in case they are equal
+            }
+            Ordering::Greater => {
+                // The new mandatory parts ends after the previous mandatory part
+                // This means that we need to add to the time-table
+                added_parts.push(previous_mandatory_part.end..new_mandatory_part.end);
+            }
+        }
+
+        match new_mandatory_part.start.cmp(&previous_mandatory_part.start) {
+            Ordering::Less => {
+                // The new mandatory part starts before the previous mandatory part
+                // This means that we need to add to the time-table
+                added_parts.push(new_mandatory_part.start..previous_mandatory_part.start);
+            }
+            Ordering::Equal => {
+
+                // Do nothing in case they are equal
+            }
+            Ordering::Greater => {
+                // The new mandatory part starts later than the previous mandatory part
+                // This means that we need to remove from the time-table
+                removed_parts.push(previous_mandatory_part.start..new_mandatory_part.start);
+            }
+        }
+        (removed_parts, added_parts)
+    }
+}
+
 /// Structures which are adjusted during search; either due to incrementality or to keep track of
 /// bounds.
 #[derive(Debug, Clone)]
@@ -84,7 +151,7 @@ pub(crate) struct DynamicStructures<Var> {
     bounds: Vec<(i32, i32)>,
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
-    updates: Vec<Vec<UpdateType<Var>>>,
+    updates: Vec<Option<UpdatedTaskInfo<Var>>>,
     /// The tasks which have been updated since the last iteration
     updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// The tasks which are unfixed
@@ -99,7 +166,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         let unfixed_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         Self {
             bounds: vec![],
-            updates: vec![vec![]; parameters.tasks.len()],
+            updates: vec![None; parameters.tasks.len()],
             updated_tasks,
             unfixed_tasks,
         }
@@ -118,15 +185,15 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         Some(updated_task)
     }
 
-    pub(crate) fn pop_next_update_for_task(
+    pub(crate) fn get_update_for_task(
         &mut self,
         updated_task: &Rc<Task<Var>>,
-    ) -> Option<UpdateType<Var>> {
-        // TODO: this could take quadratic time, refactor
-        if self.updates[updated_task.id.unpack() as usize].is_empty() {
-            return None;
-        }
-        Some(self.updates[updated_task.id.unpack() as usize].remove(0))
+    ) -> Option<UpdatedTaskInfo<Var>> {
+        self.updates[updated_task.id.unpack() as usize].clone()
+    }
+
+    pub(crate) fn reset_update_for_task(&mut self, updated_task: &Rc<Task<Var>>) {
+        self.updates[updated_task.id.unpack() as usize] = None
     }
 
     pub(crate) fn get_stored_bounds(&self) -> &[(i32, i32)] {
@@ -210,8 +277,17 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         self.updated_tasks.insert(Rc::clone(task))
     }
 
-    pub(crate) fn insert_update_for_task(&mut self, task: &Rc<Task<Var>>, update: UpdateType<Var>) {
-        self.updates[task.id.unpack() as usize].push(update);
+    pub(crate) fn insert_update_for_task(
+        &mut self,
+        task: &Rc<Task<Var>>,
+        updated_task_info: UpdatedTaskInfo<Var>,
+    ) {
+        if let Some(stored_updated_task_info) = &mut self.updates[task.id.unpack() as usize] {
+            stored_updated_task_info.new_lower_bound = updated_task_info.new_lower_bound;
+            stored_updated_task_info.new_upper_bound = updated_task_info.new_upper_bound;
+        } else {
+            self.updates[task.id.unpack() as usize] = Some(updated_task_info);
+        }
     }
 
     pub(crate) fn recreate_from_context(
@@ -232,7 +308,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
 
     pub(crate) fn clean_updated(&mut self) {
         while let Some(updated_task) = self.pop_next_updated_task() {
-            self.updates[updated_task.id.unpack() as usize].clear();
+            self.updates[updated_task.id.unpack() as usize] = None;
         }
     }
 }
@@ -252,12 +328,6 @@ pub(crate) struct CumulativeParameters<Var> {
     pub(crate) capacity: i32,
     /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
     pub(crate) options: CumulativePropagatorOptions,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum UpdateType<Var> {
-    Addition(UpdatedTaskInfo<Var>),
-    Removal(UpdatedTaskInfo<Var>),
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {

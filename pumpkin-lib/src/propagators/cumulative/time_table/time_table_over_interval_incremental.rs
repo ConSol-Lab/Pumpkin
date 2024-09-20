@@ -3,8 +3,6 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use super::debug_propagate_from_scratch_time_table_interval;
-use super::mandatory_part_addition::generate_update_range;
-use super::mandatory_part_removal::generate_removal_range;
 use super::propagation_handler::create_conflict_explanation;
 use super::time_table_util::backtrack_update;
 use super::time_table_util::has_overlap_with_interval;
@@ -32,12 +30,11 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::DynamicStructures;
 use crate::propagators::OverIntervalTimeTableType;
+use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
-use crate::propagators::UpdateType;
-use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
@@ -93,20 +90,17 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     fn add_to_time_table(
         &mut self,
         context: &PropagationContextMut,
-        update_info: &UpdatedTaskInfo<Var>,
+        update_ranges: Vec<Range<i32>>,
+        task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
-        let added_mandatory_consumption = generate_update_range(
-            &update_info.task,
-            update_info.old_lower_bound,
-            update_info.old_upper_bound,
-            update_info.new_lower_bound,
-            update_info.new_upper_bound,
-        );
         let mut conflict = None;
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
-        for update_range in added_mandatory_consumption.get_reverse_update_ranges() {
+        for update_range in update_ranges {
+            if update_range.is_empty() {
+                continue;
+            }
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
@@ -115,7 +109,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                         start_index,
                         end_index,
                         &update_range,
-                        &update_info.task,
+                        task,
                         self.parameters.capacity,
                     );
                     if let Err(conflict_tasks) = result {
@@ -133,7 +127,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                     &mut self.time_table,
                     index_to_insert,
                     &update_range,
-                    &update_info.task,
+                    task,
                 ),
             }
         }
@@ -144,18 +138,14 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
         }
     }
 
-    fn remove_from_time_table(&mut self, update_info: &UpdatedTaskInfo<Var>) {
-        let reduced_mandatory_consumption = generate_removal_range(
-            &update_info.task,
-            update_info.old_lower_bound,
-            update_info.old_upper_bound,
-            update_info.new_lower_bound,
-            update_info.new_upper_bound,
-        );
+    fn remove_from_time_table(&mut self, update_ranges: Vec<Range<i32>>, task: &Rc<Task<Var>>) {
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
-        for update_range in reduced_mandatory_consumption.get_reverse_update_ranges() {
+        for update_range in update_ranges {
+            if update_range.is_empty() {
+                continue;
+            }
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
@@ -164,7 +154,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                         start_index,
                         end_index,
                         &update_range,
-                        &update_info.task,
+                        task,
                     )
                 }
                 Err(_) => {
@@ -182,20 +172,20 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let mut found_conflict = false;
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
-            while let Some(element) = self
-                .dynamic_structures
-                .pop_next_update_for_task(&updated_task)
-            {
-                match element {
-                    UpdateType::Addition(addition) => {
-                        let result = self.add_to_time_table(context, &addition);
-                        found_conflict |= result.is_err();
-                    }
-                    UpdateType::Removal(removal) => self.remove_from_time_table(&removal),
+            if let Some(element) = &self.dynamic_structures.get_update_for_task(&updated_task) {
+                let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
+
+                if !removed_parts.is_empty() {
+                    self.remove_from_time_table(removed_parts, &updated_task);
+                }
+
+                if !added_parts.is_empty() {
+                    let result = self.add_to_time_table(context, added_parts, &updated_task);
+                    found_conflict |= result.is_err();
                 }
             }
+            self.dynamic_structures.reset_update_for_task(&updated_task);
         }
-
         if found_conflict {
             // TODO: should find a better way to do this
             let conflicting_profile = self
@@ -222,6 +212,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                 .into());
             }
         }
+
         Ok(())
     }
 }
