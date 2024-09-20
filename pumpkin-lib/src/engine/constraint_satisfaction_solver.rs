@@ -740,8 +740,10 @@ impl ConstraintSatisfactionSolver {
                 // assigned when the decision level is strictly larger than the number of
                 // assumptions.
                 if self.restart_strategy.should_restart() {
-                    self.restart_during_search(brancher);
-                    self.declare_new_decision_level();
+                    let restarted = self.restart_during_search(brancher);
+                    if restarted {
+                        self.declare_new_decision_level();
+                    }
                 }
 
                 let branching_result = self.make_next_decision(brancher);
@@ -968,7 +970,9 @@ impl ConstraintSatisfactionSolver {
     /// to be necessary by the [`ConstraintSatisfactionSolver::restart_strategy`]. A 'restart'
     /// differs from backtracking to level zero in that a restart backtracks to decision level
     /// zero, cleans up nogoods, and notifies the restart strategy.
-    fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
+    ///
+    /// Returns a boolean indicating whether a restart took place
+    fn restart_during_search(&mut self, brancher: &mut impl Brancher) -> bool {
         pumpkin_assert_simple!(
             self.get_decision_level() > self.assumptions.len(),
             "Sanity check: restarts should not trigger whilst assigning assumptions"
@@ -976,13 +980,13 @@ impl ConstraintSatisfactionSolver {
 
         // no point backtracking past the assumption level
         if self.get_decision_level() <= self.assumptions.len() {
-            return;
+            return false;
         }
 
         if brancher.is_restart_pointless() {
             // If the brancher is static then there is no point in restarting as it would make the
             // exact same decision
-            return;
+            return false;
         }
 
         self.counters.num_restarts += 1;
@@ -990,6 +994,8 @@ impl ConstraintSatisfactionSolver {
         self.backtrack(0, brancher);
 
         self.restart_strategy.notify_restart();
+
+        true
     }
 
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
