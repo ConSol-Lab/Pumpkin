@@ -68,6 +68,13 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     /// Stores structures which change during the search; either to store bounds or when applying
     /// incrementality
     dynamic_structures: DynamicStructures<Var>,
+    /// Stores whether the propagator found a conflict in the previous call
+    ///
+    /// This is stored to deal with the case where the same conflict can be created via two
+    /// distinct propagation chains; to the propagator it appears that nothing has changed (since
+    /// the bounds on the variables remain the same) but there is still a conflicting profile in
+    /// the time-table
+    found_previous_conflict: bool,
 }
 
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
@@ -84,6 +91,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
             time_table: Default::default(),
             parameters,
             dynamic_structures,
+            found_previous_conflict: false,
         }
     }
 
@@ -186,7 +194,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
             }
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
-        if found_conflict {
+        if found_conflict || self.found_previous_conflict {
             // TODO: should find a better way to do this
             let conflicting_profile = self
                 .time_table
@@ -201,6 +209,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                     .is_err(),
                     "Time-table from scratch could not find conflict"
                 );
+                self.found_previous_conflict = true;
 
                 // TODO: could decide which tasks to choose from the profile to explain the
                 // conflict
@@ -211,8 +220,15 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                 )
                 .into());
             }
+            self.found_previous_conflict = false;
         }
 
+        // We check whether there are no non-conflicting profiles in the time-table if we do not
+        // report any conflicts
+        pumpkin_assert_extreme!(self
+            .time_table
+            .iter()
+            .all(|profile| profile.height <= self.parameters.capacity));
         Ok(())
     }
 }
