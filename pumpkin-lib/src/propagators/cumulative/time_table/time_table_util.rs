@@ -281,7 +281,12 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             let task = dynamic_structures.get_unfixed_task_at_index(task_index);
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating
-                dynamic_structures.fix_task(&task);
+                //
+                // Note that we fix this task temporarily and then wait for the notification to
+                // come in before properly fixing it - this is to avoid fixing a task without ever
+                // receiving the notification for it (which would result in a task never becoming
+                // unfixed since no backtrack notification would occur)
+                dynamic_structures.temporarily_remove_task_from_unfixed(&task);
                 if dynamic_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
