@@ -26,6 +26,10 @@ use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::flatzinc::create_solver_from_mzn;
+use crate::flatzinc::error::FlatZincError;
+use crate::flatzinc::solve;
+use crate::flatzinc::FlatZincOptions;
 use crate::options::LearningOptions;
 use crate::options::SolverOptions;
 use crate::predicate;
@@ -116,8 +120,12 @@ impl std::fmt::Debug for Solver {
 }
 
 impl Solver {
-    pub fn from_mzn(_file: impl AsRef<Path>) -> Self {
-        todo!()
+    pub fn from_mzn(file: impl AsRef<Path>) -> Self {
+        create_solver_from_mzn(file).expect("Error while creating solver from Mzn")
+    }
+
+    pub fn solve_from_mzn(file: impl AsRef<Path>) -> Result<(), FlatZincError> {
+        solve(Solver::default(), file, None, FlatZincOptions::default())
     }
 
     /// Creates a solver with the provided [`LearningOptions`] and [`SolverOptions`].

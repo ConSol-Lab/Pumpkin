@@ -390,6 +390,7 @@ dependencies = [
  "drcp-format",
  "enumset",
  "env_logger",
+ "flatzinc",
  "fnv",
  "log",
  "once_cell",

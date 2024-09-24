@@ -286,6 +286,7 @@ use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub(crate) mod basic_types;
 pub(crate) mod encoders;
 pub(crate) mod engine;
+pub(crate) mod flatzinc;
 pub(crate) mod math;
 pub(crate) mod propagators;
 pub(crate) mod pumpkin_asserts;
