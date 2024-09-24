@@ -454,7 +454,7 @@ impl Solver {
             .restore_state_at_root(&mut brancher);
 
         self.satisfaction_solver.propagate_enqueued();
-        !self.satisfaction_solver.is_conflicting()
+        self.satisfaction_solver.is_conflicting()
     }
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
