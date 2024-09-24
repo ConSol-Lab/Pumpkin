@@ -1,4 +1,5 @@
 use std::num::NonZero;
+use std::path::Path;
 
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
@@ -14,6 +15,7 @@ use crate::branching::value_selection::ValueSelector;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::branching::PhaseSaving;
+use crate::branching::SelectionContext;
 use crate::branching::SolutionGuidedValueSelector;
 use crate::branching::Vsids;
 use crate::constraints::ConstraintPoster;
@@ -114,6 +116,10 @@ impl std::fmt::Debug for Solver {
 }
 
 impl Solver {
+    pub fn from_mzn(_file: impl AsRef<Path>) -> Self {
+        todo!()
+    }
+
     /// Creates a solver with the provided [`LearningOptions`] and [`SolverOptions`].
     pub fn with_options(learning_options: LearningOptions, solver_options: SolverOptions) -> Self {
         Solver {
@@ -430,6 +436,17 @@ impl Solver {
                 SatisfactionResultUnderAssumptions::Unknown
             }
         }
+    }
+
+    /// Runs a single propagation loop until fix-point and then returns true if a conflict has been
+    /// found and false otherwise
+    pub fn is_conflicting_without_search(&mut self) -> bool {
+        let mut brancher = NoBrancher;
+        self.satisfaction_solver
+            .restore_state_at_root(&mut brancher);
+
+        self.satisfaction_solver.propagate_enqueued();
+        !self.satisfaction_solver.is_conflicting()
     }
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
@@ -750,3 +767,11 @@ pub type DefaultBrancher = IndependentVariableValueBrancher<
         PhaseSaving<PropositionalVariable, bool>,
     >,
 >;
+
+struct NoBrancher;
+
+impl Brancher for NoBrancher {
+    fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+        None
+    }
+}
