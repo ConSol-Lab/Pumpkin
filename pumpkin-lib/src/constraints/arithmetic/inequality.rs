@@ -40,6 +40,7 @@ pub fn binary_less_than<Var: IntegerVariable + 'static>(
     binary_less_than_or_equals(lhs.scaled(1), rhs.offset(-1))
 }
 
+#[derive(Clone)]
 struct Inequality<Var> {
     terms: Box<[Var]>,
     rhs: i32,

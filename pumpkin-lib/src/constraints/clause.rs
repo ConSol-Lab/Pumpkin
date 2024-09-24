@@ -20,6 +20,7 @@ pub fn conjunction(literals: impl Into<Vec<Literal>>) -> impl NegatableConstrain
     Conjunction(literals.into())
 }
 
+#[derive(Clone)]
 struct Clause(Vec<Literal>);
 
 impl Constraint for Clause {
@@ -57,6 +58,7 @@ impl NegatableConstraint for Clause {
     }
 }
 
+#[derive(Clone)]
 struct Conjunction(Vec<Literal>);
 
 impl Constraint for Conjunction {

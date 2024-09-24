@@ -37,6 +37,7 @@ pub fn boolean_equals(
     }
 }
 
+#[derive(Clone)]
 struct BooleanLessThanOrEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,
@@ -91,6 +92,7 @@ impl BooleanLessThanOrEqual {
     }
 }
 
+#[derive(Clone)]
 struct BooleanEqual {
     weights: Box<[i32]>,
     bools: Box<[Literal]>,

@@ -51,7 +51,7 @@ use crate::Solver;
 ///
 /// For example, the constraint `a = b` over two variables `a` and `b` only allows assignments to
 /// `a` and `b` of the same value, and rejects any assignment where `a` and `b` differ.
-pub trait Constraint {
+pub trait Constraint: Clone {
     /// Add the [`Constraint`] to the [`Solver`].
     ///
     /// This method returns a [`ConstraintOperationError`] if the addition of the [`Constraint`] led
@@ -83,7 +83,7 @@ pub trait Constraint {
 
 impl<ConcretePropagator> Constraint for ConcretePropagator
 where
-    ConcretePropagator: Propagator + 'static,
+    ConcretePropagator: Propagator + 'static + Clone,
 {
     fn post(
         self,

@@ -52,6 +52,7 @@ pub fn binary_not_equals<Var: IntegerVariable + 'static>(
     not_equals([lhs.scaled(1), rhs.scaled(-1)], 0)
 }
 
+#[derive(Clone)]
 struct EqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
@@ -115,6 +116,7 @@ where
     }
 }
 
+#[derive(Clone)]
 struct NotEqualConstraint<Var> {
     terms: Box<[Var]>,
     rhs: i32,
