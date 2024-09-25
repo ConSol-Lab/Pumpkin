@@ -1,7 +1,5 @@
 % Taken from https://github.com/chuffed/chuffed/blob/develop/chuffed/flatzinc/mznlib/fzn_cumulative.mzn
 % See the constraint at https://www.minizinc.org/doc-2.7.6/en/lib-globals-scheduling.html#mzn-ref-globals-scheduling-cumulative
-
-
 predicate fzn_cumulative(array[int] of var int: s,
                          array[int] of var int: d,
                          array[int] of var int: r,
