@@ -32,6 +32,39 @@ pub struct AssignmentsInteger {
 pub struct EmptyDomain;
 
 impl AssignmentsInteger {
+    pub fn is_predicate_possible(&self, predicate: IntegerPredicate) -> bool {
+        match predicate {
+            IntegerPredicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => {
+                self.get_lower_bound(domain_id) <= lower_bound
+                    && self.get_upper_bound(domain_id) >= lower_bound
+            }
+            IntegerPredicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => {
+                self.get_upper_bound(domain_id) >= upper_bound
+                    && self.get_lower_bound(domain_id) <= upper_bound
+            }
+            IntegerPredicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => {
+                self.get_upper_bound(domain_id) >= not_equal_constant
+                    && self.get_lower_bound(domain_id) <= not_equal_constant
+            }
+            IntegerPredicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                self.get_upper_bound(domain_id) >= equality_constant
+                    && self.get_lower_bound(domain_id) <= equality_constant
+            }
+        }
+    }
+
     pub fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }

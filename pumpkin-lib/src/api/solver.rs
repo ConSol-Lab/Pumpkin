@@ -457,6 +457,43 @@ impl Solver {
         self.satisfaction_solver.is_conflicting()
     }
 
+    pub fn are_predicates_possible(&mut self, predicates: &[Predicate]) -> bool {
+        predicates.iter().all(|predicate| {
+            self.satisfaction_solver
+                .assignments_integer
+                .is_predicate_possible((*predicate).try_into().expect("Expected integer predicate"))
+        })
+    }
+
+    /// First posts the assumptions as decisions and then runs a single propagation loop until
+    /// fixpoint
+    pub fn is_conflicting_without_search_under_assumptions(
+        &mut self,
+        assumptions: &[Predicate],
+    ) -> bool {
+        let mut brancher = NoBrancher;
+        self.satisfaction_solver
+            .restore_state_at_root(&mut brancher);
+
+        for &assumption in assumptions {
+            self.satisfaction_solver.declare_new_decision_level();
+            self.satisfaction_solver
+                .assignments_propositional
+                .enqueue_decision_literal(
+                    self.satisfaction_solver
+                        .variable_literal_mappings
+                        .get_literal(
+                            assumption.try_into().expect("Expected integer predicate"),
+                            &self.satisfaction_solver.assignments_propositional,
+                            &self.satisfaction_solver.assignments_integer,
+                        ),
+                );
+        }
+
+        self.satisfaction_solver.propagate_enqueued();
+        self.satisfaction_solver.is_conflicting()
+    }
+
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is minimised (or is indicated to terminate by the provided
     /// [`TerminationCondition`]).
