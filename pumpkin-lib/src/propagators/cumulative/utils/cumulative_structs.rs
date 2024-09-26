@@ -75,22 +75,79 @@ pub(crate) struct UpdatedTaskInfo<Var> {
     pub(crate) new_upper_bound: i32,
 }
 
+pub(crate) struct MandatoryPartAdjustments {
+    added_parts: Vec<Range<i32>>,
+    removed_parts: Vec<Range<i32>>,
+}
+
+impl MandatoryPartAdjustments {
+    fn new(added_parts: Vec<Range<i32>>, removed_parts: Vec<Range<i32>>) -> Self {
+        Self {
+            added_parts,
+            removed_parts,
+        }
+    }
+
+    pub(crate) fn get_removed_parts(&self) -> impl Iterator<Item = Range<i32>> + '_ {
+        self.removed_parts
+            .iter()
+            .filter(|range| !range.is_empty())
+            .cloned()
+    }
+
+    pub(crate) fn get_added_parts(&self) -> impl Iterator<Item = Range<i32>> + '_ {
+        self.added_parts
+            .iter()
+            .filter(|range| !range.is_empty())
+            .cloned()
+    }
+
+    fn empty() -> Self {
+        Self {
+            added_parts: vec![],
+            removed_parts: vec![],
+        }
+    }
+
+    fn from_added_part(added_part: Range<i32>) -> Self {
+        Self {
+            added_parts: vec![added_part],
+            removed_parts: vec![],
+        }
+    }
+
+    fn from_removed_part(removed_part: Range<i32>) -> Self {
+        Self {
+            added_parts: vec![],
+            removed_parts: vec![removed_part],
+        }
+    }
+
+    fn from_added_and_removed_part(added_part: Range<i32>, removed_part: Range<i32>) -> Self {
+        Self {
+            added_parts: vec![added_part],
+            removed_parts: vec![removed_part],
+        }
+    }
+}
+
 impl<Var> UpdatedTaskInfo<Var> {
-    pub(crate) fn get_removed_and_added_mandatory_parts(
-        &self,
-    ) -> (Vec<Range<i32>>, Vec<Range<i32>>) {
+    pub(crate) fn get_removed_and_added_mandatory_parts(&self) -> MandatoryPartAdjustments {
         let previous_mandatory_part =
             self.old_upper_bound..self.old_lower_bound + self.task.processing_time;
         let new_mandatory_part =
             self.new_upper_bound..self.new_lower_bound + self.task.processing_time;
 
+        if previous_mandatory_part.is_empty() && new_mandatory_part.is_empty() {
+            return MandatoryPartAdjustments::empty();
+        }
         if previous_mandatory_part.is_empty() {
             // There is no previous mandatory part, simply add the new one
-            return (vec![], vec![new_mandatory_part]);
+            return MandatoryPartAdjustments::from_added_part(new_mandatory_part);
         }
         if new_mandatory_part.is_empty() {
             // There is no new mandatory part, simply remove the old mandatory part
-            return (vec![previous_mandatory_part], vec![]);
+            return MandatoryPartAdjustments::from_removed_part(previous_mandatory_part);
         }
 
         if previous_mandatory_part.start >= new_mandatory_part.end
@@ -98,7 +155,10 @@ impl<Var> UpdatedTaskInfo<Var> {
         {
             // There is no overlap between the parts, we remove the old mandatory part and add the
             // new
-            return (vec![previous_mandatory_part], vec![new_mandatory_part]);
+            return MandatoryPartAdjustments::from_added_and_removed_part(
+                new_mandatory_part,
+                previous_mandatory_part,
+            );
         }
 
         let mut removed_parts = vec![];
@@ -136,7 +196,7 @@ impl<Var> UpdatedTaskInfo<Var> {
                 removed_parts.push(previous_mandatory_part.start..new_mandatory_part.start);
             }
         }
-        (removed_parts, added_parts)
+        MandatoryPartAdjustments::new(added_parts, removed_parts)
     }
 }
 

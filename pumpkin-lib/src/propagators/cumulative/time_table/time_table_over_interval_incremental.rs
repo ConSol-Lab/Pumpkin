@@ -29,6 +29,7 @@ use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::DynamicStructures;
+use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::Task;
 #[cfg(doc)]
@@ -98,17 +99,14 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     fn add_to_time_table(
         &mut self,
         context: &PropagationContextMut,
-        update_ranges: Vec<Range<i32>>,
+        mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
         let mut conflict = None;
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
-        for update_range in update_ranges {
-            if update_range.is_empty() {
-                continue;
-            }
+        for update_range in mandatory_part_adjustments.get_added_parts() {
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
@@ -146,14 +144,15 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
         }
     }
 
-    fn remove_from_time_table(&mut self, update_ranges: Vec<Range<i32>>, task: &Rc<Task<Var>>) {
+    fn remove_from_time_table(
+        &mut self,
+        mandatory_part_adjustments: &MandatoryPartAdjustments,
+        task: &Rc<Task<Var>>,
+    ) {
         // We consider both of the possible update ranges
         // Note that the upper update range is first considered to avoid any issues with the
         // indices when processing the other update range
-        for update_range in update_ranges {
-            if update_range.is_empty() {
-                continue;
-            }
+        for update_range in mandatory_part_adjustments.get_removed_parts() {
             // First we attempt to find overlapping profiles
             match determine_profiles_to_update(&self.time_table, &update_range) {
                 Ok((start_index, end_index)) => {
@@ -181,16 +180,14 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
         let mut found_conflict = false;
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
             let element = self.dynamic_structures.get_update_for_task(&updated_task);
-            let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
+            let mandatory_part_adjustments = element.get_removed_and_added_mandatory_parts();
 
-            if !removed_parts.is_empty() {
-                self.remove_from_time_table(removed_parts, &updated_task);
-            }
+            self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
 
-            if !added_parts.is_empty() {
-                let result = self.add_to_time_table(context, added_parts, &updated_task);
-                found_conflict |= result.is_err();
-            }
+            let result =
+                self.add_to_time_table(context, &mandatory_part_adjustments, &updated_task);
+            found_conflict |= result.is_err();
+
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
         if found_conflict || self.found_previous_conflict {

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::ops::Range;
 use std::rc::Rc;
 
 use super::create_time_table_per_point_from_scratch;
@@ -30,6 +29,7 @@ use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::DynamicStructures;
+use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::Task;
 #[cfg(doc)]
@@ -97,19 +97,14 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
     fn add_to_time_table(
         &mut self,
         context: &PropagationContext,
-        added_parts: Vec<Range<i32>>,
+        mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
         // Go over all of the updated tasks and calculate the added mandatory part (we know
         // that for each of these tasks, a mandatory part exists, otherwise it would not
         // have been added (see [`should_propagate`]))
         let mut conflict = None;
-        for time_point in added_parts
-            .iter()
-            .filter(|range| !range.is_empty())
-            .cloned()
-            .flatten()
-        {
+        for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
             pumpkin_assert_extreme!(
                         !self.time_table.contains_key(&(time_point as u32))
                         || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
@@ -141,13 +136,12 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         }
     }
 
-    fn remove_from_time_table(&mut self, removed_parts: Vec<Range<i32>>, task: &Rc<Task<Var>>) {
-        for time_point in removed_parts
-            .iter()
-            .filter(|range| !range.is_empty())
-            .cloned()
-            .flatten()
-        {
+    fn remove_from_time_table(
+        &mut self,
+        mandatory_part_adjustments: &MandatoryPartAdjustments,
+        task: &Rc<Task<Var>>,
+    ) {
+        for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
             pumpkin_assert_extreme!(
                         self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
                         "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
@@ -184,16 +178,17 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
             let dynamic_structures = &mut self.dynamic_structures;
             let element = dynamic_structures.get_update_for_task(&updated_task);
-            let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
-            if !removed_parts.is_empty() {
-                self.remove_from_time_table(removed_parts, &updated_task);
-            }
+            let mandatory_part_adjustments = element.get_removed_and_added_mandatory_parts();
 
-            if !added_parts.is_empty() {
-                let result =
-                    self.add_to_time_table(&context.as_readonly(), added_parts, &updated_task);
-                found_conflict |= result.is_err()
-            }
+            self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
+
+            let result = self.add_to_time_table(
+                &context.as_readonly(),
+                &mandatory_part_adjustments,
+                &updated_task,
+            );
+            found_conflict |= result.is_err();
+
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
 
