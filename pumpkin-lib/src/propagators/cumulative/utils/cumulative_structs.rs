@@ -151,7 +151,7 @@ pub(crate) struct DynamicStructures<Var> {
     bounds: Vec<(i32, i32)>,
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
-    updates: Vec<Option<UpdatedTaskInfo<Var>>>,
+    updates: Vec<UpdatedTaskInfo<Var>>,
     /// The tasks which have been updated since the last iteration
     updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// The tasks which are unfixed
@@ -166,7 +166,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         let unfixed_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         Self {
             bounds: vec![],
-            updates: vec![None; parameters.tasks.len()],
+            updates: vec![],
             updated_tasks,
             unfixed_tasks,
         }
@@ -188,12 +188,15 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
     pub(crate) fn get_update_for_task(
         &mut self,
         updated_task: &Rc<Task<Var>>,
-    ) -> Option<UpdatedTaskInfo<Var>> {
+    ) -> UpdatedTaskInfo<Var> {
         self.updates[updated_task.id.unpack() as usize].clone()
     }
 
     pub(crate) fn reset_update_for_task(&mut self, updated_task: &Rc<Task<Var>>) {
-        self.updates[updated_task.id.unpack() as usize] = None
+        let update = &mut self.updates[updated_task.id.unpack() as usize];
+
+        update.old_lower_bound = update.new_lower_bound;
+        update.old_upper_bound = update.new_upper_bound;
     }
 
     pub(crate) fn get_stored_bounds(&self) -> &[(i32, i32)] {
@@ -226,6 +229,22 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         parameters: &CumulativeParameters<Var>,
     ) {
         for task in parameters.tasks.iter() {
+            if self.updates.len() <= task.id.unpack() as usize {
+                self.updates.push(UpdatedTaskInfo {
+                    task: Rc::clone(task),
+                    old_lower_bound: context.lower_bound(&task.start_variable),
+                    old_upper_bound: context.upper_bound(&task.start_variable),
+                    new_lower_bound: context.lower_bound(&task.start_variable),
+                    new_upper_bound: context.upper_bound(&task.start_variable),
+                })
+            } else {
+                let update = &mut self.updates[task.id.unpack() as usize];
+                update.new_lower_bound = context.lower_bound(&task.start_variable);
+                update.new_upper_bound = context.upper_bound(&task.start_variable);
+                update.old_lower_bound = context.lower_bound(&task.start_variable);
+                update.old_upper_bound = context.upper_bound(&task.start_variable);
+            }
+
             self.bounds.push((
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
@@ -282,12 +301,10 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         task: &Rc<Task<Var>>,
         updated_task_info: UpdatedTaskInfo<Var>,
     ) {
-        if let Some(stored_updated_task_info) = &mut self.updates[task.id.unpack() as usize] {
-            stored_updated_task_info.new_lower_bound = updated_task_info.new_lower_bound;
-            stored_updated_task_info.new_upper_bound = updated_task_info.new_upper_bound;
-        } else {
-            self.updates[task.id.unpack() as usize] = Some(updated_task_info);
-        }
+        let stored_updated_task_info = &mut self.updates[task.id.unpack() as usize];
+
+        stored_updated_task_info.new_lower_bound = updated_task_info.new_lower_bound;
+        stored_updated_task_info.new_upper_bound = updated_task_info.new_upper_bound;
     }
 
     pub(crate) fn recreate_from_context(
@@ -304,12 +321,6 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         other.reset_all_bounds_and_remove_fixed(context, parameters);
 
         other
-    }
-
-    pub(crate) fn clean_updated(&mut self) {
-        while let Some(updated_task) = self.pop_next_updated_task() {
-            self.updates[updated_task.id.unpack() as usize] = None;
-        }
     }
 }
 

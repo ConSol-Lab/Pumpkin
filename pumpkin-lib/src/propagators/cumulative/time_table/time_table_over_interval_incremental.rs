@@ -180,17 +180,16 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         let mut found_conflict = false;
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
-            if let Some(element) = &self.dynamic_structures.get_update_for_task(&updated_task) {
-                let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
+            let element = self.dynamic_structures.get_update_for_task(&updated_task);
+            let (removed_parts, added_parts) = element.get_removed_and_added_mandatory_parts();
 
-                if !removed_parts.is_empty() {
-                    self.remove_from_time_table(removed_parts, &updated_task);
-                }
+            if !removed_parts.is_empty() {
+                self.remove_from_time_table(removed_parts, &updated_task);
+            }
 
-                if !added_parts.is_empty() {
-                    let result = self.add_to_time_table(context, added_parts, &updated_task);
-                    found_conflict |= result.is_err();
-                }
+            if !added_parts.is_empty() {
+                let result = self.add_to_time_table(context, added_parts, &updated_task);
+                found_conflict |= result.is_err();
             }
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
@@ -353,7 +352,6 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         // First we store the bounds in the parameters
         self.dynamic_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
-        self.dynamic_structures.clean_updated();
 
         // Then we do normal propagation
         self.time_table = create_time_table_over_interval_from_scratch(context, &self.parameters)?;
