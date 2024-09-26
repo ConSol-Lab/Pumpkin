@@ -55,7 +55,7 @@ pub(crate) struct ArgTask<Var> {
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct UpdatedTaskInfo<Var> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
@@ -75,7 +75,7 @@ pub(crate) struct UpdatedTaskInfo<Var> {
 /// - The capacity of the resource
 /// - The known bounds
 /// - The values which have been updated since the previous propagation
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct CumulativeParameters<Var> {
     /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
     /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
