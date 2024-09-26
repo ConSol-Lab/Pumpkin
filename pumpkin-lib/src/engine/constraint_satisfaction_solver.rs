@@ -1870,69 +1870,6 @@ mod tests {
         (solver, vec![lit1, lit2])
     }
 
-    /// Warning: This test is potentially flaky due to its dependence on the propagation order of
-    /// the clausal propagator, please treat with caution.
-    // TODO: test does not work with the new checking of propagations
-    // #[test]
-    // fn test_synchronisation_view() {
-    //     let mut solver = ConstraintSatisfactionSolver::default();
-    //     let variable = solver.create_new_integer_variable(1, 5, None);
-    //     let other_variable = solver.create_new_integer_variable(3, 5, None);
-
-    //     // We create a test solver which propagates such that there is a jump across a hole in
-    // the     // domain and then we report a conflict based on the assigned values.
-    //     let propagator_constructor = TestPropagator::new(
-    //         vec![
-    //             (predicate!(variable != 2), conjunction!()),
-    //             (predicate!(variable <= 3), conjunction!()),
-    //             (predicate!(variable != 3), conjunction!()),
-    //             (predicate!(other_variable != 4), conjunction!()),
-    //             (predicate!(other_variable <= 4), conjunction!()),
-    //         ],
-    //         vec![conjunction!([other_variable == 3] & [variable == 1])],
-    //     );
-
-    //     let result = solver.add_propagator(propagator_constructor, None);
-    //     assert!(result.is_ok());
-
-    //     // We add the clause that will lead to the conflict in the SAT-solver
-    //     let result = solver.add_clause([
-    //         solver.get_literal(predicate![variable == 2]),
-    //         solver.get_literal(predicate![variable == 3]),
-    //         solver.get_literal(predicate![variable == 4]),
-    //         solver.get_literal(predicate![variable == 5]),
-    //     ]);
-    //     assert!(result.is_ok());
-
-    //     solver.declare_new_decision_level();
-
-    //     // We manually enqueue the propagator to mimic solver behaviour
-    //     solver
-    //         .propagator_queue
-    //         .enqueue_propagator(PropagatorId(0), 0);
-
-    //     // After propagating we expect that both the CP propagators and the SAT solver have found
-    // a     // conflict, however, the CP conflict explanation contains variables which are not
-    // assigned     // in the SAT view due to it finding a conflict. We expect the conflict info
-    // in the solver     // to contain the conflict found by the clausal propagator.
-    //     solver.propagate_enqueued();
-
-    //     assert!(solver.state.is_inconsistent());
-    //     assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
-
-    //     // We check whether the conflict which is returned is the conflict found by the
-    // SAT-solver     // rather than the one found by the CP solver.
-    //     assert!(matches!(
-    //         solver.state.internal_state,
-    //         CSPSolverStateInternal::Conflict {
-    //             conflict_info: StoredConflictInfo::Propagation {
-    //                 reference: _,
-    //                 literal: _,
-    //             },
-    //         }
-    //     ));
-    // }
-
     #[test]
     fn core_extraction_unit_core() {
         let mut solver = ConstraintSatisfactionSolver::default();
