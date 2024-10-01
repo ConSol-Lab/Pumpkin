@@ -174,6 +174,20 @@ impl DebugHelper {
             .filter(|&predicate| predicate != Predicate::True)
             .collect();
 
+        if reason
+            .iter()
+            .any(|&predicate| predicate == Predicate::False)
+        {
+            panic!(
+                "The reason for propagation should not contain the trivially false predicate.
+                 Propagator: {},
+                 id: {propagator_id},
+                 The reported propagation reason: {reason},
+                 Propagated predicate: {propagated_predicate}",
+                propagator.name(),
+            );
+        }
+
         // Note that it could be the case that the reason contains the trivially false predicate in
         // case of lifting!
         //

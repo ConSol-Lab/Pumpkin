@@ -1443,37 +1443,31 @@ impl ConstraintSatisfactionSolver {
         num_trail_entries_before: usize,
         propagator_id: PropagatorId,
     ) -> bool {
-        {
-            let mut result = true;
-            for trail_index in
-                num_trail_entries_before..self.assignments_integer.num_trail_entries()
-            {
-                let trail_entry = self.assignments_integer.get_trail_entry(trail_index);
+        let mut result = true;
+        for trail_index in num_trail_entries_before..self.assignments_integer.num_trail_entries() {
+            let trail_entry = self.assignments_integer.get_trail_entry(trail_index);
 
-                let context = PropagationContext::new(
-                    &self.assignments_integer,
-                    &self.assignments_propositional,
-                );
+            let context =
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
 
-                let reason = self.reason_store.get_or_compute(
-                    trail_entry
-                        .reason
-                        .expect("Expected checked propagation to have a reason"),
-                    &context,
-                );
+            let reason = self.reason_store.get_or_compute(
+                trail_entry
+                    .reason
+                    .expect("Expected checked propagation to have a reason"),
+                &context,
+            );
 
-                result &= DebugHelper::debug_propagator_reason(
-                    trail_entry.predicate.into(),
-                    reason.expect("Expected reason to exist"),
-                    &self.assignments_integer,
-                    &self.assignments_propositional,
-                    &self.variable_literal_mappings,
-                    &self.cp_propagators[propagator_id],
-                    propagator_id,
-                );
-            }
-            result
+            result &= DebugHelper::debug_propagator_reason(
+                trail_entry.predicate.into(),
+                reason.expect("Expected reason to exist"),
+                &self.assignments_integer,
+                &self.assignments_propositional,
+                &self.variable_literal_mappings,
+                &self.cp_propagators[propagator_id],
+                propagator_id,
+            );
         }
+        result
     }
 }
 
@@ -2146,130 +2140,4 @@ mod tests {
             }
         }
     }
-
-    //     struct TestPropagator {
-    //     original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
-    //     propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
-    //     conflicts: Vec<PropositionalConjunction>,
-    //     is_in_root: bool,
-    // }
-
-    // impl TestPropagator {
-    //     pub(crate) fn new(
-    //         propagations: Vec<(Predicate, PropositionalConjunction)>,
-    //         conflicts: Vec<PropositionalConjunction>,
-    //     ) -> Self {
-    //         let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = propagations
-    //             .iter()
-    //             .rev()
-    //             .map(|variable| {
-    //                 (
-    //                     variable.0.get_domain().unwrap(),
-    //                     variable.0,
-    //                     variable.1.clone(),
-    //                 )
-    //             })
-    //             .collect::<Vec<_>>();
-    //         TestPropagator {
-    //             original_propagations: propagations.clone(),
-    //             propagations,
-    //             conflicts: conflicts.into_iter().rev().collect::<Vec<_>>(),
-    //             is_in_root: true,
-    //         }
-    //     }
-    // }
-
-    // impl Propagator for TestPropagator {
-    //     fn initialise_at_root(
-    //         &mut self,
-    //         context: &mut PropagatorInitialisationContext,
-    //     ) -> Result<(), PropositionalConjunction> {
-    //         self.propagations
-    //             .iter()
-    //             .enumerate()
-    //             .for_each(|(index, variable)| {
-    //                 let _ = context.register(
-    //                     variable.0,
-    //                     DomainEvents::BOUNDS,
-    //                     LocalId::from(index as u32),
-    //                 );
-    //             });
-    //         Ok(())
-    //     }
-
-    //     fn name(&self) -> &str {
-    //         "TestPropagator"
-    //     }
-
-    //     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-    //         if self.is_in_root {
-    //             self.is_in_root = false;
-    //             return Ok(());
-    //         }
-
-    //         while let Some(propagation) = self.propagations.pop() {
-    //             match propagation.1 {
-    //                 Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
-    //                     IntegerPredicate::LowerBound {
-    //                         domain_id: _,
-    //                         lower_bound,
-    //                     } => {
-    //                         let result =
-    //                             context.set_lower_bound(&propagation.0, lower_bound,
-    // propagation.2);                         assert!(result.is_ok())
-    //                     }
-    //                     IntegerPredicate::UpperBound {
-    //                         domain_id: _,
-    //                         upper_bound,
-    //                     } => {
-    //                         let result =
-    //                             context.set_upper_bound(&propagation.0, upper_bound,
-    // propagation.2);                         assert!(result.is_ok())
-    //                     }
-    //                     IntegerPredicate::NotEqual {
-    //                         domain_id: _,
-    //                         not_equal_constant,
-    //                     } => {
-    //                         let result =
-    //                             context.remove(&propagation.0, not_equal_constant,
-    // propagation.2);                         assert!(result.is_ok())
-    //                     }
-    //                     IntegerPredicate::Equal {
-    //                         domain_id: _,
-    //                         equality_constant: _,
-    //                     } => todo!(),
-    //                 },
-    //                 _ => todo!(),
-    //             }
-    //         }
-
-    //         if let Some(conflict) = self.conflicts.pop() {
-    //             return Err(conflict.into());
-    //         }
-
-    //         Ok(())
-    //     }
-
-    //     fn debug_propagate_from_scratch(
-    //         &self,
-    //         context: PropagationContextMut,
-    //     ) -> PropagationStatusCP {
-    //         // This method detects when a debug propagation method is called and it attempts to
-    //         // return the correct result in this case
-    //         if self.conflicts.is_empty()
-    //             && self.original_propagations.iter().all(|propagation| {
-    //                 context.assignments_integer().does_integer_predicate_hold(
-    //                     propagation
-    //                         .1
-    //                         .try_into()
-    //                         .expect("Expected provided predicate to be integer"),
-    //                 )
-    //             })
-    //         {
-    //             Err(crate::basic_types::Inconsistency::EmptyDomain)
-    //         } else {
-    //             Ok(())
-    //         }
-    //     }
-    // }
 }
