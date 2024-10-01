@@ -13,6 +13,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
@@ -111,7 +112,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         &mut self,
         context: PropagationContext,
         local_id: LocalId,
-        _event: OpaqueDomainEvent,
+        event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
@@ -131,6 +132,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             self.dynamic_structures.get_stored_bounds_mut(),
             &updated_task,
         );
+
+        if matches!(
+            updated_task.start_variable.unpack_event(event),
+            IntDomainEvent::Assign
+        ) {
+            self.dynamic_structures.fix_task(&updated_task)
+        }
+
         result.decision
     }
 
@@ -147,7 +156,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.dynamic_structures
-            .reset_all_bounds(context, &self.parameters);
+            .initialise_bounds(context, &self.parameters);
         register_tasks(&self.parameters.tasks, context, true);
 
         Ok(())

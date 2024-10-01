@@ -161,6 +161,10 @@ impl<T> SparseSet<T> {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.domain[..self.size].iter()
     }
+
+    pub(crate) fn out_of_domain(&self) -> impl Iterator<Item = &T> {
+        self.domain[self.size..].iter()
+    }
 }
 
 impl<T> IntoIterator for SparseSet<T> {

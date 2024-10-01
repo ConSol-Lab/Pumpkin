@@ -1812,7 +1812,6 @@ mod tests {
     ///
     /// It is assumed that the propagations do not lead to conflict, if the propagations do lead to
     /// a conflict then this method will panic.
-
     fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }

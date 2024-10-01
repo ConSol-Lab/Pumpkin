@@ -11,6 +11,7 @@ use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::CumulativePropagatorOptions;
+use crate::pumpkin_assert_moderate;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
@@ -290,13 +291,14 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
     ) {
         for task in parameters.tasks.iter() {
             if self.updates.len() <= task.id.unpack() as usize {
+                pumpkin_assert_moderate!(task.id.unpack() as usize == self.updates.len());
                 self.updates.push(UpdatedTaskInfo {
                     task: Rc::clone(task),
                     old_lower_bound: context.lower_bound(&task.start_variable),
                     old_upper_bound: context.upper_bound(&task.start_variable),
                     new_lower_bound: context.lower_bound(&task.start_variable),
                     new_upper_bound: context.upper_bound(&task.start_variable),
-                })
+                });
             } else {
                 let update = &mut self.updates[task.id.unpack() as usize];
                 update.new_lower_bound = context.lower_bound(&task.start_variable);
@@ -305,17 +307,28 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
                 update.old_upper_bound = context.upper_bound(&task.start_variable);
             }
 
-            self.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ));
+            if self.bounds.len() <= task.id.unpack() as usize {
+                pumpkin_assert_moderate!(task.id.unpack() as usize == self.bounds.len());
+                self.bounds.push((
+                    context.lower_bound(&task.start_variable),
+                    context.upper_bound(&task.start_variable),
+                ));
+            } else {
+                self.bounds[task.id.unpack() as usize] = (
+                    context.lower_bound(&task.start_variable),
+                    context.upper_bound(&task.start_variable),
+                );
+            }
+
             if context.is_fixed(&task.start_variable) {
                 self.unfixed_tasks.remove(task);
+            } else {
+                self.unfixed_tasks.insert(Rc::clone(task));
             }
         }
     }
 
-    pub(crate) fn reset_all_bounds<Context: ReadDomains>(
+    pub(crate) fn initialise_bounds<Context: ReadDomains>(
         &mut self,
         context: &Context,
         parameters: &CumulativeParameters<Var>,
@@ -330,6 +343,10 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
 
     pub(crate) fn get_unfixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
         self.unfixed_tasks.iter()
+    }
+
+    pub(crate) fn get_fixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
+        self.unfixed_tasks.out_of_domain()
     }
 
     pub(crate) fn number_of_unfixed_tasks(&self) -> usize {

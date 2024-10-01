@@ -80,9 +80,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         context.lower_bound(&updated_task.start_variable) > dynamic_structures.get_stored_lower_bound(updated_task)
             || dynamic_structures.get_stored_upper_bound(updated_task)
                 >= context.upper_bound(&updated_task.start_variable)
-        , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound,
-           this either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates
-           or the stored bounds were not managed properly"
+        , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
     );
 
     let mut result = ShouldEnqueueResult {
@@ -92,6 +90,12 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 
     let old_lower_bound = dynamic_structures.get_stored_lower_bound(updated_task);
     let old_upper_bound = dynamic_structures.get_stored_upper_bound(updated_task);
+
+    if old_lower_bound == context.lower_bound(&updated_task.start_variable)
+        && old_upper_bound == context.upper_bound(&updated_task.start_variable)
+    {
+        return result;
+    }
 
     // We check whether a mandatory part was extended/introduced
     if has_mandatory_part(context, updated_task) {
@@ -239,6 +243,12 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
             .get_unfixed_tasks()
             .all(|unfixed_task| !context.is_fixed(&unfixed_task.start_variable)),
         "All of the unfixed tasks should not be fixed at this point"
+    );
+    pumpkin_assert_extreme!(
+        dynamic_structures
+            .get_fixed_tasks()
+            .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
+        "All of the fixed tasks should be fixed at this point"
     );
 
     if parameters.options.generate_sequence {

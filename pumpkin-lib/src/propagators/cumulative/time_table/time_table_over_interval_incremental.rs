@@ -987,6 +987,7 @@ mod checks {
 /// Contains functions related to debugging
 mod debug {
     use std::fmt::Debug;
+    use std::ops::Range;
 
     use crate::basic_types::HashSet;
     use crate::engine::propagation::PropagationContext;
@@ -1066,6 +1067,9 @@ mod debug {
         let mut current_index = start_index;
         let mut end = end_index;
 
+        let mut insertion_range: Option<Range<usize>> = None;
+        let mut to_add: Option<Vec<ResourceProfile<Var>>> = None;
+
         // We go over all pairs of profiles, starting from start index until end index
         while current_index < end {
             let first = current_index;
@@ -1089,18 +1093,32 @@ mod debug {
                     profile_tasks: start_profile.profile_tasks.to_owned(),
                     height: start_profile.height,
                 };
-                // We replace the previously separate profile with the new profile
-                let _ = time_table.splice(first..(current_index + 1), [new_profile]);
 
-                // We have removed profiles from the time-table and we thus need to adjust our
-                // end-index under consideration by the number of profiles which were removed
-                end -= current_index - first;
+                if let Some(to_add) = to_add.as_mut() {
+                    to_add.push(new_profile);
+                } else {
+                    to_add = Some(vec![new_profile]);
+                }
 
-                // We reset the current index to the index of the new profile and move onto the next
-                // profile
-                current_index = first;
+                insertion_range = Some(
+                    insertion_range
+                        .map(|previous_range| previous_range.start..(current_index + 1))
+                        .unwrap_or_else(|| first..(current_index + 1)),
+                );
+            } else if let Some(replacing_profiles) = to_add.take() {
+                if let Some(replacing_range) = insertion_range.take() {
+                    end -= replacing_range.end - replacing_profiles.len();
+                    current_index = replacing_range.end - 1;
+                    let _ = time_table.splice(replacing_range, replacing_profiles);
+                }
             }
+
             current_index += 1;
+        }
+        if let Some(replacing_profiles) = to_add.take() {
+            if let Some(replacing_range) = insertion_range.take() {
+                let _ = time_table.splice(replacing_range, replacing_profiles);
+            }
         }
     }
 
