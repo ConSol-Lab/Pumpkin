@@ -1437,28 +1437,43 @@ impl ConstraintSatisfactionSolver {
                     &self.assignments_integer,
                 );
 
-                let premises = reason.iter().map(|predicate| match predicate {
-                    Predicate::IntegerPredicate(predicate) => {
-                        self.variable_literal_mappings.get_literal(
-                            *predicate,
-                            &self.assignments_propositional,
-                            &self.assignments_integer,
-                        )
-                    }
-                    Predicate::Literal(literal) => *literal,
-                    Predicate::False => self.false_literal,
-                    Predicate::True => self.true_literal,
-                });
+                let premises = reason
+                    .iter()
+                    .map(|predicate| match predicate {
+                        Predicate::IntegerPredicate(predicate) => {
+                            self.variable_literal_mappings.get_literal(
+                                *predicate,
+                                &self.assignments_propositional,
+                                &self.assignments_integer,
+                            )
+                        }
+                        Predicate::Literal(literal) => *literal,
+                        Predicate::False => self.false_literal,
+                        Predicate::True => self.true_literal,
+                    })
+                    .collect::<Vec<_>>();
 
                 let _ = self
                     .internal_parameters
                     .proof_log
-                    .log_inference(tag, premises, propagated);
+                    .log_inference(tag, premises.clone(), propagated)
+                    .and_then(|id| {
+                        let _ = self.unit_nogood_step_ids.insert(propagated, id);
 
-                let _ = self
-                    .internal_parameters
-                    .proof_log
-                    .log_learned_clause([propagated]);
+                        for premise in premises {
+                            let step_id = self
+                                .unit_nogood_step_ids
+                                .get(&premise)
+                                .copied()
+                                .expect("All unit nogoods are logged at this point");
+
+                            self.internal_parameters.proof_log.add_propagation(step_id);
+                        }
+
+                        self.internal_parameters
+                            .proof_log
+                            .log_learned_clause([propagated])
+                    });
             }
         }
 
