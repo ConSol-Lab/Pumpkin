@@ -978,7 +978,6 @@ impl ConstraintSatisfactionSolver {
                 // assumptions.
                 if self.restart_strategy.should_restart() {
                     self.restart_during_search(brancher);
-                    self.declare_new_decision_level();
                 }
 
                 let branching_result = self.enqueue_next_decision(brancher);
@@ -1185,6 +1184,10 @@ impl ConstraintSatisfactionSolver {
     /// differs from backtracking to level zero in that a restart backtracks to decision level
     /// zero and then performs additional operations, e.g., clean up learned clauses, adjust
     /// restart frequency, etc.
+    ///
+    /// This method will also increase the decision level after backtracking.
+    ///
+    /// Returns true if a restart took place and false otherwise.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
             self.are_all_assumptions_assigned(),
@@ -1207,6 +1210,8 @@ impl ConstraintSatisfactionSolver {
         self.backtrack(0, brancher);
 
         self.restart_strategy.notify_restart();
+
+        self.declare_new_decision_level();
     }
 
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
