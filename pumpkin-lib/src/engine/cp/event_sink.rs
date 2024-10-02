@@ -30,7 +30,7 @@ impl EventSink {
         event_sink
     }
     pub(crate) fn grow(&mut self) {
-        self.present.push(EnumSet::new());
+        let _ = self.present.push(EnumSet::new());
     }
 
     pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {

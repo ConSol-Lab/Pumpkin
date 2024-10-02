@@ -49,8 +49,8 @@ impl BooleanDomainEvent {
 // public functions
 impl WatchListPropositional {
     pub(crate) fn grow(&mut self) {
-        self.watchers.push(WatcherPropositional::default());
-        self.watchers.push(WatcherPropositional::default());
+        let _ = self.watchers.push(WatcherPropositional::default());
+        let _ = self.watchers.push(WatcherPropositional::default());
     }
 
     pub(crate) fn is_watching_anything(&self) -> bool {
