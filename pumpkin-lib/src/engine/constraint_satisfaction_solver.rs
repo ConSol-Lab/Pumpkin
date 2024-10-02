@@ -403,9 +403,12 @@ impl ConstraintSatisfactionSolver {
     fn complete_proof(&mut self) {
         pumpkin_assert_simple!(self.is_conflicting());
 
+        if !self.internal_parameters.proof_log.is_logging_hints() {
+            return;
+        }
+
         let mut unexplained = vec![];
 
-        println!("completing proof {:?}", self.state.get_conflict_info());
         match self.state.get_conflict_info() {
             StoredConflictInfo::VirtualBinaryClause { .. } => panic!("should be unused"),
             StoredConflictInfo::Propagation { reference, literal } => {

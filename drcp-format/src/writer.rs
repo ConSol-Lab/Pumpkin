@@ -26,17 +26,19 @@ use crate::steps::StepId;
 /// writer
 ///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], lit(-2))
 ///     .unwrap();
-/// let nogood_id = writer.log_nogood_clause([lit(1), lit(-3), lit(5)]).unwrap();
+/// let nogood_id = writer
+///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None)
+///     .unwrap();
 /// writer.log_deletion(nogood_id).unwrap();
 /// writer.unsat().unwrap();
 ///
 /// let expected = "
-/// i 4 5 0 -2 l:linear_bound
-/// n 1 1 -3 5
-/// d 1
+/// i 1 4 5 0 -2 l:linear_bound
+/// n 2 1 -3 5
+/// d 2
 /// c UNSAT
 /// ";
-/// assert_eq!(proof, expected.trim_start().as_bytes());
+/// assert_eq!(std::str::from_utf8(&proof).unwrap(), expected.trim_start());
 /// ```
 #[derive(Debug)]
 pub struct ProofWriter<W: Write, Literals> {
