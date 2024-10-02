@@ -291,7 +291,7 @@ mod tests {
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1\n",
+            "i 1 2 -3 0 1\n",
         );
     }
 
@@ -305,7 +305,7 @@ mod tests {
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 l:inf_label\n",
+            "i 1 2 -3 0 1 l:inf_label\n",
         );
     }
 
@@ -319,7 +319,7 @@ mod tests {
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 c:1\n",
+            "i 1 2 -3 0 1 c:1\n",
         );
     }
 
@@ -333,7 +333,7 @@ mod tests {
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 c:1 l:inf_label\n",
+            "i 1 2 -3 0 1 c:1 l:inf_label\n",
         );
     }
 
