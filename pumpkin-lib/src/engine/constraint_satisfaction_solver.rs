@@ -1005,7 +1005,14 @@ impl ConstraintSatisfactionSolver {
             // conflict
             else {
                 if self.assignments_propositional.is_at_the_root_level() {
-                    self.complete_proof();
+                    if self.assumptions.is_empty() {
+                        // Only complete the proof when _not_ solving under assumptions. It is
+                        // unclear what a proof would look like with assumptions, as there is extra
+                        // state to consider. It also means that the learned clause could be
+                        // non-empty, messing with all kinds of asserts.
+                        self.complete_proof();
+                    }
+
                     self.state.declare_infeasible();
 
                     return CSPSolverExecutionFlag::Infeasible;

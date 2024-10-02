@@ -172,7 +172,7 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                 let _ = self.internal_parameters.proof_log.log_inference(
                     self.propagator_store.get_tag(*propagator),
-                    explanation_literals.iter().copied(),
+                    explanation_literals.iter().map(|&lit| !lit),
                     self.assignments_propositional.false_literal,
                 );
 
@@ -226,7 +226,7 @@ impl<'a> ConflictAnalysisContext<'a> {
 
         let _ = self.internal_parameters.proof_log.log_inference(
             self.propagator_store.get_tag(propagator),
-            explanation_literals.iter().skip(1).copied(),
+            explanation_literals.iter().skip(1).map(|&lit| !lit),
             propagated_literal,
         );
 
