@@ -109,6 +109,9 @@ impl ProofLog {
     }
 
     /// Log a learned clause to the proof.
+    ///
+    /// The inferences and marked propagations are assumed to be recorded in reverse-application
+    /// order.
     pub(crate) fn log_learned_clause(
         &mut self,
         literals: impl IntoIterator<Item = Literal>,
@@ -119,7 +122,9 @@ impl ProofLog {
                 propagation_order_hint,
                 ..
             }) => {
-                let propagation_hints = propagation_order_hint.as_ref().map(|vec| vec.as_slice());
+                let propagation_hints = propagation_order_hint
+                    .as_ref()
+                    .map(|vec| vec.iter().rev().copied());
                 let id = writer.log_nogood_clause(literals, propagation_hints)?;
 
                 // Clear the hints for the next nogood.

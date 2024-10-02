@@ -19,6 +19,7 @@ use crate::steps::StepId;
 /// # use std::num::NonZeroI32;
 /// # use drcp_format::Format;
 /// # use drcp_format::ProofWriter;
+/// # use drcp_format::steps::StepId;
 /// let mut proof: Vec<u8> = Vec::new();
 /// let mut writer = ProofWriter::new(Format::Text, &mut proof, std::convert::identity);
 ///
@@ -27,7 +28,7 @@ use crate::steps::StepId;
 ///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], lit(-2))
 ///     .unwrap();
 /// let nogood_id = writer
-///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None)
+///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None::<[StepId; 0]>)
 ///     .unwrap();
 /// writer.log_deletion(nogood_id).unwrap();
 /// writer.unsat().unwrap();
@@ -87,7 +88,7 @@ where
     pub fn log_nogood_clause(
         &mut self,
         nogood: impl IntoIterator<Item = Literals::Literal>,
-        propagation_hints: Option<&[StepId]>,
+        propagation_hints: Option<impl IntoIterator<Item = StepId>>,
     ) -> std::io::Result<StepId> {
         let id = self.next_step_id();
 
@@ -192,9 +193,10 @@ trait WritableProofStep: Sized {
     }
 }
 
-impl<'a, Literals> WritableProofStep for Nogood<'a, Literals>
+impl<Literals, Hints> WritableProofStep for Nogood<Literals, Hints>
 where
     Literals: IntoIterator<Item = NonZeroI32>,
+    Hints: IntoIterator<Item = StepId>,
 {
     fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
         write!(sink, "n {}", self.id)?;
