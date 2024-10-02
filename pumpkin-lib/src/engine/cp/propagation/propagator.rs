@@ -1,4 +1,5 @@
 use super::PropagatorInitialisationContext;
+use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -170,6 +171,9 @@ pub trait Propagator {
     ) -> Option<PropositionalConjunction> {
         None
     }
+
+    /// Logs statistics of the propagator using the provided [`StatisticLogger`].
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }
 
 /// Indicator of what to do when a propagator is notified.

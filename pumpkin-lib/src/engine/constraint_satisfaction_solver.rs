@@ -19,9 +19,9 @@ use super::conflict_analysis::ResolutionConflictAnalyser;
 use super::propagation::store::PropagatorStore;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
+use crate::basic_types::statistics::counters::Counters;
+use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
@@ -524,7 +524,14 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log_statistics()
+        self.counters.log_statistics();
+        for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
+            propagator.log_statistics(StatisticLogger::new(format!(
+                "{}Number{}",
+                propagator.name(),
+                index
+            )));
+        }
     }
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
@@ -1587,54 +1594,6 @@ impl ConstraintSatisfactionSolver {
                 == self.assignments_integer.get_decision_level()
         );
         self.assignments_propositional.get_decision_level()
-    }
-}
-
-/// Structure responsible for storing several statistics of the solving process of the
-/// [`ConstraintSatisfactionSolver`].
-#[derive(Default, Debug, Copy, Clone)]
-pub(crate) struct Counters {
-    pub(crate) num_decisions: u64,
-    pub(crate) num_conflicts: u64,
-    num_restarts: u64,
-    pub(crate) average_conflict_size: CumulativeMovingAverage,
-    num_propagations: u64,
-    num_unit_clauses_learned: u64,
-    average_learned_clause_length: CumulativeMovingAverage,
-    time_spent_in_solver: u64,
-    average_backtrack_amount: CumulativeMovingAverage,
-    pub(crate) average_number_of_removed_literals_recursive: CumulativeMovingAverage,
-    pub(crate) average_number_of_removed_literals_semantic: CumulativeMovingAverage,
-}
-
-impl Counters {
-    fn log_statistics(&self) {
-        log_statistic("numberOfDecisions", self.num_decisions);
-        log_statistic("numberOfConflicts", self.num_conflicts);
-        log_statistic("numberOfRestarts", self.num_restarts);
-        log_statistic(
-            "averageSizeOfConflictExplanation",
-            self.average_conflict_size.value(),
-        );
-        log_statistic("numberOfPropagations", self.num_propagations);
-        log_statistic("numberOfLearnedUnitClauses", self.num_unit_clauses_learned);
-        log_statistic(
-            "averageLearnedClauseLength",
-            self.average_learned_clause_length.value(),
-        );
-        log_statistic("timeSpentInSolverInMilliseconds", self.time_spent_in_solver);
-        log_statistic(
-            "averageBacktrackAmount",
-            self.average_backtrack_amount.value(),
-        );
-        log_statistic(
-            "averageNumberOfRemovedLiteralsRecursive",
-            self.average_number_of_removed_literals_recursive.value(),
-        );
-        log_statistic(
-            "averageNumberOfRemovedLiteralsSemantic",
-            self.average_number_of_removed_literals_semantic.value(),
-        );
     }
 }
 

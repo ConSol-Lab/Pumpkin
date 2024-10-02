@@ -96,7 +96,7 @@ pub mod termination {
 pub mod statistics {
     //! Contains functions which configure the logging and allow the logging of statistics
     //! themselves.
-    pub use crate::basic_types::statistic_logging::statistic_logger::*;
+    pub use crate::basic_types::statistics::statistic_logging::statistic_logger::*;
 }
 
 pub mod proof {
