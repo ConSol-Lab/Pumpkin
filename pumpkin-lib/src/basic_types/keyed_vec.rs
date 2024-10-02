@@ -66,10 +66,6 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
             .enumerate()
             .map(|(idx, value)| (Key::create_from_index(idx), value))
     }
-
-    pub(crate) fn get(&self, key: Key) -> Option<&Value> {
-        self.elements.get(key.index())
-    }
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {

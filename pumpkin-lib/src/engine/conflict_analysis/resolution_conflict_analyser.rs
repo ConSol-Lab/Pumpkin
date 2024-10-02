@@ -82,7 +82,7 @@ impl ResolutionConflictAnalyser {
         let mut next_trail_index = context.assignments_propositional.num_trail_entries() - 1;
         let mut next_literal: Option<Literal> = None;
 
-        loop {
+        'outer_analysis_loop: loop {
             pumpkin_assert_moderate!(Self::debug_1uip_conflict_analysis_check_next_literal(
                 next_literal,
                 context
@@ -174,6 +174,10 @@ impl ResolutionConflictAnalyser {
                 .get_trail_entry(next_trail_index)
                 .get_propositional_variable()]
             {
+                if next_trail_index == 0 {
+                    break 'outer_analysis_loop;
+                }
+
                 next_trail_index -= 1;
                 pumpkin_assert_advanced!(
                     context
@@ -630,7 +634,6 @@ impl ResolutionConflictAnalyser {
                     .num_propositional_variables()
         );
         pumpkin_assert_simple!(context.explanation_clause_manager.is_empty());
-        pumpkin_assert_simple!(!context.assignments_propositional.is_at_the_root_level());
         pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
 
         true

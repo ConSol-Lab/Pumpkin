@@ -403,185 +403,7 @@ impl ConstraintSatisfactionSolver {
     fn complete_proof(&mut self) {
         pumpkin_assert_simple!(self.is_conflicting());
 
-        if !self.internal_parameters.proof_log.is_logging_hints() {
-            return;
-        }
-
-        let mut unexplained = vec![];
-
-        match self.state.get_conflict_info() {
-            StoredConflictInfo::VirtualBinaryClause { .. } => panic!("should be unused"),
-            StoredConflictInfo::Propagation { reference, literal } => {
-                unexplained.push(!*literal);
-
-                // If the literal is propagated by a clause, we add the propagation to the hint.
-                if reference.is_clause() {
-                    let clause_reference = reference.as_clause_reference();
-                    let nogood_step_id =
-                        self.nogood_step_ids[clause_reference].expect("clause is a logged nogood");
-
-                    self.internal_parameters
-                        .proof_log
-                        .add_propagation(nogood_step_id);
-
-                    // All literals in the clause are false, so we want the explanation for why
-                    // that is the case.
-                    let iter = self.clause_allocator[clause_reference]
-                        .get_literal_slice()
-                        .iter()
-                        .map(|&lit| !lit);
-                    unexplained.extend(iter);
-                } else {
-                    let cp_reason = reference.get_reason_ref();
-                    let constraint_tag = self
-                        .cp_propagators
-                        .get_tag(self.reason_store.get_propagator(cp_reason));
-
-                    let reason = self
-                        .reason_store
-                        .get_or_compute(
-                            cp_reason,
-                            &PropagationContext::new(
-                                &self.assignments_integer,
-                                &self.assignments_propositional,
-                            ),
-                        )
-                        .expect("reason should exist");
-
-                    let literals = reason
-                        .iter()
-                        .map(|&predicate| match predicate {
-                            Predicate::IntegerPredicate(int_predicate) => {
-                                self.variable_literal_mappings.get_literal(
-                                    int_predicate,
-                                    &self.assignments_propositional,
-                                    &self.assignments_integer,
-                                )
-                            }
-                            Predicate::Literal(literal) => literal,
-                            Predicate::False => {
-                                panic!("inference premise contained false predicate")
-                            }
-                            Predicate::True => self.true_literal,
-                        })
-                        .collect::<Vec<_>>();
-
-                    let _ = self.internal_parameters.proof_log.log_inference(
-                        constraint_tag,
-                        literals.iter().copied(),
-                        *literal,
-                    );
-
-                    unexplained.extend(literals);
-                }
-            }
-
-            StoredConflictInfo::Explanation {
-                conjunction,
-                propagator,
-            } => {
-                let constraint_tag = self.cp_propagators.get_tag(*propagator);
-
-                let literals = conjunction
-                    .iter()
-                    .map(|&predicate| match predicate {
-                        Predicate::IntegerPredicate(int_predicate) => {
-                            self.variable_literal_mappings.get_literal(
-                                int_predicate,
-                                &self.assignments_propositional,
-                                &self.assignments_integer,
-                            )
-                        }
-                        Predicate::Literal(literal) => literal,
-                        Predicate::False => panic!("inference premise contained false predicate"),
-                        Predicate::True => self.true_literal,
-                    })
-                    .collect::<Vec<_>>();
-
-                let _ = self.internal_parameters.proof_log.log_inference(
-                    constraint_tag,
-                    literals.iter().copied(),
-                    self.false_literal,
-                );
-
-                unexplained.extend(literals);
-            }
-        }
-
-        dbg!(&unexplained);
-        while let Some(literal) = unexplained.pop() {
-            println!("explaining {literal}");
-            let reference = self
-                .assignments_propositional
-                .get_literal_reason_constraint(literal);
-
-            if reference.is_null() {
-                println!("  is assignment");
-                // If the literal has no reason, then it is an assignment. This means it is either
-                // a root bound, or a learned unit clause.
-                let Some(nogood_step_id) = self.unit_nogood_step_ids.get(&literal) else {
-                    continue;
-                };
-
-                self.internal_parameters
-                    .proof_log
-                    .add_propagation(*nogood_step_id);
-            } else if reference.is_clause() {
-                println!("  is clause");
-                // If the literal is propagated by a clause, we add the propagation to the hint.
-                let clause_reference = reference.as_clause_reference();
-                dbg!(&self.clause_allocator[clause_reference]);
-                let Some(Some(nogood_step_id)) = self.nogood_step_ids.get(clause_reference) else {
-                    continue;
-                };
-
-                self.internal_parameters
-                    .proof_log
-                    .add_propagation(*nogood_step_id);
-            } else {
-                println!("  is propagator");
-                let cp_reason = reference.get_reason_ref();
-                let constraint_tag = self
-                    .cp_propagators
-                    .get_tag(self.reason_store.get_propagator(cp_reason));
-
-                let reason = self
-                    .reason_store
-                    .get_or_compute(
-                        cp_reason,
-                        &PropagationContext::new(
-                            &self.assignments_integer,
-                            &self.assignments_propositional,
-                        ),
-                    )
-                    .expect("reason should exist");
-
-                let literals = reason
-                    .iter()
-                    .map(|&predicate| match predicate {
-                        Predicate::IntegerPredicate(int_predicate) => {
-                            self.variable_literal_mappings.get_literal(
-                                int_predicate,
-                                &self.assignments_propositional,
-                                &self.assignments_integer,
-                            )
-                        }
-                        Predicate::Literal(literal) => literal,
-                        Predicate::False => panic!("inference premise contained false predicate"),
-                        Predicate::True => self.true_literal,
-                    })
-                    .collect::<Vec<_>>();
-
-                let _ = self.internal_parameters.proof_log.log_inference(
-                    constraint_tag,
-                    literals.iter().copied(),
-                    literal,
-                );
-
-                unexplained.extend(literals);
-            }
-        }
-
+        let _ = self.compute_learned_clause(&mut DummyBrancher);
         let _ = self.internal_parameters.proof_log.log_learned_clause([]);
     }
 
@@ -1938,6 +1760,14 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         }
+    }
+}
+
+struct DummyBrancher;
+
+impl Brancher for DummyBrancher {
+    fn next_decision(&mut self, _: &mut SelectionContext) -> Option<Predicate> {
+        panic!("DummyBrancher should only be used when `next_decision` will not be called")
     }
 }
 
