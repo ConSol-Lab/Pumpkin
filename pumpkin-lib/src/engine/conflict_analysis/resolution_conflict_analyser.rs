@@ -12,6 +12,7 @@ use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -82,7 +83,7 @@ impl ResolutionConflictAnalyser {
         let mut next_trail_index = context.assignments_propositional.num_trail_entries() - 1;
         let mut next_literal: Option<Literal> = None;
 
-        'outer_analysis_loop: loop {
+        loop {
             pumpkin_assert_moderate!(Self::debug_1uip_conflict_analysis_check_next_literal(
                 next_literal,
                 context
@@ -175,7 +176,17 @@ impl ResolutionConflictAnalyser {
                 .get_propositional_variable()]
             {
                 if next_trail_index == 0 {
-                    break 'outer_analysis_loop;
+                    // At this point, the learned literals contains only the true literal, which
+                    // serves as a placeholder for the asserting literal. However, at this point,
+                    // there is no asserting literal, so we can clear the learned literals.
+                    pumpkin_assert_eq_simple!(
+                        vec![context.assignments_propositional.true_literal],
+                        self.analysis_result.learned_literals
+                    );
+
+                    self.analysis_result.learned_literals.clear();
+
+                    return self.analysis_result.clone();
                 }
 
                 next_trail_index -= 1;
