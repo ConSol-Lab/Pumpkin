@@ -12,6 +12,8 @@ use std::time::Duration;
 use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_lib::branching::branchers::dynamic_brancher::DynamicBrancher;
+#[cfg(doc)]
+use pumpkin_lib::constraints::cumulative;
 use pumpkin_lib::options::CumulativeOptions;
 use pumpkin_lib::predicate;
 use pumpkin_lib::predicates::Predicate;
@@ -43,6 +45,7 @@ pub(crate) struct FlatZincOptions {
     /// the solver to print intermediate solutions.
     pub(crate) all_solutions: bool,
 
+    /// Options used for the cumulative constraint (see [`cumulative`]).
     pub(crate) cumulative_options: CumulativeOptions,
 }
 

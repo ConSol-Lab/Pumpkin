@@ -13,7 +13,6 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
-use crate::options::CumulativeOptions;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
@@ -22,6 +21,7 @@ use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
+use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
@@ -71,7 +71,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
-        cumulative_options: CumulativeOptions,
+        cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         TimeTableOverIntervalPropagator {
@@ -413,9 +413,9 @@ mod tests {
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
-    use crate::options::CumulativeOptions;
     use crate::predicate;
     use crate::propagators::ArgTask;
+    use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::TimeTableOverIntervalPropagator;
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -476,9 +476,10 @@ mod tests {
             .into_iter()
             .collect::<Vec<_>>(),
             1,
-            CumulativeOptions {
+            CumulativePropagatorOptions {
                 allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
+
                 generate_sequence: false,
             },
         ));
@@ -528,7 +529,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -588,7 +589,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -621,7 +622,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -669,7 +670,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     generate_sequence: false,
@@ -739,7 +740,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -822,7 +823,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::default(),
                     generate_sequence: false,
@@ -873,7 +874,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     generate_sequence: false,
@@ -925,7 +926,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
                     generate_sequence: false,
@@ -973,7 +974,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativeOptions {
+                CumulativePropagatorOptions {
                     allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
                     generate_sequence: false,
