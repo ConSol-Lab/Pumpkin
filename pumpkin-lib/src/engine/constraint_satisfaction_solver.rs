@@ -1333,7 +1333,6 @@ impl ConstraintSatisfactionSolver {
             self.backtrack(0, brancher);
 
             let unit_clause = self.analysis_result.learned_literals[0];
-            println!("learned unit clause {unit_clause} with step id {proof_step_id}");
             let _ = self.unit_nogood_step_ids.insert(unit_clause, proof_step_id);
 
             self.assignments_propositional
