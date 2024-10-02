@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -115,6 +116,12 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
 impl<Var: IntegerVariable + 'static> Propagator for ParallelMachinePropagator<Var> {
     fn name(&self) -> &str {
         "ParallelMachinePropagator"
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        statistic_logger.log_statistic("numberOfCalls", self.n_calls);
+        statistic_logger.log_statistic("numberOfPropagations", self.n_propagations);
+        statistic_logger.log_statistic("numberOfConflicts", self.n_conflicts);
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
