@@ -50,7 +50,8 @@ impl AssignmentsPropositional {
     }
 
     pub fn grow(&mut self) {
-        self.assignment_info
+        let _ = self
+            .assignment_info
             .push(PropositionalAssignmentInfo::Unassigned);
     }
 

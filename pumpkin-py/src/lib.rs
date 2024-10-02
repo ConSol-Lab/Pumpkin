@@ -1,6 +1,7 @@
 mod constraints;
-mod core;
-mod solver;
+mod model;
+mod result;
+mod variables;
 
 use pyo3::prelude::*;
 
@@ -24,10 +25,11 @@ macro_rules! submodule {
 
 #[pymodule]
 fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<core::Variable>()?;
-    m.add_class::<solver::Solver>()?;
-    m.add_class::<solver::SatisfactionResult>()?;
-    m.add_class::<solver::Solution>()?;
+    m.add_class::<variables::IntExpression>()?;
+    m.add_class::<variables::BoolExpression>()?;
+    m.add_class::<model::Model>()?;
+    m.add_class::<result::SatisfactionResult>()?;
+    m.add_class::<result::Solution>()?;
 
     submodule!(constraints, python, m);
 

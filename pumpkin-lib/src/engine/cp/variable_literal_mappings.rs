@@ -80,8 +80,8 @@ impl VariableLiteralMappings {
         assignments_propositional.grow();
 
         // add an empty predicate vector for both polarities of the variable
-        self.literal_to_predicates.push(vec![]);
-        self.literal_to_predicates.push(vec![]);
+        let _ = self.literal_to_predicates.push(vec![]);
+        let _ = self.literal_to_predicates.push(vec![]);
 
         PropositionalVariable::new(new_variable_index)
     }
@@ -151,10 +151,12 @@ impl VariableLiteralMappings {
             clause_allocator,
         );
 
-        self.domain_to_lower_bound_literals
+        let _ = self
+            .domain_to_lower_bound_literals
             .push(lower_bound_literals);
 
-        self.domain_to_equality_literals
+        let _ = self
+            .domain_to_equality_literals
             .push(equality_literals.clone());
 
         // Add clause to select at least one equality.
