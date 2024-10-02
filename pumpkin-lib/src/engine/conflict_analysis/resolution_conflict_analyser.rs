@@ -74,9 +74,10 @@ impl ResolutionConflictAnalyser {
         // Note that in position 0, we placed a dummy literal.
         // The point is that we allocate space for the asserting literal,
         // which will by convention be placed at index 0
+        self.analysis_result.learned_literals.clear();
         self.analysis_result
             .learned_literals
-            .resize(1, context.assignments_propositional.true_literal);
+            .push(context.assignments_propositional.true_literal);
         self.analysis_result.backjump_level = 0;
 
         let mut num_current_decision_level_literals_to_inspect = 0;
