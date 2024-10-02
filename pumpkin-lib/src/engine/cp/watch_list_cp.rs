@@ -39,7 +39,7 @@ pub enum IntDomainEvent {
 // public functions
 impl WatchListCP {
     pub(crate) fn grow(&mut self) {
-        self.watchers.push(WatcherCP::default());
+        let _ = self.watchers.push(WatcherCP::default());
     }
 
     pub(crate) fn is_watching_anything(&self) -> bool {

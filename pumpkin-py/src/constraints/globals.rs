@@ -1,9 +1,10 @@
-use pumpkin_lib::constraints;
+use pumpkin_lib::constraints::Constraint;
+use pumpkin_lib::constraints::{self};
 use pyo3::pyclass;
 use pyo3::pymethods;
 
-use crate::core::Boolean;
-use crate::core::Variable;
+use super::arguments::PythonConstraintArg;
+use crate::variables::*;
 
 macro_rules! python_constraint {
     ($name:ident : $constraint_func:ident { $($field:ident : $type:ty),+ $(,)? }) => {
@@ -23,22 +24,28 @@ macro_rules! python_constraint {
             }
         }
 
-        impl pumpkin_lib::constraints::Constraint for $name {
-            fn post(
+        impl $name {
+            pub fn post(
                 self,
                 solver: &mut pumpkin_lib::Solver,
                 tag: Option<std::num::NonZero<u32>>,
+                variable_map: &VariableMap,
             ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-                constraints::$constraint_func($(self.$field),+).post(solver, tag)
+                constraints::$constraint_func(
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+
+                ).post(solver, tag)
             }
 
-            fn implied_by(
+            pub fn implied_by(
                 self,
                 solver: &mut pumpkin_lib::Solver,
                 reification_literal: pumpkin_lib::variables::Literal,
                 tag: Option<std::num::NonZero<u32>>,
+                variable_map: &VariableMap,
             ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-                constraints::$constraint_func($(self.$field),+).implied_by(solver, reification_literal, tag)
+                constraints::$constraint_func(
+                    $(<$type as super::arguments::PythonConstraintArg>::to_solver_constraint_argument(self.$field, variable_map)),+
+                ).implied_by(solver, reification_literal, tag)
             }
         }
     };
@@ -46,48 +53,48 @@ macro_rules! python_constraint {
 
 python_constraint! {
     Absolute: absolute {
-        signed: Variable,
-        absolute: Variable,
+        signed: IntVariable,
+        absolute: IntVariable,
     }
 }
 
 python_constraint! {
     AllDifferent: all_different {
-        variables: Vec<Variable>,
+        variables: Vec<IntVariable>,
     }
 }
 
 python_constraint! {
     BinaryEquals: binary_equals {
-        lhs: Variable,
-        rhs: Variable,
+        lhs: IntVariable,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     BinaryLessThan: binary_less_than {
-        lhs: Variable,
-        rhs: Variable,
+        lhs: IntVariable,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     BinaryLessThanEqual: binary_less_than_or_equals {
-        lhs: Variable,
-        rhs: Variable,
+        lhs: IntVariable,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     BinaryNotEquals: binary_not_equals {
-        lhs: Variable,
-        rhs: Variable,
+        lhs: IntVariable,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     Cumulative: cumulative {
-        start_times: Vec<Variable>,
+        start_times: Vec<IntVariable>,
         durations: Vec<i32>,
         resource_requirements: Vec<i32>,
         resource_capacity: i32,
@@ -96,110 +103,104 @@ python_constraint! {
 
 python_constraint! {
     Division: division {
-        numerator: Variable,
-        denominator: Variable,
-        rhs: Variable,
+        numerator: IntVariable,
+        denominator: IntVariable,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     Element: element {
-        index: Variable,
-        array: Vec<Variable>,
-        rhs: Variable,
+        index: IntVariable,
+        array: Vec<IntVariable>,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     Equals: equals {
-        terms: Vec<Variable>,
+        terms: Vec<IntVariable>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     LessThanOrEquals: less_than_or_equals {
-        terms: Vec<Variable>,
+        terms: Vec<IntVariable>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     Maximum: maximum {
-        choices: Vec<Variable>,
-        rhs: Variable,
+        choices: Vec<IntVariable>,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     Minimum: minimum {
-        choices: Vec<Variable>,
-        rhs: Variable,
+        choices: Vec<IntVariable>,
+        rhs: IntVariable,
     }
 }
 
 python_constraint! {
     NotEquals: not_equals {
-        terms: Vec<Variable>,
+        terms: Vec<IntVariable>,
         rhs: i32,
     }
 }
 
 python_constraint! {
     Plus: plus {
-        a: Variable,
-        b: Variable,
-        c: Variable,
+        a: IntVariable,
+        b: IntVariable,
+        c: IntVariable,
     }
 }
 
 python_constraint! {
     Times: times {
-        a: Variable,
-        b: Variable,
-        c: Variable,
+        a: IntVariable,
+        b: IntVariable,
+        c: IntVariable,
     }
 }
 
 #[pyclass]
 #[derive(Clone)]
 pub(crate) struct Clause {
-    literals: Vec<Boolean>,
+    literals: Vec<BoolVariable>,
 }
 
 #[pymethods]
 impl Clause {
     #[new]
-    fn new(literals: Vec<Boolean>) -> Self {
+    fn new(literals: Vec<BoolVariable>) -> Self {
         Clause { literals }
     }
 }
 
-impl pumpkin_lib::constraints::Constraint for Clause {
-    fn post(
+impl Clause {
+    pub fn post(
         self,
         solver: &mut pumpkin_lib::Solver,
         tag: Option<std::num::NonZero<u32>>,
+        variable_map: &VariableMap,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        let clause = self
-            .literals
-            .iter()
-            .map(|boolean| boolean.0)
-            .collect::<Vec<_>>();
+        let clause = self.literals.to_solver_constraint_argument(variable_map);
         constraints::clause(clause).post(solver, tag)
     }
 
-    fn implied_by(
+    pub fn implied_by(
         self,
         solver: &mut pumpkin_lib::Solver,
         reification_literal: pumpkin_lib::variables::Literal,
         tag: Option<std::num::NonZero<u32>>,
+        variable_map: &VariableMap,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        let clause = self
-            .literals
-            .iter()
-            .map(|boolean| boolean.0)
-            .collect::<Vec<_>>();
+        let clause = self.literals.to_solver_constraint_argument(variable_map);
         constraints::clause(clause).implied_by(solver, reification_literal, tag)
     }
 }
@@ -207,42 +208,36 @@ impl pumpkin_lib::constraints::Constraint for Clause {
 #[pyclass]
 #[derive(Clone)]
 pub(crate) struct Conjunction {
-    literals: Vec<Boolean>,
+    literals: Vec<BoolVariable>,
 }
 
 #[pymethods]
 impl Conjunction {
     #[new]
-    fn new(literals: Vec<Boolean>) -> Self {
+    fn new(literals: Vec<BoolVariable>) -> Self {
         Conjunction { literals }
     }
 }
 
-impl pumpkin_lib::constraints::Constraint for Conjunction {
-    fn post(
+impl Conjunction {
+    pub fn post(
         self,
         solver: &mut pumpkin_lib::Solver,
         tag: Option<std::num::NonZero<u32>>,
+        variable_map: &VariableMap,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        let conjunction = self
-            .literals
-            .iter()
-            .map(|boolean| boolean.0)
-            .collect::<Vec<_>>();
+        let conjunction = self.literals.to_solver_constraint_argument(variable_map);
         constraints::conjunction(conjunction).post(solver, tag)
     }
 
-    fn implied_by(
+    pub fn implied_by(
         self,
         solver: &mut pumpkin_lib::Solver,
         reification_literal: pumpkin_lib::variables::Literal,
         tag: Option<std::num::NonZero<u32>>,
+        variable_map: &VariableMap,
     ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
-        let conjunction = self
-            .literals
-            .iter()
-            .map(|boolean| boolean.0)
-            .collect::<Vec<_>>();
+        let conjunction = self.literals.to_solver_constraint_argument(variable_map);
         constraints::conjunction(conjunction).implied_by(solver, reification_literal, tag)
     }
 }

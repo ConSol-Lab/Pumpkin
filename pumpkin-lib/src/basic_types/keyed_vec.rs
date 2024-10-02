@@ -7,7 +7,7 @@ use std::ops::IndexMut;
 ///
 /// Almost all features of this structure require that `Key` implements the [StorageKey] trait.
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub(crate) struct KeyedVec<Key, Value> {
+pub struct KeyedVec<Key, Value> {
     /// [PhantomData] to ensure that the [KeyedVec] is bound to the structure
     key: PhantomData<Key>,
     /// Storage of the elements of type `Value`
@@ -44,11 +44,17 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
         self.elements.len()
     }
 
-    pub(crate) fn push(&mut self, value: Value) {
-        self.elements.push(value)
+    /// Add a new value to the vector.
+    ///
+    /// Returns the key for the inserted value.
+    pub fn push(&mut self, value: Value) -> Key {
+        self.elements.push(value);
+
+        Key::create_from_index(self.elements.len() - 1)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &'_ Value> {
+    /// Iterate over the values in the vector.
+    pub fn iter(&self) -> impl Iterator<Item = &'_ Value> {
         self.elements.iter()
     }
 

@@ -1,3 +1,4 @@
+pub mod arguments;
 mod globals;
 
 use globals::*;
@@ -10,25 +11,27 @@ macro_rules! declare_constraints {
             $($constraint($constraint)),+
         }
 
-        impl pumpkin_lib::constraints::Constraint for Constraint {
-            fn post(
+        impl Constraint {
+            pub fn post(
                 self,
                 solver: &mut pumpkin_lib::Solver,
                 tag: Option<std::num::NonZero<u32>>,
+                variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.post(solver, tag)),+
+                    $($name::$constraint(cns) => cns.post(solver, tag, variable_map)),+
                 }
             }
 
-            fn implied_by(
+            pub fn implied_by(
                 self,
                 solver: &mut pumpkin_lib::Solver,
                 reification_literal: pumpkin_lib::variables::Literal,
                 tag: Option<std::num::NonZero<u32>>,
+                variable_map: &$crate::variables::VariableMap,
             ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
                 match self {
-                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, tag)),+
+                    $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, tag, variable_map)),+
                 }
             }
         }
@@ -46,6 +49,7 @@ declare_constraints! {
         AllDifferent,
         BinaryEquals,
         BinaryLessThanEqual,
+        BinaryLessThan,
         BinaryNotEquals,
         Cumulative,
         Division,

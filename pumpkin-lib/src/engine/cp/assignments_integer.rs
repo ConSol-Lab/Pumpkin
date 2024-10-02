@@ -104,7 +104,8 @@ impl AssignmentsInteger {
             id: self.num_domains(),
         };
 
-        self.domains
+        let _ = self
+            .domains
             .push(IntegerDomainExplicit::new(lower_bound, upper_bound, id));
 
         self.events.grow();

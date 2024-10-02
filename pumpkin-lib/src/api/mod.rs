@@ -70,6 +70,9 @@ pub mod assignments {
 pub mod containers {
     /// ! Contains containers which are used by the solver.
     pub use enumset::EnumSet;
+
+    pub use crate::basic_types::KeyedVec;
+    pub use crate::basic_types::StorageKey;
 }
 
 pub mod options {
