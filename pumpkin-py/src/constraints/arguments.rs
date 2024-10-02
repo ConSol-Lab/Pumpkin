@@ -6,6 +6,7 @@ use crate::variables::BoolVariable;
 use crate::variables::IntExpression;
 use crate::variables::VariableMap;
 
+/// Trait which helps to convert Python API types to the solver types when creating constraints.
 pub trait PythonConstraintArg {
     type Output;
 

@@ -52,12 +52,15 @@ impl AssignmentsInteger {
         self.domains.len() as u32
     }
 
-    /// returns an iterator of all the [`DomainId`]s.
+    /// Returns an iterator of all the [`DomainId`]s.
     pub fn get_domains(&self) -> DomainGeneratorIterator {
         DomainGeneratorIterator::new(0, self.num_domains())
     }
 
     /// Returns the number of entries on the trail.
+    ///
+    /// Note: this is not necessarily equal to the number of asserted predicates (either decisions
+    /// or propagated).
     pub fn num_trail_entries(&self) -> usize {
         self.trail.len()
     }

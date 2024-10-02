@@ -67,9 +67,9 @@ impl Model {
         });
     }
 
-    /// Add `implied_by -> constraint` to the model.
+    /// Add `premise -> constraint` to the model.
     #[pyo3(signature = (constraint, premise, tag=None))]
-    fn add_reified(
+    fn add_implication(
         &mut self,
         constraint: Constraint,
         premise: BoolVariable,
@@ -148,12 +148,12 @@ impl Model {
         solver: &mut Solver,
         variable_map: &VariableMap,
     ) -> Result<(), ConstraintOperationError> {
-        for cons in self.constraints.iter() {
+        for constraint in self.constraints.iter() {
             let ModelConstraint {
                 constraint,
                 premise,
                 tag,
-            } = cons.clone();
+            } = constraint.clone();
 
             if let Some(premise) = premise {
                 constraint.implied_by(
