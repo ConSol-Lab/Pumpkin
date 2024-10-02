@@ -124,8 +124,8 @@ impl SemanticMinimiser {
             holes: HashSet::from_iter(holes.iter().cloned()),
             inconsistent: false,
         };
-        self.original_domains.push(initial_domain.clone());
-        self.domains.push(initial_domain);
+        let _ = self.original_domains.push(initial_domain.clone());
+        let _ = self.domains.push(initial_domain);
     }
 
     pub fn clean_up(&mut self) {

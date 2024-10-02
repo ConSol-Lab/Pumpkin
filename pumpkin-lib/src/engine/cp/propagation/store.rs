@@ -6,7 +6,6 @@ use std::ops::IndexMut;
 use super::Propagator;
 use super::PropagatorId;
 use crate::containers::KeyedVec;
-use crate::containers::StorageKey;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
@@ -25,10 +24,10 @@ impl PropagatorStore {
         propagator: Box<dyn Propagator>,
         tag: Option<NonZero<u32>>,
     ) -> PropagatorId {
-        self.propagators.push(propagator);
-        self.tags.push(tag);
+        let id = self.propagators.push(propagator);
+        let _ = self.tags.push(tag);
 
-        PropagatorId::create_from_index(self.propagators.len() - 1)
+        id
     }
 
     #[allow(unused)]

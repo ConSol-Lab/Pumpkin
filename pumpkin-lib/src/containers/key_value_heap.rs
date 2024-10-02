@@ -18,7 +18,7 @@ use crate::pumpkin_assert_moderate;
 /// which allows for generalised `Key`s (required to implement [StorageKey]) and `Value`s (which are
 /// required to be ordered, divisible and addable).
 #[derive(Debug, Clone)]
-pub(crate) struct KeyValueHeap<Key: StorageKey, Value> {
+pub struct KeyValueHeap<Key: StorageKey, Value> {
     /// Contains the values stored as a heap; the value of key `i` is at index
     /// [`KeyValueHeap::map_key_to_position\[i\]`][KeyValueHeap::map_key_to_position]
     values: Vec<Value>,
@@ -180,7 +180,7 @@ impl<
         self.values.push(value);
         // Initially the key is placed placed at the very end, will be placed in the correct
         // position below to ensure a valid heap structure
-        self.map_key_to_position.push(last_index);
+        let _ = self.map_key_to_position.push(last_index);
         self.map_position_to_key.push(key);
         pumpkin_assert_moderate!(
             self.map_position_to_key[last_index].index() == key.index()

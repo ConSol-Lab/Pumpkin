@@ -16,6 +16,7 @@ pub(crate) struct WatchListCP {
     is_watching_any_backtrack_events: bool,
 }
 
+/// Used to register a propagator for notifications about events to a particular variable
 #[derive(Debug)]
 pub struct Watchers<'a> {
     propagator_var: PropagatorVarId,
@@ -51,7 +52,7 @@ impl Display for IntDomainEvent {
 // public functions
 impl WatchListCP {
     pub(crate) fn grow(&mut self) {
-        self.watchers.push(WatcherCP::default());
+        let _ = self.watchers.push(WatcherCP::default());
     }
 
     #[allow(dead_code)]

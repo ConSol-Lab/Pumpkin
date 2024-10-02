@@ -239,7 +239,8 @@ impl NogoodPropagator {
             let new_nogood_id = NogoodId {
                 id: self.nogoods.len() as u32,
             };
-            self.nogoods
+            let _ = self
+                .nogoods
                 .push(Nogood::new_learned_nogood(nogood.into(), lbd));
             new_nogood_id
         };
@@ -330,12 +331,8 @@ impl NogoodPropagator {
                 self.nogoods[reused_id] = Nogood::new_permanent_nogood(nogood.into());
                 reused_id
             } else {
-                let new_nogood_id = NogoodId {
-                    id: self.nogoods.len() as u32,
-                };
                 self.nogoods
-                    .push(Nogood::new_permanent_nogood(nogood.into()));
-                new_nogood_id
+                    .push(Nogood::new_permanent_nogood(nogood.into()))
             };
 
             self.permanent_nogoods.push(new_id);

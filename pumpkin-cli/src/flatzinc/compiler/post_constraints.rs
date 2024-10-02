@@ -237,9 +237,9 @@ fn compile_cumulative(
     let resource_capacity = context.resolve_integer_constant_from_expr(&exprs[3])?;
 
     let post_result = constraints::cumulative_with_options(
-        &start_times,
-        &durations,
-        &resource_requirements,
+        start_times.iter().copied(),
+        durations.iter().copied(),
+        resource_requirements.iter().copied(),
         resource_capacity,
         options.cumulative_options,
     )

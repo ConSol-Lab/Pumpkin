@@ -71,6 +71,7 @@ impl ReasonStore {
     }
 }
 
+/// A reference to a reason
 #[derive(Default, Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct ReasonRef(pub(crate) u32);
 
