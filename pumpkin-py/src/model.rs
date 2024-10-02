@@ -14,6 +14,7 @@ use pyo3::prelude::*;
 use crate::constraints::Constraint;
 use crate::result::SatisfactionResult;
 use crate::result::Solution;
+use crate::variables::BoolExpression;
 use crate::variables::BoolVariable;
 use crate::variables::IntExpression;
 use crate::variables::IntVariable;
@@ -53,8 +54,10 @@ impl Model {
 
     /// Create a new boolean variable.
     #[pyo3(signature = (name=None))]
-    fn new_boolean(&mut self, name: Option<&str>) -> BoolVariable {
-        self.boolean_variables.push(name.map(|n| n.to_owned()))
+    fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
+        self.boolean_variables
+            .push(name.map(|n| n.to_owned()))
+            .into()
     }
 
     /// Add the given constraint to the model.
@@ -72,7 +75,7 @@ impl Model {
     fn add_implication(
         &mut self,
         constraint: Constraint,
-        premise: BoolVariable,
+        premise: BoolExpression,
         tag: Option<NonZero<u32>>,
     ) {
         self.constraints.push(ModelConstraint {
@@ -166,7 +169,7 @@ impl Model {
             if let Some(premise) = premise {
                 constraint.implied_by(
                     solver,
-                    variable_map.get_boolean(premise),
+                    premise.to_literal(variable_map),
                     tag,
                     variable_map,
                 )?;
@@ -182,7 +185,7 @@ impl Model {
 #[derive(Clone)]
 struct ModelConstraint {
     constraint: Constraint,
-    premise: Option<BoolVariable>,
+    premise: Option<BoolExpression>,
     tag: Option<NonZero<u32>>,
 }
 

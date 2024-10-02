@@ -2,7 +2,7 @@ use pumpkin_lib::variables::AffineView;
 use pumpkin_lib::variables::DomainId;
 use pumpkin_lib::variables::Literal;
 
-use crate::variables::BoolVariable;
+use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
 use crate::variables::VariableMap;
 
@@ -21,11 +21,11 @@ impl PythonConstraintArg for IntExpression {
     }
 }
 
-impl PythonConstraintArg for BoolVariable {
+impl PythonConstraintArg for BoolExpression {
     type Output = Literal;
 
     fn to_solver_constraint_argument(self, variable_map: &VariableMap) -> Self::Output {
-        variable_map.get_boolean(self)
+        self.to_literal(variable_map)
     }
 }
 

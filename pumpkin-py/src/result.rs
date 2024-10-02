@@ -1,7 +1,7 @@
 use pumpkin_lib::results::ProblemSolution;
 use pyo3::prelude::*;
 
-use crate::variables::BoolVariable;
+use crate::variables::BoolExpression;
 use crate::variables::IntExpression;
 use crate::variables::VariableMap;
 
@@ -27,8 +27,8 @@ impl Solution {
             .get_integer_value(variable.to_affine_view(&self.variable_map))
     }
 
-    fn bool_value(&self, variable: BoolVariable) -> bool {
+    fn bool_value(&self, variable: BoolExpression) -> bool {
         self.solver_solution
-            .get_literal_value(self.variable_map.get_boolean(variable))
+            .get_literal_value(variable.to_literal(&self.variable_map))
     }
 }

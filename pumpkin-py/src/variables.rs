@@ -83,7 +83,6 @@ impl IntExpression {
     }
 }
 
-#[pyclass]
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct BoolVariable(usize);
 
@@ -94,6 +93,35 @@ impl StorageKey for BoolVariable {
 
     fn create_from_index(index: usize) -> Self {
         BoolVariable(index)
+    }
+}
+
+#[pyclass]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]
+pub struct BoolExpression(BoolVariable, bool);
+
+impl From<BoolVariable> for BoolExpression {
+    fn from(value: BoolVariable) -> Self {
+        BoolExpression(value, true)
+    }
+}
+
+impl BoolExpression {
+    pub fn to_literal(self, variable_map: &VariableMap) -> Literal {
+        let literal = variable_map.get_boolean(self.0);
+
+        if self.1 {
+            literal
+        } else {
+            !literal
+        }
+    }
+}
+
+#[pymethods]
+impl BoolExpression {
+    fn negate(&self) -> Self {
+        BoolExpression(self.0, !self.1)
     }
 }
 

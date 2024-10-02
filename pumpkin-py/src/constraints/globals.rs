@@ -169,12 +169,12 @@ python_constraint! {
 
 python_constraint! {
     Conjunction: conjunction {
-        literals: Vec<BoolVariable>,
+        literals: Vec<BoolExpression>,
     }
 }
 
 python_constraint! {
     Clause: clause {
-        literals: Vec<BoolVariable>,
+        literals: Vec<BoolExpression>,
     }
 }
