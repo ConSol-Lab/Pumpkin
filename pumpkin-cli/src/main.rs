@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use convert_case::Case;
 use file_format::FileFormat;
 use log::error;
 use log::info;
@@ -365,7 +366,12 @@ fn configure_logging_unknown() -> std::io::Result<()> {
 }
 
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
-    pumpkin_lib::statistics::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    pumpkin_lib::statistics::configure(
+        log_statistics,
+        "%%%mzn-stat:",
+        Some("%%%mzn-stat-end"),
+        Some(Case::Camel),
+    );
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -391,7 +397,7 @@ fn configure_logging_sat(
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
-    pumpkin_lib::statistics::configure(log_statistics, "c STAT", None);
+    pumpkin_lib::statistics::configure(log_statistics, "c STAT", None, None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {

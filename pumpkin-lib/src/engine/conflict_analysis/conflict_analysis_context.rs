@@ -1,11 +1,11 @@
 use super::AnalysisStep;
+use crate::basic_types::statistics::counters::Counters;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
-use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
