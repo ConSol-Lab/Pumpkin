@@ -27,8 +27,8 @@ pub(crate) struct BasicClausalPropagator {
 impl ClausalPropagator for BasicClausalPropagator {
     fn grow(&mut self) {
         // increase the watch list, once for each polarity
-        self.watch_lists.push(vec![]);
-        self.watch_lists.push(vec![]);
+        let _ = self.watch_lists.push(vec![]);
+        let _ = self.watch_lists.push(vec![]);
     }
 
     fn get_literal_propagation_clause_reference(
