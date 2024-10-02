@@ -2,6 +2,7 @@
 //! using a Lazy Clause Generation approach.
 
 use std::cmp::min;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::num::NonZero;
@@ -1457,21 +1458,47 @@ impl ConstraintSatisfactionSolver {
                     })
                     .collect::<Vec<_>>();
 
+                let inference_premises =
+                    premises.iter().copied().chain(std::iter::once(!propagated));
+
                 let _ = self
                     .internal_parameters
                     .proof_log
-                    .log_inference(tag, premises.clone(), propagated)
+                    .log_inference(tag, inference_premises, self.false_literal)
                     .and_then(|id| {
                         let _ = self.unit_nogood_step_ids.insert(propagated, id);
 
-                        for premise in premises {
-                            let step_id = self
-                                .unit_nogood_step_ids
-                                .get(&premise)
-                                .copied()
-                                .expect("All unit nogoods are logged at this point");
+                        let mut to_explain = VecDeque::from(premises);
 
-                            self.internal_parameters.proof_log.add_propagation(step_id);
+                        while let Some(premise) = to_explain.pop_front() {
+                            pumpkin_assert_simple!(self
+                                .assignments_propositional
+                                .is_literal_assigned_true(premise));
+
+                            if premise == self.true_literal {
+                                continue;
+                            }
+
+                            if let Some(step_id) = self.unit_nogood_step_ids.get(&premise) {
+                                self.internal_parameters.proof_log.add_propagation(*step_id);
+                            } else {
+                                let reason = self
+                                    .assignments_propositional
+                                    .get_literal_reason_constraint(premise);
+
+                                assert!(
+                                    reason.is_clause(),
+                                    "a propagation would have been logged as a nogood"
+                                );
+
+                                let clause_ref = reason.as_clause_reference();
+                                let premises = self.clause_allocator[clause_ref]
+                                    .get_literal_slice()
+                                    .iter()
+                                    .skip(1)
+                                    .map(|&lit| !lit);
+                                to_explain.extend(premises);
+                            }
                         }
 
                         self.internal_parameters
