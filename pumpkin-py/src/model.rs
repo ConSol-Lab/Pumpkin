@@ -15,6 +15,7 @@ use crate::constraints::Constraint;
 use crate::result::SatisfactionResult;
 use crate::result::Solution;
 use crate::variables::BoolVariable;
+use crate::variables::IntExpression;
 use crate::variables::IntVariable;
 use crate::variables::VariableMap;
 
@@ -40,14 +41,14 @@ impl Model {
         lower_bound: i32,
         upper_bound: i32,
         name: Option<&str>,
-    ) -> IntVariable {
+    ) -> IntExpression {
         let variable = ModelIntVar {
             lower_bound,
             upper_bound,
             name: name.map(|n| n.to_owned()),
         };
 
-        self.integer_variables.push(variable)
+        self.integer_variables.push(variable).into()
     }
 
     /// Create a new boolean variable.

@@ -1,7 +1,7 @@
 use pumpkin_lib::results::ProblemSolution;
 use pyo3::prelude::*;
 
-use crate::variables::IntVariable;
+use crate::variables::IntExpression;
 use crate::variables::VariableMap;
 
 #[pyclass]
@@ -21,8 +21,8 @@ pub struct Solution {
 
 #[pymethods]
 impl Solution {
-    fn value(&self, variable: IntVariable) -> i32 {
+    fn value(&self, variable: IntExpression) -> i32 {
         self.solver_solution
-            .get_integer_value(self.variable_map.get_integer(variable))
+            .get_integer_value(variable.to_affine_view(&self.variable_map))
     }
 }

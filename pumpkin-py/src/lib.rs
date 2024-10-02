@@ -25,7 +25,8 @@ macro_rules! submodule {
 
 #[pymodule]
 fn pumpkin_py(python: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<variables::IntVariable>()?;
+    m.add_class::<variables::IntExpression>()?;
+    m.add_class::<variables::BoolVariable>()?;
     m.add_class::<model::Model>()?;
     m.add_class::<result::SatisfactionResult>()?;
     m.add_class::<result::Solution>()?;

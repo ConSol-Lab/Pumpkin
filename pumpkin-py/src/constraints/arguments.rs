@@ -3,7 +3,7 @@ use pumpkin_lib::variables::DomainId;
 use pumpkin_lib::variables::Literal;
 
 use crate::variables::BoolVariable;
-use crate::variables::IntVariable;
+use crate::variables::IntExpression;
 use crate::variables::VariableMap;
 
 pub trait PythonConstraintArg {
@@ -12,11 +12,11 @@ pub trait PythonConstraintArg {
     fn to_solver_constraint_argument(self, variable_map: &VariableMap) -> Self::Output;
 }
 
-impl PythonConstraintArg for IntVariable {
+impl PythonConstraintArg for IntExpression {
     type Output = AffineView<DomainId>;
 
     fn to_solver_constraint_argument(self, variable_map: &VariableMap) -> Self::Output {
-        variable_map.get_integer(self)
+        self.to_affine_view(variable_map)
     }
 }
 
