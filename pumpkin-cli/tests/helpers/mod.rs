@@ -36,23 +36,34 @@ impl Files {
 }
 
 pub(crate) fn run_solver(instance_path: impl AsRef<Path>, with_proof: bool) -> Files {
-    run_solver_with_options(instance_path, with_proof, std::iter::empty())
+    run_solver_with_options(instance_path, with_proof, std::iter::empty(), None)
 }
 
 pub(crate) fn run_solver_with_options<'a>(
     instance_path: impl AsRef<Path>,
     with_proof: bool,
     args: impl IntoIterator<Item = &'a str>,
+    prefix: Option<&str>,
 ) -> Files {
+    let args = args.into_iter().collect::<Vec<_>>();
+
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
     let instance_path = instance_path.as_ref();
 
     let solver = PathBuf::from(env!("CARGO_BIN_EXE_pumpkin-cli"));
 
-    let log_file_path = instance_path.with_extension("log");
-    let err_file_path = instance_path.with_extension("err");
-    let proof_file_path = instance_path.with_extension("proof");
+    let add_extension = |extension: &str| -> PathBuf {
+        if let Some(prefix) = prefix {
+            instance_path.with_extension(format!("{prefix}.{extension}"))
+        } else {
+            instance_path.with_extension(extension)
+        }
+    };
+
+    let log_file_path = add_extension("log");
+    let err_file_path = add_extension("err");
+    let proof_file_path = add_extension("proof");
 
     let mut command = Command::new(solver);
 
@@ -79,7 +90,7 @@ pub(crate) fn run_solver_with_options<'a>(
     match child.wait_timeout(TEST_TIMEOUT) {
         Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
         Ok(Some(status)) if status.success() => {}
-        Ok(Some(_)) => panic!("error solving instance"),
+        Ok(Some(e)) => panic!("error solving instance {e}"),
         Err(e) => panic!("error starting solver: {e}"),
     }
 
@@ -171,6 +182,15 @@ pub(crate) fn verify_proof(files: Files, checker_output: &Output) -> std::io::Re
 }
 
 pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name: &str) {
+    run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, vec![], "")
+}
+
+pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
+    instance_name: &str,
+    folder_name: &str,
+    mut options: Vec<&str>,
+    prefix: &str,
+) {
     let instance_path = format!(
         "{}/tests/{folder_name}/{instance_name}.fzn",
         env!("CARGO_MANIFEST_DIR")
@@ -181,7 +201,9 @@ pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name
         env!("CARGO_MANIFEST_DIR")
     );
 
-    let files = run_solver_with_options(instance_path, false, ["-a"]);
+    options.push("-a");
+
+    let files = run_solver_with_options(instance_path, false, options, Some(prefix));
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
 

@@ -2,13 +2,48 @@
 
 mod helpers;
 
-use helpers::run_mzn_test;
+use helpers::run_mzn_test_with_options;
 
 macro_rules! mzn_test {
     ($name:ident) => {
+        mzn_test!($name, stringify!($name), vec![]);
+    };
+
+    ($name:ident, $file:expr, $options:expr) => {
         #[test]
         fn $name() {
-            run_mzn_test::<false>(stringify!($name), "mzn_constraints");
+            run_mzn_test_with_options::<false>(
+                $file,
+                "mzn_constraints",
+                $options,
+                stringify!($name),
+            );
+        }
+    };
+}
+
+macro_rules! cumulative_test {
+    ($propagator:ident) => {
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _naive >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)),"--cumulative-explanation-type", "naive"]
+            );
+        }
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _big_step >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "big-step"]
+            );
+        }
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _pointwise >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "pointwise"]
+            );
         }
     };
 }
@@ -52,5 +87,9 @@ mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
 mzn_test!(bool_clause);
 
-mzn_test!(cumulative);
+cumulative_test!(time_table_per_point);
+cumulative_test!(time_table_per_point_incremental);
+cumulative_test!(time_table_over_interval);
+cumulative_test!(time_table_over_interval_incremental);
+
 mzn_test!(all_different);

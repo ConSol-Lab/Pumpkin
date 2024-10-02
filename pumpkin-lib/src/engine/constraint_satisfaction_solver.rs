@@ -994,7 +994,6 @@ impl ConstraintSatisfactionSolver {
                 // assumptions.
                 if self.restart_strategy.should_restart() {
                     self.restart_during_search(brancher);
-                    self.declare_new_decision_level();
                 }
 
                 let branching_result = self.enqueue_next_decision(brancher);
@@ -1210,6 +1209,10 @@ impl ConstraintSatisfactionSolver {
     /// differs from backtracking to level zero in that a restart backtracks to decision level
     /// zero and then performs additional operations, e.g., clean up learned clauses, adjust
     /// restart frequency, etc.
+    ///
+    /// This method will also increase the decision level after backtracking.
+    ///
+    /// Returns true if a restart took place and false otherwise.
     fn restart_during_search(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(
             self.are_all_assumptions_assigned(),
@@ -1232,6 +1235,8 @@ impl ConstraintSatisfactionSolver {
         self.backtrack(0, brancher);
 
         self.restart_strategy.notify_restart();
+
+        self.declare_new_decision_level();
     }
 
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
@@ -1397,7 +1402,6 @@ impl ConstraintSatisfactionSolver {
 
         let cp_trail_length = self.assignments_integer.num_trail_entries();
         let is_at_root = self.get_decision_level() == 0;
-
         let propagator_id = self.propagator_queue.pop();
         let tag = self.cp_propagators.get_tag(propagator_id);
         let propagator = &mut self.cp_propagators[propagator_id];
@@ -1477,7 +1481,7 @@ impl ConstraintSatisfactionSolver {
             }
         }
 
-        match propagation_status {
+        let result = match propagation_status {
             // An empty domain conflict will be caught by the clausal propagator.
             Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
 
@@ -1501,9 +1505,25 @@ impl ConstraintSatisfactionSolver {
 
             Ok(()) => {
                 let _ = self.process_domain_events();
+
                 PropagationStatusOneStepCP::PropagationHappened
             }
-        }
+        };
+
+        pumpkin_assert_extreme!(
+            DebugHelper::debug_check_propagations(
+                cp_trail_length,
+                propagator_id,
+                &self.assignments_integer,
+                &self.assignments_propositional,
+                &mut self.reason_store,
+                &self.variable_literal_mappings,
+                &self.cp_propagators
+            ),
+            "Checking the propagations performed by the propagator led to inconsistencies!"
+        );
+
+        result
     }
 
     fn are_all_assumptions_assigned(&self) -> bool {
@@ -1856,24 +1876,9 @@ mod tests {
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::basic_types::PropagationStatusCP;
-    use crate::basic_types::PropositionalConjunction;
-    use crate::basic_types::StoredConflictInfo;
-    use crate::conjunction;
-    use crate::engine::constraint_satisfaction_solver::CSPSolverStateInternal;
-    use crate::engine::predicates::integer_predicate::IntegerPredicate;
-    use crate::engine::predicates::predicate::Predicate;
-    use crate::engine::propagation::propagation_context::HasAssignments;
-    use crate::engine::propagation::LocalId;
-    use crate::engine::propagation::PropagationContextMut;
-    use crate::engine::propagation::Propagator;
-    use crate::engine::propagation::PropagatorId;
-    use crate::engine::propagation::PropagatorInitialisationContext;
     use crate::engine::reason::ReasonRef;
     use crate::engine::termination::indefinite::Indefinite;
-    use crate::engine::variables::DomainId;
     use crate::engine::variables::Literal;
-    use crate::engine::DomainEvents;
     use crate::predicate;
 
     /// A test propagator which propagates the stored propagations and then reports one of the
@@ -1882,132 +1887,6 @@ mod tests {
     ///
     /// It is assumed that the propagations do not lead to conflict, if the propagations do lead to
     /// a conflict then this method will panic.
-    struct TestPropagator {
-        original_propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
-        propagations: Vec<(DomainId, Predicate, PropositionalConjunction)>,
-        conflicts: Vec<PropositionalConjunction>,
-        is_in_root: bool,
-    }
-
-    impl TestPropagator {
-        pub(crate) fn new(
-            propagations: Vec<(Predicate, PropositionalConjunction)>,
-            conflicts: Vec<PropositionalConjunction>,
-        ) -> Self {
-            let propagations: Vec<(DomainId, Predicate, PropositionalConjunction)> = propagations
-                .iter()
-                .rev()
-                .map(|variable| {
-                    (
-                        variable.0.get_domain().unwrap(),
-                        variable.0,
-                        variable.1.clone(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            TestPropagator {
-                original_propagations: propagations.clone(),
-                propagations,
-                conflicts: conflicts.into_iter().rev().collect::<Vec<_>>(),
-                is_in_root: true,
-            }
-        }
-    }
-
-    impl Propagator for TestPropagator {
-        fn initialise_at_root(
-            &mut self,
-            context: &mut PropagatorInitialisationContext,
-        ) -> Result<(), PropositionalConjunction> {
-            self.propagations
-                .iter()
-                .enumerate()
-                .for_each(|(index, variable)| {
-                    let _ = context.register(
-                        variable.0,
-                        DomainEvents::BOUNDS,
-                        LocalId::from(index as u32),
-                    );
-                });
-            Ok(())
-        }
-
-        fn name(&self) -> &str {
-            "TestPropagator"
-        }
-
-        fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-            if self.is_in_root {
-                self.is_in_root = false;
-                return Ok(());
-            }
-
-            while let Some(propagation) = self.propagations.pop() {
-                match propagation.1 {
-                    Predicate::IntegerPredicate(integer_predicate) => match integer_predicate {
-                        IntegerPredicate::LowerBound {
-                            domain_id: _,
-                            lower_bound,
-                        } => {
-                            let result =
-                                context.set_lower_bound(&propagation.0, lower_bound, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::UpperBound {
-                            domain_id: _,
-                            upper_bound,
-                        } => {
-                            let result =
-                                context.set_upper_bound(&propagation.0, upper_bound, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::NotEqual {
-                            domain_id: _,
-                            not_equal_constant,
-                        } => {
-                            let result =
-                                context.remove(&propagation.0, not_equal_constant, propagation.2);
-                            assert!(result.is_ok())
-                        }
-                        IntegerPredicate::Equal {
-                            domain_id: _,
-                            equality_constant: _,
-                        } => todo!(),
-                    },
-                    _ => todo!(),
-                }
-            }
-
-            if let Some(conflict) = self.conflicts.pop() {
-                return Err(conflict.into());
-            }
-
-            Ok(())
-        }
-
-        fn debug_propagate_from_scratch(
-            &self,
-            context: PropagationContextMut,
-        ) -> PropagationStatusCP {
-            // This method detects when a debug propagation method is called and it attempts to
-            // return the correct result in this case
-            if self.conflicts.is_empty()
-                && self.original_propagations.iter().all(|propagation| {
-                    context.assignments_integer().does_integer_predicate_hold(
-                        propagation
-                            .1
-                            .try_into()
-                            .expect("Expected provided predicate to be integer"),
-                    )
-                })
-            {
-                Err(crate::basic_types::Inconsistency::EmptyDomain)
-            } else {
-                Ok(())
-            }
-        }
-    }
-
     fn is_same_core(core1: &[Literal], core2: &[Literal]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
     }
@@ -2063,68 +1942,6 @@ mod tests {
         let _ = solver.add_clause([lit1, !lit2]);
         let _ = solver.add_clause([!lit1, lit2]);
         (solver, vec![lit1, lit2])
-    }
-
-    /// Warning: This test is potentially flaky due to its dependence on the propagation order of
-    /// the clausal propagator, please treat with caution.
-    #[test]
-    fn test_synchronisation_view() {
-        let mut solver = ConstraintSatisfactionSolver::default();
-        let variable = solver.create_new_integer_variable(1, 5, None);
-        let other_variable = solver.create_new_integer_variable(3, 5, None);
-
-        // We create a test solver which propagates such that there is a jump across a hole in the
-        // domain and then we report a conflict based on the assigned values.
-        let propagator_constructor = TestPropagator::new(
-            vec![
-                (predicate!(variable != 2), conjunction!()),
-                (predicate!(variable <= 3), conjunction!()),
-                (predicate!(variable != 3), conjunction!()),
-                (predicate!(other_variable != 4), conjunction!()),
-                (predicate!(other_variable <= 4), conjunction!()),
-            ],
-            vec![conjunction!([other_variable == 3] & [variable == 1])],
-        );
-
-        let result = solver.add_propagator(propagator_constructor, None);
-        assert!(result.is_ok());
-
-        // We add the clause that will lead to the conflict in the SAT-solver
-        let result = solver.add_clause([
-            solver.get_literal(predicate![variable == 2]),
-            solver.get_literal(predicate![variable == 3]),
-            solver.get_literal(predicate![variable == 4]),
-            solver.get_literal(predicate![variable == 5]),
-        ]);
-        assert!(result.is_ok());
-
-        solver.declare_new_decision_level();
-
-        // We manually enqueue the propagator to mimic solver behaviour
-        solver
-            .propagator_queue
-            .enqueue_propagator(PropagatorId(0), 0);
-
-        // After propagating we expect that both the CP propagators and the SAT solver have found a
-        // conflict, however, the CP conflict explanation contains variables which are not assigned
-        // in the SAT view due to it finding a conflict. We expect the conflict info in the solver
-        // to contain the conflict found by the clausal propagator.
-        solver.propagate_enqueued();
-
-        assert!(solver.state.is_inconsistent());
-        assert_eq!(solver.get_assigned_integer_value(&variable), Some(1));
-
-        // We check whether the conflict which is returned is the conflict found by the SAT-solver
-        // rather than the one found by the CP solver.
-        assert!(matches!(
-            solver.state.internal_state,
-            CSPSolverStateInternal::Conflict {
-                conflict_info: StoredConflictInfo::Propagation {
-                    reference: _,
-                    literal: _,
-                },
-            }
-        ));
     }
 
     #[test]

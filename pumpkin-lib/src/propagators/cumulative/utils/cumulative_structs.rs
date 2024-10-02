@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::variables::IntegerVariable;
-use crate::options::CumulativeOptions;
+use crate::propagators::CumulativePropagatorOptions;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
@@ -93,14 +93,14 @@ pub(crate) struct CumulativeParameters<Var> {
     /// is updated by the (incremental) propagator
     pub(crate) updated: Vec<UpdatedTaskInfo<Var>>,
     /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
-    pub(crate) options: CumulativeOptions,
+    pub(crate) options: CumulativePropagatorOptions,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
     pub(crate) fn new(
         tasks: Vec<Task<Var>>,
         capacity: i32,
-        options: CumulativeOptions,
+        options: CumulativePropagatorOptions,
     ) -> CumulativeParameters<Var> {
         let tasks = tasks
             .into_iter()

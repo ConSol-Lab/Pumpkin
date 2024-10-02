@@ -70,6 +70,7 @@ pub mod options {
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::CumulativeExplanationType;
     pub use crate::propagators::CumulativeOptions;
+    pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]
     use crate::Solver;
 }
