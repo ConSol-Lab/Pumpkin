@@ -1395,16 +1395,74 @@ impl ConstraintSatisfactionSolver {
             return PropagationStatusOneStepCP::FixedPoint;
         }
 
-        let propagator_id = self.propagator_queue.pop();
-        let propagator = &mut self.cp_propagators[propagator_id];
-        let context = PropagationContextMut::new(
-            &mut self.assignments_integer,
-            &mut self.reason_store,
-            &mut self.assignments_propositional,
-            propagator_id,
-        );
+        let cp_trail_length = self.assignments_integer.num_trail_entries();
+        let is_at_root = self.get_decision_level() == 0;
 
-        match propagator.propagate(context) {
+        let propagator_id = self.propagator_queue.pop();
+        let tag = self.cp_propagators.get_tag(propagator_id);
+        let propagator = &mut self.cp_propagators[propagator_id];
+
+        let propagation_status = {
+            let context = PropagationContextMut::new(
+                &mut self.assignments_integer,
+                &mut self.reason_store,
+                &mut self.assignments_propositional,
+                propagator_id,
+            );
+
+            propagator.propagate(context)
+        };
+
+        if is_at_root && self.internal_parameters.proof_log.is_logging_inferences() {
+            for trail_idx in cp_trail_length..self.assignments_integer.num_trail_entries() {
+                let entry = self.assignments_integer.get_trail_entry(trail_idx);
+                let reason = entry
+                    .reason
+                    .expect("Added by a propagator and must therefore have a reason");
+
+                let reason = self
+                    .reason_store
+                    .get_or_compute(
+                        reason,
+                        &PropagationContext::new(
+                            &self.assignments_integer,
+                            &self.assignments_propositional,
+                        ),
+                    )
+                    .expect("Reason ref is valid");
+
+                let propagated = self.variable_literal_mappings.get_literal(
+                    entry.predicate,
+                    &self.assignments_propositional,
+                    &self.assignments_integer,
+                );
+
+                let premises = reason.iter().map(|predicate| match predicate {
+                    Predicate::IntegerPredicate(predicate) => {
+                        self.variable_literal_mappings.get_literal(
+                            *predicate,
+                            &self.assignments_propositional,
+                            &self.assignments_integer,
+                        )
+                    }
+                    Predicate::Literal(literal) => *literal,
+                    Predicate::False => self.false_literal,
+                    Predicate::True => self.true_literal,
+                });
+
+                let _ = self
+                    .internal_parameters
+                    .proof_log
+                    .log_inference(tag, premises, propagated);
+
+                let _ = self
+                    .internal_parameters
+                    .proof_log
+                    .log_learned_clause([propagated]);
+            }
+        }
+
+        match propagation_status {
             // An empty domain conflict will be caught by the clausal propagator.
             Err(Inconsistency::EmptyDomain) => PropagationStatusOneStepCP::PropagationHappened,
 

@@ -182,6 +182,16 @@ impl ProofLog {
             None => Ok(()),
         }
     }
+
+    pub(crate) fn is_logging_inferences(&self) -> bool {
+        matches!(
+            self.internal_proof,
+            Some(ProofImpl::CpProof {
+                log_inferences: true,
+                ..
+            })
+        )
+    }
 }
 
 #[derive(Debug)]
