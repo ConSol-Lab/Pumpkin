@@ -74,86 +74,70 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     // First we propagate the signs
     propagate_signs(&mut context, a, b, c)?;
 
-    // Then we propagate on whether or not the variables are sign fixed
-    // For now we only propagate in the case where a, b, c >= 0
-    // TODO: We can likely perform much more propagation
-    if context.lower_bound(a) >= 0 && context.lower_bound(b) >= 0 {
-        let a_min = context.lower_bound(a);
-        let a_max = context.upper_bound(a);
-        let b_min = context.lower_bound(b);
-        let b_max = context.upper_bound(b);
-        let c_min = context.lower_bound(c);
-        let c_max = context.upper_bound(c);
+    let a_min = context.lower_bound(a);
+    let a_max = context.upper_bound(a);
+    let b_min = context.lower_bound(b);
+    let b_max = context.upper_bound(b);
+    let c_min = context.lower_bound(c);
+    let c_max = context.upper_bound(c);
 
+    if a_min >= 0 && b_min >= 0 {
         let new_max_c = a_max * b_max;
         let new_min_c = a_min * b_min;
 
         // c is smaller than the maximum value that a * b can take
-        if context.upper_bound(c) > new_max_c {
-            // We need the lower-bounds in the explanation as well because the reasoning does not
-            // hold in the case of a negative lower-bound
-            context.set_upper_bound(
-                c,
-                new_max_c,
-                conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
-            )?;
-        }
+        //
+        // We need the lower-bounds in the explanation as well because the reasoning does not
+        // hold in the case of a negative lower-bound
+        context.set_upper_bound(
+            c,
+            new_max_c,
+            conjunction!([a >= 0] & [a <= a_max] & [b >= 0] & [b <= b_max]),
+        )?;
 
         // c is larger than the minimum value that a * b can take
-        if context.lower_bound(c) < new_min_c {
-            context.set_lower_bound(c, new_min_c, conjunction!([a >= a_min] & [b >= b_min]))?;
-        }
+        context.set_lower_bound(c, new_min_c, conjunction!([a >= a_min] & [b >= b_min]))?;
+    }
 
-        if c_min >= 0 {
-            // a >= ceil(c.min / b.max)
-            if b_max >= 1 && c_min >= 1 {
-                let bound = div_ceil_pos(c_min, b_max);
-                if context.lower_bound(a) < bound {
-                    context.set_lower_bound(
-                        a,
-                        bound,
-                        conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
-                    )?;
-                }
-            }
+    if b_min >= 0 && b_max >= 1 && c_min >= 1 {
+        // a >= ceil(c.min / b.max)
+        let bound = div_ceil_pos(c_min, b_max);
+        context.set_lower_bound(
+            a,
+            bound,
+            conjunction!([c >= c_min] & [b >= 0] & [b <= b_max]),
+        )?;
+    }
 
-            // a <= floor(c.max / b.min)
-            if b_min >= 1 && c_max >= 1 {
-                let bound = c_max / b_min;
-                if context.upper_bound(a) > bound {
-                    context.set_upper_bound(
-                        a,
-                        bound,
-                        conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
-                    )?;
-                }
-            }
+    if b_min >= 1 && c_min >= 0 && c_max >= 1 {
+        // a <= floor(c.max / b.min)
+        let bound = c_max / b_min;
+        context.set_upper_bound(
+            a,
+            bound,
+            conjunction!([c >= 0] & [c <= c_max] & [b >= b_min]),
+        )?;
+    }
 
-            // b >= ceil(c.min / a.max)
-            if a_max >= 1 && c_min >= 1 {
-                let bound = div_ceil_pos(c_min, a_max);
+    if a_min >= 1 && c_min >= 0 && c_max >= 1 {
+        // b <= floor(c.max / a.min)
+        let bound = c_max / a_min;
+        context.set_upper_bound(
+            b,
+            bound,
+            conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
+        )?;
+    }
 
-                if context.lower_bound(b) < bound {
-                    context.set_lower_bound(
-                        b,
-                        bound,
-                        conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
-                    )?;
-                }
-            }
+    // b >= ceil(c.min / a.max)
+    if a_min >= 0 && a_max >= 1 && c_min >= 1 {
+        let bound = div_ceil_pos(c_min, a_max);
 
-            // b <= floor(c.max / a.min)
-            if a_min >= 1 && c_max >= 1 {
-                let bound = c_max / a_min;
-                if context.upper_bound(b) > bound {
-                    context.set_upper_bound(
-                        b,
-                        bound,
-                        conjunction!([c >= 0] & [c <= c_max] & [a >= a_min]),
-                    )?;
-                }
-            }
-        }
+        context.set_lower_bound(
+            b,
+            bound,
+            conjunction!([c >= c_min] & [a >= 0] & [a <= a_max]),
+        )?;
     }
 
     if context.is_fixed(a)

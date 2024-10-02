@@ -713,6 +713,7 @@ impl ConstraintSatisfactionSolver {
                 self.state.declare_timeout();
                 return CSPSolverExecutionFlag::Timeout;
             }
+
             self.propagate();
 
             if self.state.no_conflict() {
@@ -1053,6 +1054,7 @@ impl ConstraintSatisfactionSolver {
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop_new() {
             let propagator = &mut self.propagators[propagator_id];
+            let num_trail_entries_before = self.assignments.num_trail_entries();
             let context = PropagationContextMut::new(
                 &mut self.assignments,
                 &mut self.reason_store,
@@ -1102,6 +1104,16 @@ impl ConstraintSatisfactionSolver {
                     }
                 },
             }
+            pumpkin_assert_extreme!(
+                DebugHelper::debug_check_propagations(
+                    num_trail_entries_before,
+                    propagator_id,
+                    &self.assignments,
+                    &mut self.reason_store,
+                    &self.propagators
+                ),
+                "Checking the propagations performed by the propagator led to inconsistencies!"
+            );
         }
         // Record statistics.
         self.counters.num_conflicts += self.state.is_conflicting() as u64;

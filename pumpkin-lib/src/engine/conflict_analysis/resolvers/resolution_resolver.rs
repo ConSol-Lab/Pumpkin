@@ -176,7 +176,13 @@ impl ResolutionResolver {
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
-            .unwrap();
+            .unwrap_or_else(|| {
+                panic!(
+                    "Expected predicate {predicate} to be assigned but bounds were ({}, {})",
+                    assignments.get_lower_bound(predicate.get_domain()),
+                    assignments.get_upper_bound(predicate.get_domain()),
+                )
+            });
 
         // Ignore root level predicates.
         if dec_level == 0 {

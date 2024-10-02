@@ -572,9 +572,6 @@ impl Assignments {
                 } else {
                     None
                 }
-                // self
-                //.get_assigned_value(domain_id)
-                //.map(|assigned_value| assigned_value == equality_constant),
             }
         }
     }

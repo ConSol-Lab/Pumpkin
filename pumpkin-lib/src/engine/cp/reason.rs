@@ -60,7 +60,6 @@ impl ReasonStore {
         let _ = self.trail.synchronise(level);
     }
 
-    #[cfg(test)]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.trail.len()
