@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::LocalId;
@@ -10,12 +11,15 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::DomainEvents;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::util::create_tasks;
+use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
+use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
 #[allow(unused)]
 pub(crate) struct ParallelMachinePropagator<Var> {
-    parameters: CumulativeParameters<Var>,
+    parameters: ParallelMachineParameters<Var>,
     makespan_variable: Var,
     responsible_tasks: Vec<(u32, u32)>,
     n_machine: usize,
@@ -25,14 +29,35 @@ pub(crate) struct ParallelMachinePropagator<Var> {
     n_conflicts: usize,
 }
 
-impl<Var: IntegerVariable + Clone> ParallelMachinePropagator<Var> {
+#[derive(Clone, Debug)]
+pub(crate) struct ParallelMachineParameters<Var> {
+    /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
+    /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
+    /// sharing of the tasks
+    pub(crate) tasks: Box<[Rc<Task<Var>>]>,
+    /// The capacity of the resource (i.e. how much resource consumption can be maximally
+    /// accomodated at each time point)
+    pub(crate) capacity: i32,
+}
+
+impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
     #[allow(unused)]
     fn new(
+        arg_tasks: &[ArgTask<Var>],
+        capacity: i32,
         parameters: CumulativeParameters<Var>,
         min_machine: usize,
         max_machine: usize,
         makespan_variable: Var,
     ) -> Vec<Self> {
+        let parameters = ParallelMachineParameters {
+            tasks: create_tasks(arg_tasks)
+                .into_iter()
+                .map(Rc::new)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            capacity,
+        };
         (min_machine..max_machine)
             .map(|n_machine| {
                 let min_resource_usage = 1 + parameters.capacity as u32 / (1 + n_machine as u32);
