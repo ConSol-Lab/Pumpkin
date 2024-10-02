@@ -140,6 +140,14 @@ impl Model {
             });
         }
 
+        for name in self.boolean_variables.iter() {
+            let _ = map.booleans.push(if let Some(name) = name {
+                solver.new_named_literal(name)
+            } else {
+                solver.new_literal()
+            });
+        }
+
         map
     }
 
