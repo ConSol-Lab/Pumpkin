@@ -14,7 +14,6 @@ use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_tasks;
 use crate::propagators::ArgTask;
-use crate::propagators::CumulativeParameters;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -42,11 +41,9 @@ pub(crate) struct ParallelMachineParameters<Var> {
 }
 
 impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
-    #[allow(unused)]
-    fn new(
+    pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
-        parameters: CumulativeParameters<Var>,
         min_machine: usize,
         max_machine: usize,
         makespan_variable: Var,
@@ -94,7 +91,7 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
                 .flat_map(|(n_copies, activity_index)| {
                     let task = &self.parameters.tasks[(*activity_index) as usize];
                     // TODO: double check lower or upper
-                    let max_makespan = context.lower_bound(&self.makespan_variable) as u32;
+                    let max_makespan = context.upper_bound(&self.makespan_variable) as u32;
 
                     let earliest_start_time = context.lower_bound(&task.start_variable) as u32;
                     let tail_time = max_makespan
