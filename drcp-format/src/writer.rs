@@ -236,7 +236,7 @@ impl WritableProofStep for Conclusion<NonZeroI32> {
     }
 }
 
-impl<'label, Premises> WritableProofStep for Inference<'label, Premises, NonZeroI32>
+impl<Premises> WritableProofStep for Inference<'_, Premises, NonZeroI32>
 where
     Premises: IntoIterator<Item = NonZeroI32>,
 {
