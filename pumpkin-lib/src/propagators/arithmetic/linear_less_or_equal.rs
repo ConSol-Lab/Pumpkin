@@ -34,11 +34,7 @@ where
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.x.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(
-                x_i.clone(),
-                DomainEvents::LOWER_BOUND,
-                LocalId::from(i as u32),
-            );
+            let _ = context.register(x_i.clone(), DomainEvents::BOUNDS, LocalId::from(i as u32));
         });
 
         Ok(())

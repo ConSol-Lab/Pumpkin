@@ -108,6 +108,21 @@ fn run() -> SchedulingResult<()> {
         })
         .collect::<Vec<_>>();
 
+    let result = solver
+        .add_constraint(constraints::maximum(
+            start_variables
+                .iter()
+                .enumerate()
+                .map(|(index, start_variable)| {
+                    start_variable.offset(rcpsp_instance.processing_times[index] as i32)
+                }),
+            makespan,
+        ))
+        .post();
+    if result.is_err() {
+        panic!("Adding precedence for makespan led to unsatisfiability");
+    }
+
     for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
     {
         let result = solver
@@ -163,17 +178,6 @@ fn run() -> SchedulingResult<()> {
             if result.is_err() {
                 panic!("Adding precedence led to unsatisfiability");
             }
-        }
-
-        let result = solver
-            .add_constraint(constraints::binary_less_than_or_equals(
-                start_variables[task_index]
-                    .offset(rcpsp_instance.processing_times[task_index] as i32),
-                makespan.scaled(1),
-            ))
-            .post();
-        if result.is_err() {
-            panic!("Adding precedence for makespan led to unsatisfiability");
         }
     }
 

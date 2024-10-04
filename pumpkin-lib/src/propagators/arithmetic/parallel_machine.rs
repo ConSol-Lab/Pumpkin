@@ -81,7 +81,6 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
             .collect::<Vec<_>>()
     }
 
-    #[allow(unused)]
     fn get_parallel_machine_bound(&self, context: &PropagationContext) -> i32 {
         ParallelMachineProblem {
             n_machines: self.n_machine,
