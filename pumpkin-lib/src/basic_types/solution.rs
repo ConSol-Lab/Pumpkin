@@ -81,7 +81,7 @@ impl<'a> SolutionReference<'a> {
     }
 }
 
-impl<'a> ProblemSolution for SolutionReference<'a> {}
+impl ProblemSolution for SolutionReference<'_> {}
 
 /// A solution which takes ownership of its inner structures.
 #[derive(Clone, Debug, Default)]
@@ -111,7 +111,7 @@ impl Solution {
 
 impl ProblemSolution for Solution {}
 
-impl<'a> From<SolutionReference<'a>> for Solution {
+impl From<SolutionReference<'_>> for Solution {
     fn from(value: SolutionReference) -> Self {
         Self {
             assignments_propositional: value.assignments_propositional.clone(),

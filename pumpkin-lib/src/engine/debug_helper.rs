@@ -34,7 +34,7 @@ impl<'a> DebugDyn<'a> {
     }
 }
 
-impl<'a> Debug for DebugDyn<'a> {
+impl Debug for DebugDyn<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "<dyn {}>", self.trait_name)
     }
