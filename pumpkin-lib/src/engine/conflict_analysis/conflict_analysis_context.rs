@@ -1,5 +1,4 @@
 use super::AnalysisStep;
-use crate::basic_types::statistics::counters::Counters;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
@@ -20,6 +19,7 @@ use crate::engine::SatisfactionSolverOptions;
 use crate::engine::VariableLiteralMappings;
 use crate::propagators::clausal::ClausalPropagator;
 use crate::pumpkin_assert_moderate;
+use crate::statistics::counters::Counters;
 
 /// Used during conflict analysis to provide the necessary information.
 /// All fields are made public for the time being for simplicity. In the future that may change.

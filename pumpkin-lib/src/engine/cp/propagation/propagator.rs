@@ -1,5 +1,4 @@
 use super::PropagatorInitialisationContext;
-use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -17,6 +16,7 @@ use crate::propagators::clausal::BasicClausalPropagator;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+use crate::statistics::statistic_logger::StatisticLogger;
 
 /// All propagators implement the [`Propagator`] trait, with the exception of the
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with

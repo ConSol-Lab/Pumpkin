@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::statistics::log_statistic;
+use super::statistic_logging::statistic_logger::log_statistic;
 
 #[derive(Debug)]
 pub struct StatisticLogger {

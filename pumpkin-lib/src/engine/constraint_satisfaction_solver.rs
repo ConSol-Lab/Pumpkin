@@ -20,8 +20,6 @@ use super::propagation::store::PropagatorStore;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::statistics::counters::Counters;
-use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::ConflictInfo;
@@ -72,6 +70,8 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::counters::Counters;
+use crate::statistics::statistic_logger::StatisticLogger;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
 #[cfg(doc)]
@@ -186,10 +186,10 @@ pub struct ConstraintSatisfactionSolver {
     /// Convenience literals used in special cases.
     true_literal: Literal,
     false_literal: Literal,
-    /// A set of counters updated during the search.
-    counters: Counters,
     /// Used to store the learned clause.
     analysis_result: ConflictAnalysisResult,
+    /// A set of counters updated during the search.
+    counters: Counters,
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
