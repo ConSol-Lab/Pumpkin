@@ -1,11 +1,19 @@
 use std::fmt::Debug;
+use std::num::NonZero;
 
 use super::Constraint;
+use crate::options::CumulativePropagationMethod;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeOptions;
 use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
+use crate::propagators::TimeTableOverIntervalPropagator;
+use crate::propagators::TimeTablePerPointIncrementalPropagator;
+use crate::propagators::TimeTablePerPointPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
+use crate::ConstraintOperationError;
+use crate::Solver;
 
 /// Creates the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) [`Constraint`].
 ///
@@ -51,9 +59,9 @@ use crate::variables::IntegerVariable;
 ///
 /// solver
 ///     .add_constraint(constraints::cumulative(
-///         &start_times,
-///         &durations,
-///         &resource_requirements,
+///         start_times.clone(),
+///         durations.clone(),
+///         resource_requirements.clone(),
 ///         resource_capacity,
 ///     ))
 ///     .post();
@@ -111,12 +119,21 @@ use crate::variables::IntegerVariable;
 /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
 /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
 /// 21, 2015, pp. 149–157.
-pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
-    start_times: &[Var],
-    durations: &[i32],
-    resource_requirements: &[i32],
+pub fn cumulative<StartTimes, Durations, ResourceRequirements>(
+    start_times: StartTimes,
+    durations: Durations,
+    resource_requirements: ResourceRequirements,
     resource_capacity: i32,
-) -> impl Constraint {
+) -> impl Constraint
+where
+    StartTimes: IntoIterator,
+    StartTimes::Item: IntegerVariable + Debug + 'static,
+    StartTimes::IntoIter: ExactSizeIterator,
+    Durations: IntoIterator<Item = i32>,
+    Durations::IntoIter: ExactSizeIterator,
+    ResourceRequirements: IntoIterator<Item = i32>,
+    ResourceRequirements::IntoIter: ExactSizeIterator,
+{
     cumulative_with_options(
         start_times,
         durations,
@@ -130,31 +147,141 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
 /// with the provided [`CumulativeOptions`].
 ///
 /// See the documentation of [`cumulative`] for more information about the constraint.
-pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
-    start_times: &[Var],
-    durations: &[i32],
-    resource_requirements: &[i32],
+pub fn cumulative_with_options<StartTimes, Durations, ResourceRequirements>(
+    start_times: StartTimes,
+    durations: Durations,
+    resource_requirements: ResourceRequirements,
     resource_capacity: i32,
     options: CumulativeOptions,
-) -> impl Constraint {
+) -> impl Constraint
+where
+    StartTimes: IntoIterator,
+    StartTimes::Item: IntegerVariable + Debug + 'static,
+    StartTimes::IntoIter: ExactSizeIterator,
+    Durations: IntoIterator<Item = i32>,
+    Durations::IntoIter: ExactSizeIterator,
+    ResourceRequirements: IntoIterator<Item = i32>,
+    ResourceRequirements::IntoIter: ExactSizeIterator,
+{
+    let start_times = start_times.into_iter();
+    let durations = durations.into_iter();
+    let resource_requirements = resource_requirements.into_iter();
+
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the
 same!"
     );
 
-    TimeTableOverIntervalIncrementalPropagator::new(
+    CumulativeConstraint::new(
         &start_times
-            .iter()
             .zip(durations)
             .zip(resource_requirements)
             .map(|((start_time, duration), resource_requirement)| ArgTask {
-                start_time: start_time.clone(),
-                processing_time: *duration,
-                resource_usage: *resource_requirement,
+                start_time,
+                processing_time: duration,
+                resource_usage: resource_requirement,
             })
             .collect::<Vec<_>>(),
         resource_capacity,
         options,
     )
+}
+
+struct CumulativeConstraint<Var> {
+    tasks: Vec<ArgTask<Var>>,
+    resource_capacity: i32,
+    options: CumulativeOptions,
+}
+
+impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
+    fn new(tasks: &[ArgTask<Var>], resource_capacity: i32, options: CumulativeOptions) -> Self {
+        Self {
+            tasks: tasks.into(),
+            resource_capacity,
+            options,
+        }
+    }
+}
+
+impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
+    fn post(
+        self,
+        solver: &mut Solver,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        match self.options.propagation_method {
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
+                &self.tasks,
+                self.resource_capacity,
+                self.options.propagator_options,
+            )
+            .post(solver, tag),
+
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                TimeTablePerPointIncrementalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .post(solver, tag)
+            }
+            CumulativePropagationMethod::TimeTableOverInterval => {
+                TimeTableOverIntervalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .post(solver, tag)
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                TimeTableOverIntervalIncrementalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .post(solver, tag)
+            }
+        }
+    }
+
+    fn implied_by(
+        self,
+        solver: &mut Solver,
+        reification_literal: Literal,
+        tag: Option<NonZero<u32>>,
+    ) -> Result<(), ConstraintOperationError> {
+        match self.options.propagation_method {
+            CumulativePropagationMethod::TimeTablePerPoint => TimeTablePerPointPropagator::new(
+                &self.tasks,
+                self.resource_capacity,
+                self.options.propagator_options,
+            )
+            .implied_by(solver, reification_literal, tag),
+            CumulativePropagationMethod::TimeTablePerPointIncremental => {
+                TimeTablePerPointIncrementalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .implied_by(solver, reification_literal, tag)
+            }
+            CumulativePropagationMethod::TimeTableOverInterval => {
+                TimeTableOverIntervalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .implied_by(solver, reification_literal, tag)
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
+                TimeTableOverIntervalIncrementalPropagator::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .implied_by(solver, reification_literal, tag)
+            }
+        }
+    }
 }

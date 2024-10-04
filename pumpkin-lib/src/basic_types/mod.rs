@@ -26,7 +26,7 @@ pub(crate) use csp_solver_execution_flag::CSPSolverExecutionFlag;
 pub use function::Function;
 pub(crate) use hash_structures::*;
 pub(crate) use key_value_heap::KeyValueHeap;
-pub(crate) use keyed_vec::*;
+pub use keyed_vec::*;
 pub(crate) use propagation_status_cp::Inconsistency;
 pub(crate) use propagation_status_cp::PropagationStatusCP;
 pub(crate) use propagation_status_cp_one_step::PropagationStatusOneStepCP;

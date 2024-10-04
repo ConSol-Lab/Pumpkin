@@ -56,6 +56,12 @@ pub mod variables {
     use crate::Solver;
 }
 
+pub mod containers {
+    /// ! Contains containers which are used by the solver.
+    pub use crate::basic_types::KeyedVec;
+    pub use crate::basic_types::StorageKey;
+}
+
 pub mod options {
     //! Contains the options which can be passed to the [`Solver`].
     //!
@@ -70,6 +76,7 @@ pub mod options {
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::CumulativeExplanationType;
     pub use crate::propagators::CumulativeOptions;
+    pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]
     use crate::Solver;
 }
