@@ -2,6 +2,8 @@ use std::collections::BTreeSet;
 use std::ops::Div;
 use std::rc::Rc;
 
+use log::warn;
+
 use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::LocalId;
@@ -226,44 +228,39 @@ struct ParallelMachineProblem {
 
 impl ParallelMachineProblem {
     fn bound_makespan(&self) -> u32 {
-        eprintln!("{self:?}");
         // Choose all possible values of the lower bound on earliest start time
-        let est_bounds = self
+        let res = self
             .jobs
             .iter()
-            .map(|job| job.earliest_start_time)
-            .collect::<BTreeSet<_>>();
-        // Choose all possible values of the lower bound on the tail value
-        let tail_bounds = self
-            .jobs
-            .iter()
-            .map(|job| job.tail_time)
-            .collect::<BTreeSet<_>>();
-        let res = est_bounds
-            .iter()
-            .flat_map(|&est_lower_bound| {
-                tail_bounds
+            .map(|h| {
+                // We go over all jobs h, i in S such that est_h <= est_i /\ tail_h >= tail_i
+                self.jobs
                     .iter()
-                    .map(|&tail_lower_bound| {
-                        est_lower_bound
-                            + tail_lower_bound
+                    .filter(|i| {
+                        h.earliest_start_time <= i.earliest_start_time && h.tail_time >= i.tail_time
+                    })
+                    .map(|i| {
+                        // Then the lower-bound on the makespan is the min(est) +
+                        // ceil(sum(durations) / n_machine) + min(tail)
+                        h.earliest_start_time
+                            + i.tail_time
                             + self
                                 .jobs
                                 .iter()
                                 .filter(|job| {
-                                    job.earliest_start_time >= est_lower_bound
-                                        && job.tail_time >= tail_lower_bound
+                                    job.earliest_start_time >= h.earliest_start_time
+                                        && job.tail_time >= i.tail_time
                                 })
                                 .map(|job| (job.duration as f32))
                                 .sum::<f32>()
                                 .div(self.n_machines as f32)
                                 .ceil() as u32
                     })
-                    .collect::<Vec<_>>()
+                    .max()
+                    .unwrap_or(0)
             })
             .max()
             .unwrap_or(0);
-        eprintln!("{res}");
         res
     }
 }
