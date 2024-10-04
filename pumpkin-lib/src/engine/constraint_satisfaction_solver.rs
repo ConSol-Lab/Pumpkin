@@ -404,8 +404,11 @@ impl ConstraintSatisfactionSolver {
     fn complete_proof(&mut self) {
         pumpkin_assert_simple!(self.is_conflicting());
 
-        let _ = self.compute_learned_clause(&mut DummyBrancher);
-        let _ = self.internal_parameters.proof_log.log_learned_clause([]);
+        let result = self.compute_learned_clause(&mut DummyBrancher);
+        let _ = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(result.learned_literals);
     }
 
     // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
