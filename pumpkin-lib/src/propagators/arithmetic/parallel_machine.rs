@@ -63,7 +63,8 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
                 let responsible_tasks = (0..parameters.tasks.len())
                     .map(|activity_index| {
                         let n_copies = parameters.tasks[activity_index].resource_usage as u32
-                            / min_resource_usage;
+                            / min_resource_usage
+                            - 1;
                         (n_copies, activity_index as u32)
                     })
                     .filter(|(n_copies, _)| *n_copies != 0)
