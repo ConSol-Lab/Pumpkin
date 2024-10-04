@@ -1422,93 +1422,7 @@ impl ConstraintSatisfactionSolver {
         };
 
         if is_at_root && self.internal_parameters.proof_log.is_logging_inferences() {
-            for trail_idx in cp_trail_length..self.assignments_integer.num_trail_entries() {
-                let entry = self.assignments_integer.get_trail_entry(trail_idx);
-                let reason = entry
-                    .reason
-                    .expect("Added by a propagator and must therefore have a reason");
-
-                let reason = self
-                    .reason_store
-                    .get_or_compute(
-                        reason,
-                        &PropagationContext::new(
-                            &self.assignments_integer,
-                            &self.assignments_propositional,
-                        ),
-                    )
-                    .expect("Reason ref is valid");
-
-                let propagated = self.variable_literal_mappings.get_literal(
-                    entry.predicate,
-                    &self.assignments_propositional,
-                    &self.assignments_integer,
-                );
-
-                let premises = reason
-                    .iter()
-                    .map(|predicate| match predicate {
-                        Predicate::IntegerPredicate(predicate) => {
-                            self.variable_literal_mappings.get_literal(
-                                *predicate,
-                                &self.assignments_propositional,
-                                &self.assignments_integer,
-                            )
-                        }
-                        Predicate::Literal(literal) => *literal,
-                        Predicate::False => self.false_literal,
-                        Predicate::True => self.true_literal,
-                    })
-                    .collect::<Vec<_>>();
-
-                let inference_premises =
-                    premises.iter().copied().chain(std::iter::once(!propagated));
-
-                let _ = self
-                    .internal_parameters
-                    .proof_log
-                    .log_inference(tag, inference_premises, self.false_literal)
-                    .and_then(|id| {
-                        let _ = self.unit_nogood_step_ids.insert(propagated, id);
-
-                        let mut to_explain = VecDeque::from(premises);
-
-                        while let Some(premise) = to_explain.pop_front() {
-                            pumpkin_assert_simple!(self
-                                .assignments_propositional
-                                .is_literal_assigned_true(premise));
-
-                            if premise == self.true_literal {
-                                continue;
-                            }
-
-                            if let Some(step_id) = self.unit_nogood_step_ids.get(&premise) {
-                                self.internal_parameters.proof_log.add_propagation(*step_id);
-                            } else {
-                                let reason = self
-                                    .assignments_propositional
-                                    .get_literal_reason_constraint(premise);
-
-                                assert!(
-                                    reason.is_clause(),
-                                    "a propagation would have been logged as a nogood"
-                                );
-
-                                let clause_ref = reason.as_clause_reference();
-                                let premises = self.clause_allocator[clause_ref]
-                                    .get_literal_slice()
-                                    .iter()
-                                    .skip(1)
-                                    .map(|&lit| !lit);
-                                to_explain.extend(premises);
-                            }
-                        }
-
-                        self.internal_parameters
-                            .proof_log
-                            .log_learned_clause([propagated])
-                    });
-            }
+            self.log_root_propagation_to_proof(cp_trail_length, tag);
         }
 
         let result = match propagation_status {
@@ -1523,7 +1437,7 @@ impl ConstraintSatisfactionSolver {
                         &self.assignments_propositional,
                         &self.variable_literal_mappings,
                         propositional_conjunction,
-                        propagator,
+                        &self.cp_propagators[propagator_id],
                         propagator_id,
                     ));
                 }
@@ -1554,6 +1468,123 @@ impl ConstraintSatisfactionSolver {
         );
 
         result
+    }
+
+    /// Introduces any propagations to the proof by introducing them as nogoods.
+    ///
+    /// The inference `R -> l` is logged to the proof as follows:
+    /// 1. Infernce `R /\ ~l -> false`
+    /// 2. Nogood (clause) `l`
+    fn log_root_propagation_to_proof(
+        &mut self,
+        start_trail_index: usize,
+        tag: Option<NonZero<u32>>,
+    ) {
+        for trail_idx in start_trail_index..self.assignments_integer.num_trail_entries() {
+            let entry = self.assignments_integer.get_trail_entry(trail_idx);
+            let reason = entry
+                .reason
+                .expect("Added by a propagator and must therefore have a reason");
+
+            // Get the conjunction of predicates explaining the propagation.
+            let reason = self
+                .reason_store
+                .get_or_compute(
+                    reason,
+                    &PropagationContext::new(
+                        &self.assignments_integer,
+                        &self.assignments_propositional,
+                    ),
+                )
+                .expect("Reason ref is valid");
+
+            // Get the literal corresponding to the propagated predicate.
+            let propagated = self.variable_literal_mappings.get_literal(
+                entry.predicate,
+                &self.assignments_propositional,
+                &self.assignments_integer,
+            );
+
+            // Convert the conjunction of predicates to a conjunction of literals.
+            let premises = reason
+                .iter()
+                .map(|predicate| match predicate {
+                    Predicate::IntegerPredicate(predicate) => {
+                        self.variable_literal_mappings.get_literal(
+                            *predicate,
+                            &self.assignments_propositional,
+                            &self.assignments_integer,
+                        )
+                    }
+                    Predicate::Literal(literal) => *literal,
+                    Predicate::False => self.false_literal,
+                    Predicate::True => self.true_literal,
+                })
+                .collect::<Vec<_>>();
+
+            // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
+            let inference_premises = premises.iter().copied().chain(std::iter::once(!propagated));
+            let _ = self.internal_parameters.proof_log.log_inference(
+                tag,
+                inference_premises,
+                self.false_literal,
+            );
+
+            // Since inference steps only are only related to the nogood they directly precede,
+            // facts derived at the root are also logged as nogoods so they can be used in the
+            // derivation of other nogoods.
+            //
+            // In case we are logging hints, we must therefore identify what proof steps contribute
+            // to the derivation of the current nogood, and therefore are in the premise of the
+            // previously logged inference. These proof steps are necessarily unit nogoods, and
+            // therefore we recursively look up which unit nogoods are involved in the premise of
+            // the inference.
+
+            let mut to_explain = VecDeque::from(premises);
+
+            while let Some(premise) = to_explain.pop_front() {
+                pumpkin_assert_simple!(self
+                    .assignments_propositional
+                    .is_literal_assigned_true(premise));
+
+                if premise == self.true_literal {
+                    continue;
+                }
+
+                if let Some(step_id) = self.unit_nogood_step_ids.get(&premise) {
+                    self.internal_parameters.proof_log.add_propagation(*step_id);
+                } else {
+                    let reason = self
+                        .assignments_propositional
+                        .get_literal_reason_constraint(premise);
+
+                    // If the reason were a CP propagation, then `self.unit_nogood_step_ids` would
+                    // have contained `premise`.
+                    assert!(
+                        reason.is_clause(),
+                        "a propagation would have been logged as a nogood"
+                    );
+
+                    let clause_ref = reason.as_clause_reference();
+                    let premises = self.clause_allocator[clause_ref]
+                        .get_literal_slice()
+                        .iter()
+                        .skip(1)
+                        .map(|&lit| !lit);
+                    to_explain.extend(premises);
+                }
+            }
+
+            // Log the nogood which adds the root-level knowledge to the proof.
+            let nogood_step_id = self
+                .internal_parameters
+                .proof_log
+                .log_learned_clause([propagated]);
+
+            if let Ok(nogood_step_id) = nogood_step_id {
+                let _ = self.unit_nogood_step_ids.insert(propagated, nogood_step_id);
+            }
+        }
     }
 
     fn are_all_assumptions_assigned(&self) -> bool {
