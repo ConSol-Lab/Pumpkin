@@ -16,6 +16,7 @@ use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::termination::Combinator;
 use pumpkin_lib::termination::OsSignal;
 use pumpkin_lib::termination::TimeBudget;
+use pumpkin_lib::variables::TransformableVariable;
 use pumpkin_lib::Solver;
 use rcpsp_instance::parse_rcpsp_dzn;
 use rcpsp_instance::SchedulingError;
@@ -166,8 +167,9 @@ fn run() -> SchedulingResult<()> {
 
         let result = solver
             .add_constraint(constraints::binary_less_than_or_equals(
-                start_variables[task_index],
-                makespan,
+                start_variables[task_index]
+                    .offset(rcpsp_instance.processing_times[task_index] as i32),
+                makespan.scaled(1),
             ))
             .post();
         if result.is_err() {
@@ -175,7 +177,7 @@ fn run() -> SchedulingResult<()> {
         }
     }
 
-    let mut brancher = AlternatingBrancher::new(&solver, IndependentVariableValueBrancher::new(Smallest::new(&start_variables), InDomainMin), pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy::SwitchToDefaultAfterFirstSolution);
+    let mut brancher = AlternatingBrancher::new(&solver, IndependentVariableValueBrancher::new(Smallest::new(&start_variables.into_iter().chain(std::iter::once(makespan)).collect::<Vec<_>>()), InDomainMin), pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy::SwitchToDefaultAfterFirstSolution);
 
     let mut termination = Combinator::new(
         OsSignal::install(),
