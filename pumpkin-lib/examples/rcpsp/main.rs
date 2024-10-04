@@ -32,6 +32,10 @@ struct Args {
     /// file.
     instance_path: PathBuf,
 
+    /// Enable the parallel-machine propagator
+    #[arg(short = 'p', long)]
+    use_parallel_machine: bool,
+
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
@@ -144,26 +148,28 @@ fn run() -> SchedulingResult<()> {
             panic!("Adding cumulative led to unsatisfiability");
         }
 
-        let result = solver
-            .add_constraint(constraints::parallel_machine(
-                &start_variables,
-                &rcpsp_instance
-                    .processing_times
-                    .iter()
-                    .map(|&value| value as i32)
-                    .collect::<Vec<_>>(),
-                &resource_usages
-                    .iter()
-                    .map(|&value| value as i32)
-                    .collect::<Vec<_>>(),
-                rcpsp_instance.resource_capacities[resource_index] as i32,
-                2,
-                5,
-                makespan,
-            ))
-            .post();
-        if result.is_err() {
-            panic!("Adding parallel machine bound led to unsatisfiability");
+        if args.use_parallel_machine {
+            let result = solver
+                .add_constraint(constraints::parallel_machine(
+                    &start_variables,
+                    &rcpsp_instance
+                        .processing_times
+                        .iter()
+                        .map(|&value| value as i32)
+                        .collect::<Vec<_>>(),
+                    &resource_usages
+                        .iter()
+                        .map(|&value| value as i32)
+                        .collect::<Vec<_>>(),
+                    rcpsp_instance.resource_capacities[resource_index] as i32,
+                    2,
+                    5,
+                    makespan,
+                ))
+                .post();
+            if result.is_err() {
+                panic!("Adding parallel machine bound led to unsatisfiability");
+            }
         }
     }
 
