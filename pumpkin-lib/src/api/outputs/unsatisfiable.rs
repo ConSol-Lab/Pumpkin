@@ -110,9 +110,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     }
 }
 
-impl<'solver, 'brancher, B: Brancher> Drop
-    for UnsatisfiableUnderAssumptions<'solver, 'brancher, B>
-{
+impl<B: Brancher> Drop for UnsatisfiableUnderAssumptions<'_, '_, B> {
     fn drop(&mut self) {
         self.solver.restore_state_at_root(self.brancher)
     }

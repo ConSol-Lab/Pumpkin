@@ -42,7 +42,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) learned_clause_manager: &'a mut LearnedClauseManager,
 }
 
-impl<'a> ConflictAnalysisContext<'a> {
+impl ConflictAnalysisContext<'_> {
     pub(crate) fn get_decision_level(&self) -> usize {
         pumpkin_assert_moderate!(
             self.assignments_propositional.get_decision_level()
