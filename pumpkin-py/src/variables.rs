@@ -107,6 +107,14 @@ impl From<BoolVariable> for BoolExpression {
 }
 
 impl BoolExpression {
+    pub fn get_polarity(self) -> bool {
+        self.1
+    }
+
+    pub fn get_variable(self) -> BoolVariable {
+        self.0
+    }
+
     pub fn to_literal(self, variable_map: &VariableMap) -> Literal {
         let literal = variable_map.get_boolean(self.0);
 

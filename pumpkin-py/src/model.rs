@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use pumpkin_lib::containers::KeyedVec;
 use pumpkin_lib::options::LearningOptions;
 use pumpkin_lib::options::SolverOptions;
+use pumpkin_lib::predicate;
 use pumpkin_lib::proof::Format;
 use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::termination::Indefinite;
@@ -24,7 +25,7 @@ use crate::variables::VariableMap;
 #[derive(Default)]
 pub struct Model {
     integer_variables: KeyedVec<IntVariable, ModelIntVar>,
-    boolean_variables: KeyedVec<BoolVariable, Option<String>>,
+    boolean_variables: KeyedVec<BoolVariable, ModelBoolVar>,
     constraints: Vec<ModelConstraint>,
 }
 
@@ -56,8 +57,34 @@ impl Model {
     #[pyo3(signature = (name=None))]
     fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
         self.boolean_variables
-            .push(name.map(|n| n.to_owned()))
+            .push(ModelBoolVar {
+                name: name.map(|n| n.to_owned()),
+                integer: None,
+            })
             .into()
+    }
+
+    /// Get an integer variable for the given boolean.
+    ///
+    /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
+    fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
+        let bool_variable = boolean.get_variable();
+        let polarity = boolean.get_polarity();
+
+        if let Some(int_expr) = self.boolean_variables[bool_variable].integer {
+            return int_expr;
+        }
+
+        let name = self.boolean_variables[bool_variable].name.clone();
+        let mut int_expr = self.new_integer_variable(0, 1, name.as_deref());
+        if !polarity {
+            int_expr.scale = -1;
+            int_expr.offset = 1;
+        }
+
+        self.boolean_variables[bool_variable].integer = Some(int_expr);
+
+        int_expr
     }
 
     /// Add the given constraint to the model.
@@ -143,12 +170,18 @@ impl Model {
             });
         }
 
-        for name in self.boolean_variables.iter() {
-            let _ = map.booleans.push(if let Some(name) = name {
-                solver.new_named_literal(name)
-            } else {
-                solver.new_literal()
-            });
+        for ModelBoolVar { name, integer } in self.boolean_variables.iter() {
+            let literal = match (integer, name) {
+                (Some(int_expr), _) => {
+                    let solver_var = int_expr.to_affine_view(&map);
+                    solver.get_literal(predicate![solver_var == 1])
+                }
+
+                (None, Some(name)) => solver.new_named_literal(name),
+                (None, None) => solver.new_literal(),
+            };
+
+            map.booleans.push(literal);
         }
 
         map
@@ -193,4 +226,9 @@ struct ModelIntVar {
     lower_bound: i32,
     upper_bound: i32,
     name: Option<String>,
+}
+
+struct ModelBoolVar {
+    name: Option<String>,
+    integer: Option<IntExpression>,
 }
