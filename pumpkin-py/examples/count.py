@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from pumpkin_py import constraints, SatisfactionResult, Model
+from pumpkin_py import Comparator, constraints, SatisfactionResult, Model
 
 def main():
     model = Model()
@@ -27,14 +27,16 @@ def main():
                 print("---")
 
                 model.add_constraint(constraints.Clause(
-                    [model.get_predicate(var, Comparator.NOT_EQUAL, solution.int_value(var)) for var in xyz]
+                    [model.predicate_as_boolean(var, Comparator.NotEqual, solution.int_value(var)) for var in xyz]
                 ))
             
             case SatisfactionResult.Unsatisfiable():
                 print(f"Finished enumeration.")
+                break
             
             case SatisfactionResult.Unknown():
                 print("Timeout.")
+                break
 
 
 if __name__ == "__main__":

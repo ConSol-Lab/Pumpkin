@@ -10,7 +10,7 @@ macro_rules! python_constraint {
         #[pyclass]
         #[derive(Clone)]
         pub(crate) struct $name {
-            $($field: $type),+
+            pub(crate) $($field: $type),+
         }
 
         #[pymethods]

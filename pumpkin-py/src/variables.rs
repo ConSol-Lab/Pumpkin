@@ -128,7 +128,7 @@ impl BoolExpression {
 
 #[pymethods]
 impl BoolExpression {
-    fn negate(&self) -> Self {
+    pub fn negate(&self) -> Self {
         BoolExpression(self.0, !self.1)
     }
 }

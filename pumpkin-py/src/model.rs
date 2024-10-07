@@ -29,6 +29,15 @@ pub struct Model {
     constraints: Vec<ModelConstraint>,
 }
 
+#[pyclass(eq, eq_int)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Comparator {
+    NotEqual,
+    Equal,
+    LessEqual,
+    GreaterEqual,
+}
+
 #[pymethods]
 impl Model {
     #[new]
@@ -57,7 +66,7 @@ impl Model {
     #[pyo3(signature = (name=None))]
     fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
         self.boolean_variables
-            .push(ModelBoolVar {
+            .push(ModelBoolVar::Expr {
                 name: name.map(|n| n.to_owned()),
                 integer: None,
             })
@@ -68,23 +77,79 @@ impl Model {
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        let bool_variable = boolean.get_variable();
-        let polarity = boolean.get_polarity();
+        // The boolean may be a fresh literal or a predicate literal. In the latter case, we cannot
+        // simply substitute the literal with the predicate literals of a fresh integer variable.
+        // Instead, we create a new integer and enforce equality between the predicate literals.
 
-        if let Some(int_expr) = self.boolean_variables[bool_variable].integer {
+        let bool_variable = boolean.get_variable();
+
+        let name = self.boolean_variables[bool_variable]
+            .name()
+            .map(|n| n.to_owned());
+
+        let mut int_expr: IntExpression = self
+            .integer_variables
+            .push(ModelIntVar {
+                lower_bound: 0,
+                upper_bound: 1,
+                name: name.clone(),
+            })
+            .into();
+
+        if let ModelBoolVar::Expr {
+            ref mut integer, ..
+        } = &mut self.boolean_variables[bool_variable]
+        {
+            let polarity = boolean.get_polarity();
+
+            if let Some(int_expr) = integer {
+                return *int_expr;
+            }
+
+            if !polarity {
+                int_expr.scale = -1;
+                int_expr.offset = 1;
+            }
+
+            *integer = Some(int_expr);
+
             return int_expr;
         }
 
-        let name = self.boolean_variables[bool_variable].name.clone();
-        let mut int_expr = self.new_integer_variable(0, 1, name.as_deref());
-        if !polarity {
-            int_expr.scale = -1;
-            int_expr.offset = 1;
-        }
+        let int_eq_1 = self.predicate_as_boolean(int_expr, Comparator::Equal, 1, name.as_deref());
 
-        self.boolean_variables[bool_variable].integer = Some(int_expr);
+        self.add_constraint(
+            Constraint::Clause(crate::constraints::globals::Clause {
+                literals: vec![int_eq_1, boolean],
+            }),
+            None,
+        );
+        self.add_constraint(
+            Constraint::Clause(crate::constraints::globals::Clause {
+                literals: vec![int_eq_1.negate(), boolean.negate()],
+            }),
+            None,
+        );
 
         int_expr
+    }
+
+    #[pyo3(signature = (integer, comparator, value, name=None))]
+    fn predicate_as_boolean(
+        &mut self,
+        integer: IntExpression,
+        comparator: Comparator,
+        value: i32,
+        name: Option<&str>,
+    ) -> BoolExpression {
+        self.boolean_variables
+            .push(ModelBoolVar::PredicateLiteral {
+                name: name.map(|n| n.to_owned()),
+                integer,
+                comparator,
+                value,
+            })
+            .into()
     }
 
     /// Add the given constraint to the model.
@@ -170,15 +235,35 @@ impl Model {
             });
         }
 
-        for ModelBoolVar { name, integer } in self.boolean_variables.iter() {
-            let literal = match (integer, name) {
-                (Some(int_expr), _) => {
-                    let solver_var = int_expr.to_affine_view(&map);
-                    solver.get_literal(predicate![solver_var == 1])
-                }
+        for model_bool_var in self.boolean_variables.iter() {
+            let literal = match model_bool_var {
+                ModelBoolVar::Expr { name, integer } => match (integer, name) {
+                    (Some(int_expr), _) => {
+                        let solver_var = int_expr.to_affine_view(&map);
+                        solver.get_literal(predicate![solver_var == 1])
+                    }
 
-                (None, Some(name)) => solver.new_named_literal(name),
-                (None, None) => solver.new_literal(),
+                    (None, Some(name)) => solver.new_named_literal(name),
+                    (None, None) => solver.new_literal(),
+                },
+
+                ModelBoolVar::PredicateLiteral {
+                    // TODO: Associate name with the solver literal.
+                    name: _,
+                    integer,
+                    comparator,
+                    value,
+                } => {
+                    let int_var = integer.to_affine_view(&map);
+                    let predicate = match comparator {
+                        Comparator::NotEqual => predicate![int_var != *value],
+                        Comparator::Equal => predicate![int_var == *value],
+                        Comparator::LessEqual => predicate![int_var <= *value],
+                        Comparator::GreaterEqual => predicate![int_var >= *value],
+                    };
+
+                    solver.get_literal(predicate)
+                }
             };
 
             map.booleans.push(literal);
@@ -228,7 +313,26 @@ struct ModelIntVar {
     name: Option<String>,
 }
 
-struct ModelBoolVar {
-    name: Option<String>,
-    integer: Option<IntExpression>,
+enum ModelBoolVar {
+    Expr {
+        name: Option<String>,
+        integer: Option<IntExpression>,
+    },
+
+    PredicateLiteral {
+        name: Option<String>,
+        integer: IntExpression,
+        comparator: Comparator,
+        value: i32,
+    },
+}
+
+impl ModelBoolVar {
+    fn name(&self) -> Option<&str> {
+        match self {
+            ModelBoolVar::Expr { name, .. } | ModelBoolVar::PredicateLiteral { name, .. } => {
+                name.as_deref()
+            }
+        }
+    }
 }
