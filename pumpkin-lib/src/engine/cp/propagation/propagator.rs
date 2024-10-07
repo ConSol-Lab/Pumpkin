@@ -16,6 +16,7 @@ use crate::propagators::clausal::BasicClausalPropagator;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+use crate::statistics::statistic_logger::StatisticLogger;
 
 /// All propagators implement the [`Propagator`] trait, with the exception of the
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
@@ -170,6 +171,9 @@ pub trait Propagator {
     ) -> Option<PropositionalConjunction> {
         None
     }
+
+    /// Logs statistics of the propagator using the provided [`StatisticLogger`].
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }
 
 /// Indicator of what to do when a propagator is notified.

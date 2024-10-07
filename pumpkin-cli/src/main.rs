@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
+use convert_case::Case;
 use file_format::FileFormat;
 use log::error;
 use log::info;
@@ -28,6 +29,7 @@ use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
+use pumpkin_lib::statistics::statistic_logging::statistic_logger::configure;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Solver;
@@ -375,7 +377,12 @@ fn configure_logging_unknown() -> std::io::Result<()> {
 }
 
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
-    pumpkin_lib::statistics::configure(log_statistics, "%%%mzn-stat:", Some("%%%mzn-stat-end"));
+    configure(
+        log_statistics,
+        "%%%mzn-stat:",
+        Some("%%%mzn-stat-end"),
+        Some(Case::Camel),
+    );
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {
@@ -401,7 +408,7 @@ fn configure_logging_sat(
     omit_timestamp: bool,
     omit_call_site: bool,
 ) -> std::io::Result<()> {
-    pumpkin_lib::statistics::configure(log_statistics, "c STAT", None);
+    configure(log_statistics, "c STAT", None, None);
     let level_filter = if verbose {
         LevelFilter::Debug
     } else {

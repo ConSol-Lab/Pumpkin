@@ -100,12 +100,6 @@ pub mod termination {
     use crate::Solver;
 }
 
-pub mod statistics {
-    //! Contains functions which configure the logging and allow the logging of statistics
-    //! themselves.
-    pub use crate::basic_types::statistic_logging::statistic_logger::*;
-}
-
 pub mod proof {
     //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
     //! [`ProofLog`], which is a list of deductions made by the solver.
