@@ -553,6 +553,7 @@ impl Solver {
                 }
                 CSPSolverExecutionFlag::Infeasible => {
                     {
+                        self.log_statistics_with_objective(best_objective_value);
                         // Reset the state whenever we return a result
                         self.satisfaction_solver.restore_state_at_root(brancher);
                         let _ = self
@@ -562,6 +563,7 @@ impl Solver {
                     }
                 }
                 CSPSolverExecutionFlag::Timeout => {
+                    self.log_statistics_with_objective(best_objective_value);
                     // Reset the state whenever we return a result
                     self.satisfaction_solver.restore_state_at_root(brancher);
                     return OptimisationResult::Satisfiable(best_solution);

@@ -36,6 +36,14 @@ struct Args {
     #[arg(short = 'p', long)]
     use_parallel_machine: bool,
 
+    /// The minimum number of machines passed to the parallel-machine propagator
+    #[arg(short = 'i', long, default_value_t = 2)]
+    minimum_number_of_machines: usize,
+
+    /// The maximum number of machines passed to the parallel-machine propagator
+    #[arg(short = 'a', long, default_value_t = 5)]
+    maximum_number_of_machines: usize,
+
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
@@ -162,8 +170,8 @@ fn run() -> SchedulingResult<()> {
                         .map(|&value| value as i32)
                         .collect::<Vec<_>>(),
                     rcpsp_instance.resource_capacities[resource_index] as i32,
-                    2,
-                    5,
+                    args.minimum_number_of_machines,
+                    args.maximum_number_of_machines,
                     makespan,
                 ))
                 .post();
@@ -186,6 +194,14 @@ fn run() -> SchedulingResult<()> {
             }
         }
     }
+
+    solver.with_solution_callback(move |solution| {
+        println!("-----------------------------------------");
+        println!(
+            "Found solution with makespan {}",
+            solution.get_integer_value(makespan)
+        );
+    });
 
     let mut brancher = AlternatingBrancher::new(&solver, IndependentVariableValueBrancher::new(Smallest::new(&start_variables.into_iter().chain(std::iter::once(makespan)).collect::<Vec<_>>()), InDomainMin), pumpkin_lib::branching::branchers::alternating_brancher::AlternatingStrategy::SwitchToDefaultAfterFirstSolution);
 

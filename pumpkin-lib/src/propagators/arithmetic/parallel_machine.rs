@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use log::warn;
 
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistics::statistic_logger::StatisticLogger;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::LocalId;
@@ -30,6 +32,7 @@ pub(crate) struct ParallelMachinePropagator<Var> {
     n_calls: usize,
     n_propagations: usize,
     n_conflicts: usize,
+    average_size_of_propagation: CumulativeMovingAverage,
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +82,7 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
                     n_calls: 0,
                     n_propagations: 0,
                     n_conflicts: 0,
+                    average_size_of_propagation: CumulativeMovingAverage::default(),
                 }
             })
             .collect::<Vec<_>>()
@@ -145,6 +149,9 @@ impl<Var: IntegerVariable + 'static> Propagator for ParallelMachinePropagator<Va
         let parallel_machine_bound = self.get_parallel_machine_bound(&context.as_readonly());
 
         if parallel_machine_bound > context.lower_bound(&self.makespan_variable) {
+            self.average_size_of_propagation.add_term(
+                (parallel_machine_bound - context.lower_bound(&self.makespan_variable)) as u64,
+            );
             self.n_propagations += 1;
             let result = context.set_lower_bound(
                 &self.makespan_variable,
