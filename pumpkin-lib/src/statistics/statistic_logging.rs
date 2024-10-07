@@ -45,16 +45,15 @@ pub mod statistic_logger {
     /// Logs the provided statistic with name `name` and value `value`. At the moment it will log in
     /// the format `STATISTIC_PREFIX NAME=VALUE`.
     pub fn log_statistic(name: impl Display, value: impl Display) {
-        let statistic_options = STATISTIC_OPTIONS
-            .get()
-            .expect("Expected statistics to be configured before logging");
-        if statistic_options.log_statistics {
-            let name = if let Some(casing) = &statistic_options.statistics_casing {
-                name.to_string().to_case(*casing)
-            } else {
-                name.to_string()
-            };
-            println!("{} {name}={value}", statistic_options.statistic_prefix)
+        if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
+            if statistic_options.log_statistics {
+                let name = if let Some(casing) = &statistic_options.statistics_casing {
+                    name.to_string().to_case(*casing)
+                } else {
+                    name.to_string()
+                };
+                println!("{} {name}={value}", statistic_options.statistic_prefix)
+            }
         }
     }
 
@@ -64,12 +63,11 @@ pub mod statistic_logger {
     /// output format) require that a block of statistics is followed by a closing line; this
     /// function outputs this closing line **if** it is configued.
     pub fn log_statistic_postfix() {
-        let statistic_options = STATISTIC_OPTIONS
-            .get()
-            .expect("Expected statistics to be configured before logging");
-        if statistic_options.log_statistics {
-            if let Some(post_fix) = statistic_options.after_statistics {
-                println!("{post_fix}")
+        if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
+            if statistic_options.log_statistics {
+                if let Some(post_fix) = statistic_options.after_statistics {
+                    println!("{post_fix}")
+                }
             }
         }
     }
