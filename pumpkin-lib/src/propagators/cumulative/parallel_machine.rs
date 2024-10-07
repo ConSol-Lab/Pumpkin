@@ -1,8 +1,5 @@
-use std::collections::BTreeSet;
 use std::ops::Div;
 use std::rc::Rc;
-
-use log::warn;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -28,6 +25,8 @@ pub(crate) struct ParallelMachinePropagator<Var> {
     makespan_variable: Var,
     responsible_tasks: Vec<(u32, u32)>,
     n_machine: usize,
+
+    name: String,
 
     n_calls: usize,
     n_propagations: usize,
@@ -83,6 +82,7 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
                     n_propagations: 0,
                     n_conflicts: 0,
                     average_size_of_propagation: CumulativeMovingAverage::default(),
+                    name: format!("ParallelMachinePropagatorWith{}Machines", n_machine),
                 }
             })
             .collect::<Vec<_>>()
@@ -134,13 +134,17 @@ impl<Var: IntegerVariable + Clone + 'static> ParallelMachinePropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> Propagator for ParallelMachinePropagator<Var> {
     fn name(&self) -> &str {
-        "ParallelMachinePropagator"
+        self.name.as_str()
     }
 
     fn log_statistics(&self, statistic_logger: StatisticLogger) {
         statistic_logger.log_statistic("numberOfCalls", self.n_calls);
         statistic_logger.log_statistic("numberOfPropagations", self.n_propagations);
         statistic_logger.log_statistic("numberOfConflicts", self.n_conflicts);
+        statistic_logger.log_statistic(
+            "averageSizeOfPropagation",
+            self.average_size_of_propagation.value(),
+        )
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
