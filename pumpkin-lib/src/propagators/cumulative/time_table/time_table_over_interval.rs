@@ -156,8 +156,8 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.dynamic_structures
-            .initialise_bounds(context, &self.parameters);
-        register_tasks(&self.parameters.tasks, context, true);
+            .initialise_bounds_and_remove_fixed(context, &self.parameters);
+        register_tasks(&self.parameters.tasks, context, false);
 
         Ok(())
     }

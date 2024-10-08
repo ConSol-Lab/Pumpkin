@@ -96,9 +96,11 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
         }
     }
 
+    /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
+    /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: &PropagationContextMut,
+        context: &PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -144,6 +146,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
         }
     }
 
+    /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
     fn remove_from_time_table(
         &mut self,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
@@ -172,30 +175,53 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     }
 
     /// Updates the stored time-table based on the updates stored in
-    /// [`CumulativeParameters::updated`]. If the time-table is outdated then this method will
-    /// simply calculate it from scratch.
+    /// [`DynamicStructures::updated`].
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        // We keep track whether a conflict was found
         let mut found_conflict = false;
+
+        // Then we go over all of the updated tasks
         while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
             let element = self.dynamic_structures.get_update_for_task(&updated_task);
-            let mandatory_part_adjustments = element.get_removed_and_added_mandatory_parts();
 
+            // We get the adjustments based on the stored updated
+            let mandatory_part_adjustments = element.get_mandatory_part_adjustments();
+
+            // Then we first remove from the time-table (if necessary)
+            //
+            // This order ensures that there is less of a chance of incorrect overflows bieng
+            // reported
             self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
 
-            let result =
-                self.add_to_time_table(context, &mandatory_part_adjustments, &updated_task);
+            // Then we add to the time-table (if necessary)
+            //
+            // Note that the inconsistency returned here does not necessarily hold since other
+            // updates could remove from the profile
+            let result = self.add_to_time_table(
+                &context.as_readonly(),
+                &mandatory_part_adjustments,
+                &updated_task,
+            );
+
+            // If we have found an overflow then we mark that we need to check the profile
             found_conflict |= result.is_err();
 
+            // Then we reset the update for the task since it has been processed
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
+
+        // After all the updates have been processed, we need to check whether there is still a
+        // conflict in the time-table (if any calls have reported an overflow)
         if found_conflict || self.found_previous_conflict {
-            // TODO: should find a better way to do this
+            // We linearly scan the profiles and find the first one which exceeds the capacity
             let conflicting_profile = self
                 .time_table
                 .iter()
                 .find(|profile| profile.height > self.parameters.capacity);
+
+            // If we have found such a conflict then we return it
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
                     create_time_table_over_interval_from_scratch(
@@ -205,10 +231,9 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                     .is_err(),
                     "Time-table from scratch could not find conflict"
                 );
+                // We have found the previous conflict
                 self.found_previous_conflict = true;
 
-                // TODO: could decide which tasks to choose from the profile to explain the
-                // conflict
                 return Err(create_conflict_explanation(
                     context,
                     conflicting_profile,
@@ -216,6 +241,8 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
                 )
                 .into());
             }
+
+            // Otherwise we mark that we have not found the previous conflict and continue
             self.found_previous_conflict = false;
         }
 
@@ -494,7 +521,9 @@ mod insertion {
     ) -> Result<(), ResourceProfile<Var>> {
         let mut to_add = Vec::new();
 
+        // We keep track of whether a conflict has been found
         let mut conflict = None;
+
         // Go over all indices of the profiles which overlap with the updated
         // one and determine which one need to be updated
         for current_index in start_index..=end_index {
@@ -640,14 +669,16 @@ mod removal {
             .take(end_index + 1)
             .skip(start_index)
         {
-            // We only need to check whether the sides are updated, from the rest we simply remove
-            // this value
+            // We need to check whether the first overlapping profile was split
             if index == start_index {
                 split_first_profile(&mut to_add, update_range, profile);
             }
 
+            // Then we need to add the updated profile due to the overlap between `profile` and
+            // `updated_task`
             overlap_updated_profile(update_range, profile, &mut to_add, updated_task);
 
+            // We need to check whether the last overlapping profile was split
             if index == end_index {
                 split_last_profile(&mut to_add, update_range, profile)
             }
@@ -658,6 +689,7 @@ mod removal {
         let _ = time_table.splice(start_index..end_index + 1, to_add);
     }
 
+    /// Returns the provided `profile` with the provided `updated_task` removed.
     fn remove_task_from_profile<Var: IntegerVariable + 'static>(
         updated_task: &Rc<Task<Var>>,
         start: i32,
@@ -680,6 +712,8 @@ mod removal {
         }
     }
 
+    /// If there is a partial overlap, this method creates a profile consisting of the original
+    /// profile before the overlap.
     pub(crate) fn split_first_profile<Var: IntegerVariable + 'static>(
         to_add: &mut Vec<ResourceProfile<Var>>,
         update_range: &Range<i32>,
@@ -688,15 +722,7 @@ mod removal {
         if update_range.start > first_profile.start {
             to_add.push(ResourceProfile {
                 start: first_profile.start,
-                end: min(update_range.start - 1, first_profile.end), /* It could be that the
-                                                                      * update
-                                                                      * range extends past the
-                                                                      * profile
-                                                                      * in which case we should
-                                                                      * create
-                                                                      * a profile until the end
-                                                                      * of the
-                                                                      * profile */
+                end: min(update_range.start - 1, first_profile.end),
                 profile_tasks: first_profile.profile_tasks.clone(),
                 height: first_profile.height,
             });
@@ -723,6 +749,7 @@ mod removal {
         }
     }
 
+    /// This method creates a new profile based on the overlap with the provided `profile`.
     pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
         update_range: &Range<i32>,
         profile: &ResourceProfile<Var>,
@@ -730,10 +757,12 @@ mod removal {
         updated_task: &Rc<Task<Var>>,
     ) {
         if profile.height - updated_task.resource_usage == 0 {
+            // If the removal of this task results in an empty profile then we simply do not add it
             return;
         }
         // Now we create a new profile which consists of the part of the
         // profile covered by the update range
+        //
         // This means that we are removing the contribution of the updated
         // task to the profile and adjusting the bounds appropriately
 

@@ -1,3 +1,4 @@
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -94,6 +95,8 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         }
     }
 
+    /// Adds the added parts in the provided [`MandatoryPartAdjustments`] to the time-table; note
+    /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
         context: &PropagationContext,
@@ -104,6 +107,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         // that for each of these tasks, a mandatory part exists, otherwise it would not
         // have been added (see [`should_propagate`]))
         let mut conflict = None;
+
         for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
             pumpkin_assert_extreme!(
                         !self.time_table.contains_key(&(time_point as u32))
@@ -129,6 +133,8 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                 .into()));
             }
         }
+
+        // If we have found a conflict then we report it
         if let Some(conflict) = conflict {
             conflict
         } else {
@@ -136,6 +142,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         }
     }
 
+    /// Removes the removed parts in the provided [`MandatoryPartAdjustments`] from the time-table
     fn remove_from_time_table(
         &mut self,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
@@ -146,57 +153,85 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                         self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
                         "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
 
-            // Add the updated profile to the ResourceProfile at time t
-            let current_profile: &mut ResourceProfile<Var> = self
-                .time_table
-                .entry(time_point as u32)
-                .or_insert(ResourceProfile::default(time_point));
+            // Then we update the time-table
+            if let Entry::Occupied(entry) =
+                self.time_table
+                    .entry(time_point as u32)
+                    .and_modify(|profile| {
+                        // We remove the resource usage of the task from the height of the profile
+                        profile.height -= task.resource_usage;
 
-            current_profile.height -= task.resource_usage;
-
-            if current_profile.height != 0 {
-                let _ = current_profile.profile_tasks.remove(
-                    current_profile
-                        .profile_tasks
-                        .iter()
-                        .position(|profile_task| profile_task.id == task.id)
-                        .expect("Task should be present"),
-                );
+                        // If the height of the profile is not equal to 0 then we remove the task
+                        // from the profile tasks
+                        if profile.height != 0 {
+                            let _ = profile.profile_tasks.remove(
+                                profile
+                                    .profile_tasks
+                                    .iter()
+                                    .position(|profile_task| profile_task.id == task.id)
+                                    .expect("Task should be present"),
+                            );
+                        }
+                    })
+            {
+                if entry.get().height == 0 {
+                    // If the height of the profile is now 0 then we remove the entry
+                    let _ = entry.remove();
+                }
             } else {
-                let _ = self.time_table.remove_entry(&(time_point as u32));
+                panic!("Entry for time-point did not exist when removing from time-table")
             }
         }
     }
 
     /// Updates the stored time-table based on the updates stored in
-    /// [`CumulativeParameters::updated`]. If the time-table is outdated then this method will
-    /// simply calculate it from scratch.
+    /// [`DynamicStructures::updated`].
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        // We keep track whether a conflict was found
         let mut found_conflict = false;
-        while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
-            let dynamic_structures = &mut self.dynamic_structures;
-            let element = dynamic_structures.get_update_for_task(&updated_task);
-            let mandatory_part_adjustments = element.get_removed_and_added_mandatory_parts();
 
+        // Then we go over all of the updated tasks
+        while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
+            let element = self.dynamic_structures.get_update_for_task(&updated_task);
+
+            // We get the adjustments based on the stored updated
+            let mandatory_part_adjustments = element.get_mandatory_part_adjustments();
+
+            // Then we first remove from the time-table (if necessary)
+            //
+            // This order ensures that there is less of a chance of incorrect overflows bieng
+            // reported
             self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
 
+            // Then we add to the time-table (if necessary)
+            //
+            // Note that the inconsistency returned here does not necessarily hold since other
+            // updates could remove from the profile
             let result = self.add_to_time_table(
                 &context.as_readonly(),
                 &mandatory_part_adjustments,
                 &updated_task,
             );
+
+            // If we have found an overflow then we mark that we need to check the profile
             found_conflict |= result.is_err();
 
+            // Then we reset the update for the task since it has been processed
             self.dynamic_structures.reset_update_for_task(&updated_task);
         }
 
-        if self.found_previous_conflict || found_conflict {
+        // After all the updates have been processed, we need to check whether there is still a
+        // conflict in the time-table (if any calls have reported an overflow)
+        if found_conflict || self.found_previous_conflict {
+            // We linearly scan the profiles and find the first one which exceeds the capacity
             let conflicting_profile = self
                 .time_table
                 .values()
                 .find(|profile| profile.height > self.parameters.capacity);
+
+            // If we have found such a conflict then we return it
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
                     create_time_table_per_point_from_scratch(
@@ -206,10 +241,9 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                     .is_err(),
                     "Time-table from scratch could not find conflict"
                 );
+                // We have found the previous conflict
                 self.found_previous_conflict = true;
 
-                // TODO: could decide which tasks to choose from the profile to explain the
-                // conflict
                 return Err(create_conflict_explanation(
                     context,
                     conflicting_profile,
@@ -217,6 +251,8 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                 )
                 .into());
             }
+
+            // Otherwise we mark that we have not found the previous conflict and continue
             self.found_previous_conflict = false;
         }
 

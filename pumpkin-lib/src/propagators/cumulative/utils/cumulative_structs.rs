@@ -60,7 +60,7 @@ pub(crate) struct ArgTask<Var> {
 }
 
 /// Stores the information of an updated task; for example in the context of
-/// [`TimeTablePerPointPropagator`] this is a task who's mandatory part has changed.
+/// [`TimeTablePerPointPropagator`] this is a task whose mandatory part has changed.
 #[derive(Debug, Clone)]
 pub(crate) struct UpdatedTaskInfo<Var> {
     /// The task which has been updated (where "updated" is according to some context-dependent
@@ -76,8 +76,15 @@ pub(crate) struct UpdatedTaskInfo<Var> {
     pub(crate) new_upper_bound: i32,
 }
 
+/// Represents adjustments to a mandatory part due to bound changes.
+///
+/// It contains both the additions to the mandatory part (stored in
+/// [`MandatoryPartAdjustments::added_parts`]) and the removals from the mandatory part
+/// [`MandatoryPartAdjustments::removed_parts`].
 pub(crate) struct MandatoryPartAdjustments {
+    /// The additions to the mandatory part
     added_parts: Vec<Range<i32>>,
+    /// The removals from the mandatory part
     removed_parts: Vec<Range<i32>>,
 }
 
@@ -89,6 +96,8 @@ impl MandatoryPartAdjustments {
         }
     }
 
+    /// Returns an iterator over the removed ranges of the mandatory part; only returns non-empty
+    /// intervals.
     pub(crate) fn get_removed_parts(&self) -> impl Iterator<Item = Range<i32>> + '_ {
         self.removed_parts
             .iter()
@@ -96,6 +105,8 @@ impl MandatoryPartAdjustments {
             .cloned()
     }
 
+    /// Returns an iterator over the added ranges of the mandatory part; only returns non-mepty
+    /// intervals.
     pub(crate) fn get_added_parts(&self) -> impl Iterator<Item = Range<i32>> + '_ {
         self.added_parts
             .iter()
@@ -103,6 +114,8 @@ impl MandatoryPartAdjustments {
             .cloned()
     }
 
+    /// Creates an empty [`MandatoryPartAdjustments`] (i.e. with no added parts and with no removed
+    /// parts).
     fn empty() -> Self {
         Self {
             added_parts: vec![],
@@ -110,6 +123,7 @@ impl MandatoryPartAdjustments {
         }
     }
 
+    /// Creates a [`MandatoryPartAdjustments`] containing a single added part.
     fn from_added_part(added_part: Range<i32>) -> Self {
         Self {
             added_parts: vec![added_part],
@@ -117,6 +131,7 @@ impl MandatoryPartAdjustments {
         }
     }
 
+    /// Creates a [`MandatoryPartAdjustments`] containing a single removed part.
     fn from_removed_part(removed_part: Range<i32>) -> Self {
         Self {
             added_parts: vec![],
@@ -124,6 +139,8 @@ impl MandatoryPartAdjustments {
         }
     }
 
+    /// Creates a [`MandatoryPartAdjustments`] containing a single added part and a single removed
+    /// part.
     fn from_added_and_removed_part(added_part: Range<i32>, removed_part: Range<i32>) -> Self {
         Self {
             added_parts: vec![added_part],
@@ -133,15 +150,21 @@ impl MandatoryPartAdjustments {
 }
 
 impl<Var> UpdatedTaskInfo<Var> {
-    pub(crate) fn get_removed_and_added_mandatory_parts(&self) -> MandatoryPartAdjustments {
+    /// Returns the adjustments which need to be made to the time-table in the form of a
+    /// [`MandatoryPartAdjustments`].
+    pub(crate) fn get_mandatory_part_adjustments(&self) -> MandatoryPartAdjustments {
+        // We get the previous mandatory part
         let previous_mandatory_part =
             self.old_upper_bound..self.old_lower_bound + self.task.processing_time;
+        // We also get the new mandatory part
         let new_mandatory_part =
             self.new_upper_bound..self.new_lower_bound + self.task.processing_time;
 
         if previous_mandatory_part.is_empty() && new_mandatory_part.is_empty() {
+            // If both are empty then no adjustments should be made
             return MandatoryPartAdjustments::empty();
         }
+
         if previous_mandatory_part.is_empty() {
             // There is no previous mandatory part, simply add the new one
             return MandatoryPartAdjustments::from_added_part(new_mandatory_part);
@@ -165,6 +188,8 @@ impl<Var> UpdatedTaskInfo<Var> {
         let mut removed_parts = vec![];
         let mut added_parts = vec![];
 
+        // We first check the adjustments which need to be made based on the new end time of the
+        // mandatory part
         match new_mandatory_part.end.cmp(&previous_mandatory_part.end) {
             Ordering::Less => {
                 // The new mandatory parts ends before the previous mandatory part
@@ -181,6 +206,8 @@ impl<Var> UpdatedTaskInfo<Var> {
             }
         }
 
+        // Then we check the adjustments which need to be made based on the new start time of the
+        // mandatory part
         match new_mandatory_part.start.cmp(&previous_mandatory_part.start) {
             Ordering::Less => {
                 // The new mandatory part starts before the previous mandatory part
@@ -233,10 +260,12 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         }
     }
 
+    /// Returns whether there are any updates stored which have not been processed
     pub(crate) fn has_updates(&self) -> bool {
-        !self.updates.is_empty()
+        !self.updated_tasks.is_empty()
     }
 
+    /// Returns the next updated task and removes it from the updated list
     pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
         if self.updated_tasks.is_empty() {
             return None;
@@ -246,6 +275,8 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         Some(updated_task)
     }
 
+    /// Get the update info for the provided task (note that this method does not actually check
+    /// whether the updated task was actually updated).
     pub(crate) fn get_update_for_task(
         &mut self,
         updated_task: &Rc<Task<Var>>,
@@ -253,6 +284,8 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         self.updates[updated_task.id.unpack() as usize].clone()
     }
 
+    /// Resets the stored update for the current task to be equal to the current scenario; i.e.
+    /// resets the old bounds to be equal to the new bounds
     pub(crate) fn reset_update_for_task(&mut self, updated_task: &Rc<Task<Var>>) {
         let update = &mut self.updates[updated_task.id.unpack() as usize];
 
@@ -260,30 +293,38 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         update.old_upper_bound = update.new_upper_bound;
     }
 
+    /// Returns the bounds which are stored for each tasks.
     pub(crate) fn get_stored_bounds(&self) -> &[(i32, i32)] {
         &self.bounds
     }
 
+    /// Returns a mutable reference to the bounds which are stored for each task.
     pub(crate) fn get_stored_bounds_mut(&mut self) -> &mut [(i32, i32)] {
         &mut self.bounds
     }
 
+    /// Returns the stored lower-bound for a task.
     pub(crate) fn get_stored_lower_bound(&self, task: &Rc<Task<Var>>) -> i32 {
         self.bounds[task.id.unpack() as usize].0
     }
 
+    /// Returns the stored upper-bound for a task.
     pub(crate) fn get_stored_upper_bound(&self, task: &Rc<Task<Var>>) -> i32 {
         self.bounds[task.id.unpack() as usize].1
     }
 
+    /// Fixes a task in the internal structure(s).
     pub(crate) fn fix_task(&mut self, updated_task: &Rc<Task<Var>>) {
         self.unfixed_tasks.remove(updated_task);
     }
 
+    /// Unfixes a task in the internal structure(s).
     pub(crate) fn unfix_task(&mut self, updated_task: Rc<Task<Var>>) {
         self.unfixed_tasks.insert(updated_task);
     }
 
+    /// Resets all of the bounds to the current values in the context and removes all of the fixed
+    /// tasks from the internal structure(s).
     pub(crate) fn reset_all_bounds_and_remove_fixed<Context: ReadDomains>(
         &mut self,
         context: &Context,
@@ -291,6 +332,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
     ) {
         for task in parameters.tasks.iter() {
             if self.updates.len() <= task.id.unpack() as usize {
+                // If have not stored an update for it before then we create it now
                 pumpkin_assert_moderate!(task.id.unpack() as usize == self.updates.len());
                 self.updates.push(UpdatedTaskInfo {
                     task: Rc::clone(task),
@@ -300,6 +342,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
                     new_upper_bound: context.upper_bound(&task.start_variable),
                 });
             } else {
+                // Otherwise we simply update the bounds to be equal to the current bounds
                 let update = &mut self.updates[task.id.unpack() as usize];
                 update.new_lower_bound = context.lower_bound(&task.start_variable);
                 update.new_upper_bound = context.upper_bound(&task.start_variable);
@@ -308,18 +351,21 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
             }
 
             if self.bounds.len() <= task.id.unpack() as usize {
+                // If we have not stored the bound then we add it
                 pumpkin_assert_moderate!(task.id.unpack() as usize == self.bounds.len());
                 self.bounds.push((
                     context.lower_bound(&task.start_variable),
                     context.upper_bound(&task.start_variable),
                 ));
             } else {
+                // Otherwise we simply store the current bounds
                 self.bounds[task.id.unpack() as usize] = (
                     context.lower_bound(&task.start_variable),
                     context.upper_bound(&task.start_variable),
                 );
             }
 
+            // If the task is fixed then we remove it, otherwise we insert it as an unfixed task
             if context.is_fixed(&task.start_variable) {
                 self.unfixed_tasks.remove(task);
             } else {
@@ -328,7 +374,8 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         }
     }
 
-    pub(crate) fn initialise_bounds<Context: ReadDomains>(
+    // Initialises all stored bounds to their current values and removes any tasks which are fixed
+    pub(crate) fn initialise_bounds_and_remove_fixed<Context: ReadDomains>(
         &mut self,
         context: &Context,
         parameters: &CumulativeParameters<Var>,
@@ -338,41 +385,54 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
                 context.lower_bound(&task.start_variable),
                 context.upper_bound(&task.start_variable),
             ));
+            if context.is_fixed(&task.start_variable) {
+                self.fix_task(task);
+            }
         }
     }
 
+    /// Returns all of the tasks which are not currently fixed
     pub(crate) fn get_unfixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
         self.unfixed_tasks.iter()
     }
 
+    // Returns all of the tasks which are currently fixed
     pub(crate) fn get_fixed_tasks(&self) -> impl Iterator<Item = &Rc<Task<Var>>> {
         self.unfixed_tasks.out_of_domain()
     }
 
+    // Returns the number of unfixed tasks
     pub(crate) fn number_of_unfixed_tasks(&self) -> usize {
         self.unfixed_tasks.len()
     }
 
+    // Returns whether there are no unfixed tasks
     pub(crate) fn has_no_unfixed_tasks(&self) -> bool {
         self.unfixed_tasks.is_empty()
     }
 
+    // Temporarily removes a task from the set of unfixed tasks
     pub(crate) fn temporarily_remove_task_from_unfixed(&mut self, task: &Rc<Task<Var>>) {
         self.unfixed_tasks.remove_temporarily(task)
     }
 
+    // Restore all of the temporarily removed tasks
     pub(crate) fn restore_temporarily_removed(&mut self) {
         self.unfixed_tasks.restore_temporarily_removed()
     }
 
+    // Returns the unfixed task at the specified index
     pub(crate) fn get_unfixed_task_at_index(&self, index: usize) -> Rc<Task<Var>> {
         Rc::clone(self.unfixed_tasks.get(index))
     }
 
+    // Marks a task as updated in the internal structure(s)
     pub(crate) fn task_has_been_updated(&mut self, task: &Rc<Task<Var>>) {
         self.updated_tasks.insert(Rc::clone(task))
     }
 
+    // Insert the provided update for a specific task; this means that the new bounds of the tasks
+    // are updated to the ones provided in the update
     pub(crate) fn insert_update_for_task(
         &mut self,
         task: &Rc<Task<Var>>,
@@ -384,6 +444,7 @@ impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
         stored_updated_task_info.new_upper_bound = updated_task_info.new_upper_bound;
     }
 
+    /// Used for creating the dynamic structures from the provided context
     pub(crate) fn recreate_from_context(
         &self,
         context: &PropagationContext,
