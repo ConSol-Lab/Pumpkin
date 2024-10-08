@@ -7,6 +7,8 @@ use log::warn;
 
 use super::predicates::integer_predicate::IntegerPredicate;
 use super::propagation::store::PropagatorStore;
+use super::propagation::PropagationContext;
+use super::reason::ReasonStore;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -32,7 +34,7 @@ impl<'a> DebugDyn<'a> {
     }
 }
 
-impl<'a> Debug for DebugDyn<'a> {
+impl Debug for DebugDyn<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "<dyn {}>", self.trait_name)
     }
@@ -159,7 +161,48 @@ impl DebugHelper {
         true
     }
 
-    pub(crate) fn debug_propagator_reason(
+    /// Checks whether the propagations of the propagator since `num_trail_entries_before` are
+    /// reproducible by performing 2 checks:
+    /// 1. Setting the reason for a propagation should lead to the same propagation when debug
+    ///    propagating from scratch
+    /// 2. Setting the reason for a propagation and the negation of that propagation should lead to
+    ///    failure
+    pub(crate) fn debug_check_propagations(
+        num_trail_entries_before: usize,
+        propagator_id: PropagatorId,
+        assignments_integer: &AssignmentsInteger,
+        assignments_propositional: &AssignmentsPropositional,
+        reason_store: &mut ReasonStore,
+        variable_literal_mappings: &VariableLiteralMappings,
+        cp_propagators: &PropagatorStore,
+    ) -> bool {
+        let mut result = true;
+        for trail_index in num_trail_entries_before..assignments_integer.num_trail_entries() {
+            let trail_entry = assignments_integer.get_trail_entry(trail_index);
+
+            let context = PropagationContext::new(assignments_integer, assignments_propositional);
+
+            let reason = reason_store.get_or_compute(
+                trail_entry
+                    .reason
+                    .expect("Expected checked propagation to have a reason"),
+                &context,
+            );
+
+            result &= Self::debug_propagator_reason(
+                trail_entry.predicate.into(),
+                reason.expect("Expected reason to exist"),
+                assignments_integer,
+                assignments_propositional,
+                variable_literal_mappings,
+                &cp_propagators[propagator_id],
+                propagator_id,
+            );
+        }
+        result
+    }
+
+    fn debug_propagator_reason(
         propagated_predicate: Predicate,
         reason: &PropositionalConjunction,
         assignments_integer: &AssignmentsInteger,
@@ -173,6 +216,22 @@ impl DebugHelper {
             .cloned()
             .filter(|&predicate| predicate != Predicate::True)
             .collect();
+
+        // We first check whether there are any trivially false predicates in the reason, if this
+        // is the case then this reason could never hold
+        if reason
+            .iter()
+            .any(|&predicate| predicate == Predicate::False)
+        {
+            panic!(
+                "The reason for propagation should not contain the trivially false predicate.
+                 Propagator: {},
+                 id: {propagator_id},
+                 The reported propagation reason: {reason},
+                 Propagated predicate: {propagated_predicate}",
+                propagator.name(),
+            );
+        }
 
         // Note that it could be the case that the reason contains the trivially false predicate in
         // case of lifting!
@@ -220,7 +279,12 @@ impl DebugHelper {
                 if let Err(conflict) = debug_propagation_status_cp {
                     assert!(
                         matches!(conflict, Inconsistency::EmptyDomain),
-                        "Debug propagation detected a conflict other than a propagation"
+                        "Debug propagation detected a conflict other than a propagation\n
+                         Propagator: '{}'\n
+                         Propagator id: {propagator_id}\n
+                         Reported reason: {reason}\n
+                         Reported propagation: {propagated_predicate}",
+                        propagator.name()
                     );
                 }
 

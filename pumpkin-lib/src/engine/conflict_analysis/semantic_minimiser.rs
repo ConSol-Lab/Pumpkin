@@ -237,8 +237,8 @@ impl SemanticMinimiser {
             holes: HashSet::from_iter(holes.iter().cloned()),
             inconsistent: false,
         };
-        self.original_domains.push(initial_domain.clone());
-        self.domains.push(initial_domain);
+        let _ = self.original_domains.push(initial_domain.clone());
+        let _ = self.domains.push(initial_domain);
     }
 
     /// Cleans up the internal structures such that a new iteration can take place; it performs the

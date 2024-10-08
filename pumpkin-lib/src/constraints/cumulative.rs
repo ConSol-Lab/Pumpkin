@@ -59,9 +59,9 @@ use crate::Solver;
 ///
 /// solver
 ///     .add_constraint(constraints::cumulative(
-///         &start_times,
-///         &durations,
-///         &resource_requirements,
+///         start_times.clone(),
+///         durations.clone(),
+///         resource_requirements.clone(),
 ///         resource_capacity,
 ///     ))
 ///     .post();
@@ -119,12 +119,21 @@ use crate::Solver;
 /// cumulative constraint’, in Principles and Practice of Constraint Programming: 21st
 /// International Conference, CP 2015, Cork, Ireland, August 31--September 4, 2015, Proceedings
 /// 21, 2015, pp. 149–157.
-pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
-    start_times: &[Var],
-    durations: &[i32],
-    resource_requirements: &[i32],
+pub fn cumulative<StartTimes, Durations, ResourceRequirements>(
+    start_times: StartTimes,
+    durations: Durations,
+    resource_requirements: ResourceRequirements,
     resource_capacity: i32,
-) -> impl Constraint {
+) -> impl Constraint
+where
+    StartTimes: IntoIterator,
+    StartTimes::Item: IntegerVariable + Debug + 'static,
+    StartTimes::IntoIter: ExactSizeIterator,
+    Durations: IntoIterator<Item = i32>,
+    Durations::IntoIter: ExactSizeIterator,
+    ResourceRequirements: IntoIterator<Item = i32>,
+    ResourceRequirements::IntoIter: ExactSizeIterator,
+{
     cumulative_with_options(
         start_times,
         durations,
@@ -138,13 +147,26 @@ pub fn cumulative<Var: IntegerVariable + 'static + Debug>(
 /// with the provided [`CumulativeOptions`].
 ///
 /// See the documentation of [`cumulative`] for more information about the constraint.
-pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
-    start_times: &[Var],
-    durations: &[i32],
-    resource_requirements: &[i32],
+pub fn cumulative_with_options<StartTimes, Durations, ResourceRequirements>(
+    start_times: StartTimes,
+    durations: Durations,
+    resource_requirements: ResourceRequirements,
     resource_capacity: i32,
     options: CumulativeOptions,
-) -> impl Constraint {
+) -> impl Constraint
+where
+    StartTimes: IntoIterator,
+    StartTimes::Item: IntegerVariable + Debug + 'static,
+    StartTimes::IntoIter: ExactSizeIterator,
+    Durations: IntoIterator<Item = i32>,
+    Durations::IntoIter: ExactSizeIterator,
+    ResourceRequirements: IntoIterator<Item = i32>,
+    ResourceRequirements::IntoIter: ExactSizeIterator,
+{
+    let start_times = start_times.into_iter();
+    let durations = durations.into_iter();
+    let resource_requirements = resource_requirements.into_iter();
+
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
         "The number of start variables, durations and resource requirements should be the same!"
@@ -152,13 +174,12 @@ pub fn cumulative_with_options<Var: IntegerVariable + 'static + Debug>(
 
     CumulativeConstraint::new(
         &start_times
-            .iter()
             .zip(durations)
             .zip(resource_requirements)
             .map(|((start_time, duration), resource_requirement)| ArgTask {
-                start_time: start_time.clone(),
-                processing_time: *duration,
-                resource_usage: *resource_requirement,
+                start_time,
+                processing_time: duration,
+                resource_usage: resource_requirement,
             })
             .collect::<Vec<_>>(),
         resource_capacity,

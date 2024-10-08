@@ -4,7 +4,6 @@
 pub(crate) mod flatzinc;
 
 use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -91,17 +90,7 @@ pub(crate) fn run_solver_with_options<'a>(
     match child.wait_timeout(TEST_TIMEOUT) {
         Ok(None) => panic!("solver took more than {} seconds", TEST_TIMEOUT.as_secs()),
         Ok(Some(status)) if status.success() => {}
-        Ok(Some(e)) => {
-            let mut file = File::open(&err_file_path)
-                .expect("Failed to create error file for {instance_name}.");
-            let mut contents = String::new();
-            let _ = file
-                .read_to_string(&mut contents)
-                .expect("Unable to read the file");
-            println!("{}", contents);
-            println!("{:?}", command.arg(instance_path));
-            panic!("error solving instance {e}")
-        }
+        Ok(Some(e)) => panic!("error solving instance {e}"),
         Err(e) => panic!("error starting solver: {e}"),
     }
 
