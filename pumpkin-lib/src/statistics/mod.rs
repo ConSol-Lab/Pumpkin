@@ -35,7 +35,7 @@ macro_rules! create_statistics_struct {
                 &self,
                 statistic_logger: StatisticLogger
             ) {
-                $(statistic_logger.log_statistic(self.$field, self.$field.to_string()));+
+                $(statistic_logger.log_statistic(stringify!($field), self.$field.to_string()));+
             }
         }
     };
