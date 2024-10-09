@@ -1676,6 +1676,7 @@ impl ConstraintSatisfactionSolver {
 
         if initialisation_status.is_err() {
             self.complete_proof();
+            let _ = self.conclude_proof_unsat();
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
@@ -1688,6 +1689,7 @@ impl ConstraintSatisfactionSolver {
                 Ok(())
             } else {
                 self.complete_proof();
+                let _ = self.conclude_proof_unsat();
                 Err(ConstraintOperationError::InfeasiblePropagator)
             }
         }
