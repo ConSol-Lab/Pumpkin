@@ -1,9 +1,17 @@
+use std::fmt::Display;
+
 use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
 pub(crate) struct CumulativeMovingAverage {
     sum: u64,
     num_terms: u64,
+}
+
+impl Display for CumulativeMovingAverage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value())
+    }
 }
 
 impl MovingAverage for CumulativeMovingAverage {
