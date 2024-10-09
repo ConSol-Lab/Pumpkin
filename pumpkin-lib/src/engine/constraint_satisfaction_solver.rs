@@ -1470,7 +1470,8 @@ impl ConstraintSatisfactionSolver {
         result
     }
 
-    /// Introduces any propagations to the proof by introducing them as nogoods.
+    /// Introduces any root-level propagations to the proof by introducing them as
+    /// nogoods.
     ///
     /// The inference `R -> l` is logged to the proof as follows:
     /// 1. Infernce `R /\ ~l -> false`
@@ -1530,7 +1531,7 @@ impl ConstraintSatisfactionSolver {
                 self.false_literal,
             );
 
-            // Since inference steps only are only related to the nogood they directly precede,
+            // Since inference steps are only related to the nogood they directly precede,
             // facts derived at the root are also logged as nogoods so they can be used in the
             // derivation of other nogoods.
             //
