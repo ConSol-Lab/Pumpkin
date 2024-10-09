@@ -92,7 +92,7 @@ impl LearnedClauseManager {
         clausal_propagator: &mut ClausalPropagatorType,
         assignments: &mut AssignmentsPropositional,
         clause_allocator: &mut ClauseAllocator,
-    ) {
+    ) -> ClauseReference {
         let result = clausal_propagator.add_asserting_learned_clause(
             learned_clause_literals,
             assignments,
@@ -109,7 +109,11 @@ impl LearnedClauseManager {
             } else {
                 self.learned_clauses.high_lbd.push(clause_reference);
             }
+
+            return clause_reference;
         }
+
+        unreachable!("This should always allocate a clause");
     }
 
     pub(crate) fn shrink_learned_clause_database_if_needed(
