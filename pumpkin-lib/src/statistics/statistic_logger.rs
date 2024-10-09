@@ -20,8 +20,7 @@ impl StatisticLogger {
     }
 
     /// Logs the statistic with the provided `name` and `value`.
-    #[allow(unused)]
     pub fn log_statistic(&self, name: impl Display, value: impl Display) {
-        log_statistic(format!("{}{name}", self.name_prefix), value);
+        log_statistic(format!("{}_{name}", self.name_prefix), value);
     }
 }

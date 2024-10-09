@@ -1,7 +1,12 @@
 //! Contains structures related to the statistic logging of the [`Solver`]
 pub(crate) mod statistic_logger;
-pub mod statistic_logging;
+pub(crate) mod statistic_logging;
+
 pub use statistic_logger::StatisticLogger;
+pub use statistic_logging::configure_statistic_logging;
+pub use statistic_logging::log_statistic;
+pub use statistic_logging::log_statistic_postfix;
+pub use statistic_logging::StatisticOptions;
 
 #[cfg(doc)]
 use crate::Solver;
@@ -35,7 +40,7 @@ macro_rules! create_statistics_struct {
                 &self,
                 statistic_logger: StatisticLogger
             ) {
-                $(statistic_logger.log_statistic(stringify!($field), self.$field.to_string()));+
+                $(statistic_logger.log_statistic(stringify!($field), self.$field));+
             }
         }
     };

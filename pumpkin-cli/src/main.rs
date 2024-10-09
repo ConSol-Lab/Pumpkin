@@ -29,7 +29,7 @@ use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::results::ProblemSolution;
 use pumpkin_lib::results::SatisfactionResult;
 use pumpkin_lib::results::Solution;
-use pumpkin_lib::statistics::statistic_logging::configure_statistic_logging;
+use pumpkin_lib::statistics::configure_statistic_logging;
 use pumpkin_lib::termination::TimeBudget;
 use pumpkin_lib::variables::PropositionalVariable;
 use pumpkin_lib::Solver;
