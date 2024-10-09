@@ -2,6 +2,8 @@ use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+#[cfg(doc)]
+use crate::create_statistics_struct;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
@@ -173,6 +175,8 @@ pub trait Propagator {
     }
 
     /// Logs statistics of the propagator using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
     fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }
 

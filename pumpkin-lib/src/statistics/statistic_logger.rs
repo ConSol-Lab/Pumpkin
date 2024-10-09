@@ -6,13 +6,14 @@ use crate::engine::propagation::Propagator;
 
 /// Responsible for logging the statistics with the provided prefix; currently used when logging
 /// the statistics of propagators.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StatisticLogger {
+    /// The prefix which will be attached to the statistic name
     name_prefix: String,
 }
 
 impl StatisticLogger {
-    pub(crate) fn new(name_prefix: impl Display) -> Self {
+    pub fn new(name_prefix: impl Display) -> Self {
         Self {
             name_prefix: name_prefix.to_string(),
         }
@@ -20,7 +21,7 @@ impl StatisticLogger {
 
     /// Logs the statistic with the provided `name` and `value`.
     #[allow(unused)]
-    pub(crate) fn log_statistic(&self, name: impl Display, value: impl Display) {
+    pub fn log_statistic(&self, name: impl Display, value: impl Display) {
         log_statistic(format!("{}{name}", self.name_prefix), value);
     }
 }

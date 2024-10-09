@@ -524,7 +524,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log_statistics();
+        self.counters.log_statistics(StatisticLogger::default());
         for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
             propagator.log_statistics(StatisticLogger::new(format!(
                 "{}Number{}",
