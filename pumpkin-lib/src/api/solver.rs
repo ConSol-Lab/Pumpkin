@@ -30,8 +30,8 @@ use crate::predicate;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::statistics::statistic_logging::statistic_logger::log_statistic;
-use crate::statistics::statistic_logging::statistic_logger::log_statistic_postfix;
+use crate::statistics::statistic_logging::log_statistic;
+use crate::statistics::statistic_logging::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,

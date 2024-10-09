@@ -1,6 +1,6 @@
-use super::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::statistics::statistic_logging::log_statistic;
 
 /// Structure responsible for storing several statistics of the solving process of the
 /// [`ConstraintSatisfactionSolver`].

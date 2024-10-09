@@ -1,5 +1,6 @@
 pub(crate) mod conflict_analysis;
 pub(crate) mod constraint_satisfaction_solver;
+mod counters;
 pub(crate) mod cp;
 mod debug_helper;
 pub(crate) mod predicates;

@@ -1,7 +1,11 @@
 use std::fmt::Display;
 
-use super::statistic_logging::statistic_logger::log_statistic;
+use super::statistic_logging::log_statistic;
+#[cfg(doc)]
+use crate::engine::propagation::Propagator;
 
+/// Responsible for logging the statistics with the provided prefix; currently used when logging
+/// the statistics of propagators.
 #[derive(Debug)]
 pub struct StatisticLogger {
     name_prefix: String,
