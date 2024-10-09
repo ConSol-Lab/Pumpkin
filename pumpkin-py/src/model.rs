@@ -87,7 +87,7 @@ impl Model {
     #[pyo3(signature = (proof=None))]
     fn satisfy(&self, proof: Option<PathBuf>) -> SatisfactionResult {
         let proof_log = proof
-            .map(|path| ProofLog::cp(&path, Format::Text, true))
+            .map(|path| ProofLog::cp(&path, Format::Text, true, true))
             .transpose()
             .map(|proof| proof.unwrap_or_default())
             .expect("failed to create proof file");

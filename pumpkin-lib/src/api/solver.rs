@@ -331,7 +331,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                self.satisfaction_solver.conclude_proof_unsat();
+                let _ = self.satisfaction_solver.conclude_proof_unsat();
 
                 SatisfactionResult::Unsatisfiable
             }
@@ -464,7 +464,7 @@ impl Solver {
             CSPSolverExecutionFlag::Infeasible => {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                self.satisfaction_solver.conclude_proof_unsat();
+                let _ = self.satisfaction_solver.conclude_proof_unsat();
                 return OptimisationResult::Unsatisfiable;
             }
             CSPSolverExecutionFlag::Timeout => {
@@ -502,7 +502,8 @@ impl Solver {
             {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
-                self.satisfaction_solver
+                let _ = self
+                    .satisfaction_solver
                     .conclude_proof_optimal(objective_bound_predicate);
                 return OptimisationResult::Optimal(best_solution);
             }
@@ -526,7 +527,8 @@ impl Solver {
                     {
                         // Reset the state whenever we return a result
                         self.satisfaction_solver.restore_state_at_root(brancher);
-                        self.satisfaction_solver
+                        let _ = self
+                            .satisfaction_solver
                             .conclude_proof_optimal(objective_bound_predicate);
                         return OptimisationResult::Optimal(best_solution);
                     }
@@ -685,7 +687,7 @@ impl Solver {
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_unsat(&mut self) {
-        self.satisfaction_solver.conclude_proof_unsat()
+        let _ = self.satisfaction_solver.conclude_proof_unsat();
     }
 
     #[doc(hidden)]
@@ -693,8 +695,9 @@ impl Solver {
     ///
     /// This method will finish the proof. Any new operation will not be logged to the proof.
     pub fn conclude_proof_optimal(&mut self, bound: Literal) {
-        self.satisfaction_solver
-            .conclude_proof_optimal(bound.get_true_predicate())
+        let _ = self
+            .satisfaction_solver
+            .conclude_proof_optimal(bound.get_true_predicate());
     }
 }
 

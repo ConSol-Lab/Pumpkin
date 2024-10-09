@@ -36,7 +36,7 @@ fn main() {
 
     let Ok(proof_log) = proof_path
         .as_ref()
-        .map(|path| ProofLog::cp(path, Format::Text, true))
+        .map(|path| ProofLog::cp(path, Format::Text, true, true))
         .transpose()
         .map(|proof| proof.unwrap_or_default())
     else {

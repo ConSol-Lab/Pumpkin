@@ -28,9 +28,19 @@ pub struct ProofLog {
     internal_proof: Option<ProofImpl>,
 }
 
+/// A dummy proof step ID. Used when there is proof logging is not enabled.
+// Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
+// context.
+const DUMMY_STEP_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+
 impl ProofLog {
     /// Create a CP proof logger.
-    pub fn cp(file_path: &Path, format: Format, log_inferences: bool) -> std::io::Result<ProofLog> {
+    pub fn cp(
+        file_path: &Path,
+        format: Format,
+        log_inferences: bool,
+        log_hints: bool,
+    ) -> std::io::Result<ProofLog> {
         let definitions_path = file_path.with_extension("lits");
         let file = File::create(file_path)?;
 
@@ -41,6 +51,7 @@ impl ProofLog {
                 writer,
                 log_inferences,
                 definitions_path,
+                propagation_order_hint: if log_hints { Some(vec![]) } else { None },
             }),
         })
     }
@@ -60,36 +71,75 @@ impl ProofLog {
         constraint_tag: Option<NonZero<u32>>,
         premises: impl IntoIterator<Item = Predicate>,
         propagated: Predicate,
-    ) -> std::io::Result<()> {
-        if let Some(ProofImpl::CpProof {
+    ) -> std::io::Result<NonZeroU64> {
+        let Some(ProofImpl::CpProof {
             writer,
             log_inferences: true,
+            propagation_order_hint,
             ..
         }) = self.internal_proof.as_mut()
-        {
-            // TODO: Log the inference label.
-            writer.log_inference(constraint_tag, None, premises, propagated)?;
+        else {
+            return Ok(DUMMY_STEP_ID);
+        };
+
+        // TODO: Log the inference label.
+        let id = writer.log_inference(constraint_tag, None, premises, propagated)?;
+
+        if let Some(hints) = propagation_order_hint {
+            hints.push(id);
         }
 
-        Ok(())
+        Ok(id)
+    }
+
+    /// Record that a step has been used in the derivation of the next nogood.
+    ///
+    /// Inferences are automatically added as a propagation hint when they are logged, this is
+    /// therefore only necessary when nogoods are used in a propagation.
+    #[allow(unused)]
+    pub(crate) fn add_propagation(&mut self, step_id: NonZeroU64) {
+        let Some(ProofImpl::CpProof {
+            propagation_order_hint: Some(ref mut hints),
+            ..
+        }) = self.internal_proof.as_mut()
+        else {
+            return;
+        };
+
+        hints.push(step_id);
     }
 
     /// Log a learned clause to the proof.
+    ///
+    /// The inferences and marked propagations are assumed to be recorded in reverse-application
+    /// order.
     pub(crate) fn log_learned_clause(
         &mut self,
         literals: impl IntoIterator<Item = Predicate>,
         variable_names: &VariableNames,
     ) -> std::io::Result<NonZeroU64> {
-        // Used as a proof clause ID when no proof log is used. This should ideally be a `const`,
-        // but `Option::<T>::unwrap()` is not yet stable in const context.
-        let default_clause_id: NonZeroU64 = NonZeroU64::new(1).unwrap();
-
         match &mut self.internal_proof {
-            Some(ProofImpl::CpProof { writer, .. }) => writer.log_nogood_clause(literals),
+            Some(ProofImpl::CpProof {
+                writer,
+                propagation_order_hint,
+                ..
+            }) => {
+                let propagation_hints = propagation_order_hint
+                    .as_ref()
+                    .map(|vec| vec.iter().rev().copied());
+                let id = writer.log_nogood_clause(literals, propagation_hints)?;
+
+                // Clear the hints for the next nogood.
+                if let Some(hints) = propagation_order_hint.as_mut() {
+                    hints.clear();
+                }
+
+                Ok(id)
+            }
 
             Some(ProofImpl::DimacsProof(writer)) => writer.learned_clause(literals, variable_names),
 
-            None => Ok(default_clause_id),
+            None => Ok(DUMMY_STEP_ID),
         }
     }
 
@@ -97,8 +147,8 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
-                log_inferences: _,
                 definitions_path,
+                ..
             }) => {
                 let literals = writer.unsat()?;
                 let file = File::create(definitions_path)?;
@@ -119,8 +169,8 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
-                log_inferences: _,
                 definitions_path,
+                ..
             }) => {
                 let literals = writer.optimal(objective_bound)?;
                 let file = File::create(definitions_path)?;
@@ -134,6 +184,17 @@ impl ProofLog {
             None => Ok(()),
         }
     }
+
+    #[allow(unused)]
+    pub(crate) fn is_logging_inferences(&self) -> bool {
+        matches!(
+            self.internal_proof,
+            Some(ProofImpl::CpProof {
+                log_inferences: true,
+                ..
+            })
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -142,6 +203,9 @@ enum ProofImpl {
         writer: ProofWriter<File, ProofLiterals>,
         log_inferences: bool,
         definitions_path: PathBuf,
+        // If propagation hints are enabled, this is a buffer used to record propagations in the
+        // order they can be applied to derive the next nogood.
+        propagation_order_hint: Option<Vec<NonZeroU64>>,
     },
     DimacsProof(DimacsProof<File>),
 }

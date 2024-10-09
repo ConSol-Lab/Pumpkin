@@ -350,6 +350,48 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn declare_ready(&mut self) {
         self.state.declare_ready()
     }
+
+    /// Conclude the proof with the unsatisfiable claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_unsat(&mut self) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.unsat(&self.variable_names)
+    }
+
+    /// Conclude the proof with the optimality claim.
+    ///
+    /// This method will finish the proof. Any new operation will not be logged to the proof.
+    pub fn conclude_proof_optimal(&mut self, bound: Predicate) -> std::io::Result<()> {
+        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
+        proof.optimal(bound, &self.variable_names)
+    }
+
+    fn complete_proof(&mut self) {
+        pumpkin_assert_simple!(self.is_conflicting());
+
+        warn!("Haven't implemented complete_proof");
+        // let result = self.compute_learned_clause(&mut DummyBrancher);
+        // let _ = self
+        //    .internal_parameters
+        //    .proof_log
+        //    .log_learned_clause(result.learned_literals);
+    }
+
+    // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() as usize
+    // == self.mapping_domain_to_lower_bound_literals.len()
+    // );
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() as usize
+    // == self.mapping_domain_to_equality_literals.len()
+    // );
+    // pumpkin_assert_simple!(
+    // assignments_integer.num_domains() == cp_data_structures.watch_list_cp.num_domains()
+    // );
+    // true
+    // }
 }
 
 // methods that offer basic functionality
@@ -656,33 +698,6 @@ impl ConstraintSatisfactionSolver {
         }
     }
 
-    /// Conclude the proof with the unsatisfiable claim.
-    ///
-    /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_unsat(&mut self) {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-        if let Err(write_error) = proof.unsat(&self.variable_names) {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
-    }
-
-    /// Conclude the proof with the optimality claim.
-    ///
-    /// This method will finish the proof. Any new operation will not be logged to the proof.
-    pub fn conclude_proof_optimal(&mut self, bound: Predicate) {
-        let proof = std::mem::take(&mut self.internal_parameters.proof_log);
-
-        if let Err(write_error) = proof.optimal(bound, &self.variable_names) {
-            warn!(
-                "Failed to update the certificate file, error message: {}",
-                write_error
-            );
-        }
-    }
-
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         if self.assignments.get_decision_level() != 0 {
             self.backtrack(0, brancher);
@@ -733,7 +748,16 @@ impl ConstraintSatisfactionSolver {
                 }
             } else {
                 if self.get_decision_level() == 0 {
+                    if self.assumptions.is_empty() {
+                        // Only complete the proof when _not_ solving under assumptions. It is
+                        // unclear what a proof would look like with assumptions, as there is extra
+                        // state to consider. It also means that the learned clause could be
+                        // non-empty, messing with all kinds of asserts.
+                        self.complete_proof();
+                    }
+
                     self.state.declare_infeasible();
+
                     return CSPSolverExecutionFlag::Infeasible;
                 }
 
@@ -1176,6 +1200,8 @@ impl ConstraintSatisfactionSolver {
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
         if initialisation_status.is_err() {
+            self.complete_proof();
+            let _ = self.conclude_proof_unsat();
             self.state.declare_infeasible();
             Err(ConstraintOperationError::InfeasiblePropagator)
         } else {
@@ -1187,6 +1213,8 @@ impl ConstraintSatisfactionSolver {
             if self.state.no_conflict() {
                 Ok(())
             } else {
+                self.complete_proof();
+                let _ = self.conclude_proof_unsat();
                 Err(ConstraintOperationError::InfeasiblePropagator)
             }
         }
