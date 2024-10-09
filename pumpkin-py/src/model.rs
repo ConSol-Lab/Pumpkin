@@ -8,6 +8,8 @@ use pumpkin_lib::predicate;
 use pumpkin_lib::proof::Format;
 use pumpkin_lib::proof::ProofLog;
 use pumpkin_lib::termination::Indefinite;
+use pumpkin_lib::variables::DomainId;
+use pumpkin_lib::variables::Literal;
 use pumpkin_lib::ConstraintOperationError;
 use pumpkin_lib::Solver;
 use pyo3::prelude::*;
@@ -66,9 +68,10 @@ impl Model {
     #[pyo3(signature = (name=None))]
     fn new_boolean_variable(&mut self, name: Option<&str>) -> BoolExpression {
         self.boolean_variables
-            .push(ModelBoolVar::Expr {
+            .push(ModelBoolVar {
                 name: name.map(|n| n.to_owned()),
-                integer: None,
+                integer_equivalent: None,
+                predicate: None,
             })
             .into()
     }
@@ -77,61 +80,40 @@ impl Model {
     ///
     /// The integer is 1 if the boolean is `true`, and 0 if the boolean is `false`.
     fn boolean_as_integer(&mut self, boolean: BoolExpression) -> IntExpression {
-        // The boolean may be a fresh literal or a predicate literal. In the latter case, we cannot
-        // simply substitute the literal with the predicate literals of a fresh integer variable.
-        // Instead, we create a new integer and enforce equality between the predicate literals.
-
         let bool_variable = boolean.get_variable();
 
-        let name = self.boolean_variables[bool_variable]
-            .name()
-            .map(|n| n.to_owned());
+        let int_variable = match self.boolean_variables[bool_variable] {
+            // If there is already an integer associated with the boolean variable, don't create a
+            // new one.
+            ModelBoolVar {
+                integer_equivalent: Some(variable),
+                ..
+            } => variable,
 
-        let mut int_expr: IntExpression = self
-            .integer_variables
-            .push(ModelIntVar {
+            // Create a new integer variable which is equivalent to this boolean variable.
+            ModelBoolVar {
+                ref name,
+                integer_equivalent: None,
+                ..
+            } => self.integer_variables.push(ModelIntVar {
                 lower_bound: 0,
                 upper_bound: 1,
                 name: name.clone(),
-            })
-            .into();
+            }),
+        };
 
-        if let ModelBoolVar::Expr {
-            ref mut integer, ..
-        } = &mut self.boolean_variables[bool_variable]
-        {
-            let polarity = boolean.get_polarity();
+        // Link the integer variable to the boolean variable.
+        self.boolean_variables[bool_variable].integer_equivalent = Some(int_variable);
 
-            if let Some(int_expr) = integer {
-                return *int_expr;
-            }
+        // Convert the integer variable to an appropriate integer expression based on the polarity
+        // of the boolean expression.
+        let polarity = boolean.get_polarity();
 
-            if !polarity {
-                int_expr.scale = -1;
-                int_expr.offset = 1;
-            }
-
-            *integer = Some(int_expr);
-
-            return int_expr;
+        IntExpression {
+            variable: int_variable,
+            offset: if polarity { 0 } else { 1 },
+            scale: if polarity { 1 } else { -1 },
         }
-
-        let int_eq_1 = self.predicate_as_boolean(int_expr, Comparator::Equal, 1, name.as_deref());
-
-        self.add_constraint(
-            Constraint::Clause(crate::constraints::globals::Clause {
-                literals: vec![int_eq_1, boolean],
-            }),
-            None,
-        );
-        self.add_constraint(
-            Constraint::Clause(crate::constraints::globals::Clause {
-                literals: vec![int_eq_1.negate(), boolean.negate()],
-            }),
-            None,
-        );
-
-        int_expr
     }
 
     #[pyo3(signature = (integer, comparator, value, name=None))]
@@ -143,11 +125,14 @@ impl Model {
         name: Option<&str>,
     ) -> BoolExpression {
         self.boolean_variables
-            .push(ModelBoolVar::PredicateLiteral {
+            .push(ModelBoolVar {
                 name: name.map(|n| n.to_owned()),
-                integer,
-                comparator,
-                value,
+                integer_equivalent: None,
+                predicate: Some(Predicate {
+                    integer,
+                    comparator,
+                    value,
+                }),
             })
             .into()
     }
@@ -191,11 +176,17 @@ impl Model {
         };
 
         let mut solver = Solver::with_options(LearningOptions::default(), options);
-        let variable_map = self.create_variable_map(&mut solver);
 
-        if self.post_constraints(&mut solver, &variable_map).is_err() {
+        let solver_setup = self
+            .create_variable_map(&mut solver)
+            .and_then(|variable_map| {
+                self.post_constraints(&mut solver, &variable_map)?;
+                Ok(variable_map)
+            });
+
+        let Ok(variable_map) = solver_setup else {
             return SatisfactionResult::Unsatisfiable();
-        }
+        };
 
         let mut brancher = solver.default_brancher_over_all_propositional_variables();
 
@@ -215,61 +206,25 @@ impl Model {
 }
 
 impl Model {
-    fn create_variable_map(&self, solver: &mut Solver) -> VariableMap {
+    fn create_variable_map(
+        &self,
+        solver: &mut Solver,
+    ) -> Result<VariableMap, ConstraintOperationError> {
         let mut map = VariableMap::default();
 
-        for ModelIntVar {
-            lower_bound,
-            upper_bound,
-            name,
-        } in self.integer_variables.iter()
-        {
-            let _ = map.integers.push(if let Some(name) = name {
-                solver
-                    .new_named_bounded_integer(*lower_bound, *upper_bound, name)
-                    .into()
-            } else {
-                solver
-                    .new_bounded_integer(*lower_bound, *upper_bound)
-                    .into()
-            });
+        for model_int_var in self.integer_variables.iter() {
+            let _ = map
+                .integers
+                .push(model_int_var.create_domain(solver).into());
         }
 
         for model_bool_var in self.boolean_variables.iter() {
-            let literal = match model_bool_var {
-                ModelBoolVar::Expr { name, integer } => match (integer, name) {
-                    (Some(int_expr), _) => {
-                        let solver_var = int_expr.to_affine_view(&map);
-                        solver.get_literal(predicate![solver_var == 1])
-                    }
-
-                    (None, Some(name)) => solver.new_named_literal(name),
-                    (None, None) => solver.new_literal(),
-                },
-
-                ModelBoolVar::PredicateLiteral {
-                    // TODO: Associate name with the solver literal.
-                    name: _,
-                    integer,
-                    comparator,
-                    value,
-                } => {
-                    let int_var = integer.to_affine_view(&map);
-                    let predicate = match comparator {
-                        Comparator::NotEqual => predicate![int_var != *value],
-                        Comparator::Equal => predicate![int_var == *value],
-                        Comparator::LessEqual => predicate![int_var <= *value],
-                        Comparator::GreaterEqual => predicate![int_var >= *value],
-                    };
-
-                    solver.get_literal(predicate)
-                }
-            };
-
-            map.booleans.push(literal);
+            let _ = map
+                .booleans
+                .push(model_bool_var.create_literal(solver, &map)?);
         }
 
-        map
+        Ok(map)
     }
 
     fn post_constraints(
@@ -313,26 +268,100 @@ struct ModelIntVar {
     name: Option<String>,
 }
 
-enum ModelBoolVar {
-    Expr {
-        name: Option<String>,
-        integer: Option<IntExpression>,
-    },
+impl ModelIntVar {
+    fn create_domain(&self, solver: &mut Solver) -> DomainId {
+        match self.name {
+            Some(ref name) => {
+                solver.new_named_bounded_integer(self.lower_bound, self.upper_bound, name)
+            }
 
-    PredicateLiteral {
-        name: Option<String>,
-        integer: IntExpression,
-        comparator: Comparator,
-        value: i32,
-    },
+            None => solver.new_bounded_integer(self.lower_bound, self.upper_bound),
+        }
+    }
+}
+
+struct ModelBoolVar {
+    name: Option<String>,
+    /// If present, this is the 0-1 integer variable which is 1 if this boolean is `true`, and
+    /// 0 if this boolean is `false`.
+    integer_equivalent: Option<IntVariable>,
+    /// If present, this boolean is true iff the predicate holds.
+    predicate: Option<Predicate>,
 }
 
 impl ModelBoolVar {
-    fn name(&self) -> Option<&str> {
-        match self {
-            ModelBoolVar::Expr { name, .. } | ModelBoolVar::PredicateLiteral { name, .. } => {
-                name.as_deref()
+    /// Convert a boolean variable to a solver literal.
+    fn create_literal(
+        &self,
+        solver: &mut Solver,
+        variable_map: &VariableMap,
+    ) -> Result<Literal, ConstraintOperationError> {
+        let literal = match self {
+            ModelBoolVar {
+                integer_equivalent: Some(int_var),
+                predicate: Some(predicate),
+                ..
+            } => {
+                // In case the boolean corresponds to both a predicate and a 0-1 integer, we have to
+                // enforce equality between the integer variable and the truth of the predicate.
+
+                let affine_view = variable_map.get_integer(*int_var);
+                let int_eq_1 = solver.get_literal(predicate![affine_view == 1]);
+
+                let predicate_literal =
+                    solver.get_literal(predicate.to_solver_predicate(variable_map));
+
+                solver.add_clause([!predicate_literal, int_eq_1])?;
+                solver.add_clause([predicate_literal, !int_eq_1])?;
+
+                int_eq_1
             }
+
+            ModelBoolVar {
+                integer_equivalent: Some(int_var),
+                predicate: None,
+                ..
+            } => {
+                let affine_view = variable_map.get_integer(*int_var);
+                solver.get_literal(predicate![affine_view == 1])
+            }
+
+            ModelBoolVar {
+                predicate: Some(predicate),
+                integer_equivalent: None,
+                ..
+            } => solver.get_literal(predicate.to_solver_predicate(variable_map)),
+
+            ModelBoolVar {
+                name: Some(name), ..
+            } => solver.new_named_literal(name),
+
+            ModelBoolVar { name: None, .. } => solver.new_literal(),
+        };
+
+        Ok(literal)
+    }
+}
+
+struct Predicate {
+    integer: IntExpression,
+    comparator: Comparator,
+    value: i32,
+}
+
+impl Predicate {
+    /// Convert the predicate in the model domain to a predicate in the solver domain.
+    fn to_solver_predicate(
+        &self,
+        variable_map: &VariableMap,
+    ) -> pumpkin_lib::predicates::Predicate {
+        let affine_view = self.integer.to_affine_view(variable_map);
+
+        match self.comparator {
+            Comparator::NotEqual => predicate![affine_view != self.value],
+            Comparator::Equal => predicate![affine_view == self.value],
+            Comparator::LessEqual => predicate![affine_view <= self.value],
+            Comparator::GreaterEqual => predicate![affine_view >= self.value],
         }
     }
 }
