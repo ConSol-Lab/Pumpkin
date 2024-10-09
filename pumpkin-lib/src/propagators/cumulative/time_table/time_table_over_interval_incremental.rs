@@ -76,6 +76,10 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     /// the bounds on the variables remain the same) but there is still a conflicting profile in
     /// the time-table
     found_previous_conflict: bool,
+    /// Indicates whether the current time-table is outdated and should be recalculated from
+    /// scratch or not; note that this variable is only used if
+    /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
+    is_time_table_outdated: bool,
 }
 
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
@@ -93,6 +97,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
             parameters,
             dynamic_structures,
             found_previous_conflict: false,
+            is_time_table_outdated: false,
         }
     }
 
@@ -175,10 +180,26 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     }
 
     /// Updates the stored time-table based on the updates stored in
-    /// [`DynamicStructures::updated`].
+    /// [`DynamicStructures::updated`] or recalculates it from scratch if
+    /// [`TimeTableOverIntervalIncrementalPropagator::is_time_table_outdated`] is true.
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
+        if self.is_time_table_outdated {
+            // We create the time-table from scratch (and return an error if it overflows)
+            self.time_table =
+                create_time_table_over_interval_from_scratch(context, &self.parameters)?;
+
+            // Then we note that the time-table is not outdated anymore
+            self.is_time_table_outdated = false;
+
+            // And we clear all of the updates since they have now necessarily been processed
+            self.dynamic_structures
+                .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+
+            return Ok(());
+        }
+
         // We keep track whether a conflict was found
         let mut found_conflict = false;
 
@@ -340,6 +361,10 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
+        if !self.parameters.options.incremental_backtracking {
+            return;
+        }
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
         backtrack_update(context, &mut self.dynamic_structures, &updated_task);
@@ -359,6 +384,20 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         }
     }
 
+    fn synchronise(&mut self, context: &PropagationContext) {
+        // We now recalculate the time-table from scratch if necessary and reset all of the bounds
+        // *if* incremental backtracking is disabled
+        if !self.parameters.options.incremental_backtracking {
+            self.dynamic_structures
+                .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+            // If the time-table is already empty then backtracking will not cause it to become
+            // outdated
+            if !self.time_table.is_empty() {
+                self.is_time_table_outdated = true;
+            }
+        }
+    }
+
     fn priority(&self) -> u32 {
         3
     }
@@ -371,7 +410,13 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        register_tasks(&self.parameters.tasks, context, true);
+        // We only register for notifications of backtrack events if incremental backtracking is
+        // enabled
+        register_tasks(
+            &self.parameters.tasks,
+            context,
+            self.parameters.options.incremental_backtracking,
+        );
 
         // First we store the bounds in the parameters
         self.dynamic_structures
@@ -1237,9 +1282,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1272,10 +1315,8 @@ mod tests {
             .collect::<Vec<_>>(),
             1,
             CumulativePropagatorOptions {
-                allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
-
-                generate_sequence: false,
+                ..Default::default()
             },
         ));
         assert!(matches!(result, Err(Inconsistency::Other(_))));
@@ -1320,9 +1361,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1380,9 +1419,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1413,9 +1450,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1461,9 +1496,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1533,9 +1567,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1616,9 +1648,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1667,9 +1697,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1721,9 +1750,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1745,5 +1773,52 @@ mod tests {
             ]),
             reason
         );
+    }
+
+    #[test]
+    fn propagator_propagates_with_holes() {
+        let mut solver = TestSolver::default();
+        let s1 = solver.new_variable(4, 4);
+        let s2 = solver.new_variable(0, 8);
+
+        let _ = solver
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
+                &[
+                    ArgTask {
+                        start_time: s1,
+                        processing_time: 4,
+                        resource_usage: 1,
+                    },
+                    ArgTask {
+                        start_time: s2,
+                        processing_time: 3,
+                        resource_usage: 1,
+                    },
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+                1,
+                CumulativePropagatorOptions {
+                    explanation_type: CumulativeExplanationType::Naive,
+                    allow_holes_in_domain: true,
+                    ..Default::default()
+                },
+            ))
+            .expect("No conflict");
+        assert_eq!(solver.lower_bound(s2), 0);
+        assert_eq!(solver.upper_bound(s2), 8);
+        assert_eq!(solver.lower_bound(s1), 4);
+        assert_eq!(solver.upper_bound(s1), 4);
+
+        for removed in 2..8 {
+            assert!(!solver.contains(s2, removed));
+            let reason = solver
+                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
+                .clone();
+            assert_eq!(
+                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
+                reason
+            );
+        }
     }
 }

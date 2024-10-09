@@ -13,6 +13,8 @@ pub(crate) struct CumulativePropagatorOptions {
     pub(crate) explanation_type: CumulativeExplanationType,
     /// Determines whether a sequence of profiles is generated when explaining a propagation.
     pub(crate) generate_sequence: bool,
+    /// Determines whether to incrementally backtrack or to calculate from scratch
+    pub(crate) incremental_backtracking: bool,
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -31,6 +33,7 @@ impl CumulativeOptions {
         explanation_type: CumulativeExplanationType,
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
+        incremental_backtracking: bool,
     ) -> Self {
         Self {
             propagation_method,
@@ -38,6 +41,7 @@ impl CumulativeOptions {
                 allow_holes_in_domain,
                 explanation_type,
                 generate_sequence,
+                incremental_backtracking,
             },
         }
     }

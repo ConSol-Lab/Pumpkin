@@ -470,9 +470,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -505,10 +503,8 @@ mod tests {
             .collect::<Vec<_>>(),
             1,
             CumulativePropagatorOptions {
-                allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
-
-                generate_sequence: false,
+                ..Default::default()
             },
         ));
         assert!(match result {
@@ -552,9 +548,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -612,9 +606,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -645,9 +637,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -693,9 +683,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -765,9 +754,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -848,9 +835,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -899,9 +884,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -953,9 +937,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -1003,9 +986,9 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    allow_holes_in_domain: true,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
