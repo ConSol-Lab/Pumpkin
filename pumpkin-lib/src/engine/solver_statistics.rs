@@ -4,7 +4,7 @@ use crate::create_statistics_struct;
 create_statistics_struct!(
     /// Structure responsible for storing several statistics of the solving process of the
     /// [`ConstraintSatisfactionSolver`].
-    Counters {
+    SolverStatistics {
         /// Core statistics of the solver engine (e.g. the number of decisions)
         engine_statistics: EngineStatistics,
         /// The statistics related to clause learning

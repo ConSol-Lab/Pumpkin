@@ -16,8 +16,8 @@ use super::clause_allocators::ClauseInterface;
 use super::conflict_analysis::AnalysisStep;
 use super::conflict_analysis::ConflictAnalysisResult;
 use super::conflict_analysis::ResolutionConflictAnalyser;
-use super::counters::Counters;
 use super::propagation::store::PropagatorStore;
+use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -72,7 +72,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
-use crate::statistics::LogStatistics;
+use crate::statistics::Statistic;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
 #[cfg(doc)]
@@ -190,7 +190,7 @@ pub struct ConstraintSatisfactionSolver {
     /// Used to store the learned clause.
     analysis_result: ConflictAnalysisResult,
     /// A set of counters updated during the search.
-    counters: Counters,
+    counters: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
@@ -445,7 +445,7 @@ impl ConstraintSatisfactionSolver {
             learned_clause_manager: LearnedClauseManager::new(learning_options),
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             cp_propagators: PropagatorStore::default(),
-            counters: Counters::default(),
+            counters: SolverStatistics::default(),
             internal_parameters: solver_options,
             analysis_result: ConflictAnalysisResult::default(),
             variable_names: VariableNames::default(),
@@ -526,7 +526,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log_statistics(&StatisticLogger::default());
+        self.counters.log(StatisticLogger::default());
         for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
             propagator.log_statistics(StatisticLogger::new(format!(
                 "{}_number_{}",

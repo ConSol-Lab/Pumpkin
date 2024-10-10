@@ -19,8 +19,16 @@ impl StatisticLogger {
         }
     }
 
-    /// Logs the statistic with the provided `name` and `value`.
-    pub fn log_statistic(&self, name: impl Display, value: impl Display) {
-        log_statistic(format!("{}_{name}", self.name_prefix), value);
+    pub fn attach_to_prefix(&self, addition_to_prefix: impl Display) -> Self {
+        Self {
+            name_prefix: format!("{}_{}", self.name_prefix, addition_to_prefix),
+        }
+    }
+}
+
+impl std::fmt::Write for StatisticLogger {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        log_statistic(self.name_prefix.clone(), s);
+        Ok(())
     }
 }

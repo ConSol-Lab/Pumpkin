@@ -5,12 +5,12 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
-use crate::engine::counters::Counters;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
+use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::variables::Literal;
 use crate::engine::AssignmentsInteger;
 use crate::engine::AssignmentsPropositional;
@@ -38,7 +38,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) clause_allocator: &'a mut ClauseAllocator,
     pub(crate) explanation_clause_manager: &'a mut ExplanationClauseManager,
     pub(crate) reason_store: &'a mut ReasonStore,
-    pub(crate) counters: &'a mut Counters,
+    pub(crate) counters: &'a mut SolverStatistics,
     pub(crate) learned_clause_manager: &'a mut LearnedClauseManager,
 }
 

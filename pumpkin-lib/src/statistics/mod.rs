@@ -3,6 +3,7 @@ pub(crate) mod statistic_logger;
 pub(crate) mod statistic_logging;
 
 use std::fmt::Display;
+use std::fmt::Write;
 
 pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
@@ -13,13 +14,13 @@ pub use statistic_logging::StatisticOptions;
 #[cfg(doc)]
 use crate::Solver;
 
-pub(crate) trait LogStatistics {
-    fn log_statistics(&self, statistic_logger: &StatisticLogger);
+pub(crate) trait Statistic {
+    fn log(&self, statistic_logger: StatisticLogger);
 }
 
-impl<Name: Display + Clone, Value: Display + Clone> LogStatistics for (Name, Value) {
-    fn log_statistics(&self, statistic_logger: &StatisticLogger) {
-        statistic_logger.log_statistic(self.0.clone(), self.1.clone())
+impl<Value: Display> Statistic for Value {
+    fn log(&self, mut statistic_logger: StatisticLogger) {
+        write!(statistic_logger, "{self}").expect("Expected statistic to be logged");
     }
 }
 
@@ -45,18 +46,9 @@ macro_rules! create_statistics_struct {
             $($(#[$variable_documentation])* pub(crate) $field: $type),+
         }
 
-        impl<Name: std::fmt::Display> $crate::statistics::LogStatistics for (Name, $name) {
-            fn log_statistics(&self, statistic_logger: &$crate::statistics::StatisticLogger) {
-                self.1.log_statistics(statistic_logger)
-            }
-        }
-
-        impl $crate::statistics::LogStatistics for $name {
-            fn log_statistics(
-                &self,
-                statistic_logger: &$crate::statistics::StatisticLogger
-            ) {
-                $((stringify!($field), self.$field).log_statistics(&statistic_logger));+
+        impl $crate::statistics::Statistic for $name {
+            fn log(&self, statistic_logger: $crate::statistics::StatisticLogger) {
+                $(self.$field.log(statistic_logger.attach_to_prefix(stringify!($field),)));+
             }
         }
     };
