@@ -19,6 +19,8 @@ impl StatisticLogger {
         }
     }
 
+    /// Attaches the provided `addition_to_prefix` to the stored internal prefix and returns a new
+    /// [`StatisticLogger`] with these two prefixes.
     pub fn attach_to_prefix(&self, addition_to_prefix: impl Display) -> Self {
         Self {
             name_prefix: format!("{}_{}", self.name_prefix, addition_to_prefix),

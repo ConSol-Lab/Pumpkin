@@ -14,7 +14,11 @@ pub use statistic_logging::StatisticOptions;
 #[cfg(doc)]
 use crate::Solver;
 
+/// A simple trait for defining a loggable statistic.
+///
+/// See [`create_statistics_struct!`] for creating a statistic struct automatically!
 pub(crate) trait Statistic {
+    /// Logs the [`Statistic`] using the provided [`StatisticLogger`].
     fn log(&self, statistic_logger: StatisticLogger);
 }
 
