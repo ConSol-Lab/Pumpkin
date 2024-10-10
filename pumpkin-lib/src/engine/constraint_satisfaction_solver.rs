@@ -72,6 +72,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
+use crate::statistics::LogStatistics;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
 #[cfg(doc)]
@@ -492,7 +493,8 @@ impl ConstraintSatisfactionSolver {
         self.initialise(assumptions);
         let result = self.solve_internal(termination, brancher);
 
-        self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
+        self.counters.engine_statistics.time_spent_in_solver +=
+            start_time.elapsed().as_millis() as u64;
 
         result
     }
@@ -524,7 +526,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log_statistics(StatisticLogger::default());
+        self.counters.log_statistics(&StatisticLogger::default());
         for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
             propagator.log_statistics(StatisticLogger::new(format!(
                 "{}_number_{}",
@@ -1025,7 +1027,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.internal_parameters.random_generator,
             ));
             if let Some(predicate) = decided_predicate {
-                self.counters.num_decisions += 1;
+                self.counters.engine_statistics.num_decisions += 1;
                 self.assignments_propositional
                     .enqueue_decision_literal(match predicate {
                         Predicate::IntegerPredicate(integer_predicate) => {
@@ -1154,10 +1156,13 @@ impl ConstraintSatisfactionSolver {
             self.assignments_propositional
                 .enqueue_decision_literal(unit_clause);
 
-            self.counters.num_unit_clauses_learned +=
+            self.counters
+                .learned_clause_statistics
+                .num_unit_clauses_learned +=
                 (self.analysis_result.learned_literals.len() == 1) as u64;
         } else {
             self.counters
+                .learned_clause_statistics
                 .average_learned_clause_length
                 .add_term(self.analysis_result.learned_literals.len() as u64);
 
@@ -1166,6 +1171,7 @@ impl ConstraintSatisfactionSolver {
                 &self.assignments_propositional.num_trail_entries();
 
             self.counters
+                .learned_clause_statistics
                 .average_backtrack_amount
                 .add_term((self.get_decision_level() - self.analysis_result.backjump_level) as u64);
             self.backtrack(self.analysis_result.backjump_level, brancher);
@@ -1212,7 +1218,7 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        self.counters.num_restarts += 1;
+        self.counters.engine_statistics.num_restarts += 1;
 
         self.backtrack(0, brancher);
 
@@ -1355,9 +1361,9 @@ impl ConstraintSatisfactionSolver {
             } // end match
         }
 
-        self.counters.num_conflicts += self.state.conflicting() as u64;
+        self.counters.engine_statistics.num_conflicts += self.state.conflicting() as u64;
 
-        self.counters.num_propagations +=
+        self.counters.engine_statistics.num_propagations +=
             self.assignments_integer.num_trail_entries() as u64 - num_assigned_variables_old as u64;
 
         // Only check fixed point propagation if there was no reported conflict.

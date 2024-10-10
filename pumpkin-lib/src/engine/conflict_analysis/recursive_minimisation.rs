@@ -120,6 +120,7 @@ impl RecursiveMinimiser {
             num_literals_before_minimisation - analysis_result.learned_literals.len();
         context
             .counters
+            .learned_clause_statistics
             .average_number_of_removed_literals_recursive
             .add_term(num_literals_removed as u64);
     }
