@@ -36,8 +36,8 @@ pub struct Model {
 pub enum Comparator {
     NotEqual,
     Equal,
-    LessEqual,
-    GreaterEqual,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
 }
 
 #[pymethods]
@@ -360,8 +360,8 @@ impl Predicate {
         match self.comparator {
             Comparator::NotEqual => predicate![affine_view != self.value],
             Comparator::Equal => predicate![affine_view == self.value],
-            Comparator::LessEqual => predicate![affine_view <= self.value],
-            Comparator::GreaterEqual => predicate![affine_view >= self.value],
+            Comparator::LessThanOrEqual => predicate![affine_view <= self.value],
+            Comparator::GreaterThanOrEqual => predicate![affine_view >= self.value],
         }
     }
 }
