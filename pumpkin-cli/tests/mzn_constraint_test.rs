@@ -45,6 +45,28 @@ macro_rules! cumulative_test {
                 vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "pointwise"]
             );
         }
+
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _naive_incremental_backtracking >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)),"--cumulative-explanation-type", "naive", "--cumulative-incremental-backtracking"]
+            );
+        }
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _big_step_incremental_backtracking >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "big-step", "--cumulative-incremental-backtracking"]
+            );
+        }
+        paste::item! {
+            mzn_test!(
+                [< cumulative_ $propagator _pointwise_incremental_backtracking >],
+                "cumulative",
+                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "pointwise", "--cumulative-incremental-backtracking"]
+            );
+        }
     };
 }
 

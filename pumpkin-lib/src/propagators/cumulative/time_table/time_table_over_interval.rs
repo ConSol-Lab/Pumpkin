@@ -13,15 +13,16 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
-use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
+use crate::propagators::DynamicStructures;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
@@ -58,6 +59,8 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
+    /// Stores structures which change during the search; used to store the bounds
+    dynamic_structures: DynamicStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
@@ -74,9 +77,13 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let dynamic_structures = DynamicStructures::new(&parameters);
+
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
-            parameters: CumulativeParameters::new(tasks, capacity, cumulative_options),
+            parameters,
+            dynamic_structures,
         }
     }
 }
@@ -88,23 +95,24 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(&mut context, time_table.iter(), &self.parameters)
+        propagate_based_on_timetable(
+            &mut context,
+            time_table.iter(),
+            &self.parameters,
+            &mut self.dynamic_structures,
+        )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(
-            context,
-            &mut self.parameters.updated,
-            &mut self.parameters.bounds,
-            &self.parameters.tasks,
-        );
+        self.dynamic_structures
+            .reset_all_bounds_and_remove_fixed(context, &self.parameters);
     }
 
     fn notify(
         &mut self,
         context: PropagationContext,
         local_id: LocalId,
-        _event: OpaqueDomainEvent,
+        event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
@@ -114,11 +122,24 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         // will never return `true` when the time-table is not empty.
         let result = should_enqueue(
             &self.parameters,
+            &self.dynamic_structures,
             &updated_task,
             &context,
             self.is_time_table_empty,
         );
-        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(
+            &context,
+            self.dynamic_structures.get_stored_bounds_mut(),
+            &updated_task,
+        );
+
+        if matches!(
+            updated_task.start_variable.unpack_event(event),
+            IntDomainEvent::Assign
+        ) {
+            self.dynamic_structures.fix_task(&updated_task)
+        }
+
         result.decision
     }
 
@@ -134,13 +155,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        register_tasks(&self.parameters.tasks, context);
-        for task in self.parameters.tasks.iter() {
-            self.parameters.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ));
-        }
+        self.dynamic_structures
+            .initialise_bounds_and_remove_fixed(context, &self.parameters);
+        register_tasks(&self.parameters.tasks, context, false);
 
         Ok(())
     }
@@ -149,7 +166,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_interval(&mut context, &self.parameters)
+        debug_propagate_from_scratch_time_table_interval(
+            &mut context,
+            &self.parameters,
+            &self.dynamic_structures,
+        )
     }
 }
 
@@ -396,13 +417,19 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
 pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
+    dynamic_structures: &DynamicStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
     let time_table =
         create_time_table_over_interval_from_scratch(&context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
-    propagate_based_on_timetable(context, time_table.iter(), parameters)
+    propagate_based_on_timetable(
+        context,
+        time_table.iter(),
+        parameters,
+        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+    )
 }
 
 #[cfg(test)]
@@ -443,9 +470,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -478,10 +503,8 @@ mod tests {
             .collect::<Vec<_>>(),
             1,
             CumulativePropagatorOptions {
-                allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
-
-                generate_sequence: false,
+                ..Default::default()
             },
         ));
         assert!(match result {
@@ -525,9 +548,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -585,9 +606,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -618,9 +637,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -666,9 +683,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -738,9 +754,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -821,9 +835,7 @@ mod tests {
                 .collect::<Vec<_>>(),
                 5,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -872,9 +884,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -926,9 +937,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -976,9 +986,9 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    allow_holes_in_domain: true,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
