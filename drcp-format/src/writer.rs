@@ -10,7 +10,7 @@ use crate::steps::Conclusion;
 use crate::steps::Deletion;
 use crate::steps::Inference;
 use crate::steps::Nogood;
-use crate::steps::NogoodId;
+use crate::steps::StepId;
 
 /// Abstraction for writing DRCP proofs.
 ///
@@ -19,6 +19,7 @@ use crate::steps::NogoodId;
 /// # use std::num::NonZeroI32;
 /// # use drcp_format::Format;
 /// # use drcp_format::ProofWriter;
+/// # use drcp_format::steps::StepId;
 /// let mut proof: Vec<u8> = Vec::new();
 /// let mut writer = ProofWriter::new(Format::Text, &mut proof, std::convert::identity);
 ///
@@ -26,17 +27,19 @@ use crate::steps::NogoodId;
 /// writer
 ///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], lit(-2))
 ///     .unwrap();
-/// let nogood_id = writer.log_nogood_clause([lit(1), lit(-3), lit(5)]).unwrap();
+/// let nogood_id = writer
+///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None::<[StepId; 0]>)
+///     .unwrap();
 /// writer.log_deletion(nogood_id).unwrap();
 /// writer.unsat().unwrap();
 ///
 /// let expected = "
-/// i 4 5 0 -2 l:linear_bound
-/// n 1 1 -3 5
-/// d 1
+/// i 1 4 5 0 -2 l:linear_bound
+/// n 2 1 -3 5
+/// d 2
 /// c UNSAT
 /// ";
-/// assert_eq!(proof, expected.trim_start().as_bytes());
+/// assert_eq!(std::str::from_utf8(&proof).unwrap(), expected.trim_start());
 /// ```
 #[derive(Debug)]
 pub struct ProofWriter<W: Write, Literals> {
@@ -47,8 +50,8 @@ pub struct ProofWriter<W: Write, Literals> {
     /// A container for all the literals which are seen in the proof. Unseen literals need not be
     /// defined in the literal definition file.
     encountered_literals: Literals,
-    /// The id for the next nogood which is logged.
-    next_nogood_id: NogoodId,
+    /// The id for the next step which is logged.
+    next_step_id: StepId,
 }
 
 impl<W: Write, Literals> ProofWriter<W, Literals> {
@@ -59,7 +62,7 @@ impl<W: Write, Literals> ProofWriter<W, Literals> {
             format,
             writer: BufWriter::new(writer),
             encountered_literals,
-            next_nogood_id: NonZeroU64::new(1).unwrap(),
+            next_step_id: NonZeroU64::new(1).unwrap(),
         }
     }
 }
@@ -69,8 +72,13 @@ where
     W: Write,
     Literals: LiteralCodeProvider,
 {
-    /// Write a nogood step. A new nogood ID will be generated, which can be given to
-    /// [`Self::log_deletion`] to indicate the nogood is deleted.
+    /// Write a nogood step.
+    ///
+    /// This step can be referenced by the [`StepId`] that is returned. Such a reference may occur
+    /// when the nogood is deleted, or used in the derivation of another nogood as a hint.
+    ///
+    /// The `propagation_hints` can be optionally given to indicate the order in which the given
+    /// steps can be applied to derive the conflict under reverse propagation.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
     ///
@@ -80,26 +88,33 @@ where
     pub fn log_nogood_clause(
         &mut self,
         nogood: impl IntoIterator<Item = Literals::Literal>,
-    ) -> std::io::Result<NogoodId> {
-        let id = self.next_nogood_id;
-        self.next_nogood_id = self.next_nogood_id.checked_add(1).unwrap();
+        propagation_hints: Option<impl IntoIterator<Item = StepId>>,
+    ) -> std::io::Result<StepId> {
+        let id = self.next_step_id();
 
-        let nogood = Nogood::new(
+        let nogood = Nogood {
             id,
-            nogood
+            literals: nogood
                 .into_iter()
                 .map(|pred| self.encountered_literals.to_code(pred)),
-        );
+            hints: propagation_hints,
+        };
 
         nogood.write(self.format, &mut self.writer)?;
 
         Ok(id)
     }
 
+    fn next_step_id(&mut self) -> NonZero<u64> {
+        let id = self.next_step_id;
+        self.next_step_id = self.next_step_id.checked_add(1).unwrap();
+        id
+    }
+
     /// Log that the nogood with the given ID can be deleted.
     ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
-    pub fn log_deletion(&mut self, nogood_id: NogoodId) -> std::io::Result<()> {
+    pub fn log_deletion(&mut self, nogood_id: StepId) -> std::io::Result<()> {
         Deletion::new(nogood_id).write(self.format, &mut self.writer)
     }
 
@@ -116,10 +131,12 @@ where
         hint_label: Option<&str>,
         premises: impl IntoIterator<Item = Literals::Literal>,
         propagated: Literals::Literal,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<StepId> {
         let propagated = self.encountered_literals.to_code(propagated);
+        let id = self.next_step_id();
 
         let inference = Inference {
+            id,
             hint_constraint_id,
             hint_label,
             premises: premises
@@ -128,7 +145,9 @@ where
             propagated,
         };
 
-        inference.write(self.format, &mut self.writer)
+        inference.write(self.format, &mut self.writer)?;
+
+        Ok(id)
     }
 
     /// Conclude with the unsatisfiable claim.
@@ -174,15 +193,24 @@ trait WritableProofStep: Sized {
     }
 }
 
-impl<Literals> WritableProofStep for Nogood<Literals>
+impl<Literals, Hints> WritableProofStep for Nogood<Literals, Hints>
 where
     Literals: IntoIterator<Item = NonZeroI32>,
+    Hints: IntoIterator<Item = StepId>,
 {
     fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
         write!(sink, "n {}", self.id)?;
 
         for literal in self.literals {
             write!(sink, " {literal}")?;
+        }
+
+        if let Some(hints) = self.hints {
+            write!(sink, " 0")?;
+
+            for hint in hints {
+                write!(sink, " {hint}")?;
+            }
         }
 
         writeln!(sink)?;
@@ -213,7 +241,7 @@ where
     Premises: IntoIterator<Item = NonZeroI32>,
 {
     fn write_string(self, sink: &mut impl Write) -> std::io::Result<()> {
-        write!(sink, "i")?;
+        write!(sink, "i {}", self.id)?;
 
         for literal in self.premises {
             write!(sink, " {literal}")?;
@@ -253,16 +281,21 @@ impl WritableProofStep for Deletion {
 mod tests {
     use super::*;
 
+    // Safety: Unwrapping an option is not stable, so we cannot get a NonZero<T> safely in a const
+    // context.
+    const TEST_ID: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+
     #[test]
     fn write_basic_inference() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: None,
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1\n",
+            "i 1 2 -3 0 1\n",
         );
     }
 
@@ -270,12 +303,13 @@ mod tests {
     fn write_inference_with_label() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: None,
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 l:inf_label\n",
+            "i 1 2 -3 0 1 l:inf_label\n",
         );
     }
 
@@ -283,12 +317,13 @@ mod tests {
     fn write_inference_with_constraint_id() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 c:1\n",
+            "i 1 2 -3 0 1 c:1\n",
         );
     }
 
@@ -296,12 +331,13 @@ mod tests {
     fn write_inference_with_constraint_id_and_label() {
         test_step_serialization(
             Inference {
+                id: TEST_ID,
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],
                 propagated: lit(1),
             },
-            "i 2 -3 0 1 c:1 l:inf_label\n",
+            "i 1 2 -3 0 1 c:1 l:inf_label\n",
         );
     }
 

@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 use bitfield::Bit;
 use bitfield::BitRange;
 
+use super::StorageKey;
 use crate::basic_types::ConstraintReference;
 #[cfg(doc)]
 use crate::engine::clause_allocators::clause_allocator_interface::ClauseAllocatorInterface;
@@ -43,6 +44,18 @@ impl Debug for ClauseReference {
         } else {
             debug_assert!(self.is_allocated_clause());
             write!(f, "::AllocatedClause({})", self.get_code())
+        }
+    }
+}
+
+impl StorageKey for ClauseReference {
+    fn index(&self) -> usize {
+        self.get_code() as usize - 1
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        Self {
+            code: index as u32 + 1,
         }
     }
 }

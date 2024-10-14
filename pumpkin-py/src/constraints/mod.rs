@@ -1,5 +1,5 @@
 pub mod arguments;
-mod globals;
+pub mod globals;
 
 use globals::*;
 use pyo3::prelude::*;
