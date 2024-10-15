@@ -6,6 +6,7 @@
 //! files can be written using [`writer::LiteralDefinitions`].
 
 mod format;
+pub mod reader;
 pub mod writer;
 
 pub mod steps;
