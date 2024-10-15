@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::num::NonZeroU32;
 
-use crate::AtomicConstraint;
+use super::AtomicConstraint;
 
 /// Associates literals used in the proof with the [`AtomicConstraint`] they correspond to.
 ///

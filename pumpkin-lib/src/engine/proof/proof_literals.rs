@@ -2,11 +2,11 @@ use std::io::Write;
 use std::num::NonZeroI32;
 use std::num::NonZeroU32;
 
-use drcp_format::AtomicConstraint;
-use drcp_format::Comparison;
-use drcp_format::IntAtomicConstraint;
-use drcp_format::LiteralCodeProvider;
-use drcp_format::LiteralDefinitions;
+use drcp_format::writer::AtomicConstraint;
+use drcp_format::writer::Comparison;
+use drcp_format::writer::IntAtomicConstraint;
+use drcp_format::writer::LiteralCodeProvider;
+use drcp_format::writer::LiteralDefinitions;
 
 use crate::basic_types::KeyedVec;
 use crate::engine::predicates::integer_predicate::IntegerPredicate;
