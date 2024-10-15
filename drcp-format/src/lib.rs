@@ -2,13 +2,18 @@
 //! (DRCP) proof format. The format can be used by Constraint Programming solvers to provide a
 //! certifyable proof of unsatisfiability or optimality.
 //!
-//! To write DRCP proof files, look at the [`writer::ProofWriter`] documentation. Literal definition
-//! files can be written using [`writer::LiteralDefinitions`].
+//! To read DRCP files see [`reader::ProofReader`], and to write DRCP files see
+//! [`writer::ProofWriter`]. Literal definitions (`.lits`) files can be read and parsed with
+//! [`LiteralDefinitions`].
 
+mod atomic;
 mod format;
+mod literal_definitions;
+
 pub mod reader;
+pub mod steps;
 pub mod writer;
 
-pub mod steps;
-
+pub use atomic::*;
 pub use format::*;
+pub use literal_definitions::*;

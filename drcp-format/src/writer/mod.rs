@@ -2,9 +2,7 @@
 //!
 //! See [`ProofWriter`] for more information on how to write proofs.
 
-mod atomic;
 mod literal_code_provider;
-mod literal_definitions;
 
 use std::io::BufWriter;
 use std::io::Write;
@@ -12,9 +10,7 @@ use std::num::NonZero;
 use std::num::NonZeroI32;
 use std::num::NonZeroU64;
 
-pub use atomic::*;
 pub use literal_code_provider::*;
-pub use literal_definitions::*;
 
 use crate::format::Format;
 use crate::steps::Conclusion;
