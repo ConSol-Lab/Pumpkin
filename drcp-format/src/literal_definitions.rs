@@ -42,6 +42,9 @@ pub struct LiteralDefinitions<Identifier> {
 impl<Identifier> LiteralDefinitions<Identifier> {
     /// Parse from a source as written to by [`LiteralDefinitions::write`].
     ///
+    /// If multiple definition lines are encountered for the same literal, then the last
+    /// encountered definition will overwrite the other ones.
+    ///
     /// # Example
     /// ```
     /// use drcp_format::AtomicConstraint;
@@ -187,18 +190,15 @@ fn bool_atomic<Identifier>(input: &str) -> IResult<&str, BoolAtomicConstraint<Id
 where
     Identifier: for<'a> From<&'a str>,
 {
-    let inner = tuple((
+    let inner = separated_pair(
         identifier,
         tag(" == "),
         alt((value(true, tag("true")), value(false, tag("false")))),
-    ));
+    );
 
     delimited(
         tag("["),
-        map(inner, |(name, _, value)| BoolAtomicConstraint {
-            name,
-            value,
-        }),
+        map(inner, |(name, value)| BoolAtomicConstraint { name, value }),
         tag("]"),
     )(input)
 }
