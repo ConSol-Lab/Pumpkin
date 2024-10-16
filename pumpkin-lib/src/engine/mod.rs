@@ -7,6 +7,7 @@ mod preprocessor;
 pub(crate) mod proof;
 pub mod rp_engine;
 mod sat;
+mod solver_statistics;
 pub(crate) mod termination;
 pub(crate) mod variables;
 

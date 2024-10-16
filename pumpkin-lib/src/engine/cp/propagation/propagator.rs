@@ -2,6 +2,8 @@ use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+#[cfg(doc)]
+use crate::create_statistics_struct;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
@@ -16,6 +18,7 @@ use crate::propagators::clausal::BasicClausalPropagator;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+use crate::statistics::statistic_logger::StatisticLogger;
 
 /// All propagators implement the [`Propagator`] trait, with the exception of the
 /// clausal propagator. Structs implementing the trait defines the main propagator logic with
@@ -170,6 +173,11 @@ pub trait Propagator {
     ) -> Option<PropositionalConjunction> {
         None
     }
+
+    /// Logs statistics of the propagator using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }
 
 /// Indicator of what to do when a propagator is notified.
