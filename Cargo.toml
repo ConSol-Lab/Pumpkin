@@ -1,6 +1,18 @@
 [workspace]
-members = ["./pumpkin-lib", "./pumpkin-cli", "drcp-format", "./pumpkin-py"]
+members = ["./pumpkin-lib", "./pumpkin-cli", "./drcp-format", "./pumpkin-py"]
 resolver = "2"
+
+[workspace.package]
+repository = "https://github.com/consol-lab/pumpkin"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = [
+    "Emir Demirović",
+    "Maarten Flippo",
+    "Imko Marijnissen",
+    "Konstantin Sidorov",
+    "Jeff Smits"
+] # Ordered alphabetically based on last name!
 
 [profile.release]
 lto = true
