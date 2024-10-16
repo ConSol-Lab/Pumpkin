@@ -41,7 +41,7 @@ pub fn configure_statistic_logging(
 
 /// Logs the provided statistic with name `name` and value `value`. At the moment it will log in
 /// the format `STATISTIC_PREFIX NAME=VALUE`.
-pub fn log_statistic(name: &impl Display, value: impl Display) {
+pub fn log_statistic(name: impl Display, value: impl Display) {
     if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
         let name = if let Some(casing) = &statistic_options.statistics_casing {
             name.to_string().to_case(*casing)

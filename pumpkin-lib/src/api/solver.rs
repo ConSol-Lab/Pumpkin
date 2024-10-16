@@ -137,7 +137,7 @@ impl Solver {
 
     /// Logs the statistics currently present in the solver with the provided objective value.
     pub fn log_statistics_with_objective(&self, objective_value: i64) {
-        log_statistic(&"objective", objective_value);
+        log_statistic("objective", objective_value);
         self.log_statistics();
     }
 
