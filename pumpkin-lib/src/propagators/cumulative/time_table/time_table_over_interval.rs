@@ -22,10 +22,10 @@ use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::DynamicStructures;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
+use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -60,7 +60,7 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
-    dynamic_structures: DynamicStructures<Var>,
+    dynamic_structures: UpdatableStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
@@ -78,7 +78,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = DynamicStructures::new(&parameters);
+        let dynamic_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
@@ -91,7 +91,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
-            create_time_table_over_interval_from_scratch(&context.as_readonly(), &self.parameters)?;
+            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
@@ -186,9 +186,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_over_interval_from_scratch<
     Var: IntegerVariable + 'static,
-    Context: ReadDomains,
+    Context: ReadDomains + Copy,
 >(
-    context: &Context,
+    context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
@@ -205,8 +205,8 @@ pub(crate) fn create_time_table_over_interval_from_scratch<
 /// is resolved by placing the events which signify the ends of mandatory parts first (if the
 /// tie is between events of the same type then the tie-breaking is done on the id in
 /// non-decreasing order).
-fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
-    context: &Context,
+fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+    context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<Event<Var>> {
     // First we create a list of events with which we will create the time-table
@@ -265,9 +265,9 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains>(
+fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
     events: Vec<Event<Var>>,
-    context: &Context,
+    context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
     pumpkin_assert_extreme!(
@@ -417,12 +417,12 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
 pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &DynamicStructures<Var>,
+    dynamic_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
     let time_table =
-        create_time_table_over_interval_from_scratch(&context.as_readonly(), parameters)?;
+        create_time_table_over_interval_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,

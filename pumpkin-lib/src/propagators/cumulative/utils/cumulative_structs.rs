@@ -231,7 +231,7 @@ impl<Var> UpdatedTaskInfo<Var> {
 /// Structures which are adjusted during search; either due to incrementality or to keep track of
 /// bounds.
 #[derive(Debug, Clone)]
-pub(crate) struct DynamicStructures<Var> {
+pub(crate) struct UpdatableStructures<Var> {
     /// The current known bounds of the different [tasks][CumulativeParameters::tasks]; stored as
     /// (lower bound, upper bound)
     ///
@@ -246,7 +246,7 @@ pub(crate) struct DynamicStructures<Var> {
     unfixed_tasks: SparseSet<Rc<Task<Var>>>,
 }
 
-impl<Var: IntegerVariable + 'static> DynamicStructures<Var> {
+impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     pub(crate) fn new(parameters: &CumulativeParameters<Var>) -> Self {
         let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         updated_tasks.set_to_empty();

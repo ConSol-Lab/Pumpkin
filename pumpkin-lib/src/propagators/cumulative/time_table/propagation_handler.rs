@@ -537,8 +537,8 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
-    context: &Context,
+pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+    context: Context,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
 ) -> PropositionalConjunction
@@ -619,10 +619,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                &PropagationContext::new(
-                    &self.assignments_integer,
-                    &self.assignments_propositional,
-                ),
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
                 &profile,
                 self.propagation_handler.explanation_type,
             );

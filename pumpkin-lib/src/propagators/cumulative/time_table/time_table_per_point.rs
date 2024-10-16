@@ -27,7 +27,7 @@ use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::DynamicStructures;
+use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -50,7 +50,7 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
-    dynamic_structures: DynamicStructures<Var>,
+    dynamic_structures: UpdatableStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -71,7 +71,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     ) -> TimeTablePerPointPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = DynamicStructures::new(&parameters);
+        let dynamic_structures = UpdatableStructures::new(&parameters);
 
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
@@ -84,7 +84,7 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
-            create_time_table_per_point_from_scratch(&context.as_readonly(), &self.parameters)?;
+            create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
@@ -180,9 +180,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_per_point_from_scratch<
     Var: IntegerVariable + 'static,
-    Context: ReadDomains,
+    Context: ReadDomains + Copy,
 >(
-    context: &Context,
+    context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
     let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
@@ -227,11 +227,11 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &DynamicStructures<Var>,
+    dynamic_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(&context.as_readonly(), parameters)?;
+    let time_table = create_time_table_per_point_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,

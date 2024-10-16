@@ -18,8 +18,8 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
-use crate::propagators::DynamicStructures;
 use crate::propagators::Task;
+use crate::propagators::UpdatableStructures;
 use crate::propagators::UpdatedTaskInfo;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -71,7 +71,7 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 /// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &DynamicStructures<Var>,
+    dynamic_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
     context: &PropagationContext,
     empty_time_table: bool,
@@ -231,7 +231,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &mut DynamicStructures<Var>,
+    dynamic_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
@@ -272,7 +272,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    dynamic_structures: &mut DynamicStructures<Var>,
+    dynamic_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -638,7 +638,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
 
 pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     updated_task: &Rc<Task<Var>>,
-    dynamic_structures: &mut DynamicStructures<Var>,
+    dynamic_structures: &mut UpdatableStructures<Var>,
     potential_update: Option<UpdatedTaskInfo<Var>>,
 ) {
     if let Some(update) = potential_update {
@@ -647,9 +647,9 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     }
 }
 
-pub(crate) fn backtrack_update<Var: IntegerVariable + 'static + Debug>(
+pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
-    dynamic_structures: &mut DynamicStructures<Var>,
+    dynamic_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
     // If the stored bounds are already the same or the previous stored bounds did not include a

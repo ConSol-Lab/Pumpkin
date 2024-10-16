@@ -29,12 +29,12 @@ use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
-use crate::propagators::DynamicStructures;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
+use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 
@@ -68,7 +68,7 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; either to store bounds or when applying
     /// incrementality
-    dynamic_structures: DynamicStructures<Var>,
+    updatable_structures: UpdatableStructures<Var>,
     /// Stores whether the propagator found a conflict in the previous call
     ///
     /// This is stored to deal with the case where the same conflict can be created via two
@@ -90,11 +90,11 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
     ) -> TimeTablePerPointIncrementalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = DynamicStructures::new(&parameters);
+        let dynamic_structures = UpdatableStructures::new(&parameters);
         TimeTablePerPointIncrementalPropagator {
             time_table: BTreeMap::new(),
             parameters,
-            dynamic_structures,
+            updatable_structures: dynamic_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
         }
@@ -104,7 +104,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
     /// that all of the adjustments are applied even if a conflict is found.
     fn add_to_time_table(
         &mut self,
-        context: &PropagationContext,
+        context: PropagationContext,
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
@@ -196,13 +196,14 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
-            self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
+            self.time_table =
+                create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
 
             // Then we note that the time-table is not outdated anymore
             self.is_time_table_outdated = false;
 
             // And we clear all of the updates since they have now necessarily been processed
-            self.dynamic_structures
+            self.updatable_structures
                 .reset_all_bounds_and_remove_fixed(context, &self.parameters);
 
             return Ok(());
@@ -212,8 +213,8 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         let mut found_conflict = false;
 
         // Then we go over all of the updated tasks
-        while let Some(updated_task) = self.dynamic_structures.pop_next_updated_task() {
-            let element = self.dynamic_structures.get_update_for_task(&updated_task);
+        while let Some(updated_task) = self.updatable_structures.pop_next_updated_task() {
+            let element = self.updatable_structures.get_update_for_task(&updated_task);
 
             // We get the adjustments based on the stored updated
             let mandatory_part_adjustments = element.get_mandatory_part_adjustments();
@@ -229,7 +230,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
             // Note that the inconsistency returned here does not necessarily hold since other
             // updates could remove from the profile
             let result = self.add_to_time_table(
-                &context.as_readonly(),
+                context.as_readonly(),
                 &mandatory_part_adjustments,
                 &updated_task,
             );
@@ -238,7 +239,8 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
             found_conflict |= result.is_err();
 
             // Then we reset the update for the task since it has been processed
-            self.dynamic_structures.reset_update_for_task(&updated_task);
+            self.updatable_structures
+                .reset_update_for_task(&updated_task);
         }
 
         // After all the updates have been processed, we need to check whether there is still a
@@ -254,7 +256,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
                     create_time_table_per_point_from_scratch(
-                        &context.as_readonly(),
+                        context.as_readonly(),
                         &self.parameters
                     )
                     .is_err(),
@@ -264,7 +266,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                 self.found_previous_conflict = true;
 
                 return Err(create_conflict_explanation(
-                    context,
+                    context.as_readonly(),
                     conflicting_profile,
                     self.parameters.options.explanation_type,
                 )
@@ -293,7 +295,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             check_bounds_equal_at_propagation(
                 &context.as_readonly(),
                 &self.parameters.tasks,
-                self.dynamic_structures.get_stored_bounds(),
+                self.updatable_structures.get_stored_bounds(),
             ),
             "Bound were not equal when propagating"
         );
@@ -302,7 +304,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(debug::time_tables_are_the_same_point(
-            &context.as_readonly(),
+            context.as_readonly(),
             &self.time_table,
             &self.parameters
         ));
@@ -315,7 +317,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             &mut context,
             self.time_table.values(),
             &self.parameters,
-            &mut self.dynamic_structures,
+            &mut self.updatable_structures,
         )
     }
 
@@ -335,7 +337,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         // after backtracking but has not been recalculated yet.
         let result = should_enqueue(
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
             &updated_task,
             &context,
             self.time_table.is_empty(),
@@ -343,11 +345,11 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
         // If there is a task which now has a mandatory part then we store it and process it when
         // the `propagate` method is called
-        insert_update(&updated_task, &mut self.dynamic_structures, result.update);
+        insert_update(&updated_task, &mut self.updatable_structures, result.update);
 
         update_bounds_task(
             &context,
-            self.dynamic_structures.get_stored_bounds_mut(),
+            self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
 
@@ -355,7 +357,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             updated_task.start_variable.unpack_event(event),
             IntDomainEvent::Assign
         ) {
-            self.dynamic_structures.fix_task(&updated_task);
+            self.updatable_structures.fix_task(&updated_task);
         }
 
         result.decision
@@ -369,11 +371,11 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
     ) {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
-        backtrack_update(context, &mut self.dynamic_structures, &updated_task);
+        backtrack_update(context, &mut self.updatable_structures, &updated_task);
 
         update_bounds_task(
             context,
-            self.dynamic_structures.get_stored_bounds_mut(),
+            self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
 
@@ -382,7 +384,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             IntDomainEvent::Assign
         ) {
             // The start variable of the task has been unassigned, we should restore it to unfixed
-            self.dynamic_structures.unfix_task(updated_task)
+            self.updatable_structures.unfix_task(updated_task)
         }
     }
 
@@ -390,7 +392,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {
-            self.dynamic_structures
+            self.updatable_structures
                 .reset_all_bounds_and_remove_fixed(context, &self.parameters);
             // If the time-table is already empty then backtracking will not cause it to become
             // outdated
@@ -413,11 +415,12 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         register_tasks(&self.parameters.tasks, context, true);
-        self.dynamic_structures
+        self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
 
         // Then we do normal propagation
-        self.time_table = create_time_table_per_point_from_scratch(context, &self.parameters)?;
+        self.time_table =
+            create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         Ok(())
     }
 
@@ -429,7 +432,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         debug_propagate_from_scratch_time_table_point(
             &mut context,
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
         )
     }
 }
@@ -453,7 +456,7 @@ mod debug {
     ///      - The profile tasks should be the same; note that we do not check whether the order is
     ///        the same!
     pub(crate) fn time_tables_are_the_same_point<Var: IntegerVariable + 'static>(
-        context: &PropagationContext,
+        context: PropagationContext,
         time_table: &PerPointTimeTableType<Var>,
         parameters: &CumulativeParameters<Var>,
     ) -> bool {
