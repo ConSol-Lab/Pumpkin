@@ -765,9 +765,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -844,9 +842,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -902,9 +898,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -933,9 +927,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -1050,9 +1042,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -1131,9 +1121,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    ..Default::default()
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
