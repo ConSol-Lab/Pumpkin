@@ -2,11 +2,11 @@
 name = "pumpkin-lib"
 version = "0.1.0"
 description = "The Pumpkin combinatorial optimisation solver library."
-repository = "https://github.com/consol-lab/pumpkin"
 readme = "../README.md"
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [dependencies]
 thiserror = "1.0.39"

@@ -2,10 +2,10 @@
 name = "pumpkin-py"
 version = "0.1.0"
 description = "The Python interface for the Pumpkin solver library."
-repository = "https://github.com/consol-lab/pumpkin"
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [lib]
 name = "pumpkin_py"

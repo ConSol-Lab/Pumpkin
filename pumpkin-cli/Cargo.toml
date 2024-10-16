@@ -2,11 +2,11 @@
 name = "pumpkin-cli"
 version = "0.1.0"
 description = "The command-line interface for using the Pumpkin solver"
-repository = "https://github.com/consol-lab/pumpkin"
 readme = "../README.md"
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [dependencies]
 pumpkin-lib = { path = "../pumpkin-lib" }

@@ -3,6 +3,7 @@ members = ["./pumpkin-lib", "./pumpkin-cli", "drcp-format", "./pumpkin-py"]
 resolver = "2"
 
 [workspace.package]
+repository = "https://github.com/consol-lab/pumpkin"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = [
