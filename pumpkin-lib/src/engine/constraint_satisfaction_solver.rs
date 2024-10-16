@@ -75,6 +75,7 @@ use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::statistic_logger::StatisticLogger;
+use crate::statistics::statistic_logging::should_log_statistics;
 use crate::statistics::Statistic;
 use crate::variable_names::VariableNames;
 use crate::DefaultBrancher;
@@ -544,13 +545,17 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log(StatisticLogger::default());
-        for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
-            propagator.log_statistics(StatisticLogger::new(format!(
-                "{}_number_{}",
-                propagator.name(),
-                index
-            )));
+        // We first check whether the statistics will/should be logged to prevent unnecessarily
+        // going through all the propagators
+        if should_log_statistics() {
+            self.counters.log(StatisticLogger::default());
+            for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
+                propagator.log_statistics(StatisticLogger::new([
+                    propagator.name(),
+                    "number",
+                    index.to_string().as_str(),
+                ]));
+            }
         }
     }
 

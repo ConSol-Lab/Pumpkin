@@ -9,15 +9,18 @@ pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
 pub use statistic_logging::log_statistic;
 pub use statistic_logging::log_statistic_postfix;
+pub use statistic_logging::should_log_statistics;
 pub use statistic_logging::StatisticOptions;
 
+#[cfg(doc)]
+use crate::create_statistics_struct;
 #[cfg(doc)]
 use crate::Solver;
 
 /// A simple trait for defining a loggable statistic.
 ///
-/// See [`create_statistics_struct!`] for creating a statistic struct automatically!
-pub(crate) trait Statistic {
+/// See [`create_statistics_struct`] for creating a statistic struct automatically!
+pub trait Statistic {
     /// Logs the [`Statistic`] using the provided [`StatisticLogger`].
     fn log(&self, statistic_logger: StatisticLogger);
 }

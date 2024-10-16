@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use itertools::Itertools;
+
 use super::statistic_logging::log_statistic;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
@@ -13,9 +15,9 @@ pub struct StatisticLogger {
 }
 
 impl StatisticLogger {
-    pub fn new(name_prefix: impl Display) -> Self {
+    pub fn new<Input: IntoIterator<Item = impl Display>>(name_prefix: Input) -> Self {
         Self {
-            name_prefix: name_prefix.to_string(),
+            name_prefix: name_prefix.into_iter().join("_"),
         }
     }
 
@@ -30,7 +32,7 @@ impl StatisticLogger {
 
 impl std::fmt::Write for StatisticLogger {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        log_statistic(self.name_prefix.clone(), s);
+        log_statistic(&self.name_prefix, s);
         Ok(())
     }
 }
