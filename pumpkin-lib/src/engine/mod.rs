@@ -5,6 +5,7 @@ mod debug_helper;
 pub(crate) mod nogoods;
 pub(crate) mod predicates;
 mod sat;
+mod solver_statistics;
 pub(crate) mod termination;
 pub(crate) mod variables;
 

@@ -2,11 +2,11 @@ use super::SemanticMinimiser;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
-use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonStore;
+use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
@@ -20,7 +20,6 @@ pub struct ConflictAnalysisNogoodContext<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) reason_store: &'a mut ReasonStore,
-    pub(crate) counters: &'a mut Counters,
     pub(crate) brancher: &'a mut dyn Brancher,
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
@@ -31,6 +30,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
     pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
 
     pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
+    pub(crate) counters: &'a mut SolverStatistics,
 }
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {

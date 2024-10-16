@@ -15,13 +15,12 @@ use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
+use super::solver_statistics::SolverStatistics;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::ResolutionResolver;
-use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
-use crate::basic_types::statistic_logging::statistic_logger::log_statistic;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
@@ -55,6 +54,9 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::statistic_logger::StatisticLogger;
+use crate::statistics::statistic_logging::should_log_statistics;
+use crate::statistics::Statistic;
 use crate::variable_names::VariableNames;
 #[cfg(doc)]
 use crate::Solver;
@@ -160,7 +162,7 @@ pub struct ConstraintSatisfactionSolver {
     backtrack_event_drain: Vec<(IntDomainEvent, DomainId)>,
     last_notified_cp_trail_index: usize,
     /// A set of counters updated during the search.
-    counters: Counters,
+    counters: SolverStatistics,
     /// Miscellaneous constant parameters used by the solver.
     internal_parameters: SatisfactionSolverOptions,
     /// The names of the variables in the solver.
@@ -409,7 +411,7 @@ impl ConstraintSatisfactionSolver {
             backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: PropagatorStore::default(),
-            counters: Counters::default(),
+            counters: SolverStatistics::default(),
             internal_parameters: solver_options,
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
@@ -459,7 +461,8 @@ impl ConstraintSatisfactionSolver {
         self.initialise(assumptions);
         let result = self.solve_internal(termination, brancher);
 
-        self.counters.time_spent_in_solver += start_time.elapsed().as_millis() as u64;
+        self.counters.engine_statistics.time_spent_in_solver +=
+            start_time.elapsed().as_millis() as u64;
 
         result
     }
@@ -473,7 +476,18 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn log_statistics(&self) {
-        self.counters.log_statistics()
+        // We first check whether the statistics will/should be logged to prevent unnecessarily
+        // going through all the propagators
+        if should_log_statistics() {
+            self.counters.log(StatisticLogger::default());
+            for (index, propagator) in self.propagators.iter_propagators().enumerate() {
+                propagator.log_statistics(StatisticLogger::new([
+                    propagator.name(),
+                    "number",
+                    index.to_string().as_str(),
+                ]));
+            }
+        }
     }
 
     pub fn create_new_literal(&mut self, name: Option<String>) -> Literal {
@@ -804,7 +818,7 @@ impl ConstraintSatisfactionSolver {
                     "Decision should not already be assigned; double check the brancher"
                 );
 
-                self.counters.num_decisions += 1;
+                self.counters.engine_statistics.num_decisions += 1;
                 self.assignments
                     .post_decision(decision_predicate)
                     .expect("Decisions are expected not to fail.");
@@ -923,9 +937,12 @@ impl ConstraintSatisfactionSolver {
                 );
             }
 
-            self.counters.num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
+            self.counters
+                .learned_clause_statistics
+                .num_unit_clauses_learned += (learned_nogood.predicates.len() == 1) as u64;
 
             self.counters
+                .learned_clause_statistics
                 .average_learned_clause_length
                 .add_term(learned_nogood.predicates.len() as u64);
 
@@ -987,7 +1004,7 @@ impl ConstraintSatisfactionSolver {
             return;
         }
 
-        self.counters.num_restarts += 1;
+        self.counters.engine_statistics.num_restarts += 1;
 
         self.backtrack(0, brancher);
 
@@ -1140,8 +1157,8 @@ impl ConstraintSatisfactionSolver {
             );
         }
         // Record statistics.
-        self.counters.num_conflicts += self.state.is_conflicting() as u64;
-        self.counters.num_propagations +=
+        self.counters.engine_statistics.num_conflicts += self.state.is_conflicting() as u64;
+        self.counters.engine_statistics.num_propagations +=
             self.assignments.num_trail_entries() as u64 - num_assigned_variables_old as u64;
         // Only check fixed point propagation if there was no reported conflict,
         // since otherwise the state may be inconsistent.
@@ -1373,44 +1390,6 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
-    }
-}
-
-/// Structure responsible for storing several statistics of the solving process of the
-/// [`ConstraintSatisfactionSolver`].
-#[derive(Default, Debug, Copy, Clone)]
-pub(crate) struct Counters {
-    pub(crate) num_decisions: u64,
-    pub(crate) num_conflicts: u64,
-    num_restarts: u64,
-    pub(crate) average_conflict_size: CumulativeMovingAverage,
-    num_propagations: u64,
-    pub(crate) num_unit_clauses_learned: u64,
-    pub(crate) average_learned_clause_length: CumulativeMovingAverage,
-    time_spent_in_solver: u64,
-    pub(crate) average_backtrack_amount: CumulativeMovingAverage,
-}
-
-impl Counters {
-    fn log_statistics(&self) {
-        log_statistic("numberOfDecisions", self.num_decisions);
-        log_statistic("numberOfConflicts", self.num_conflicts);
-        log_statistic("numberOfRestarts", self.num_restarts);
-        log_statistic(
-            "averageSizeOfConflictExplanation",
-            self.average_conflict_size.value(),
-        );
-        log_statistic("numberOfPropagations", self.num_propagations);
-        log_statistic("numberOfLearnedUnitClauses", self.num_unit_clauses_learned);
-        log_statistic(
-            "averageLearnedClauseLength",
-            self.average_learned_clause_length.value(),
-        );
-        log_statistic("timeSpentInSolverInMilliseconds", self.time_spent_in_solver);
-        log_statistic(
-            "averageBacktrackAmount",
-            self.average_backtrack_amount.value(),
-        );
     }
 }
 

@@ -98,22 +98,15 @@ pub mod termination {
     use crate::Solver;
 }
 
-pub mod statistics {
-    //! Contains functions which configure the logging and allow the logging of statistics
-    //! themselves.
-    pub use crate::basic_types::statistic_logging::statistic_logger::*;
-}
-
-// todo: put back the proof logging
 // pub mod proof {
-//     //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver
-// produces a     //! [`ProofLog`], which is a list of deductions made by the solver.
-//     //!
-//     //! Proof logging for CP is supported in the DRCP format. This format explicitly supports
-// usage     //! where the solver logs a proof scaffold which later processed into a full proof
-// after search     //! has completed. Proof processing is very close to solving, and the
-//     //! [`rp_engine::RpEngine`] exposes an API that can be used to process a proof scaffold into
-//     //! a full CP proof.
+// //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
+// //! [`ProofLog`], which is a list of deductions made by the solver.
+// //!
+// //! Proof logging for CP is supported in the DRCP format. This format explicitly supports usage
+// //! where the solver logs a proof scaffold which later processed into a full proof after search
+// //! has completed. Proof processing is very close to solving, and the
+// //! [`rp_engine::RpEngine`] exposes an API that can be used to process a proof scaffold into
+// //! a full CP proof.
 
 //     pub use crate::engine::proof::Format;
 //     pub use crate::engine::proof::ProofLog;

@@ -5,6 +5,8 @@ use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
+#[cfg(doc)]
+use crate::create_statistics_struct;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
@@ -18,6 +20,7 @@ use crate::predicates::PropositionalConjunction;
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_ADVANCED;
 #[cfg(doc)]
 use crate::pumpkin_asserts::PUMPKIN_ASSERT_EXTREME;
+use crate::statistics::statistic_logger::StatisticLogger;
 
 // We need to use this to cast from `Box<dyn Propagator>` to `NogoodPropagator`; rust inherently
 // does not allow downcasting from the trait definition to its concrete type.
@@ -168,6 +171,10 @@ pub trait Propagator: Downcast {
             )
         );
     }
+    /// Logs statistics of the propagator using the provided [`StatisticLogger`].
+    ///
+    /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
+    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
 }
 
 /// Indicator of what to do when a propagator is notified.

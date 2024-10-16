@@ -47,6 +47,7 @@ impl ConflictResolver for ResolutionResolver {
                 + self.predicates_lower_decision_level.len();
         context
             .counters
+            .learned_clause_statistics
             .average_conflict_size
             .add_term(num_initial_conflict_predicates as u64);
 
