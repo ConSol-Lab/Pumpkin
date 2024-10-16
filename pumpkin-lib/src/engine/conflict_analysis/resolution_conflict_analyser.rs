@@ -12,6 +12,7 @@ use crate::engine::variables::PropositionalVariable;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
@@ -73,9 +74,10 @@ impl ResolutionConflictAnalyser {
         // Note that in position 0, we placed a dummy literal.
         // The point is that we allocate space for the asserting literal,
         // which will by convention be placed at index 0
+        self.analysis_result.learned_literals.clear();
         self.analysis_result
             .learned_literals
-            .resize(1, context.assignments_propositional.true_literal);
+            .push(context.assignments_propositional.true_literal);
         self.analysis_result.backjump_level = 0;
 
         let mut num_current_decision_level_literals_to_inspect = 0;
@@ -174,6 +176,20 @@ impl ResolutionConflictAnalyser {
                 .get_trail_entry(next_trail_index)
                 .get_propositional_variable()]
             {
+                if next_trail_index == 0 {
+                    // At this point, the learned literals contains only the true literal, which
+                    // serves as a placeholder for the asserting literal. However, at this point,
+                    // there is no asserting literal, so we can clear the learned literals.
+                    pumpkin_assert_eq_simple!(
+                        vec![context.assignments_propositional.true_literal],
+                        self.analysis_result.learned_literals
+                    );
+
+                    self.analysis_result.learned_literals.clear();
+
+                    return self.analysis_result.clone();
+                }
+
                 next_trail_index -= 1;
                 pumpkin_assert_advanced!(
                     context
@@ -630,7 +646,6 @@ impl ResolutionConflictAnalyser {
                     .num_propositional_variables()
         );
         pumpkin_assert_simple!(context.explanation_clause_manager.is_empty());
-        pumpkin_assert_simple!(!context.assignments_propositional.is_at_the_root_level());
         pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
 
         true
