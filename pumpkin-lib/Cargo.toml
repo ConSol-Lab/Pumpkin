@@ -2,9 +2,18 @@
 name = "pumpkin-lib"
 version = "0.1.0"
 edition = "2021"
-publish = false
+license = "MIT OR Apache-2.0"
+description = "The Pumpkin combinatorial optimisation solver library."
+repository = "https://github.com/consol-lab/pumpkin"
+readme = "../README.md"
+authors = [
+    "Emir Demirović", 
+    "Maarten Flippo", 
+    "Imko Marijnissen", 
+    "Konstantin Sidorov", 
+    "Jeff Smits"
+] # Ordered alphabetically based on last name!
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 thiserror = "1.0.39"
 log = "0.4.17"

@@ -2,9 +2,11 @@
 name = "pumpkin-py"
 version = "0.1.0"
 edition = "2021"
-publish = false
+license = "MIT OR Apache-2.0"
+description = "The Python interface for the Pumpkin solver library."
+repository = "https://github.com/consol-lab/pumpkin"
+authors = ["Maarten Flippo"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "pumpkin_py"
 crate-type = ["cdylib"]
