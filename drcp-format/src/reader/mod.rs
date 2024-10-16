@@ -159,7 +159,7 @@ where
     /// Map the literals to the atomic constraints in the proof step.
     fn map_step<'s>(
         &self,
-        step: Step<'s, Vec<NonZero<i32>>, NonZero<i32>, Vec<StepId>>,
+        step: ReadStep<'s, NonZero<i32>>,
     ) -> ReadStep<'s, AtomicConstraints::Atomic> {
         match step {
             Step::Inference(Inference {
