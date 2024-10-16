@@ -1,10 +1,17 @@
+//! Implements the writing of DRCP files.
+//!
+//! See [`ProofWriter`] for more information on how to write proofs.
+
+mod literal_code_provider;
+
 use std::io::BufWriter;
 use std::io::Write;
 use std::num::NonZero;
 use std::num::NonZeroI32;
 use std::num::NonZeroU64;
 
-use crate::encountered_literals::LiteralCodeProvider;
+pub use literal_code_provider::*;
+
 use crate::format::Format;
 use crate::steps::Conclusion;
 use crate::steps::Deletion;
@@ -18,7 +25,7 @@ use crate::steps::StepId;
 /// ```
 /// # use std::num::NonZeroI32;
 /// # use drcp_format::Format;
-/// # use drcp_format::ProofWriter;
+/// # use drcp_format::writer::ProofWriter;
 /// # use drcp_format::steps::StepId;
 /// let mut proof: Vec<u8> = Vec::new();
 /// let mut writer = ProofWriter::new(Format::Text, &mut proof, std::convert::identity);

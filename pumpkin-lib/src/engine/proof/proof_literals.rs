@@ -2,10 +2,11 @@ use std::io::Write;
 use std::num::NonZeroI32;
 use std::num::NonZeroU32;
 
+use drcp_format::writer::LiteralCodeProvider;
 use drcp_format::AtomicConstraint;
+use drcp_format::BoolAtomicConstraint;
 use drcp_format::Comparison;
 use drcp_format::IntAtomicConstraint;
-use drcp_format::LiteralCodeProvider;
 use drcp_format::LiteralDefinitions;
 
 use crate::basic_types::KeyedVec;
@@ -52,7 +53,7 @@ impl ProofLiterals {
             let atomics = variable_names
                 .get_propositional_name(variable)
                 .into_iter()
-                .map(AtomicConstraint::Bool)
+                .map(|name| AtomicConstraint::Bool(BoolAtomicConstraint { name, value: true }))
                 .chain(
                     predicates
                         .map(|predicate| integer_predicate_to_atomic(predicate, variable_names)),
@@ -79,7 +80,7 @@ impl ProofLiterals {
 fn integer_predicate_to_atomic(
     predicate: IntegerPredicate,
     variable_names: &VariableNames,
-) -> AtomicConstraint<'_> {
+) -> AtomicConstraint<&str> {
     match predicate {
         IntegerPredicate::LowerBound {
             domain_id,
