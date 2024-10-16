@@ -1,9 +1,11 @@
 [package]
 name = "drcp-format"
 version = "0.1.0"
-edition = "2021"
-license = "MIT"
-authors = ["Maarten Flippo"]
+description = "Parse and write DRCP and literal definition files."
+license.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true

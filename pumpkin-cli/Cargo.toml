@@ -1,10 +1,12 @@
 [package]
 name = "pumpkin-cli"
 version = "0.1.0"
-edition = "2021"
-publish = false
-authors = ["Emir Demirović", "Maarten Flippo", "Imko Marijnissen", "Konstantin Sidorov", "Jeff Smits"] # Ordered alphabetically based on last name!
 description = "The command-line interface for using the Pumpkin solver"
+readme = "../README.md"
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
 
 [dependencies]
 pumpkin-lib = { path = "../pumpkin-lib" }
