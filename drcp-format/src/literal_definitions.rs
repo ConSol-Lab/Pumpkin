@@ -47,6 +47,8 @@ impl<Identifier> LiteralDefinitions<Identifier> {
     ///
     /// # Example
     /// ```
+    /// use std::num::NonZero;
+    ///
     /// use drcp_format::AtomicConstraint;
     /// use drcp_format::BoolAtomicConstraint;
     /// use drcp_format::Comparison;
@@ -61,8 +63,6 @@ impl<Identifier> LiteralDefinitions<Identifier> {
     /// let definitions = drcp_format::LiteralDefinitions::<String>::parse(source.as_bytes())
     ///     .expect("valid lits file");
     ///
-    /// let var = |num: u32| std::num::NonZero::new(num).unwrap();
-    ///
     /// let atomics_for_20 = [
     ///     AtomicConstraint::Int(IntAtomicConstraint {
     ///         name: "x1".to_owned(),
@@ -75,13 +75,19 @@ impl<Identifier> LiteralDefinitions<Identifier> {
     ///         value: 21,
     ///     }),
     /// ];
-    /// assert_eq!(Some(atomics_for_20.as_slice()), definitions.get(var(20)));
+    /// assert_eq!(
+    ///     Some(atomics_for_20.as_slice()),
+    ///     definitions.get(NonZero::new(20).unwrap())
+    /// );
     ///
     /// let atomics_for_5 = [AtomicConstraint::Bool(BoolAtomicConstraint {
     ///     name: "x2".to_owned(),
     ///     value: true,
     /// })];
-    /// assert_eq!(Some(atomics_for_5.as_slice()), definitions.get(var(5)));
+    /// assert_eq!(
+    ///     Some(atomics_for_5.as_slice()),
+    ///     definitions.get(NonZero::new(5).unwrap())
+    /// );
     ///
     /// let atomics_for_6 = [
     ///     AtomicConstraint::Int(IntAtomicConstraint {
@@ -95,7 +101,10 @@ impl<Identifier> LiteralDefinitions<Identifier> {
     ///         value: 5,
     ///     }),
     /// ];
-    /// assert_eq!(Some(atomics_for_20.as_slice()), definitions.get(var(20)));
+    /// assert_eq!(
+    ///     Some(atomics_for_20.as_slice()),
+    ///     definitions.get(NonZero::new(20).unwrap())
+    /// );
     /// ```
     pub fn parse(source: impl Read) -> Result<Self, DrcpError>
     where
