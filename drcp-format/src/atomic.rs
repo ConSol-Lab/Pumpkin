@@ -54,7 +54,7 @@ impl<Identifier> Not for BoolAtomicConstraint<Identifier> {
     fn not(self) -> Self::Output {
         BoolAtomicConstraint {
             name: self.name,
-            value: self.value,
+            value: !self.value,
         }
     }
 }
