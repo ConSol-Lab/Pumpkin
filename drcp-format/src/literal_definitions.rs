@@ -156,6 +156,7 @@ impl<Identifier> LiteralDefinitions<Identifier> {
     }
 }
 
+/// `<unsigned non-zero integer> <list of atomics>`
 fn atomic_definition<Identifier>(
     input: &str,
 ) -> IResult<&str, (NonZero<u32>, Vec<AtomicConstraint<Identifier>>)>
@@ -165,17 +166,20 @@ where
     separated_pair(variable, tag(" "), atomic_list)(input)
 }
 
+/// Parses an unsigned non-zero 32-bit integer
 fn variable(input: &str) -> IResult<&str, NonZero<u32>> {
     map_opt(nom::character::complete::u32, NonZero::new)(input)
 }
 
+/// Parses space-separated list of atomic constraints.
 fn atomic_list<Identifier>(input: &str) -> IResult<&str, Vec<AtomicConstraint<Identifier>>>
 where
     Identifier: for<'a> From<&'a str>,
 {
-    separated_list1(whitespace, atomic)(input)
+    separated_list1(space, atomic)(input)
 }
 
+/// Parses an atomic constraint, either boolean or integer.
 fn atomic<Identifier>(input: &str) -> IResult<&str, AtomicConstraint<Identifier>>
 where
     Identifier: for<'a> From<&'a str>,
@@ -186,6 +190,7 @@ where
     ))(input)
 }
 
+/// `[<var> == <true | false>]`.
 fn bool_atomic<Identifier>(input: &str) -> IResult<&str, BoolAtomicConstraint<Identifier>>
 where
     Identifier: for<'a> From<&'a str>,
@@ -203,13 +208,14 @@ where
     )(input)
 }
 
+/// `[<var> <comparator> <value>]`.
 fn int_atomic<Identifier>(input: &str) -> IResult<&str, IntAtomicConstraint<Identifier>>
 where
     Identifier: for<'a> From<&'a str>,
 {
     let inner = tuple((
         identifier,
-        delimited(whitespace, comparator, whitespace),
+        delimited(space, comparator, space),
         nom::character::complete::i64,
     ));
 
@@ -224,10 +230,7 @@ where
     )(input)
 }
 
-fn whitespace(input: &str) -> IResult<&str, &str> {
-    tag(" ")(input)
-}
-
+/// Parses an integer comparator.
 fn comparator(input: &str) -> IResult<&str, Comparison> {
     alt((
         value(Comparison::Equal, tag("==")),
@@ -237,6 +240,9 @@ fn comparator(input: &str) -> IResult<&str, Comparison> {
     ))(input)
 }
 
+/// Parses a variable name and turns it into an identifier.
+///
+/// Variable names be accepted by the following regex: `[A-Za-z_][A-Za-z0-9_]*`
 fn identifier<Identifier>(input: &str) -> IResult<&str, Identifier>
 where
     Identifier: for<'a> From<&'a str>,
@@ -248,4 +254,9 @@ where
         )),
         Identifier::from,
     )(input)
+}
+
+/// Parses a space character.
+fn space(input: &str) -> IResult<&str, &str> {
+    tag(" ")(input)
 }

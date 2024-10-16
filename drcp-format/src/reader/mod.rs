@@ -279,22 +279,27 @@ fn conclusion_step(input: &str) -> IResult<&str, Conclusion<NonZero<i32>>> {
     )(input)
 }
 
+/// Parses a space-separated list of non-zero signed integers.
 fn literal_list(input: &str) -> IResult<&str, Vec<NonZero<i32>>> {
     separated_list0(tag(" "), literal)(input)
 }
 
+/// Parses a single non-zero signed integer.
 fn literal(input: &str) -> IResult<&str, NonZero<i32>> {
     map_opt(nom::character::complete::i32, NonZero::new)(input)
 }
 
+/// Parses a single unsigned non-zero 64-bit integer.
 fn step_id(input: &str) -> IResult<&str, NonZero<u64>> {
     map_opt(nom::character::complete::u64, NonZero::new)(input)
 }
 
+/// Parses a single unsigned non-zero 32-bit integer.
 fn constraint_id(input: &str) -> IResult<&str, NonZero<u32>> {
     map_opt(nom::character::complete::u32, NonZero::new)(input)
 }
 
+/// Parses identifiers according to the minizinc spec: `[A-Za-z_][A-Za-z0-9_]*`
 fn identifier(input: &str) -> IResult<&str, &str> {
     recognize(pair(
         alt((alpha1, tag("_"))),
