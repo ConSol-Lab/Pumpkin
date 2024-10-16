@@ -7,8 +7,8 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
+use drcp_format::writer::ProofWriter;
 pub use drcp_format::Format;
-use drcp_format::ProofWriter;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
