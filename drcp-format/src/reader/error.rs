@@ -2,10 +2,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum DrcpError {
-    #[error("failed to read: {0}")]
+    #[error("Failed to read: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("syntax error: {0}")]
+    #[error("Syntax error: {0}")]
     Syntax(String),
 }
 
