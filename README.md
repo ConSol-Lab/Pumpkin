@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
 
 <p align="center">
-    <img align="left" width="50%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
+    <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin.svg", alt="ASCII art pumpkin logo">
 </p>
 
 <p align="left">

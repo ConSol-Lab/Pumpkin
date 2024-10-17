@@ -57,7 +57,7 @@ pub mod variables {
 }
 
 pub mod containers {
-    /// ! Contains containers which are used by the solver.
+    //! Contains containers which are used by the solver.
     pub use crate::basic_types::KeyedVec;
     pub use crate::basic_types::StorageKey;
 }
