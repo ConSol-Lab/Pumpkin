@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 /// Contains functions related to debugging
 use std::ops::Range;
 
@@ -20,7 +21,7 @@ use crate::variables::IntegerVariable;
 ///      - The heights are the same
 ///      - The profile tasks should be the same; note that we do not check whether the order is the
 ///        same!
-pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static + Debug>(
     context: &PropagationContext,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
@@ -46,21 +47,23 @@ pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
     //      - The heights are the same
     //      - The profile tasks of the profiles should be the same; note that we do not check
     //        whether the order is the same!
-    time_table.len() == time_table_scratch.len()
-        && time_table
-            .iter()
-            .zip(time_table_scratch)
-            .all(|(actual, expected)| {
-                let result = actual.height == expected.height
-                    && actual.start == expected.start
-                    && actual.end == expected.end
-                    && actual.profile_tasks.len() == expected.profile_tasks.len()
-                    && actual
-                        .profile_tasks
-                        .iter()
-                        .all(|task| expected.profile_tasks.contains(task));
-                result
-            })
+    time_table
+        .iter()
+        .zip(time_table_scratch)
+        .all(|(actual, expected)| {
+            let result = actual.height == expected.height
+                && actual.start == expected.start
+                && actual.end == expected.end
+                && actual.profile_tasks.len() == expected.profile_tasks.len()
+                && actual
+                    .profile_tasks
+                    .iter()
+                    .all(|task| expected.profile_tasks.contains(task));
+            if !result {
+                println!("{actual:#?}\n{expected:#?}")
+            }
+            result
+        })
 }
 
 /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
@@ -79,7 +82,9 @@ fn merge_profiles<Var: IntegerVariable + 'static>(
     let mut current_index = start_index;
     let mut end = end_index;
 
+    // To avoid needless splicing, we keep track of the range at which insertions will take place
     let mut insertion_range: Option<Range<usize>> = None;
+    // And the profiles which need to be added
     let mut to_add: Option<Vec<ResourceProfile<Var>>> = None;
 
     // We go over all pairs of profiles, starting from start index until end index
@@ -106,32 +111,55 @@ fn merge_profiles<Var: IntegerVariable + 'static>(
                 height: start_profile.height,
             };
 
+            // And we add the new profiles to the profiles to add
             if let Some(to_add) = to_add.as_mut() {
                 to_add.push(new_profile);
             } else {
                 to_add = Some(vec![new_profile]);
             }
 
+            // If the insertion range already exists then we update it to cover the newly added
+            // profiles as well
+            // Otherwise we initialise it to cover the range of profiles which can be merged
             insertion_range = Some(
                 insertion_range
                     .map(|previous_range| previous_range.start..(current_index + 1))
                     .unwrap_or_else(|| first..(current_index + 1)),
             );
         } else if let Some(replacing_profiles) = to_add.take() {
+            // We need to insert the merged profiles and remove the old profiles from the
+            // time-table
             if let Some(replacing_range) = insertion_range.take() {
-                end -= replacing_range.end - replacing_profiles.len();
-                current_index = replacing_range.end - 1;
+                // The end is decreased by the number of removed profiles (taking into account that
+                // `|replacing_profiles|` profiles were added)
+                end -= (replacing_range.end - replacing_range.start) - replacing_profiles.len();
+                // The current index should point to after the range of newly added profiles which
+                // means that it is updated to be the start of `replacing_range` + the number of
+                // newly added profiles (note that we know that the profile directly after the
+                // spliced profiles can also be skipped now, hence we do not add a -1)
+                current_index = replacing_range.start + replacing_profiles.len();
+                // Then we replace the profile in the range with the merged profiles
                 let _ = time_table.splice(replacing_range, replacing_profiles);
             }
         }
 
         current_index += 1;
     }
+    // It could be that there were merged profiles at the end which we have not merged yet, we
+    // add them now (note that we do not need to adjust any of the other elements now)
     if let Some(replacing_profiles) = to_add.take() {
         if let Some(replacing_range) = insertion_range.take() {
             let _ = time_table.splice(replacing_range, replacing_profiles);
         }
     }
+
+    // A sanity check which checks whether all of the adjacent profiles are not mergeable (which
+    // would indicate that we missed merging some profiles)
+    pumpkin_assert_extreme!(
+        (0..time_table.len() - 1)
+            .all(|index| { !are_mergeable(&time_table[index], &time_table[index + 1]) }),
+        "The profiles were incorrectly merged"
+    )
 }
 
 /// Determines whether 2 profiles are mergeable (i.e. they are next to each other, consist of

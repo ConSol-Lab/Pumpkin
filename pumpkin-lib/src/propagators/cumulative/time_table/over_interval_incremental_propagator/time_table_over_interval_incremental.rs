@@ -284,7 +284,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
     }
 }
 
-impl<Var: IntegerVariable + 'static> Propagator
+impl<Var: IntegerVariable + 'static + Debug> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
