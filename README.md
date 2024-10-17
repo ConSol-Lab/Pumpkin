@@ -19,9 +19,9 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 
 The solver currently supports integer variables and a number of (global) constraints:
 
-- [Cumulative global constraint](./pumpkin-lib/src/propagators/cumulative/).
-- [Element global constraint](./pumpkin-lib/src/propagators/element.rs).
-- [Arithmetic constraints](./pumpkin-lib/src/propagators/arithmetic/): [linear integer (in)equalities](./pumpkin-lib/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](./pumpkin-lib/src/propagators/arithmetic/division.rs), [integer multiplication](./pumpkin-lib/src/propagators/arithmetic/integer_multiplication.rs), [maximum](./pumpkin-lib/src/propagators/arithmetic/maximum.rs), [absolute value](./pumpkin-lib/src/propagators/arithmetic/absolute_value.rs).
+- [Cumulative global constraint](./pumpkin-solver/src/propagators/cumulative/).
+- [Element global constraint](./pumpkin-solver/src/propagators/element.rs).
+- [Arithmetic constraints](./pumpkin-solver/src/propagators/arithmetic/): [linear integer (in)equalities](./pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](./pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](./pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](./pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](./pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
@@ -56,9 +56,10 @@ To use it as such a backend, follow the following steps:
 ## Components
 Pumpkin consists of 3 different crates:
 
-- The library contained in [pumpkin-lib](./pumpkin-lib/); this crate defines the API through which the solver can be used via Rust.
-- The CLI contained in [pumpkin-cli](./pumpkin-cli/); this crate defines the usage of Pumpkin through a command line.
-- The proof logging contained in [drcp-format](./drcp-format/); this crate defines proof logging which can be used in combination with Pumpkin.
+- The library contained in [pumpkin-solver](./pumpkin-solver/); defines the API through which the solver can be used via Rust.
+- The CLI contained in [here](./pumpkin-solver/src/bin); defines the usage of Pumpkin through a command line.
+- The proof logging contained in [drcp-format](./drcp-format/); defines proof logging which can be used in combination with Pumpkin.
+- The python bindings contained in [pumpkin-py](./pumpkin-py/); defines the python interface for Pumpkin
 
 The easiest way to get to know the different modules is through the documentation. This documentation can be created automatically using the command:
 ```sh
@@ -66,7 +67,7 @@ cargo doc --no-deps
 ```
 
 ## Examples
-There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](./pumpkin-lib/examples/) which contains examples such as bibd, nqueens, and disjunctive scheduling.
+There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](./pumpkin-solver/examples/) which contains examples such as bibd, nqueens, and disjunctive scheduling.
 
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
