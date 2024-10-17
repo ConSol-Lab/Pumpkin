@@ -32,7 +32,17 @@ We are actively developing Pumpkin and would be happy to hear from you should yo
 
 # Usage
 
-## Building
+To use Pumpkin as a library, use cargo to install it with:
+```sh
+cargo add pumpkin-solver
+```
+
+Pumpkin is also the command-line interface to the library. It provides support for (W)CNF and FlatZinc files. Obtaining the solver binary can also be done with cargo:
+```sh
+cargo install pumpkin-solver
+```
+
+## Building from Source
 To clone the project, run:
 ```sh 
 git clone https://github.com/ConSol-Lab/pumpkin
