@@ -1,6 +1,8 @@
 # Pumpkin
 
 [![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
+![DRCP Format on crates.io](https://img.shields.io/badge/drcp--format-v0.1.0-green)
+![Pumpkin on crates.io](https://img.shields.io/badge/pumpkin--solver-v0.1.0-green)
 
 <p align="center">
     <img align="left" width="50%" src="./pumpkin.svg", alt="ASCII art pumpkin logo">
