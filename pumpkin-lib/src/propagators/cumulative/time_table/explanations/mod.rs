@@ -11,10 +11,10 @@ use naive::create_naive_predicate_propagating_task_upper_bound_propagation;
 use pointwise::create_pointwise_predicate_propagating_task_lower_bound_propagation;
 use pointwise::create_pointwise_predicate_propagating_task_upper_bound_propagation;
 
-use super::time_table_util::ResourceProfile;
 use crate::engine::propagation::PropagationContext;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 

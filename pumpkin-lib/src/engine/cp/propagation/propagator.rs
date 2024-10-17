@@ -1,4 +1,4 @@
-use super::PropagatorInitialisationContext;
+use super::propagator_initialisation_context::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;

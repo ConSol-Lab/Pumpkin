@@ -1,3 +1,4 @@
+use super::propagation_context::HasAssignments;
 use super::PropagationContext;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
@@ -45,6 +46,10 @@ impl PropagatorInitialisationContext<'_> {
 
             context: PropagationContext::new(assignments_integer, assignments_propositional),
         }
+    }
+
+    pub(crate) fn as_readonly(&self) -> PropagationContext {
+        PropagationContext::new(self.assignments_integer(), self.assignments_propositional())
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].

@@ -2,8 +2,8 @@
 //! constraint which are generalisable enough to be useful for different types of cumulative
 //! propagators
 
-mod cumulative_structs;
-pub(crate) use cumulative_structs::*;
+mod structs;
+pub(crate) use structs::*;
 
 pub(crate) mod util;
 

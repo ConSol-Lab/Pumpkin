@@ -13,13 +13,13 @@ use super::explanations::naive::create_naive_conflict_explanation;
 use super::explanations::naive::create_naive_propagation_explanation;
 use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
-use super::time_table_util::ResourceProfile;
 use super::CumulativeExplanationType;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_simple;
@@ -537,8 +537,8 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains>(
-    context: &Context,
+pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+    context: Context,
     conflict_profile: &ResourceProfile<Var>,
     explanation_type: CumulativeExplanationType,
 ) -> PropositionalConjunction
@@ -575,7 +575,7 @@ pub(crate) mod test_propagation_handler {
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
-    use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+    use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
     use crate::variables::DomainId;
 
@@ -619,10 +619,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                &PropagationContext::new(
-                    &self.assignments_integer,
-                    &self.assignments_propositional,
-                ),
+                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
                 &profile,
                 self.propagation_handler.explanation_type,
             );
