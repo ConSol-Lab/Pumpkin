@@ -625,16 +625,24 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     dynamic_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
+    // Stores whether the stored lower-bound is equal to the current lower-bound
+    let lower_bound_equal_to_stored = dynamic_structures.get_stored_lower_bound(updated_task)
+        == context.lower_bound(&updated_task.start_variable);
+
+    // Stores whether the stored upper-bound is equal to the current upper-bound
+    let upper_bound_equal_to_stored = dynamic_structures.get_stored_upper_bound(updated_task)
+        == context.upper_bound(&updated_task.start_variable);
+
+    // Stores whether the stored bounds did not include a mandatory part
+    let previously_did_not_have_mandatory_part = dynamic_structures
+        .get_stored_upper_bound(updated_task)
+        >= dynamic_structures.get_stored_lower_bound(updated_task) + updated_task.processing_time;
+
     // If the stored bounds are already the same or the previous stored bounds did not include a
     // mandatory part (which means that this task will also not have mandatory part after
     // backtracking)
-    if (dynamic_structures.get_stored_lower_bound(updated_task)
-        == context.lower_bound(&updated_task.start_variable)
-        && dynamic_structures.get_stored_upper_bound(updated_task)
-            == context.upper_bound(&updated_task.start_variable))
-        || dynamic_structures.get_stored_upper_bound(updated_task)
-            >= dynamic_structures.get_stored_lower_bound(updated_task)
-                + updated_task.processing_time
+    if (lower_bound_equal_to_stored && upper_bound_equal_to_stored)
+        || previously_did_not_have_mandatory_part
     {
         return;
     }

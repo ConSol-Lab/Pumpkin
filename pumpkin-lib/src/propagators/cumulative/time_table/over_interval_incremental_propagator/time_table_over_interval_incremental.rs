@@ -41,6 +41,7 @@ use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_simple;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -217,7 +218,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<
 
             // Then we first remove from the time-table (if necessary)
             //
-            // This order ensures that there is less of a chance of incorrect overflows bieng
+            // This order ensures that there is less of a chance of incorrect overflows being
             // reported
             self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
 
@@ -367,9 +368,7 @@ impl<Var: IntegerVariable + 'static> Propagator
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
-        if !self.parameters.options.incremental_backtracking {
-            return;
-        }
+        pumpkin_assert_simple!(self.parameters.options.incremental_backtracking);
 
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 

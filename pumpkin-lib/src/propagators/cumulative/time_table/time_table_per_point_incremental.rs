@@ -221,7 +221,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
 
             // Then we first remove from the time-table (if necessary)
             //
-            // This order ensures that there is less of a chance of incorrect overflows bieng
+            // This order ensures that there is less of a chance of incorrect overflows being
             // reported
             self.remove_from_time_table(&mandatory_part_adjustments, &updated_task);
 
