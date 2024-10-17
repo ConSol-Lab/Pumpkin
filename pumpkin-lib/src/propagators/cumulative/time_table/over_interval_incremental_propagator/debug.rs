@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 /// Contains functions related to debugging
 use std::ops::Range;
 
@@ -21,7 +20,7 @@ use crate::variables::IntegerVariable;
 ///      - The heights are the same
 ///      - The profile tasks should be the same; note that we do not check whether the order is the
 ///        same!
-pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static + Debug>(
+pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
     context: &PropagationContext,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
@@ -47,23 +46,21 @@ pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static +
     //      - The heights are the same
     //      - The profile tasks of the profiles should be the same; note that we do not check
     //        whether the order is the same!
-    time_table
-        .iter()
-        .zip(time_table_scratch)
-        .all(|(actual, expected)| {
-            let result = actual.height == expected.height
-                && actual.start == expected.start
-                && actual.end == expected.end
-                && actual.profile_tasks.len() == expected.profile_tasks.len()
-                && actual
-                    .profile_tasks
-                    .iter()
-                    .all(|task| expected.profile_tasks.contains(task));
-            if !result {
-                println!("{actual:#?}\n{expected:#?}")
-            }
-            result
-        })
+    time_table.len() == time_table_scratch.len()
+        && time_table
+            .iter()
+            .zip(time_table_scratch)
+            .all(|(actual, expected)| {
+                let result = actual.height == expected.height
+                    && actual.start == expected.start
+                    && actual.end == expected.end
+                    && actual.profile_tasks.len() == expected.profile_tasks.len()
+                    && actual
+                        .profile_tasks
+                        .iter()
+                        .all(|task| expected.profile_tasks.contains(task));
+                result
+            })
 }
 
 /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
