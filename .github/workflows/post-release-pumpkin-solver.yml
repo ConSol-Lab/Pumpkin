@@ -45,9 +45,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate Release Notes
+        shell: bash
         run: |
           set -x
-          ./.github/workflows/release-notes.py --tag ${{ env.RELEASE_NAME }} --output notes-${{ env.RELEASE_NAME }}.md
+          ./.github/workflows/release-notes.py \
+              --tag ${{ env.RELEASE_NAME }}    \
+              --output notes-${{ env.RELEASE_NAME }}.md
           cat notes-${{ env.RELEASE_NAME }}.md
 
       - name: Create GitHub release
