@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use super::time_table_util::ResourceProfile;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -22,6 +21,7 @@ use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;

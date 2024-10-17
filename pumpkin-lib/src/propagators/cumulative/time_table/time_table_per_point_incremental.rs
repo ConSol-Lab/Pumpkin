@@ -21,7 +21,6 @@ use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
-use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -31,6 +30,7 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::PerPointTimeTableType;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;

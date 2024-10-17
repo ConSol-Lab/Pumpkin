@@ -5,7 +5,7 @@ use crate::engine::propagation::PropagationContext;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 

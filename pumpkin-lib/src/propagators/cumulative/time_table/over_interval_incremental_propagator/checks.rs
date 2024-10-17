@@ -5,8 +5,8 @@ use std::cmp::min;
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
 use crate::propagators::OverIntervalTimeTableType;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
