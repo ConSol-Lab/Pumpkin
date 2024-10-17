@@ -14,7 +14,6 @@ mod propositional_conjunction;
 mod random;
 pub(crate) mod sequence_generators;
 mod solution;
-pub(crate) mod statistic_logging;
 mod trail;
 mod weighted_literal;
 

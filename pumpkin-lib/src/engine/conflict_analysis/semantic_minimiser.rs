@@ -90,6 +90,7 @@ impl SemanticMinimiser {
 
         context
             .counters
+            .learned_clause_statistics
             .average_number_of_removed_literals_semantic
             .add_term(
                 (number_of_literals_before_semantic_minimisation

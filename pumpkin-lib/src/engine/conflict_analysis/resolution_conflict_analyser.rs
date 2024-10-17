@@ -96,6 +96,7 @@ impl ResolutionConflictAnalyser {
                 let conflict = context.get_conflict_reason_clause_reference(&mut |_| {});
                 context
                     .counters
+                    .learned_clause_statistics
                     .average_conflict_size
                     .add_term(context.clause_allocator[conflict].len() as u64);
                 conflict
