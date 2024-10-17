@@ -14,10 +14,10 @@ macro_rules! declare_constraints {
         impl Constraint {
             pub fn post(
                 self,
-                solver: &mut pumpkin_lib::Solver,
+                solver: &mut pumpkin_solver::Solver,
                 tag: Option<std::num::NonZero<u32>>,
                 variable_map: &$crate::variables::VariableMap,
-            ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
                     $($name::$constraint(cns) => cns.post(solver, tag, variable_map)),+
                 }
@@ -25,11 +25,11 @@ macro_rules! declare_constraints {
 
             pub fn implied_by(
                 self,
-                solver: &mut pumpkin_lib::Solver,
-                reification_literal: pumpkin_lib::variables::Literal,
+                solver: &mut pumpkin_solver::Solver,
+                reification_literal: pumpkin_solver::variables::Literal,
                 tag: Option<std::num::NonZero<u32>>,
                 variable_map: &$crate::variables::VariableMap,
-            ) -> Result<(), pumpkin_lib::ConstraintOperationError> {
+            ) -> Result<(), pumpkin_solver::ConstraintOperationError> {
                 match self {
                     $($name::$constraint(cns) => cns.implied_by(solver, reification_literal, tag, variable_map)),+
                 }

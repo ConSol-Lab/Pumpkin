@@ -114,7 +114,9 @@ impl<Identifier> Not for IntAtomicConstraint<Identifier> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comparison {
     LessThanEqual,
+    GreaterThanEqual,
     Equal,
+    NotEqual,
 }
 
 impl Display for Comparison {
@@ -122,6 +124,8 @@ impl Display for Comparison {
         let symbol = match self {
             Comparison::LessThanEqual => "<=",
             Comparison::Equal => "==",
+            Comparison::GreaterThanEqual => ">=",
+            Comparison::NotEqual => "!=",
         };
 
         write!(f, "{symbol}")

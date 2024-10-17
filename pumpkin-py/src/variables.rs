@@ -1,9 +1,9 @@
-use pumpkin_lib::containers::KeyedVec;
-use pumpkin_lib::containers::StorageKey;
-use pumpkin_lib::variables::AffineView;
-use pumpkin_lib::variables::DomainId;
-use pumpkin_lib::variables::Literal;
-use pumpkin_lib::variables::TransformableVariable;
+use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::containers::StorageKey;
+use pumpkin_solver::variables::AffineView;
+use pumpkin_solver::variables::DomainId;
+use pumpkin_solver::variables::Literal;
+use pumpkin_solver::variables::TransformableVariable;
 use pyo3::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq)]

@@ -13,4 +13,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.22.4"
-pumpkin-lib = { path = "../pumpkin-lib" }
+pumpkin-solver = { path = "../pumpkin-solver" }
