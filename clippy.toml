@@ -1,0 +1,4 @@
+# https://rust-lang.github.io/rust-clippy/master/index.html#/multiple_crate_versions
+# env_logger 0.10.2 -> is-terminal 0.4.13 -> windows-sys 0.52
+# env_logger 0.10.2 -> termcolor 1.4.1 -> winapi-util 0.1.9 -> windows-sys 0.59.0
+allowed-duplicate-crates = ["windows-sys"]

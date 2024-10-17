@@ -1,17 +1,17 @@
 use std::num::NonZero;
 use std::path::PathBuf;
 
-use pumpkin_lib::containers::KeyedVec;
-use pumpkin_lib::options::LearningOptions;
-use pumpkin_lib::options::SolverOptions;
-use pumpkin_lib::predicate;
-use pumpkin_lib::proof::Format;
-use pumpkin_lib::proof::ProofLog;
-use pumpkin_lib::termination::Indefinite;
-use pumpkin_lib::variables::DomainId;
-use pumpkin_lib::variables::Literal;
-use pumpkin_lib::ConstraintOperationError;
-use pumpkin_lib::Solver;
+use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::options::LearningOptions;
+use pumpkin_solver::options::SolverOptions;
+use pumpkin_solver::predicate;
+use pumpkin_solver::proof::Format;
+use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::termination::Indefinite;
+use pumpkin_solver::variables::DomainId;
+use pumpkin_solver::variables::Literal;
+use pumpkin_solver::ConstraintOperationError;
+use pumpkin_solver::Solver;
 use pyo3::prelude::*;
 
 use crate::constraints::Constraint;
@@ -191,16 +191,16 @@ impl Model {
         let mut brancher = solver.default_brancher_over_all_propositional_variables();
 
         match solver.satisfy(&mut brancher, &mut Indefinite) {
-            pumpkin_lib::results::SatisfactionResult::Satisfiable(solution) => {
+            pumpkin_solver::results::SatisfactionResult::Satisfiable(solution) => {
                 SatisfactionResult::Satisfiable(Solution {
                     solver_solution: solution,
                     variable_map,
                 })
             }
-            pumpkin_lib::results::SatisfactionResult::Unsatisfiable => {
+            pumpkin_solver::results::SatisfactionResult::Unsatisfiable => {
                 SatisfactionResult::Unsatisfiable()
             }
-            pumpkin_lib::results::SatisfactionResult::Unknown => SatisfactionResult::Unknown(),
+            pumpkin_solver::results::SatisfactionResult::Unknown => SatisfactionResult::Unknown(),
         }
     }
 }
@@ -354,7 +354,7 @@ impl Predicate {
     fn to_solver_predicate(
         &self,
         variable_map: &VariableMap,
-    ) -> pumpkin_lib::predicates::Predicate {
+    ) -> pumpkin_solver::predicates::Predicate {
         let affine_view = self.integer.to_affine_view(variable_map);
 
         match self.comparator {
