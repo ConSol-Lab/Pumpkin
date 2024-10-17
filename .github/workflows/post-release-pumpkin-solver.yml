@@ -46,6 +46,7 @@ jobs:
 
       - name: Generate Release Notes
         run: |
+          set -x
           ./.github/workflows/release-notes.py --tag ${{ env.RELEASE_NAME }} --output notes-${{ env.RELEASE_NAME }}.md
           cat notes-${{ env.RELEASE_NAME }}.md
 
