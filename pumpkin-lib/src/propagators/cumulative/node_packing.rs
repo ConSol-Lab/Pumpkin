@@ -97,12 +97,11 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         selected_activity: Rc<Task<Var>>,
     ) {
         activities.retain(|activity| {
-            let has_overlap_with_interval = has_overlap_with_interval(
-                context.lower_bound(&activity.start_variable),
-                context.upper_bound(&activity.start_variable) + 1,
-                context.lower_bound(&selected_activity.start_variable),
-                context.upper_bound(&selected_activity.start_variable),
-            );
+            let has_overlap_with_interval = context.lower_bound(&activity.start_variable)
+                <= context.upper_bound(&selected_activity.start_variable)
+                    + selected_activity.processing_time
+                && context.lower_bound(&selected_activity.start_variable)
+                    <= context.upper_bound(&activity.start_variable) + activity.processing_time;
             // Either they would exceed the resource capacities or their executions times cannot
             // overlap
             selected_activity.resource_usage + activity.resource_usage > self.parameters.capacity
@@ -121,7 +120,10 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             let mut selected_activities = vec![];
 
             let mut activities = initial_activity_list.clone();
-            let _ = self.rotate_activities(cycle_number, &mut activities);
+            let result = self.rotate_activities(cycle_number, &mut activities);
+            if result.is_err() {
+                return (max_lower_bound, tasks);
+            }
 
             while !activities.is_empty() {
                 let selected_activity = activities.pop_front().unwrap();
@@ -134,7 +136,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
 
             if sum_duration_selected > max_lower_bound {
                 max_lower_bound = sum_duration_selected;
-                tasks = selected_activities
+                tasks = selected_activities;
             }
         }
         (max_lower_bound, tasks)
