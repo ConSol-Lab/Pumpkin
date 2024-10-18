@@ -74,7 +74,7 @@ pub trait Random: Debug {
 
     fn weighted_choice_domain_id(
         &mut self,
-        items_with_weights: Vec<(DomainId, i32)>,
+        items_with_weights: &Vec<(DomainId, i32)>,
     ) -> Option<DomainId>;
 }
 
@@ -104,7 +104,7 @@ where
 
     fn weighted_choice_domain_id(
         &mut self,
-        items_with_weights: Vec<(DomainId, i32)>,
+        items_with_weights: &Vec<(DomainId, i32)>,
     ) -> Option<DomainId> {
         // Taken from https://docs.rs/random_choice/latest/src/random_choice/lib.rs.html
         if items_with_weights.is_empty() {
