@@ -28,11 +28,8 @@ impl StatisticLogger {
             name_prefix: format!("{}_{}", self.name_prefix, addition_to_prefix),
         }
     }
-}
 
-impl std::fmt::Write for StatisticLogger {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        log_statistic(&self.name_prefix, s);
-        Ok(())
+    pub fn log_statistic(&self, value: impl Display) {
+        log_statistic(&self.name_prefix, value);
     }
 }

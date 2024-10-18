@@ -3,8 +3,6 @@ pub(crate) mod statistic_logger;
 pub(crate) mod statistic_logging;
 
 use std::fmt::Display;
-use std::fmt::Write;
-
 pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
 pub use statistic_logging::log_statistic;
@@ -26,8 +24,8 @@ pub trait Statistic {
 }
 
 impl<Value: Display> Statistic for Value {
-    fn log(&self, mut statistic_logger: StatisticLogger) {
-        write!(statistic_logger, "{self}").expect("Expected statistic to be logged");
+    fn log(&self, statistic_logger: StatisticLogger) {
+        statistic_logger.log_statistic(self);
     }
 }
 
