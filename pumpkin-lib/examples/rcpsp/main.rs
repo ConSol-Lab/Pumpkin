@@ -36,6 +36,14 @@ struct Args {
     #[arg(short = 'p', long)]
     use_parallel_machine: bool,
 
+    /// Enable the node-packing propagator
+    #[arg(short = 'n', long)]
+    use_node_packing: bool,
+
+    /// The maximum number of rotations performed by the node-packing propagator
+    #[arg(short='c', long, default_value_t=usize::MAX)]
+    number_of_cycles: usize,
+
     /// The minimum number of machines passed to the parallel-machine propagator
     #[arg(short = 'i', long, default_value_t = 2)]
     minimum_number_of_machines: usize,
@@ -177,6 +185,28 @@ fn run() -> SchedulingResult<()> {
                 .post();
             if result.is_err() {
                 panic!("Adding parallel machine bound led to unsatisfiability");
+            }
+        }
+        if args.use_node_packing {
+            let result = solver
+                .add_constraint(constraints::node_packing(
+                    &start_variables,
+                    &rcpsp_instance
+                        .processing_times
+                        .iter()
+                        .map(|&value| value as i32)
+                        .collect::<Vec<_>>(),
+                    &resource_usages
+                        .iter()
+                        .map(|&value| value as i32)
+                        .collect::<Vec<_>>(),
+                    rcpsp_instance.resource_capacities[resource_index] as i32,
+                    args.number_of_cycles,
+                    makespan,
+                ))
+                .post();
+            if result.is_err() {
+                panic!("Adding node packing bound led to unsatisfiability");
             }
         }
     }

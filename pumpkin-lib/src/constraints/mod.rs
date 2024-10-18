@@ -29,6 +29,7 @@ mod clause;
 mod constraint_poster;
 mod cumulative;
 mod element;
+mod node_packing;
 mod parallel_machine;
 
 use std::num::NonZero;
@@ -40,6 +41,7 @@ pub use clause::*;
 pub use constraint_poster::*;
 pub use cumulative::*;
 pub use element::*;
+pub use node_packing::*;
 pub use parallel_machine::*;
 
 use crate::engine::propagation::Propagator;

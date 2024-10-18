@@ -114,6 +114,7 @@
 mod time_table;
 pub use time_table::CumulativeExplanationType;
 pub(crate) use time_table::*;
+pub(crate) mod node_packing;
 mod options;
 pub(crate) mod parallel_machine;
 pub use options::CumulativeOptions;
