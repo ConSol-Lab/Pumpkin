@@ -1,4 +1,5 @@
 use super::PropagationContext;
+use super::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -56,6 +57,9 @@ impl PropagatorInitialisationContext<'_> {
         domain_events: DomainEvents,
         local_id: LocalId,
     ) -> Var {
+        if self.context.is_fixed(&var) {
+            return var;
+        }
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,

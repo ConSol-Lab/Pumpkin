@@ -14,7 +14,6 @@ use crate::results::Solution;
 use crate::variables::DomainId;
 #[cfg(doc)]
 use crate::DefaultBrancher;
-#[allow(clippy::too_long_first_doc_paragraph)]
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
 ///
