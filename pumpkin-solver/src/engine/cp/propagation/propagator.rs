@@ -1,3 +1,4 @@
+use std::io::Write;
 use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
@@ -177,7 +178,7 @@ pub trait Propagator {
     /// Logs statistics of the propagator using the provided [`StatisticLogger`].
     ///
     /// It is recommended to create a struct through the [`create_statistics_struct!`] macro!
-    fn log_statistics(&self, _statistic_logger: StatisticLogger) {}
+    fn write_statistics(&self, _writer: &mut Box<dyn Write>, _statistic_logger: StatisticLogger) {}
 }
 
 /// Indicator of what to do when a propagator is notified.

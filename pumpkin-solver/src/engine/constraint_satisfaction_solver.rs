@@ -4,6 +4,7 @@
 use std::cmp::min;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::io::Write;
 use std::marker::PhantomData;
 use std::num::NonZero;
 use std::time::Instant;
@@ -544,13 +545,13 @@ impl ConstraintSatisfactionSolver {
         &mut self.internal_parameters.random_generator
     }
 
-    pub fn log_statistics(&self) {
+    pub fn write_statistics(&self, writer: &mut Box<dyn Write>) {
         // We first check whether the statistics will/should be logged to prevent unnecessarily
         // going through all the propagators
         if should_log_statistics() {
-            self.counters.log(StatisticLogger::default());
+            self.counters.write(writer, StatisticLogger::default());
             for (index, propagator) in self.cp_propagators.iter_propagators().enumerate() {
-                propagator.log_statistics(StatisticLogger::new([
+                propagator.write_statistics(writer, StatisticLogger::new([
                     propagator.name(),
                     "number",
                     index.to_string().as_str(),
@@ -558,6 +559,7 @@ impl ConstraintSatisfactionSolver {
             }
         }
     }
+
 
     /// Create a new integer variable. Its domain will have the given lower and upper bounds.
     pub fn create_new_integer_variable(

@@ -2,10 +2,12 @@
 //! lines.
 
 use std::fmt::Display;
+use std::io::Write;
 use std::sync::OnceLock;
 
 use convert_case::Case;
 use convert_case::Casing;
+use log::debug;
 
 /// The options for statistic logging containing the statistic prefix, the (optional) line which is
 /// printed after the statistics, and the (optional) casing of the statistics.
@@ -41,14 +43,16 @@ pub fn configure_statistic_logging(
 
 /// Logs the provided statistic with name `name` and value `value`. At the moment it will log in
 /// the format `STATISTIC_PREFIX NAME=VALUE`.
-pub fn log_statistic(name: impl Display, value: impl Display) {
+pub fn write_statistic(writer: &mut Box<dyn Write>, name: impl Display, value: impl Display) {
     if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
         let name = if let Some(casing) = &statistic_options.statistics_casing {
             name.to_string().to_case(*casing)
         } else {
             name.to_string()
         };
-        println!("{} {name}={value}", statistic_options.statistic_prefix)
+        if let Err(e) = writer.write_fmt(format_args!("{} {name}={value}\n", statistic_options.statistic_prefix)) {
+            debug!("Could not write statistic: {e}")
+        };
     }
 }
 
@@ -57,10 +61,12 @@ pub fn log_statistic(name: impl Display, value: impl Display) {
 /// Certain formats (e.g. the [MiniZinc](https://www.minizinc.org/doc-2.7.6/en/fzn-spec.html#statistics-output)
 /// output format) require that a block of statistics is followed by a closing line; this
 /// function outputs this closing line **if** it is configued.
-pub fn log_statistic_postfix() {
+pub fn write_statistic_postfix(writer: &mut Box<dyn Write>) {
     if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
         if let Some(post_fix) = statistic_options.after_statistics {
-            println!("{post_fix}")
+            if let Err(e) = writer.write_fmt(format_args!("{post_fix}\n")) {
+                debug!("Could not write statistic: {e}");
+            }
         }
     }
 }
