@@ -8,9 +8,9 @@ pub fn node_packing<Var: IntegerVariable + 'static>(
     start_times: &[Var],
     durations: &[i32],
     resource_requirements: &[i32],
-    resource_capacity: i32,
     num_cycles: usize,
     makespan_variable: Var,
+    static_incompatibilities: Vec<Vec<bool>>,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
@@ -29,8 +29,8 @@ same!"
                 resource_usage: *resource_requirement,
             })
             .collect::<Vec<_>>(),
-        resource_capacity,
         makespan_variable,
         num_cycles,
+        static_incompatibilities,
     )
 }

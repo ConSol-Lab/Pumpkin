@@ -17,6 +17,7 @@ once_cell = "1.19.0"
 drcp-format = { path = "../drcp-format" }
 convert_case = "0.6.0"
 nom = "7.1.3"
+petgraph = "0.6.5"
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }

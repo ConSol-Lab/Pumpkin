@@ -7,6 +7,12 @@ use clap::Parser;
 use convert_case::Case;
 use log::info;
 use log::LevelFilter;
+use petgraph::adj::List;
+use petgraph::algo::toposort;
+use petgraph::algo::tred::dag_to_toposorted_adjacency_list;
+use petgraph::algo::tred::dag_transitive_reduction_closure;
+use petgraph::Directed;
+use petgraph::Graph;
 use pumpkin_lib::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use pumpkin_lib::branching::InDomainMin;
@@ -67,6 +73,39 @@ pub fn main() {
             std::process::exit(1);
         }
     }
+}
+
+fn create_transitive_closure_of_graph(
+    edges: &[Vec<usize>],
+    number_of_tasks: u32,
+) -> (List<(), usize>, Vec<usize>) {
+    let mut graph: Graph<usize, usize, Directed, usize> = Graph::from_edges(
+        edges
+            .iter()
+            .enumerate()
+            .filter_map(|(index, dependencies)| {
+                if dependencies.is_empty() {
+                    return None;
+                }
+                Some(
+                    dependencies
+                        .iter()
+                        .map(|dependency| (index, *dependency))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .flatten(),
+    );
+
+    while graph.node_count() != number_of_tasks as usize {
+        let _ = graph.add_node(1);
+    }
+
+    let (toposorted_map, rev_map): (List<(), usize>, Vec<usize>) =
+        dag_to_toposorted_adjacency_list(&graph, &toposort(&graph, None).unwrap());
+
+    let (_, transitive_closure) = dag_transitive_reduction_closure(&toposorted_map);
+    (transitive_closure, rev_map)
 }
 
 fn run() -> SchedulingResult<()> {
@@ -143,6 +182,55 @@ fn run() -> SchedulingResult<()> {
         panic!("Adding precedence for makespan led to unsatisfiability");
     }
 
+    let mut incompatibility_matrix = vec![
+        vec![false; rcpsp_instance.processing_times.len()];
+        rcpsp_instance.processing_times.len()
+    ];
+
+    let (transitive_closure, rev_map) = create_transitive_closure_of_graph(
+        &rcpsp_instance.dependencies,
+        rcpsp_instance.processing_times.len() as u32,
+    );
+
+    // Keep track of the resource infeasibilities and the incompatibilities due to precedence
+    // constraints
+    for index in 0..rcpsp_instance.processing_times.len() {
+        for other_index in 0..rcpsp_instance.processing_times.len() {
+            if index == other_index {
+                continue;
+            }
+            for resource_index in 0..rcpsp_instance.resource_capacities.len() {
+                if rcpsp_instance.resource_requirements[resource_index][index]
+                    + rcpsp_instance.resource_requirements[resource_index][other_index]
+                    > rcpsp_instance.resource_capacities[resource_index]
+                {
+                    incompatibility_matrix[index][other_index] = true;
+                    incompatibility_matrix[other_index][index] = true;
+                }
+            }
+            if transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
+                || transitive_closure.contains_edge(rev_map[other_index], rev_map[index])
+            {
+                incompatibility_matrix[index][other_index] = true;
+                incompatibility_matrix[other_index][index] = true;
+            }
+        }
+    }
+
+    for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
+        for dependency in dependencies.iter() {
+            let result = solver
+                .add_constraint(constraints::binary_less_than(
+                    start_variables[*dependency],
+                    start_variables[task_index],
+                ))
+                .post();
+            if result.is_err() {
+                panic!("Adding precedence led to unsatisfiability");
+            }
+        }
+    }
+
     for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
     {
         let result = solver
@@ -200,27 +288,13 @@ fn run() -> SchedulingResult<()> {
                         .iter()
                         .map(|&value| value as i32)
                         .collect::<Vec<_>>(),
-                    rcpsp_instance.resource_capacities[resource_index] as i32,
                     args.number_of_cycles,
                     makespan,
+                    incompatibility_matrix.clone(),
                 ))
                 .post();
             if result.is_err() {
                 panic!("Adding node packing bound led to unsatisfiability");
-            }
-        }
-    }
-
-    for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
-        for dependency in dependencies.iter() {
-            let result = solver
-                .add_constraint(constraints::binary_less_than(
-                    start_variables[*dependency],
-                    start_variables[task_index],
-                ))
-                .post();
-            if result.is_err() {
-                panic!("Adding precedence led to unsatisfiability");
             }
         }
     }

@@ -80,7 +80,6 @@ pub use explanations::CumulativeExplanationType;
 pub(crate) use time_table_over_interval::*;
 pub(crate) use time_table_over_interval_incremental::*;
 pub(crate) use time_table_per_point::*;
-pub(crate) use time_table_util::has_overlap_with_interval;
 
 #[cfg(doc)]
 use crate::propagators::cumulative::time_table::time_table_util::*;

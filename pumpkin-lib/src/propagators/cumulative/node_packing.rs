@@ -1,10 +1,7 @@
-use std::cmp::max;
 use std::cmp::min;
 use std::collections::VecDeque;
-use std::ops::Div;
 use std::rc::Rc;
 
-use super::has_overlap_with_interval;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistics::statistic_logger::StatisticLogger;
@@ -44,15 +41,15 @@ pub(crate) struct NodePackingParameters<Var> {
     pub(crate) tasks: Box<[Rc<Task<Var>>]>,
     /// The capacity of the resource (i.e. how much resource consumption can be maximally
     /// accomodated at each time point)
-    pub(crate) capacity: i32,
+    pub(crate) static_incompatibilities: Vec<Vec<bool>>,
 }
 
 impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
-        capacity: i32,
         makespan_variable: Var,
         number_of_cycles: usize,
+        static_incompatibilities: Vec<Vec<bool>>,
     ) -> Self {
         let parameters = NodePackingParameters {
             tasks: create_tasks(arg_tasks)
@@ -60,7 +57,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 .map(Rc::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            capacity,
+            static_incompatibilities,
         };
 
         NodePackingPropagator {
@@ -97,15 +94,15 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         selected_activity: Rc<Task<Var>>,
     ) {
         activities.retain(|activity| {
-            let has_overlap_with_interval = context.lower_bound(&activity.start_variable)
-                <= context.upper_bound(&selected_activity.start_variable)
-                    + selected_activity.processing_time
-                && context.lower_bound(&selected_activity.start_variable)
-                    <= context.upper_bound(&activity.start_variable) + activity.processing_time;
             // Either they would exceed the resource capacities or their executions times cannot
             // overlap
-            selected_activity.resource_usage + activity.resource_usage > self.parameters.capacity
-                || !has_overlap_with_interval
+            self.parameters.static_incompatibilities[selected_activity.id.unpack() as usize]
+                [activity.id.unpack() as usize]
+                || !(context.lower_bound(&activity.start_variable)
+                    <= context.upper_bound(&selected_activity.start_variable)
+                        + selected_activity.processing_time
+                    && context.lower_bound(&selected_activity.start_variable)
+                        <= context.upper_bound(&activity.start_variable) + activity.processing_time)
         })
     }
 
@@ -125,7 +122,11 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 return (max_lower_bound, tasks);
             }
 
-            while !activities.is_empty() {
+            // We attempt to find the smallest clique which are mutually exclusive such that it
+            // finds a conflict
+            while !activities.is_empty()
+                && sum_duration_selected <= context.upper_bound(&self.makespan_variable)
+            {
                 let selected_activity = activities.pop_front().unwrap();
 
                 sum_duration_selected += selected_activity.processing_time;
