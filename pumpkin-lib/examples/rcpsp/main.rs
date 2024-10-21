@@ -275,27 +275,24 @@ fn run() -> SchedulingResult<()> {
                 panic!("Adding parallel machine bound led to unsatisfiability");
             }
         }
-        if args.use_node_packing {
-            let result = solver
-                .add_constraint(constraints::node_packing(
-                    &start_variables,
-                    &rcpsp_instance
-                        .processing_times
-                        .iter()
-                        .map(|&value| value as i32)
-                        .collect::<Vec<_>>(),
-                    &resource_usages
-                        .iter()
-                        .map(|&value| value as i32)
-                        .collect::<Vec<_>>(),
-                    args.number_of_cycles,
-                    makespan,
-                    incompatibility_matrix.clone(),
-                ))
-                .post();
-            if result.is_err() {
-                panic!("Adding node packing bound led to unsatisfiability");
-            }
+    }
+
+    if args.use_node_packing {
+        let result = solver
+            .add_constraint(constraints::node_packing(
+                &start_variables,
+                &rcpsp_instance
+                    .processing_times
+                    .iter()
+                    .map(|&value| value as i32)
+                    .collect::<Vec<_>>(),
+                args.number_of_cycles,
+                makespan,
+                incompatibility_matrix.clone(),
+            ))
+            .post();
+        if result.is_err() {
+            panic!("Adding node packing bound led to unsatisfiability");
         }
     }
 

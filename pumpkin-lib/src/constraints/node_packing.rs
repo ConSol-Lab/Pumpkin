@@ -7,13 +7,12 @@ use crate::variables::IntegerVariable;
 pub fn node_packing<Var: IntegerVariable + 'static>(
     start_times: &[Var],
     durations: &[i32],
-    resource_requirements: &[i32],
     num_cycles: usize,
     makespan_variable: Var,
     static_incompatibilities: Vec<Vec<bool>>,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
-        start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
+        start_times.len() == durations.len(),
         "The number of start variables, durations and resource requirements should be the
 same!"
     );
@@ -22,11 +21,11 @@ same!"
         &start_times
             .iter()
             .zip(durations)
-            .zip(resource_requirements)
-            .map(|((start_time, duration), resource_requirement)| ArgTask {
+            .map(|(start_time, duration)| ArgTask {
                 start_time: start_time.clone(),
                 processing_time: *duration,
-                resource_usage: *resource_requirement,
+                // FIXME This code should not be aware of the concept of resource
+                resource_usage: 1,
             })
             .collect::<Vec<_>>(),
         makespan_variable,
