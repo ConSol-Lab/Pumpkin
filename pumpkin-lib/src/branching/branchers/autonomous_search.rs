@@ -260,6 +260,10 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
         }
     }
 
+    fn on_backtrack(&mut self) {
+        self.backup_brancher.on_backtrack()
+    }
+
     /// Restores dormant predicates after backtracking.
     fn synchronise(&mut self, assignments: &Assignments) {
         // Note that while iterating with 'retain', the function also

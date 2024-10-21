@@ -74,6 +74,12 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_conflict());
     }
 
+    fn on_backtrack(&mut self) {
+        self.branchers
+            .iter_mut()
+            .for_each(|brancher| brancher.on_backtrack());
+    }
+
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.branchers
             .iter_mut()

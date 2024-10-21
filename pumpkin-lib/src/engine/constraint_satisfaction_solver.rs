@@ -733,17 +733,13 @@ impl ConstraintSatisfactionSolver {
             self.propagate();
 
             if self.state.no_conflict() {
-                self.declare_new_decision_level();
                 // Restarts should only occur after a new decision level has been declared to
                 // account for the fact that all assumptions should be assigned when restarts take
                 // place. Since one assumption is posted per decision level, all assumptions are
                 // assigned when the decision level is strictly larger than the number of
                 // assumptions.
                 if self.restart_strategy.should_restart() {
-                    let restarted = self.restart_during_search(brancher);
-                    if restarted {
-                        self.declare_new_decision_level();
-                    }
+                    let _ = self.restart_during_search(brancher);
                 }
 
                 let branching_result = self.make_next_decision(brancher);
@@ -788,6 +784,7 @@ impl ConstraintSatisfactionSolver {
         // Currently assumptions are implemented by adding an assumption predicate
         // at separate decision levels.
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
+            self.declare_new_decision_level();
             self.enqueue_assumption_predicate(assumption_literal)
         }
         // Otherwise proceed with standard branching.
@@ -798,6 +795,12 @@ impl ConstraintSatisfactionSolver {
             );
             // If there is a next decision, make the decision.
             if let Some(decision_predicate) = brancher.next_decision(context) {
+                self.declare_new_decision_level();
+                pumpkin_assert_moderate!(
+                    !self.assignments.is_predicate_satisfied(decision_predicate),
+                    "Decision should not already be assigned; double check the brancher"
+                );
+
                 self.counters.num_decisions += 1;
                 self.assignments
                     .post_decision(decision_predicate)
@@ -995,6 +998,8 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
+        brancher.on_backtrack();
+
         self.assignments
             .synchronise(
                 backtrack_level,
@@ -1139,7 +1144,7 @@ impl ConstraintSatisfactionSolver {
     fn peek_next_assumption_predicate(&self) -> Option<Predicate> {
         // The convention is that at decision level i, the (i-1)th assumption is posted.
         // Note that decisions start being posted start at 1, hence the minus one.
-        let next_assumption_index = self.get_decision_level() - 1;
+        let next_assumption_index = self.get_decision_level();
         self.assumptions.get(next_assumption_index).copied()
     }
 }

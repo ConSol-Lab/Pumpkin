@@ -47,6 +47,8 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         pumpkin_assert_simple!(backtrack_level < self.assignments.get_decision_level());
 
+        self.brancher.on_backtrack();
+
         self.assignments
             .synchronise(
                 backtrack_level,

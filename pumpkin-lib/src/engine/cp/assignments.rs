@@ -579,13 +579,11 @@ impl Assignments {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)
@@ -686,7 +684,6 @@ impl Assignments {
 #[cfg(test)]
 impl Assignments {
     pub(crate) fn get_reason_for_predicate_brute_force(&self, predicate: Predicate) -> ReasonRef {
-        println!("Reached");
         self.trail
             .iter()
             .for_each(|trail_entry| println!("{trail_entry:?}"));

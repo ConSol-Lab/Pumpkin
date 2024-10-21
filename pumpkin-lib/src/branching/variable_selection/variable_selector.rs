@@ -20,6 +20,8 @@ pub trait VariableSelector<Var> {
     /// does not provide any additional information.
     fn on_conflict(&mut self) {}
 
+    fn on_backtrack(&mut self) {}
+
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `variable` which is the
     /// [`DomainId`] which has been reset. This method could thus be called multiple times in a

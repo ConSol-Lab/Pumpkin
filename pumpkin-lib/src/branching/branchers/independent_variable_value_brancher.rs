@@ -83,6 +83,10 @@ where
             })
     }
 
+    fn on_backtrack(&mut self) {
+        self.variable_selector.on_backtrack()
+    }
+
     fn on_conflict(&mut self) {
         self.variable_selector.on_conflict()
     }

@@ -1,5 +1,7 @@
 use super::VariableSelector;
 use crate::branching::SelectionContext;
+use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 #[derive(Debug)]
@@ -33,6 +35,10 @@ impl VariableSelector<DomainId> for ProportionalDomainSize {
             });
 
         if self.variables_under_consideration.is_empty() {
+            pumpkin_assert_extreme!(self
+                .variables
+                .iter()
+                .all(|variable| context.is_integer_fixed(*variable)), "There was a variable which was not fixed while the proportional domain selector returned None");
             return None;
         }
 
@@ -41,7 +47,7 @@ impl VariableSelector<DomainId> for ProportionalDomainSize {
             .weighted_choice_domain_id(&self.variables_under_consideration)
     }
 
-    fn on_conflict(&mut self) {
+    fn on_backtrack(&mut self) {
         // We need to add back the fixed variables, for now we just add back everything (while
         // ensuring that no extra memory allocations are done by simply clearing and inserting)
         self.variables_under_consideration.clear();

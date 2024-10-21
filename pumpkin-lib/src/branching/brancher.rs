@@ -41,6 +41,8 @@ pub trait Brancher {
     /// does not provide any additional information.
     fn on_conflict(&mut self) {}
 
+    fn on_backtrack(&mut self) {}
+
     /// This method is called when a solution is found by the [`Solver`].
     fn on_solution(&mut self, _solution: SolutionReference) {}
 
