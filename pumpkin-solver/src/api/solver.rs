@@ -136,25 +136,25 @@ impl Solver {
         self.solution_callback = Box::new(solution_callback);
     }
 
-    /// Logs the statistics currently present in the solver with the provided objective value.
+    /// Logs the statistics currently present in the solver with the provided objective value to stdout.
     pub fn log_statistics_with_objective(&self, objective_value: i64) {
         let mut writer: Box<dyn Write> = Box::new(stdout());
         self.write_statistics_with_objective(&mut writer, objective_value);
     }
 
-    /// Logs the statistics currently present in the solver with the provided objective value.
+    /// Writes the statistics currently present in the solver with the provided objective value to the provided [`Write`]r.
     pub fn write_statistics_with_objective(&self, writer: &mut Box<dyn Write>, objective_value: i64) {
         write_statistic(writer, "objective", objective_value);
         self.write_statistics(writer);
     }
 
-    /// Logs the statistics currently present in the solver.
+    /// Logs the statistics currently present in the solver to stdout.
     pub fn log_statistics(&self) {
         let mut writer: Box<dyn Write> = Box::new(stdout());
         self.write_statistics(&mut writer);
     }
 
-    /// Writes the statistics currently present in the solver to the given writer.
+    /// Writes the statistics currently present in the solver to the provided [`Write`]r.
     pub fn write_statistics(&self, writer: &mut Box<dyn Write>) {
         self.satisfaction_solver.write_statistics(writer);
         write_statistic_postfix(writer);

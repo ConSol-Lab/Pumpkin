@@ -50,7 +50,7 @@ pub fn write_statistic(writer: &mut Box<dyn Write>, name: impl Display, value: i
         } else {
             name.to_string()
         };
-        if let Err(e) = writer.write_fmt(format_args!("{} {name}={value}\n", statistic_options.statistic_prefix)) {
+        if let Err(e) = write!(writer, "{} {name}={value}\n", statistic_options.statistic_prefix) {
             debug!("Could not write statistic: {e}")
         };
     }
@@ -64,7 +64,7 @@ pub fn write_statistic(writer: &mut Box<dyn Write>, name: impl Display, value: i
 pub fn write_statistic_postfix(writer: &mut Box<dyn Write>) {
     if let Some(statistic_options) = STATISTIC_OPTIONS.get() {
         if let Some(post_fix) = statistic_options.after_statistics {
-            if let Err(e) = writer.write_fmt(format_args!("{post_fix}\n")) {
+            if let Err(e) = write!(writer, "{post_fix}\n") {
                 debug!("Could not write statistic: {e}");
             }
         }
