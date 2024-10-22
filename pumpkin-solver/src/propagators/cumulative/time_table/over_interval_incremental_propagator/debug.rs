@@ -20,7 +20,10 @@ use crate::variables::IntegerVariable;
 ///      - The heights are the same
 ///      - The profile tasks should be the same; note that we do not check whether the order is the
 ///        same!
-pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
+pub(crate) fn time_tables_are_the_same_interval<
+    Var: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+>(
     context: &PropagationContext,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
@@ -36,7 +39,10 @@ pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
     // non-incremental time-table
     let mut time_table = time_table.clone();
     let time_table_len = time_table.len();
-    merge_profiles(&mut time_table, 0, time_table_len - 1);
+
+    if !SYNCHRONISE {
+        merge_profiles(&mut time_table, 0, time_table_len - 1);
+    }
 
     // Then we compare whether the time-tables are the same with the following checks:
     // - The time-tables should contain the same number of profiles
@@ -55,10 +61,16 @@ pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
                     && actual.start == expected.start
                     && actual.end == expected.end
                     && actual.profile_tasks.len() == expected.profile_tasks.len()
-                    && actual
-                        .profile_tasks
-                        .iter()
-                        .all(|task| expected.profile_tasks.contains(task));
+                    && {
+                        if SYNCHRONISE {
+                            actual.profile_tasks == expected.profile_tasks
+                        } else {
+                            actual
+                                .profile_tasks
+                                .iter()
+                                .all(|task| expected.profile_tasks.contains(task))
+                        }
+                    };
                 result
             })
 }

@@ -54,6 +54,7 @@ pub enum CumulativePropagationMethod {
     TimeTableOverInterval,
     #[default]
     TimeTableOverIntervalIncremental,
+    TimeTableOverIntervalIncrementalSynchronised,
 }
 
 impl Display for CumulativePropagationMethod {
@@ -68,6 +69,9 @@ impl Display for CumulativePropagationMethod {
             }
             CumulativePropagationMethod::TimeTableOverIntervalIncremental => {
                 write!(f, "time-table-over-interval-incremental")
+            }
+            CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised => {
+                write!(f, "time-table-over-interval-incremental-synchronised")
             }
         }
     }

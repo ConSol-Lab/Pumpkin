@@ -317,7 +317,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(
-            debug::time_tables_are_the_same_interval(
+            debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(
                 &context.as_readonly(),
                 &self.time_table,
                 &self.parameters,

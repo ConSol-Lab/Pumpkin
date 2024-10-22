@@ -113,5 +113,6 @@ cumulative_test!(time_table_per_point);
 cumulative_test!(time_table_per_point_incremental);
 cumulative_test!(time_table_over_interval);
 cumulative_test!(time_table_over_interval_incremental);
+cumulative_test!(time_table_over_interval_incremental_synchronised);
 
 mzn_test!(all_different);
