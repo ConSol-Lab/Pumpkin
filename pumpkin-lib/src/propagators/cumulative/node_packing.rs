@@ -135,9 +135,27 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 selected_activities.push(selected_activity);
             }
 
-            if sum_duration_selected > max_lower_bound {
-                max_lower_bound = sum_duration_selected;
-                tasks = selected_activities;
+            selected_activities.sort_by(|a, b| {
+                context
+                    .lower_bound(&a.start_variable)
+                    .cmp(&context.lower_bound(&b.start_variable))
+            });
+
+            let mut updated = false;
+            let mut index = 0;
+            for (activity_index, selected_activity) in selected_activities.iter().enumerate() {
+                if context.lower_bound(&selected_activity.start_variable) + sum_duration_selected
+                    > max_lower_bound
+                {
+                    updated = true;
+                    index = activity_index;
+                    max_lower_bound = context.lower_bound(&selected_activity.start_variable)
+                        + sum_duration_selected;
+                }
+                sum_duration_selected -= selected_activity.processing_time;
+            }
+            if updated {
+                tasks = selected_activities[index..].to_vec();
             }
         }
         (max_lower_bound, tasks)
