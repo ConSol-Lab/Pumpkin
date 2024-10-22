@@ -5,7 +5,7 @@
 [![Pumpkin on crates.io](https://img.shields.io/badge/pumpkin--solver-v0.1.1-green)](https://crates.io/crates/pumpkin-solver)
 
 <p align="center">
-    <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin.svg", alt="ASCII art pumpkin logo">
+    <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg", alt="ASCII art pumpkin logo">
 </p>
 
 <p align="left">
