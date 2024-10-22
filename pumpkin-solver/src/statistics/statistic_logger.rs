@@ -1,8 +1,8 @@
 use std::fmt::Display;
-
+use std::io::Write;
 use itertools::Itertools;
 
-use super::statistic_logging::log_statistic;
+use super::statistic_logging::write_statistic;
 #[cfg(doc)]
 use crate::engine::propagation::Propagator;
 
@@ -28,11 +28,8 @@ impl StatisticLogger {
             name_prefix: format!("{}_{}", self.name_prefix, addition_to_prefix),
         }
     }
-}
 
-impl std::fmt::Write for StatisticLogger {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        log_statistic(&self.name_prefix, s);
-        Ok(())
+    pub fn write_statistic(&self, writer: &mut Box<dyn Write>, value: impl Display) {
+        write_statistic(writer, &self.name_prefix, value);
     }
 }
