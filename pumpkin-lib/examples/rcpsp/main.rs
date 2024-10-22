@@ -220,9 +220,10 @@ fn run() -> SchedulingResult<()> {
     for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
         for dependency in dependencies.iter() {
             let result = solver
-                .add_constraint(constraints::binary_less_than(
-                    start_variables[*dependency],
-                    start_variables[task_index],
+                .add_constraint(constraints::binary_less_than_or_equals(
+                    start_variables[*dependency]
+                        .offset(rcpsp_instance.processing_times[*dependency] as i32),
+                    start_variables[task_index].scaled(1),
                 ))
                 .post();
             if result.is_err() {
