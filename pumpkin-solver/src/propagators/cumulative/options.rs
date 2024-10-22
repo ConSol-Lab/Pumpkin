@@ -51,6 +51,7 @@ impl CumulativeOptions {
 pub enum CumulativePropagationMethod {
     TimeTablePerPoint,
     TimeTablePerPointIncremental,
+    TimeTablePerPointIncrementalSynchronised,
     TimeTableOverInterval,
     #[default]
     TimeTableOverIntervalIncremental,
@@ -63,6 +64,9 @@ impl Display for CumulativePropagationMethod {
             CumulativePropagationMethod::TimeTablePerPoint => write!(f, "time-table-per-point"),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
                 write!(f, "time-table-per-point-incremental")
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
+                write!(f, "time-table-per-point-incremental-synchronised")
             }
             CumulativePropagationMethod::TimeTableOverInterval => {
                 write!(f, "time-table-over-interval")

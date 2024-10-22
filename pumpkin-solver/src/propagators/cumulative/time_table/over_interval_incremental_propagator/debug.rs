@@ -77,7 +77,7 @@ pub(crate) fn time_tables_are_the_same_interval<
 
 /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
 /// in the provided `time_table`.
-fn merge_profiles<Var: IntegerVariable + 'static>(
+pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
     time_table: &mut OverIntervalTimeTableType<Var>,
     start_index: usize,
     end_index: usize,

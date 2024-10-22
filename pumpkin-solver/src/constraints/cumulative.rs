@@ -218,7 +218,15 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
             .post(solver, tag),
 
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::new(
+                TimeTablePerPointIncrementalPropagator::<Var, false>::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .post(solver, tag)
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
+                TimeTablePerPointIncrementalPropagator::<Var, true>::new(
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
@@ -266,7 +274,15 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
             )
             .implied_by(solver, reification_literal, tag),
             CumulativePropagationMethod::TimeTablePerPointIncremental => {
-                TimeTablePerPointIncrementalPropagator::new(
+                TimeTablePerPointIncrementalPropagator::<Var, false>::new(
+                    &self.tasks,
+                    self.resource_capacity,
+                    self.options.propagator_options,
+                )
+                .implied_by(solver, reification_literal, tag)
+            }
+            CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised => {
+                TimeTablePerPointIncrementalPropagator::<Var, true>::new(
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,

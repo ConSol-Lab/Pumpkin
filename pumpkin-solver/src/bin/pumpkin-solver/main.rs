@@ -342,6 +342,7 @@ struct Args {
     /// Currently, the solver only supports variations on time-tabling methods.
     ///
     /// Possible values: ["time-table-per-point", "time-table-per-point-incremental",
+    /// "time-table-per-point-incremental-synchronised",
     /// "time-table-over-interval", "time-table-over-interval-incremental",
     /// "time-table-over-interval-incremental-synchronised"]
     #[arg(long = "cumulative-propagation-method", value_parser = cumulative_propagation_method_parser, default_value_t = CumulativePropagationMethod::default())]
@@ -692,9 +693,10 @@ fn cumulative_propagation_method_parser(s: &str) -> Result<CumulativePropagation
     match s {
         "time-table-per-point" => Ok(CumulativePropagationMethod::TimeTablePerPoint),
         "time-table-per-point-incremental" => Ok(CumulativePropagationMethod::TimeTablePerPointIncremental),
+        "time-table-per-point-incremental-synchronised" => Ok(CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised),
         "time-table-over-interval" => Ok(CumulativePropagationMethod::TimeTableOverInterval),
         "time-table-over-interval-incremental" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncremental),
         "time-table-over-interval-incremental-synchronised" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised),
-        value => Err(format!("'{value}' is not a valid cumulative propagation method. Possible values: ['time-table-per-point', 'time-table-per-point-incremental', 'time-table-over-interval', 'time-table-over-interval-incremental', 'time-table-over-interval-incremental-synchronised']"))
+        value => Err(format!("'{value}' is not a valid cumulative propagation method. Possible values: ['time-table-per-point', 'time-table-per-point-incremental', 'time-table-per-point-incremental-synchronised', 'time-table-over-interval', 'time-table-over-interval-incremental', 'time-table-over-interval-incremental-synchronised']"))
     }
 }
