@@ -1,5 +1,5 @@
 [workspace]
-members = ["./pumpkin-lib", "./pumpkin-cli", "./drcp-format", "./pumpkin-py"]
+members = ["./pumpkin-solver", "./drcp-format", "./pumpkin-py"]
 resolver = "2"
 
 [workspace.package]
