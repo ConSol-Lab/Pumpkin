@@ -56,7 +56,13 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
                 self.solver.process_solution(&solution, self.brancher);
                 IteratedSolution::Solution(self.solver.get_solution_reference())
             }
-            Unsatisfiable => IteratedSolution::Unsatisfiable,
+            Unsatisfiable => {
+                if self.has_solution {
+                    IteratedSolution::Finished
+                } else {
+                    IteratedSolution::Unsatisfiable
+                }
+            }
             Unknown => IteratedSolution::Unknown,
         }
     }
