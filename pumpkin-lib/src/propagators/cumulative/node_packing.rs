@@ -155,7 +155,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 sum_duration_selected -= selected_activity.processing_time;
             }
             if updated {
-                tasks = selected_activities[index..].to_vec();
+                tasks = selected_activities;
             }
         }
         (max_lower_bound, tasks)
