@@ -1,5 +1,7 @@
 use std::num::NonZero;
 
+use super::outputs::solution_callback::SolutionCallback;
+use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -88,7 +90,7 @@ pub struct Solver {
     satisfaction_solver: ConstraintSatisfactionSolver,
     /// The function is called whenever an optimisation function finds a solution; see
     /// [`Solver::with_solution_callback`].
-    solution_callback: Box<dyn Fn(&Solution)>,
+    solution_callback: Box<dyn Fn(&SolutionCallback)>,
 }
 
 impl Default for Solver {
@@ -101,7 +103,7 @@ impl Default for Solver {
 }
 
 /// Creates a place-holder empty function which does not do anything when a solution is found.
-fn create_empty_function() -> Box<dyn Fn(&Solution)> {
+fn create_empty_function() -> Box<dyn Fn(&SolutionCallback)> {
     Box::new(|_| {})
 }
 
@@ -131,7 +133,10 @@ impl Solver {
     /// Note that this will also
     /// perform the call-back on the optimal solution which is returned in
     /// [`OptimisationResult::Optimal`].
-    pub fn with_solution_callback(&mut self, solution_callback: impl Fn(&Solution) + 'static) {
+    pub fn with_solution_callback(
+        &mut self,
+        solution_callback: impl Fn(&SolutionCallback) + 'static,
+    ) {
         self.solution_callback = Box::new(solution_callback);
     }
 
@@ -145,6 +150,14 @@ impl Solver {
     pub fn log_statistics(&self) {
         self.satisfaction_solver.log_statistics();
         log_statistic_postfix();
+    }
+
+    pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
+        &mut self.satisfaction_solver
+    }
+
+    pub(crate) fn get_solution_reference(&self) -> SolutionReference<'_> {
+        self.satisfaction_solver.get_solution_reference()
     }
 }
 
@@ -346,8 +359,7 @@ impl Solver {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
-                self.satisfaction_solver.restore_state_at_root(brancher);
-                brancher.on_solution(solution.as_reference());
+                self.process_solution(&solution, brancher);
                 SatisfactionResult::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
@@ -376,7 +388,7 @@ impl Solver {
         brancher: &'brancher mut B,
         termination: &'termination mut T,
     ) -> SolutionIterator<'this, 'brancher, 'termination, B, T> {
-        SolutionIterator::new(&mut self.satisfaction_solver, brancher, termination)
+        SolutionIterator::new(self, brancher, termination)
     }
 
     /// Solves the current model in the [`Solver`] until it finds a solution (or is indicated to
@@ -499,7 +511,7 @@ impl Solver {
         let mut best_objective_value = Default::default();
         let mut best_solution = Solution::default();
 
-        self.process_solution(
+        self.update_best_solution_and_process(
             objective_multiplier,
             &objective_variable,
             &mut best_objective_value,
@@ -543,7 +555,7 @@ impl Solver {
                         &objective_variable,
                         best_objective_value * objective_multiplier as i64,
                     );
-                    self.process_solution(
+                    self.update_best_solution_and_process(
                         objective_multiplier,
                         &objective_variable,
                         &mut best_objective_value,
@@ -577,7 +589,7 @@ impl Solver {
     /// - Calling [`Brancher::on_solution`] on the provided `brancher`.
     /// - Logging the statistics using [`Solver::log_statistics_with_objective`].
     /// - Calling the solution callback stored in [`Solver::solution_callback`].
-    fn process_solution(
+    fn update_best_solution_and_process(
         &self,
         objective_multiplier: i32,
         objective_variable: &impl IntegerVariable,
@@ -592,9 +604,22 @@ impl Solver {
                 .expect("expected variable to be assigned")) as i64;
         *best_solution = self.satisfaction_solver.get_solution_reference().into();
 
-        self.log_statistics_with_objective(*best_objective_value);
+        self.internal_process_solution(best_solution, brancher, Some(*best_objective_value))
+    }
+
+    pub(crate) fn process_solution(&self, solution: &Solution, brancher: &mut impl Brancher) {
+        self.internal_process_solution(solution, brancher, None)
+    }
+
+    fn internal_process_solution(
+        &self,
+        solution: &Solution,
+        brancher: &mut impl Brancher,
+        objective_value: Option<i64>,
+    ) {
         brancher.on_solution(self.satisfaction_solver.get_solution_reference());
-        (self.solution_callback)(best_solution);
+
+        (self.solution_callback)(&SolutionCallback::new(self, solution, objective_value));
     }
 
     /// Given the current objective value `best_objective_value`, it adds a constraint specifying
