@@ -359,6 +359,7 @@ impl Solver {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
+                self.satisfaction_solver.restore_state_at_root(brancher);
                 self.process_solution(&solution, brancher);
                 SatisfactionResult::Satisfiable(solution)
             }
