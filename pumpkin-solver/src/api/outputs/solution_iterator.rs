@@ -53,7 +53,6 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                self.solver.process_solution(&solution, self.brancher);
                 IteratedSolution::Solution(self.solver.get_solution_reference())
             }
             Unsatisfiable => {
