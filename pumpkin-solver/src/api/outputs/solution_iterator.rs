@@ -58,19 +58,6 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             }
             Unsatisfiable => IteratedSolution::Unsatisfiable,
             Unknown => IteratedSolution::Unknown,
-            // CSPSolverExecutionFlag::Feasible => {
-            //    self.has_solution = true;
-            //    self.brancher
-            //        .on_solution(self.solver.get_solution_reference());
-            //    let solution = self.solver.get_solution_reference();
-            //    self.next_blocking_clause = Some(self.get_blocking_clause());
-            //    IteratedSolution::Solution(solution)
-            //}
-            // CSPSolverExecutionFlag::Infeasible if !self.has_solution => {
-            //    IteratedSolution::Unsatisfiable
-            //}
-            // CSPSolverExecutionFlag::Infeasible => IteratedSolution::Finished,
-            // CSPSolverExecutionFlag::Timeout => IteratedSolution::Unknown,
         }
     }
 }
