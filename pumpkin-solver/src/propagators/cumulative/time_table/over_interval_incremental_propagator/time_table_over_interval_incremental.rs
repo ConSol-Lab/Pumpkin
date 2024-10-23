@@ -17,7 +17,6 @@ use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
-use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug::merge_profiles;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::synchronise_time_table;
@@ -270,6 +269,15 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 self.found_previous_conflict = true;
 
                 if SYNCHRONISE {
+                    // If we are synchronising then we need to find the conflict which would have
+                    // been found by the non-incremental propagator
+                    //
+                    // Luckily, the non-incremental propagator would have found the earliest
+                    // time-point at which a conflict would have occured which is exactly what is
+                    // stored in `conflict_profile`
+                    //
+                    // Now we just need to find the same explanation as would have been found by
+                    // the non-incremental propagator
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
@@ -300,11 +308,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         }
 
         if SYNCHRONISE {
-            let time_table_len = self.time_table.len();
-            if time_table_len > 0 {
-                merge_profiles(&mut self.time_table, 0, time_table_len - 1);
-                synchronise_time_table(self.time_table.iter_mut(), context.as_readonly())
-            }
+            // We have not found a conflict; we need to ensure that the time-tables are the same by
+            // ensuring that the profiles are maximal and the profile tasks are sorted in the same
+            // order
+            synchronise_time_table(&mut self.time_table, context.as_readonly())
         }
 
         // We check whether there are no non-conflicting profiles in the time-table if we do not

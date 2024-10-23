@@ -253,11 +253,19 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         // conflict in the time-table (if any calls have reported an overflow)
         if found_conflict || self.found_previous_conflict {
             if SYNCHRONISE {
-                let conflicting_profile = self.time_table.get_mut(&find_synchronised_conflict(
-                    self.time_table.iter(),
-                    &self.parameters,
-                ));
-                if let Some(conflicting_profile) = conflicting_profile {
+                // If we are synchronising then we need to search for the conflict which would have
+                // been found by the non-incremental propagator
+                let synchronised_conflict =
+                    find_synchronised_conflict(&mut self.time_table, &self.parameters);
+
+                // After finding the profile which would have been found by the non-incremental
+                // propagator, we also need to find the profile explanation which would have been
+                // found by the non-incremental propagator
+                if let Some(conflicting_time_point) = synchronised_conflict {
+                    let conflicting_profile = self
+                        .time_table
+                        .get_mut(&conflicting_time_point)
+                        .expect("Expected to find a conflicting profile");
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
@@ -279,6 +287,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
                     return synchronised_conflict_explanation;
                 }
+
+                // Otherwise we mark that we have not found the previous conflict and continue
                 self.found_previous_conflict = false;
             } else {
                 // We linearly scan the profiles and find the first one which exceeds the capacity
@@ -314,6 +324,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         }
 
         if SYNCHRONISE {
+            // We have not found a conflict; we need to ensure that the time-tables are the same by
+            // ensuring that the profile tasks are sorted in the same order
             synchronise_time_table(self.time_table.values_mut());
         }
 
