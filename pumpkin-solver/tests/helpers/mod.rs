@@ -185,6 +185,49 @@ pub(crate) fn run_mzn_test<const ORDERED: bool>(instance_name: &str, folder_name
     run_mzn_test_with_options::<ORDERED>(instance_name, folder_name, vec![], "")
 }
 
+pub(crate) fn check_statistic_equality(
+    instance_name: &str,
+    folder_name: &str,
+    mut options_first: Vec<&str>,
+    mut options_second: Vec<&str>,
+    prefix_first: &str,
+    prefix_second: &str,
+) {
+    let instance_path = format!(
+        "{}/tests/{folder_name}/{instance_name}.fzn",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    options_first.push("-sa");
+    options_second.push("-sa");
+
+    let files_first = run_solver_with_options(
+        instance_path.clone(),
+        false,
+        options_first,
+        Some(prefix_first),
+    );
+
+    let files_second =
+        run_solver_with_options(instance_path, false, options_second, Some(prefix_second));
+
+    let output_first =
+        std::fs::read_to_string(files_first.log_file).expect("Failed to read solver output");
+    let output_second =
+        std::fs::read_to_string(files_second.log_file).expect("Failed to read solver output");
+
+    assert_eq!(
+        output_first
+            .lines()
+            .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+            .collect::<String>(),
+        output_second
+            .lines()
+            .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+            .collect::<String>(),
+    )
+}
+
 pub(crate) fn run_mzn_test_with_options<const ORDERED: bool>(
     instance_name: &str,
     folder_name: &str,

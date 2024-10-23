@@ -2,7 +2,26 @@
 
 mod helpers;
 
+use helpers::check_statistic_equality;
 use helpers::run_mzn_test_with_options;
+
+macro_rules! statistic_equality_cumulative {
+    ($first_name:ident, $second_name:ident) => {
+        paste::item! {
+            #[test]
+            fn [< cumulative_ $first_name _equal_with_ $first_name >]() {
+                check_statistic_equality(
+                    "cumulative",
+                    "mzn_constraints",
+                    vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($first_name))],
+                    vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($second_name))],
+                    stringify!($first_name),
+                    stringify!($second_name),
+                );
+            }
+        }
+    };
+}
 
 macro_rules! mzn_test {
     ($name:ident) => {
@@ -115,5 +134,14 @@ cumulative_test!(time_table_per_point_incremental_synchronised);
 cumulative_test!(time_table_over_interval);
 cumulative_test!(time_table_over_interval_incremental);
 cumulative_test!(time_table_over_interval_incremental_synchronised);
+
+statistic_equality_cumulative!(
+    time_table_per_point,
+    time_table_per_point_incremental_synchronised
+);
+statistic_equality_cumulative!(
+    time_table_over_interval,
+    time_table_over_interval_incremental_synchronised
+);
 
 mzn_test!(all_different);
