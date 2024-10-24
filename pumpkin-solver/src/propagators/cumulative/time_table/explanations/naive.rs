@@ -5,7 +5,7 @@ use crate::engine::propagation::PropagationContext;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -35,13 +35,12 @@ pub(crate) fn create_naive_propagation_explanation<'a, Var: IntegerVariable + 's
 
 /// Creates the conflict explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_conflict_explanation<Var, Context>(
+pub(crate) fn create_naive_conflict_explanation<Var, Context: ReadDomains + Copy>(
     conflict_profile: &ResourceProfile<Var>,
-    context: &Context,
+    context: Context,
 ) -> PropositionalConjunction
 where
     Var: IntegerVariable + 'static,
-    Context: ReadDomains,
 {
     conflict_profile
         .profile_tasks
