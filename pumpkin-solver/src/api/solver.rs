@@ -1,7 +1,6 @@
 use std::num::NonZero;
 
 use super::outputs::solution_callback::SolutionCallback;
-use super::outputs::SolutionReference;
 use super::results::OptimisationResult;
 use super::results::SatisfactionResult;
 use super::results::SatisfactionResultUnderAssumptions;
@@ -154,10 +153,6 @@ impl Solver {
 
     pub(crate) fn get_satisfaction_solver_mut(&mut self) -> &mut ConstraintSatisfactionSolver {
         &mut self.satisfaction_solver
-    }
-
-    pub(crate) fn get_solution_reference(&self) -> SolutionReference<'_> {
-        self.satisfaction_solver.get_solution_reference()
     }
 }
 

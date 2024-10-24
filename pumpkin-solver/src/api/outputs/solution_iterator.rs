@@ -3,7 +3,6 @@
 use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
-use super::SolutionReference;
 use crate::branching::Brancher;
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::results::Solution;
@@ -53,7 +52,7 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
             Satisfiable(solution) => {
                 self.has_solution = true;
                 self.next_blocking_clause = Some(get_blocking_clause(&solution));
-                IteratedSolution::Solution(self.solver.get_solution_reference())
+                IteratedSolution::Solution(solution)
             }
             Unsatisfiable => {
                 if self.has_solution {
@@ -97,9 +96,9 @@ fn get_blocking_clause(solution: &Solution) -> Vec<Literal> {
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
-pub enum IteratedSolution<'solver> {
+pub enum IteratedSolution {
     /// A new solution was identified.
-    Solution(SolutionReference<'solver>),
+    Solution(Solution),
 
     /// No more solutions exist.
     Finished,
