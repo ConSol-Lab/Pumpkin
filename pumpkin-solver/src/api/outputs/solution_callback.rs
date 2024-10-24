@@ -8,13 +8,20 @@ use crate::Solver;
 /// the statistics of the [`Solver`] using [`SolutionCallback::log_statistics`].
 #[derive(Debug)]
 pub struct SolutionCallback<'a, 'b> {
+    /// The solver which found the solution
     solver: &'a Solver,
+    /// The solution which has been found
     pub solution: &'b Solution,
+    /// The (optional) objective value provided to the [`Solver`].
     objective_value: Option<i64>,
 }
 
 impl<'a, 'b> SolutionCallback<'a, 'b> {
-    pub fn new(solver: &'a Solver, solution: &'b Solution, objective_value: Option<i64>) -> Self {
+    pub(crate) fn new(
+        solver: &'a Solver,
+        solution: &'b Solution,
+        objective_value: Option<i64>,
+    ) -> Self {
         Self {
             solver,
             solution,
@@ -23,6 +30,9 @@ impl<'a, 'b> SolutionCallback<'a, 'b> {
     }
 
     /// Log the statistics of the [`Solver`].
+    ///
+    /// If the solution was found using [`Solver::minimise`] or [`Solver::maximise`] then the
+    /// objective value of the current solution is included in the statistics.
     pub fn log_statistics(&self) {
         if let Some(objective_value) = self.objective_value {
             self.solver.log_statistics_with_objective(objective_value)
