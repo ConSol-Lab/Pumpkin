@@ -169,7 +169,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
                         // If the height of the profile is not equal to 0 then we remove the task
                         // from the profile tasks
                         if profile.height != 0 {
-                            let _ = profile.profile_tasks.remove(
+                            let _ = profile.profile_tasks.swap_remove(
                                 profile
                                     .profile_tasks
                                     .iter()
