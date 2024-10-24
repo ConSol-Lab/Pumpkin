@@ -68,12 +68,9 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 
 /// Creates a clause which prevents the current solution from occurring again by going over the
 /// defined output variables and creating a clause which prevents those values from
-/// being assigned. This method is used when attempting to find multiple solutions. It restores
-/// the state of the passed [`ConstraintSatisfactionSolver`] to the root (using
-/// [`ConstraintSatisfactionSolver::restore_state_at_root`]) and returns true if adding the
-/// clause was successful (i.e. it is possible that there could be another solution) and
-/// returns false otherwise (i.e. if adding a clause led to a conflict which indicates that
-/// there are no more solutions).
+/// being assigned.
+///
+/// This method is used when attempting to find multiple solutions.
 fn get_blocking_clause(solution: &Solution) -> Vec<Literal> {
     solution
         .assignments_propositional()
