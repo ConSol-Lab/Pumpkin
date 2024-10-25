@@ -21,9 +21,9 @@ A unique feature of Pumpkin is that it can produce a certificate of unsatisfiabi
 
 The solver currently supports integer variables and a number of (global) constraints:
 
-- [Cumulative global constraint](./pumpkin-solver/src/propagators/cumulative/).
-- [Element global constraint](./pumpkin-solver/src/propagators/element.rs).
-- [Arithmetic constraints](./pumpkin-solver/src/propagators/arithmetic/): [linear integer (in)equalities](./pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](./pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](./pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](./pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](./pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
+- [Cumulative global constraint](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/cumulative).
+- [Element global constraint](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/element.rs).
+- [Arithmetic constraints](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/propagators/arithmetic): [linear integer (in)equalities](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/linear_less_or_equal.rs), [integer division](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/division.rs), [integer multiplication](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/integer_multiplication.rs), [maximum](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/maximum.rs), [absolute value](https://github.com/ConSol-Lab/Pumpkin/blob/main/pumpkin-solver/src/propagators/arithmetic/absolute_value.rs).
 - Clausal constraints.
 
 We are actively developing Pumpkin and would be happy to hear from you should you have any questions or feature requests!
@@ -68,10 +68,10 @@ To use it as such a backend, follow the following steps:
 ## Components
 Pumpkin consists of 3 different crates:
 
-- The library contained in [pumpkin-solver](./pumpkin-solver/); defines the API through which the solver can be used via Rust.
-- The CLI contained in [here](./pumpkin-solver/src/bin); defines the usage of Pumpkin through a command line.
-- The proof logging contained in [drcp-format](./drcp-format/); defines proof logging which can be used in combination with Pumpkin.
-- The python bindings contained in [pumpkin-py](./pumpkin-py/); defines the python interface for Pumpkin
+- The library contained in [pumpkin-solver](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver); defines the API through which the solver can be used via Rust.
+- The CLI contained in [here](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/src/bin/pumpkin-solver); defines the usage of Pumpkin through a command line.
+- The proof logging contained in [drcp-format](https://github.com/ConSol-Lab/Pumpkin/tree/main/drcp-format); defines proof logging which can be used in combination with Pumpkin.
+- The python bindings contained in [pumpkin-py](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-py); defines the python interface for Pumpkin
 
 The easiest way to get to know the different modules is through the documentation. This documentation can be created automatically using the command:
 ```sh
@@ -79,7 +79,7 @@ cargo doc --no-deps
 ```
 
 ## Examples
-There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](./pumpkin-solver/examples/) which contains examples such as bibd, nqueens, and disjunctive scheduling.
+There are several examples of how to use the solver specified in the documentation of the different components. For more concrete examples of how to use Pumpkin to solve a set of example problems, we refer to the [examples folder](https://github.com/ConSol-Lab/Pumpkin/tree/main/pumpkin-solver/examples) which contains examples such as bibd, nqueens, and disjunctive scheduling.
 
 # Contributing
 We encourage contributions to Pumpkin by merge requests and issues. When contributing please ensure that you adhere to the following guidelines.
