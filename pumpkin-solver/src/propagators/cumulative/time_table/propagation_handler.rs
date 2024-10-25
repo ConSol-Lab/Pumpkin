@@ -16,12 +16,14 @@ use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use super::time_table_util::ResourceProfile;
 use super::CumulativeExplanationType;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
+use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -109,6 +111,12 @@ impl CumulativePropagationHandler {
                         profiles[current_profile_index],
                         Some(time_point),
                     );
+                    pumpkin_assert_extreme!(
+                        explanation.iter().all(|predicate| context
+                            .assignments_integer()
+                            .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                        "All of the predicates in the reason should hold"
+                    );
                     context.set_lower_bound(
                         &propagating_task.start_variable,
                         time_point + 1,
@@ -121,9 +129,23 @@ impl CumulativePropagationHandler {
 
                     // We place the time-point as far as possible
                     time_point += propagating_task.processing_time;
+
                     // Then we update the index of the current profile if appropriate
                     if time_point > profiles[current_profile_index].end {
-                        current_profile_index += 1;
+                        if current_profile_index < profiles.len() - 1
+                            && time_point < profiles[current_profile_index + 1].start
+                        {
+                            // The time-point has ended up between profiles, we thus set the
+                            // time-point to the end of the current profile and propagate from
+                            // there
+                            //
+                            // (Note that we could have also set it to
+                            // `profiles[current_profile_index + 1].start -
+                            // propagating_task.processing_time`)
+                            time_point = profiles[current_profile_index].end;
+                        } else {
+                            current_profile_index += 1;
+                        }
                     }
 
                     // We have gone past the last profile, we ensure that we propagate past its end
@@ -214,6 +236,12 @@ impl CumulativePropagationHandler {
                         profiles[current_profile_index],
                         Some(time_point),
                     );
+                    pumpkin_assert_extreme!(
+                        explanation.iter().all(|predicate| context
+                            .assignments_integer()
+                            .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                        "All of the predicates in the reason should hold"
+                    );
                     context.set_upper_bound(
                         &propagating_task.start_variable,
                         time_point - propagating_task.processing_time,
@@ -228,14 +256,26 @@ impl CumulativePropagationHandler {
 
                     // Then we update the index of the current profile if appropriate
                     if time_point < profiles[current_profile_index].start {
-                        if current_profile_index == 0 {
+                        if current_profile_index > 0
+                            && time_point > profiles[current_profile_index - 1].end
+                        {
+                            // The time-point has ended up between profiles, we thus set the
+                            // time-point to the start of the current profile and propagate from
+                            // there
+                            //
+                            // (Note that we could have also set it to
+                            // `profiles[current_profile_index - 1].end +
+                            // propagating_task.processing_time`)
+                            time_point = profiles[current_profile_index].start
+                        } else if current_profile_index == 0 {
                             // We have gone past the first profile, we ensure that we propagate past
                             // its start point here
                             time_point = profiles[current_profile_index].start;
                             should_exit = true;
                             continue;
+                        } else {
+                            current_profile_index -= 1;
                         }
-                        current_profile_index -= 1;
                     }
 
                     // Now we check whether we are skipping a profile, if this is the case then we
