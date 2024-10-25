@@ -225,7 +225,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     );
 
     if parameters.options.generate_sequence {
-        propagate_sequence_of_profiles(context, time_table, parameters)?;
+        propagate_sequence_of_profiles(context, time_table, dynamic_structures, parameters)?;
     } else {
         propagate_single_profiles(context, time_table, dynamic_structures, parameters)?;
     }
@@ -328,6 +328,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    dynamic_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -338,7 +339,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     let time_table = time_table.collect::<Vec<_>>();
 
     // Then we go over all the possible tasks
-    for task in parameters.tasks.iter() {
+    for task in dynamic_structures.get_unfixed_tasks() {
         if context.is_fixed(&task.start_variable) {
             // If the task is fixed then we are not able to propagate it further
             continue;
