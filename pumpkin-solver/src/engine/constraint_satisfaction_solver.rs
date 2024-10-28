@@ -404,7 +404,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        pumpkin_assert_simple!(self.is_conflicting());
+        pumpkin_assert_simple!(
+            self.is_conflicting(),
+            "Proof attempted to be completed while not in conflicting state"
+        );
 
         let result = self.compute_learned_clause(&mut DummyBrancher);
         let _ = self
@@ -1693,7 +1696,12 @@ impl ConstraintSatisfactionSolver {
 
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
-        if initialisation_status.is_err() {
+        if let Err(conflict_explanation) = initialisation_status {
+            self.state
+                .declare_conflict(StoredConflictInfo::Explanation {
+                    conjunction: conflict_explanation,
+                    propagator: new_propagator_id,
+                });
             self.complete_proof();
             let _ = self.conclude_proof_unsat();
             self.state.declare_infeasible();
