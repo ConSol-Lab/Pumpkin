@@ -1922,6 +1922,9 @@ mod tests {
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::Literal;
     use crate::predicate;
+    use crate::propagators::linear_less_or_equal::LinearLessOrEqualPropagator;
+    use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
+    use crate::variables::TransformableVariable;
 
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
@@ -2262,5 +2265,37 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+
+        let p = solver.create_new_integer_variable(0, 3, None);
+        let q = solver.create_new_integer_variable(0, 3, None);
+        let r = solver.create_new_integer_variable(0, 3, None);
+        let s = solver.create_new_integer_variable(0, 3, None);
+
+        let propagator =
+            LinearLessOrEqualPropagator::new(Box::new([s.scaled(3), p.scaled(1), r.scaled(1)]), 1);
+        let result = solver.add_propagator(propagator, None);
+        assert!(result.is_ok());
+
+        let mut all_different = Vec::new();
+        let variables = [p, q, r, s];
+
+        for i in 0..variables.len() {
+            for j in i + 1..variables.len() {
+                all_different.push(LinearNotEqualPropagator::new(
+                    Box::new([variables[i].scaled(1), variables[j].scaled(-1)]),
+                    0,
+                ));
+            }
+        }
+
+        let result = all_different
+            .into_iter()
+            .try_for_each(|c| solver.add_propagator(c, None));
+        assert!(result.is_err());
     }
 }
