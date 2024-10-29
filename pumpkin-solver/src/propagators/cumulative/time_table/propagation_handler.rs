@@ -94,12 +94,41 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the start of the profile
+                // The time points should follow the following properties (based on `Improving
+                // scheduling by learning - Andreas Schutt`):
+                // 1. `t_0 = lb(s)`
+                // 2. `t_m = profiles.last.end`
+                // 3. `∀1 <= j <= m : t_{j - 1} + p >= t_j`
+                // 4. There exists a mapping `P(t_l)` such that `∀1 <= j <= m : P(t_l).start <= t_j
+                //   <= P(t_j).end`
+                //
+                // Property 1 ensures that the first propagation is correct
+                // Property 2 ensures that the maximum propagation is reached by the set of
+                // profiles
+                // Property 3 ensures that every `t_i` is not more than
+                // `p` units apart
+                // Property 4 ensures that every time-point falls within the
+                // range of a profile.
                 let mut current_profile_index = 0;
-                let mut time_point = profiles[current_profile_index].start;
+                // We take as `t_1` the minimum of the first profile end and the earliest
+                // completion time - 1 (this - 1 is necessary since the explanation uses the
+                // predicate `[s >= t_l + 1 - p]`, and this predicate holds only if the -1 is added)
+                let mut time_point = profiles[current_profile_index].end.min(
+                    context.lower_bound(&propagating_task.start_variable)
+                        + propagating_task.processing_time
+                        - 1,
+                );
                 let mut should_exit = false;
 
                 loop {
+                    pumpkin_assert_simple!(
+                        time_point >= profiles[current_profile_index].start
+                            && time_point <= profiles[current_profile_index].end,
+                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+                        profiles[current_profile_index].start,
+                        profiles[current_profile_index].end
+                    );
+
                     let explanation = add_propagating_task_predicate_lower_bound(
                         create_pointwise_propagation_explanation(
                             time_point,
@@ -219,12 +248,38 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the end of the profile
+                // The time points should follow the following properties (based on `Improving
+                // scheduling by learning - Andreas Schutt`):
+                // 1. `t_0 = ub(s) + p`
+                // 2. `t_m = profiles.first.start`
+                // 3. `∀1 <= j <= m : t_{j - 1} - p >= t_j`
+                // 4. There exists a mapping `P(t_l)` such that `∀1 <= j <= m : P(t_l).start <= t_j
+                //   <= P(t_j).end`
+                //
+                // Property 1 ensures that the first propagation is correct
+                // Property 2 ensures that the maximum propagation is reached by the set of
+                // profiles
+                // Property 3 ensures that every `t_i` is not more than
+                // `p` units apart
+                // Property 4 ensures that every time-point falls within the
+                // range of a profile.
                 let mut current_profile_index = profiles.len() - 1;
-                let mut time_point = profiles[current_profile_index].end;
+                // We take as `t_1` the maximum of the last profile start and the
+                // latest start time
+                let mut time_point = profiles[current_profile_index]
+                    .start
+                    .max(context.upper_bound(&propagating_task.start_variable));
                 let mut should_exit = false;
 
                 loop {
+                    pumpkin_assert_simple!(
+                        time_point >= profiles[current_profile_index].start
+                            && time_point <= profiles[current_profile_index].end,
+                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+                        profiles[current_profile_index].start,
+                        profiles[current_profile_index].end
+                    );
+
                     let explanation = add_propagating_task_predicate_upper_bound(
                         create_pointwise_propagation_explanation(
                             time_point,
@@ -331,8 +386,29 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the start of the profile
-                let mut time_point = profile.start;
+                // The time points should follow the following properties (based on `Improving
+                // scheduling by learning - Andreas Schutt`):
+                // 1. `t_0 = lb(s)`
+                // 2. `t_m = profiles.last.end`
+                // 3. `∀1 <= j <= m : t_{j - 1} + p >= t_j`
+                // 4. There exists a mapping `P(t_l)` such that `∀1 <= j <= m : P(t_l).start <= t_j
+                //   <= P(t_j).end`
+                //
+                // Property 1 ensures that the first propagation is correct
+                // Property 2 ensures that the maximum propagation is reached by the set of
+                // profiles
+                // Property 3 ensures that every `t_i` is not more than
+                // `p` units apart
+                // Property 4 ensures that every time-point falls within the
+                // range of a profile.
+
+                // We take as `t_1` the minimum of the first profile end and the earliest
+                // completion time - 1 (this - 1 is necessary since the explanation uses the
+                // predicate `[s >= t_l + 1 - p]`, and this predicate holds only if the -1 is added)
+                let mut time_point = context.lower_bound(&propagating_task.start_variable)
+                    + propagating_task.processing_time
+                    - 1;
+
                 loop {
                     if time_point >= profile.end {
                         // We ensure that the last time-point is always the end of the profile
@@ -352,6 +428,13 @@ impl CumulativePropagationHandler {
                         )?;
                         break;
                     }
+                    pumpkin_assert_simple!(
+                        time_point >= profile.start
+                            && time_point <= profile.end,
+                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+                        profile.start,
+                        profile.end
+                    );
 
                     let explanation = add_propagating_task_predicate_lower_bound(
                         create_pointwise_propagation_explanation(time_point, profile),
@@ -415,8 +498,27 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the end of the profile
-                let mut time_point = profile.end;
+                // The time points should follow the following properties (based on `Improving
+                // scheduling by learning - Andreas Schutt`):
+                // 1. `t_0 = ub(s) + p`
+                // 2. `t_m = profiles.first.start`
+                // 3. `∀1 <= j <= m : t_{j - 1} - p >= t_j`
+                // 4. There exists a mapping `P(t_l)` such that `∀1 <= j <= m : P(t_l).start <= t_j
+                //   <= P(t_j).end`
+                //
+                // Property 1 ensures that the first propagation is correct
+                // Property 2 ensures that the maximum propagation is reached by the set of
+                // profiles
+                // Property 3 ensures that every `t_i` is not more than
+                // `p` units apart
+                // Property 4 ensures that every time-point falls within the
+                // range of a profile.
+
+                // We take as `t_1` the maximum of the last profile start and the
+                // latest start time
+                let mut time_point = profile
+                    .start
+                    .max(context.upper_bound(&propagating_task.start_variable));
                 loop {
                     if time_point <= profile.start {
                         let explanation = add_propagating_task_predicate_upper_bound(
@@ -435,6 +537,14 @@ impl CumulativePropagationHandler {
                         )?;
                         break;
                     }
+                    pumpkin_assert_simple!(
+                        time_point >= profile.start
+                            && time_point <= profile.end,
+                        "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
+                        profile.start,
+                        profile.end
+                    );
+
                     let explanation = add_propagating_task_predicate_upper_bound(
                         create_pointwise_propagation_explanation(time_point, profile),
                         CumulativeExplanationType::PointWise,
