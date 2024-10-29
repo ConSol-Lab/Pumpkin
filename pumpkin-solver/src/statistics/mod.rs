@@ -3,6 +3,7 @@ pub(crate) mod statistic_logger;
 pub(crate) mod statistic_logging;
 
 use std::fmt::Display;
+
 pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
 pub use statistic_logging::log_statistic;
