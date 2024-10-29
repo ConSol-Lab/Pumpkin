@@ -1,10 +1,9 @@
+use super::explanation_clause_manager::ExplanationClauseManager;
 use super::ConflictAnalysisContext;
 use super::ConflictAnalysisResult;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
-use crate::engine::clause_allocators::ClauseAllocatorInterface;
-use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::AssignmentsPropositional;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -68,6 +67,7 @@ impl RecursiveMinimiser {
     pub(crate) fn remove_dominated_literals(
         &mut self,
         context: &mut ConflictAnalysisContext,
+        temporary_allocator: &mut ExplanationClauseManager,
         analysis_result: &mut ConflictAnalysisResult,
     ) {
         let num_literals_before_minimisation = analysis_result.learned_literals.len();
@@ -82,7 +82,7 @@ impl RecursiveMinimiser {
         for i in 1..analysis_result.learned_literals.len() {
             let learned_literal = analysis_result.learned_literals[i];
 
-            self.compute_label(!learned_literal, context);
+            self.compute_label(!learned_literal, context, temporary_allocator);
 
             let label = self.get_literal_label(!learned_literal);
             // keep the literal in case it was not deemed deemed redundant
@@ -151,7 +151,12 @@ impl RecursiveMinimiser {
         }
     }
 
-    fn compute_label(&mut self, input_literal: Literal, context: &mut ConflictAnalysisContext) {
+    fn compute_label(
+        &mut self,
+        input_literal: Literal,
+        context: &mut ConflictAnalysisContext,
+        temporary_allocator: &mut ExplanationClauseManager,
+    ) {
         pumpkin_assert_moderate!(context
             .assignments_propositional
             .is_literal_assigned_true(input_literal));
@@ -195,10 +200,18 @@ impl RecursiveMinimiser {
             return;
         }
 
-        let reason_reference = context.get_propagation_clause_reference(input_literal, &mut |_| {});
+        let reason_reference = temporary_allocator.get_propagation_clause_reference(
+            context,
+            input_literal,
+            &mut |_| {},
+        );
 
-        for i in 1..context.clause_allocator.get_clause(reason_reference).len() {
-            let antecedent_literal = !context.clause_allocator.get_clause(reason_reference)[i];
+        for i in 1..temporary_allocator
+            .get_clause(context.clause_allocator, &reason_reference)
+            .len()
+        {
+            let antecedent_literal =
+                !temporary_allocator.get_clause(context.clause_allocator, &reason_reference)[i];
 
             // root assignments can be safely ignored
             if context
@@ -209,7 +222,7 @@ impl RecursiveMinimiser {
             }
 
             // compute the label of the antecedent literal
-            self.compute_label(antecedent_literal, context);
+            self.compute_label(antecedent_literal, context, temporary_allocator);
 
             // in case one of the antecedents is Poison, the input literal is not deemed redundant
             if self.get_literal_label(antecedent_literal) == Label::Poison {

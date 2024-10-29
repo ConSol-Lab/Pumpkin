@@ -4,7 +4,6 @@ use crate::basic_types::ConstraintOperationError;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::ExplanationClauseManager;
 use crate::pumpkin_assert_simple;
 
 pub(crate) trait ClausalPropagator {
@@ -15,7 +14,6 @@ pub(crate) trait ClausalPropagator {
         propagated_literal: Literal,
         assignments: &AssignmentsPropositional,
         clause_allocator: &mut ClauseAllocator,
-        explanation_clause_manager: &mut ExplanationClauseManager,
     ) -> ClauseReference;
 
     fn add_permanent_clause(

@@ -11,7 +11,6 @@ use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::ClauseAllocator;
 use crate::engine::variables::Literal;
 use crate::engine::AssignmentsPropositional;
-use crate::engine::ExplanationClauseManager;
 use crate::engine::Preprocessor;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -36,7 +35,6 @@ impl ClausalPropagator for BasicClausalPropagator {
         propagated_literal: Literal,
         assignments: &AssignmentsPropositional,
         _clause_allocator: &mut ClauseAllocator,
-        _explanation_clause_manager: &mut ExplanationClauseManager,
     ) -> ClauseReference {
         pumpkin_assert_moderate!(assignments
             .get_literal_reason_constraint(propagated_literal)

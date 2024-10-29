@@ -1,10 +1,10 @@
+use super::explanation_clause_manager::ExplanationClauseManager;
 use super::ConflictAnalysisContext;
 use super::RecursiveMinimiser;
 use super::SemanticMinimiser;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ClauseReference;
 use crate::basic_types::KeyedVec;
-use crate::engine::clause_allocators::ClauseInterface;
 use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::variables::Literal;
@@ -31,6 +31,7 @@ pub(crate) struct ResolutionConflictAnalyser {
     // data structures used for conflict analysis
     seen: KeyedVec<PropositionalVariable, bool>,
     analysis_result: ConflictAnalysisResult,
+    temporary_clause_allocator: ExplanationClauseManager,
 
     /// A clause minimiser which uses a recursive minimisation approach to remove dominated
     /// literals (see [`RecursiveMinimiser`]).
@@ -91,23 +92,27 @@ impl ResolutionConflictAnalyser {
             ));
             // note that the 'next_literal' is only None in the first iteration
             let clause_reference = if let Some(propagated_literal) = next_literal {
-                context.get_propagation_clause_reference(propagated_literal, &mut |_| {})
+                self.temporary_clause_allocator
+                    .get_propagation_clause_reference(context, propagated_literal, &mut |_| {})
             } else {
-                let conflict = context.get_conflict_reason_clause_reference(&mut |_| {});
+                let conflict = self
+                    .temporary_clause_allocator
+                    .get_conflict_reason_clause_reference(context, &mut |_| {});
+                let conflict_clause_size = self
+                    .temporary_clause_allocator
+                    .get_clause(context.clause_allocator, &conflict)
+                    .len() as u64;
                 context
                     .counters
                     .learned_clause_statistics
                     .average_conflict_size
-                    .add_term(context.clause_allocator[conflict].len() as u64);
+                    .add_term(conflict_clause_size);
                 conflict
             };
-            context
-                .learned_clause_manager
-                .update_clause_lbd_and_bump_activity(
-                    clause_reference,
-                    context.assignments_propositional,
-                    context.clause_allocator,
-                );
+            ExplanationClauseManager::update_clause_lbd_and_update_activity(
+                &clause_reference,
+                context,
+            );
 
             // process the reason literal
             // 	i.e., perform resolution and update other related internal data structures
@@ -115,8 +120,9 @@ impl ResolutionConflictAnalyser {
             // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
             // in case the clause represents a propagation
             let start_index = next_literal.is_some() as usize;
-            for &reason_literal in
-                &context.clause_allocator[clause_reference].get_literal_slice()[start_index..]
+            for &reason_literal in &self
+                .temporary_clause_allocator
+                .get_clause(context.clause_allocator, &clause_reference)[start_index..]
             {
                 // only consider non-root assignments that have not been considered before
                 let is_root_assignment = context
@@ -235,16 +241,18 @@ impl ResolutionConflictAnalyser {
         if context.internal_parameters.learning_clause_minimisation {
             pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
 
-            self.recursive_minimiser
-                .remove_dominated_literals(context, &mut self.analysis_result);
+            self.recursive_minimiser.remove_dominated_literals(
+                context,
+                &mut self.temporary_clause_allocator,
+                &mut self.analysis_result,
+            );
 
             self.semantic_minimiser
                 .minimise(context, &mut self.analysis_result);
         }
 
-        context
-            .explanation_clause_manager
-            .clean_up_explanation_clauses(context.clause_allocator);
+        self.temporary_clause_allocator
+            .clean_up_explanation_clauses();
 
         pumpkin_assert_moderate!(self.debug_check_conflict_analysis_result(false, context));
         // the return value is stored in the input 'analysis_result'
@@ -295,25 +303,29 @@ impl ResolutionConflictAnalyser {
             // Note that the 'next_literal' is given as input.
             //  If it is none, it is none in the first iteration only
             let clause_reference = if let Some(propagated_literal) = next_literal {
-                context.get_propagation_clause_reference(propagated_literal, &mut on_analysis_step)
+                self.temporary_clause_allocator
+                    .get_propagation_clause_reference(
+                        context,
+                        propagated_literal,
+                        &mut on_analysis_step,
+                    )
             } else {
-                context.get_conflict_reason_clause_reference(&mut on_analysis_step)
+                self.temporary_clause_allocator
+                    .get_conflict_reason_clause_reference(context, &mut on_analysis_step)
             };
-            context
-                .learned_clause_manager
-                .update_clause_lbd_and_bump_activity(
-                    clause_reference,
-                    context.assignments_propositional,
-                    context.clause_allocator,
-                );
+            ExplanationClauseManager::update_clause_lbd_and_update_activity(
+                &clause_reference,
+                context,
+            );
 
             // process the reason literal
             // 	i.e., perform resolution and update other related internal data structures
             let start_index = next_literal.is_some() as usize;
             // note that the start index will be either 0 or 1 - the idea is to skip the 0th literal
             // in case the clause represents a propagation
-            for &reason_literal in
-                &context.clause_allocator[clause_reference].get_literal_slice()[start_index..]
+            for &reason_literal in &self
+                .temporary_clause_allocator
+                .get_clause(context.clause_allocator, &clause_reference)[start_index..]
             {
                 if self.seen[reason_literal.get_propositional_variable()] {
                     continue;
@@ -435,9 +447,8 @@ impl ResolutionConflictAnalyser {
                 .get_literal_assignment_level(self.analysis_result.learned_literals[1]);
         }
 
-        context
-            .explanation_clause_manager
-            .clean_up_explanation_clauses(context.clause_allocator);
+        self.temporary_clause_allocator
+            .clean_up_explanation_clauses();
 
         pumpkin_assert_moderate!(
             self.debug_check_conflict_analysis_result(is_extracting_core, context)
@@ -646,7 +657,7 @@ impl ResolutionConflictAnalyser {
                     .assignments_propositional
                     .num_propositional_variables()
         );
-        pumpkin_assert_simple!(context.explanation_clause_manager.is_empty());
+        pumpkin_assert_simple!(self.temporary_clause_allocator.is_empty());
         pumpkin_assert_advanced!(self.seen.iter().all(|b| !b));
 
         true

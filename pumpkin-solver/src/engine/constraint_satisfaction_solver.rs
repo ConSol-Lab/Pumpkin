@@ -61,7 +61,6 @@ use crate::engine::AssignmentsPropositional;
 use crate::engine::BooleanDomainEvent;
 use crate::engine::DebugHelper;
 use crate::engine::EmptyDomain;
-use crate::engine::ExplanationClauseManager;
 use crate::engine::IntDomainEvent;
 use crate::engine::LearnedClauseManager;
 use crate::engine::LearningOptions;
@@ -186,9 +185,6 @@ pub struct ConstraintSatisfactionSolver {
     /// [[`sat_trail_synced_position`]] is the next
     /// [`Literal`] on the trail that needs to be synchronised with [`AssignmentsInteger::trail`].
     sat_trail_synced_position: usize,
-    /// Holds information about explanations during conflict analysis.
-    explanation_clause_manager: ExplanationClauseManager,
-    /// Convenience literals used in special cases.
     true_literal: Literal,
     false_literal: Literal,
     /// Used to store the learned clause.
@@ -454,7 +450,6 @@ impl ConstraintSatisfactionSolver {
             variable_literal_mappings: VariableLiteralMappings::default(),
             cp_trail_synced_position: 0,
             sat_trail_synced_position: 0,
-            explanation_clause_manager: ExplanationClauseManager::default(),
             true_literal: dummy_literal,
             false_literal: !dummy_literal,
             conflict_analyser: ResolutionConflictAnalyser::default(),
@@ -715,7 +710,6 @@ impl ConstraintSatisfactionSolver {
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
@@ -750,7 +744,6 @@ impl ConstraintSatisfactionSolver {
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,
@@ -1155,7 +1148,6 @@ impl ConstraintSatisfactionSolver {
             solver_state: &mut self.state,
             brancher,
             clause_allocator: &mut self.clause_allocator,
-            explanation_clause_manager: &mut self.explanation_clause_manager,
             reason_store: &mut self.reason_store,
             counters: &mut self.counters,
             learned_clause_manager: &mut self.learned_clause_manager,

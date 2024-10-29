@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use bitfield::Bit;
+use bitfield::BitMut;
 use bitfield::BitRange;
 
 use super::StorageKey;
@@ -14,7 +15,8 @@ use crate::pumpkin_assert_moderate;
 /// Opaque clause reference that is used by clause allocators (`ClauseAllocatorInterface`).
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub struct ClauseReference {
-    /// A packed representation of either a virtual binary clause of a reference to an allocated
+    /// A packed representation of either a virtual binary clause, a reference to an explanation
+    /// clause, or a reference to an allocated
     ///  clause.
     ///
     /// 1. Binary clause: The 31st bit is one (31st bit -> most significant bit). The remaining 31
@@ -24,11 +26,11 @@ pub struct ClauseReference {
     ///    binary clause is (x v r).
     /// 2. Allocated clause: Both the 31st and 30th bit are zero, the remaining 30 bits encode the
     ///    clause id.
+    /// 3. Explanation clause: The 31st bit is not and the 30th is set, the remaining 29 bits are
+    ///    used to encode the clause ID
     ///
-    /// N.B. having both 31st and 30th bit set or having the 31st not set with the 30th bit set
-    ///  cannot take place, this combination could be used in the future for some other indicator.
-    ///  But in that case then the binary clause will only have 30 bits to work with, whereas
-    ///  currently it has 31 bits.
+    /// N.B. having both 31st and 30th bit set cannot take place, this combination could be used in
+    /// the future for some other indicator.
     code: u32,
 }
 
@@ -67,6 +69,13 @@ impl ClauseReference {
         ClauseReference { code: id }
     }
 
+    pub(crate) fn create_explanation_clause_reference(id: u32) -> Self {
+        pumpkin_assert_moderate!(ClauseReference::is_valid_allocated_clause_id(id));
+        let mut code = id;
+        code.set_bit(30, true);
+        ClauseReference { code }
+    }
+
     #[cfg(test)]
     /// Creates the reference to indicate that propagation was due to the input literal as part of
     ///  a binary clause.
@@ -88,6 +97,14 @@ impl ClauseReference {
 impl ClauseReference {
     pub fn is_virtual_binary_clause(&self) -> bool {
         self.code.bit(31)
+    }
+
+    pub fn is_explanation_clause(&self) -> bool {
+        !self.code.bit(31) && self.code.bit(30)
+    }
+
+    pub fn get_explanation_clause_index(&self) -> usize {
+        <u32 as BitRange<u32>>::bit_range(&self.code, 29, 0) as usize
     }
 
     pub fn is_allocated_clause(&self) -> bool {
