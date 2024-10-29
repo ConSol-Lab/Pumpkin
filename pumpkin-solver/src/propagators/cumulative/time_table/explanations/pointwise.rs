@@ -150,15 +150,6 @@ mod tests {
         ]
         .into();
         assert_eq!(reason_last_propagation, expected_reason);
-
-        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x <= 12));
-        let expected_reason: PropositionalConjunction = vec![
-            predicate!(x <= 18),
-            predicate!(y >= 15),
-            predicate!(y <= 18),
-        ]
-        .into();
-        assert_eq!(reason_first_propagation, expected_reason);
     }
 
     #[test]
@@ -171,16 +162,16 @@ mod tests {
             vec![predicate!(x <= 9), predicate!(z >= 4), predicate!(z <= 9)].into();
         assert_eq!(reason_last_propagation, expected_reason);
 
-        let reason_middle_propagation = propagation_handler.get_reason_for(predicate!(x <= 6));
+        let reason_middle_propagation = propagation_handler.get_reason_for(predicate!(x <= 4));
         let expected_reason: PropositionalConjunction =
-            vec![predicate!(x <= 12), predicate!(z >= 7), predicate!(z <= 12)].into();
+            vec![predicate!(x <= 10), predicate!(z >= 5), predicate!(z <= 10)].into();
         assert_eq!(reason_middle_propagation, expected_reason);
 
-        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x <= 12));
+        let reason_first_propagation = propagation_handler.get_reason_for(predicate!(x <= 10));
         let expected_reason: PropositionalConjunction = vec![
-            predicate!(x <= 18),
-            predicate!(y >= 15),
-            predicate!(y <= 18),
+            predicate!(x <= 16),
+            predicate!(y >= 13),
+            predicate!(y <= 16),
         ]
         .into();
         assert_eq!(reason_first_propagation, expected_reason);

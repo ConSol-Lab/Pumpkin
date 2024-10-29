@@ -129,28 +129,30 @@ impl CumulativePropagationHandler {
                         profiles[current_profile_index].end
                     );
 
-                    let explanation = add_propagating_task_predicate_lower_bound(
-                        create_pointwise_propagation_explanation(
-                            time_point,
+                    if time_point >= context.lower_bound(&propagating_task.start_variable) {
+                        let explanation = add_propagating_task_predicate_lower_bound(
+                            create_pointwise_propagation_explanation(
+                                time_point,
+                                profiles[current_profile_index],
+                            ),
+                            CumulativeExplanationType::PointWise,
+                            &context.as_readonly(),
+                            propagating_task,
                             profiles[current_profile_index],
-                        ),
-                        CumulativeExplanationType::PointWise,
-                        &context.as_readonly(),
-                        propagating_task,
-                        profiles[current_profile_index],
-                        Some(time_point),
-                    );
-                    pumpkin_assert_extreme!(
-                        explanation.iter().all(|predicate| context
-                            .assignments_integer()
-                            .does_integer_predicate_hold((*predicate).try_into().unwrap())),
-                        "All of the predicates in the reason should hold"
-                    );
-                    context.set_lower_bound(
-                        &propagating_task.start_variable,
-                        time_point + 1,
-                        explanation,
-                    )?;
+                            Some(time_point),
+                        );
+                        pumpkin_assert_extreme!(
+                            explanation.iter().all(|predicate| context
+                                .assignments_integer()
+                                .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                            "All of the predicates in the reason should hold"
+                        );
+                        context.set_lower_bound(
+                            &propagating_task.start_variable,
+                            time_point + 1,
+                            explanation,
+                        )?;
+                    }
 
                     if should_exit {
                         break;
@@ -280,28 +282,32 @@ impl CumulativePropagationHandler {
                         profiles[current_profile_index].end
                     );
 
-                    let explanation = add_propagating_task_predicate_upper_bound(
-                        create_pointwise_propagation_explanation(
-                            time_point,
+                    if time_point - propagating_task.processing_time
+                        < context.upper_bound(&propagating_task.start_variable)
+                    {
+                        let explanation = add_propagating_task_predicate_upper_bound(
+                            create_pointwise_propagation_explanation(
+                                time_point,
+                                profiles[current_profile_index],
+                            ),
+                            CumulativeExplanationType::PointWise,
+                            &context.as_readonly(),
+                            propagating_task,
                             profiles[current_profile_index],
-                        ),
-                        CumulativeExplanationType::PointWise,
-                        &context.as_readonly(),
-                        propagating_task,
-                        profiles[current_profile_index],
-                        Some(time_point),
-                    );
-                    pumpkin_assert_extreme!(
-                        explanation.iter().all(|predicate| context
-                            .assignments_integer()
-                            .does_integer_predicate_hold((*predicate).try_into().unwrap())),
-                        "All of the predicates in the reason should hold"
-                    );
-                    context.set_upper_bound(
-                        &propagating_task.start_variable,
-                        time_point - propagating_task.processing_time,
-                        explanation,
-                    )?;
+                            Some(time_point),
+                        );
+                        pumpkin_assert_extreme!(
+                            explanation.iter().all(|predicate| context
+                                .assignments_integer()
+                                .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                            "All of the predicates in the reason should hold"
+                        );
+                        context.set_upper_bound(
+                            &propagating_task.start_variable,
+                            time_point - propagating_task.processing_time,
+                            explanation,
+                        )?;
+                    }
 
                     if should_exit {
                         break;
@@ -411,21 +417,23 @@ impl CumulativePropagationHandler {
 
                 loop {
                     if time_point >= profile.end {
-                        // We ensure that the last time-point is always the end of the profile
-                        let explanation = add_propagating_task_predicate_lower_bound(
-                            create_pointwise_propagation_explanation(profile.end, profile),
-                            CumulativeExplanationType::PointWise,
-                            &context.as_readonly(),
-                            propagating_task,
-                            profile,
-                            Some(profile.end),
-                        );
+                        if time_point >= context.lower_bound(&propagating_task.start_variable) {
+                            // We ensure that the last time-point is always the end of the profile
+                            let explanation = add_propagating_task_predicate_lower_bound(
+                                create_pointwise_propagation_explanation(profile.end, profile),
+                                CumulativeExplanationType::PointWise,
+                                &context.as_readonly(),
+                                propagating_task,
+                                profile,
+                                Some(profile.end),
+                            );
 
-                        context.set_lower_bound(
-                            &propagating_task.start_variable,
-                            profile.end + 1,
-                            explanation,
-                        )?;
+                            context.set_lower_bound(
+                                &propagating_task.start_variable,
+                                profile.end + 1,
+                                explanation,
+                            )?;
+                        }
                         break;
                     }
                     pumpkin_assert_simple!(
@@ -436,19 +444,21 @@ impl CumulativePropagationHandler {
                         profile.end
                     );
 
-                    let explanation = add_propagating_task_predicate_lower_bound(
-                        create_pointwise_propagation_explanation(time_point, profile),
-                        CumulativeExplanationType::PointWise,
-                        &context.as_readonly(),
-                        propagating_task,
-                        profile,
-                        Some(time_point),
-                    );
-                    context.set_lower_bound(
-                        &propagating_task.start_variable,
-                        time_point + 1,
-                        explanation,
-                    )?;
+                    if time_point >= context.lower_bound(&propagating_task.start_variable) {
+                        let explanation = add_propagating_task_predicate_lower_bound(
+                            create_pointwise_propagation_explanation(time_point, profile),
+                            CumulativeExplanationType::PointWise,
+                            &context.as_readonly(),
+                            propagating_task,
+                            profile,
+                            Some(time_point),
+                        );
+                        context.set_lower_bound(
+                            &propagating_task.start_variable,
+                            time_point + 1,
+                            explanation,
+                        )?;
+                    }
 
                     time_point += propagating_task.processing_time
                 }
@@ -521,20 +531,24 @@ impl CumulativePropagationHandler {
                     .max(context.upper_bound(&propagating_task.start_variable));
                 loop {
                     if time_point <= profile.start {
-                        let explanation = add_propagating_task_predicate_upper_bound(
-                            create_pointwise_propagation_explanation(profile.start, profile),
-                            CumulativeExplanationType::PointWise,
-                            &context.as_readonly(),
-                            propagating_task,
-                            profile,
-                            Some(profile.start),
-                        );
-                        // We ensure that the last time-point is always the end of the profile
-                        context.set_upper_bound(
-                            &propagating_task.start_variable,
-                            profile.start - propagating_task.processing_time,
-                            explanation,
-                        )?;
+                        if time_point - propagating_task.processing_time
+                            < context.upper_bound(&propagating_task.start_variable)
+                        {
+                            let explanation = add_propagating_task_predicate_upper_bound(
+                                create_pointwise_propagation_explanation(profile.start, profile),
+                                CumulativeExplanationType::PointWise,
+                                &context.as_readonly(),
+                                propagating_task,
+                                profile,
+                                Some(profile.start),
+                            );
+                            // We ensure that the last time-point is always the end of the profile
+                            context.set_upper_bound(
+                                &propagating_task.start_variable,
+                                profile.start - propagating_task.processing_time,
+                                explanation,
+                            )?;
+                        }
                         break;
                     }
                     pumpkin_assert_simple!(
@@ -544,20 +558,23 @@ impl CumulativePropagationHandler {
                         profile.start,
                         profile.end
                     );
-
-                    let explanation = add_propagating_task_predicate_upper_bound(
-                        create_pointwise_propagation_explanation(time_point, profile),
-                        CumulativeExplanationType::PointWise,
-                        &context.as_readonly(),
-                        propagating_task,
-                        profile,
-                        Some(time_point),
-                    );
-                    context.set_upper_bound(
-                        &propagating_task.start_variable,
-                        time_point - propagating_task.processing_time,
-                        explanation,
-                    )?;
+                    if time_point - propagating_task.processing_time
+                        < context.upper_bound(&propagating_task.start_variable)
+                    {
+                        let explanation = add_propagating_task_predicate_upper_bound(
+                            create_pointwise_propagation_explanation(time_point, profile),
+                            CumulativeExplanationType::PointWise,
+                            &context.as_readonly(),
+                            propagating_task,
+                            profile,
+                            Some(time_point),
+                        );
+                        context.set_upper_bound(
+                            &propagating_task.start_variable,
+                            time_point - propagating_task.processing_time,
+                            explanation,
+                        )?;
+                    }
 
                     time_point -= propagating_task.processing_time
                 }
