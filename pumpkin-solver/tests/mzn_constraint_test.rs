@@ -4,6 +4,7 @@ mod helpers;
 
 use helpers::check_statistic_equality;
 use helpers::run_mzn_test_with_options;
+use test_macros::cumulative;
 
 macro_rules! statistic_equality_cumulative {
     ($first_name:ident, $second_name:ident) => {
@@ -188,7 +189,7 @@ macro_rules! mzn_test {
     };
 }
 
-macro_rules! cumulative_test {
+macro_rules! cumulative {
     ($propagator:ident) => {
         paste::item! {
             mzn_test!(
@@ -319,12 +320,12 @@ mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
 mzn_test!(bool_clause);
 
-cumulative_test!(time_table_per_point);
-cumulative_test!(time_table_per_point_incremental);
-cumulative_test!(time_table_per_point_incremental_synchronised);
-cumulative_test!(time_table_over_interval);
-cumulative_test!(time_table_over_interval_incremental);
-cumulative_test!(time_table_over_interval_incremental_synchronised);
+cumulative!(time_table_per_point);
+cumulative!(time_table_per_point_incremental);
+cumulative!(time_table_per_point_incremental_synchronised);
+cumulative!(time_table_over_interval);
+cumulative!(time_table_over_interval_incremental);
+cumulative!(time_table_over_interval_incremental_synchronised);
 
 statistic_equality_cumulative!(
     time_table_per_point,

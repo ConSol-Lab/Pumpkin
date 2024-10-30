@@ -1,0 +1,22 @@
+[package]
+name = "test-macros"
+version = "0.1.0"
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "test_macros"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+itertools = "0.13.0"
+proc-macro2 = "1.0.89"
+quote = "1.0.37"
+stringcase = "0.3.0"
+syn = "2.0.85"
+
+[lints]
+workspace = true
