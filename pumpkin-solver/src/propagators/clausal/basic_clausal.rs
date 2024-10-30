@@ -295,8 +295,6 @@ impl ClausalPropagator for BasicClausalPropagator {
     fn synchronise(&mut self, trail_size: usize) {
         pumpkin_assert_simple!(self.next_position_on_trail_to_propagate >= trail_size);
         self.next_position_on_trail_to_propagate = trail_size;
-        // self.next_position_on_trail_to_propagate =
-        //    std::cmp::min(self.next_position_on_trail_to_propagate, trail_size);
     }
 
     fn is_propagation_complete(&self, trail_size: usize) -> bool {

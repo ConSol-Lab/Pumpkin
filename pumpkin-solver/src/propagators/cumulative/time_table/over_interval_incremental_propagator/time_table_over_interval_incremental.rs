@@ -1,13 +1,9 @@
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::ops::Range;
 use std::rc::Rc;
 
-use super::create_time_table_per_point_from_scratch;
-use super::debug_propagate_from_scratch_time_table_point;
-use super::time_table_util::backtrack_update;
-use super::time_table_util::insert_update;
-use super::time_table_util::should_enqueue;
+use super::insertion;
+use super::removal;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -19,8 +15,15 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::create_time_table_over_interval_from_scratch;
+use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
+use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
+use crate::propagators::cumulative::time_table::time_table_util::has_overlap_with_interval;
+use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
+use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
+use crate::propagators::debug_propagate_from_scratch_time_table_interval;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -29,25 +32,27 @@ use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
-use crate::propagators::PerPointTimeTableType;
-use crate::propagators::ResourceProfile;
+use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::Task;
+#[cfg(doc)]
+use crate::propagators::TimeTableOverIntervalPropagator;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
 use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
+use crate::pumpkin_assert_simple;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
-/// different time-points - This method creates a resource profile per time point rather than
-/// creating one over an interval (hence the name). Furthermore, the [`TimeTablePerPointPropagator`]
-/// has a generic argument which represents the type of variable used for modelling the start
-/// variables, this will be an implementation of [`IntegerVariable`].
+/// different time-points - This method creates a resource profile over an interval rather than
+/// creating one per time-point (hence the name). Furthermore, the
+/// [`TimeTableOverIntervalPropagator`] has a generic argument which represents the type of variable
+/// used for modelling the start variables, this will be an implementation of [`IntegerVariable`].
 ///
-/// The difference between the [`TimeTablePerPointIncrementalPropagator`] and
-/// [`TimeTablePerPointPropagator`] is that the [`TimeTablePerPointIncrementalPropagator`] does not
-/// recalculate the time-table from scratch whenever the
+/// The difference between the [`TimeTableOverIntervalIncrementalPropagator`] and
+/// [`TimeTableOverIntervalPropagator`] is that the [`TimeTableOverIntervalIncrementalPropagator`]
+/// does not recalculate the time-table from scratch whenever the
 /// [`Propagator::propagate`] method is called but it utilises the
 /// [`Propagator::notify`] method to determine when a mandatory part is added
 /// and only updates the structure based on these updated mandatory parts.
@@ -57,13 +62,12 @@ use crate::pumpkin_assert_extreme;
 ///
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
-#[derive(Debug)]
-#[allow(unused)]
-pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
+#[derive(Clone, Debug)]
+pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: PerPointTimeTableType<Var>,
+    time_table: OverIntervalTimeTableType<Var>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; either to store bounds or when applying
@@ -82,17 +86,18 @@ pub(crate) struct TimeTablePerPointIncrementalPropagator<Var> {
     is_time_table_outdated: bool,
 }
 
-impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropagator<Var> {
+impl<Var: IntegerVariable + 'static> TimeTableOverIntervalIncrementalPropagator<Var> {
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
-    ) -> TimeTablePerPointIncrementalPropagator<Var> {
+    ) -> TimeTableOverIntervalIncrementalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
         let dynamic_structures = UpdatableStructures::new(&parameters);
-        TimeTablePerPointIncrementalPropagator {
-            time_table: BTreeMap::new(),
+
+        TimeTableOverIntervalIncrementalPropagator {
+            time_table: Default::default(),
             parameters,
             updatable_structures: dynamic_structures,
             found_previous_conflict: false,
@@ -108,38 +113,41 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) -> PropagationStatusCP {
-        // Go over all of the updated tasks and calculate the added mandatory part (we know
-        // that for each of these tasks, a mandatory part exists, otherwise it would not
-        // have been added (see [`should_propagate`]))
         let mut conflict = None;
-
-        for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
-            pumpkin_assert_extreme!(
-                        !self.time_table.contains_key(&(time_point as u32))
-                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
-                        "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
-
-            // Add the updated profile to the ResourceProfile at time t
-            let current_profile: &mut ResourceProfile<Var> = self
-                .time_table
-                .entry(time_point as u32)
-                .or_insert(ResourceProfile::default(time_point));
-
-            current_profile.height += task.resource_usage;
-            current_profile.profile_tasks.push(Rc::clone(task));
-
-            if current_profile.height > self.parameters.capacity && conflict.is_none() {
-                // The newly introduced mandatory part(s) caused an overflow of the resource
-                conflict = Some(Err(create_conflict_explanation(
-                    context,
-                    current_profile,
-                    self.parameters.options.explanation_type,
-                )
-                .into()));
+        // We consider both of the possible update ranges
+        // Note that the upper update range is first considered to avoid any issues with the
+        // indices when processing the other update range
+        for update_range in mandatory_part_adjustments.get_added_parts() {
+            // First we attempt to find overlapping profiles
+            match determine_profiles_to_update(&self.time_table, &update_range) {
+                Ok((start_index, end_index)) => {
+                    let result = insertion::insert_profiles_overlapping_with_added_mandatory_part(
+                        &mut self.time_table,
+                        start_index,
+                        end_index,
+                        &update_range,
+                        task,
+                        self.parameters.capacity,
+                    );
+                    if let Err(conflict_tasks) = result {
+                        if conflict.is_none() {
+                            conflict = Some(Err(create_conflict_explanation(
+                                context,
+                                &conflict_tasks,
+                                self.parameters.options.explanation_type,
+                            )
+                            .into()));
+                        }
+                    }
+                }
+                Err(index_to_insert) => insertion::insert_profile_new_mandatory_part(
+                    &mut self.time_table,
+                    index_to_insert,
+                    &update_range,
+                    task,
+                ),
             }
         }
-
-        // If we have found a conflict then we report it
         if let Some(conflict) = conflict {
             conflict
         } else {
@@ -153,51 +161,40 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         mandatory_part_adjustments: &MandatoryPartAdjustments,
         task: &Rc<Task<Var>>,
     ) {
-        for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
-            pumpkin_assert_extreme!(
-                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
-                        "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
-
-            // Then we update the time-table
-            if let Entry::Occupied(entry) =
-                self.time_table
-                    .entry(time_point as u32)
-                    .and_modify(|profile| {
-                        // We remove the resource usage of the task from the height of the profile
-                        profile.height -= task.resource_usage;
-
-                        // If the height of the profile is not equal to 0 then we remove the task
-                        // from the profile tasks
-                        if profile.height != 0 {
-                            let _ = profile.profile_tasks.swap_remove(
-                                profile
-                                    .profile_tasks
-                                    .iter()
-                                    .position(|profile_task| profile_task.id == task.id)
-                                    .expect("Task should be present"),
-                            );
-                        }
-                    })
-            {
-                if entry.get().height == 0 {
-                    // If the height of the profile is now 0 then we remove the entry
-                    let _ = entry.remove();
+        // We consider both of the possible update ranges
+        // Note that the upper update range is first considered to avoid any issues with the
+        // indices when processing the other update range
+        for update_range in mandatory_part_adjustments.get_removed_parts() {
+            // First we attempt to find overlapping profiles
+            match determine_profiles_to_update(&self.time_table, &update_range) {
+                Ok((start_index, end_index)) => {
+                    removal::reduce_profiles_overlapping_with_added_mandatory_part(
+                        &mut self.time_table,
+                        start_index,
+                        end_index,
+                        &update_range,
+                        task,
+                    )
                 }
-            } else {
-                panic!("Entry for time-point did not exist when removing from time-table")
+                Err(_) => {
+                    panic!("Removal should always have overlap with a profile")
+                }
             }
         }
     }
 
     /// Updates the stored time-table based on the updates stored in
-    /// [`DynamicStructures::updated`].
+    /// [`DynamicStructures::updated`] or recalculates it from scratch if
+    /// [`TimeTableOverIntervalIncrementalPropagator::is_time_table_outdated`] is true.
     ///
     /// An error is returned if an overflow of the resource occurs while updating the time-table.
     fn update_time_table(&mut self, context: &mut PropagationContextMut) -> PropagationStatusCP {
         if self.is_time_table_outdated {
             // We create the time-table from scratch (and return an error if it overflows)
-            self.time_table =
-                create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
+            self.time_table = create_time_table_over_interval_from_scratch(
+                context.as_readonly(),
+                &self.parameters,
+            )?;
 
             // Then we note that the time-table is not outdated anymore
             self.is_time_table_outdated = false;
@@ -249,13 +246,13 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
             // We linearly scan the profiles and find the first one which exceeds the capacity
             let conflicting_profile = self
                 .time_table
-                .values()
+                .iter()
                 .find(|profile| profile.height > self.parameters.capacity);
 
             // If we have found such a conflict then we return it
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
-                    create_time_table_per_point_from_scratch(
+                    create_time_table_over_interval_from_scratch(
                         context.as_readonly(),
                         &self.parameters
                     )
@@ -281,14 +278,14 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
         // report any conflicts
         pumpkin_assert_extreme!(self
             .time_table
-            .values()
+            .iter()
             .all(|profile| profile.height <= self.parameters.capacity));
         Ok(())
     }
 }
 
-impl<Var: IntegerVariable + 'static + Debug> Propagator
-    for TimeTablePerPointIncrementalPropagator<Var>
+impl<Var: IntegerVariable + 'static> Propagator
+    for TimeTableOverIntervalIncrementalPropagator<Var>
 {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
@@ -297,25 +294,27 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
                 &self.parameters.tasks,
                 self.updatable_structures.get_stored_bounds(),
             ),
-            "Bound were not equal when propagating"
+            "Bounds were not equal when propagating"
         );
 
-        // We update the time-table based on the stored updates
         self.update_time_table(&mut context)?;
 
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point(
-            context.as_readonly(),
-            &self.time_table,
-            &self.parameters
-        ));
+        pumpkin_assert_extreme!(
+            debug::time_tables_are_the_same_interval(
+                &context.as_readonly(),
+                &self.time_table,
+                &self.parameters,
+            ),
+            "The profiles were not the same between the incremental and the non-incremental version"
+        );
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
         // current profile could lead to the propagation across multiple profiles
-        // For example, if we have updated 1 ResourceProfile which caused a propagation then this
+        // For example, if we have updated 1 resource profile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
-            self.time_table.values(),
+            self.time_table.iter(),
             &self.parameters,
             &mut self.updatable_structures,
         )
@@ -357,7 +356,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             updated_task.start_variable.unpack_event(event),
             IntDomainEvent::Assign
         ) {
-            self.updatable_structures.fix_task(&updated_task);
+            self.updatable_structures.fix_task(&updated_task)
         }
 
         result.decision
@@ -369,6 +368,8 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
+        pumpkin_assert_simple!(self.parameters.options.incremental_backtracking);
+
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
 
         backtrack_update(context, &mut self.updatable_structures, &updated_task);
@@ -384,7 +385,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             IntDomainEvent::Assign
         ) {
             // The start variable of the task has been unassigned, we should restore it to unfixed
-            self.updatable_structures.unfix_task(updated_task)
+            self.updatable_structures.unfix_task(updated_task);
         }
     }
 
@@ -407,20 +408,28 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
     }
 
     fn name(&self) -> &str {
-        "CumulativeTimeTablePerPointIncremental"
+        "CumulativeTimeTableOverIntervalIncremental"
     }
 
     fn initialise_at_root(
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        register_tasks(&self.parameters.tasks, context, true);
+        // We only register for notifications of backtrack events if incremental backtracking is
+        // enabled
+        register_tasks(
+            &self.parameters.tasks,
+            context,
+            self.parameters.options.incremental_backtracking,
+        );
+
+        // First we store the bounds in the parameters
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
 
         // Then we do normal propagation
         self.time_table =
-            create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
+            create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
         Ok(())
     }
 
@@ -428,8 +437,8 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        // Use the same debug propagator from `TimeTablePerPoint`
-        debug_propagate_from_scratch_time_table_point(
+        // Use the same debug propagator from `TimeTableOverInterval`
+        debug_propagate_from_scratch_time_table_interval(
             &mut context,
             &self.parameters,
             &self.updatable_structures,
@@ -437,63 +446,101 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
     }
 }
 
-/// Contains functions related to debugging
-mod debug {
+/// Determines which profiles are required to be updated given a range of times which now
+/// include a mandatory part (i.e. determine the profiles which overlap with the update_range).
+/// It returns two indices into
+/// [time_table][TimeTableOverIntervalIncrementalPropagator::time_table] representing the
+/// index of the first profile which overlaps with the update_range (inclusive)
+/// and the index of the last profile which overlaps with the update_range (inclusive) or [None]
+/// if there are no overlapping profiles
+///
+/// Note that the lower-bound of the range is inclusive and the upper-bound is exclusive
+fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
+    time_table: &OverIntervalTimeTableType<Var>,
+    update_range: &Range<i32>,
+) -> Result<(usize, usize), usize> {
+    let overlapping_profile = find_overlapping_profile(time_table, update_range);
 
-    use crate::engine::propagation::PropagationContext;
-    use crate::propagators::create_time_table_per_point_from_scratch;
-    use crate::propagators::CumulativeParameters;
-    use crate::propagators::PerPointTimeTableType;
-    use crate::variables::IntegerVariable;
-
-    /// Determines whether the provided `time_table` is the same as the one creatd from scratch
-    /// using the following checks:
-    /// - The time-tables should contain the same number of profiles
-    /// - For each profile it should hold that
-    ///      - The start times are the same
-    ///      - The end times are the same
-    ///      - The heights are the same
-    ///      - The profile tasks should be the same; note that we do not check whether the order is
-    ///        the same!
-    pub(crate) fn time_tables_are_the_same_point<Var: IntegerVariable + 'static>(
-        context: PropagationContext,
-        time_table: &PerPointTimeTableType<Var>,
-        parameters: &CumulativeParameters<Var>,
-    ) -> bool {
-        let time_table_scratch = create_time_table_per_point_from_scratch(context, parameters)
-            .expect("Expected no error");
-
-        if time_table.is_empty() {
-            return time_table_scratch.is_empty();
-        }
-
-        // First we merge all of the split profiles to ensure that it is the same as the
-        // non-incremental time-table
-        let time_table = time_table.clone();
-
-        // Then we compare whether the time-tables are the same with the following checks:
-        // - The time-tables should contain the same number of profiles
-        // - For each profile it should hold that
-        //      - The starts are the same
-        //      - The ends are the same
-        //      - The heights are the same
-        //      - The profile tasks of the profiles should be the same; note that we do not check
-        //        whether the order is the same!
-        time_table.len() == time_table_scratch.len()
-            && time_table
-                .values()
-                .zip(time_table_scratch.values())
-                .all(|(actual, expected)| {
-                    actual.height == expected.height
-                        && actual.start == expected.start
-                        && actual.end == expected.end
-                        && actual.profile_tasks.len() == expected.profile_tasks.len()
-                        && actual
-                            .profile_tasks
-                            .iter()
-                            .all(|task| expected.profile_tasks.contains(task))
-                })
+    if overlapping_profile.is_err() {
+        // We have not found any profile which overlaps with the update range
+        return Err(overlapping_profile.expect_err("Overlapping profile could not be found"));
     }
+
+    // Now we need to find all of the profiles which are adjacent to `overlapping_profile` which
+    // also overlap with `update_range` Our starting index is thus the index of
+    // `overlapping_profile` and we need to search to the left and the right of the profile to
+    // find the other overlapping profiles
+    let mut left_most_overlapping_index = overlapping_profile.unwrap();
+    let mut right_most_overlapping_index = left_most_overlapping_index;
+    if left_most_overlapping_index > 0 {
+        // We go to the left of `overlapping_profile`
+        for left_profile_index in (0..left_most_overlapping_index).rev() {
+            let profile = &time_table[left_profile_index];
+            if has_overlap_with_interval(
+                update_range.start,
+                update_range.end,
+                profile.start,
+                profile.end,
+            ) {
+                // We now know that the left most overlapping index is either
+                // `left_profile_index` or before it
+                left_most_overlapping_index = left_profile_index;
+            } else {
+                // We know that no profile on the left of this one will be overlapping with
+                // `update_range`
+                break;
+            }
+        }
+    }
+
+    // We go to the right of `overlapping_profile`
+    for (right_profile_index, _) in time_table
+        .iter()
+        .enumerate()
+        .skip(left_most_overlapping_index + 1)
+    {
+        let profile = &time_table[right_profile_index];
+        if has_overlap_with_interval(
+            update_range.start,
+            update_range.end,
+            profile.start,
+            profile.end,
+        ) {
+            // We now know that the right most overlapping index is either `right_profile_index`
+            // or after it
+            right_most_overlapping_index = right_profile_index;
+        } else {
+            // We know that no profile on the right of this one will be overlapping with
+            // `update_range`
+            break;
+        }
+    }
+    Ok((left_most_overlapping_index, right_most_overlapping_index))
+}
+
+/// Performs a binary search on the
+/// [time-table][TimeTableOverIntervalIncrementalPropagator::time_table] to find *an* element
+/// which overlaps with the `update_range`. If such an element can be found then it returns
+/// [Ok] containing the index of the overlapping profile. If no such element could be found,
+/// it returns [Err] containing the index at which the element should be inserted to
+/// preserve the ordering
+fn find_overlapping_profile<Var: IntegerVariable + 'static>(
+    time_table: &OverIntervalTimeTableType<Var>,
+    update_range: &Range<i32>,
+) -> Result<usize, usize> {
+    time_table.binary_search_by(|profile| {
+        if has_overlap_with_interval(
+            update_range.start,
+            update_range.end,
+            profile.start,
+            profile.end,
+        ) {
+            return std::cmp::Ordering::Equal;
+        } else if profile.end < update_range.start {
+            return std::cmp::Ordering::Less;
+        }
+        std::cmp::Ordering::Greater
+    })
 }
 
 #[cfg(test)]
@@ -505,9 +552,9 @@ mod tests {
     use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
     use crate::predicate;
-    use crate::propagators::cumulative::time_table::time_table_per_point_incremental::TimeTablePerPointIncrementalPropagator;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativePropagatorOptions;
+    use crate::propagators::TimeTableOverIntervalIncrementalPropagator;
 
     #[test]
     fn propagator_propagates_from_profile() {
@@ -516,7 +563,7 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -547,7 +594,7 @@ mod tests {
         let s1 = solver.new_variable(1, 1);
         let s2 = solver.new_variable(1, 1);
 
-        let result = solver.new_propagator(TimeTablePerPointIncrementalPropagator::new(
+        let result = solver.new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
             &[
                 ArgTask {
                     start_time: s1,
@@ -569,23 +616,24 @@ mod tests {
             },
         ));
 
+        assert!(matches!(
+            result,
+            Err(Inconsistency::Conflict { conflict_nogood: _ })
+        ));
         assert!(match result {
-            Err(e) => {
-                match e {
-                    Inconsistency::EmptyDomain => false,
-                    Inconsistency::Conflict { conflict_nogood: x } => {
-                        let expected = [
-                            predicate!(s1 <= 1),
-                            predicate!(s1 >= 1),
-                            predicate!(s2 <= 1),
-                            predicate!(s2 >= 1),
-                        ];
-                        expected
-                            .iter()
-                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                            && x.iter().all(|y| expected.contains(y))
-                    }
-                }
+            Err(Inconsistency::Conflict { conflict_nogood }) => {
+                let expected = [
+                    predicate!(s1 <= 1),
+                    predicate!(s1 >= 1),
+                    predicate!(s2 >= 1),
+                    predicate!(s2 <= 1),
+                ];
+                expected.iter().all(|y| {
+                    conflict_nogood
+                        .iter()
+                        .collect::<Vec<&Predicate>>()
+                        .contains(&y)
+                }) && conflict_nogood.iter().all(|y| expected.contains(y))
             }
             _ => false,
         });
@@ -598,7 +646,7 @@ mod tests {
         let s2 = solver.new_variable(0, 6);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -634,7 +682,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: a,
@@ -683,7 +731,7 @@ mod tests {
         let s2 = solver.new_variable(6, 10);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -726,8 +774,8 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+        let _ = solver
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -749,8 +797,6 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let result = solver.propagate_until_fixed_point(&mut propagator);
-        assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
@@ -759,7 +805,7 @@ mod tests {
         let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 <= 5),
+                predicate!(s2 <= 8),
                 predicate!(s1 >= 6),
                 predicate!(s1 <= 6),
             ]),
@@ -778,7 +824,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: a,
@@ -852,7 +898,7 @@ mod tests {
         let a = solver.new_variable(0, 1);
 
         let mut propagator = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: a,
@@ -924,7 +970,7 @@ mod tests {
         let s2 = solver.new_variable(1, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -954,11 +1000,9 @@ mod tests {
         let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
-                predicate!(s2 >= 4),
+                predicate!(s2 >= 1),
                 predicate!(s1 >= 1),
-                predicate!(s1 <= 1), /* Note that this not the most general explanation, if s2
-                                      * could have started at 0 then it would still have
-                                      * overlapped with the current interval */
+                predicate!(s1 <= 1),
             ]),
             reason
         );
@@ -972,7 +1016,7 @@ mod tests {
         let s3 = solver.new_variable(1, 15);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,
@@ -1011,8 +1055,7 @@ mod tests {
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
                 predicate!(s2 >= 5),
-                predicate!(s3 >= 6), /* Note that s3 would have been able to propagate
-                                      * this bound even if it started at time 0 */
+                predicate!(s3 >= 5),
             ]),
             reason
         );
@@ -1025,7 +1068,7 @@ mod tests {
         let s2 = solver.new_variable(0, 8);
 
         let _ = solver
-            .new_propagator(TimeTablePerPointIncrementalPropagator::new(
+            .new_propagator(TimeTableOverIntervalIncrementalPropagator::new(
                 &[
                     ArgTask {
                         start_time: s1,

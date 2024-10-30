@@ -28,7 +28,7 @@ impl Lbd {
         predicates: &[Predicate],
         assignments: &Assignments,
     ) -> u32 {
-        self.lbd_helper.clear();
+        self.lbd_helper.set_to_empty();
         self.lbd_helper
             .accommodate(&(assignments.get_decision_level() as u32));
 

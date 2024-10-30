@@ -40,6 +40,10 @@ impl PropagatorInitialisationContext<'_> {
         }
     }
 
+    pub(crate) fn as_readonly(&self) -> PropagationContext {
+        self.context
+    }
+
     /// Subscribes the propagator to the given [`DomainEvents`].
     ///
     /// The domain events determine when [`Propagator::notify()`] will be called on the propagator.

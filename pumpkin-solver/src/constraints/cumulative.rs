@@ -168,8 +168,7 @@ where
 
     pumpkin_assert_simple!(
         start_times.len() == durations.len() && durations.len() == resource_requirements.len(),
-        "The number of start variables, durations and resource requirements should be the
-same!"
+        "The number of start variables, durations and resource requirements should be the same!"
     );
 
     CumulativeConstraint::new(
@@ -203,7 +202,7 @@ impl<Var: IntegerVariable + 'static> CumulativeConstraint<Var> {
     }
 }
 
-impl<Var: IntegerVariable + 'static> Constraint for CumulativeConstraint<Var> {
+impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint<Var> {
     fn post(
         self,
         solver: &mut Solver,

@@ -363,6 +363,13 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "no-learning")]
     no_learning: bool,
+
+    /// Determines whether incremental backtracking is applied or whether the cumulative
+    /// propagators compute the time-table from scratch upon backtracking
+    ///
+    /// Possible values: bool
+    #[arg(long = "cumulative-incremental-backtracking")]
+    cumulative_incremental_backtracking: bool,
 }
 
 fn configure_logging(
@@ -569,6 +576,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_explanation_type,
                     args.cumulative_generate_sequence,
                     args.cumulative_propagation_method,
+                    args.cumulative_incremental_backtracking,
                 ),
             },
         )?,
