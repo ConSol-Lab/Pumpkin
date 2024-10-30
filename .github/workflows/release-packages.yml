@@ -1,4 +1,5 @@
-# This workflow is used to create and publish releases for the pumpkin-solver crate.
+# This workflow is used to create and publish releases for the various packages in
+# the repository.
 #
 # The way this works is the following:
 #
@@ -10,6 +11,9 @@
 # executables for each supported platform and attaches them as release assets
 # to the previously created release.
 #
+# The publish-package job runs to distribute the package to the appropriate
+# registry.
+#
 # The key here is that we create the release only once.
 #
 # Reference:
@@ -19,7 +23,7 @@ name: Release Packages
 on:
   push:
     tags:
-      - "pumpkin-solver-v*"
+      - "*-v*"
 
 jobs:
   # Create a GitHub release based on the tag. Extract the appropriate changes from 
