@@ -1,4 +1,3 @@
-use std::io::{stdout, Write};
 use std::num::NonZero;
 
 use super::results::OptimisationResult;
@@ -31,8 +30,8 @@ use crate::predicate;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::statistics::statistic_logging::write_statistic;
-use crate::statistics::statistic_logging::write_statistic_postfix;
+use crate::statistics::statistic_logging::log_statistic;
+use crate::statistics::statistic_logging::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
 
 /// The main interaction point which allows the creation of variables, the addition of constraints,
@@ -136,28 +135,16 @@ impl Solver {
         self.solution_callback = Box::new(solution_callback);
     }
 
-    /// Logs the statistics currently present in the solver with the provided objective value to stdout.
+    /// Logs the statistics currently present in the solver with the provided objective value.
     pub fn log_statistics_with_objective(&self, objective_value: i64) {
-        let mut writer: Box<dyn Write> = Box::new(stdout());
-        self.write_statistics_with_objective(&mut writer, objective_value);
+        log_statistic("objective", objective_value);
+        self.log_statistics();
     }
 
-    /// Writes the statistics currently present in the solver with the provided objective value to the provided [`Write`]r.
-    pub fn write_statistics_with_objective(&self, writer: &mut Box<dyn Write>, objective_value: i64) {
-        write_statistic(writer, "objective", objective_value);
-        self.write_statistics(writer);
-    }
-
-    /// Logs the statistics currently present in the solver to stdout.
+    /// Logs the statistics currently present in the solver.
     pub fn log_statistics(&self) {
-        let mut writer: Box<dyn Write> = Box::new(stdout());
-        self.write_statistics(&mut writer);
-    }
-
-    /// Writes the statistics currently present in the solver to the provided [`Write`]r.
-    pub fn write_statistics(&self, writer: &mut Box<dyn Write>) {
-        self.satisfaction_solver.write_statistics(writer);
-        write_statistic_postfix(writer);
+        self.satisfaction_solver.log_statistics();
+        log_statistic_postfix();
     }
 }
 

@@ -3,11 +3,11 @@ pub(crate) mod statistic_logger;
 pub(crate) mod statistic_logging;
 
 use std::fmt::Display;
-use std::io::Write;
+
 pub use statistic_logger::StatisticLogger;
 pub use statistic_logging::configure_statistic_logging;
-pub use statistic_logging::write_statistic;
-pub use statistic_logging::write_statistic_postfix;
+pub use statistic_logging::log_statistic;
+pub use statistic_logging::log_statistic_postfix;
 pub use statistic_logging::should_log_statistics;
 pub use statistic_logging::StatisticOptions;
 
@@ -21,12 +21,12 @@ use crate::Solver;
 /// See [`create_statistics_struct`] for creating a statistic struct automatically!
 pub trait Statistic {
     /// Logs the [`Statistic`] using the provided [`StatisticLogger`].
-    fn write(&self, writer: &mut Box<dyn Write>, statistic_logger: StatisticLogger);
+    fn log(&self, statistic_logger: StatisticLogger);
 }
 
 impl<Value: Display> Statistic for Value {
-    fn write(&self, writer: &mut Box<dyn Write>, statistic_logger: StatisticLogger) {
-        statistic_logger.write_statistic(writer, self);
+    fn log(&self, statistic_logger: StatisticLogger) {
+        statistic_logger.log_statistic(self);
     }
 }
 
@@ -53,8 +53,8 @@ macro_rules! create_statistics_struct {
         }
 
         impl $crate::statistics::Statistic for $name {
-            fn write(&self, writer: &mut Box<dyn std::io::Write>, statistic_logger: $crate::statistics::StatisticLogger) {
-                $(self.$field.write(writer, statistic_logger.attach_to_prefix(stringify!($field),)));+
+            fn log(&self, statistic_logger: $crate::statistics::StatisticLogger) {
+                $(self.$field.log(statistic_logger.attach_to_prefix(stringify!($field),)));+
             }
         }
     };
