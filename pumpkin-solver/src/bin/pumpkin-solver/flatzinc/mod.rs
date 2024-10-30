@@ -88,10 +88,10 @@ pub(crate) fn solve(
         instance.search.expect("Expected a search to be defined")
     };
 
-    solver.with_solution_callback(move |solution_callback| {
+    solver.with_solution_callback(move |solution_callback_input| {
         if options.all_solutions || instance.objective_function.is_none() {
-            solution_callback.log_statistics();
-            print_solution_from_solver(solution_callback.solution, &outputs);
+            solution_callback_input.log_statistics();
+            print_solution_from_solver(solution_callback_input.solution, &outputs);
         }
     });
 

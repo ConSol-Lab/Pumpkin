@@ -2,7 +2,7 @@ use self::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub use crate::basic_types::ProblemSolution;
 use crate::basic_types::Solution;
 pub use crate::basic_types::SolutionReference;
-pub(crate) mod solution_callback;
+pub(crate) mod solution_callback_input;
 pub mod solution_iterator;
 pub mod unsatisfiable;
 use crate::branching::Brancher;
