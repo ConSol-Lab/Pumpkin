@@ -201,7 +201,7 @@ impl ConflictAnalysisContext<'_> {
         let propagator = self.reason_store.get_propagator(reason_ref);
         let reason = self
             .reason_store
-            .get_or_compute(reason_ref, &propagation_context)
+            .get_or_compute(reason_ref, propagation_context)
             .expect("reason reference should not be stale");
         // create the explanation clause
         //  allocate a fresh vector each time might be a performance bottleneck
