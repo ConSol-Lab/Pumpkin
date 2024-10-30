@@ -280,7 +280,7 @@ impl ConstraintSatisfactionSolver {
                         &self.assignments_propositional,
                     );
 
-                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
             }
         }
@@ -1329,7 +1329,7 @@ impl ConstraintSatisfactionSolver {
         for propagator in self.cp_propagators.iter_propagators_mut() {
             let context =
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
-            propagator.synchronise(&context);
+            propagator.synchronise(context);
         }
 
         let _ = self.process_backtrack_events();
@@ -1513,7 +1513,7 @@ impl ConstraintSatisfactionSolver {
                 .reason_store
                 .get_or_compute(
                     reason,
-                    &PropagationContext::new(
+                    PropagationContext::new(
                         &self.assignments_integer,
                         &self.assignments_propositional,
                     ),

@@ -24,11 +24,11 @@ pub(crate) fn time_tables_are_the_same_interval<
     Var: IntegerVariable + 'static,
     const SYNCHRONISE: bool,
 >(
-    context: &PropagationContext,
+    context: PropagationContext,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let time_table_scratch = create_time_table_over_interval_from_scratch(*context, parameters)
+    let time_table_scratch = create_time_table_over_interval_from_scratch(context, parameters)
         .expect("Expected no error");
 
     if time_table.is_empty() {

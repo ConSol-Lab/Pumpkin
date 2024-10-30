@@ -46,7 +46,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
-    context: &PropagationContext,
+    context: PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
@@ -107,7 +107,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
 }
 
 pub(crate) fn has_mandatory_part<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
 ) -> bool {
     context.upper_bound(&task.start_variable)
@@ -117,7 +117,7 @@ pub(crate) fn has_mandatory_part<Var: IntegerVariable + 'static>(
 /// Checks whether a specific task (indicated by id) has a mandatory part which overlaps with the
 /// interval [start, end]
 pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -134,7 +134,7 @@ pub(crate) fn has_mandatory_part_in_interval<Var: IntegerVariable + 'static>(
 
 /// Checks whether the lower and upper bound of a task overlap with the provided interval
 pub(crate) fn task_has_overlap_with_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
@@ -370,7 +370,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 
             // Then we check what propagations can be performed
             if lower_bound_can_be_propagated_by_profile(
-                &context.as_readonly(),
+                context.as_readonly(),
                 task,
                 profile,
                 parameters.capacity,
@@ -380,7 +380,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 let last_index = find_index_last_profile_which_propagates_lower_bound(
                     profile_index,
                     &time_table,
-                    &context.as_readonly(),
+                    context.as_readonly(),
                     task,
                     parameters.capacity,
                 );
@@ -399,7 +399,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             }
 
             if upper_bound_can_be_propagated_by_profile(
-                &context.as_readonly(),
+                context.as_readonly(),
                 task,
                 profile,
                 parameters.capacity,
@@ -410,7 +410,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 let first_index = find_index_last_profile_which_propagates_upper_bound(
                     profile_index,
                     &time_table,
-                    &context.as_readonly(),
+                    context.as_readonly(),
                     task,
                     parameters.capacity,
                 );
@@ -449,7 +449,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&ResourceProfile<Var>],
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
 ) -> usize {
@@ -472,7 +472,7 @@ fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + '
 fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + 'static>(
     profile_index: usize,
     time_table: &[&ResourceProfile<Var>],
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
 ) -> usize {
@@ -508,7 +508,7 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
 fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -528,7 +528,7 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
 fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -548,7 +548,7 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 /// If the first condition is true, the second false and the third true then this method returns
 /// true (otherwise it returns false)
 fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     capacity: i32,
@@ -577,7 +577,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<CanUpdate> {
-    if !can_be_updated_by_profile(&context.as_readonly(), task, profile, parameters.capacity) {
+    if !can_be_updated_by_profile(context.as_readonly(), task, profile, parameters.capacity) {
         // If the task cannot be updated by the profile then we simply return the empty list
         vec![]
     } else {
@@ -585,7 +585,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
         let mut result = vec![];
 
         if lower_bound_can_be_propagated_by_profile(
-            &context.as_readonly(),
+            context.as_readonly(),
             task,
             profile,
             parameters.capacity,
@@ -594,7 +594,7 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
             result.push(CanUpdate::LowerBound)
         }
         if upper_bound_can_be_propagated_by_profile(
-            &context.as_readonly(),
+            context.as_readonly(),
             task,
             profile,
             parameters.capacity,
@@ -622,7 +622,7 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
 }
 
 pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     updatable_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
