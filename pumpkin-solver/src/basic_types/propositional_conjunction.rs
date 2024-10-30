@@ -1,7 +1,8 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 
-use super::HashSet;
+use itertools::Itertools;
+
 use crate::engine::predicates::predicate::Predicate;
 
 /// A struct which represents a conjunction of [`Predicate`]s (e.g. it can represent `[x >= 5] /\ [y
@@ -62,8 +63,7 @@ impl PropositionalConjunction {
             .predicates_in_conjunction
             .into_iter()
             .chain(additional_elements)
-            .collect::<HashSet<_>>()
-            .into_iter()
+            .unique()
             .collect();
         self
     }

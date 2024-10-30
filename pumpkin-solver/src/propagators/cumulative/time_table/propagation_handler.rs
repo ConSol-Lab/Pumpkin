@@ -19,6 +19,7 @@ use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
+use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
@@ -92,58 +93,11 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the start of the profile
-                let mut current_profile_index = 0;
-                let mut time_point = profiles[current_profile_index].start;
-                let mut should_exit = false;
-
-                loop {
-                    let explanation = add_propagating_task_predicate_lower_bound(
-                        create_pointwise_propagation_explanation(
-                            time_point,
-                            profiles[current_profile_index],
-                        ),
-                        CumulativeExplanationType::PointWise,
-                        context.as_readonly(),
-                        propagating_task,
-                        profiles[current_profile_index],
-                        Some(time_point),
-                    );
-                    context.set_lower_bound(
-                        &propagating_task.start_variable,
-                        time_point + 1,
-                        explanation,
-                    )?;
-
-                    if should_exit {
-                        break;
-                    }
-
-                    // We place the time-point as far as possible
-                    time_point += propagating_task.processing_time;
-                    // Then we update the index of the current profile if appropriate
-                    if time_point > profiles[current_profile_index].end {
-                        current_profile_index += 1;
-                    }
-
-                    // We have gone past the last profile, we ensure that we propagate past its end
-                    // point here
-                    if current_profile_index >= profiles.len() {
-                        current_profile_index -= 1;
-                        time_point = profiles[current_profile_index].end;
-                        should_exit = true;
-                        continue;
-                    }
-
-                    // Now we check whether we are skipping a profile, if this is the case then we
-                    // set the time-point to the end of the next profile rather than skipping it
-                    // entirely (this is preferable according to `Improving Scheduling by
-                    // Learning`).
-                    if time_point > profiles[current_profile_index].end {
-                        time_point = profiles[current_profile_index].end
-                    }
-                }
-                Ok(())
+                pointwise::propagate_lower_bounds_with_pointwise_explanations(
+                    context,
+                    profiles,
+                    propagating_task,
+                )
             }
         }
     }
@@ -197,56 +151,11 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the end of the profile
-                let mut current_profile_index = profiles.len() - 1;
-                let mut time_point = profiles[current_profile_index].end;
-                let mut should_exit = false;
-
-                loop {
-                    let explanation = add_propagating_task_predicate_upper_bound(
-                        create_pointwise_propagation_explanation(
-                            time_point,
-                            profiles[current_profile_index],
-                        ),
-                        CumulativeExplanationType::PointWise,
-                        context.as_readonly(),
-                        propagating_task,
-                        profiles[current_profile_index],
-                        Some(time_point),
-                    );
-                    context.set_upper_bound(
-                        &propagating_task.start_variable,
-                        time_point - propagating_task.processing_time,
-                        explanation,
-                    )?;
-
-                    if should_exit {
-                        break;
-                    }
-
-                    time_point -= propagating_task.processing_time;
-
-                    // Then we update the index of the current profile if appropriate
-                    if time_point < profiles[current_profile_index].start {
-                        if current_profile_index == 0 {
-                            // We have gone past the first profile, we ensure that we propagate past
-                            // its start point here
-                            time_point = profiles[current_profile_index].start;
-                            should_exit = true;
-                            continue;
-                        }
-                        current_profile_index -= 1;
-                    }
-
-                    // Now we check whether we are skipping a profile, if this is the case then we
-                    // set the time-point to the end of the next profile rather than skipping it
-                    // entirely (this is preferable according to `Improving Scheduling by
-                    // Learning`).
-                    if time_point < profiles[current_profile_index].start {
-                        time_point = profiles[current_profile_index].start
-                    }
-                }
-                Ok(())
+                pointwise::propagate_upper_bounds_with_pointwise_explanations(
+                    context,
+                    profiles,
+                    propagating_task,
+                )
             }
         }
     }
@@ -291,45 +200,11 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the start of the profile
-                let mut time_point = profile.start;
-                loop {
-                    if time_point >= profile.end {
-                        // We ensure that the last time-point is always the end of the profile
-                        let explanation = add_propagating_task_predicate_lower_bound(
-                            create_pointwise_propagation_explanation(profile.end, profile),
-                            CumulativeExplanationType::PointWise,
-                            context.as_readonly(),
-                            propagating_task,
-                            profile,
-                            Some(profile.end),
-                        );
-
-                        context.set_lower_bound(
-                            &propagating_task.start_variable,
-                            profile.end + 1,
-                            explanation,
-                        )?;
-                        break;
-                    }
-
-                    let explanation = add_propagating_task_predicate_lower_bound(
-                        create_pointwise_propagation_explanation(time_point, profile),
-                        CumulativeExplanationType::PointWise,
-                        context.as_readonly(),
-                        propagating_task,
-                        profile,
-                        Some(time_point),
-                    );
-                    context.set_lower_bound(
-                        &propagating_task.start_variable,
-                        time_point + 1,
-                        explanation,
-                    )?;
-
-                    time_point += propagating_task.processing_time
-                }
-                Ok(())
+                pointwise::propagate_lower_bounds_with_pointwise_explanations(
+                    context,
+                    &[profile],
+                    propagating_task,
+                )
             }
         }
     }
@@ -375,43 +250,11 @@ impl CumulativePropagationHandler {
                 )
             }
             CumulativeExplanationType::PointWise => {
-                // The first time-point which we explain is always the end of the profile
-                let mut time_point = profile.end;
-                loop {
-                    if time_point <= profile.start {
-                        let explanation = add_propagating_task_predicate_upper_bound(
-                            create_pointwise_propagation_explanation(profile.start, profile),
-                            CumulativeExplanationType::PointWise,
-                            context.as_readonly(),
-                            propagating_task,
-                            profile,
-                            Some(profile.start),
-                        );
-                        // We ensure that the last time-point is always the end of the profile
-                        context.set_upper_bound(
-                            &propagating_task.start_variable,
-                            profile.start - propagating_task.processing_time,
-                            explanation,
-                        )?;
-                        break;
-                    }
-                    let explanation = add_propagating_task_predicate_upper_bound(
-                        create_pointwise_propagation_explanation(time_point, profile),
-                        CumulativeExplanationType::PointWise,
-                        context.as_readonly(),
-                        propagating_task,
-                        profile,
-                        Some(time_point),
-                    );
-                    context.set_upper_bound(
-                        &propagating_task.start_variable,
-                        time_point - propagating_task.processing_time,
-                        explanation,
-                    )?;
-
-                    time_point -= propagating_task.processing_time
-                }
-                Ok(())
+                pointwise::propagate_upper_bounds_with_pointwise_explanations(
+                    context,
+                    &[profile],
+                    propagating_task,
+                )
             }
         }
     }
