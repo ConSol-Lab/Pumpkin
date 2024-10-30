@@ -405,7 +405,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        pumpkin_assert_simple!(self.is_conflicting());
+        pumpkin_assert_simple!(
+            self.is_conflicting(),
+            "Proof attempted to be completed while not in conflicting state"
+        );
 
         let result = self.compute_learned_clause(&mut DummyBrancher);
         let _ = self
@@ -1695,7 +1698,12 @@ impl ConstraintSatisfactionSolver {
 
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
-        if initialisation_status.is_err() {
+        if let Err(conflict_explanation) = initialisation_status {
+            self.state
+                .declare_conflict(StoredConflictInfo::Explanation {
+                    conjunction: conflict_explanation,
+                    propagator: new_propagator_id,
+                });
             self.complete_proof();
             let _ = self.conclude_proof_unsat();
             self.state.declare_infeasible();
@@ -1916,6 +1924,7 @@ mod tests {
     use crate::engine::termination::indefinite::Indefinite;
     use crate::engine::variables::Literal;
     use crate::predicate;
+    use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
 
     /// A test propagator which propagates the stored propagations and then reports one of the
     /// stored conflicts. If multiple conflicts are stored then the next time it is called, it will
@@ -2256,5 +2265,17 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
+        let mut solver = ConstraintSatisfactionSolver::default();
+
+        let x = solver.create_new_integer_variable(1, 1, None);
+        let y = solver.create_new_integer_variable(2, 2, None);
+
+        let propagator = LinearNotEqualPropagator::new(Box::new([x, y]), 3);
+        let result = solver.add_propagator(propagator, None);
+        assert!(result.is_err());
     }
 }

@@ -38,14 +38,14 @@ jobs:
         if: env.RELEASE_NAME == ''
         run: |
           # See: https://github.community/t5/GitHub-Actions/How-to-get-just-the-tag-name/m-p/32167/highlight/true#M1027
-
-          echo "RELEASE_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          RELEASE_NAME=${GITHUB_REF#refs/tags/}
+          echo "RELEASE_NAME=${RELEASE_NAME}" >> $GITHUB_ENV
           echo "PACKAGE=${RELEASE_NAME%-*}" >> $GITHUB_ENV
           echo "VERSION=${RELEASE_NAME##*-}" >> $GITHUB_ENV
 
-          echo "release_name: ${{ env.RELEASE_NAME }}"
-          echo "package: ${{ env.PACKAGE }}"
-          echo "version: ${{ env.VERSION }}"
+          echo "release_name: ${RELEASE_NAME}"
+          echo "package: ${RELEASE_NAME%-*}"
+          echo "version: ${RELEASE_NAME##*-}"
             
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,14 +83,14 @@ jobs:
         toolchain: stable
 
     - name: Publish to crates.io
-      if: ${{ needs.create-release.outputs.package == 'pumpkin-solver' || needs.create-release.outputs.package == 'drcp-format' }}
+      if: ${{ contains(needs.create-release.outputs.package, 'pumpkin-solver') || contains(needs.create-release.outputs.package, 'drcp-format') }}
       run: cargo publish --package ${{ needs.create-release.outputs.package }} --token ${CRATES_TOKEN}
       env:
         CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
 
   attach-artifacts:
     name: Build Pumpkin Artifacts and Upload
-    if: ${{ needs.create-release.outputs.package == 'pumpkin-solver' }}
+    if: ${{ contains(needs.create-release.outputs.package, 'pumpkin-solver') }}
     needs: create-release
     strategy:
       fail-fast: false
