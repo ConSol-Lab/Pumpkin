@@ -249,7 +249,7 @@ impl ConstraintSatisfactionSolver {
                     let propagator = &mut self.propagators[propagator_var.propagator];
                     let context = PropagationContext::new(&self.assignments);
 
-                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
             }
         }
@@ -1039,7 +1039,7 @@ impl ConstraintSatisfactionSolver {
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
             let context = PropagationContext::new(&self.assignments);
-            propagator.synchronise(&context);
+            propagator.synchronise(context);
         }
 
         brancher.synchronise(&self.assignments);
@@ -1075,7 +1075,7 @@ impl ConstraintSatisfactionSolver {
         let reason_changing_bound = ReasonStore::get_or_compute_new(
             &mut self.reason_store,
             entry.reason.unwrap(),
-            &propagation_context,
+            propagation_context,
             &mut self.propagators,
         )
         .unwrap();

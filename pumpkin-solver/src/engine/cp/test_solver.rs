@@ -242,7 +242,7 @@ impl TestSolver {
             .get_reason_for_predicate_brute_force(predicate);
         let context = PropagationContext::new(&self.assignments);
         self.reason_store
-            .get_or_compute(reason_ref, &context)
+            .get_or_compute(reason_ref, context)
             .expect("reason_ref should not be stale")
     }
 
@@ -256,7 +256,7 @@ impl TestSolver {
             .get_reason_for_predicate_brute_force(predicate);
         let context = PropagationContext::new(&self.assignments);
         self.reason_store
-            .get_or_compute_new(reason_ref, &context, propagators)
+            .get_or_compute_new(reason_ref, context, propagators)
             .expect("reason_ref should not be stale")
     }
 

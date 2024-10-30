@@ -65,7 +65,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
     fn notify_backtrack(
         &mut self,
-        context: &PropagationContext,
+        context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
@@ -102,7 +102,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
         self.propagator.priority()
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         // We remove the inconsistency upon backtracking since it might be invalid now
         self.inconsistency = None;
 

@@ -204,7 +204,7 @@ impl<Var: IntegerVariable + 'static + Debug> TimeTablePerPointIncrementalPropaga
 
             // And we clear all of the updates since they have now necessarily been processed
             self.updatable_structures
-                .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+                .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
 
             return Ok(());
         }
@@ -293,7 +293,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
-                &context.as_readonly(),
+                context.as_readonly(),
                 &self.parameters.tasks,
                 self.updatable_structures.get_stored_bounds(),
             ),
@@ -339,7 +339,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            &context,
+            context,
             self.time_table.is_empty(),
         );
 
@@ -348,7 +348,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         insert_update(&updated_task, &mut self.updatable_structures, result.update);
 
         update_bounds_task(
-            &context,
+            context,
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -365,7 +365,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
 
     fn notify_backtrack(
         &mut self,
-        context: &PropagationContext,
+        context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
@@ -388,7 +388,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
         }
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         // We now recalculate the time-table from scratch if necessary and reset all of the bounds
         // *if* incremental backtracking is disabled
         if !self.parameters.options.incremental_backtracking {
@@ -416,7 +416,7 @@ impl<Var: IntegerVariable + 'static + Debug> Propagator
     ) -> Result<(), PropositionalConjunction> {
         register_tasks(&self.parameters.tasks, context, true);
         self.updatable_structures
-            .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+            .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
 
         // Then we do normal propagation
         self.time_table =

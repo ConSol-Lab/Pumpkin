@@ -220,7 +220,7 @@ impl<Var> LazyReason for RightHandSideReason<Var>
 where
     Var: PredicateConstructor<Value = i32>,
 {
-    fn compute(self: Box<Self>, _: &PropagationContext) -> PropositionalConjunction {
+    fn compute(self: Box<Self>, _: PropagationContext) -> PropositionalConjunction {
         self.variables
             .iter()
             .map(|variable| match self.bound {

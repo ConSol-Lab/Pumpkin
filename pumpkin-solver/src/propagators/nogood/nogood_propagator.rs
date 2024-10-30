@@ -561,7 +561,7 @@ impl NogoodPropagator {
         true
     }
 
-    fn clean_up_learned_nogoods_if_needed(&mut self, context: &PropagationContext) {
+    fn clean_up_learned_nogoods_if_needed(&mut self, context: PropagationContext) {
         // Only remove learned nogoods if there are too many.
         if self.learned_nogood_ids.high_lbd.len() > self.parameters.limit_num_high_lbd_nogoods {
             // The procedure is divided into two parts (for simplicity of implementation).
@@ -639,7 +639,7 @@ impl NogoodPropagator {
         }
     }
 
-    fn remove_high_lbd_nogoods(&mut self, context: &PropagationContext) {
+    fn remove_high_lbd_nogoods(&mut self, context: PropagationContext) {
         // Currently we only remove at the root level for simplicity, but we could consider
         // otherwise.
         assert!(context.get_decision_level() == 0);
@@ -1580,7 +1580,7 @@ impl Propagator for NogoodPropagator {
         Ok(())
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         self.last_index_on_trail = context.assignments().trail.len() - 1;
         let _ = self.enqueued_updates.drain();
 

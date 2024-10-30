@@ -101,7 +101,7 @@ where
 
     fn notify_backtrack(
         &mut self,
-        _context: &PropagationContext,
+        _context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {
@@ -147,8 +147,8 @@ where
             );
         });
 
-        self.recalculate_fixed_variables(context);
-        self.check_for_conflict(context)?;
+        self.recalculate_fixed_variables(context.as_readonly());
+        self.check_for_conflict(context.as_readonly())?;
         Ok(())
     }
 
@@ -156,7 +156,7 @@ where
         // If the left-hand side is out of date then we simply recalculate from scratch; we only do
         // this when we can propagate or check for a conflict
         if self.should_recalculate_lhs && self.number_of_fixed_terms >= self.terms.len() - 1 {
-            self.recalculate_fixed_variables(&context.as_readonly());
+            self.recalculate_fixed_variables(context.as_readonly());
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
@@ -196,7 +196,7 @@ where
         } else if self.number_of_fixed_terms == self.terms.len() {
             pumpkin_assert_simple!(!self.should_recalculate_lhs);
             // Otherwise we check for a conflict
-            self.check_for_conflict(&context.as_readonly())?;
+            self.check_for_conflict(context.as_readonly())?;
         }
 
         Ok(())
@@ -271,7 +271,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     /// Note that this method always sets the `unfixed_variable_has_been_updated` to true; this
     /// might be too lenient as it could be the case that synchronisation does not lead to the
     /// re-adding of the removed value.
-    fn recalculate_fixed_variables<Context: ReadDomains>(&mut self, context: &Context) {
+    fn recalculate_fixed_variables(&mut self, context: PropagationContext) {
         self.unfixed_variable_has_been_updated = false;
         (self.fixed_lhs, self.number_of_fixed_terms) =
             self.terms
@@ -289,9 +289,9 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
     }
 
     /// Determines whether a conflict has occurred and calculate the reason for the conflict
-    fn check_for_conflict<Context: ReadDomains>(
+    fn check_for_conflict(
         &self,
-        context: &Context,
+        context: PropagationContext,
     ) -> Result<(), PropositionalConjunction> {
         pumpkin_assert_simple!(!self.should_recalculate_lhs);
         if self.number_of_fixed_terms == self.terms.len() && self.fixed_lhs == self.rhs {

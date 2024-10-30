@@ -103,7 +103,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         )
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         self.dynamic_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
     }
@@ -124,11 +124,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &self.parameters,
             &self.dynamic_structures,
             &updated_task,
-            &context,
+            context,
             self.is_time_table_empty,
         );
         update_bounds_task(
-            &context,
+            context,
             self.dynamic_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -156,7 +156,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.dynamic_structures
-            .initialise_bounds_and_remove_fixed(context, &self.parameters);
+            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
         register_tasks(&self.parameters.tasks, context, false);
 
         Ok(())
@@ -428,7 +428,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
         context,
         time_table.iter(),
         parameters,
-        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+        &mut dynamic_structures.recreate_from_context(context.as_readonly(), parameters),
     )
 }
 

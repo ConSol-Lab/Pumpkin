@@ -70,7 +70,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.propagators.iter_propagators_mut() {
             let context = PropagationContext::new(self.assignments);
-            propagator.synchronise(&context);
+            propagator.synchronise(context);
         }
 
         self.brancher.synchronise(self.assignments);
@@ -98,7 +98,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     let propagator = &mut self.propagators[propagator_var.propagator];
                     let context = PropagationContext::new(self.assignments);
 
-                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
             }
         }
@@ -200,7 +200,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 .expect("Cannot be a null reason for propagation.");
 
             reason_store
-                .get_or_compute_new(reason_ref, &propagation_context, propagators)
+                .get_or_compute_new(reason_ref, propagation_context, propagators)
                 .expect("reason reference should not be stale")
         // The predicate is implicitly due as a result of a decision.
         }
@@ -237,7 +237,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                     reason_store
                                         .get_or_compute_new(
                                             reason_ref,
-                                            &propagation_context,
+                                            propagation_context,
                                             propagators,
                                         )
                                         .expect("reason reference should not be stale")
@@ -310,7 +310,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 reason_store
                                     .get_or_compute_new(
                                         reason_ref,
-                                        &propagation_context,
+                                        propagation_context,
                                         propagators,
                                     )
                                     .expect("reason reference should not be stale")
@@ -386,7 +386,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                                 reason_store
                                     .get_or_compute_new(
                                         reason_ref,
-                                        &propagation_context,
+                                        propagation_context,
                                         propagators,
                                     )
                                     .expect("reason reference should not be stale")
@@ -437,7 +437,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         let propagation_context = PropagationContext::new(assignments);
                         if let Some(reason_ref) = trail_entry.reason {
                             reason_store
-                                .get_or_compute_new(reason_ref, &propagation_context, propagators)
+                                .get_or_compute_new(reason_ref, propagation_context, propagators)
                                 .expect("reason reference should not be stale")
                         } else {
                             reason_store.helper.clear();

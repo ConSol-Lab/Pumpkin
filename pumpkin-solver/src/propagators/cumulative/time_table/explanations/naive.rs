@@ -11,9 +11,9 @@ use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_propagation_explanation<'a, Var: IntegerVariable + 'static>(
-    profile: &'a ResourceProfile<Var>,
-    context: &'a PropagationContext,
+pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
+    profile: &ResourceProfile<Var>,
+    context: PropagationContext,
 ) -> PropositionalConjunction {
     profile
         .profile_tasks
@@ -61,7 +61,7 @@ where
 }
 
 pub(crate) fn create_naive_predicate_propagating_task_lower_bound_propagation<Var>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
 ) -> Predicate
 where
@@ -71,7 +71,7 @@ where
 }
 
 pub(crate) fn create_naive_predicate_propagating_task_upper_bound_propagation<Var>(
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
 ) -> Predicate
 where
