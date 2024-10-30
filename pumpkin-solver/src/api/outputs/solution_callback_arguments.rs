@@ -4,10 +4,10 @@ use crate::Solver;
 /// The input which is passed to the solution callback (which can be set using
 /// [`Solver::with_solution_callback`]).
 ///
-/// Provides direct access to the solution via [`SolutionCallbackInput::solution`] and allows
-/// logging the statistics of the [`Solver`] using [`SolutionCallbackInput::log_statistics`].
+/// Provides direct access to the solution via [`SolutionCallbackArguments::solution`] and allows
+/// logging the statistics of the [`Solver`] using [`SolutionCallbackArguments::log_statistics`].
 #[derive(Debug)]
-pub struct SolutionCallbackInput<'a, 'b> {
+pub struct SolutionCallbackArguments<'a, 'b> {
     /// The solver which found the solution
     solver: &'a Solver,
     /// The solution which has been found
@@ -16,7 +16,7 @@ pub struct SolutionCallbackInput<'a, 'b> {
     objective_value: Option<i64>,
 }
 
-impl<'a, 'b> SolutionCallbackInput<'a, 'b> {
+impl<'a, 'b> SolutionCallbackArguments<'a, 'b> {
     pub(crate) fn new(
         solver: &'a Solver,
         solution: &'b Solution,

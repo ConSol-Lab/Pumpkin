@@ -30,7 +30,7 @@ use crate::predicate;
 use crate::pumpkin_assert_simple;
 use crate::results::solution_iterator::SolutionIterator;
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-use crate::results::SolutionCallbackInput;
+use crate::results::SolutionCallbackArguments;
 use crate::statistics::statistic_logging::log_statistic;
 use crate::statistics::statistic_logging::log_statistic_postfix;
 use crate::variables::PropositionalVariable;
@@ -89,7 +89,7 @@ pub struct Solver {
     satisfaction_solver: ConstraintSatisfactionSolver,
     /// The function is called whenever an optimisation function finds a solution; see
     /// [`Solver::with_solution_callback`].
-    solution_callback: Box<dyn Fn(SolutionCallbackInput)>,
+    solution_callback: Box<dyn Fn(SolutionCallbackArguments)>,
 }
 
 impl Default for Solver {
@@ -102,7 +102,7 @@ impl Default for Solver {
 }
 
 /// Creates a place-holder empty function which does not do anything when a solution is found.
-fn create_empty_function() -> Box<dyn Fn(SolutionCallbackInput)> {
+fn create_empty_function() -> Box<dyn Fn(SolutionCallbackArguments)> {
     Box::new(|_| {})
 }
 
@@ -134,7 +134,7 @@ impl Solver {
     /// [`OptimisationResult::Optimal`].
     pub fn with_solution_callback(
         &mut self,
-        solution_callback: impl Fn(SolutionCallbackInput) + 'static,
+        solution_callback: impl Fn(SolutionCallbackArguments) + 'static,
     ) {
         self.solution_callback = Box::new(solution_callback);
     }
@@ -615,7 +615,11 @@ impl Solver {
     ) {
         brancher.on_solution(self.satisfaction_solver.get_solution_reference());
 
-        (self.solution_callback)(SolutionCallbackInput::new(self, solution, objective_value));
+        (self.solution_callback)(SolutionCallbackArguments::new(
+            self,
+            solution,
+            objective_value,
+        ));
     }
 
     /// Given the current objective value `best_objective_value`, it adds a constraint specifying
