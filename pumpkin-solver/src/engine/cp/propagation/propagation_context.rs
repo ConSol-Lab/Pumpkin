@@ -81,7 +81,7 @@ impl<'a> PropagationContextMut<'a> {
                     Reason::Eager(conjunction)
                 }
                 Reason::Lazy(callback) => {
-                    Reason::Lazy(Box::new(move |context: &PropagationContext| {
+                    Reason::Lazy(Box::new(move |context: PropagationContext| {
                         let mut conjunction = callback.compute(context);
                         conjunction.add(reification_literal.into());
                         conjunction

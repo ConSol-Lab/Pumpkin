@@ -33,7 +33,7 @@ impl ReasonStore {
     pub fn get_or_compute<'this>(
         &'this mut self,
         reference: ReasonRef,
-        context: &PropagationContext,
+        context: PropagationContext,
     ) -> Option<&'this PropositionalConjunction> {
         self.trail
             .get_mut(reference.0 as usize)
@@ -94,11 +94,11 @@ pub trait LazyReason {
     ///   assignments at the time of computing the reason, not from the time when the change was
     ///   made. The CP propagator must compute and save any required information in the closure if
     ///   dependent on the state of the assignments at that time.
-    fn compute(self: Box<Self>, context: &PropagationContext) -> PropositionalConjunction;
+    fn compute(self: Box<Self>, context: PropagationContext) -> PropositionalConjunction;
 }
 
-impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction> LazyReason for F {
-    fn compute(self: Box<Self>, context: &PropagationContext) -> PropositionalConjunction {
+impl<F: FnOnce(PropagationContext) -> PropositionalConjunction> LazyReason for F {
+    fn compute(self: Box<Self>, context: PropagationContext) -> PropositionalConjunction {
         self(context)
     }
 }
@@ -106,7 +106,7 @@ impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction> LazyReason for 
 impl Reason {
     /// Compute the reason for a propagation, replacing the original reason with an `Eager` one if
     ///   it's `Lazy`.
-    pub fn compute(&mut self, context: &PropagationContext) -> &PropositionalConjunction {
+    pub fn compute(&mut self, context: PropagationContext) -> &PropositionalConjunction {
         // You can't just (1) match on the reason to see if it's Lazy, (2) use it to compute a new
         //   result, and (3) then change the Lazy into an Eager, because you'll still be borrowing
         //   the closure.
@@ -133,7 +133,7 @@ impl From<PropositionalConjunction> for Reason {
     }
 }
 
-impl<F: FnOnce(&PropagationContext) -> PropositionalConjunction + 'static> From<F> for Reason {
+impl<F: FnOnce(PropagationContext) -> PropositionalConjunction + 'static> From<F> for Reason {
     fn from(value: F) -> Self {
         Reason::Lazy(Box::new(value))
     }
@@ -159,7 +159,7 @@ mod tests {
         let conjunction = conjunction!([x == 1] & [y == 2]);
         let mut reason = Reason::Eager(conjunction.clone());
 
-        assert_eq!(&conjunction, reason.compute(&context));
+        assert_eq!(&conjunction, reason.compute(context));
     }
 
     #[test]
@@ -173,9 +173,9 @@ mod tests {
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
         let conjunction_to_return = conjunction.clone();
-        let mut reason = Reason::from(|_: &PropagationContext| conjunction_to_return);
+        let mut reason = Reason::from(|_: PropagationContext| conjunction_to_return);
 
-        assert_eq!(&conjunction, reason.compute(&context));
+        assert_eq!(&conjunction, reason.compute(context));
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod tests {
 
         assert_eq!(
             Some(&conjunction),
-            reason_store.get_or_compute(reason_ref, &context)
+            reason_store.get_or_compute(reason_ref, context)
         );
     }
 }

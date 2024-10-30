@@ -72,7 +72,7 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     Var: IntegerVariable + 'static,
 >(
     explanation_type: CumulativeExplanationType,
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
@@ -94,7 +94,7 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
 pub(crate) fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 'static>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
@@ -114,7 +114,7 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
     Var: IntegerVariable + 'static,
 >(
     explanation_type: CumulativeExplanationType,
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
@@ -138,7 +138,7 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
 pub(crate) fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 'static>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
-    context: &PropagationContext,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
     time_point: Option<i32>,
