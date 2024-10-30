@@ -26,7 +26,7 @@ pub trait Statistic {
 
 impl<Value: Display> Statistic for Value {
     fn log(&self, statistic_logger: StatisticLogger) {
-        statistic_logger.log_statistic(self)
+        statistic_logger.log_statistic(self);
     }
 }
 

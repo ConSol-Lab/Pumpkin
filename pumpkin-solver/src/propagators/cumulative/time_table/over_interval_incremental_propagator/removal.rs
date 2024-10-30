@@ -58,7 +58,7 @@ fn remove_task_from_profile<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
 ) -> ResourceProfile<Var> {
     let mut updated_profile_tasks = profile.profile_tasks.clone();
-    let _ = updated_profile_tasks.remove(
+    let _ = updated_profile_tasks.swap_remove(
         updated_profile_tasks
             .iter()
             .position(|task| task.id == updated_task.id)

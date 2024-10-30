@@ -249,7 +249,6 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         // conflict in the time-table (if any calls have reported an overflow)
         if found_conflict || self.found_previous_conflict {
             // We linearly scan the profiles and find the first one which exceeds the capacity
-
             let conflicting_profile = self
                 .time_table
                 .iter_mut()
