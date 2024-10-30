@@ -167,7 +167,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointIncremental
         propagate_based_on_timetable(&mut context, self.time_table.values(), &self.parameters)
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         reset_bounds_clear_updated(
             context,
             &mut self.parameters.updated,

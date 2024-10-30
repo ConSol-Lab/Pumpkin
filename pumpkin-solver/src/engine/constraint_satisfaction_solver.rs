@@ -1324,9 +1324,10 @@ impl ConstraintSatisfactionSolver {
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
         for propagator in self.cp_propagators.iter_propagators_mut() {
-            let context =
-                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
-            propagator.synchronise(&context);
+            propagator.synchronise(PropagationContext::new(
+                &self.assignments_integer,
+                &self.assignments_propositional,
+            ));
         }
 
         let _ = self.process_backtrack_events();

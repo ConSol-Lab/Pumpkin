@@ -72,7 +72,7 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
 ///
 /// This method is currently used during bactracking/synchronisation
 pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     updated: &mut Vec<UpdatedTaskInfo<Var>>,
     bounds: &mut Vec<(i32, i32)>,
     tasks: &[Rc<Task<Var>>],

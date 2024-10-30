@@ -91,7 +91,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         propagate_based_on_timetable(&mut context, time_table.iter(), &self.parameters)
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         reset_bounds_clear_updated(
             context,
             &mut self.parameters.updated,
