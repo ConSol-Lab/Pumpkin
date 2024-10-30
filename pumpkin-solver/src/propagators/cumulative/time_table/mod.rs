@@ -70,15 +70,15 @@
 //! 149–157.
 
 mod explanations;
+mod over_interval_incremental_propagator;
 mod propagation_handler;
 mod time_table_over_interval;
-mod time_table_over_interval_incremental;
 mod time_table_per_point;
 mod time_table_per_point_incremental;
 mod time_table_util;
 pub use explanations::CumulativeExplanationType;
+pub(crate) use over_interval_incremental_propagator::*;
 pub(crate) use time_table_over_interval::*;
-pub(crate) use time_table_over_interval_incremental::*;
 pub(crate) use time_table_per_point::*;
 pub(crate) use time_table_per_point_incremental::*;
 

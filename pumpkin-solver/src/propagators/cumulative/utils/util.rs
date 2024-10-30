@@ -3,15 +3,17 @@
 //! input parameters.
 use std::rc::Rc;
 
+use enumset::enum_set;
+
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
-use crate::engine::propagation::propagator_initialisation_context::PropagatorInitialisationContext;
+use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::propagators::ArgTask;
 use crate::propagators::Task;
-use crate::propagators::UpdatedTaskInfo;
 
 /// Based on the [`ArgTask`]s which are passed, it creates and returns [`Task`]s which have been
 /// registered for [`DomainEvents`].
@@ -36,6 +38,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
                 });
+
                 id += 1;
                 return_value
             } else {
@@ -48,10 +51,28 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
 pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks: &[Rc<Task<Var>>],
     context: &mut PropagatorInitialisationContext<'_>,
+    register_backtrack: bool,
 ) {
     tasks.iter().for_each(|task| {
-        let _ = context.register(task.start_variable.clone(), DomainEvents::BOUNDS, task.id);
-    })
+        let _ = context.register(
+            task.start_variable.clone(),
+            DomainEvents::create_with_int_events(enum_set!(
+                IntDomainEvent::LowerBound | IntDomainEvent::UpperBound | IntDomainEvent::Assign
+            )),
+            task.id,
+        );
+        if register_backtrack {
+            let _ = context.register_for_backtrack_events(
+                task.start_variable.clone(),
+                DomainEvents::create_with_int_events(enum_set!(
+                    IntDomainEvent::LowerBound
+                        | IntDomainEvent::UpperBound
+                        | IntDomainEvent::Assign
+                )),
+                task.id,
+            );
+        }
+    });
 }
 
 /// Updates the bounds of the provided [`Task`] to those stored in
@@ -65,26 +86,6 @@ pub(crate) fn update_bounds_task<Var: IntegerVariable + 'static>(
         context.lower_bound(&task.start_variable),
         context.upper_bound(&task.start_variable),
     );
-}
-
-/// Clears the provided `updated` and resets **all** bounds to those stored in
-/// `context`.
-///
-/// This method is currently used during bactracking/synchronisation
-pub(crate) fn reset_bounds_clear_updated<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
-    updated: &mut Vec<UpdatedTaskInfo<Var>>,
-    bounds: &mut Vec<(i32, i32)>,
-    tasks: &[Rc<Task<Var>>],
-) {
-    updated.clear();
-    bounds.clear();
-    for task in tasks.iter() {
-        bounds.push((
-            context.lower_bound(&task.start_variable),
-            context.upper_bound(&task.start_variable),
-        ))
-    }
 }
 
 /// Determines whether the stored bounds are equal when propagation occurs
