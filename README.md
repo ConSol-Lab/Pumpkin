@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml/badge.svg)](https://github.com/ConSol-Lab/pumpkin/actions/workflows/ci.yml)
 [![DRCP Format on crates.io](https://img.shields.io/badge/drcp--format-v0.1.0-green)](https://crates.io/crates/drcp-format)
-[![Pumpkin on crates.io](https://img.shields.io/badge/pumpkin--solver-v0.1.1-green)](https://crates.io/crates/pumpkin-solver)
+[![Pumpkin on crates.io](https://img.shields.io/badge/pumpkin--solver-v0.1.2-green)](https://crates.io/crates/pumpkin-solver)
 
 <p align="center">
     <img align="left" width="50%" src="https://github.com/ConSol-Lab/Pumpkin/raw/main/pumpkin.svg", alt="ASCII art pumpkin logo">
