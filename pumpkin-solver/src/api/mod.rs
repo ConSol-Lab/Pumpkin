@@ -14,6 +14,7 @@ pub mod results {
     //! right state for these operations. For example,
     //! [`SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions`] allows you to extract
     //! a core consisting of the assumptions using [`UnsatisfiableUnderAssumptions::extract_core`].
+    pub use crate::api::outputs::solution_callback_arguments::SolutionCallbackArguments;
     pub use crate::api::outputs::solution_iterator;
     pub use crate::api::outputs::unsatisfiable;
     pub use crate::api::outputs::OptimisationResult;
