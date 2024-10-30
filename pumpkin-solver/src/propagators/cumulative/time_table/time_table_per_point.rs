@@ -50,7 +50,7 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
-    dynamic_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -71,12 +71,12 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
     ) -> TimeTablePerPointPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = UpdatableStructures::new(&parameters);
+        let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
             parameters,
-            dynamic_structures,
+            updatable_structures,
         }
     }
 }
@@ -92,12 +92,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &mut context,
             time_table.values(),
             &self.parameters,
-            &mut self.dynamic_structures,
+            &mut self.updatable_structures,
         )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        self.dynamic_structures
+        self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }
 
@@ -115,7 +115,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         // will never return `true` when the time-table is not empty.
         let result = should_enqueue(
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
             &updated_task,
             &context,
             self.is_time_table_empty,
@@ -125,7 +125,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         // propagates from scratch anyways
         update_bounds_task(
             &context,
-            self.dynamic_structures.get_stored_bounds_mut(),
+            self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
 
@@ -133,7 +133,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             updated_task.start_variable.unpack_event(event),
             IntDomainEvent::Assign
         ) {
-            self.dynamic_structures.fix_task(&updated_task)
+            self.updatable_structures.fix_task(&updated_task)
         }
 
         result.decision
@@ -151,7 +151,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        self.dynamic_structures
+        self.updatable_structures
             .initialise_bounds_and_remove_fixed(context, &self.parameters);
         register_tasks(&self.parameters.tasks, context, false);
 
@@ -165,7 +165,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         debug_propagate_from_scratch_time_table_point(
             &mut context,
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
         )
     }
 }
@@ -227,7 +227,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
@@ -237,7 +237,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable
         context,
         time_table.values(),
         parameters,
-        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+        &mut updatable_structures.recreate_from_context(&context.as_readonly(), parameters),
     )
 }
 

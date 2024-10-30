@@ -96,11 +96,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     ) -> TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = UpdatableStructures::new(&parameters);
+        let updatable_structures = UpdatableStructures::new(&parameters);
         TimeTablePerPointIncrementalPropagator {
             time_table: BTreeMap::new(),
             parameters,
-            updatable_structures: dynamic_structures,
+            updatable_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
         }
@@ -451,6 +451,9 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
             if !self.time_table.is_empty() {
                 self.is_time_table_outdated = true;
             }
+        } else if SYNCHRONISE {
+            self.updatable_structures
+                .remove_fixed(context, &self.parameters);
         }
     }
 

@@ -216,15 +216,30 @@ pub(crate) fn check_statistic_equality(
     let output_second =
         std::fs::read_to_string(files_second.log_file).expect("Failed to read solver output");
 
+    let filtered_output_first = output_first
+        .lines()
+        .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+        .collect::<Vec<&str>>();
+    let filtered_output_second = output_second
+        .lines()
+        .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
+        .collect::<Vec<&str>>();
     assert_eq!(
-        output_first
-            .lines()
-            .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
-            .collect::<String>(),
-        output_second
-            .lines()
-            .filter(|line| line.starts_with("%%%mzn-stat") && !line.contains("imeSpentInSolver"))
-            .collect::<String>(),
+        filtered_output_first,
+        filtered_output_second,
+        "Lines first differ at:\n{:?}",
+        {
+            assert_eq!(
+                filtered_output_first.len(),
+                filtered_output_second.len(),
+                "The output length was not the same"
+            );
+            filtered_output_first
+                .iter()
+                .zip(filtered_output_second.iter())
+                .find(|(a, b)| a != b)
+                .unwrap()
+        }
     )
 }
 

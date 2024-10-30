@@ -60,7 +60,7 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; used to store the bounds
-    dynamic_structures: UpdatableStructures<Var>,
+    updatable_structures: UpdatableStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning over intervals.
@@ -78,12 +78,12 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
     ) -> TimeTableOverIntervalPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = UpdatableStructures::new(&parameters);
+        let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalPropagator {
             is_time_table_empty: true,
             parameters,
-            dynamic_structures,
+            updatable_structures,
         }
     }
 }
@@ -99,12 +99,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &mut context,
             time_table.iter(),
             &self.parameters,
-            &mut self.dynamic_structures,
+            &mut self.updatable_structures,
         )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        self.dynamic_structures
+        self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters);
     }
 
@@ -122,14 +122,15 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         // will never return `true` when the time-table is not empty.
         let result = should_enqueue(
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
             &updated_task,
             &context,
             self.is_time_table_empty,
         );
+
         update_bounds_task(
             &context,
-            self.dynamic_structures.get_stored_bounds_mut(),
+            self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );
 
@@ -137,7 +138,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             updated_task.start_variable.unpack_event(event),
             IntDomainEvent::Assign
         ) {
-            self.dynamic_structures.fix_task(&updated_task)
+            self.updatable_structures.fix_task(&updated_task)
         }
 
         result.decision
@@ -155,7 +156,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        self.dynamic_structures
+        self.updatable_structures
             .initialise_bounds_and_remove_fixed(context, &self.parameters);
         register_tasks(&self.parameters.tasks, context, false);
 
@@ -169,7 +170,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
         debug_propagate_from_scratch_time_table_interval(
             &mut context,
             &self.parameters,
-            &self.dynamic_structures,
+            &self.updatable_structures,
         )
     }
 }
@@ -417,7 +418,7 @@ fn check_starting_new_profile_invariants<Var: IntegerVariable + 'static>(
 pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
@@ -428,7 +429,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
         context,
         time_table.iter(),
         parameters,
-        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+        &mut updatable_structures.recreate_from_context(&context.as_readonly(), parameters),
     )
 }
 

@@ -99,12 +99,12 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
     ) -> TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
-        let dynamic_structures = UpdatableStructures::new(&parameters);
+        let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalIncrementalPropagator {
             time_table: Default::default(),
             parameters,
-            updatable_structures: dynamic_structures,
+            updatable_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
         }
@@ -439,6 +439,9 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             if !self.time_table.is_empty() {
                 self.is_time_table_outdated = true;
             }
+        } else if SYNCHRONISE {
+            self.updatable_structures
+                .remove_fixed(context, &self.parameters);
         }
     }
 
