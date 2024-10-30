@@ -65,7 +65,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
     fn notify_backtrack(
         &mut self,
-        context: &PropagationContext,
+        context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {

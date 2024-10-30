@@ -101,7 +101,7 @@ where
 
     fn notify_backtrack(
         &mut self,
-        _context: &PropagationContext,
+        _context: PropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) {

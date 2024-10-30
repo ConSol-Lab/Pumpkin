@@ -106,7 +106,7 @@ pub trait Propagator {
     /// [`PropagatorInitialisationContext::register()`].
     fn notify_backtrack(
         &mut self,
-        _context: &PropagationContext,
+        _context: PropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) {

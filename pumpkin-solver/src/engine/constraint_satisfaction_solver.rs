@@ -280,7 +280,7 @@ impl ConstraintSatisfactionSolver {
                         &self.assignments_propositional,
                     );
 
-                    propagator.notify_backtrack(&context, propagator_var.variable, event.into())
+                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
             }
         }
