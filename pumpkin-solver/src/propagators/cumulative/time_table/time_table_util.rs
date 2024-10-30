@@ -438,7 +438,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             }
 
             // Finally, we simply set the profile index to the index of the new profile
-            profile_index = new_profile_index;
+            profile_index = max(new_profile_index, profile_index + 1);
         }
     }
     Ok(())
