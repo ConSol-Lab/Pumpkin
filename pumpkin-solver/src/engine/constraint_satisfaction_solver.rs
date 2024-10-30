@@ -370,7 +370,10 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn complete_proof(&mut self) {
-        pumpkin_assert_simple!(self.is_conflicting());
+        pumpkin_assert_simple!(
+            self.is_conflicting(),
+            "Proof attempted to be completed while not in conflicting state"
+        );
 
         warn!("Haven't implemented complete_proof");
         // let result = self.compute_learned_clause(&mut DummyBrancher);
@@ -1216,7 +1219,11 @@ impl ConstraintSatisfactionSolver {
 
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
 
-        if initialisation_status.is_err() {
+        if let Err(conflict_explanation) = initialisation_status {
+            self.state.declare_conflict(StoredConflictInfo::Propagator {
+                conflict_nogood: conflict_explanation,
+                propagator_id: new_propagator_id,
+            });
             self.complete_proof();
             let _ = self.conclude_proof_unsat();
             self.state.declare_infeasible();
@@ -1573,235 +1580,302 @@ mod tests {
     //    }
     //}
 
-    // TODO: readd this
-    // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    // fn create_instance1() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
     //
-    // let _ = solver.add_clause([lit1, lit2]);
-    // let _ = solver.add_clause([lit1, !lit2]);
-    // let _ = solver.add_clause([!lit1, lit2]);
-    // (solver, vec![lit1, lit2])
-    // }
-
-    // #[test]
+    //    let _ = solver.add_clause([lit1, lit2]);
+    //    let _ = solver.add_clause([lit1, !lit2]);
+    //    let _ = solver.add_clause([!lit1, lit2]);
+    //    (solver, vec![lit1, lit2])
+    //}
+    //
+    //#[test]
+    // fn core_extraction_unit_core() {
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let _ = solver.add_clause(vec![lit1]);
+    //
+    //    run_test(
+    //        solver,
+    //        vec![!lit1],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lit1]),
+    //    )
+    //}
+    //
+    //#[test]
     // fn simple_core_extraction_1_1() {
-    // let (solver, lits) = create_instance1();
-    // run_test(
-    // solver,
-    // vec![!lits[0], !lits[1]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![!lits[0]]),
-    // )
-    // }
+    //    let (solver, lits) = create_instance1();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], !lits[1]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[0]]),
+    //    )
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_1_2() {
-    // let (solver, lits) = create_instance1();
-    // run_test(
-    // solver,
-    // vec![!lits[1], !lits[0]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![!lits[1]]),
-    // );
-    // }
+    //    let (solver, lits) = create_instance1();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[1], !lits[0]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[1]]),
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_1_infeasible() {
-    // let (mut solver, lits) = create_instance1();
-    // let _ = solver.add_clause([!lits[0], !lits[1]]);
-    // run_test(
-    // solver,
-    // vec![!lits[1], !lits[0]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![]),
-    // );
-    // }
+    //    let (mut solver, lits) = create_instance1();
+    //    let _ = solver.add_clause([!lits[0], !lits[1]]);
+    //    run_test(
+    //        solver,
+    //        vec![!lits[1], !lits[0]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![]),
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_1_core_before_inconsistency() {
-    // let (solver, lits) = create_instance1();
-    // run_test(
-    // solver,
-    // vec![!lits[1], lits[1]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![!lits[1]]), // the core gets computed before inconsistency is detected
-    // );
-    // }
-    //
+    //    let (solver, lits) = create_instance1();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[1], lits[1]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[1]]), /* The core gets computed before
+    //                                                     * inconsistency is detected */
+    //    );
+    //}
     // fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
     //
-    // let _ = solver.add_clause([lit1, lit2, lit3]);
-    // let _ = solver.add_clause([lit1, !lit2, lit3]);
-    // (solver, vec![lit1, lit2, lit3])
-    // }
+    //    let _ = solver.add_clause([lit1, lit2, lit3]);
+    //    let _ = solver.add_clause([lit1, !lit2, lit3]);
+    //    (solver, vec![lit1, lit2, lit3])
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_2_1() {
-    // let (solver, lits) = create_instance2();
-    // run_test(
-    // solver,
-    // vec![!lits[0], lits[1], !lits[2]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![lits[0], !lits[1], lits[2]]),
-    // );
-    // }
+    //    let (solver, lits) = create_instance2();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], lits[1], !lits[2]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]),
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_2_long_assumptions_with_inconsistency_at_the_end() {
-    // let (solver, lits) = create_instance2();
-    // run_test(
-    // solver,
-    // vec![!lits[0], lits[1], !lits[2], lits[0]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![lits[0], !lits[1], lits[2]]), /* could return inconsistent assumptions,
-    // however inconsistency will not be detected
-    // given the order of the assumptions */
-    // );
-    // }
+    //    let (solver, lits) = create_instance2();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], lits[1], !lits[2], lits[0]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]), /* could return
+    //                                                                        * inconsistent
+    //                                                                        * assumptions,
+    //                                                                        * however inconsistency will not be detected
+    //                                                                        * given the order of
+    //                                                                        * the assumptions */
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_2_inconsistent_long_assumptions() {
-    // let (solver, lits) = create_instance2();
-    // run_test(
-    // solver,
-    // vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Err(lits[0]),
-    // );
-    // }
-    //
+    //    let (solver, lits) = create_instance2();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::ConflictingAssumption(lits[0]),
+    //    );
+    //}
     // fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Literal>) {
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
-    // let _ = solver.add_clause([lit1, lit2, lit3]);
-    // (solver, vec![lit1, lit2, lit3])
-    // }
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let lit1 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let lit2 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let lit3 = Literal::new(solver.create_new_propositional_variable(None), true);
+    //    let _ = solver.add_clause([lit1, lit2, lit3]);
+    //    (solver, vec![lit1, lit2, lit3])
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_3_1() {
-    // let (solver, lits) = create_instance3();
-    // run_test(
-    // solver,
-    // vec![!lits[0], !lits[1], !lits[2]],
-    // CSPSolverExecutionFlag::Infeasible,
-    // Ok(vec![lits[0], lits[1], lits[2]]),
-    // );
-    // }
+    //    let (solver, lits) = create_instance3();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], !lits[1], !lits[2]],
+    //        CSPSolverExecutionFlag::Infeasible,
+    //        CoreExtractionResult::Core(vec![!lits[0], !lits[1], !lits[2]]),
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn simple_core_extraction_3_2() {
-    // let (solver, lits) = create_instance3();
-    // run_test(
-    // solver,
-    // vec![!lits[0], !lits[1]],
-    // CSPSolverExecutionFlag::Feasible,
-    // Ok(vec![]), // will be ignored in the test
-    // );
-    // }
+    //    let (solver, lits) = create_instance3();
+    //    run_test(
+    //        solver,
+    //        vec![!lits[0], !lits[1]],
+    //        CSPSolverExecutionFlag::Feasible,
+    //        CoreExtractionResult::Core(vec![]), // will be ignored in the test
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
     // fn negative_upper_bound() {
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let domain_id = solver.create_new_integer_variable(0, 10, None);
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let domain_id = solver.create_new_integer_variable(0, 10, None);
     //
-    // let result = solver.get_literal(predicate![domain_id <= -2]);
-    // assert_eq!(result, solver.assignments_propositional.false_literal);
-    // }
+    //    let result = solver.get_literal(predicate![domain_id <= -2]);
+    //    assert_eq!(result, solver.assignments_propositional.false_literal);
+    //}
     //
-    // #[test]
+    //#[test]
     // fn lower_bound_literal_lower_than_lower_bound_should_be_true_literal() {
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let domain_id = solver.create_new_integer_variable(0, 10, None);
-    // let result = solver.get_literal(predicate![domain_id >= -2]);
-    // assert_eq!(result, solver.assignments_propositional.true_literal);
-    // }
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let domain_id = solver.create_new_integer_variable(0, 10, None);
+    //    let result = solver.get_literal(predicate![domain_id >= -2]);
+    //    assert_eq!(result, solver.assignments_propositional.true_literal);
+    //}
     //
-    // #[test]
+    //#[test]
     // fn new_domain_with_negative_lower_bound() {
-    // let lb = -2;
-    // let ub = 2;
+    //    let lb = -2;
+    //    let ub = 2;
     //
-    // let mut solver = ConstraintSatisfactionSolver::default();
-    // let domain_id = solver.create_new_integer_variable(lb, ub, None);
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let domain_id = solver.create_new_integer_variable(lb, ub, None);
     //
-    // assert_eq!(lb, solver.assignments.get_lower_bound(domain_id));
+    //    assert_eq!(lb, solver.assignments_integer.get_lower_bound(domain_id));
     //
-    // assert_eq!(ub, solver.assignments.get_upper_bound(domain_id));
+    //    assert_eq!(ub, solver.assignments_integer.get_upper_bound(domain_id));
     //
-    // assert_eq!(
-    // solver.assignments_propositional.true_literal,
-    // solver.get_literal(predicate![domain_id >= lb])
-    // );
+    //    assert_eq!(
+    //        solver.assignments_propositional.true_literal,
+    //        solver.get_literal(predicate![domain_id >= lb])
+    //    );
     //
-    // assert_eq!(
-    // solver.assignments_propositional.false_literal,
-    // solver.get_literal(predicate![domain_id <= lb - 1])
-    // );
+    //    assert_eq!(
+    //        solver.assignments_propositional.false_literal,
+    //        solver.get_literal(predicate![domain_id <= lb - 1])
+    //    );
     //
-    // assert!(solver
-    // .assignments_propositional
-    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
+    //    assert!(solver
+    //        .assignments_propositional
+    //        .is_literal_unassigned(solver.get_literal(predicate![domain_id == lb])));
     //
-    // assert_eq!(
-    // solver.assignments_propositional.false_literal,
-    // solver.get_literal(predicate![domain_id == lb - 1])
-    // );
+    //    assert_eq!(
+    //        solver.assignments_propositional.false_literal,
+    //        solver.get_literal(predicate![domain_id == lb - 1])
+    //    );
     //
-    // for value in (lb + 1)..ub {
-    // let literal = solver.get_literal(predicate![domain_id >= value]);
+    //    for value in (lb + 1)..ub {
+    //        let literal = solver.get_literal(predicate![domain_id >= value]);
     //
-    // assert!(solver
-    // .assignments_propositional
-    // .is_literal_unassigned(literal));
+    //        assert!(solver
+    //            .assignments_propositional
+    //            .is_literal_unassigned(literal));
     //
-    // assert!(solver
-    // .assignments_propositional
-    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
-    // }
+    //        assert!(solver
+    //            .assignments_propositional
+    //            .is_literal_unassigned(solver.get_literal(predicate![domain_id == value])));
+    //    }
     //
-    // assert_eq!(
-    // solver.assignments_propositional.false_literal,
-    // solver.get_literal(predicate![domain_id >= ub + 1])
-    // );
-    // assert_eq!(
-    // solver.assignments_propositional.true_literal,
-    // solver.get_literal(predicate![domain_id <= ub])
-    // );
-    // assert!(solver
-    // .assignments_propositional
-    // .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
-    // assert_eq!(
-    // solver.assignments_propositional.false_literal,
-    // solver.get_literal(predicate![domain_id == ub + 1])
-    // );
-    // }
+    //    assert_eq!(
+    //        solver.assignments_propositional.false_literal,
+    //        solver.get_literal(predicate![domain_id >= ub + 1])
+    //    );
+    //    assert_eq!(
+    //        solver.assignments_propositional.true_literal,
+    //        solver.get_literal(predicate![domain_id <= ub])
+    //    );
+    //    assert!(solver
+    //        .assignments_propositional
+    //        .is_literal_unassigned(solver.get_literal(predicate![domain_id == ub])));
+    //    assert_eq!(
+    //        solver.assignments_propositional.false_literal,
+    //        solver.get_literal(predicate![domain_id == ub + 1])
+    //    );
+    //}
     //
-    // #[test]
+    //#[test]
+    // fn clausal_propagation_is_synced_until_right_before_conflict() {
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //    let domain_id = solver.create_new_integer_variable(0, 10, None);
+    //    let dummy_reason = ReasonRef(0);
+    //
+    //    let result =
+    //        solver
+    //            .assignments_integer
+    //            .tighten_lower_bound(domain_id, 2, Some(dummy_reason));
+    //    assert!(result.is_ok());
+    //    assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 2);
+    //
+    //    let result =
+    //        solver
+    //            .assignments_integer
+    //            .tighten_lower_bound(domain_id, 8, Some(dummy_reason));
+    //    assert!(result.is_ok());
+    //    assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 8);
+    //
+    //    let result =
+    //        solver
+    //            .assignments_integer
+    //            .tighten_lower_bound(domain_id, 12, Some(dummy_reason));
+    //    assert!(result.is_err());
+    //    assert_eq!(solver.assignments_integer.get_lower_bound(domain_id), 12);
+    //
+    //    let _ = solver.synchronise_propositional_trail_based_on_integer_trail();
+    //
+    //    for lower_bound in 0..=8 {
+    //        let literal = solver.get_literal(predicate!(domain_id >= lower_bound));
+    //        assert!(
+    //            solver
+    //                .assignments_propositional
+    //                .is_literal_assigned_true(literal),
+    //            "Literal for lower-bound {lower_bound} is not assigned"
+    //        );
+    //    }
+    //}
+    //
+    //#[test]
     // fn check_correspondence_predicates_creating_new_int_domain() {
-    // let mut solver = ConstraintSatisfactionSolver::default();
+    //    let mut solver = ConstraintSatisfactionSolver::default();
     //
-    // let lower_bound = 0;
-    // let upper_bound = 10;
-    // let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
+    //    let lower_bound = 0;
+    //    let upper_bound = 10;
+    //    let domain_id = solver.create_new_integer_variable(lower_bound, upper_bound, None);
     //
-    // for bound in lower_bound + 1..upper_bound {
-    // let lower_bound_predicate = predicate![domain_id >= bound];
-    // let equality_predicate = predicate![domain_id == bound];
-    // for predicate in [lower_bound_predicate, equality_predicate] {
-    // let literal = solver.get_literal(predicate);
-    // assert!(
-    // solver.variable_literal_mappings.literal_to_predicates[literal]
-    // .contains(&predicate)
-    // )
-    // }
-    // }
-    // }
+    //    for bound in lower_bound + 1..upper_bound {
+    //        let lower_bound_predicate = predicate![domain_id >= bound];
+    //        let equality_predicate = predicate![domain_id == bound];
+    //        for predicate in [lower_bound_predicate, equality_predicate] {
+    //            let literal = solver.get_literal(predicate);
+    //            assert!(
+    //                solver.variable_literal_mappings.literal_to_predicates[literal]
+    //                    .contains(&predicate.try_into().unwrap())
+    //            )
+    //        }
+    //    }
+    //}
+    //
+    //#[test]
+    // fn check_can_compute_1uip_with_propagator_initialisation_conflict() {
+    //    let mut solver = ConstraintSatisfactionSolver::default();
+    //
+    //    let x = solver.create_new_integer_variable(1, 1, None);
+    //    let y = solver.create_new_integer_variable(2, 2, None);
+    //
+    //    let propagator = LinearNotEqualPropagator::new(Box::new([x, y]), 3);
+    //    let result = solver.add_propagator(propagator, None);
+    //    assert!(result.is_err());
+    //}
 }
