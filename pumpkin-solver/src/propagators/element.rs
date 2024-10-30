@@ -140,7 +140,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
                         ))
                     }));
                     let x_i = (*x_i).clone();
-                    context.remove(&self.index, i, move |_context: &PropagationContext| {
+                    context.remove(&self.index, i, move |_context: PropagationContext| {
                         let mut reason = reason_info.0.clone();
                         reason_info
                             .1
@@ -166,7 +166,7 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
                         ))
                     }));
                     let array = Rc::clone(&self.array);
-                    context.remove(&self.rhs, e, move |_context: &PropagationContext| {
+                    context.remove(&self.rhs, e, move |_context: PropagationContext| {
                         let mut reason = reason_info.0.clone();
                         reason_info
                             .1

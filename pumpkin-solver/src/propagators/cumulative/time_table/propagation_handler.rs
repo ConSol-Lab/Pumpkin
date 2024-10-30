@@ -63,7 +63,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, &context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -80,7 +80,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_lower_bound(
                     full_explanation,
                     self.explanation_type,
-                    &context.as_readonly(),
+                    context.as_readonly(),
                     propagating_task,
                     profiles[0],
                     None,
@@ -122,7 +122,7 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, &context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
@@ -139,7 +139,7 @@ impl CumulativePropagationHandler {
                 let full_explanation = add_propagating_task_predicate_upper_bound(
                     full_explanation,
                     self.explanation_type,
-                    &context.as_readonly(),
+                    context.as_readonly(),
                     propagating_task,
                     profiles[profiles.len() - 1],
                     None,
@@ -184,7 +184,7 @@ impl CumulativePropagationHandler {
                 let lower_bound_predicate_propagating_task =
                     create_predicate_propagating_task_lower_bound_propagation(
                         self.explanation_type,
-                        &context.as_readonly(),
+                        context.as_readonly(),
                         propagating_task,
                         profile,
                         None,
@@ -192,7 +192,7 @@ impl CumulativePropagationHandler {
                 context.set_lower_bound(
                     &propagating_task.start_variable,
                     profile.end + 1,
-                    move |_context: &PropagationContext| {
+                    move |_context: PropagationContext| {
                         let mut reason = (*explanation).clone();
                         reason.add(lower_bound_predicate_propagating_task);
                         reason
@@ -234,7 +234,7 @@ impl CumulativePropagationHandler {
                 let upper_bound_predicate_propagating_task =
                     create_predicate_propagating_task_upper_bound_propagation(
                         self.explanation_type,
-                        &context.as_readonly(),
+                        context.as_readonly(),
                         propagating_task,
                         profile,
                         None,
@@ -242,7 +242,7 @@ impl CumulativePropagationHandler {
                 context.set_upper_bound(
                     &propagating_task.start_variable,
                     profile.start - propagating_task.processing_time,
-                    move |_context: &PropagationContext| {
+                    move |_context: PropagationContext| {
                         let mut reason = (*explanation).clone();
                         reason.add(upper_bound_predicate_propagating_task);
                         reason
@@ -309,7 +309,7 @@ impl CumulativePropagationHandler {
                     context.remove(
                         &propagating_task.start_variable,
                         time_point,
-                        move |_context: &PropagationContext| (*explanation).clone(),
+                        move |_context: PropagationContext| (*explanation).clone(),
                     )?;
                 }
                 CumulativeExplanationType::PointWise => {
@@ -364,7 +364,7 @@ impl CumulativePropagationHandler {
             Rc::new(
                 match self.explanation_type {
                     CumulativeExplanationType::Naive => {
-                        create_naive_propagation_explanation(profile, &context.as_readonly())
+                        create_naive_propagation_explanation(profile, context.as_readonly())
                     },
                     CumulativeExplanationType::BigStep => {
                         create_big_step_propagation_explanation(profile)
@@ -692,7 +692,7 @@ pub(crate) mod test_propagation_handler {
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
             let reason = self
                 .reason_store
-                .get_or_compute(reason_ref, &context)
+                .get_or_compute(reason_ref, context)
                 .expect("reason_ref should not be stale");
             reason.clone()
         }

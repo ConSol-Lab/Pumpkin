@@ -96,7 +96,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         )
     }
 
-    fn synchronise(&mut self, context: &PropagationContext) {
+    fn synchronise(&mut self, context: PropagationContext) {
         self.dynamic_structures
             .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }
@@ -117,14 +117,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &self.parameters,
             &self.dynamic_structures,
             &updated_task,
-            &context,
+            context,
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
         update_bounds_task(
-            &context,
+            context,
             self.dynamic_structures.get_stored_bounds_mut(),
             &updated_task,
         );
@@ -152,7 +152,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.dynamic_structures
-            .initialise_bounds_and_remove_fixed(context, &self.parameters);
+            .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
         register_tasks(&self.parameters.tasks, context, false);
 
         Ok(())
@@ -237,7 +237,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable
         context,
         time_table.values(),
         parameters,
-        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+        &mut dynamic_structures.recreate_from_context(context.as_readonly(), parameters),
     )
 }
 
