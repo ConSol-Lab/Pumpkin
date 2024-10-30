@@ -7,7 +7,6 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
-use super::time_table_util::ResourceProfile;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -18,15 +17,17 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
-use crate::propagators::util::reset_bounds_clear_updated;
 use crate::propagators::util::update_bounds_task;
 use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
+use crate::propagators::ResourceProfile;
+use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_extreme;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
@@ -48,6 +49,8 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
+    /// Stores structures which change during the search; used to store the bounds
+    dynamic_structures: UpdatableStructures<Var>,
 }
 
 /// The type of the time-table used by propagators which use time-table reasoning per time-point;
@@ -67,9 +70,13 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTablePerPointPropagator<Var> {
         let tasks = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let dynamic_structures = UpdatableStructures::new(&parameters);
+
         TimeTablePerPointPropagator {
             is_time_table_empty: true,
-            parameters: CumulativeParameters::new(tasks, capacity, cumulative_options),
+            parameters,
+            dynamic_structures,
         }
     }
 }
@@ -77,27 +84,28 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
-            create_time_table_per_point_from_scratch(&context.as_readonly(), &self.parameters)?;
+            create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(&mut context, time_table.values(), &self.parameters)
+        propagate_based_on_timetable(
+            &mut context,
+            time_table.values(),
+            &self.parameters,
+            &mut self.dynamic_structures,
+        )
     }
 
     fn synchronise(&mut self, context: &PropagationContext) {
-        reset_bounds_clear_updated(
-            context,
-            &mut self.parameters.updated,
-            &mut self.parameters.bounds,
-            &self.parameters.tasks,
-        );
+        self.dynamic_structures
+            .reset_all_bounds_and_remove_fixed(context, &self.parameters)
     }
 
     fn notify(
         &mut self,
         context: PropagationContext,
         local_id: LocalId,
-        _event: OpaqueDomainEvent,
+        event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
         // Note that it could be the case that `is_time_table_empty` is inaccurate here since it
@@ -107,6 +115,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         // will never return `true` when the time-table is not empty.
         let result = should_enqueue(
             &self.parameters,
+            &self.dynamic_structures,
             &updated_task,
             &context,
             self.is_time_table_empty,
@@ -114,7 +123,19 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
-        update_bounds_task(&context, &mut self.parameters.bounds, &updated_task);
+        update_bounds_task(
+            &context,
+            self.dynamic_structures.get_stored_bounds_mut(),
+            &updated_task,
+        );
+
+        if matches!(
+            updated_task.start_variable.unpack_event(event),
+            IntDomainEvent::Assign
+        ) {
+            self.dynamic_structures.fix_task(&updated_task)
+        }
+
         result.decision
     }
 
@@ -130,20 +151,22 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        register_tasks(&self.parameters.tasks, context);
-        // First we store the bounds in the parameters
-        for task in self.parameters.tasks.iter() {
-            self.parameters.bounds.push((
-                context.lower_bound(&task.start_variable),
-                context.upper_bound(&task.start_variable),
-            ));
-        }
+        self.dynamic_structures
+            .initialise_bounds_and_remove_fixed(context, &self.parameters);
+        register_tasks(&self.parameters.tasks, context, false);
 
         Ok(())
     }
 
-    fn debug_propagate_from_scratch(&self, context: PropagationContextMut) -> PropagationStatusCP {
-        debug_propagate_from_scratch_time_table_point(context, &self.parameters)
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
+        debug_propagate_from_scratch_time_table_point(
+            &mut context,
+            &self.parameters,
+            &self.dynamic_structures,
+        )
     }
 }
 
@@ -157,9 +180,9 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 /// conflict in the form of an [`Inconsistency`].
 pub(crate) fn create_time_table_per_point_from_scratch<
     Var: IntegerVariable + 'static,
-    Context: ReadDomains,
+    Context: ReadDomains + Copy,
 >(
-    context: &Context,
+    context: Context,
     parameters: &CumulativeParameters<Var>,
 ) -> Result<PerPointTimeTableType<Var>, PropositionalConjunction> {
     let mut time_table: PerPointTimeTableType<Var> = PerPointTimeTableType::new();
@@ -202,14 +225,20 @@ pub(crate) fn create_time_table_per_point_from_scratch<
 }
 
 pub(crate) fn debug_propagate_from_scratch_time_table_point<Var: IntegerVariable + 'static>(
-    mut context: PropagationContextMut,
+    context: &mut PropagationContextMut,
     parameters: &CumulativeParameters<Var>,
+    dynamic_structures: &UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table = create_time_table_per_point_from_scratch(&context.as_readonly(), parameters)?;
+    let time_table = create_time_table_per_point_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
-    propagate_based_on_timetable(&mut context, time_table.values(), parameters)
+    propagate_based_on_timetable(
+        context,
+        time_table.values(),
+        parameters,
+        &mut dynamic_structures.recreate_from_context(&context.as_readonly(), parameters),
+    )
 }
 
 #[cfg(test)]
@@ -249,11 +278,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 5);
@@ -285,10 +310,8 @@ mod tests {
             .collect::<Vec<_>>(),
             1,
             CumulativePropagatorOptions {
-                allow_holes_in_domain: false,
                 explanation_type: CumulativeExplanationType::Naive,
-
-                generate_sequence: false,
+                ..Default::default()
             },
         ));
         assert!(match result {
@@ -331,11 +354,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 0);
@@ -391,11 +410,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(f), 10);
@@ -424,11 +439,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 1,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(s2), 6);
@@ -473,9 +484,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -546,11 +556,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -629,11 +635,7 @@ mod tests {
                 .into_iter()
                 .collect::<Vec<_>>(),
                 5,
-                CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
-                    explanation_type: CumulativeExplanationType::default(),
-                    generate_sequence: false,
-                },
+                CumulativePropagatorOptions::default(),
             ))
             .expect("No conflict");
         assert_eq!(solver.lower_bound(a), 0);
@@ -681,9 +683,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -737,9 +738,8 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: false,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
@@ -788,9 +788,9 @@ mod tests {
                 .collect::<Vec<_>>(),
                 1,
                 CumulativePropagatorOptions {
-                    allow_holes_in_domain: true,
                     explanation_type: CumulativeExplanationType::Naive,
-                    generate_sequence: false,
+                    allow_holes_in_domain: true,
+                    ..Default::default()
                 },
             ))
             .expect("No conflict");
