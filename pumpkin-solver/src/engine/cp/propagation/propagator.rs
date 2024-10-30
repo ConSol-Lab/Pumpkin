@@ -106,7 +106,7 @@ pub trait Propagator {
     /// [`PropagatorInitialisationContext::register()`].
     fn notify_backtrack(
         &mut self,
-        _context: &PropagationContext,
+        _context: PropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) {
@@ -130,7 +130,7 @@ pub trait Propagator {
     /// update its internal data structures given the new variable domains.
     ///
     /// By default this function does nothing.
-    fn synchronise(&mut self, _context: &PropagationContext) {}
+    fn synchronise(&mut self, _context: PropagationContext) {}
 
     /// Returns the priority of the propagator represented as an integer. Lower values mean higher
     /// priority and the priority determines the order in which propagators will be asked to

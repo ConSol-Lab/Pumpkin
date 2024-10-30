@@ -62,7 +62,7 @@ where
 pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var>(
     task: &Rc<Task<Var>>,
     profile: &ResourceProfile<Var>,
-    context: &PropagationContext,
+    context: PropagationContext,
 ) -> Predicate
 where
     Var: IntegerVariable + 'static,

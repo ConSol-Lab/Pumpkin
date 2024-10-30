@@ -186,7 +186,7 @@ impl DebugHelper {
                 trail_entry
                     .reason
                     .expect("Expected checked propagation to have a reason"),
-                &context,
+                context,
             );
 
             result &= Self::debug_propagator_reason(

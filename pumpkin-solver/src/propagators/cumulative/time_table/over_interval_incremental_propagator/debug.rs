@@ -21,11 +21,11 @@ use crate::variables::IntegerVariable;
 ///      - The profile tasks should be the same; note that we do not check whether the order is the
 ///        same!
 pub(crate) fn time_tables_are_the_same_interval<Var: IntegerVariable + 'static>(
-    context: &PropagationContext,
+    context: PropagationContext,
     time_table: &OverIntervalTimeTableType<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let time_table_scratch = create_time_table_over_interval_from_scratch(*context, parameters)
+    let time_table_scratch = create_time_table_over_interval_from_scratch(context, parameters)
         .expect("Expected no error");
 
     if time_table.is_empty() {

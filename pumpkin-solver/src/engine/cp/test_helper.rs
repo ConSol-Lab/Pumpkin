@@ -199,7 +199,7 @@ impl TestSolver {
         let context =
             PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
         self.reason_store
-            .get_or_compute(reason_ref, &context)
+            .get_or_compute(reason_ref, context)
             .expect("reason_ref should not be stale")
     }
 
@@ -214,7 +214,7 @@ impl TestSolver {
         let context =
             PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
         self.reason_store
-            .get_or_compute(reason_ref, &context)
+            .get_or_compute(reason_ref, context)
             .expect("reason_ref should not be stale")
     }
 
