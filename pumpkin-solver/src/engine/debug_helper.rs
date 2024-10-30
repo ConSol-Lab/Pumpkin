@@ -458,6 +458,23 @@ impl DebugHelper {
         // Then (!p1 || !p2 || !p3) should not lead to immediate failure
 
         // Empty reasons are by definition satisifed after negation
+        let failure_reason = failure_reason
+            .iter()
+            .filter(|predicate| match predicate {
+                Predicate::IntegerPredicate(integer_predicate) => {
+                    variable_literal_mappings.get_literal(
+                        *integer_predicate,
+                        assignments_propositional,
+                        assignments_integer,
+                    ) != assignments_propositional.true_literal
+                }
+                Predicate::Literal(literal) => *literal != assignments_propositional.true_literal,
+                Predicate::False => unreachable!(),
+                Predicate::True => false,
+            })
+            .copied()
+            .collect::<PropositionalConjunction>();
+
         if failure_reason.num_predicates() == 0 {
             return;
         }

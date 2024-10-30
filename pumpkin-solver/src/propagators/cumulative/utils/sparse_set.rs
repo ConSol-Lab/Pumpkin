@@ -68,6 +68,12 @@ impl<T> SparseSet<T> {
         }
     }
 
+    pub(crate) fn set_to_empty(&mut self) {
+        self.indices = vec![usize::MAX; self.domain.len()];
+        self.domain.clear();
+        self.size = 0;
+    }
+
     /// Determines whether the domain represented by the [`SparseSet`] is empty
     pub(crate) fn is_empty(&self) -> bool {
         self.size == 0
@@ -98,10 +104,32 @@ impl<T> SparseSet<T> {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;
-            self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+            self.swap(
+                self.indices[(self.mapping)(to_remove)],
+                self.domain.len() - 1,
+            );
+            let _ = self.domain.pop().expect("Has to have something to pop.");
+            self.indices[(self.mapping)(to_remove)] = usize::MAX;
+        } else if self.indices[(self.mapping)(to_remove)] < self.domain.len() {
+            self.swap(
+                self.indices[(self.mapping)(to_remove)],
+                self.domain.len() - 1,
+            );
             let _ = self.domain.pop().expect("Has to have something to pop.");
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
+    }
+
+    pub(crate) fn remove_temporarily(&mut self, to_remove: &T) {
+        if self.indices[(self.mapping)(to_remove)] < self.size {
+            // The element is part of the domain and should be removed
+            self.size -= 1;
+            self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+        }
+    }
+
+    pub(crate) fn restore_temporarily_removed(&mut self) {
+        self.size = self.domain.len();
     }
 
     /// Determines whehter the `element` is contained in the domain of the sparse-set.
@@ -123,7 +151,7 @@ impl<T> SparseSet<T> {
         if !self.contains(&element) {
             self.accommodate(&element);
 
-            self.indices[(self.mapping)(&element)] = self.size;
+            self.indices[(self.mapping)(&element)] = self.domain.len();
             self.domain.push(element);
             self.size += 1;
         }
@@ -132,6 +160,10 @@ impl<T> SparseSet<T> {
     /// Returns an iterator which goes over the values in the domain of the sparse-set
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.domain[..self.size].iter()
+    }
+
+    pub(crate) fn out_of_domain(&self) -> impl Iterator<Item = &T> {
+        self.domain[self.size..].iter()
     }
 }
 

@@ -10,7 +10,7 @@ use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_lower_bound;
 use crate::propagators::cumulative::time_table::explanations::add_propagating_task_predicate_upper_bound;
-use crate::propagators::cumulative::time_table::time_table_util::ResourceProfile;
+use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
