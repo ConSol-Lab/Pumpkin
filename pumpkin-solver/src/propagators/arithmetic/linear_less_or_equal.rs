@@ -20,7 +20,7 @@ pub(crate) struct LinearLessOrEqualPropagator<Var> {
     c: i32,
 
     /// The lower bound of the sum of the left-hand side. This is incremental state.
-    lower_bound_left_hand_side: i32,
+    lower_bound_left_hand_side: i64,
     /// The value at index `i` is the bound for `x[i]`.
     current_bounds: Box<[i32]>,
 }
@@ -46,8 +46,8 @@ where
         self.lower_bound_left_hand_side = self
             .x
             .iter()
-            .map(|var| context.lower_bound(var))
-            .sum::<i32>();
+            .map(|var| context.lower_bound(var) as i64)
+            .sum();
 
         self.current_bounds
             .iter_mut()
@@ -87,7 +87,7 @@ where
         &self,
         context: PropagationContext,
     ) -> Option<PropositionalConjunction> {
-        if self.c < self.lower_bound_left_hand_side {
+        if (self.c as i64) < self.lower_bound_left_hand_side {
             let reason: PropositionalConjunction = self
                 .x
                 .iter()
@@ -117,7 +117,7 @@ where
         );
 
         self.current_bounds[index] = new_bound;
-        self.lower_bound_left_hand_side += new_bound - old_bound;
+        self.lower_bound_left_hand_side += (new_bound - old_bound) as i64;
 
         EnqueueDecision::Enqueue
     }
@@ -143,7 +143,10 @@ where
         }
 
         for (i, x_i) in self.x.iter().enumerate() {
-            let bound = self.c - (self.lower_bound_left_hand_side - context.lower_bound(x_i));
+            let bound = (self.c as i64
+                - (self.lower_bound_left_hand_side - context.lower_bound(x_i) as i64))
+                .try_into()
+                .expect("Could not fit the lower-bound of lhs in an i32");
 
             if context.upper_bound(x_i) > bound {
                 let reason: PropositionalConjunction = self
