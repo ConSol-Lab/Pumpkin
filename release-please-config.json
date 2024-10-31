@@ -1,13 +1,9 @@
 {
   "packages": {
     "pumpkin-solver": {
-      "package-name": "pumpkin-solver",
-      "component": "pumpkin-solver",
       "release-type": "rust"
     },
     "drcp-format": {
-      "package-name": "drcp-format",
-      "component": "drcp-format",
       "release-type": "rust"
     }
   },
@@ -16,5 +12,6 @@
   "bump-patch-for-minor-pre-major": true,
   "draft": false,
   "prerelease": false,
+  "separate-pull-requests": true,
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }
