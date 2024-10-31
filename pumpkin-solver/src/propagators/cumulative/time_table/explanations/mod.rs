@@ -25,7 +25,7 @@ use crate::variables::IntegerVariable;
 /// For the explanations of conflicts and conflicts, we different between 3 types of explanations:
 /// - The naive explanation (see [`CumulativeExplanationType::Naive`])
 /// - The bigstep explanation (see [CumulativeExplanationType::BigStep])
-/// - The pointwise explanation (see [CumulativeExplanationType::PointWise])
+/// - The pointwise explanation (see [CumulativeExplanationType::Pointwise])
 ///
 /// # Bibliography
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
@@ -55,7 +55,7 @@ pub enum CumulativeExplanationType {
     /// For conflicts we follow the work by Schutt (see the documentation for
     /// [`CumulativeExplanationType`]) and select the middle point in the profile as the point used
     /// for the explanation.
-    PointWise,
+    Pointwise,
 }
 
 impl Display for CumulativeExplanationType {
@@ -63,7 +63,7 @@ impl Display for CumulativeExplanationType {
         match self {
             CumulativeExplanationType::Naive => write!(f, "naive"),
             CumulativeExplanationType::BigStep => write!(f, "big-step"),
-            CumulativeExplanationType::PointWise => write!(f, "pointwise"),
+            CumulativeExplanationType::Pointwise => write!(f, "pointwise"),
         }
     }
 }
@@ -85,7 +85,7 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
         CumulativeExplanationType::BigStep => {
             create_big_step_predicate_propagating_task_lower_bound_propagation(task, profile)
         }
-        CumulativeExplanationType::PointWise => {
+        CumulativeExplanationType::Pointwise => {
             create_pointwise_predicate_propagating_task_lower_bound_propagation(task, time_point)
         }
     }
@@ -129,7 +129,7 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
                 task, profile, context,
             )
         }
-        CumulativeExplanationType::PointWise => {
+        CumulativeExplanationType::Pointwise => {
             create_pointwise_predicate_propagating_task_upper_bound_propagation(task, time_point)
         }
     }

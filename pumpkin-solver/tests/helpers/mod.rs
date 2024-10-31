@@ -47,8 +47,6 @@ pub(crate) fn run_solver_with_options<'a>(
 ) -> Files {
     let args = args.into_iter().collect::<Vec<_>>();
 
-    println!("{prefix:?}");
-
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
 
     let instance_path = instance_path.as_ref();
