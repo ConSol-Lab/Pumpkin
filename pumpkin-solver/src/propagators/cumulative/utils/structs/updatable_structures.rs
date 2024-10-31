@@ -104,6 +104,22 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         self.unfixed_tasks.insert(updated_task);
     }
 
+    /// Removes the fixed tasks from the internal structure(s).
+    pub(crate) fn remove_fixed(
+        &mut self,
+        context: PropagationContext,
+        parameters: &CumulativeParameters<Var>,
+    ) {
+        for task in parameters.tasks.iter() {
+            // If the task is fixed then we remove it, otherwise we insert it as an unfixed task
+            if context.is_fixed(&task.start_variable) {
+                self.unfixed_tasks.remove(task);
+            } else {
+                self.unfixed_tasks.insert(Rc::clone(task));
+            }
+        }
+    }
+
     /// Resets all of the bounds to the current values in the context and removes all of the fixed
     /// tasks from the internal structure(s).
     pub(crate) fn reset_all_bounds_and_remove_fixed(

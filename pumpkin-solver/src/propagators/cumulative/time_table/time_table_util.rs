@@ -42,14 +42,14 @@ pub(crate) struct ShouldEnqueueResult<Var> {
 /// [`ConstraintProgrammingPropagator::notify`] method.
 pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
     context: PropagationContext,
     empty_time_table: bool,
 ) -> ShouldEnqueueResult<Var> {
     pumpkin_assert_extreme!(
-        context.lower_bound(&updated_task.start_variable) > dynamic_structures.get_stored_lower_bound(updated_task)
-            || dynamic_structures.get_stored_upper_bound(updated_task)
+        context.lower_bound(&updated_task.start_variable) > updatable_structures.get_stored_lower_bound(updated_task)
+            || updatable_structures.get_stored_upper_bound(updated_task)
                 >= context.upper_bound(&updated_task.start_variable)
         , "Either the stored lower-bound was larger than or equal to the actual lower bound or the upper-bound was smaller than or equal to the actual upper-bound\nThis either indicates that the propagator subscribed to events other than lower-bound and upper-bound updates or the stored bounds were not managed properly"
     );
@@ -59,8 +59,8 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         update: None,
     };
 
-    let old_lower_bound = dynamic_structures.get_stored_lower_bound(updated_task);
-    let old_upper_bound = dynamic_structures.get_stored_upper_bound(updated_task);
+    let old_lower_bound = updatable_structures.get_stored_lower_bound(updated_task);
+    let old_upper_bound = updatable_structures.get_stored_upper_bound(updated_task);
 
     if old_lower_bound == context.lower_bound(&updated_task.start_variable)
         && old_upper_bound == context.upper_bound(&updated_task.start_variable)
@@ -83,7 +83,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // If there are updates then propagations might occur due to new mandatory parts being
         // added. However, if there are no updates then because we allow holes in the domain, no
         // updates can occur so we can skip propagation!
-        if dynamic_structures.has_updates() || result.update.is_some() {
+        if updatable_structures.has_updates() || result.update.is_some() {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -95,7 +95,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // been no updates since it could be the case that a task which has been updated can
         // now propagate due to an existing profile (this is due to the fact that we only
         // propagate bounds and (currently) do not create holes in the domain!).
-        if !empty_time_table || dynamic_structures.has_updates() || result.update.is_some() {
+        if !empty_time_table || updatable_structures.has_updates() || result.update.is_some() {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -202,7 +202,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
     parameters: &CumulativeParameters<Var>,
-    dynamic_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
     pumpkin_assert_extreme!(
         debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
@@ -210,22 +210,22 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     );
 
     pumpkin_assert_extreme!(
-        dynamic_structures
+        updatable_structures
             .get_unfixed_tasks()
             .all(|unfixed_task| !context.is_fixed(&unfixed_task.start_variable)),
         "All of the unfixed tasks should not be fixed at this point"
     );
     pumpkin_assert_extreme!(
-        dynamic_structures
+        updatable_structures
             .get_fixed_tasks()
             .all(|fixed_task| context.is_fixed(&fixed_task.start_variable)),
         "All of the fixed tasks should be fixed at this point"
     );
 
     if parameters.options.generate_sequence {
-        propagate_sequence_of_profiles(context, time_table, dynamic_structures, parameters)?;
+        propagate_sequence_of_profiles(context, time_table, updatable_structures, parameters)?;
     } else {
-        propagate_single_profiles(context, time_table, dynamic_structures, parameters)?;
+        propagate_single_profiles(context, time_table, updatable_structures, parameters)?;
     }
 
     Ok(())
@@ -243,7 +243,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    dynamic_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -258,8 +258,8 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 
         // Then we go over all the different tasks
         let mut task_index = 0;
-        while task_index < dynamic_structures.number_of_unfixed_tasks() {
-            let task = dynamic_structures.get_unfixed_task_at_index(task_index);
+        while task_index < updatable_structures.number_of_unfixed_tasks() {
+            let task = updatable_structures.get_unfixed_task_at_index(task_index);
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating
                 //
@@ -267,8 +267,8 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 // come in before properly fixing it - this is to avoid fixing a task without ever
                 // receiving the notification for it (which would result in a task never becoming
                 // unfixed since no backtrack notification would occur)
-                dynamic_structures.temporarily_remove_task_from_unfixed(&task);
-                if dynamic_structures.has_no_unfixed_tasks() {
+                updatable_structures.temporarily_remove_task_from_unfixed(&task);
+                if updatable_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
                 }
@@ -279,8 +279,8 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 // completion time of the task under consideration The profiles are
                 // sorted by start time (and non-overlapping) so we can remove the task from
                 // consideration
-                dynamic_structures.temporarily_remove_task_from_unfixed(&task);
-                if dynamic_structures.has_no_unfixed_tasks() {
+                updatable_structures.temporarily_remove_task_from_unfixed(&task);
+                if updatable_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
                 }
@@ -304,13 +304,13 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                     }
                 };
                 if result.is_err() {
-                    dynamic_structures.restore_temporarily_removed();
+                    updatable_structures.restore_temporarily_removed();
                     result?;
                 }
             }
         }
     }
-    dynamic_structures.restore_temporarily_removed();
+    updatable_structures.restore_temporarily_removed();
     Ok(())
 }
 
@@ -326,7 +326,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    dynamic_structures: &UpdatableStructures<Var>,
+    updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -337,7 +337,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     let time_table = time_table.collect::<Vec<_>>();
 
     // Then we go over all the possible tasks
-    for task in dynamic_structures.get_unfixed_tasks() {
+    for task in updatable_structures.get_unfixed_tasks() {
         if context.is_fixed(&task.start_variable) {
             // If the task is fixed then we are not able to propagate it further
             continue;
@@ -610,32 +610,32 @@ fn find_possible_updates<Var: IntegerVariable + 'static>(
 
 pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     updated_task: &Rc<Task<Var>>,
-    dynamic_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     potential_update: Option<UpdatedTaskInfo<Var>>,
 ) {
     if let Some(update) = potential_update {
-        dynamic_structures.task_has_been_updated(updated_task);
-        dynamic_structures.insert_update_for_task(updated_task, update);
+        updatable_structures.task_has_been_updated(updated_task);
+        updatable_structures.insert_update_for_task(updated_task, update);
     }
 }
 
 pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     context: PropagationContext,
-    dynamic_structures: &mut UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
     // Stores whether the stored lower-bound is equal to the current lower-bound
-    let lower_bound_equal_to_stored = dynamic_structures.get_stored_lower_bound(updated_task)
+    let lower_bound_equal_to_stored = updatable_structures.get_stored_lower_bound(updated_task)
         == context.lower_bound(&updated_task.start_variable);
 
     // Stores whether the stored upper-bound is equal to the current upper-bound
-    let upper_bound_equal_to_stored = dynamic_structures.get_stored_upper_bound(updated_task)
+    let upper_bound_equal_to_stored = updatable_structures.get_stored_upper_bound(updated_task)
         == context.upper_bound(&updated_task.start_variable);
 
     // Stores whether the stored bounds did not include a mandatory part
-    let previously_did_not_have_mandatory_part = dynamic_structures
+    let previously_did_not_have_mandatory_part = updatable_structures
         .get_stored_upper_bound(updated_task)
-        >= dynamic_structures.get_stored_lower_bound(updated_task) + updated_task.processing_time;
+        >= updatable_structures.get_stored_lower_bound(updated_task) + updated_task.processing_time;
 
     // If the stored bounds are already the same or the previous stored bounds did not include a
     // mandatory part (which means that this task will also not have mandatory part after
@@ -647,14 +647,14 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     }
 
     // We insert this task into the updated category
-    dynamic_structures.task_has_been_updated(updated_task);
+    updatable_structures.task_has_been_updated(updated_task);
     // And we add the type of update
-    dynamic_structures.insert_update_for_task(
+    updatable_structures.insert_update_for_task(
         updated_task,
         UpdatedTaskInfo {
             task: Rc::clone(updated_task),
-            old_lower_bound: dynamic_structures.get_stored_lower_bound(updated_task),
-            old_upper_bound: dynamic_structures.get_stored_upper_bound(updated_task),
+            old_lower_bound: updatable_structures.get_stored_lower_bound(updated_task),
+            old_upper_bound: updatable_structures.get_stored_upper_bound(updated_task),
             new_lower_bound: context.lower_bound(&updated_task.start_variable),
             new_upper_bound: context.upper_bound(&updated_task.start_variable),
         },

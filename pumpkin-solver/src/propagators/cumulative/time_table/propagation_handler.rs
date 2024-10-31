@@ -68,7 +68,7 @@ impl CumulativePropagationHandler {
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
                         }
-                        CumulativeExplanationType::PointWise => {
+                        CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
                         }
                     };
@@ -92,7 +92,7 @@ impl CumulativePropagationHandler {
                     full_explanation,
                 )
             }
-            CumulativeExplanationType::PointWise => {
+            CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
                     context,
                     profiles,
@@ -127,7 +127,7 @@ impl CumulativePropagationHandler {
                         CumulativeExplanationType::BigStep => {
                             create_big_step_propagation_explanation(profile)
                         }
-                        CumulativeExplanationType::PointWise => {
+                        CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
                         }
                     };
@@ -150,7 +150,7 @@ impl CumulativePropagationHandler {
                     full_explanation,
                 )
             }
-            CumulativeExplanationType::PointWise => {
+            CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
                     context,
                     profiles,
@@ -199,7 +199,7 @@ impl CumulativePropagationHandler {
                     },
                 )
             }
-            CumulativeExplanationType::PointWise => {
+            CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
                     context,
                     &[profile],
@@ -249,7 +249,7 @@ impl CumulativePropagationHandler {
                     },
                 )
             }
-            CumulativeExplanationType::PointWise => {
+            CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
                     context,
                     &[profile],
@@ -312,7 +312,7 @@ impl CumulativePropagationHandler {
                         move |_context: PropagationContext| (*explanation).clone(),
                     )?;
                 }
-                CumulativeExplanationType::PointWise => {
+                CumulativeExplanationType::Pointwise => {
                     // We split into two cases when determining the explanation of the profile
                     // - Either the time-point is before the start of the profile; in which case the
                     //   explanation for the removal of this time-point is that there is a profile
@@ -369,7 +369,7 @@ impl CumulativePropagationHandler {
                     CumulativeExplanationType::BigStep => {
                         create_big_step_propagation_explanation(profile)
                     },
-                    CumulativeExplanationType::PointWise => {
+                    CumulativeExplanationType::Pointwise => {
                         unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
                     },
                 }
@@ -395,7 +395,7 @@ where
         CumulativeExplanationType::BigStep => {
             create_big_step_conflict_explanation(conflict_profile)
         }
-        CumulativeExplanationType::PointWise => {
+        CumulativeExplanationType::Pointwise => {
             create_pointwise_conflict_explanation(conflict_profile)
         }
     }

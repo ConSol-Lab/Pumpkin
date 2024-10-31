@@ -131,6 +131,28 @@ impl TestSolver {
         )
     }
 
+    pub(crate) fn decrease_upper_bound_and_notify(
+        &mut self,
+        propagator: &mut BoxedPropagator,
+        id: i32,
+        var: DomainId,
+        value: i32,
+    ) -> EnqueueDecision {
+        let result = self.assignments.tighten_upper_bound(var, value, None);
+        assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
+        let context = PropagationContext::new(&self.assignments);
+        propagator.notify(
+            context,
+            LocalId::from(id as u32),
+            OpaqueDomainEvent::from(
+                DomainEvents::UPPER_BOUND
+                    .get_int_events()
+                    .iter()
+                    .next()
+                    .unwrap(),
+            ),
+        )
+    }
     pub(crate) fn is_literal_false(&self, literal: Literal) -> bool {
         self.assignments
             .evaluate_predicate(literal.get_true_predicate())
