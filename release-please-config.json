@@ -3,23 +3,18 @@
     "pumpkin-solver": {
       "package-name": "pumpkin-solver",
       "component": "pumpkin-solver",
-      "changelog-path": "CHANGELOG.md",
       "release-type": "rust",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
-      "draft": false,
-      "prerelease": false
     },
     "drcp-format": {
       "package-name": "drcp-format",
       "component": "drcp-format",
-      "changelog-path": "CHANGELOG.md",
       "release-type": "rust",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
-      "draft": false,
-      "prerelease": false
     }
   },
+  "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "draft": false,
+  "prerelease": false
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }
