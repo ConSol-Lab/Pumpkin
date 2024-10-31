@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use proc_macro::TokenStream;
+use quote::format_ident;
 use quote::quote;
 use syn::parse_macro_input;
 use syn::punctuated::Punctuated;
@@ -35,14 +36,26 @@ pub fn cumulative(item: TokenStream) -> TokenStream {
                 let options = quote! {
                     #(#options),*
                 };
+                let test_name = format_ident!(
+                    "{}",
+                    stringcase::snake_case(
+                        &[
+                            "cumulative",
+                            &propagation_method,
+                            explanation_type,
+                            &option_string,
+                        ]
+                        .into_iter()
+                        .filter(|string| !string.is_empty())
+                        .join("_")
+                    )
+                );
                 let stream: TokenStream = quote! {
-                        paste::item! {
-                                mzn_test!(
-                                    [< cumulative_ #propagation_method _ #explanation_type _ #option_string>],
-                                    "cumulative",
-                                    vec!["--cumulative-propagation-method", &stringcase::kebab_case(#propagation_method),"--cumulative-explanation-type", #explanation_type, #options]
-                                );
-                            }
+                        mzn_test!(
+                            #test_name,
+                            "cumulative",
+                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(#propagation_method),"--cumulative-explanation-type", #explanation_type, #options]
+                        );
                     }
                 .into();
                 output.extend(stream);
@@ -89,11 +102,27 @@ pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
             let options = quote! {
                 #(#options),*
             };
+            let test_name = format_ident!(
+                "{}",
+                stringcase::snake_case(
+                    &[
+                        "cumulative",
+                        &first_name,
+                        "equal_with",
+                        &second_name,
+                        explanation_type,
+                        &option_string,
+                    ]
+                    .into_iter()
+                    .filter(|string| !string.is_empty())
+                    .join("_")
+                )
+            );
 
             let stream: TokenStream = quote! {
                 paste::item! {
                     #[test]
-                    fn [< cumulative_ #first_name _equal_with_ #second_name _ #explanation_type _ #option_string>]() {
+                    fn #test_name() {
                         check_statistic_equality(
                             "cumulative",
                             "mzn_constraints",
