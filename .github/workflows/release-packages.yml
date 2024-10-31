@@ -1,38 +1,16 @@
-# This workflow is used to create and publish releases for the various packages in
-# the repository.
-#
-# The way this works is the following:
-#
-# The create-release job runs purely to initialize the GitHub release itself
-# and to output upload_url for the following job.
-#
-# The attach-artifacts job runs only once create-release is finished. It gets the
-# release upload URL from create-release job outputs, then builds the release
-# executables for each supported platform and attaches them as release assets
-# to the previously created release.
-#
-# The publish-package job runs to distribute the package to the appropriate
-# registry.
-#
-# The key here is that we create the release only once.
-#
-# Reference:
-# https://eugene-babichenko.github.io/blog/2020/05/09/github-actions-cross-platform-auto-releases/
+# When a release is created, distribute the packages to the appropriate registries. Also builds the binaries to attach them to the release.
 
 name: Release Packages
 on:
-  push:
-    tags:
-      - "*-v*"
+  release:
+    types: [published]
 
 jobs:
-  # Create a GitHub release based on the tag. Extract the appropriate changes from 
-  # the CHANGELOG.md to serve as the release body.
-  create-release:
-    name: Create Release
+  # Extract the release information from the tag
+  parse-release:
+    name: Parse Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.release.outputs.upload_url }}
       release_name: ${{ env.RELEASE_NAME }}
       package: ${{ env.PACKAGE }}
       release_version: ${{ env.VERSION }}
@@ -50,31 +28,10 @@ jobs:
           echo "release_name: ${RELEASE_NAME}"
           echo "package: ${RELEASE_NAME%-*}"
           echo "version: ${RELEASE_NAME##*-}"
-            
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Generate Release Notes
-        shell: bash
-        run: |
-          set -x
-          ./.github/workflows/release-notes.py \
-              --tag ${{ env.RELEASE_NAME }}    \
-              --output notes-${{ env.RELEASE_NAME }}.md
-          cat notes-${{ env.RELEASE_NAME }}.md
-
-      - name: Create GitHub release
-        id: release
-        uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag: ${{ env.RELEASE_NAME }}
-          bodyFile: notes-${{ env.RELEASE_NAME }}.md
 
   publish-package:
     name: Publish to Registry
-    needs: create-release
+    needs: parse-release
     runs-on: ubuntu-latest
 
     steps:
@@ -87,15 +44,15 @@ jobs:
         toolchain: stable
 
     - name: Publish to crates.io
-      if: ${{ contains(needs.create-release.outputs.package, 'pumpkin-solver') || contains(needs.create-release.outputs.package, 'drcp-format') }}
-      run: cargo publish --package ${{ needs.create-release.outputs.package }} --token ${CRATES_TOKEN}
+      if: ${{ contains(needs.parse-release.outputs.package, 'pumpkin-solver') || contains(needs.parse-release.outputs.package, 'drcp-format') }}
+      run: cargo publish --package ${{ needs.parse-release.outputs.package }} --token ${CRATES_TOKEN}
       env:
         CRATES_TOKEN: ${{ secrets.CRATES_TOKEN }}
 
   attach-artifacts:
     name: Build Pumpkin Artifacts and Upload
-    if: ${{ contains(needs.create-release.outputs.package, 'pumpkin-solver') }}
-    needs: create-release
+    needs: parse-release
+    if: ${{ contains(needs.parse-release.outputs.package, 'pumpkin-solver') }}
     strategy:
       fail-fast: false
       matrix:
@@ -142,9 +99,6 @@ jobs:
         fi
       
     - name: Upload release archive
-      uses: softprops/action-gh-release@v2
+      run: gh release upload ${{ needs.parse-release.outputs.release_name }} ${{ env.ASSET }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        name: ${{ needs.create-release.outputs.release_name }}
-        files: ${{ env.ASSET }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
