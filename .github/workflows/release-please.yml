@@ -22,6 +22,6 @@ jobs:
           manifest-file: .release-please-manifest.json
 
       - name: Update README
-        if: ${{ steps.release-please.pr != null }}
-        run: echo ${{ steps.release-please.pr }}
+        if: ${{ steps.release-please.outputs.pr != null }}
+        run: echo ${{ steps.release-please.outputs.pr }}
         
