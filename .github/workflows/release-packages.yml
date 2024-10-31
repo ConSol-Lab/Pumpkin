@@ -89,7 +89,7 @@ jobs:
     - name: Build archive
       shell: bash
       run: |
-        out_bin_name="${{ needs.create-release.outputs.release_name }}-${{ matrix.target }}"
+        out_bin_name="${{ needs.parse-release.outputs.release_name }}-${{ matrix.target }}"
         if [ "${{ matrix.os }}" = "windows-2019" ]; then
           cp "target/${{ matrix.target }}/release/pumpkin-solver.exe" "$out_bin_name.exe"
           echo "ASSET=$out_bin_name.exe" >> $GITHUB_ENV
