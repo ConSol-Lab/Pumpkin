@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use clap::ValueEnum;
+
 use super::CumulativeExplanationType;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -47,7 +49,7 @@ impl CumulativeOptions {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, ValueEnum)]
 pub enum CumulativePropagationMethod {
     TimeTablePerPoint,
     TimeTablePerPointIncremental,

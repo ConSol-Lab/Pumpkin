@@ -107,12 +107,9 @@ struct Args {
     /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
     /// based on the LBD of a clause (the number of different decision levels) or on the activity
     /// of a clause (how often it is used in conflict analysis).
-    ///
-    /// Possible values: ["lbd", "activity"]
     #[arg(
         short = 'l',
         long = "learning-sorting-strategy",
-        value_parser = learned_clause_sorting_strategy_parser,
         default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
     )]
     learning_sorting_strategy: LearnedClauseSortingStrategy,
@@ -136,11 +133,8 @@ struct Args {
     ///   (1993)")
     ///
     /// To be used in combination with "--restarts-base-interval".
-    ///
-    /// Possible values: ["constant", "geometric", "luby"]
     #[arg(
         long = "restart-sequence",
-        value_parser = sequence_generator_parser,
         default_value_t = SequenceGeneratorType::Constant, verbatim_doc_comment
     )]
     restart_sequence_generator_type: SequenceGeneratorType,
@@ -309,11 +303,8 @@ struct Args {
     /// (2015)"), and the "cne" value specifies that the solver should use the Cardinality Network
     /// Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et al.
     /// (2011)").
-    ///
-    /// Possible values: ["gte", "cne"]
     #[arg(
         long = "upper-bound-encoding",
-        value_parser = upper_bound_encoding_parser,
         default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer, verbatim_doc_comment
     )]
     upper_bound_encoding: PseudoBooleanEncoding,
@@ -331,21 +322,14 @@ struct Args {
     no_restarts: bool,
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
-    ///
-    /// Possible values: ["naive", "big-step", "pointwise"]
-    #[arg(long = "cumulative-explanation-type", value_parser = cumulative_explanation_type_parser, default_value_t = CumulativeExplanationType::default())]
+    #[arg(long = "cumulative-explanation-type", default_value_t = CumulativeExplanationType::default())]
     cumulative_explanation_type: CumulativeExplanationType,
 
     /// Determines the type of propagator which is used by the cumulative propagator(s) to
     /// propagate the constraint.
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
-    ///
-    /// Possible values: ["time-table-per-point", "time-table-per-point-incremental",
-    /// "time-table-per-point-incremental-synchronised",
-    /// "time-table-over-interval", "time-table-over-interval-incremental",
-    /// "time-table-over-interval-incremental-synchronised"]
-    #[arg(long = "cumulative-propagation-method", value_parser = cumulative_propagation_method_parser, default_value_t = CumulativePropagationMethod::default())]
+    #[arg(long = "cumulative-propagation-method",  default_value_t = CumulativePropagationMethod::default())]
     cumulative_propagation_method: CumulativePropagationMethod,
 
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
@@ -629,46 +613,6 @@ fn stringify_solution(
         .collect::<String>()
 }
 
-fn learned_clause_sorting_strategy_parser(s: &str) -> Result<LearnedClauseSortingStrategy, String> {
-    match s {
-        "lbd" => Ok(LearnedClauseSortingStrategy::Lbd),
-        "activity" => Ok(LearnedClauseSortingStrategy::Activity),
-        value => Err(format!(
-            "'{value}' is not a valid learned clause sorting strategy. Possible values: ['lbd', 'activity']"
-        )),
-    }
-}
-
-fn upper_bound_encoding_parser(s: &str) -> Result<PseudoBooleanEncoding, String> {
-    match s {
-        "gte" => Ok(PseudoBooleanEncoding::GeneralizedTotalizer),
-        "cne" => Ok(PseudoBooleanEncoding::CardinalityNetwork),
-        value => Err(format!(
-            "'{value}' is not a valid upper bound encoding. Possible values: ['gte', 'cne']."
-        )),
-    }
-}
-
-fn sequence_generator_parser(s: &str) -> Result<SequenceGeneratorType, String> {
-    match s {
-        "constant" => Ok(SequenceGeneratorType::Constant),
-        "geometric" => Ok(SequenceGeneratorType::Geometric),
-        "luby" => Ok(SequenceGeneratorType::Luby),
-        value => Err(format!("'{value}' is not a valid sequence generator. Possible values: ['constant', 'geometric', 'luby'].")),
-    }
-}
-
-fn cumulative_explanation_type_parser(s: &str) -> Result<CumulativeExplanationType, String> {
-    match s {
-        "naive" => Ok(CumulativeExplanationType::Naive),
-        "big-step" => Ok(CumulativeExplanationType::BigStep),
-        "pointwise" => Ok(CumulativeExplanationType::PointWise),
-        value => Err(format!(
-            "'{value}' is not a valid cumulative explanation type. Possible values: ['naive', 'big-step', 'pointwise']"
-        )),
-    }
-}
-
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum ProofType {
     /// Log only the proof scaffold.
@@ -686,17 +630,5 @@ impl Display for ProofType {
             ProofType::Full => write!(f, "full"),
             ProofType::WithHints => write!(f, "with-hints"),
         }
-    }
-}
-
-fn cumulative_propagation_method_parser(s: &str) -> Result<CumulativePropagationMethod, String> {
-    match s {
-        "time-table-per-point" => Ok(CumulativePropagationMethod::TimeTablePerPoint),
-        "time-table-per-point-incremental" => Ok(CumulativePropagationMethod::TimeTablePerPointIncremental),
-        "time-table-per-point-incremental-synchronised" => Ok(CumulativePropagationMethod::TimeTablePerPointIncrementalSynchronised),
-        "time-table-over-interval" => Ok(CumulativePropagationMethod::TimeTableOverInterval),
-        "time-table-over-interval-incremental" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncremental),
-        "time-table-over-interval-incremental-synchronised" => Ok(CumulativePropagationMethod::TimeTableOverIntervalIncrementalSynchronised),
-        value => Err(format!("'{value}' is not a valid cumulative propagation method. Possible values: ['time-table-per-point', 'time-table-per-point-incremental', 'time-table-per-point-incremental-synchronised', 'time-table-over-interval', 'time-table-over-interval-incremental', 'time-table-over-interval-incremental-synchronised']"))
     }
 }

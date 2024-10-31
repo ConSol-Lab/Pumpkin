@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::time::Instant;
 
+use clap::ValueEnum;
 use log::debug;
 use thiserror::Error;
 
@@ -52,7 +53,7 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
 
 /// Specifies the type of pseudo-boolean encoding which is used by the
 /// [`PseudoBooleanConstraintEncoder`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum PseudoBooleanEncoding {
     /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
@@ -80,9 +81,9 @@ pub enum PseudoBooleanEncoding {
 impl std::fmt::Display for PseudoBooleanEncoding {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PseudoBooleanEncoding::GeneralizedTotalizer => write!(f, "gte"),
-            PseudoBooleanEncoding::CardinalityNetwork => write!(f, "cne"),
-            PseudoBooleanEncoding::SingleInteger => write!(f, "single_integer"),
+            PseudoBooleanEncoding::GeneralizedTotalizer => write!(f, "generalized-totalizer"),
+            PseudoBooleanEncoding::CardinalityNetwork => write!(f, "cardinality-network"),
+            PseudoBooleanEncoding::SingleInteger => write!(f, "single-integer"),
         }
     }
 }
