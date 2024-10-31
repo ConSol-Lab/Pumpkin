@@ -7,15 +7,21 @@ permissions:
   contents: write
   pull-requests: write
 
-name: release-please
+name: Release Please
 
 jobs:
-  release-please:
+  handle-releases:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - name: Release Please
+        id: release-please
+        uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          
+
+      - name: Update README
+        if: ${{ steps.release-please.pr != null }}
+        run: echo ${{ steps.release-please.pr }}
+        
