@@ -23,7 +23,7 @@ itertools = "0.13.0"
 flatzinc = "0.3.21"
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
-test-macros = { version = "0.1.0", path = "../test-macros"}
+pumpkin-macros = { version = "0.1.0", path = "../pumpkin-macros"}
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }

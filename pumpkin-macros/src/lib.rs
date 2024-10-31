@@ -1,0 +1,115 @@
+use itertools::Itertools;
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::parse_macro_input;
+use syn::punctuated::Punctuated;
+use syn::Ident;
+use syn::Token;
+
+const EXPLANATION_TYPES: [&str; 3] = ["naive", "big-step", "pointwise"];
+const OTHER_OPTIONS: [&str; 3] = [
+    "--cumulative-generate-sequence",
+    "--cumulative-incremental-backtracking",
+    "--cumulative-allow-holes",
+];
+
+/// A macro for creating test cases for the cumulative; it takes as input the name of a propagator
+/// (in snake case) and it creates a test case for every possible combination of cumulative options
+#[proc_macro]
+pub fn cumulative(item: TokenStream) -> TokenStream {
+    let input = syn::parse::<Ident>(item);
+
+    let mut output = TokenStream::new();
+
+    if let Ok(input) = input {
+        let propagation_method = input.to_string();
+
+        for explanation_type in EXPLANATION_TYPES {
+            for options in OTHER_OPTIONS.into_iter().powerset() {
+                let option_string = options
+                    .iter()
+                    .map(|argument| {
+                        stringcase::snake_case(&argument[2..].split("-").skip(1).join("_"))
+                    })
+                    .join("_");
+                let options = quote! {
+                    #(#options),*
+                };
+                let stream: TokenStream = quote! {
+                        paste::item! {
+                                mzn_test!(
+                                    [< cumulative_ #propagation_method _ #explanation_type _ #option_string>],
+                                    "cumulative",
+                                    vec!["--cumulative-propagation-method", &stringcase::kebab_case(#propagation_method),"--cumulative-explanation-type", #explanation_type, #options]
+                                );
+                            }
+                    }
+                .into();
+                output.extend(stream);
+            }
+        }
+
+        output
+    } else {
+        quote! {
+            compile_error!("Could not parse the input as an identifier")
+        }
+        .into()
+    }
+}
+
+/// A macro for creating test cases for the synchronisation of the cumulative; it takes as input
+/// the name of two propagators (both in snake case) and it creates a test case for every possible
+/// combination of cumulative options which checks whether the statistics of the two outputs are
+/// the same
+#[proc_macro]
+pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item with Punctuated::<Ident, Token![,]>::parse_terminated)
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if input.len() != 2 {
+        return quote! {
+            compile_error!("Expected two arguments")
+        }
+        .into();
+    }
+
+    let mut output = TokenStream::new();
+
+    for explanation_type in EXPLANATION_TYPES {
+        for options in OTHER_OPTIONS.into_iter().powerset() {
+            let first_name = input[0].to_string();
+            let second_name = input[1].to_string();
+
+            let option_string = options
+                .iter()
+                .map(|argument| stringcase::snake_case(&argument[2..].split("-").skip(1).join("_")))
+                .join("_");
+            let options = quote! {
+                #(#options),*
+            };
+
+            let stream: TokenStream = quote! {
+                paste::item! {
+                    #[test]
+                    fn [< cumulative_ #first_name _equal_with_ #second_name _ #explanation_type _ #option_string>]() {
+                        check_statistic_equality(
+                            "cumulative",
+                            "mzn_constraints",
+                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#first_name)),"--cumulative-explanation-type", #explanation_type, #options],
+                            vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!(#second_name)),"--cumulative-explanation-type", #explanation_type, #options],
+                            &format!("equality_{}_{}_{}", #first_name, #explanation_type, #option_string),
+                            &format!("equality_{}_{}_{}", #second_name, #explanation_type, #option_string),
+                        );
+                    }
+                }
+            }
+            .into();
+
+            output.extend(stream);
+        }
+    }
+
+    output
+}
