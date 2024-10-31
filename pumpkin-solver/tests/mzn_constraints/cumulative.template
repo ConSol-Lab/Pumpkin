@@ -1,5 +1,4 @@
-predicate gecode_cumulatives(
-    array [int] of var int: start_times,
+predicate gecode_cumulatives(array [int] of var int: start_times,
     array [int] of var int: durations,
     array [int] of var int: resource_requirements,
     var int: resource_capacity

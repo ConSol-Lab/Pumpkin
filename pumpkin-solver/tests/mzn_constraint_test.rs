@@ -1,8 +1,10 @@
 #![cfg(test)] // workaround for https://github.com/rust-lang/rust-clippy/issues/11024
 
 mod helpers;
-
+use helpers::check_statistic_equality;
 use helpers::run_mzn_test_with_options;
+use pumpkin_macros::cumulative;
+use pumpkin_macros::cumulative_synchronised;
 
 macro_rules! mzn_test {
     ($name:ident) => {
@@ -17,54 +19,6 @@ macro_rules! mzn_test {
                 "mzn_constraints",
                 $options,
                 stringify!($name),
-            );
-        }
-    };
-}
-
-macro_rules! cumulative_test {
-    ($propagator:ident) => {
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _naive >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)),"--cumulative-explanation-type", "naive"]
-            );
-        }
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _big_step >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "big-step"]
-            );
-        }
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _pointwise >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "pointwise"]
-            );
-        }
-
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _naive_incremental_backtracking >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)),"--cumulative-explanation-type", "naive", "--cumulative-incremental-backtracking"]
-            );
-        }
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _big_step_incremental_backtracking >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "big-step", "--cumulative-incremental-backtracking"]
-            );
-        }
-        paste::item! {
-            mzn_test!(
-                [< cumulative_ $propagator _pointwise_incremental_backtracking >],
-                "cumulative",
-                vec!["--cumulative-propagation-method", &stringcase::kebab_case(stringify!($propagator)), "--cumulative-explanation-type", "pointwise", "--cumulative-incremental-backtracking"]
             );
         }
     };
@@ -109,9 +63,20 @@ mzn_test!(bool_lin_eq);
 mzn_test!(bool_lin_le);
 mzn_test!(bool_clause);
 
-cumulative_test!(time_table_per_point);
-cumulative_test!(time_table_per_point_incremental);
-cumulative_test!(time_table_over_interval);
-cumulative_test!(time_table_over_interval_incremental);
+cumulative!(time_table_per_point);
+cumulative!(time_table_per_point_incremental);
+cumulative!(time_table_per_point_incremental_synchronised);
+cumulative!(time_table_over_interval);
+cumulative!(time_table_over_interval_incremental);
+cumulative!(time_table_over_interval_incremental_synchronised);
+
+cumulative_synchronised!(
+    time_table_per_point,
+    time_table_per_point_incremental_synchronised
+);
+cumulative_synchronised!(
+    time_table_over_interval,
+    time_table_over_interval_incremental_synchronised
+);
 
 mzn_test!(all_different);

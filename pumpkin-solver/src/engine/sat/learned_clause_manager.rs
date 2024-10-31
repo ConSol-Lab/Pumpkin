@@ -1,3 +1,5 @@
+use clap::ValueEnum;
+
 use super::AssignmentsPropositional;
 use crate::basic_types::ClauseReference;
 use crate::engine::clause_allocators::ClauseAllocatorInterface;
@@ -43,7 +45,7 @@ impl Default for LearningOptions {
 }
 
 /// The sorting strategy which is used when considering removal from the clause database.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum LearnedClauseSortingStrategy {
     /// Sorts based on the activity, the activity is bumped when a literal is encountered during
     /// conflict analysis.
