@@ -2,19 +2,21 @@
   "packages": {
     "pumpkin-solver": {
       "package-name": "pumpkin-solver",
-      "changelog-path": "pumpkin-solver/CHANGELOG.md",
+      "component": "pumpkin-solver",
+      "changelog-path": "CHANGELOG.md",
       "release-type": "rust",
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": true,
       "draft": false,
       "prerelease": false
     },
     "drcp-format": {
       "package-name": "drcp-format",
-      "changelog-path": "drcp-format/CHANGELOG.md",
+      "component": "drcp-format",
+      "changelog-path": "CHANGELOG.md",
       "release-type": "rust",
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": true,
       "draft": false,
       "prerelease": false
     }
