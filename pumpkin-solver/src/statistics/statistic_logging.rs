@@ -1,8 +1,9 @@
 //! Responsible for behaviour related to logging statistics with a specific pre-fix and closing
 //! lines.
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::io::stdout;
 use std::io::Write;
 use std::sync::OnceLock;
@@ -41,9 +42,9 @@ static STATISTIC_OPTIONS: OnceLock<RwLock<StatisticOptions>> = OnceLock::new();
 /// Configures the logging of the statistics.
 ///
 /// It specifies the (optional) prefix and a closing line (postfix) which
-/// can be written to the (optional) writer after all of the statistics have been logged.
-/// In case no writer is specified, stdout will be used.
-/// Statistics will only be written if `log_statistics` is true.
+/// can be written to the writer after all of the statistics have been logged.
+/// It also specifies the writer to be used for writing statistics. In case no writer is specified,
+/// stdout will be used. Statistics will only be written if `log_statistics` is true.
 pub fn configure_statistic_logging(
     prefix: &'static str,
     after: Option<&'static str>,
