@@ -41,4 +41,5 @@ predicate pumpkin_bool_xor_reif(var bool: a, var bool: b, var bool: r);
 predicate int_mod(var int: x, var int: y, var int: z) =
   x=(x div y)*y+z;
 
+
 % Set Constraints
