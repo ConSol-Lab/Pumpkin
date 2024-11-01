@@ -380,7 +380,7 @@ fn configure_logging_unknown() -> std::io::Result<()> {
 
 fn configure_logging_minizinc(verbose: bool, log_statistics: bool) -> std::io::Result<()> {
     if log_statistics {
-        configure_statistic_logging("%%%mzn-stat:", Some("%%%mzn-stat-end"), Some(Case::Camel));
+        configure_statistic_logging("%%%mzn-stat:", Some("%%%mzn-stat-end"), Some(Case::Camel), None);
     }
     let level_filter = if verbose {
         LevelFilter::Debug
@@ -408,7 +408,7 @@ fn configure_logging_sat(
     omit_call_site: bool,
 ) -> std::io::Result<()> {
     if log_statistics {
-        configure_statistic_logging("c STAT", None, None);
+        configure_statistic_logging("c STAT", None, None, None);
     }
     let level_filter = if verbose {
         LevelFilter::Debug

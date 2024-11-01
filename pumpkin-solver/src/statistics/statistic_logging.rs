@@ -1,7 +1,7 @@
 //! Responsible for behaviour related to logging statistics with a specific pre-fix and closing
 //! lines.
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::fmt::Display;
 use std::io::stdout;
 use std::io::Write;
@@ -10,7 +10,6 @@ use std::sync::RwLock;
 
 use convert_case::Case;
 use convert_case::Casing;
-use log::debug;
 
 /// The options for statistic logging containing the statistic prefix, the (optional) line which is
 /// printed after the statistics, and the (optional) casing of the statistics.
@@ -22,8 +21,19 @@ pub struct StatisticOptions<'a> {
     after_statistics: Option<&'a str>,
     // The casing of the name of the statistic
     statistics_casing: Option<Case>,
-    // The writer TODO
+    // The writer to which the statistics are written
     statistics_writer: Box<dyn Write + Send + Sync>,
+}
+
+impl Debug for StatisticOptions<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StatisticOptions")
+            .field("statistic_prefix", &self.statistic_prefix)
+            .field("after_statistics", &self.after_statistics)
+            .field("statistics_casing", &self.statistics_casing)
+            .field("statistics_writer", &"<Writer>")
+            .finish()
+    }
 }
 
 static STATISTIC_OPTIONS: OnceLock<RwLock<StatisticOptions>> = OnceLock::new();
@@ -31,8 +41,9 @@ static STATISTIC_OPTIONS: OnceLock<RwLock<StatisticOptions>> = OnceLock::new();
 /// Configures the logging of the statistics.
 ///
 /// It specifies the (optional) prefix and a closing line (postfix) which
-/// can be printed after all of the statistics have been logged. Statistics will only be printed
-/// if `log_statistics` is true.
+/// can be written to the (optional) writer after all of the statistics have been logged.
+/// In case no writer is specified, stdout will be used.
+/// Statistics will only be written if `log_statistics` is true.
 pub fn configure_statistic_logging(
     prefix: &'static str,
     after: Option<&'static str>,
@@ -60,13 +71,11 @@ pub fn log_statistic(name: impl Display, value: impl Display) {
                 name.to_string()
             };
             let prefix = statistic_options.statistic_prefix;
-            if let Err(e) = write!(
+            let _ = writeln!(
                 statistic_options.statistics_writer,
-                "{} {name}={value}\n",
+                "{} {name}={value}",
                 prefix
-            ) {
-                debug!("Could not write statistic: {e}")
-            };
+            );
         }
     }
 }
@@ -80,9 +89,7 @@ pub fn log_statistic_postfix() {
     if let Some(statistic_options_lock) = STATISTIC_OPTIONS.get() {
         if let Ok(mut statistic_options) = statistic_options_lock.write() {
             if let Some(post_fix) = statistic_options.after_statistics {
-                if let Err(e) = write!(statistic_options.statistics_writer, "{post_fix}\n") {
-                    debug!("Could not write statistic: {e}");
-                }
+                let _ = writeln!(statistic_options.statistics_writer, "{post_fix}");
             }
         }
     }
