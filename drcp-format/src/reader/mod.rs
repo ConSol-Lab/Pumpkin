@@ -78,7 +78,7 @@ pub type ReadStep<'a, AtomicConstraint> =
 ///     hint_constraint_id: Some(NonZero::new(20).unwrap()),
 ///     hint_label: Some("linear_bound"),
 ///     premises: vec![lit(4), lit(5)],
-///     propagated: lit(-2),
+///     propagated: Some(lit(-2)),
 /// };
 /// assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
 ///
@@ -176,7 +176,7 @@ where
                     .into_iter()
                     .map(|literal| self.atomics.to_atomic(literal))
                     .collect(),
-                propagated: self.atomics.to_atomic(propagated),
+                propagated: propagated.map(|p| self.atomics.to_atomic(p)),
             }),
 
             Step::Nogood(Nogood {
@@ -240,7 +240,7 @@ fn inference_step(input: &str) -> IResult<&str, Inference<'_, Vec<NonZero<i32>>,
             hint_constraint_id,
             hint_label,
             premises,
-            propagated,
+            propagated: Some(propagated),
         },
     )(input)
 }
