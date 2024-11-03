@@ -14,8 +14,10 @@ const OTHER_OPTIONS: [&str; 3] = [
     "--cumulative-allow-holes",
 ];
 
-/// A macro for creating test cases for the cumulative; it takes as input the name of a propagator
-/// (in snake case) and it creates a test case for every possible combination of cumulative options
+/// A macro for creating test cases for the cumulative.
+///
+/// It takes as input the name of a propagator (in snake case) and it creates
+/// a test case for every possible combination of cumulative options
 #[proc_macro]
 pub fn cumulative(item: TokenStream) -> TokenStream {
     let input = syn::parse::<Ident>(item);
@@ -71,10 +73,11 @@ pub fn cumulative(item: TokenStream) -> TokenStream {
     }
 }
 
-/// A macro for creating test cases for the synchronisation of the cumulative; it takes as input
-/// the name of two propagators (both in snake case) and it creates a test case for every possible
-/// combination of cumulative options which checks whether the statistics of the two outputs are
-/// the same
+/// A macro for creating test cases for the synchronisation of the cumulative.
+///
+/// It takes as input the name of two propagators (both in snake case) and it creates
+/// a test case for every possible combination of cumulative options which checks
+/// whether the statistics of the two outputs are the same.
 #[proc_macro]
 pub fn cumulative_synchronised(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item with Punctuated::<Ident, Token![,]>::parse_terminated)
