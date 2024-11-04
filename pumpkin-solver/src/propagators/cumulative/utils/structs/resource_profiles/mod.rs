@@ -7,8 +7,16 @@ use std::rc::Rc;
 pub(crate) use resource_profile::*;
 
 use super::Task;
+use crate::variables::IntegerVariable;
 
 pub(crate) trait ResourceProfileInterface<Var> {
+    fn create_default_at_time_point(_time_point: i32) -> Self
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+
     fn is_updated(&self) -> bool {
         true
     }
@@ -32,4 +40,16 @@ pub(crate) trait ResourceProfileInterface<Var> {
     fn add_profile_task(&mut self, task: Rc<Task<Var>>);
 
     fn remove_profile_task(&mut self, task: &Rc<Task<Var>>);
+}
+
+pub(crate) fn remove_task_from_profile<Var: IntegerVariable + 'static>(
+    profile_tasks: &mut Vec<Rc<Task<Var>>>,
+    to_remove: &Rc<Task<Var>>,
+) {
+    let _ = profile_tasks.remove(
+        profile_tasks
+            .iter()
+            .position(|profile_task| profile_task.id == to_remove.id)
+            .expect("Task should be present"),
+    );
 }

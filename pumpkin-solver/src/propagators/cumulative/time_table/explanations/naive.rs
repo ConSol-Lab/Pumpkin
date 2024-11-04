@@ -5,15 +5,17 @@ use crate::engine::propagation::PropagationContext;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'static>(
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_naive_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    profile: &ResourceProfileType,
     context: PropagationContext,
 ) -> PropositionalConjunction {
     profile
@@ -36,8 +38,12 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
 
 /// Creates the conflict explanation using the naive approach (see
 /// [`CumulativeExplanationType::Naive`])
-pub(crate) fn create_naive_conflict_explanation<Var, Context: ReadDomains + Copy>(
-    conflict_profile: &ResourceProfile<Var>,
+pub(crate) fn create_naive_conflict_explanation<
+    Var,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+    Context: ReadDomains + Copy,
+>(
+    conflict_profile: &ResourceProfileType,
     context: Context,
 ) -> PropositionalConjunction
 where

@@ -5,6 +5,7 @@ use super::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
+#[derive(Debug)]
 pub(crate) struct UpdatableResourceProfile<Var, Profile: ResourceProfileInterface<Var>> {
     resource_profile: Profile,
     updated: bool,
@@ -14,6 +15,14 @@ pub(crate) struct UpdatableResourceProfile<Var, Profile: ResourceProfileInterfac
 impl<Var: IntegerVariable + 'static, Profile: ResourceProfileInterface<Var>>
     ResourceProfileInterface<Var> for UpdatableResourceProfile<Var, Profile>
 {
+    fn create_default_at_time_point(time_point: i32) -> Self {
+        Self {
+            resource_profile: Profile::create_default_at_time_point(time_point),
+            updated: true,
+            variable_type: PhantomData,
+        }
+    }
+
     fn get_start(&self) -> i32 {
         self.resource_profile.get_start()
     }

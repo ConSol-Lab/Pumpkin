@@ -6,15 +6,17 @@ use crate::engine::propagation::PropagationContext;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
 /// Creates the propagation explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
-pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'static>(
-    profile: &ResourceProfile<Var>,
+pub(crate) fn create_big_step_propagation_explanation<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    profile: &ResourceProfileType,
 ) -> PropositionalConjunction {
     profile
         .get_profile_tasks()
@@ -33,8 +35,11 @@ pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'st
 
 /// Creates the conflict explanation using the big-step approach (see
 /// [`CumulativeExplanationType::BigStep`])
-pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'static>(
-    conflict_profile: &ResourceProfile<Var>,
+pub(crate) fn create_big_step_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    conflict_profile: &ResourceProfileType,
 ) -> PropositionalConjunction {
     conflict_profile
         .get_profile_tasks()
@@ -51,9 +56,12 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
         .collect()
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<Var>(
+pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation<
+    Var,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
 ) -> Predicate
 where
     Var: IntegerVariable + 'static,
@@ -61,9 +69,12 @@ where
     predicate!(task.start_variable >= profile.get_start() + 1 - task.processing_time)
 }
 
-pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var>(
+pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<
+    Var,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     context: PropagationContext,
 ) -> Predicate
 where

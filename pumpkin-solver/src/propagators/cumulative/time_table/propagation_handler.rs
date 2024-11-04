@@ -20,7 +20,6 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
@@ -47,10 +46,13 @@ impl CumulativePropagationHandler {
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<Var>(
+    pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
+        profiles: &[&ResourceProfileType],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -64,10 +66,10 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(*profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            create_big_step_propagation_explanation(*profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -105,10 +107,13 @@ impl CumulativePropagationHandler {
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
-    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<Var>(
+    pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfile<Var>],
+        profiles: &[&ResourceProfileType],
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -123,10 +128,10 @@ impl CumulativePropagationHandler {
                 for profile in profiles {
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(profile, context.as_readonly())
+                            create_naive_propagation_explanation(*profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(profile)
+                            create_big_step_propagation_explanation(*profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -162,10 +167,13 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the lower-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_lower_bound_with_explanations<Var>(
+    pub(crate) fn propagate_lower_bound_with_explanations<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
+        profile: &ResourceProfileType,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -211,10 +219,13 @@ impl CumulativePropagationHandler {
     }
 
     /// Propagates the upper-bound of the `propagating_task` to not conflict with `profile` anymore.
-    pub(crate) fn propagate_upper_bound_with_explanations<Var>(
+    pub(crate) fn propagate_upper_bound_with_explanations<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
+        profile: &ResourceProfileType,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -262,10 +273,13 @@ impl CumulativePropagationHandler {
 
     /// Propagates a hole in the domain; note that this explanation does not contain any of the
     /// bounds of `propagating_task`.
-    pub(crate) fn propagate_holes_in_domain<Var>(
+    pub(crate) fn propagate_holes_in_domain<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
+        profile: &ResourceProfileType,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
@@ -354,10 +368,13 @@ impl CumulativePropagationHandler {
     }
 
     /// Either we get the stored stored profile explanation or we initialize it.
-    fn get_stored_profile_explanation_or_init<Var>(
+    fn get_stored_profile_explanation_or_init<
+        Var,
+        ResourceProfileType: ResourceProfileInterface<Var>,
+    >(
         &mut self,
         context: &mut PropagationContextMut,
-        profile: &ResourceProfile<Var>,
+        profile: &ResourceProfileType,
     ) -> Rc<PropositionalConjunction>
     where
         Var: IntegerVariable + 'static,
@@ -382,9 +399,13 @@ impl CumulativePropagationHandler {
 
 /// Creates an explanation of the conflict caused by `conflict_profile` based on the provided
 /// `explanation_type`.
-pub(crate) fn create_conflict_explanation<Var, Context: ReadDomains + Copy>(
+pub(crate) fn create_conflict_explanation<
+    Var,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+    Context: ReadDomains + Copy,
+>(
     context: Context,
-    conflict_profile: &ResourceProfile<Var>,
+    conflict_profile: &ResourceProfileType,
     explanation_type: CumulativeExplanationType,
 ) -> PropositionalConjunction
 where

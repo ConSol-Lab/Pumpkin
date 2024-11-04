@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::remove_task_from_profile;
 use super::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
@@ -66,22 +67,6 @@ impl<Var: IntegerVariable + 'static> ResourceProfileInterface<Var> for ResourceP
     }
 
     fn remove_profile_task(&mut self, task: &Rc<Task<Var>>) {
-        let _ = self.profile_tasks.remove(
-            self.profile_tasks
-                .iter()
-                .position(|profile_task| profile_task.id == task.id)
-                .expect("Task should be present"),
-        );
-    }
-}
-
-impl<Var: IntegerVariable + 'static> ResourceProfile<Var> {
-    pub(crate) fn default(time: i32) -> ResourceProfile<Var> {
-        ResourceProfile {
-            start: time,
-            end: time,
-            profile_tasks: Vec::new(),
-            height: 0,
-        }
+        remove_task_from_profile(&mut self.profile_tasks, task)
     }
 }

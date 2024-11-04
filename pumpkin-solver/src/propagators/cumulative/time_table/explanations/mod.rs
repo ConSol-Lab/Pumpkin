@@ -15,7 +15,7 @@ use pointwise::create_pointwise_predicate_propagating_task_upper_bound_propagati
 use crate::engine::propagation::PropagationContext;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
-use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -71,11 +71,12 @@ impl Display for CumulativeExplanationType {
 /// Creates the lower-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
 pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
     Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
 >(
     explanation_type: CumulativeExplanationType,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     time_point: Option<i32>,
 ) -> Predicate {
     match explanation_type {
@@ -92,12 +93,15 @@ pub(crate) fn create_predicate_propagating_task_lower_bound_propagation<
 }
 
 /// Adds the lower-bound predicate of the propagating task to the provided `explanation`.
-pub(crate) fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 'static>(
+pub(crate) fn add_propagating_task_predicate_lower_bound<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
     explanation.add(create_predicate_propagating_task_lower_bound_propagation(
@@ -113,11 +117,12 @@ pub(crate) fn add_propagating_task_predicate_lower_bound<Var: IntegerVariable + 
 /// Creates the upper-bound [`Predicate`] of the `propagating_task` based on the `explanation_type`.
 pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
     Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
 >(
     explanation_type: CumulativeExplanationType,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     time_point: Option<i32>,
 ) -> Predicate {
     match explanation_type {
@@ -136,12 +141,15 @@ pub(crate) fn create_predicate_propagating_task_upper_bound_propagation<
 }
 
 /// Adds the upper-bound predicate of the propagating task to the provided `explanation`.
-pub(crate) fn add_propagating_task_predicate_upper_bound<Var: IntegerVariable + 'static>(
+pub(crate) fn add_propagating_task_predicate_upper_bound<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     mut explanation: PropositionalConjunction,
     explanation_type: CumulativeExplanationType,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     time_point: Option<i32>,
 ) -> PropositionalConjunction {
     explanation.add(create_predicate_propagating_task_upper_bound_propagation(

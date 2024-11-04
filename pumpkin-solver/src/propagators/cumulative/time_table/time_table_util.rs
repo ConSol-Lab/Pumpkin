@@ -17,7 +17,6 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::propagators::UpdatableStructures;
@@ -163,7 +162,7 @@ pub(crate) fn has_overlap_with_interval(
 /// [`ResourceProfile::end`] cannot be increased or decreased, respectively). It returns true if
 /// both of these invariants hold and false otherwise.
 fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable + 'static>(
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
 ) -> bool {
     let collected_time_table = time_table.clone().collect::<Vec<_>>();
     let sorted_profiles = collected_time_table.is_empty()
@@ -204,7 +203,7 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// cannot be increased or decreased, respectively).
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
@@ -246,7 +245,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// [`CumulativeExplanationType::Pointwise`].
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
     updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -331,7 +330,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 /// beneficial.
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
     updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -452,9 +451,12 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 
 /// Returns the index of the profile which cannot propagate the lower-bound of the provided task any
 /// further based on the propagation of the upper-bound due to `time_table[profile_index]`.
-fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + 'static>(
+fn find_index_last_profile_which_propagates_lower_bound<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     profile_index: usize,
-    time_table: &[&ResourceProfile<Var>],
+    time_table: &[&ResourceProfileType],
     context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
@@ -475,9 +477,12 @@ fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + '
 
 /// Returns the index of the last profile which could propagate the upper-bound of the task based on
 /// the propagation of the upper-bound due to `time_table[profile_index]`.
-fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + 'static>(
+fn find_index_last_profile_which_propagates_upper_bound<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     profile_index: usize,
-    time_table: &[&ResourceProfile<Var>],
+    time_table: &[&ResourceProfileType],
     context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
@@ -514,10 +519,13 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
 ///
 /// Note: It is assumed that task.resource_usage + height > capacity (i.e. the task has the
 /// potential to overflow the capacity in combination with the profile)
-fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
+fn lower_bound_can_be_propagated_by_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
@@ -534,10 +542,13 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///       [`ResourceProfile`]
 ///     * ub(s) <= end, i.e. the latest start time is before the end of the [`ResourceProfile`]
 /// Note: It is assumed that the task is known to overflow the [`ResourceProfile`]
-fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
+fn upper_bound_can_be_propagated_by_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
@@ -554,10 +565,13 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
 ///
 /// If the first condition is true, the second false and the third true then this method returns
 /// true (otherwise it returns false)
-fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
+fn can_be_updated_by_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     context: PropagationContext,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     capacity: i32,
 ) -> bool {
     profile.get_height() + task.resource_usage > capacity
@@ -578,10 +592,13 @@ enum CanUpdate {
 ///
 /// Note that this method can only find [`Inconsistency::EmptyDomain`] conflicts which means that we
 /// handle that error in the parent function
-fn find_possible_updates<Var: IntegerVariable + 'static>(
+fn find_possible_updates<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     context: &mut PropagationContextMut,
     task: &Rc<Task<Var>>,
-    profile: &ResourceProfile<Var>,
+    profile: &ResourceProfileType,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<CanUpdate> {
     if !can_be_updated_by_profile(context.as_readonly(), task, profile, parameters.capacity) {

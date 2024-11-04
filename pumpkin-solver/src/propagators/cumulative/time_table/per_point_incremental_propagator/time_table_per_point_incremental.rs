@@ -25,6 +25,8 @@ use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 use crate::propagators::debug_propagate_from_scratch_time_table_point;
+use crate::propagators::point_resource_profile::PointResourceProfile;
+use crate::propagators::updatable_resource_profile::UpdatableResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -34,7 +36,6 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::PerPointTimeTableType;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 #[cfg(doc)]
@@ -64,11 +65,14 @@ use crate::pumpkin_assert_extreme;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 #[allow(unused)]
-pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTablePerPointIncrementalPropagator<
+    Var: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: PerPointTimeTableType<Var>,
+    time_table: PerPointTimeTableType<UpdatableResourceProfile<Var, PointResourceProfile<Var>>>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; either to store bounds or when applying
@@ -127,10 +131,9 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
 
             // Add the updated profile to the ResourceProfile at time t
-            let current_profile: &mut ResourceProfile<Var> = self
-                .time_table
-                .entry(time_point as u32)
-                .or_insert(ResourceProfile::default(time_point));
+            let current_profile = self.time_table.entry(time_point as u32).or_insert(
+                UpdatableResourceProfile::create_default_at_time_point(time_point),
+            );
 
             current_profile.add_to_height(task.resource_usage);
             current_profile.add_profile_task(Rc::clone(task));
@@ -269,7 +272,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                         );
 
                     pumpkin_assert_extreme!(
-                        check_synchronisation_conflict_explanation_per_point(
+                        check_synchronisation_conflict_explanation_per_point::<Var, UpdatableResourceProfile<Var, PointResourceProfile<Var>>>(
                             &synchronised_conflict_explanation,
                             context.as_readonly(),
                             &self.parameters,
@@ -295,10 +298,11 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 // If we have found such a conflict then we return it
                 if let Some(conflicting_profile) = conflicting_profile {
                     pumpkin_assert_extreme!(
-                        create_time_table_per_point_from_scratch(
-                            context.as_readonly(),
-                            &self.parameters
-                        )
+                        create_time_table_per_point_from_scratch::<
+                            Var,
+                            UpdatableResourceProfile<Var, PointResourceProfile<Var>>,
+                            PropagationContext,
+                        >(context.as_readonly(), &self.parameters)
                         .is_err(),
                         "Time-table from scratch could not find conflict"
                     );
@@ -350,10 +354,12 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // We update the time-table based on the stored updates
         self.update_time_table(&mut context)?;
 
-        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<Var, SYNCHRONISE>(
-            context.as_readonly(),
-            &self.time_table,
-            &self.parameters
+        pumpkin_assert_extreme!(debug::time_tables_are_the_same_point::<
+            Var,
+            UpdatableResourceProfile<Var, PointResourceProfile<Var>>,
+            SYNCHRONISE,
+        >(
+            context.as_readonly(), &self.time_table, &self.parameters
         ));
 
         // We pass the entirety of the table to check due to the fact that the propagation of the
@@ -479,11 +485,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         // Use the same debug propagator from `TimeTablePerPoint`
-        debug_propagate_from_scratch_time_table_point(
-            &mut context,
-            &self.parameters,
-            &self.updatable_structures,
-        )
+        debug_propagate_from_scratch_time_table_point::<
+            Var,
+            UpdatableResourceProfile<Var, PointResourceProfile<Var>>,
+        >(&mut context, &self.parameters, &self.updatable_structures)
     }
 }
 
@@ -508,22 +513,20 @@ mod debug {
     ///        the same!
     pub(crate) fn time_tables_are_the_same_point<
         Var: IntegerVariable + 'static,
+        ResourceProfileType: ResourceProfileInterface<Var>,
         const SYNCHRONISE: bool,
     >(
         context: PropagationContext,
-        time_table: &PerPointTimeTableType<Var>,
+        time_table: &PerPointTimeTableType<ResourceProfileType>,
         parameters: &CumulativeParameters<Var>,
     ) -> bool {
-        let time_table_scratch = create_time_table_per_point_from_scratch(context, parameters)
-            .expect("Expected no error");
+        let time_table_scratch: PerPointTimeTableType<ResourceProfileType> =
+            create_time_table_per_point_from_scratch(context, parameters)
+                .expect("Expected no error");
 
         if time_table.is_empty() {
             return time_table_scratch.is_empty();
         }
-
-        // First we merge all of the split profiles to ensure that it is the same as the
-        // non-incremental time-table
-        let time_table = time_table.clone();
 
         // Then we compare whether the time-tables are the same with the following checks:
         // - The time-tables should contain the same number of profiles
