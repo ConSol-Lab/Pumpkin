@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -57,7 +58,7 @@ fn remove_task_from_profile<Var: IntegerVariable + 'static>(
     end: i32,
     profile: &ResourceProfile<Var>,
 ) -> ResourceProfile<Var> {
-    let mut updated_profile_tasks = profile.profile_tasks.clone();
+    let mut updated_profile_tasks = profile.get_profile_tasks().clone();
     let _ = updated_profile_tasks.swap_remove(
         updated_profile_tasks
             .iter()
@@ -65,12 +66,12 @@ fn remove_task_from_profile<Var: IntegerVariable + 'static>(
             .expect("Task should be in the profile if it is being removed"),
     );
 
-    ResourceProfile {
+    ResourceProfile::new(
         start,
         end,
-        profile_tasks: updated_profile_tasks,
-        height: profile.height - updated_task.resource_usage,
-    }
+        updated_profile_tasks,
+        profile.get_height() - updated_task.resource_usage,
+    )
 }
 
 /// If there is a partial overlap, this method creates a profile consisting of the original
@@ -80,13 +81,13 @@ pub(crate) fn split_first_profile<Var: IntegerVariable + 'static>(
     update_range: &Range<i32>,
     first_profile: &ResourceProfile<Var>,
 ) {
-    if update_range.start > first_profile.start {
-        to_add.push(ResourceProfile {
-            start: first_profile.start,
-            end: min(update_range.start - 1, first_profile.end),
-            profile_tasks: first_profile.profile_tasks.clone(),
-            height: first_profile.height,
-        });
+    if update_range.start > first_profile.get_start() {
+        to_add.push(ResourceProfile::new(
+            first_profile.get_start(),
+            min(update_range.start - 1, first_profile.get_end()),
+            first_profile.get_profile_tasks().clone(),
+            first_profile.get_height(),
+        ));
     }
 }
 
@@ -95,18 +96,18 @@ pub(crate) fn split_last_profile<Var: IntegerVariable + 'static>(
     update_range: &Range<i32>,
     last_profile: &ResourceProfile<Var>,
 ) {
-    if last_profile.end >= update_range.end {
+    if last_profile.get_end() >= update_range.end {
         // We are splitting the current profile into one or more parts
         // The update range ends before the end of the profile;
         // This if-statement takes care of creating a new (smaller)
         // profile which represents the previous profile after it is
         // split by the update range
-        to_add.push(ResourceProfile {
-            start: max(update_range.end, last_profile.start),
-            end: last_profile.end,
-            profile_tasks: last_profile.profile_tasks.clone(),
-            height: last_profile.height,
-        })
+        to_add.push(ResourceProfile::new(
+            max(update_range.end, last_profile.get_start()),
+            last_profile.get_end(),
+            last_profile.get_profile_tasks().clone(),
+            last_profile.get_height(),
+        ))
     }
 }
 
@@ -117,7 +118,7 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
     to_add: &mut Vec<ResourceProfile<Var>>,
     updated_task: &Rc<Task<Var>>,
 ) {
-    if profile.height - updated_task.resource_usage == 0 {
+    if profile.get_height() - updated_task.resource_usage == 0 {
         // If the removal of this task results in an empty profile then we simply do not add it
         return;
     }
@@ -132,14 +133,14 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
     // or the new profile starts at the start of the update range (since
     // we are only looking at the part where there is overlap between
     // the current profile and the update range)
-    let new_profile_lower_bound = max(profile.start, update_range.start);
+    let new_profile_lower_bound = max(profile.get_start(), update_range.start);
 
     // Either the new profile ends at the end of the profile (in case
     // the update range ends after the profile end)
     // or the new profile ends at the end of the update range (since we
     // are only looking at the part where there is overlap between the
     // current profile and the update range)
-    let new_profile_upper_bound = min(profile.end, update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
+    let new_profile_upper_bound = min(profile.get_end(), update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
     if new_profile_upper_bound >= new_profile_lower_bound {
         // A sanity check, there is a new profile to create consisting
         // of a combination of the previous profile and the updated task

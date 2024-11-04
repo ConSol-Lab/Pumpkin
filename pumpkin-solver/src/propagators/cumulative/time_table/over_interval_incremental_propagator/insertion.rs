@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -34,7 +35,7 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     for current_index in start_index..=end_index {
         let profile = &time_table[current_index];
 
-        pumpkin_assert_extreme!(!profile.profile_tasks.contains(updated_task));
+        pumpkin_assert_extreme!(!profile.get_profile_tasks().contains(updated_task));
 
         // Check whether there is a new profile before the first overlapping
         // profile
@@ -124,18 +125,18 @@ pub(crate) fn insert_profile_new_mandatory_part<Var: IntegerVariable + 'static>(
     pumpkin_assert_moderate!(
         index_to_insert <= time_table.len()
             || index_to_insert >= time_table.len()
-            || time_table[index_to_insert].start > update_range.end - 1,
+            || time_table[index_to_insert].get_start() > update_range.end - 1,
         "The index to insert at is incorrect"
     );
 
     // Insert the new profile at its index
     time_table.insert(
         index_to_insert,
-        ResourceProfile {
-            start: update_range.start,
-            end: update_range.end - 1,
-            profile_tasks: vec![Rc::clone(updated_task)],
-            height: updated_task.resource_usage,
-        },
+        ResourceProfile::new(
+            update_range.start,
+            update_range.end - 1,
+            vec![Rc::clone(updated_task)],
+            updated_task.resource_usage,
+        ),
     );
 }

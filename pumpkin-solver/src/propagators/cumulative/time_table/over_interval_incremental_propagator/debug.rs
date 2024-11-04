@@ -7,6 +7,7 @@ use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
@@ -57,18 +58,18 @@ pub(crate) fn time_tables_are_the_same_interval<
             .iter()
             .zip(time_table_scratch)
             .all(|(actual, expected)| {
-                let result = actual.height == expected.height
-                    && actual.start == expected.start
-                    && actual.end == expected.end
-                    && actual.profile_tasks.len() == expected.profile_tasks.len()
+                let result = actual.get_height() == expected.get_height()
+                    && actual.get_start() == expected.get_start()
+                    && actual.get_end() == expected.get_end()
+                    && actual.get_profile_tasks().len() == expected.get_profile_tasks().len()
                     && {
                         if SYNCHRONISE {
-                            actual.profile_tasks == expected.profile_tasks
+                            actual.get_profile_tasks() == expected.get_profile_tasks()
                         } else {
                             actual
-                                .profile_tasks
+                                .get_profile_tasks()
                                 .iter()
-                                .all(|task| expected.profile_tasks.contains(task))
+                                .all(|task| expected.get_profile_tasks().contains(task))
                         }
                     };
                 result
@@ -113,12 +114,12 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
             let end_profile = &time_table[current_index];
 
             // We create a new profile with the bounds which we have found
-            let new_profile = ResourceProfile {
-                start: start_profile.start,
-                end: end_profile.end,
-                profile_tasks: start_profile.profile_tasks.to_owned(),
-                height: start_profile.height,
-            };
+            let new_profile = ResourceProfile::new(
+                start_profile.get_start(),
+                end_profile.get_end(),
+                start_profile.get_profile_tasks().to_owned(),
+                start_profile.get_height(),
+            );
 
             // And we add the new profiles to the profiles to add
             if let Some(to_add) = to_add.as_mut() {
@@ -182,28 +183,28 @@ fn are_mergeable<Var: IntegerVariable + 'static>(
 ) -> bool {
     pumpkin_assert_extreme!(
         first_profile
-            .profile_tasks
+            .get_profile_tasks()
             .iter()
             .collect::<HashSet<_>>()
             .len()
-            == first_profile.profile_tasks.len(),
+            == first_profile.get_profile_tasks().len(),
         "The first provided profile had duplicate profile tasks"
     );
     pumpkin_assert_extreme!(
         second_profile
-            .profile_tasks
+            .get_profile_tasks()
             .iter()
             .collect::<HashSet<_>>()
             .len()
-            == second_profile.profile_tasks.len(),
+            == second_profile.get_profile_tasks().len(),
         "The second provided profile had duplicate profile tasks"
     );
     // First we perform the simple checks, determining whether the two profiles are the same
     // height, whether they are next to one another and whether they contain the same number of
     // tasks
-    let mergeable = first_profile.height == second_profile.height
-        && first_profile.end == second_profile.start - 1
-        && first_profile.profile_tasks.len() == second_profile.profile_tasks.len();
+    let mergeable = first_profile.get_height() == second_profile.get_height()
+        && first_profile.get_end() == second_profile.get_start() - 1
+        && first_profile.get_profile_tasks().len() == second_profile.get_profile_tasks().len();
     if !mergeable {
         // The tasks have already been found to be not mergeable so we can avoid checking
         // equality of the profile tasks
@@ -212,8 +213,8 @@ fn are_mergeable<Var: IntegerVariable + 'static>(
         // We check whether the profile tasks of both profiles are the same
         mergeable
             && first_profile
-                .profile_tasks
+                .get_profile_tasks()
                 .iter()
-                .all(|profile| second_profile.profile_tasks.contains(profile))
+                .all(|profile| second_profile.get_profile_tasks().contains(profile))
     }
 }

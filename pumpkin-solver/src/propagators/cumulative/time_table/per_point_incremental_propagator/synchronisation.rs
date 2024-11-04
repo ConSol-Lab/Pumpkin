@@ -9,6 +9,7 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 use crate::propagators::CumulativeParameters;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
@@ -51,7 +52,7 @@ pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
 
     // We go over every profile
     for (time_point, profile) in time_table.iter_mut() {
-        if profile.height <= parameters.capacity {
+        if profile.get_height() <= parameters.capacity {
             // If the profile cannot overflow the resource capacity then we move onto the next
             // profile
             continue;
@@ -91,7 +92,7 @@ fn get_minimum_set_of_tasks_which_overflow_capacity<'a, Var: IntegerVariable + '
     // capacity
     let calculate_tasks = |resource_usage: &'a mut i32| {
         profile
-            .profile_tasks
+            .get_profile_tasks()
             .iter()
             .take_while(move |task| {
                 if *resource_usage > parameters.capacity {
@@ -115,8 +116,8 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // Store because we are mutably borrowing the conflicting profile
-    let new_profile_start = conflicting_profile.start;
-    let new_profile_end = conflicting_profile.end;
+    let new_profile_start = conflicting_profile.get_start();
+    let new_profile_end = conflicting_profile.get_end();
     let mut new_height = 0;
 
     // If we need to synchronise then we need to find the conflict profile which
@@ -131,12 +132,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     Err(create_conflict_explanation(
         context,
-        &ResourceProfile {
-            start: new_profile_start,
-            end: new_profile_end,
-            profile_tasks: new_profile,
-            height: new_height,
-        },
+        &ResourceProfile::new(new_profile_start, new_profile_end, new_profile, new_height),
         parameters.options.explanation_type,
     )
     .into())
@@ -154,7 +150,7 @@ pub(crate) fn synchronise_time_table<'a, Var: IntegerVariable + 'static>(
 /// Sorts the provided `profile` on non-decreasing order of ID
 fn sort_profile_based_on_id<Var: IntegerVariable + 'static>(profile: &mut ResourceProfile<Var>) {
     profile
-        .profile_tasks
+        .get_profile_tasks_mut()
         .sort_by(|a, b| a.id.unpack().cmp(&b.id.unpack()));
 }
 
@@ -206,24 +202,19 @@ mod tests {
         let mut time_table = PerPointTimeTableType::default();
         let _ = time_table.insert(
             3,
-            ResourceProfile {
-                start: 3,
-                end: 3,
-                profile_tasks: vec![Rc::clone(&parameters.tasks[1])],
-                height: 2,
-            },
+            ResourceProfile::new(3, 3, vec![Rc::clone(&parameters.tasks[1])], 2),
         );
         let _ = time_table.insert(
             4,
-            ResourceProfile {
-                start: 4,
-                end: 4,
-                profile_tasks: vec![
+            ResourceProfile::new(
+                4,
+                4,
+                vec![
                     Rc::clone(&parameters.tasks[0]),
                     Rc::clone(&parameters.tasks[2]),
                 ],
-                height: 3,
-            },
+                3,
+            ),
         );
 
         let result = find_synchronised_conflict(&mut time_table, &parameters);

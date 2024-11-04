@@ -11,6 +11,7 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::variables::IntegerVariable;
 
 /// Returns whether the synchronised conflict explanation created by
@@ -63,7 +64,7 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     // Now we find the tasks in the profile which together overflow the resource
     while resource_usage <= parameters.capacity {
-        let task = &conflicting_profile.profile_tasks[index];
+        let task = &conflicting_profile.get_profile_tasks()[index];
         resource_usage += task.resource_usage;
         new_profile.push(Rc::clone(task));
         index += 1;
@@ -71,12 +72,12 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 
     Err(create_conflict_explanation(
         context,
-        &ResourceProfile {
-            start: conflicting_profile.start,
-            end: conflicting_profile.end,
-            profile_tasks: new_profile,
-            height: resource_usage,
-        },
+        &ResourceProfile::new(
+            conflicting_profile.get_start(),
+            conflicting_profile.get_end(),
+            new_profile,
+            resource_usage,
+        ),
         parameters.options.explanation_type,
     )
     .into())
@@ -108,7 +109,7 @@ fn sort_profile_based_on_upper_bound_and_id<Var: IntegerVariable + 'static>(
     profile: &mut ResourceProfile<Var>,
     context: PropagationContext,
 ) {
-    profile.profile_tasks.sort_by(|a, b| {
+    profile.get_profile_tasks_mut().sort_by(|a, b| {
         // First match on the upper-bound of the variable
         match context
             .upper_bound(&a.start_variable)

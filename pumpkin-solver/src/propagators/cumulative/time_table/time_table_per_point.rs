@@ -27,6 +27,7 @@ use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_extreme;
 
@@ -200,10 +201,10 @@ pub(crate) fn create_time_table_per_point_from_scratch<
                 let current_profile: &mut ResourceProfile<Var> = time_table
                     .entry(i as u32)
                     .or_insert(ResourceProfile::default(i));
-                current_profile.height += task.resource_usage;
-                current_profile.profile_tasks.push(Rc::clone(task));
+                current_profile.add_to_height(task.resource_usage);
+                current_profile.add_profile_task(Rc::clone(task));
 
-                if current_profile.height > parameters.capacity {
+                if current_profile.get_height() > parameters.capacity {
                     // The addition of the current task to the resource profile has caused an
                     // overflow
                     return Err(create_conflict_explanation(
@@ -218,7 +219,7 @@ pub(crate) fn create_time_table_per_point_from_scratch<
     pumpkin_assert_extreme!(
         time_table
             .values()
-            .all(|profile| profile.start == profile.end),
+            .all(|profile| profile.get_start() == profile.get_end()),
         "The TimeTablePerPointPropagator method should only create profiles where `start == end`"
     );
     Ok(time_table)

@@ -327,12 +327,12 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
             // Potentially we need to end the current profile and start a new one due to the
             // addition/removal of the current task
             if start_of_interval != event.time_stamp {
-                let new_profile = ResourceProfile {
-                    start: start_of_interval,
-                    end: event.time_stamp - 1,
-                    profile_tasks: current_profile_tasks.clone(),
-                    height: current_resource_usage,
-                };
+                let new_profile = ResourceProfile::new(
+                    start_of_interval,
+                    event.time_stamp - 1,
+                    current_profile_tasks.clone(),
+                    current_resource_usage,
+                );
                 if is_conflicting {
                     // We have found a conflict and the profile has been ended, we can report the
                     // conflict using the current profile

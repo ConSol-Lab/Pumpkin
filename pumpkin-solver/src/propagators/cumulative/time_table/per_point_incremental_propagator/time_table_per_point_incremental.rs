@@ -35,6 +35,7 @@ use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::PerPointTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
@@ -122,7 +123,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         for time_point in mandatory_part_adjustments.get_added_parts().flatten() {
             pumpkin_assert_extreme!(
                         !self.time_table.contains_key(&(time_point as u32))
-                        || !self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
+                        || !self.time_table.get(&(time_point as u32)).unwrap().get_profile_tasks().iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize),
                         "Attempted to insert mandatory part where it already exists at time point {time_point} for task {} in time-table per time-point propagator\n", task.id.unpack() as usize);
 
             // Add the updated profile to the ResourceProfile at time t
@@ -131,10 +132,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 .entry(time_point as u32)
                 .or_insert(ResourceProfile::default(time_point));
 
-            current_profile.height += task.resource_usage;
-            current_profile.profile_tasks.push(Rc::clone(task));
+            current_profile.add_to_height(task.resource_usage);
+            current_profile.add_profile_task(Rc::clone(task));
 
-            if current_profile.height > self.parameters.capacity && conflict.is_none() {
+            if current_profile.get_height() > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource
                 conflict = Some(Err(create_conflict_explanation(
                     context,
@@ -161,7 +162,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
     ) {
         for time_point in mandatory_part_adjustments.get_removed_parts().flatten() {
             pumpkin_assert_extreme!(
-                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().profile_tasks.iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
+                        self.time_table.contains_key(&(time_point as u32)) && self.time_table.get(&(time_point as u32)).unwrap().get_profile_tasks().iter().any(|profile_task| profile_task.id.unpack() as usize == task.id.unpack() as usize) ,
                         "Attempted to remove mandatory part where it didn't exist at time point {time_point} for task {} in time-table per time-point propagator", task.id.unpack() as usize);
 
             // Then we update the time-table
@@ -170,22 +171,16 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                     .entry(time_point as u32)
                     .and_modify(|profile| {
                         // We remove the resource usage of the task from the height of the profile
-                        profile.height -= task.resource_usage;
+                        profile.add_to_height(-task.resource_usage);
 
                         // If the height of the profile is not equal to 0 then we remove the task
                         // from the profile tasks
-                        if profile.height != 0 {
-                            let _ = profile.profile_tasks.remove(
-                                profile
-                                    .profile_tasks
-                                    .iter()
-                                    .position(|profile_task| profile_task.id == task.id)
-                                    .expect("Task should be present"),
-                            );
+                        if profile.get_height() != 0 {
+                            profile.remove_profile_task(task)
                         }
                     })
             {
-                if entry.get().height == 0 {
+                if entry.get().get_height() == 0 {
                     // If the height of the profile is now 0 then we remove the entry
                     let _ = entry.remove();
                 }
@@ -295,7 +290,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
                 let conflicting_profile = self
                     .time_table
                     .values_mut()
-                    .find(|profile| profile.height > self.parameters.capacity);
+                    .find(|profile| profile.get_height() > self.parameters.capacity);
 
                 // If we have found such a conflict then we return it
                 if let Some(conflicting_profile) = conflicting_profile {
@@ -334,7 +329,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         pumpkin_assert_extreme!(self
             .time_table
             .values()
-            .all(|profile| profile.height <= self.parameters.capacity));
+            .all(|profile| profile.get_height() <= self.parameters.capacity));
         Ok(())
     }
 }
@@ -499,6 +494,7 @@ mod debug {
     use crate::propagators::create_time_table_per_point_from_scratch;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::PerPointTimeTableType;
+    use crate::propagators::ResourceProfileInterface;
     use crate::variables::IntegerVariable;
 
     /// Determines whether the provided `time_table` is the same as the one creatd from scratch
@@ -542,17 +538,17 @@ mod debug {
                 .values()
                 .zip(time_table_scratch.values())
                 .all(|(actual, expected)| {
-                    actual.height == expected.height
-                        && actual.start == expected.start
-                        && actual.end == expected.end
-                        && actual.profile_tasks.len() == expected.profile_tasks.len()
+                    actual.get_height() == expected.get_height()
+                        && actual.get_start() == expected.get_start()
+                        && actual.get_end() == expected.get_end()
+                        && actual.get_profile_tasks().len() == expected.get_profile_tasks().len()
                         && if SYNCHRONISE {
-                            actual.profile_tasks == expected.profile_tasks
+                            actual.get_profile_tasks() == expected.get_profile_tasks()
                         } else {
                             actual
-                                .profile_tasks
+                                .get_profile_tasks()
                                 .iter()
-                                .all(|task| expected.profile_tasks.contains(task))
+                                .all(|task| expected.get_profile_tasks().contains(task))
                         }
                 })
     }

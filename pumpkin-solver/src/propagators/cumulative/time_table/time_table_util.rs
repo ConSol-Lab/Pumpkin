@@ -18,6 +18,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::propagators::UpdatableStructures;
 use crate::propagators::UpdatedTaskInfo;
@@ -167,7 +168,8 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
     let collected_time_table = time_table.clone().collect::<Vec<_>>();
     let sorted_profiles = collected_time_table.is_empty()
         || (0..collected_time_table.len() - 1).all(|profile_index| {
-            collected_time_table[profile_index].end < collected_time_table[profile_index + 1].start
+            collected_time_table[profile_index].get_end()
+                < collected_time_table[profile_index + 1].get_start()
         });
     if !sorted_profiles {
         eprintln!("The provided time-table was not ordered according to start/end times");
@@ -180,10 +182,10 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
                 let other_profile = collected_time_table[other_profile_index];
                 profile_index == other_profile_index
                     || !has_overlap_with_interval(
-                        current_profile.start,
-                        current_profile.end + 1,
-                        other_profile.start,
-                        other_profile.end,
+                        current_profile.get_start(),
+                        current_profile.get_end() + 1,
+                        other_profile.get_start(),
+                        other_profile.get_end(),
                     )
             })
         });
@@ -276,7 +278,9 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
                 continue;
             }
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.get_start()
+                > context.upper_bound(&task.start_variable) + task.processing_time
+            {
                 // The start of the current profile is necessarily after the latest
                 // completion time of the task under consideration The profiles are
                 // sorted by start time (and non-overlapping) so we can remove the task from
@@ -350,7 +354,9 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         'profile_loop: while profile_index < time_table.len() {
             let profile = time_table[profile_index];
 
-            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+            if profile.get_start()
+                > context.upper_bound(&task.start_variable) + task.processing_time
+            {
                 // The profiles are sorted, if we cannot update using this one then we cannot update
                 // using the subsequent profiles, we can break from the loop
                 break 'profile_loop;
@@ -456,7 +462,7 @@ fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + '
     let mut last_index = profile_index + 1;
     while last_index < time_table.len() {
         let next_profile = time_table[last_index];
-        if next_profile.start - time_table[last_index - 1].end >= task.processing_time
+        if next_profile.get_start() - time_table[last_index - 1].get_end() >= task.processing_time
             || !can_be_updated_by_profile(context, task, next_profile, capacity)
             || !lower_bound_can_be_propagated_by_profile(context, task, next_profile, capacity)
         {
@@ -482,7 +488,8 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
     let mut first_index = profile_index - 1;
     loop {
         let previous_profile = time_table[first_index];
-        if time_table[first_index + 1].start - previous_profile.end >= task.processing_time
+        if time_table[first_index + 1].get_start() - previous_profile.get_end()
+            >= task.processing_time
             || !can_be_updated_by_profile(context, task, previous_profile, capacity)
             || !upper_bound_can_be_propagated_by_profile(context, task, previous_profile, capacity)
         {
@@ -514,11 +521,11 @@ fn lower_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
-            && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+        profile.get_height() + task.resource_usage > capacity
+            && task_has_overlap_with_interval(context, task, profile.get_start(), profile.get_end())
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.lower_bound(&task.start_variable) + task.processing_time) > profile.start
-        && context.lower_bound(&task.start_variable) <= profile.end
+    (context.lower_bound(&task.start_variable) + task.processing_time) > profile.get_start()
+        && context.lower_bound(&task.start_variable) <= profile.get_end()
 }
 
 /// Determines whether the upper bound of a task can be propagated by a [`ResourceProfile`] with the
@@ -534,10 +541,10 @@ fn upper_bound_can_be_propagated_by_profile<Var: IntegerVariable + 'static>(
     capacity: i32,
 ) -> bool {
     pumpkin_assert_moderate!(
-        profile.height + task.resource_usage > capacity
+        profile.get_height()+ task.resource_usage > capacity
     , "It is checked whether a task can be propagated while the invariants do not hold - The task should overflow the capacity with the profile");
-    (context.upper_bound(&task.start_variable) + task.processing_time) > profile.start
-        && context.upper_bound(&task.start_variable) <= profile.end
+    (context.upper_bound(&task.start_variable) + task.processing_time) > profile.get_start()
+        && context.upper_bound(&task.start_variable) <= profile.get_end()
 }
 
 /// Returns whether the provided `task` can be updated by the profile by checking the following:
@@ -553,9 +560,9 @@ fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
-    profile.height + task.resource_usage > capacity
-        && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
-        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+    profile.get_height() + task.resource_usage > capacity
+        && !has_mandatory_part_in_interval(context, task, profile.get_start(), profile.get_end())
+        && task_has_overlap_with_interval(context, task, profile.get_start(), profile.get_end())
 }
 
 /// An enum which represents which values can be updated by a profile

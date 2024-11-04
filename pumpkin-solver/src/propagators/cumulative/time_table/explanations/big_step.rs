@@ -7,6 +7,7 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -16,14 +17,15 @@ pub(crate) fn create_big_step_propagation_explanation<Var: IntegerVariable + 'st
     profile: &ResourceProfile<Var>,
 ) -> PropositionalConjunction {
     profile
-        .profile_tasks
+        .get_profile_tasks()
         .iter()
         .flat_map(|profile_task| {
             [
                 predicate!(
-                    profile_task.start_variable >= profile.end - profile_task.processing_time + 1
+                    profile_task.start_variable
+                        >= profile.get_end() - profile_task.processing_time + 1
                 ),
-                predicate!(profile_task.start_variable <= profile.start),
+                predicate!(profile_task.start_variable <= profile.get_start()),
             ]
         })
         .collect()
@@ -35,15 +37,15 @@ pub(crate) fn create_big_step_conflict_explanation<Var: IntegerVariable + 'stati
     conflict_profile: &ResourceProfile<Var>,
 ) -> PropositionalConjunction {
     conflict_profile
-        .profile_tasks
+        .get_profile_tasks()
         .iter()
         .flat_map(|profile_task| {
             [
                 predicate!(
                     profile_task.start_variable
-                        >= conflict_profile.end - profile_task.processing_time + 1
+                        >= conflict_profile.get_end() - profile_task.processing_time + 1
                 ),
-                predicate!(profile_task.start_variable <= conflict_profile.start),
+                predicate!(profile_task.start_variable <= conflict_profile.get_start()),
             ]
         })
         .collect()
@@ -56,7 +58,7 @@ pub(crate) fn create_big_step_predicate_propagating_task_lower_bound_propagation
 where
     Var: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable >= profile.start + 1 - task.processing_time)
+    predicate!(task.start_variable >= profile.get_start() + 1 - task.processing_time)
 }
 
 pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation<Var>(
@@ -67,7 +69,9 @@ pub(crate) fn create_big_step_predicate_propagating_task_upper_bound_propagation
 where
     Var: IntegerVariable + 'static,
 {
-    predicate!(task.start_variable <= max(context.upper_bound(&task.start_variable), profile.end))
+    predicate!(
+        task.start_variable <= max(context.upper_bound(&task.start_variable), profile.get_end())
+    )
 }
 
 #[cfg(test)]

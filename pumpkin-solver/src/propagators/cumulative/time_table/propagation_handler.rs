@@ -21,6 +21,7 @@ use crate::engine::EmptyDomain;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_simple;
@@ -88,7 +89,7 @@ impl CumulativePropagationHandler {
 
                 context.set_lower_bound(
                     &propagating_task.start_variable,
-                    profiles[profiles.len() - 1].end + 1,
+                    profiles[profiles.len() - 1].get_end() + 1,
                     full_explanation,
                 )
             }
@@ -146,7 +147,7 @@ impl CumulativePropagationHandler {
                 );
                 context.set_upper_bound(
                     &propagating_task.start_variable,
-                    profiles[0].start - propagating_task.processing_time,
+                    profiles[0].get_start() - propagating_task.processing_time,
                     full_explanation,
                 )
             }
@@ -171,7 +172,7 @@ impl CumulativePropagationHandler {
         Var: IntegerVariable + 'static,
     {
         pumpkin_assert_advanced!(
-            context.lower_bound(&propagating_task.start_variable) < profile.end + 1
+            context.lower_bound(&propagating_task.start_variable) < profile.get_end() + 1
         );
 
         match self.explanation_type {
@@ -191,7 +192,7 @@ impl CumulativePropagationHandler {
                     );
                 context.set_lower_bound(
                     &propagating_task.start_variable,
-                    profile.end + 1,
+                    profile.get_end() + 1,
                     move |_context: PropagationContext| {
                         let mut reason = (*explanation).clone();
                         reason.add(lower_bound_predicate_propagating_task);
@@ -221,7 +222,7 @@ impl CumulativePropagationHandler {
     {
         pumpkin_assert_advanced!(
             context.upper_bound(&propagating_task.start_variable)
-                > profile.start - propagating_task.processing_time
+                > profile.get_start() - propagating_task.processing_time
         );
 
         match self.explanation_type {
@@ -241,7 +242,7 @@ impl CumulativePropagationHandler {
                     );
                 context.set_upper_bound(
                     &propagating_task.start_variable,
-                    profile.start - propagating_task.processing_time,
+                    profile.get_start() - propagating_task.processing_time,
                     move |_context: PropagationContext| {
                         let mut reason = (*explanation).clone();
                         reason.add(upper_bound_predicate_propagating_task);
@@ -281,7 +282,7 @@ impl CumulativePropagationHandler {
         //   time-point in which case we simply start from the lower-bound of the task.
         let lower_bound_removed_time_points = max(
             context.lower_bound(&propagating_task.start_variable),
-            profile.start - propagating_task.processing_time + 1,
+            profile.get_start() - propagating_task.processing_time + 1,
         );
 
         // There are also two options for determine the highest value to remove
@@ -292,7 +293,7 @@ impl CumulativePropagationHandler {
         //   in case we remove all time-points up-and-until the upper-bound of the task.
         let upper_bound_removed_time_points = min(
             context.upper_bound(&propagating_task.start_variable),
-            profile.end,
+            profile.get_end(),
         );
 
         for time_point in lower_bound_removed_time_points..=upper_bound_removed_time_points {
@@ -324,14 +325,15 @@ impl CumulativePropagationHandler {
                     // - Or the time-point is after the start of the profile in which case the
                     //   explanation is simply that there is a profile at this time-point (which
                     //   together with the propagating task would overflow the capacity)
-                    let corresponding_profile_explanation_point = if time_point < profile.start {
-                        min(
-                            time_point + propagating_task.processing_time - 1,
-                            (profile.end - profile.start) / 2 + profile.start,
-                        )
-                    } else {
-                        time_point
-                    };
+                    let corresponding_profile_explanation_point =
+                        if time_point < profile.get_start() {
+                            min(
+                                time_point + propagating_task.processing_time - 1,
+                                (profile.get_end() - profile.get_start()) / 2 + profile.get_start(),
+                            )
+                        } else {
+                            time_point
+                        };
 
                     let explanation = create_pointwise_propagation_explanation(
                         corresponding_profile_explanation_point,
@@ -454,12 +456,7 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
-            let profile = ResourceProfile {
-                start: 15,
-                end: 17,
-                profile_tasks: vec![Rc::new(profile_task)],
-                height: 1,
-            };
+            let profile = ResourceProfile::new(15, 17, vec![Rc::new(profile_task)], 1);
 
             let reason = create_conflict_explanation(
                 PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
@@ -490,12 +487,7 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
-            let profile = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task)],
-                height: 1,
-            };
+            let profile = ResourceProfile::new(16, 18, vec![Rc::new(profile_task)], 1);
 
             let result = self
                 .propagation_handler
@@ -537,12 +529,7 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(1),
             };
-            let profile_y = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task_y)],
-                height: 1,
-            };
+            let profile_y = ResourceProfile::new(16, 18, vec![Rc::new(profile_task_y)], 1);
 
             let profile_task_z = Task {
                 start_variable: z,
@@ -550,12 +537,7 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(2),
             };
-            let profile_z = ResourceProfile {
-                start: 19,
-                end: 21,
-                profile_tasks: vec![Rc::new(profile_task_z)],
-                height: 1,
-            };
+            let profile_z = ResourceProfile::new(19, 21, vec![Rc::new(profile_task_z)], 1);
 
             let result = self
                 .propagation_handler
@@ -597,12 +579,7 @@ pub(crate) mod test_propagation_handler {
                 id: LocalId::from(1),
             };
 
-            let profile = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task)],
-                height: 1,
-            };
+            let profile = ResourceProfile::new(16, 18, vec![Rc::new(profile_task)], 1);
 
             let result = self
                 .propagation_handler
@@ -644,12 +621,7 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(1),
             };
-            let profile_y = ResourceProfile {
-                start: 16,
-                end: 18,
-                profile_tasks: vec![Rc::new(profile_task_y)],
-                height: 1,
-            };
+            let profile_y = ResourceProfile::new(16, 18, vec![Rc::new(profile_task_y)], 1);
 
             let profile_task_z = Task {
                 start_variable: z,
@@ -657,12 +629,7 @@ pub(crate) mod test_propagation_handler {
                 resource_usage: 1,
                 id: LocalId::from(2),
             };
-            let profile_z = ResourceProfile {
-                start: 9,
-                end: 12,
-                profile_tasks: vec![Rc::new(profile_task_z)],
-                height: 1,
-            };
+            let profile_z = ResourceProfile::new(9, 12, vec![Rc::new(profile_task_z)], 1);
 
             let result = self
                 .propagation_handler

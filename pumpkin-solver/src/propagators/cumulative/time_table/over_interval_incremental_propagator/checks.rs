@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -20,18 +21,18 @@ pub(crate) fn new_profile_before_first_profile<Var: IntegerVariable + 'static>(
     to_add: &mut Vec<ResourceProfile<Var>>,
     task: &Rc<Task<Var>>,
 ) {
-    if current_index == start_index && update_range.start < profile.start {
+    if current_index == start_index && update_range.start < profile.get_start() {
         // We are considering the first overlapping profile and there is
         // a part before the start of this profile
         // This means we need to add a new mandatory part before the
         // first element
-        to_add.push(ResourceProfile {
-            start: update_range.start,
-            end: profile.start - 1, /* Note that this profile needs to end before the start
-                                     * of the current profile, hence the -1 */
-            profile_tasks: vec![Rc::clone(task)],
-            height: task.resource_usage,
-        })
+        to_add.push(ResourceProfile::new(
+            update_range.start,
+            profile.get_start() - 1, /* Note that this profile needs to end before the start
+                                      * of the current profile, hence the -1 */
+            vec![Rc::clone(task)],
+            task.resource_usage,
+        ));
     }
 }
 
@@ -56,18 +57,18 @@ pub(crate) fn new_profile_between_profiles<Var: IntegerVariable + 'static>(
         // - There is empty space between the current profile and the previous profile
         // - The update range starts before the end of the previous profile
         // - The update range ends after the start of the current profile
-        if previous_profile.end < profile.start - 1
-            && update_range.start <= previous_profile.end + 1
-            && update_range.end > profile.start - 1
+        if previous_profile.get_end() < profile.get_start() - 1
+            && update_range.start <= previous_profile.get_end() + 1
+            && update_range.end > profile.get_start() - 1
         {
             // There is empty space between the current profile and the
             // previous one, we should insert a new profile
-            to_add.push(ResourceProfile {
-                start: previous_profile.end + 1,
-                end: profile.start - 1,
-                profile_tasks: vec![Rc::clone(task)],
-                height: task.resource_usage,
-            })
+            to_add.push(ResourceProfile::new(
+                previous_profile.get_end() + 1,
+                profile.get_start() - 1,
+                vec![Rc::clone(task)],
+                task.resource_usage,
+            ))
         }
     }
 }
@@ -85,22 +86,22 @@ pub(crate) fn split_profile_added_part_starts_after_profile_start<
     profile: &ResourceProfile<Var>,
     to_add: &mut Vec<ResourceProfile<Var>>,
 ) {
-    if update_range.start > profile.start {
+    if update_range.start > profile.get_start() {
         // We are splitting the current profile into one or more parts
         // The update range starts after the profile starts;
         // This if-statement takes care of creating a new (smaller)
         // profile which represents the previous profile up and until it
         // is split by the update range
-        to_add.push(ResourceProfile {
-            start: profile.start,
-            end: min(update_range.start - 1, profile.end), /* It could be that the update
-                                                            * range extends past the profile
-                                                            * in which case we should create
-                                                            * a profile until the end of the
-                                                            * profile */
-            profile_tasks: profile.profile_tasks.clone(),
-            height: profile.height,
-        })
+        to_add.push(ResourceProfile::new(
+            profile.get_start(),
+            min(update_range.start - 1, profile.get_end()), /* It could be that the update
+                                                             * range extends past the profile
+                                                             * in which case we should create
+                                                             * a profile until the end of the
+                                                             * profile */
+            profile.get_profile_tasks().clone(),
+            profile.get_height(),
+        ))
     }
 }
 
@@ -123,24 +124,24 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
     // or the new profile starts at the start of the update range (since
     // we are only looking at the part where there is overlap between
     // the current profile and the update range)
-    let new_profile_lower_bound = max(profile.start, update_range.start);
+    let new_profile_lower_bound = max(profile.get_start(), update_range.start);
 
     // Either the new profile ends at the end of the profile (in case
     // the update range ends after the profile end)
     // or the new profile ends at the end of the update range (since we
     // are only looking at the part where there is overlap between the
     // current profile and the update range)
-    let new_profile_upper_bound = min(profile.end, update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
+    let new_profile_upper_bound = min(profile.get_end(), update_range.end - 1); // Note that the end of the update_range is exclusive (hence the -1)
     if new_profile_upper_bound >= new_profile_lower_bound {
-        let mut new_profile_tasks = profile.profile_tasks.clone();
+        let mut new_profile_tasks = profile.get_profile_tasks().clone();
         new_profile_tasks.push(Rc::clone(task));
 
-        let new_profile = ResourceProfile {
-            start: new_profile_lower_bound,
-            end: new_profile_upper_bound,
-            profile_tasks: new_profile_tasks.clone(),
-            height: profile.height + task.resource_usage,
-        };
+        let new_profile = ResourceProfile::new(
+            new_profile_lower_bound,
+            new_profile_upper_bound,
+            new_profile_tasks.clone(),
+            profile.get_height() + task.resource_usage,
+        );
 
         // We thus create a new profile consisting of the combination of
         // the previous profile and the updated task under consideration
@@ -148,15 +149,15 @@ pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
 
         // A sanity check, there is a new profile to create consisting
         // of a combination of the previous profile and the updated task
-        if profile.height + task.resource_usage + task.resource_usage > capacity {
+        if profile.get_height() + task.resource_usage + task.resource_usage > capacity {
             // The addition of the new mandatory part to the profile
             // caused an overflow of the resource
-            return Err(ResourceProfile {
-                start: new_profile_lower_bound,
-                end: new_profile_upper_bound,
-                profile_tasks: new_profile_tasks,
-                height: profile.height + task.resource_usage,
-            });
+            return Err(ResourceProfile::new(
+                new_profile_lower_bound,
+                new_profile_upper_bound,
+                new_profile_tasks,
+                profile.get_height() + task.resource_usage,
+            ));
         }
     }
     Ok(())
@@ -173,18 +174,18 @@ pub(crate) fn split_profile_added_part_ends_before_profile_end<Var: IntegerVaria
     profile: &ResourceProfile<Var>,
     to_add: &mut Vec<ResourceProfile<Var>>,
 ) {
-    if profile.end >= update_range.end {
+    if profile.get_end() >= update_range.end {
         // We are splitting the current profile into one or more parts
         // The update range ends before the end of the profile;
         // This if-statement takes care of creating a new (smaller)
         // profile which represents the previous profile after it is
         // split by the update range
-        to_add.push(ResourceProfile {
-            start: max(update_range.end, profile.start),
-            end: profile.end,
-            profile_tasks: profile.profile_tasks.clone(),
-            height: profile.height,
-        })
+        to_add.push(ResourceProfile::new(
+            max(update_range.end, profile.get_start()),
+            profile.get_end(),
+            profile.get_profile_tasks().clone(),
+            profile.get_height(),
+        ))
     }
 }
 
@@ -198,16 +199,16 @@ pub(crate) fn new_part_after_last_profile<Var: IntegerVariable + 'static>(
     to_add: &mut Vec<ResourceProfile<Var>>,
     task: &Rc<Task<Var>>,
 ) {
-    if current_index == end_index && update_range.end > profile.end + 1 {
+    if current_index == end_index && update_range.end > profile.get_end() + 1 {
         // We are considering the last overlapping profile and there is
         // a part after the end of this profile
         // This means we need to add a new mandatory part after the last
         // element
-        to_add.push(ResourceProfile {
-            start: profile.end + 1,
-            end: update_range.end - 1,
-            profile_tasks: vec![Rc::clone(task)],
-            height: task.resource_usage,
-        })
+        to_add.push(ResourceProfile::new(
+            profile.get_end() + 1,
+            update_range.end - 1,
+            vec![Rc::clone(task)],
+            task.resource_usage,
+        ))
     }
 }

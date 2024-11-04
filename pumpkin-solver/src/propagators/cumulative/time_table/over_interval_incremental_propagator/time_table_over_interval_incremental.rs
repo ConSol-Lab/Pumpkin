@@ -36,6 +36,7 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::OverIntervalTimeTableType;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTableOverIntervalPropagator;
@@ -252,7 +253,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             let conflicting_profile = self
                 .time_table
                 .iter_mut()
-                .find(|profile| profile.height > self.parameters.capacity);
+                .find(|profile| profile.get_height() > self.parameters.capacity);
 
             // If we have found such a conflict then we return it
             if let Some(conflicting_profile) = conflicting_profile {
@@ -318,7 +319,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         pumpkin_assert_extreme!(self
             .time_table
             .iter()
-            .all(|profile| profile.height <= self.parameters.capacity));
+            .all(|profile| profile.get_height() <= self.parameters.capacity));
         Ok(())
     }
 }
@@ -521,8 +522,8 @@ fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
             if has_overlap_with_interval(
                 update_range.start,
                 update_range.end,
-                profile.start,
-                profile.end,
+                profile.get_start(),
+                profile.get_end(),
             ) {
                 // We now know that the left most overlapping index is either
                 // `left_profile_index` or before it
@@ -545,8 +546,8 @@ fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
         if has_overlap_with_interval(
             update_range.start,
             update_range.end,
-            profile.start,
-            profile.end,
+            profile.get_start(),
+            profile.get_end(),
         ) {
             // We now know that the right most overlapping index is either `right_profile_index`
             // or after it
@@ -574,11 +575,11 @@ fn find_overlapping_profile<Var: IntegerVariable + 'static>(
         if has_overlap_with_interval(
             update_range.start,
             update_range.end,
-            profile.start,
-            profile.end,
+            profile.get_start(),
+            profile.get_end(),
         ) {
             return std::cmp::Ordering::Equal;
-        } else if profile.end < update_range.start {
+        } else if profile.get_end() < update_range.start {
             return std::cmp::Ordering::Less;
         }
         std::cmp::Ordering::Greater

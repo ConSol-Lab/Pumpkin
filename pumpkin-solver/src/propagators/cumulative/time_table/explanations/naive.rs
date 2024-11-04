@@ -6,6 +6,7 @@ use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
 
@@ -16,7 +17,7 @@ pub(crate) fn create_naive_propagation_explanation<Var: IntegerVariable + 'stati
     context: PropagationContext,
 ) -> PropositionalConjunction {
     profile
-        .profile_tasks
+        .get_profile_tasks()
         .iter()
         .flat_map(|profile_task| {
             [
@@ -43,7 +44,7 @@ where
     Var: IntegerVariable + 'static,
 {
     conflict_profile
-        .profile_tasks
+        .get_profile_tasks()
         .iter()
         .flat_map(|profile_task| {
             [
