@@ -22,6 +22,7 @@ use crate::propagators::ArgTask;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::ResourceProfile;
+use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 #[cfg(doc)]
 use crate::propagators::TimeTablePerPointPropagator;
@@ -53,7 +54,6 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-#[allow(unused)]
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -67,10 +67,9 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
 ///
 /// The [ResourceProfile]s are sorted based on start time and they are non-overlapping; each entry
 /// in the [`Vec`] represents the mandatory resource usage across an interval.
-pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
+pub(crate) type OverIntervalTimeTableType<ResourceProfileType> = Vec<ResourceProfileType>;
 
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
-    #[allow(unused)]
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
@@ -90,7 +89,7 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table =
+        let time_table: Vec<ResourceProfile<Var>> =
             create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
@@ -188,10 +187,11 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 pub(crate) fn create_time_table_over_interval_from_scratch<
     Var: IntegerVariable + 'static,
     Context: ReadDomains + Copy,
+    ResourceProfileType: ResourceProfileInterface<Var>,
 >(
     context: Context,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+) -> Result<OverIntervalTimeTableType<ResourceProfileType>, PropositionalConjunction> {
     // First we create a list of all the events (i.e. start and ends of mandatory parts)
     let events = create_events(context, parameters);
 
@@ -266,11 +266,15 @@ fn create_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
 /// Creates a time-table based on the provided `events` (which are assumed to be sorted
 /// chronologically, with tie-breaking performed in such a way that the ends of mandatory parts
 /// are before the starts of mandatory parts).
-fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDomains + Copy>(
+fn create_time_table_from_events<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+    Context: ReadDomains + Copy,
+>(
     events: Vec<Event<Var>>,
     context: Context,
     parameters: &CumulativeParameters<Var>,
-) -> Result<OverIntervalTimeTableType<Var>, PropositionalConjunction> {
+) -> Result<OverIntervalTimeTableType<ResourceProfileType>, PropositionalConjunction> {
     pumpkin_assert_extreme!(
         events.is_empty()
             || (0..events.len() - 1)
@@ -286,7 +290,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
         "Events were not ordered in such a way that the ends of mandatory parts occurred first"
     );
 
-    let mut time_table: OverIntervalTimeTableType<Var> = Default::default();
+    let mut time_table: OverIntervalTimeTableType<ResourceProfileType> = Default::default();
     // The tasks which are contributing to the current profile under consideration
     let mut current_profile_tasks: Vec<Rc<Task<Var>>> = Vec::new();
     // The cumulative resource usage of the tasks which are contributing to the current profile
@@ -327,7 +331,7 @@ fn create_time_table_from_events<Var: IntegerVariable + 'static, Context: ReadDo
             // Potentially we need to end the current profile and start a new one due to the
             // addition/removal of the current task
             if start_of_interval != event.time_stamp {
-                let new_profile = ResourceProfile::new(
+                let new_profile = ResourceProfileType::create_profile(
                     start_of_interval,
                     event.time_stamp - 1,
                     current_profile_tasks.clone(),
@@ -422,7 +426,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table =
+    let time_table: Vec<ResourceProfile<Var>> =
         create_time_table_over_interval_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(

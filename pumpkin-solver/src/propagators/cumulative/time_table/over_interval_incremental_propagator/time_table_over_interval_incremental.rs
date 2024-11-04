@@ -27,6 +27,7 @@ use crate::propagators::cumulative::time_table::time_table_util::insert_update;
 use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 use crate::propagators::debug_propagate_from_scratch_time_table_interval;
+use crate::propagators::updatable_resource_profile::UpdatableResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
 use crate::propagators::util::register_tasks;
@@ -36,6 +37,7 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::MandatoryPartAdjustments;
 use crate::propagators::OverIntervalTimeTableType;
+use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 #[cfg(doc)]
@@ -67,11 +69,14 @@ use crate::pumpkin_assert_simple;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Clone, Debug)]
-pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTableOverIntervalIncrementalPropagator<
+    Var: IntegerVariable + 'static,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
-    time_table: OverIntervalTimeTableType<Var>,
+    time_table: OverIntervalTimeTableType<UpdatableResourceProfile<Var, ResourceProfile<Var>>>,
     /// Stores the input parameters to the cumulative constraint
     parameters: CumulativeParameters<Var>,
     /// Stores structures which change during the search; either to store bounds or when applying
@@ -258,10 +263,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // If we have found such a conflict then we return it
             if let Some(conflicting_profile) = conflicting_profile {
                 pumpkin_assert_extreme!(
-                    create_time_table_over_interval_from_scratch(
-                        context.as_readonly(),
-                        &self.parameters
-                    )
+                    create_time_table_over_interval_from_scratch::<
+                        Var,
+                        PropagationContext,
+                        ResourceProfile<Var>,
+                    >(context.as_readonly(), &self.parameters)
                     .is_err(),
                     "Time-table from scratch could not find conflict"
                 );
@@ -340,7 +346,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         self.update_time_table(&mut context)?;
 
         pumpkin_assert_extreme!(
-            debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(
+            debug::time_tables_are_the_same_interval::<Var, UpdatableResourceProfile<Var, ResourceProfile<Var>>, SYNCHRONISE>(
                 context.as_readonly(),
                 &self.time_table,
                 &self.parameters,
@@ -498,8 +504,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
 /// if there are no overlapping profiles
 ///
 /// Note that the lower-bound of the range is inclusive and the upper-bound is exclusive
-fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
-    time_table: &OverIntervalTimeTableType<Var>,
+fn determine_profiles_to_update<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &OverIntervalTimeTableType<ResourceProfileType>,
     update_range: &Range<i32>,
 ) -> Result<(usize, usize), usize> {
     let overlapping_profile = find_overlapping_profile(time_table, update_range);
@@ -567,8 +576,11 @@ fn determine_profiles_to_update<Var: IntegerVariable + 'static>(
 /// [Ok] containing the index of the overlapping profile. If no such element could be found,
 /// it returns [Err] containing the index at which the element should be inserted to
 /// preserve the ordering
-fn find_overlapping_profile<Var: IntegerVariable + 'static>(
-    time_table: &OverIntervalTimeTableType<Var>,
+fn find_overlapping_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &OverIntervalTimeTableType<ResourceProfileType>,
     update_range: &Range<i32>,
 ) -> Result<usize, usize> {
     time_table.binary_search_by(|profile| {

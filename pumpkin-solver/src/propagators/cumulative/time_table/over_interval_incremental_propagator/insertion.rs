@@ -5,7 +5,6 @@ use std::rc::Rc;
 
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::checks;
 use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_extreme;
@@ -17,14 +16,15 @@ use crate::variables::IntegerVariable;
 /// profiles and adds them to the `time-table` at the correct position.
 pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
     Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
 >(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
     start_index: usize,
     end_index: usize,
     update_range: &Range<i32>,
     updated_task: &Rc<Task<Var>>,
     capacity: i32,
-) -> Result<(), ResourceProfile<Var>> {
+) -> Result<(), ResourceProfileType> {
     let mut to_add = Vec::new();
 
     // We keep track of whether a conflict has been found
@@ -116,8 +116,11 @@ pub(crate) fn insert_profiles_overlapping_with_added_mandatory_part<
 /// The new mandatory part added by `updated_task` (spanning `update_range`) does not overlap
 /// with any existing profile. This method inserts it at the position of `index_to_insert`
 /// in the `time-table`.
-pub(crate) fn insert_profile_new_mandatory_part<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn insert_profile_new_mandatory_part<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
     index_to_insert: usize,
     update_range: &Range<i32>,
     updated_task: &Rc<Task<Var>>,
@@ -132,7 +135,7 @@ pub(crate) fn insert_profile_new_mandatory_part<Var: IntegerVariable + 'static>(
     // Insert the new profile at its index
     time_table.insert(
         index_to_insert,
-        ResourceProfile::new(
+        ResourceProfileType::create_profile(
             update_range.start,
             update_range.end - 1,
             vec![Rc::clone(updated_task)],

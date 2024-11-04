@@ -6,6 +6,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::PropagationContext;
+use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::CumulativeParameters;
@@ -24,7 +25,8 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
     context: PropagationContext,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let error_from_scratch = create_time_table_over_interval_from_scratch(context, parameters);
+    let error_from_scratch: Result<Vec<ResourceProfile<Var>>, PropositionalConjunction> =
+        create_time_table_over_interval_from_scratch(context, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
         if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
             &synchronised_conflict_explanation
@@ -44,9 +46,12 @@ pub(crate) fn check_synchronisation_conflict_explanation_over_interval<
 /// by [`TimeTableOverIntervalPropagator`]), this function calculates the error which would have
 /// been reported by [`TimeTableOverIntervalPropagator`] by finding the tasks which should be
 /// included in the profile and sorting them in the same order.
-pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 'static>(
+pub(crate) fn create_synchronised_conflict_explanation<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     context: PropagationContext,
-    conflicting_profile: &mut ResourceProfile<Var>,
+    conflicting_profile: &mut ResourceProfileType,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // If we need to synchronise then we need to find the conflict profile which
@@ -87,8 +92,11 @@ pub(crate) fn create_synchronised_conflict_explanation<Var: IntegerVariable + 's
 /// 1. Adjacent profiles are merged which have been split due to the incremental updates
 /// 2. Each profile is sorted such that it corresponds to the order in which
 ///    [`TimeTableOverIntervalPropagator`] would have found them
-pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn synchronise_time_table<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
     context: PropagationContext,
 ) {
     if !time_table.is_empty() {
@@ -105,8 +113,11 @@ pub(crate) fn synchronise_time_table<Var: IntegerVariable + 'static>(
 
 /// Sorts the provided `profile` on non-decreasing order of upper-bound while tie-breaking in
 /// non-decreasing order of ID
-fn sort_profile_based_on_upper_bound_and_id<Var: IntegerVariable + 'static>(
-    profile: &mut ResourceProfile<Var>,
+fn sort_profile_based_on_upper_bound_and_id<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    profile: &mut ResourceProfileType,
     context: PropagationContext,
 ) {
     profile.get_profile_tasks_mut().sort_by(|a, b| {

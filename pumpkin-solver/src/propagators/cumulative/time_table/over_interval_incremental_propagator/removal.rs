@@ -6,7 +6,6 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::variables::IntegerVariable;
@@ -16,8 +15,9 @@ use crate::variables::IntegerVariable;
 /// profiles and adds them to the `time-table` at the correct position.
 pub(crate) fn reduce_profiles_overlapping_with_added_mandatory_part<
     Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
 >(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
     start_index: usize,
     end_index: usize,
     update_range: &Range<i32>,
@@ -52,12 +52,15 @@ pub(crate) fn reduce_profiles_overlapping_with_added_mandatory_part<
 }
 
 /// Returns the provided `profile` with the provided `updated_task` removed.
-fn remove_task_from_profile<Var: IntegerVariable + 'static>(
+fn remove_task_from_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     updated_task: &Rc<Task<Var>>,
     start: i32,
     end: i32,
-    profile: &ResourceProfile<Var>,
-) -> ResourceProfile<Var> {
+    profile: &ResourceProfileType,
+) -> ResourceProfileType {
     let mut updated_profile_tasks = profile.get_profile_tasks().clone();
     let _ = updated_profile_tasks.swap_remove(
         updated_profile_tasks
@@ -66,7 +69,7 @@ fn remove_task_from_profile<Var: IntegerVariable + 'static>(
             .expect("Task should be in the profile if it is being removed"),
     );
 
-    ResourceProfile::new(
+    ResourceProfileType::create_profile(
         start,
         end,
         updated_profile_tasks,
@@ -76,13 +79,16 @@ fn remove_task_from_profile<Var: IntegerVariable + 'static>(
 
 /// If there is a partial overlap, this method creates a profile consisting of the original
 /// profile before the overlap.
-pub(crate) fn split_first_profile<Var: IntegerVariable + 'static>(
-    to_add: &mut Vec<ResourceProfile<Var>>,
+pub(crate) fn split_first_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    to_add: &mut Vec<ResourceProfileType>,
     update_range: &Range<i32>,
-    first_profile: &ResourceProfile<Var>,
+    first_profile: &ResourceProfileType,
 ) {
     if update_range.start > first_profile.get_start() {
-        to_add.push(ResourceProfile::new(
+        to_add.push(ResourceProfileType::create_profile(
             first_profile.get_start(),
             min(update_range.start - 1, first_profile.get_end()),
             first_profile.get_profile_tasks().clone(),
@@ -91,10 +97,13 @@ pub(crate) fn split_first_profile<Var: IntegerVariable + 'static>(
     }
 }
 
-pub(crate) fn split_last_profile<Var: IntegerVariable + 'static>(
-    to_add: &mut Vec<ResourceProfile<Var>>,
+pub(crate) fn split_last_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    to_add: &mut Vec<ResourceProfileType>,
     update_range: &Range<i32>,
-    last_profile: &ResourceProfile<Var>,
+    last_profile: &ResourceProfileType,
 ) {
     if last_profile.get_end() >= update_range.end {
         // We are splitting the current profile into one or more parts
@@ -102,7 +111,7 @@ pub(crate) fn split_last_profile<Var: IntegerVariable + 'static>(
         // This if-statement takes care of creating a new (smaller)
         // profile which represents the previous profile after it is
         // split by the update range
-        to_add.push(ResourceProfile::new(
+        to_add.push(ResourceProfileType::create_profile(
             max(update_range.end, last_profile.get_start()),
             last_profile.get_end(),
             last_profile.get_profile_tasks().clone(),
@@ -112,10 +121,13 @@ pub(crate) fn split_last_profile<Var: IntegerVariable + 'static>(
 }
 
 /// This method creates a new profile based on the overlap with the provided `profile`.
-pub(crate) fn overlap_updated_profile<Var: IntegerVariable + 'static>(
+pub(crate) fn overlap_updated_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
     update_range: &Range<i32>,
-    profile: &ResourceProfile<Var>,
-    to_add: &mut Vec<ResourceProfile<Var>>,
+    profile: &ResourceProfileType,
+    to_add: &mut Vec<ResourceProfileType>,
     updated_task: &Rc<Task<Var>>,
 ) {
     if profile.get_height() - updated_task.resource_usage == 0 {

@@ -6,7 +6,6 @@ use crate::engine::propagation::PropagationContext;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
-use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
@@ -23,14 +22,16 @@ use crate::variables::IntegerVariable;
 ///        same!
 pub(crate) fn time_tables_are_the_same_interval<
     Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
     const SYNCHRONISE: bool,
 >(
     context: PropagationContext,
-    time_table: &OverIntervalTimeTableType<Var>,
+    time_table: &OverIntervalTimeTableType<ResourceProfileType>,
     parameters: &CumulativeParameters<Var>,
 ) -> bool {
-    let time_table_scratch = create_time_table_over_interval_from_scratch(context, parameters)
-        .expect("Expected no error");
+    let time_table_scratch: OverIntervalTimeTableType<ResourceProfileType> =
+        create_time_table_over_interval_from_scratch(context, parameters)
+            .expect("Expected no error");
 
     if time_table.is_empty() {
         return time_table_scratch.is_empty();
@@ -78,8 +79,11 @@ pub(crate) fn time_tables_are_the_same_interval<
 
 /// Merge all mergeable profiles (see [`are_mergeable`]) going from `[start_index, end_index]`
 /// in the provided `time_table`.
-pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
-    time_table: &mut OverIntervalTimeTableType<Var>,
+pub(crate) fn merge_profiles<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
     start_index: usize,
     end_index: usize,
 ) {
@@ -95,7 +99,7 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
     // To avoid needless splicing, we keep track of the range at which insertions will take place
     let mut insertion_range: Option<Range<usize>> = None;
     // And the profiles which need to be added
-    let mut to_add: Option<Vec<ResourceProfile<Var>>> = None;
+    let mut to_add: Option<Vec<ResourceProfileType>> = None;
 
     // We go over all pairs of profiles, starting from start index until end index
     while current_index < end {
@@ -114,7 +118,7 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
             let end_profile = &time_table[current_index];
 
             // We create a new profile with the bounds which we have found
-            let new_profile = ResourceProfile::new(
+            let new_profile = ResourceProfileType::create_profile(
                 start_profile.get_start(),
                 end_profile.get_end(),
                 start_profile.get_profile_tasks().to_owned(),
@@ -177,9 +181,12 @@ pub(crate) fn merge_profiles<Var: IntegerVariable + 'static>(
 /// time-table created from scratch.
 ///
 /// It is assumed that the profile tasks of both profiles do not contain duplicates
-fn are_mergeable<Var: IntegerVariable + 'static>(
-    first_profile: &ResourceProfile<Var>,
-    second_profile: &ResourceProfile<Var>,
+fn are_mergeable<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    first_profile: &ResourceProfileType,
+    second_profile: &ResourceProfileType,
 ) -> bool {
     pumpkin_assert_extreme!(
         first_profile

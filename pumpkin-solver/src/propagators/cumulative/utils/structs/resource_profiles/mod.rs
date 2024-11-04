@@ -9,8 +9,20 @@ pub(crate) use resource_profile::*;
 use super::Task;
 use crate::variables::IntegerVariable;
 
-pub(crate) trait ResourceProfileInterface<Var> {
+pub(crate) trait ResourceProfileInterface<Var>: Clone {
     fn create_default_at_time_point(_time_point: i32) -> Self
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+
+    fn create_profile(
+        _start: i32,
+        _end: i32,
+        _profile_tasks: Vec<Rc<Task<Var>>>,
+        _height: i32,
+    ) -> Self
     where
         Self: Sized,
     {

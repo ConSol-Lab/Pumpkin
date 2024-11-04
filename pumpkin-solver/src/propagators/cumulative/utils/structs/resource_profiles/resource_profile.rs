@@ -38,6 +38,18 @@ impl<Var: IntegerVariable + 'static> ResourceProfile<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> ResourceProfileInterface<Var> for ResourceProfile<Var> {
+    fn create_profile(start: i32, end: i32, profile_tasks: Vec<Rc<Task<Var>>>, height: i32) -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            start,
+            end,
+            profile_tasks,
+            height,
+        }
+    }
+
     fn get_start(&self) -> i32 {
         self.start
     }
