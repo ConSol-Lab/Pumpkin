@@ -354,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn write_inference_without_conclusion() {
+    fn write_inference_without_conclusion_with_hints() {
         test_step_serialization(
             Inference {
                 id: TEST_ID,
@@ -364,6 +364,20 @@ mod tests {
                 propagated: None,
             },
             "i 1 2 -3 c:1 l:inf_label\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_without_conclusion_without_hints() {
+        test_step_serialization(
+            Inference {
+                id: TEST_ID,
+                hint_constraint_id: None,
+                hint_label: None,
+                premises: [lit(2), lit(-3)],
+                propagated: None,
+            },
+            "i 1 2 -3\n",
         );
     }
 

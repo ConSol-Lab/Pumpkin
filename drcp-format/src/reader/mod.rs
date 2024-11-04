@@ -309,6 +309,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn inference_nogood_without_hints() {
+        let source = "i 1 4 5\n";
+        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+
+        let inference_step = reader.next_step().expect("valid drcp inference step");
+        let expected_inference = Inference {
+            id: NonZero::new(1).unwrap(),
+            hint_constraint_id: None,
+            hint_label: None,
+            premises: vec![NonZero::new(4).unwrap(), NonZero::new(5).unwrap()],
+            propagated: None,
+        };
+        assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+    }
+
+    #[test]
     fn inference_nogood_with_constraint_tag_and_label() {
         let source = "i 1 4 5 c:20 l:linear_bound\n";
         let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
