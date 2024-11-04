@@ -173,7 +173,7 @@ impl ConflictAnalysisContext<'_> {
                 let _ = self.internal_parameters.proof_log.log_inference(
                     self.propagator_store.get_tag(*propagator),
                     explanation_literals.iter().map(|&lit| !lit),
-                    None,
+                    self.assignments_propositional.false_literal,
                 );
 
                 on_analysis_step(AnalysisStep::Propagation {
@@ -227,7 +227,7 @@ impl ConflictAnalysisContext<'_> {
         let _ = self.internal_parameters.proof_log.log_inference(
             self.propagator_store.get_tag(propagator),
             explanation_literals.iter().skip(1).map(|&lit| !lit),
-            Some(propagated_literal),
+            propagated_literal,
         );
 
         on_analysis_step(AnalysisStep::Propagation {
