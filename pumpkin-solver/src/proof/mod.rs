@@ -83,7 +83,7 @@ impl ProofLog {
         };
 
         // TODO: Log the inference label.
-        let id = writer.log_inference(constraint_tag, None, premises, propagated)?;
+        let id = writer.log_inference(constraint_tag, None, premises, Some(propagated))?;
 
         if let Some(hints) = propagation_order_hint {
             hints.push(id);

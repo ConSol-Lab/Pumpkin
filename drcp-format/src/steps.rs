@@ -40,7 +40,9 @@ pub struct Inference<'label, Premises, Propagated> {
     /// The premises of the inference.
     pub premises: Premises,
     /// The conclusion of the inference.
-    pub propagated: Propagated,
+    ///
+    /// If absent, the inference implies false.
+    pub propagated: Option<Propagated>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

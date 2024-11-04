@@ -1137,8 +1137,6 @@ impl ConstraintSatisfactionSolver {
                             propagator_id,
                         ));
 
-                        // println!("{:?}\n{}", conflict_nogood, propagator_id.0);
-
                         let stored_conflict_info = StoredConflictInfo::Propagator {
                             conflict_nogood,
                             propagator_id,
