@@ -70,7 +70,7 @@ impl ProofLog {
         &mut self,
         constraint_tag: Option<NonZero<u32>>,
         premises: impl IntoIterator<Item = Literal>,
-        propagated: Literal,
+        propagated: Option<Literal>,
     ) -> std::io::Result<NonZeroU64> {
         let Some(ProofImpl::CpProof {
             writer,
