@@ -134,10 +134,7 @@ where
         "LinearLeq"
     }
 
-    fn debug_propagate_from_scratch(
-        &self,
-        mut context: PropagationContextMut,
-    ) -> PropagationStatusCP {
+    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         if let Some(conjunction) = self.detect_inconsistency(context.as_readonly()) {
             return Err(conjunction.into());
         }
@@ -145,6 +142,43 @@ where
         for (i, x_i) in self.x.iter().enumerate() {
             let bound = (self.c as i64
                 - (self.lower_bound_left_hand_side - context.lower_bound(x_i) as i64))
+                .try_into()
+                .expect("Could not fit the lower-bound of lhs in an i32");
+
+            if context.upper_bound(x_i) > bound {
+                let reason: PropositionalConjunction = self
+                    .x
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(j, x_j)| {
+                        if j != i {
+                            Some(predicate![x_j >= context.lower_bound(x_j)])
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                context.set_upper_bound(x_i, bound, reason)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn debug_propagate_from_scratch(
+        &self,
+        mut context: PropagationContextMut,
+    ) -> PropagationStatusCP {
+        let lower_bound_left_hand_side = self
+            .x
+            .iter()
+            .map(|var| context.lower_bound(var) as i64)
+            .sum::<i64>();
+
+        for (i, x_i) in self.x.iter().enumerate() {
+            let bound = (self.c as i64
+                - (lower_bound_left_hand_side - context.lower_bound(x_i) as i64))
                 .try_into()
                 .expect("Could not fit the lower-bound of lhs in an i32");
 
