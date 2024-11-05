@@ -100,6 +100,8 @@ pub(crate) fn merge_profiles<
     let mut insertion_range: Option<Range<usize>> = None;
     // And the profiles which need to be added
     let mut to_add: Option<Vec<ResourceProfileType>> = None;
+    // We also need to keep track of whether one of the profiles was updated
+    let mut updated = false;
 
     // We go over all pairs of profiles, starting from start index until end index
     while current_index < end {
@@ -107,6 +109,10 @@ pub(crate) fn merge_profiles<
         while current_index < end
             && are_mergeable(&time_table[current_index], &time_table[current_index + 1])
         {
+            // Check whether any of the profiles which will be merged are updated
+            updated |= time_table[current_index].is_updated()
+                || time_table[current_index + 1].is_updated();
+
             // We go over all pairs of profiles until we find a profile which cannot be merged
             // with the current profile
             current_index += 1;
@@ -123,7 +129,11 @@ pub(crate) fn merge_profiles<
                 end_profile.get_end(),
                 start_profile.get_profile_tasks().to_owned(),
                 start_profile.get_height(),
+                updated,
             );
+
+            // We reset the updated flag for the next set of profiles
+            updated = false;
 
             // And we add the new profiles to the profiles to add
             if let Some(to_add) = to_add.as_mut() {

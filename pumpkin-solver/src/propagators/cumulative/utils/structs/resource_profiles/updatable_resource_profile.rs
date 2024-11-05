@@ -23,13 +23,19 @@ impl<Var: IntegerVariable + 'static, Profile: ResourceProfileInterface<Var>>
         }
     }
 
-    fn create_profile(start: i32, end: i32, profile_tasks: Vec<Rc<Task<Var>>>, height: i32) -> Self
+    fn create_profile(
+        start: i32,
+        end: i32,
+        profile_tasks: Vec<Rc<Task<Var>>>,
+        height: i32,
+        updated: bool,
+    ) -> Self
     where
         Self: Sized,
     {
         Self {
-            resource_profile: Profile::create_profile(start, end, profile_tasks, height),
-            updated: true,
+            resource_profile: Profile::create_profile(start, end, profile_tasks, height, updated),
+            updated,
             variable_type: PhantomData,
         }
     }
@@ -56,10 +62,6 @@ impl<Var: IntegerVariable + 'static, Profile: ResourceProfileInterface<Var>>
 
     fn is_updated(&self) -> bool {
         self.updated
-    }
-
-    fn mark_updated(&mut self) {
-        self.updated = true;
     }
 
     fn mark_processed(&mut self) {

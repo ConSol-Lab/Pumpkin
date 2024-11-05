@@ -140,6 +140,7 @@ pub(crate) fn insert_profile_new_mandatory_part<
             update_range.end - 1,
             vec![Rc::clone(updated_task)],
             updated_task.resource_usage,
+            true, // This profile was not present previously and could lead to updates
         ),
     );
 }

@@ -34,6 +34,7 @@ pub(crate) fn new_profile_before_first_profile<
                                       * of the current profile, hence the -1 */
             vec![Rc::clone(task)],
             task.resource_usage,
+            true, // This profile was not present previously and could lead to updates
         ));
     }
 }
@@ -73,6 +74,7 @@ pub(crate) fn new_profile_between_profiles<
                 profile.get_start() - 1,
                 vec![Rc::clone(task)],
                 task.resource_usage,
+                true, // This profile was not present previously and could lead to updates
             ))
         }
     }
@@ -107,6 +109,7 @@ pub(crate) fn split_profile_added_part_starts_after_profile_start<
                                                              * profile */
             profile.get_profile_tasks().clone(),
             profile.get_height(),
+            false, // This profile was present previously and could not lead to updates
         ))
     }
 }
@@ -150,6 +153,7 @@ pub(crate) fn overlap_updated_profile<
             new_profile_upper_bound,
             new_profile_tasks.clone(),
             profile.get_height() + task.resource_usage,
+            true, // This profile was not present previously and could lead to updates
         );
 
         // We thus create a new profile consisting of the combination of
@@ -166,6 +170,7 @@ pub(crate) fn overlap_updated_profile<
                 new_profile_upper_bound,
                 new_profile_tasks,
                 profile.get_height() + task.resource_usage,
+                true,
             ));
         }
     }
@@ -197,6 +202,7 @@ pub(crate) fn split_profile_added_part_ends_before_profile_end<
             profile.get_end(),
             profile.get_profile_tasks().clone(),
             profile.get_height(),
+            false, // This profile was present previously and could not lead to updates
         ))
     }
 }
@@ -224,6 +230,7 @@ pub(crate) fn new_part_after_last_profile<
             update_range.end - 1,
             vec![Rc::clone(task)],
             task.resource_usage,
+            true, // This profile was not present previously and could lead to updates
         ))
     }
 }

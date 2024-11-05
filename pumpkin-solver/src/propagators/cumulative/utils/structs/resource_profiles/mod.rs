@@ -22,6 +22,7 @@ pub(crate) trait ResourceProfileInterface<Var>: Clone {
         _end: i32,
         _profile_tasks: Vec<Rc<Task<Var>>>,
         _height: i32,
+        _updated: bool,
     ) -> Self
     where
         Self: Sized,
@@ -32,8 +33,6 @@ pub(crate) trait ResourceProfileInterface<Var>: Clone {
     fn is_updated(&self) -> bool {
         true
     }
-
-    fn mark_updated(&mut self) {}
 
     fn mark_processed(&mut self) {}
 

@@ -89,14 +89,14 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table: Vec<ResourceProfile<Var>> =
+        let mut time_table: Vec<ResourceProfile<Var>> =
             create_time_table_over_interval_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
-            time_table.iter(),
+            time_table.iter_mut(),
             &self.parameters,
             &mut self.updatable_structures,
         )
@@ -336,6 +336,7 @@ fn create_time_table_from_events<
                     event.time_stamp - 1,
                     current_profile_tasks.clone(),
                     current_resource_usage,
+                    true, // Any profile created from scratch will be updated
                 );
                 if is_conflicting {
                     // We have found a conflict and the profile has been ended, we can report the
@@ -426,12 +427,12 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 ) -> PropagationStatusCP {
     // We first create a time-table over interval and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table: Vec<ResourceProfile<Var>> =
+    let mut time_table: Vec<ResourceProfile<Var>> =
         create_time_table_over_interval_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
-        time_table.iter(),
+        time_table.iter_mut(),
         parameters,
         &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
     )

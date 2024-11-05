@@ -82,14 +82,14 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        let time_table: PerPointTimeTableType<PointResourceProfile<Var>> =
+        let mut time_table: PerPointTimeTableType<PointResourceProfile<Var>> =
             create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
             &mut context,
-            time_table.values(),
+            time_table.values_mut(),
             &self.parameters,
             &mut self.updatable_structures,
         )
@@ -234,12 +234,12 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<
 ) -> PropagationStatusCP {
     // We first create a time-table per point and return an error if there was
     // an overflow of the resource capacity while building the time-table
-    let time_table: PerPointTimeTableType<ResourceProfileType> =
+    let mut time_table: PerPointTimeTableType<ResourceProfileType> =
         create_time_table_per_point_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
     propagate_based_on_timetable(
         context,
-        time_table.values(),
+        time_table.values_mut(),
         parameters,
         &mut updatable_structures.recreate_from_context(context.as_readonly(), parameters),
     )

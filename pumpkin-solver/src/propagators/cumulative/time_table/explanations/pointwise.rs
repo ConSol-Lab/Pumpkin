@@ -17,13 +17,15 @@ use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
 pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
+    'a,
     Var: IntegerVariable + 'static,
-    ResourceProfileType: ResourceProfileInterface<Var>,
+    ResourceProfileType: ResourceProfileInterface<Var> + 'a,
 >(
     context: &mut PropagationContextMut,
-    profiles: &[&ResourceProfileType],
+    profiles: impl Iterator<Item = &'a ResourceProfileType>,
     propagating_task: &Rc<Task<Var>>,
 ) -> Result<(), EmptyDomain> {
+    let mut profiles = profiles.peekable();
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = lb(s)`
@@ -39,11 +41,13 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
     // `p` units apart
     // Property 4 ensures that every time-point falls within the
     // range of a profile.
-    let mut current_profile_index = 0;
+    let mut current_profile = profiles
+        .next()
+        .expect("Expected profiles to contain at least 1 profile");
     // We take as `t_1` the minimum of the first profile end and the earliest
     // completion time - 1 (this - 1 is necessary since the explanation uses the
     // predicate `[s >= t_l + 1 - p]`, and this predicate holds only if the -1 is added)
-    let mut time_point = profiles[current_profile_index].get_end().min(
+    let mut time_point = current_profile.get_end().min(
         context.lower_bound(&propagating_task.start_variable) + propagating_task.processing_time
             - 1,
     );
@@ -51,23 +55,20 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
 
     loop {
         pumpkin_assert_simple!(
-                        time_point >= profiles[current_profile_index].get_start()
-                            && time_point <= profiles[current_profile_index].get_end(),
+                        time_point >= current_profile.get_start()
+                            && time_point <= current_profile.get_end(),
                         "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
-                        profiles[current_profile_index].get_start(),
-                        profiles[current_profile_index].get_end()
+                        current_profile.get_start(),
+                        current_profile.get_end()
                     );
 
         if time_point >= context.lower_bound(&propagating_task.start_variable) {
             let explanation = add_propagating_task_predicate_lower_bound(
-                create_pointwise_propagation_explanation(
-                    time_point,
-                    profiles[current_profile_index],
-                ),
+                create_pointwise_propagation_explanation(time_point, current_profile),
                 CumulativeExplanationType::Pointwise,
                 context.as_readonly(),
                 propagating_task,
-                profiles[current_profile_index],
+                current_profile,
                 Some(time_point),
             );
             pumpkin_assert_extreme!(
@@ -91,10 +92,8 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
         time_point += propagating_task.processing_time;
 
         // Then we update the index of the current profile if appropriate
-        if time_point > profiles[current_profile_index].get_end() {
-            if current_profile_index < profiles.len() - 1
-                && time_point < profiles[current_profile_index + 1].get_start()
-            {
+        if time_point > current_profile.get_end() {
+            if profiles.peek().is_some() && time_point < profiles.peek().unwrap().get_start() {
                 // The time-point has ended up between profiles, we thus set the
                 // time-point to the end of the current profile and propagate from
                 // there
@@ -102,17 +101,16 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
                 // (Note that we could have also set it to
                 // `profiles[current_profile_index + 1].start -
                 // propagating_task.processing_time`)
-                time_point = profiles[current_profile_index].get_end();
-            } else {
-                current_profile_index += 1;
+                time_point = current_profile.get_end();
+            } else if profiles.peek().is_some() {
+                current_profile = profiles.next().unwrap()
             }
         }
 
         // We have gone past the last profile, we ensure that we propagate past its end
         // point here
-        if current_profile_index >= profiles.len() {
-            current_profile_index -= 1;
-            time_point = profiles[current_profile_index].get_end();
+        if profiles.peek().is_none() {
+            time_point = current_profile.get_end();
             should_exit = true;
             continue;
         }
@@ -121,20 +119,22 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<
         // set the time-point to the end of the next profile rather than skipping it
         // entirely (this is preferable according to `Improving Scheduling by
         // Learning`).
-        if time_point > profiles[current_profile_index].get_end() {
-            time_point = profiles[current_profile_index].get_end()
+        if time_point > current_profile.get_end() {
+            time_point = current_profile.get_end()
         }
     }
     Ok(())
 }
 pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
+    'a,
     Var: IntegerVariable + 'static,
-    ResourceProfileType: ResourceProfileInterface<Var>,
+    ResourceProfileType: ResourceProfileInterface<Var> + 'a,
 >(
     context: &mut PropagationContextMut,
-    profiles: &[&ResourceProfileType],
+    profiles: impl DoubleEndedIterator<Item = &'a ResourceProfileType>,
     propagating_task: &Rc<Task<Var>>,
 ) -> Result<(), EmptyDomain> {
+    let mut profiles = profiles.rev().peekable();
     // The time points should follow the following properties (based on `Improving
     // scheduling by learning - Andreas Schutt`):
     // 1. `t_0 = ub(s) + p`
@@ -150,35 +150,34 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
     // `p` units apart
     // Property 4 ensures that every time-point falls within the
     // range of a profile.
-    let mut current_profile_index = profiles.len() - 1;
+    let mut current_profile = profiles
+        .next()
+        .expect("Expected at least 1 profile to exist");
     // We take as `t_1` the maximum of the last profile start and the
     // latest start time
-    let mut time_point = profiles[current_profile_index]
+    let mut time_point = current_profile
         .get_start()
         .max(context.upper_bound(&propagating_task.start_variable));
     let mut should_exit = false;
 
     loop {
         pumpkin_assert_simple!(
-                        time_point >= profiles[current_profile_index].get_start()
-                            && time_point <= profiles[current_profile_index].get_end(),
+                        time_point >= current_profile.get_start()
+                            && time_point <= current_profile.get_end(),
                         "The time-point ({time_point}) should have been between the start ({}) and end ({}) of the first profile!",
-                        profiles[current_profile_index].get_start(),
-                        profiles[current_profile_index].get_end()
+                        current_profile.get_start(),
+                        current_profile.get_end()
                     );
 
         if time_point - propagating_task.processing_time
             < context.upper_bound(&propagating_task.start_variable)
         {
             let explanation = add_propagating_task_predicate_upper_bound(
-                create_pointwise_propagation_explanation(
-                    time_point,
-                    profiles[current_profile_index],
-                ),
+                create_pointwise_propagation_explanation(time_point, current_profile),
                 CumulativeExplanationType::Pointwise,
                 context.as_readonly(),
                 propagating_task,
-                profiles[current_profile_index],
+                current_profile,
                 Some(time_point),
             );
             pumpkin_assert_extreme!(
@@ -201,10 +200,8 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
         time_point -= propagating_task.processing_time;
 
         // Then we update the index of the current profile if appropriate
-        if time_point < profiles[current_profile_index].get_start() {
-            if current_profile_index > 0
-                && time_point > profiles[current_profile_index - 1].get_end()
-            {
+        if time_point < current_profile.get_start() {
+            if profiles.peek().is_some() && time_point > profiles.peek().unwrap().get_end() {
                 // The time-point has ended up between profiles, we thus set the
                 // time-point to the start of the current profile and propagate from
                 // there
@@ -212,15 +209,15 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
                 // (Note that we could have also set it to
                 // `profiles[current_profile_index - 1].get_end() +
                 // propagating_task.processing_time`)
-                time_point = profiles[current_profile_index].get_start()
-            } else if current_profile_index == 0 {
+                time_point = current_profile.get_start()
+            } else if profiles.peek().is_none() {
                 // We have gone past the first profile, we ensure that we propagate past
                 // its start point here
-                time_point = profiles[current_profile_index].get_start();
+                time_point = current_profile.get_start();
                 should_exit = true;
                 continue;
             } else {
-                current_profile_index -= 1;
+                current_profile = profiles.next().unwrap();
             }
         }
 
@@ -228,8 +225,8 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<
         // set the time-point to the end of the next profile rather than skipping it
         // entirely (this is preferable according to `Improving Scheduling by
         // Learning`).
-        if time_point < profiles[current_profile_index].get_start() {
-            time_point = profiles[current_profile_index].get_start()
+        if time_point < current_profile.get_start() {
+            time_point = current_profile.get_start()
         }
     }
     Ok(())

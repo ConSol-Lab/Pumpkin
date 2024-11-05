@@ -161,6 +161,7 @@ pub(crate) fn has_overlap_with_interval(
 /// based on start time and that the profiles are maximal (i.e. the [`ResourceProfile::start`] and
 /// [`ResourceProfile::end`] cannot be increased or decreased, respectively). It returns true if
 /// both of these invariants hold and false otherwise.
+#[allow(dead_code)]
 fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable + 'static>(
     time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
 ) -> bool {
@@ -203,15 +204,10 @@ fn debug_check_whether_profiles_are_maximal_and_sorted<'a, Var: IntegerVariable 
 /// cannot be increased or decreased, respectively).
 pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
+    time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
     parameters: &CumulativeParameters<Var>,
     updatable_structures: &mut UpdatableStructures<Var>,
 ) -> PropagationStatusCP {
-    pumpkin_assert_extreme!(
-        debug_check_whether_profiles_are_maximal_and_sorted(time_table.clone()),
-        "The provided time-table did not adhere to the invariants"
-    );
-
     pumpkin_assert_extreme!(
         updatable_structures
             .get_unfixed_tasks()
@@ -245,7 +241,7 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
 /// [`CumulativeExplanationType::Pointwise`].
 fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
+    time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
     updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -314,6 +310,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 }
             }
         }
+        profile.mark_processed();
     }
     updatable_structures.restore_temporarily_removed();
     Ok(())
@@ -330,7 +327,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 /// beneficial.
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
-    time_table: impl Iterator<Item = &'a (impl ResourceProfileInterface<Var> + 'a)> + Clone,
+    time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
     updatable_structures: &UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
@@ -351,7 +348,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // Then we go over all the different profiles
         let mut profile_index = 0;
         'profile_loop: while profile_index < time_table.len() {
-            let profile = time_table[profile_index];
+            let profile = &time_table[profile_index];
 
             if profile.get_start()
                 > context.upper_bound(&task.start_variable) + task.processing_time
@@ -361,7 +358,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 break 'profile_loop;
             }
 
-            let possible_upates = find_possible_updates(context, task, profile, parameters);
+            let possible_upates = find_possible_updates(context, task, *profile, parameters);
 
             if possible_upates.is_empty() {
                 // The task cannot be propagate by the profile so we move to the next one
@@ -377,14 +374,14 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             if lower_bound_can_be_propagated_by_profile(
                 context.as_readonly(),
                 task,
-                profile,
+                *profile,
                 parameters.capacity,
             ) {
                 // We find the index (non-inclusive) of the last profile in the chain of lower-bound
                 // propagations
                 let last_index = find_index_last_profile_which_propagates_lower_bound(
                     profile_index,
-                    &time_table,
+                    time_table.iter().map(|element| &**element),
                     context.as_readonly(),
                     task,
                     parameters.capacity,
@@ -394,7 +391,9 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 // all of them
                 propagation_handler.propagate_chain_of_lower_bounds_with_explanations(
                     context,
-                    &time_table[profile_index..last_index],
+                    time_table[profile_index..last_index]
+                        .iter()
+                        .map(|element| &**element),
                     task,
                 )?;
 
@@ -406,7 +405,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             if upper_bound_can_be_propagated_by_profile(
                 context.as_readonly(),
                 task,
-                profile,
+                *profile,
                 parameters.capacity,
             ) {
                 // We find the index (inclusive) of the last profile in the chain of upper-bound
@@ -414,7 +413,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 // profile_index`)
                 let first_index = find_index_last_profile_which_propagates_upper_bound(
                     profile_index,
-                    &time_table,
+                    time_table.iter().map(|element| &**element),
                     context.as_readonly(),
                     task,
                     parameters.capacity,
@@ -423,7 +422,9 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 // all of them
                 propagation_handler.propagate_chain_of_upper_bounds_with_explanations(
                     context,
-                    &time_table[first_index..=profile_index],
+                    time_table[first_index..=profile_index]
+                        .iter()
+                        .map(|element| &**element),
                     task,
                 )?;
 
@@ -435,7 +436,7 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
             if parameters.options.allow_holes_in_domain {
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
-                propagation_handler.propagate_holes_in_domain(context, profile, task)?;
+                propagation_handler.propagate_holes_in_domain(context, *profile, task)?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index
@@ -452,37 +453,44 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
 /// Returns the index of the profile which cannot propagate the lower-bound of the provided task any
 /// further based on the propagation of the upper-bound due to `time_table[profile_index]`.
 fn find_index_last_profile_which_propagates_lower_bound<
+    'a,
     Var: IntegerVariable + 'static,
-    ResourceProfileType: ResourceProfileInterface<Var>,
+    ResourceProfileType: ResourceProfileInterface<Var> + 'a,
 >(
     profile_index: usize,
-    time_table: &[&ResourceProfileType],
+    time_table: impl Iterator<Item = &'a ResourceProfileType>,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
 ) -> usize {
-    let mut last_index = profile_index + 1;
-    while last_index < time_table.len() {
-        let next_profile = time_table[last_index];
-        if next_profile.get_start() - time_table[last_index - 1].get_end() >= task.processing_time
+    let mut time_table = time_table.enumerate().peekable().skip(profile_index);
+
+    let (mut index, mut current_profile) = time_table
+        .next()
+        .expect("Expected the number of profiles to exist to at least be equal to the next");
+    for (next_index, next_profile) in time_table {
+        if next_profile.get_start() - current_profile.get_end() >= task.processing_time
             || !can_be_updated_by_profile(context, task, next_profile, capacity)
             || !lower_bound_can_be_propagated_by_profile(context, task, next_profile, capacity)
         {
             break;
         }
-        last_index += 1;
+        index = next_index;
+        current_profile = next_profile;
     }
-    last_index
+    // Note that the index is non-inclusive
+    index + 1
 }
 
 /// Returns the index of the last profile which could propagate the upper-bound of the task based on
 /// the propagation of the upper-bound due to `time_table[profile_index]`.
 fn find_index_last_profile_which_propagates_upper_bound<
+    'a,
     Var: IntegerVariable + 'static,
-    ResourceProfileType: ResourceProfileInterface<Var>,
+    ResourceProfileType: ResourceProfileInterface<Var> + 'a,
 >(
     profile_index: usize,
-    time_table: &[&ResourceProfileType],
+    time_table: impl DoubleEndedIterator<Item = &'a ResourceProfileType> + ExactSizeIterator,
     context: PropagationContext,
     task: &Rc<Task<Var>>,
     capacity: i32,
@@ -490,25 +498,29 @@ fn find_index_last_profile_which_propagates_upper_bound<
     if profile_index == 0 {
         return 0;
     }
-    let mut first_index = profile_index - 1;
-    loop {
-        let previous_profile = time_table[first_index];
-        if time_table[first_index + 1].get_start() - previous_profile.get_end()
-            >= task.processing_time
+    let num_profiles = time_table.len();
+    let mut time_table = time_table
+        .enumerate()
+        .rev()
+        .skip(num_profiles - profile_index - 1);
+
+    let (mut index, mut current_profile) = time_table
+        .next()
+        .expect("Expected element to exists at position {profile_index}");
+    for (previous_index, previous_profile) in time_table {
+        if current_profile.get_start() - previous_profile.get_end() >= task.processing_time
             || !can_be_updated_by_profile(context, task, previous_profile, capacity)
             || !upper_bound_can_be_propagated_by_profile(context, task, previous_profile, capacity)
         {
-            first_index += 1;
+            // The index here is already correctly set
             break;
         }
 
-        if first_index == 0 {
-            break;
-        } else {
-            first_index -= 1;
-        }
+        current_profile = previous_profile;
+        index = previous_index;
     }
-    first_index
+    // Note that the index is inclusive
+    index
 }
 
 /// Determines whether the lower bound of a task can be propagated by a [`ResourceProfile`] with the

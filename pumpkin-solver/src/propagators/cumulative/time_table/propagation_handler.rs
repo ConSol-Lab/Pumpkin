@@ -47,29 +47,42 @@ impl CumulativePropagationHandler {
     /// Propagates the lower-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_lower_bounds_with_explanations<
+        'a,
         Var,
-        ResourceProfileType: ResourceProfileInterface<Var>,
+        ResourceProfileType: ResourceProfileInterface<Var> + 'a,
     >(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfileType],
+        profiles: impl ExactSizeIterator<Item = &'a ResourceProfileType>,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
     {
-        pumpkin_assert_simple!(!profiles.is_empty());
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
+                let num_profiles = profiles.len();
+                pumpkin_assert_simple!(num_profiles > 0);
+
                 let mut full_explanation = PropositionalConjunction::default();
 
-                for profile in profiles {
+                for (index, profile) in profiles.enumerate() {
+                    if index == 0 {
+                        full_explanation = add_propagating_task_predicate_lower_bound(
+                            full_explanation,
+                            self.explanation_type,
+                            context.as_readonly(),
+                            propagating_task,
+                            profile,
+                            None,
+                        );
+                    }
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(*profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(*profile)
+                            create_big_step_propagation_explanation(profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -78,22 +91,16 @@ impl CumulativePropagationHandler {
 
                     full_explanation =
                         full_explanation.extend_and_remove_duplicates(explanation.into_iter());
+
+                    if num_profiles - 1 == index {
+                        return context.set_lower_bound(
+                            &propagating_task.start_variable,
+                            profile.get_end() + 1,
+                            full_explanation,
+                        );
+                    }
                 }
-
-                let full_explanation = add_propagating_task_predicate_lower_bound(
-                    full_explanation,
-                    self.explanation_type,
-                    context.as_readonly(),
-                    propagating_task,
-                    profiles[0],
-                    None,
-                );
-
-                context.set_lower_bound(
-                    &propagating_task.start_variable,
-                    profiles[profiles.len() - 1].get_end() + 1,
-                    full_explanation,
-                )
+                unreachable!()
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -108,30 +115,44 @@ impl CumulativePropagationHandler {
     /// Propagates the upper-bound of the `propagating_task` to not conflict with all of the
     /// `profiles` anymore.
     pub(crate) fn propagate_chain_of_upper_bounds_with_explanations<
+        'a,
         Var,
-        ResourceProfileType: ResourceProfileInterface<Var>,
+        ResourceProfileType: ResourceProfileInterface<Var> + 'a,
     >(
         &mut self,
         context: &mut PropagationContextMut,
-        profiles: &[&ResourceProfileType],
+        profiles: impl DoubleEndedIterator<Item = &'a ResourceProfileType> + ExactSizeIterator,
         propagating_task: &Rc<Task<Var>>,
     ) -> Result<(), EmptyDomain>
     where
         Var: IntegerVariable + 'static,
     {
-        pumpkin_assert_simple!(!profiles.is_empty());
-
         match self.explanation_type {
             CumulativeExplanationType::Naive | CumulativeExplanationType::BigStep => {
+                let num_profiles = profiles.len();
+
+                let mut profiles = profiles.peekable();
+                pumpkin_assert_simple!(profiles.peek().is_some());
+
                 let mut full_explanation = PropositionalConjunction::default();
 
-                for profile in profiles {
+                for (index, profile) in profiles.rev().enumerate() {
+                    if index == 0 {
+                        full_explanation = add_propagating_task_predicate_upper_bound(
+                            full_explanation,
+                            self.explanation_type,
+                            context.as_readonly(),
+                            propagating_task,
+                            profile,
+                            None,
+                        );
+                    }
                     let explanation = match self.explanation_type {
                         CumulativeExplanationType::Naive => {
-                            create_naive_propagation_explanation(*profile, context.as_readonly())
+                            create_naive_propagation_explanation(profile, context.as_readonly())
                         }
                         CumulativeExplanationType::BigStep => {
-                            create_big_step_propagation_explanation(*profile)
+                            create_big_step_propagation_explanation(profile)
                         }
                         CumulativeExplanationType::Pointwise => {
                             unreachable!("At the moment, we do not store the profile explanation for the pointwise explanation since it consists of multiple explanations")
@@ -140,21 +161,15 @@ impl CumulativePropagationHandler {
 
                     full_explanation =
                         full_explanation.extend_and_remove_duplicates(explanation.into_iter());
+                    if index == num_profiles - 1 {
+                        return context.set_upper_bound(
+                            &propagating_task.start_variable,
+                            profile.get_start() - propagating_task.processing_time,
+                            full_explanation,
+                        );
+                    }
                 }
-
-                let full_explanation = add_propagating_task_predicate_upper_bound(
-                    full_explanation,
-                    self.explanation_type,
-                    context.as_readonly(),
-                    propagating_task,
-                    profiles[profiles.len() - 1],
-                    None,
-                );
-                context.set_upper_bound(
-                    &propagating_task.start_variable,
-                    profiles[0].get_start() - propagating_task.processing_time,
-                    full_explanation,
-                )
+                unreachable!()
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
@@ -211,7 +226,7 @@ impl CumulativePropagationHandler {
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
                     context,
-                    &[profile],
+                    std::iter::once(profile),
                     propagating_task,
                 )
             }
@@ -264,7 +279,7 @@ impl CumulativePropagationHandler {
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_upper_bounds_with_pointwise_explanations(
                     context,
-                    &[profile],
+                    std::iter::once(profile),
                     propagating_task,
                 )
             }
@@ -569,7 +584,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments_propositional,
                         PropagatorId(0),
                     ),
-                    &[&profile_y, &profile_z],
+                    [profile_y, profile_z].iter(),
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
@@ -661,7 +676,7 @@ pub(crate) mod test_propagation_handler {
                         &mut self.assignments_propositional,
                         PropagatorId(0),
                     ),
-                    &[&profile_z, &profile_y],
+                    [profile_z, profile_y].iter(),
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());

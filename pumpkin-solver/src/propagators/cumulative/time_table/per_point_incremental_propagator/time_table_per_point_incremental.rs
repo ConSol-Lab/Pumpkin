@@ -368,7 +368,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         // could cause another propagation by a profile which has not been updated
         propagate_based_on_timetable(
             &mut context,
-            self.time_table.values(),
+            self.time_table.values_mut(),
             &self.parameters,
             &mut self.updatable_structures,
         )
