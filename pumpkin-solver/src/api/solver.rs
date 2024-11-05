@@ -613,7 +613,7 @@ impl Solver {
         brancher: &mut impl Brancher,
         objective_value: Option<i64>,
     ) {
-        brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+        brancher.on_solution(solution.as_reference());
 
         (self.solution_callback)(SolutionCallbackArguments::new(
             self,
