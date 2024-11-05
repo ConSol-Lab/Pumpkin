@@ -1,4 +1,5 @@
 [workspace]
+pr_branch_prefix = "release/"
 
 [[package]]
 name = "pumpkin-macros"
