@@ -6,5 +6,5 @@ release = false
 
 [[package]]
 name = "pumpkin-py"
-publish = false
+release = false
 
