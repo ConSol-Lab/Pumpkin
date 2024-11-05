@@ -1,0 +1,10 @@
+[workspace]
+
+[[package]]
+name = "pumpkin_macros"
+release = false
+
+[[package]]
+name = "pumpkin-py"
+publish = false
+
