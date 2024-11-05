@@ -22,10 +22,10 @@ use crate::propagators::cumulative::time_table::per_point_incremental_propagator
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
-use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 use crate::propagators::debug_propagate_from_scratch_time_table_point;
 use crate::propagators::point_resource_profile::PointResourceProfile;
+use crate::propagators::propagate_based_on_timetable;
 use crate::propagators::updatable_resource_profile::UpdatableResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
@@ -217,7 +217,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         let mut found_conflict = false;
 
         // Then we go over all of the updated tasks
-        while let Some(updated_task) = self.updatable_structures.pop_next_updated_task() {
+        while let Some(updated_task) = self.updatable_structures.get_next_updated_task() {
             let element = self.updatable_structures.get_update_for_task(&updated_task);
 
             // We get the adjustments based on the stored updated
@@ -246,6 +246,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             self.updatable_structures
                 .reset_update_for_task(&updated_task);
         }
+        self.updatable_structures
+            .restore_temporarily_removed_updated();
 
         // After all the updates have been processed, we need to check whether there is still a
         // conflict in the time-table (if any calls have reported an overflow)

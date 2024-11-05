@@ -24,9 +24,9 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
 use crate::propagators::cumulative::time_table::time_table_util::has_overlap_with_interval;
 use crate::propagators::cumulative::time_table::time_table_util::insert_update;
-use crate::propagators::cumulative::time_table::time_table_util::propagate_based_on_timetable;
 use crate::propagators::cumulative::time_table::time_table_util::should_enqueue;
 use crate::propagators::debug_propagate_from_scratch_time_table_interval;
+use crate::propagators::propagate_based_on_timetable;
 use crate::propagators::updatable_resource_profile::UpdatableResourceProfile;
 use crate::propagators::util::check_bounds_equal_at_propagation;
 use crate::propagators::util::create_tasks;
@@ -221,7 +221,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         let mut found_conflict = false;
 
         // Then we go over all of the updated tasks
-        while let Some(updated_task) = self.updatable_structures.pop_next_updated_task() {
+        while let Some(updated_task) = self.updatable_structures.get_next_updated_task() {
             let element = self.updatable_structures.get_update_for_task(&updated_task);
 
             // We get the adjustments based on the stored updated
@@ -250,6 +250,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             self.updatable_structures
                 .reset_update_for_task(&updated_task);
         }
+        self.updatable_structures
+            .restore_temporarily_removed_updated();
 
         // After all the updates have been processed, we need to check whether there is still a
         // conflict in the time-table (if any calls have reported an overflow)
@@ -317,7 +319,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // We have not found a conflict; we need to ensure that the time-tables are the same by
             // ensuring that the profiles are maximal and the profile tasks are sorted in the same
             // order
-            synchronise_time_table(&mut self.time_table, context.as_readonly())
+            synchronise_time_table(&mut self.time_table, context.as_readonly());
         }
 
         // We check whether there are no non-conflicting profiles in the time-table if we do not

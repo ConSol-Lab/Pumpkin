@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::time_table_util::propagate_based_on_timetable;
+use super::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;

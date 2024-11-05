@@ -354,8 +354,8 @@ impl Solver {
         match self.satisfaction_solver.solve(termination, brancher) {
             CSPSolverExecutionFlag::Feasible => {
                 let solution: Solution = self.satisfaction_solver.get_solution_reference().into();
-                self.satisfaction_solver.restore_state_at_root(brancher);
                 self.process_solution(&solution, brancher);
+                self.satisfaction_solver.restore_state_at_root(brancher);
                 SatisfactionResult::Satisfiable(solution)
             }
             CSPSolverExecutionFlag::Infeasible => {
@@ -613,7 +613,7 @@ impl Solver {
         brancher: &mut impl Brancher,
         objective_value: Option<i64>,
     ) {
-        brancher.on_solution(self.satisfaction_solver.get_solution_reference());
+        brancher.on_solution(solution.as_reference());
 
         (self.solution_callback)(SolutionCallbackArguments::new(
             self,

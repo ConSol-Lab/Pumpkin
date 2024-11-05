@@ -72,6 +72,7 @@
 mod explanations;
 mod over_interval_incremental_propagator;
 mod per_point_incremental_propagator;
+mod propagation;
 mod propagation_handler;
 mod time_table_over_interval;
 mod time_table_per_point;
@@ -79,6 +80,7 @@ mod time_table_util;
 pub use explanations::CumulativeExplanationType;
 pub(crate) use over_interval_incremental_propagator::*;
 pub(crate) use per_point_incremental_propagator::*;
+pub(crate) use propagation::*;
 pub(crate) use time_table_over_interval::*;
 pub(crate) use time_table_per_point::*;
 

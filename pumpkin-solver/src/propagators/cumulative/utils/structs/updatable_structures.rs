@@ -47,13 +47,18 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     /// Returns the next updated task and removes it from the updated list
-    pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
+    pub(crate) fn get_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
         if self.updated_tasks.is_empty() {
             return None;
         }
-        let updated_task = Rc::clone(self.updated_tasks.get(0));
-        self.updated_tasks.remove(&updated_task);
+        let updated = Rc::clone(self.updated_tasks.get(0));
+        self.updated_tasks.remove_temporarily(&updated);
+        let updated_task = Rc::clone(&updated);
         Some(updated_task)
+    }
+
+    pub(crate) fn remove_task_from_updated(&mut self, to_remove: &Rc<Task<Var>>) {
+        self.updated_tasks.remove(to_remove);
     }
 
     /// Get the update info for the provided task (note that this method does not actually check
@@ -203,6 +208,10 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         self.unfixed_tasks.len()
     }
 
+    pub(crate) fn number_of_updated_tasks(&self) -> usize {
+        self.updated_tasks.len()
+    }
+
     // Returns whether there are no unfixed tasks
     pub(crate) fn has_no_unfixed_tasks(&self) -> bool {
         self.unfixed_tasks.is_empty()
@@ -218,9 +227,17 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         self.unfixed_tasks.restore_temporarily_removed()
     }
 
+    pub(crate) fn restore_temporarily_removed_updated(&mut self) {
+        self.updated_tasks.restore_temporarily_removed()
+    }
+
     // Returns the unfixed task at the specified index
     pub(crate) fn get_unfixed_task_at_index(&self, index: usize) -> Rc<Task<Var>> {
         Rc::clone(self.unfixed_tasks.get(index))
+    }
+
+    pub(crate) fn get_updated_task_at_index(&self, index: usize) -> Rc<Task<Var>> {
+        Rc::clone(self.updated_tasks.get(index))
     }
 
     // Marks a task as updated in the internal structure(s)

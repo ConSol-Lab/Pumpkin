@@ -26,7 +26,7 @@ pub(crate) fn run(
         let flatzinc::ConstraintItem { id, exprs, annos } = constraint_item;
 
         let is_satisfiable: bool = match id.as_str() {
-            "array_int_maximum" => compile_array_int_maximum(context, exprs)?,
+            "pumpkin_array_int_maximum" |"array_int_maximum" => compile_array_int_maximum(context, exprs)?,
             "array_int_minimum" => compile_array_int_minimum(context, exprs)?,
             "int_max" => {
                 compile_ternary_int_predicate(context, exprs, annos, "int_max", |a, b, c| {
