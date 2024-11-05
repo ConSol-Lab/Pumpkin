@@ -1546,11 +1546,10 @@ impl ConstraintSatisfactionSolver {
 
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = premises.iter().copied().chain(std::iter::once(!propagated));
-            let _ = self.internal_parameters.proof_log.log_inference(
-                tag,
-                inference_premises,
-                self.get_false_literal(),
-            );
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(tag, inference_premises, None);
 
             // Since inference steps are only related to the nogood they directly precede,
             // facts derived at the root are also logged as nogoods so they can be used in the
