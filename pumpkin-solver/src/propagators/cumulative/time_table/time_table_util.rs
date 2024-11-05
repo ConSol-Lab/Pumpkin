@@ -362,6 +362,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
                 continue;
             }
 
+            propagation_handler.next_profile();
+
             // Keep track of the next profile index to use after we generate the sequence of
             // profiles
             let mut new_profile_index = profile_index;
