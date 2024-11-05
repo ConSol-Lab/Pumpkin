@@ -1,0 +1,12 @@
+[workspace]
+pr_branch_prefix = "release/"
+publish = false
+
+[[package]]
+name = "pumpkin-macros"
+release = false
+
+[[package]]
+name = "pumpkin-py"
+release = false
+
