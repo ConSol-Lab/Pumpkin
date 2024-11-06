@@ -87,7 +87,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
         self.is_time_table_empty = time_table.is_empty();
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
-        propagate_based_on_timetable(
+        propagate_based_on_timetable::<Var, false>(
             &mut context,
             time_table.values_mut(),
             &self.parameters,
@@ -237,7 +237,7 @@ pub(crate) fn debug_propagate_from_scratch_time_table_point<
     let mut time_table: PerPointTimeTableType<ResourceProfileType> =
         create_time_table_per_point_from_scratch(context.as_readonly(), parameters)?;
     // Then we check whether propagation can take place
-    propagate_based_on_timetable(
+    propagate_based_on_timetable::<Var, false>(
         context,
         time_table.values_mut(),
         parameters,

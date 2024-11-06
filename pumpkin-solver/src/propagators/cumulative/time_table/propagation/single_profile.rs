@@ -18,7 +18,11 @@ use crate::variables::IntegerVariable;
 ///
 /// This type of propagation is likely to be less beneficial for the explanation
 /// [`CumulativeExplanationType::Pointwise`].
-pub(crate) fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_single_profiles<
+    'a,
+    Var: IntegerVariable + 'static,
+    const SHOULD_RESET_UPDATED: bool,
+>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
     updatable_structures: &mut UpdatableStructures<Var>,
@@ -59,7 +63,9 @@ pub(crate) fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 // receiving the notification for it (which would result in a task never becoming
                 // unfixed since no backtrack notification would occur)
                 updatable_structures.temporarily_remove_task_from_unfixed(&task);
-                updatable_structures.remove_task_from_updated(&task);
+                if SHOULD_RESET_UPDATED {
+                    updatable_structures.remove_task_from_updated(&task);
+                }
                 if updatable_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
@@ -85,12 +91,24 @@ pub(crate) fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 };
                 if result.is_err() {
                     updatable_structures.restore_temporarily_removed();
+                    // Note that we do not reset the updated here since we cannot know whether the
+                    // backtracking will undo the update; if this were not to be te case and we
+                    // were to remove the task from the updated set then it would lead to potential
+                    // missed propagations
                     result?;
                 }
             }
         }
 
         profile.mark_processed();
+    }
+
+    if SHOULD_RESET_UPDATED {
+        // If we should reset the updated then we remove all of the updated from consideration
+        while updatable_structures.number_of_updated_tasks() > 0 {
+            let updated_task = updatable_structures.get_updated_task_at_index(0);
+            updatable_structures.remove_task_from_updated(&updated_task);
+        }
     }
     updatable_structures.restore_temporarily_removed();
     Ok(())

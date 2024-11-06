@@ -27,7 +27,11 @@ use crate::variables::IntegerVariable;
 /// sorted in increasing order in terms of [`ResourceProfile::start`] and that the
 /// [`ResourceProfile`] is maximal (i.e. the [`ResourceProfile::start`] and [`ResourceProfile::end`]
 /// cannot be increased or decreased, respectively).
-pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_based_on_timetable<
+    'a,
+    Var: IntegerVariable + 'static,
+    const SHOULD_RESET_UPDATED: bool,
+>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
     parameters: &CumulativeParameters<Var>,
@@ -49,7 +53,12 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     if parameters.options.generate_sequence {
         propagate_sequence_of_profiles(context, time_table, updatable_structures, parameters)?;
     } else {
-        propagate_single_profiles(context, time_table, updatable_structures, parameters)?;
+        propagate_single_profiles::<Var, SHOULD_RESET_UPDATED>(
+            context,
+            time_table,
+            updatable_structures,
+            parameters,
+        )?;
     }
 
     Ok(())

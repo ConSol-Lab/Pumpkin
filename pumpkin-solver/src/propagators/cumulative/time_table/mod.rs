@@ -88,3 +88,14 @@ pub(crate) use time_table_per_point::*;
 use crate::propagators::cumulative::time_table::time_table_util::*;
 #[cfg(doc)]
 use crate::propagators::Task;
+
+/// A macro for negating a bool parameter
+#[macro_export]
+macro_rules! negate {
+    ( $fn:ident :: < $($other:ident),* $(,)? ! $param:ident > ( $($arg:expr),* $(,)? ) ) => {
+        match $param {
+            true => $fn::< $($other),*, false>( $($arg),* ),
+            false => $fn::< $($other),*, true>( $($arg),* ),
+        }
+    }
+}

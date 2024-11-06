@@ -14,6 +14,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
+use crate::negate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
@@ -358,12 +359,12 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         // current profile could lead to the propagation across multiple profiles
         // For example, if we have updated 1 resource profile which caused a propagation then this
         // could cause another propagation by a profile which has not been updated
-        propagate_based_on_timetable(
+        negate!(propagate_based_on_timetable::<Var, !SYNCHRONISE>(
             &mut context,
             self.time_table.iter_mut(),
             &self.parameters,
             &mut self.updatable_structures,
-        )
+        ))
     }
 
     fn notify(
