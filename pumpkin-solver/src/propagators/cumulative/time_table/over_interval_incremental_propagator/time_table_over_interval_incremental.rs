@@ -271,6 +271,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                         ),
                         "The conflict explanation was not the same as the conflict explanation from scratch!"
                     );
+                    self.found_previous_conflict = true;
                     return synchronised_conflict_explanation;
                 }
                 // Otherwise we mark that we have not found the previous conflict and continue
