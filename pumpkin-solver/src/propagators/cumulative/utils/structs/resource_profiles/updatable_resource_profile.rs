@@ -15,7 +15,7 @@ pub(crate) struct UpdatableResourceProfile<Var, Profile: ResourceProfileInterfac
 impl<Var: IntegerVariable + 'static, Profile: ResourceProfileInterface<Var>>
     ResourceProfileInterface<Var> for UpdatableResourceProfile<Var, Profile>
 {
-    fn mark_udpated(&mut self) {
+    fn mark_updated(&mut self) {
         self.updated = true;
     }
 

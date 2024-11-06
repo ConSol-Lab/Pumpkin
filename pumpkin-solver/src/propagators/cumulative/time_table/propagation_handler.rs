@@ -15,6 +15,7 @@ use super::explanations::pointwise::create_pointwise_conflict_explanation;
 use super::explanations::pointwise::create_pointwise_propagation_explanation;
 use super::CumulativeExplanationType;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
+use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::EmptyDomain;
@@ -23,6 +24,7 @@ use crate::propagators::cumulative::time_table::explanations::pointwise;
 use crate::propagators::ResourceProfileInterface;
 use crate::propagators::Task;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
 
@@ -34,6 +36,16 @@ pub(crate) struct CumulativePropagationHandler {
     /// explanation and re-use it. Note that this will only be used for
     /// [`CumulativeExplanationType::Naive`] and [`CumulativeExplanationType::BigStep`].
     stored_profile_explanation: OnceCell<Rc<PropositionalConjunction>>,
+}
+
+fn check_explanation(explanation: &PropositionalConjunction, context: PropagationContext) -> bool {
+    explanation.iter().all(|&predicate| {
+        let integer_predicate = predicate.try_into().unwrap();
+
+        context
+            .assignments_integer()
+            .does_integer_predicate_hold(integer_predicate)
+    })
 }
 
 impl CumulativePropagationHandler {
@@ -93,6 +105,10 @@ impl CumulativePropagationHandler {
                         full_explanation.extend_and_remove_duplicates(explanation.into_iter());
 
                     if num_profiles - 1 == index {
+                        pumpkin_assert_extreme!(check_explanation(
+                            &full_explanation,
+                            context.as_readonly()
+                        ));
                         return context.set_lower_bound(
                             &propagating_task.start_variable,
                             profile.get_end() + 1,
@@ -162,6 +178,10 @@ impl CumulativePropagationHandler {
                     full_explanation =
                         full_explanation.extend_and_remove_duplicates(explanation.into_iter());
                     if index == num_profiles - 1 {
+                        pumpkin_assert_extreme!(check_explanation(
+                            &full_explanation,
+                            context.as_readonly()
+                        ));
                         return context.set_upper_bound(
                             &propagating_task.start_variable,
                             profile.get_start() - propagating_task.processing_time,
@@ -213,6 +233,7 @@ impl CumulativePropagationHandler {
                         profile,
                         None,
                     );
+                pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
                 context.set_lower_bound(
                     &propagating_task.start_variable,
                     profile.get_end() + 1,
@@ -266,6 +287,7 @@ impl CumulativePropagationHandler {
                         profile,
                         None,
                     );
+                pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
                 context.set_upper_bound(
                     &propagating_task.start_variable,
                     profile.get_start() - propagating_task.processing_time,
@@ -336,6 +358,7 @@ impl CumulativePropagationHandler {
                     // that `get_stored_profile_explanation_or_init` uses the
                     // explanation type to create the explanations.
                     let explanation = self.get_stored_profile_explanation_or_init(context, profile);
+                    pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
                     context.remove(
                         &propagating_task.start_variable,
                         time_point,
@@ -368,6 +391,7 @@ impl CumulativePropagationHandler {
                         corresponding_profile_explanation_point,
                         profile,
                     );
+                    pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
                     context.remove(&propagating_task.start_variable, time_point, explanation)?;
                 }
             }

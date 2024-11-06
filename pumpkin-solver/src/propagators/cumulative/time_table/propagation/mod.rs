@@ -132,9 +132,27 @@ fn can_be_updated_by_profile<
     profile: &ResourceProfileType,
     capacity: i32,
 ) -> bool {
+    overflows_capacity_and_is_not_part_of_profile(context, task, profile, capacity)
+        && task_has_overlap_with_interval(context, task, profile.get_start(), profile.get_end())
+}
+
+/// Returns whether the provided `task` passes the following checks:
+/// 1. Whether the task and the profile together would overflow the resource capacity
+/// 2. Whether the task has a mandatory part in the profile
+///
+/// If the first condition is true, and the second false then this method returns
+/// true (otherwise it returns false)
+fn overflows_capacity_and_is_not_part_of_profile<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    context: PropagationContext,
+    task: &Rc<Task<Var>>,
+    profile: &ResourceProfileType,
+    capacity: i32,
+) -> bool {
     profile.get_height() + task.resource_usage > capacity
         && !has_mandatory_part_in_interval(context, task, profile.get_start(), profile.get_end())
-        && task_has_overlap_with_interval(context, task, profile.get_start(), profile.get_end())
 }
 
 /// An enum which represents which values can be updated by a profile

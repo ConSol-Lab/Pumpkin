@@ -78,7 +78,7 @@ pub(crate) fn propagate_single_profiles<
             // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
             // update or a hole in the domain)
             let possible_updates = find_possible_updates(context, &task, profile, parameters);
-            for possible_update in possible_updates {
+            for possible_update in possible_updates.iter() {
                 // For every possible update we let the propagation handler propagate
                 let result = match possible_update {
                     CanUpdate::LowerBound => propagation_handler
@@ -97,6 +97,9 @@ pub(crate) fn propagate_single_profiles<
                     // missed propagations
                     result?;
                 }
+            }
+            if !possible_updates.is_empty() {
+                updatable_structures.task_has_been_updated(task);
             }
         }
 

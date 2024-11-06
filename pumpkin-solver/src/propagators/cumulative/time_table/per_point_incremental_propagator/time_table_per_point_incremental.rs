@@ -138,6 +138,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
 
             current_profile.add_to_height(task.resource_usage);
             current_profile.add_profile_task(Rc::clone(task));
+            current_profile.mark_updated();
 
             if current_profile.get_height() > self.parameters.capacity && conflict.is_none() {
                 // The newly introduced mandatory part(s) caused an overflow of the resource

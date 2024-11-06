@@ -1,9 +1,9 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-use super::can_be_updated_by_profile;
 use super::find_possible_updates;
 use super::lower_bound_can_be_propagated_by_profile;
+use super::overflows_capacity_and_is_not_part_of_profile;
 use super::upper_bound_can_be_propagated_by_profile;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::propagation_context::ReadDomains;
@@ -115,6 +115,10 @@ pub(crate) fn propagate_sequence_of_profiles<
                     &task,
                 )?;
 
+                // The bounds of the tasks have now been updated and this should be accounted for
+                // when propagating further
+                updatable_structures.task_has_been_updated(Rc::clone(&task));
+
                 // Then we set the new profile index to the last index, note that this index (since
                 // it is non-inclusive) will always be larger than the current profile index
                 new_profile_index = last_index;
@@ -145,6 +149,10 @@ pub(crate) fn propagate_sequence_of_profiles<
                         .map(|element| &**element),
                     &task,
                 )?;
+
+                // The bounds of the tasks have now been updated and this should be accounted for
+                // when propagating further
+                updatable_structures.task_has_been_updated(Rc::clone(&task));
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index
@@ -198,8 +206,7 @@ fn find_index_last_profile_which_propagates_lower_bound<
         .expect("Expected the number of profiles to exist to at least be equal to the next");
     for (next_index, next_profile) in time_table {
         if next_profile.get_start() - current_profile.get_end() >= task.processing_time
-            || !can_be_updated_by_profile(context, task, next_profile, capacity)
-            || !lower_bound_can_be_propagated_by_profile(context, task, next_profile, capacity)
+            || !overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity)
         {
             break;
         }
@@ -237,8 +244,12 @@ fn find_index_last_profile_which_propagates_upper_bound<
         .expect("Expected element to exists at position {profile_index}");
     for (previous_index, previous_profile) in time_table {
         if current_profile.get_start() - previous_profile.get_end() >= task.processing_time
-            || !can_be_updated_by_profile(context, task, previous_profile, capacity)
-            || !upper_bound_can_be_propagated_by_profile(context, task, previous_profile, capacity)
+            || !overflows_capacity_and_is_not_part_of_profile(
+                context,
+                task,
+                previous_profile,
+                capacity,
+            )
         {
             // The index here is already correctly set
             break;
@@ -249,4 +260,116 @@ fn find_index_last_profile_which_propagates_upper_bound<
     }
     // Note that the index is inclusive
     index
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::find_index_last_profile_which_propagates_lower_bound;
+    use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContext;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
+    use crate::propagators::cumulative::time_table::propagation::sequence::find_index_last_profile_which_propagates_upper_bound;
+    use crate::propagators::ResourceProfile;
+    use crate::propagators::Task;
+
+    #[test]
+    fn test_finding_last_index_lower_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let assignments_propositional = AssignmentsPropositional::default();
+
+        let x = assignments_integer.grow(0, 10);
+        let y = assignments_integer.grow(5, 5);
+        let z = assignments_integer.grow(8, 8);
+
+        let time_table = [
+            ResourceProfile::new(
+                5,
+                6,
+                vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                1,
+            ),
+            ResourceProfile::new(
+                8,
+                8,
+                vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                1,
+            ),
+        ];
+
+        let last_index = find_index_last_profile_which_propagates_lower_bound(
+            0,
+            time_table.iter(),
+            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            &Rc::new(Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            }),
+            1,
+        );
+        assert_eq!(last_index, 2);
+    }
+
+    #[test]
+    fn test_finding_last_index_upper_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let assignments_propositional = AssignmentsPropositional::default();
+
+        let x = assignments_integer.grow(7, 7);
+        let y = assignments_integer.grow(5, 5);
+        let z = assignments_integer.grow(8, 8);
+
+        let time_table = [
+            ResourceProfile::new(
+                5,
+                6,
+                vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                1,
+            ),
+            ResourceProfile::new(
+                8,
+                8,
+                vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                1,
+            ),
+        ];
+
+        let last_index = find_index_last_profile_which_propagates_upper_bound(
+            1,
+            time_table.iter(),
+            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            &Rc::new(Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            }),
+            1,
+        );
+        assert_eq!(last_index, 0);
+    }
 }

@@ -107,7 +107,7 @@ pub(crate) fn synchronise_time_table<
 
     // And then we sort each profile according to upper-bound and then ID
     time_table.iter_mut().for_each(|profile| {
-        profile.mark_udpated();
+        profile.mark_updated();
         sort_profile_based_on_upper_bound_and_id(profile, context)
     })
 }

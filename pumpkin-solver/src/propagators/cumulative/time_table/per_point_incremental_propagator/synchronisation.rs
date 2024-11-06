@@ -159,7 +159,7 @@ pub(crate) fn synchronise_time_table<'a, Var: IntegerVariable + 'static>(
     time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
 ) {
     time_table.for_each(|profile| {
-        profile.mark_udpated();
+        profile.mark_updated();
         sort_profile_based_on_id(profile)
     });
 }

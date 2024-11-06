@@ -9,6 +9,7 @@ use super::predicates::integer_predicate::IntegerPredicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagationContext;
 use super::reason::ReasonStore;
+use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -233,9 +234,6 @@ impl DebugHelper {
             );
         }
 
-        // Note that it could be the case that the reason contains the trivially false predicate in
-        // case of lifting!
-        //
         // Also note that the reason could contain the integer variable whose domain is propagated
         // itself
 
@@ -277,20 +275,55 @@ impl DebugHelper {
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
                 if let Err(conflict) = debug_propagation_status_cp {
+                    // If we have found an error then it should either be derived by an empty
+                    // domain due to the same propagation holding
+                    //
+                    // or
+                    //
+                    // The conflict explanation should be a subset of the reason literals for the
+                    // propagation
                     assert!(
-                        matches!(conflict, Inconsistency::EmptyDomain),
+                        (matches!(conflict, Inconsistency::EmptyDomain)
+                            && (propagated_predicate.is_integer_predicate()
+                                && assignments_integer_clone.does_integer_predicate_hold(
+                                    propagated_predicate.try_into().unwrap()
+                                ))
+                            || (!propagated_predicate.is_integer_predicate()
+                                && assignments_propositional_clone.is_literal_assigned_true(
+                                    propagated_predicate
+                                        .get_literal_of_bool_predicate(
+                                            assignments_propositional_clone.true_literal
+                                        )
+                                        .unwrap()
+                                )))
+                            || {
+                                if let Inconsistency::Other(ConflictInfo::Explanation(
+                                    found_inconsistency,
+                                )) = conflict
+                                {
+                                    let test = found_inconsistency
+                                        .iter()
+                                        .all(|&predicate| reason.contains(predicate));
+                                    if !test {
+                                        eprintln!("Conflict: {found_inconsistency:?}");
+                                    }
+
+                                    test
+                                } else {
+                                    false
+                                }
+                            },
                         "Debug propagation detected a conflict other than a propagation\n
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
                          Reported reason: {reason}\n
-                         Reported propagation: {propagated_predicate}",
+                         Reported propagation: {propagated_predicate}\n",
                         propagator.name()
                     );
-                }
-
-                // The predicate was either a propagation for the assignments_integer or
-                // assignments_propositional
-                assert!(
+                } else {
+                    // The predicate was either a propagation for the assignments_integer or
+                    // assignments_propositional
+                    assert!(
                     (propagated_predicate.is_integer_predicate() && assignments_integer_clone.does_integer_predicate_hold(propagated_predicate.try_into().unwrap()))
                     || (!propagated_predicate.is_integer_predicate() && assignments_propositional_clone.is_literal_assigned_true(propagated_predicate.get_literal_of_bool_predicate(assignments_propositional_clone.true_literal).unwrap())),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
@@ -300,6 +333,7 @@ impl DebugHelper {
                      Reported propagation: {propagated_predicate}",
                     propagator.name()
                 );
+                }
             } else {
                 // Adding the predicates of the reason to the assignments led to failure
                 panic!(
@@ -366,7 +400,7 @@ impl DebugHelper {
                     // We break if an error was found or if there were no more propagations (i.e.
                     // fixpoint was reached)
                     if debug_propagation_status_cp.is_err()
-                        || num_predicates_before != assignments_integer_clone.num_trail_entries()
+                        || num_predicates_before == assignments_integer_clone.num_trail_entries()
                     {
                         assert!(
                             debug_propagation_status_cp.is_err(),
