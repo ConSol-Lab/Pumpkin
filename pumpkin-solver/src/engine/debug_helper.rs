@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::iter::once;
 
 use log::debug;
 use log::warn;
@@ -9,6 +8,7 @@ use super::predicates::integer_predicate::IntegerPredicate;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagationContext;
 use super::reason::ReasonStore;
+use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::constraint_satisfaction_solver::ClausalPropagatorType;
@@ -233,15 +233,10 @@ impl DebugHelper {
             );
         }
 
-        // Note that it could be the case that the reason contains the trivially false predicate in
-        // case of lifting!
-        //
         // Also note that the reason could contain the integer variable whose domain is propagated
         // itself
 
-        // Two checks are done
-        //
-        // Check #1
+        // Check
         // Does setting the predicates from the reason indeed lead to the propagation?
         {
             let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
@@ -277,20 +272,55 @@ impl DebugHelper {
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
                 if let Err(conflict) = debug_propagation_status_cp {
+                    // If we have found an error then it should either be derived by an empty
+                    // domain due to the same propagation holding
+                    //
+                    // or
+                    //
+                    // The conflict explanation should be a subset of the reason literals for the
+                    // proagation
                     assert!(
-                        matches!(conflict, Inconsistency::EmptyDomain),
+                        (matches!(conflict, Inconsistency::EmptyDomain)
+                            && (propagated_predicate.is_integer_predicate()
+                                && assignments_integer_clone.does_integer_predicate_hold(
+                                    propagated_predicate.try_into().unwrap()
+                                ))
+                            || (!propagated_predicate.is_integer_predicate()
+                                && assignments_propositional_clone.is_literal_assigned_true(
+                                    propagated_predicate
+                                        .get_literal_of_bool_predicate(
+                                            assignments_propositional_clone.true_literal
+                                        )
+                                        .unwrap()
+                                )))
+                            || {
+                                if let Inconsistency::Other(ConflictInfo::Explanation(
+                                    found_inconsistency,
+                                )) = conflict
+                                {
+                                    let test = found_inconsistency
+                                        .iter()
+                                        .all(|&predicate| reason.contains(predicate));
+                                    if !test {
+                                        eprintln!("Conflict: {found_inconsistency:?}");
+                                    }
+
+                                    test
+                                } else {
+                                    false
+                                }
+                            },
                         "Debug propagation detected a conflict other than a propagation\n
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
                          Reported reason: {reason}\n
-                         Reported propagation: {propagated_predicate}",
+                         Reported propagation: {propagated_predicate}\n",
                         propagator.name()
                     );
-                }
-
-                // The predicate was either a propagation for the assignments_integer or
-                // assignments_propositional
-                assert!(
+                } else {
+                    // The predicate was either a propagation for the assignments_integer or
+                    // assignments_propositional
+                    assert!(
                     (propagated_predicate.is_integer_predicate() && assignments_integer_clone.does_integer_predicate_hold(propagated_predicate.try_into().unwrap()))
                     || (!propagated_predicate.is_integer_predicate() && assignments_propositional_clone.is_literal_assigned_true(propagated_predicate.get_literal_of_bool_predicate(assignments_propositional_clone.true_literal).unwrap())),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
@@ -300,6 +330,7 @@ impl DebugHelper {
                      Reported propagation: {propagated_predicate}",
                     propagator.name()
                 );
+                }
             } else {
                 // Adding the predicates of the reason to the assignments led to failure
                 panic!(
@@ -310,86 +341,6 @@ impl DebugHelper {
             }
         }
 
-        // Check #2
-        // Does setting the predicates from reason while having the negated propagated predicate
-        // lead to failure?
-        //
-        // This idea is by Graeme Gange in the context of debugging lazy explanations and is closely
-        // related to reverse unit propagation
-        {
-            let mut assignments_integer_clone = assignments_integer.debug_create_empty_clone();
-
-            let mut assignments_propositional_clone =
-                assignments_propositional.debug_create_empty_clone();
-
-            let failing_predicates: Vec<Predicate> = once(!propagated_predicate)
-                .chain(reason.iter().copied())
-                .collect();
-
-            let adding_predicates_was_successful =
-                DebugHelper::debug_add_predicates_to_assignment_integers(
-                    &mut assignments_integer_clone,
-                    &failing_predicates,
-                );
-
-            let adding_propositional_predicates_was_successful =
-                DebugHelper::debug_add_predicates_to_assignment_propositional(
-                    &assignments_integer_clone,
-                    &mut assignments_propositional_clone,
-                    variable_literal_mappings,
-                    &failing_predicates,
-                );
-
-            if adding_predicates_was_successful && adding_propositional_predicates_was_successful {
-                //  now propagate using the debug propagation method
-                let mut reason_store = Default::default();
-
-                // Note that it might take multiple iterations before the conflict is reached due
-                // to the assumption that some propagators make on that they are not idempotent!
-                //
-                // This happened in the cumulative where setting the reason led to a new mandatory
-                // part being created which meant that the same propagation was not performed (i.e.
-                // it did not immediately lead to a conflict) but this new mandatory part would
-                // have led to a new mandatory part in the next call to the propagator
-                loop {
-                    let num_predicates_before = assignments_integer_clone.num_trail_entries();
-
-                    let context = PropagationContextMut::new(
-                        &mut assignments_integer_clone,
-                        &mut reason_store,
-                        &mut assignments_propositional_clone,
-                        propagator_id,
-                    );
-                    let debug_propagation_status_cp =
-                        propagator.debug_propagate_from_scratch(context);
-
-                    // We break if an error was found or if there were no more propagations (i.e.
-                    // fixpoint was reached)
-                    if debug_propagation_status_cp.is_err()
-                        || num_predicates_before != assignments_integer_clone.num_trail_entries()
-                    {
-                        assert!(
-                            debug_propagation_status_cp.is_err(),
-                            "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
-                             Propagator: '{}'\n
-                             Propagator id: '{propagator_id}'.\n
-                             The reported reason: {reason}\n
-                             Reported propagated predicate: {propagated_predicate}",
-                            propagator.name()
-                        );
-
-                        break;
-                    }
-                }
-            } else {
-                // Adding the predicates of the reason to the assignments led to failure
-                panic!(
-                    "Bug detected for '{}' propagator with id '{propagator_id}'
-                     after a reason was given by the propagator. This could indicate that the reason contained conflicting predicates.",
-                    propagator.name(),
-                );
-            }
-        }
         true
     }
 

@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -6,7 +7,6 @@ use crate::variables::IntegerVariable;
 
 /// Structure which stores the variables related to a task; for now, only the start times are
 /// assumed to be variable
-#[derive(Debug)]
 pub(crate) struct Task<Var> {
     /// The variable representing the start time of a task
     pub(crate) start_variable: Var,
@@ -16,6 +16,16 @@ pub(crate) struct Task<Var> {
     pub(crate) resource_usage: i32,
     /// The [`LocalId`] of the task
     pub(crate) id: LocalId,
+}
+
+impl<Var> Debug for Task<Var> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Task")
+            .field("processing_time", &self.processing_time)
+            .field("resource_usage", &self.resource_usage)
+            .field("local_id", &self.id)
+            .finish()
+    }
 }
 
 impl<Var: IntegerVariable + 'static> Task<Var> {

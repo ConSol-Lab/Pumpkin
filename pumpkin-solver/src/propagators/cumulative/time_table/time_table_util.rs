@@ -459,8 +459,7 @@ fn find_index_last_profile_which_propagates_lower_bound<Var: IntegerVariable + '
     while last_index < time_table.len() {
         let next_profile = time_table[last_index];
         if next_profile.start - time_table[last_index - 1].end >= task.processing_time
-            || !can_be_updated_by_profile(context, task, next_profile, capacity)
-            || !lower_bound_can_be_propagated_by_profile(context, task, next_profile, capacity)
+            || !overflows_capacity_and_is_not_part_of_profile(context, task, next_profile, capacity)
         {
             break;
         }
@@ -485,8 +484,12 @@ fn find_index_last_profile_which_propagates_upper_bound<Var: IntegerVariable + '
     loop {
         let previous_profile = time_table[first_index];
         if time_table[first_index + 1].start - previous_profile.end >= task.processing_time
-            || !can_be_updated_by_profile(context, task, previous_profile, capacity)
-            || !upper_bound_can_be_propagated_by_profile(context, task, previous_profile, capacity)
+            || !overflows_capacity_and_is_not_part_of_profile(
+                context,
+                task,
+                previous_profile,
+                capacity,
+            )
         {
             first_index += 1;
             break;
@@ -555,9 +558,24 @@ fn can_be_updated_by_profile<Var: IntegerVariable + 'static>(
     profile: &ResourceProfile<Var>,
     capacity: i32,
 ) -> bool {
+    overflows_capacity_and_is_not_part_of_profile(context, task, profile, capacity)
+        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
+}
+
+/// Returns whether the provided `task` passes the following checks:
+/// 1. Whether the task and the profile together would overflow the resource capacity
+/// 2. Whether the task has a mandatory part in the profile
+///
+/// If the first condition is true, and the second false then this method returns
+/// true (otherwise it returns false)
+fn overflows_capacity_and_is_not_part_of_profile<Var: IntegerVariable + 'static>(
+    context: PropagationContext,
+    task: &Rc<Task<Var>>,
+    profile: &ResourceProfile<Var>,
+    capacity: i32,
+) -> bool {
     profile.height + task.resource_usage > capacity
         && !has_mandatory_part_in_interval(context, task, profile.start, profile.end)
-        && task_has_overlap_with_interval(context, task, profile.start, profile.end)
 }
 
 /// An enum which represents which values can be updated by a profile
@@ -663,4 +681,116 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
             new_upper_bound: context.upper_bound(&updated_task.start_variable),
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::rc::Rc;
+
+    use super::find_index_last_profile_which_propagates_lower_bound;
+    use crate::engine::propagation::LocalId;
+    use crate::engine::propagation::PropagationContext;
+    use crate::engine::AssignmentsInteger;
+    use crate::engine::AssignmentsPropositional;
+    use crate::propagators::cumulative::time_table::time_table_util::find_index_last_profile_which_propagates_upper_bound;
+    use crate::propagators::ResourceProfile;
+    use crate::propagators::Task;
+
+    #[test]
+    fn test_finding_last_index_lower_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let assignments_propositional = AssignmentsPropositional::default();
+
+        let x = assignments_integer.grow(0, 10);
+        let y = assignments_integer.grow(5, 5);
+        let z = assignments_integer.grow(8, 8);
+
+        let time_table = [
+            &ResourceProfile {
+                start: 5,
+                end: 6,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                height: 1,
+            },
+            &ResourceProfile {
+                start: 8,
+                end: 8,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                height: 1,
+            },
+        ];
+
+        let last_index = find_index_last_profile_which_propagates_lower_bound(
+            0,
+            &time_table,
+            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            &Rc::new(Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            }),
+            1,
+        );
+        assert_eq!(last_index, 2);
+    }
+
+    #[test]
+    fn test_finding_last_index_upper_bound() {
+        let mut assignments_integer = AssignmentsInteger::default();
+        let assignments_propositional = AssignmentsPropositional::default();
+
+        let x = assignments_integer.grow(7, 7);
+        let y = assignments_integer.grow(5, 5);
+        let z = assignments_integer.grow(8, 8);
+
+        let time_table = [
+            &ResourceProfile {
+                start: 5,
+                end: 6,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: y,
+                    processing_time: 2,
+                    resource_usage: 1,
+                    id: LocalId::from(1),
+                })],
+                height: 1,
+            },
+            &ResourceProfile {
+                start: 8,
+                end: 8,
+                profile_tasks: vec![Rc::new(Task {
+                    start_variable: z,
+                    processing_time: 1,
+                    resource_usage: 1,
+                    id: LocalId::from(2),
+                })],
+                height: 1,
+            },
+        ];
+
+        let last_index = find_index_last_profile_which_propagates_upper_bound(
+            1,
+            &time_table,
+            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            &Rc::new(Task {
+                start_variable: x,
+                processing_time: 6,
+                resource_usage: 1,
+                id: LocalId::from(0),
+            }),
+            1,
+        );
+        assert_eq!(last_index, 0);
+    }
 }
