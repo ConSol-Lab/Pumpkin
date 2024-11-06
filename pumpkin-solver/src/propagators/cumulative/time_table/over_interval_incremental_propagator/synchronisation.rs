@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::debug::are_mergeable;
 use super::debug::merge_profiles;
 use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
@@ -13,7 +14,48 @@ use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
 use crate::propagators::ResourceProfileInterface;
+#[cfg(doc)]
+use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::variables::IntegerVariable;
+
+/// Finds the conflicting profile which would have been found by the
+/// [`TimeTableOverIntervalPropagator`]; this is the first conflicting profile in terms of start
+/// time, however, the returned profile should be merged with adjacent profiles to create the
+/// returned conflict profile.
+pub(crate) fn find_synchronised_conflict<
+    Var: IntegerVariable + 'static,
+    ResourceProfileType: ResourceProfileInterface<Var>,
+>(
+    time_table: &mut OverIntervalTimeTableType<ResourceProfileType>,
+    parameters: &CumulativeParameters<Var>,
+) -> Option<ResourceProfileType> {
+    if time_table.is_empty() {
+        return None;
+    }
+
+    let first_conflict_profile_index = time_table
+        .iter()
+        .position(|profile| profile.get_height() > parameters.capacity);
+    if let Some(first_conflict_profile_index) = first_conflict_profile_index {
+        let mut last_index = first_conflict_profile_index;
+        while last_index < time_table.len() - 1 {
+            if are_mergeable(&time_table[last_index], &time_table[last_index + 1]) {
+                last_index += 1;
+            } else {
+                break;
+            }
+        }
+        let first_profile = &time_table[first_conflict_profile_index];
+        return Some(ResourceProfileType::create_profile(
+            first_profile.get_start(),
+            time_table[last_index].get_end(),
+            first_profile.get_profile_tasks().clone(),
+            first_profile.get_height(),
+            true,
+        ));
+    }
+    None
+}
 
 /// Returns whether the synchronised conflict explanation created by
 /// [`TimeTableOverIntervalIncrementalPropgator`] is the same as that created by

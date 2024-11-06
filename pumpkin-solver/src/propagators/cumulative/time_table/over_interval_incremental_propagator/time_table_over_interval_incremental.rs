@@ -20,6 +20,7 @@ use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
+use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::find_synchronised_conflict;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::synchronise_time_table;
 use crate::propagators::cumulative::time_table::propagation_handler::create_conflict_explanation;
 use crate::propagators::cumulative::time_table::time_table_util::backtrack_update;
@@ -255,40 +256,18 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         // After all the updates have been processed, we need to check whether there is still a
         // conflict in the time-table (if any calls have reported an overflow)
         if found_conflict || self.found_previous_conflict {
-            // We linearly scan the profiles and find the first one which exceeds the capacity
-            let conflicting_profile = self
-                .time_table
-                .iter_mut()
-                .find(|profile| profile.get_height() > self.parameters.capacity);
-
-            // If we have found such a conflict then we return it
-            if let Some(conflicting_profile) = conflicting_profile {
-                pumpkin_assert_extreme!(
-                    create_time_table_over_interval_from_scratch::<
-                        Var,
-                        PropagationContext,
-                        ResourceProfile<Var>,
-                    >(context.as_readonly(), &self.parameters)
-                    .is_err(),
-                    "Time-table from scratch could not find conflict"
-                );
-                // We have found the previous conflict
-                self.found_previous_conflict = true;
-
-                if SYNCHRONISE {
-                    // If we are synchronising then we need to find the conflict which would have
-                    // been found by the non-incremental propagator
-                    //
-                    // Luckily, the non-incremental propagator would have found the earliest
-                    // time-point at which a conflict would have occured which is exactly what is
-                    // stored in `conflict_profile`
-                    //
-                    // Now we just need to find the same explanation as would have been found by
-                    // the non-incremental propagator
+            if SYNCHRONISE {
+                // If we are synchronising then we need to search for the conflict which would have
+                // been found by the non-incremental propagator
+                let conflicting_profile =
+                    find_synchronised_conflict(&mut self.time_table, &self.parameters);
+                // Now we need to find the same explanation as would have been found by
+                // the non-incremental propagator
+                if let Some(mut conflicting_profile) = conflicting_profile {
                     let synchronised_conflict_explanation =
                         create_synchronised_conflict_explanation(
                             context.as_readonly(),
-                            conflicting_profile,
+                            &mut conflicting_profile,
                             &self.parameters,
                         );
                     pumpkin_assert_extreme!(
@@ -301,17 +280,39 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                     );
                     return synchronised_conflict_explanation;
                 }
+                // Otherwise we mark that we have not found the previous conflict and continue
+                self.found_previous_conflict = false;
+            } else {
+                // We linearly scan the profiles and find the first one which exceeds the capacity
+                let conflicting_profile = self
+                    .time_table
+                    .iter_mut()
+                    .find(|profile| profile.get_height() > self.parameters.capacity);
 
-                return Err(create_conflict_explanation(
-                    context.as_readonly(),
-                    conflicting_profile,
-                    self.parameters.options.explanation_type,
-                )
-                .into());
+                // If we have found such a conflict then we return it
+                if let Some(conflicting_profile) = conflicting_profile {
+                    pumpkin_assert_extreme!(
+                        create_time_table_over_interval_from_scratch::<
+                            Var,
+                            PropagationContext,
+                            UpdatableResourceProfile<Var, ResourceProfile<Var>>,
+                        >(context.as_readonly(), &self.parameters)
+                        .is_err(),
+                        "Time-table from scratch could not find conflict"
+                    );
+                    // We have found the previous conflict
+                    self.found_previous_conflict = true;
+
+                    return Err(create_conflict_explanation(
+                        context.as_readonly(),
+                        conflicting_profile,
+                        self.parameters.options.explanation_type,
+                    )
+                    .into());
+                }
+                // Otherwise we mark that we have not found the previous conflict and continue
+                self.found_previous_conflict = false;
             }
-
-            // Otherwise we mark that we have not found the previous conflict and continue
-            self.found_previous_conflict = false;
         }
 
         if SYNCHRONISE {

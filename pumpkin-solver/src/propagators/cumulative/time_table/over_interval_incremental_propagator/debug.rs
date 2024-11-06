@@ -191,7 +191,7 @@ pub(crate) fn merge_profiles<
 /// time-table created from scratch.
 ///
 /// It is assumed that the profile tasks of both profiles do not contain duplicates
-fn are_mergeable<
+pub(crate) fn are_mergeable<
     Var: IntegerVariable + 'static,
     ResourceProfileType: ResourceProfileInterface<Var>,
 >(
