@@ -281,4 +281,8 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     pub(crate) fn task_has_been_updated(&mut self, updated_task: Rc<Task<Var>>) {
         self.updated_tasks.insert(updated_task)
     }
+
+    pub(crate) fn has_task_been_updated(&self, task: &Rc<Task<Var>>) -> bool {
+        self.updated_tasks.contains(task)
+    }
 }

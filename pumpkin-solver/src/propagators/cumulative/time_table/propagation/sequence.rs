@@ -25,10 +25,14 @@ use crate::variables::IntegerVariable;
 ///
 /// Especially in the case of [`CumulativeExplanationType::Pointwise`] this is likely to be
 /// beneficial.
-pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
+pub(crate) fn propagate_sequence_of_profiles<
+    'a,
+    Var: IntegerVariable + 'static,
+    const SHOULD_RESET_UPDATED: bool,
+>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
-    updatable_structures: &UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -36,14 +40,19 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
         CumulativePropagationHandler::new(parameters.options.explanation_type);
 
     // We collect the time-table since we will need to index into it
-    let time_table = time_table.collect::<Vec<_>>();
+    let mut time_table = time_table.collect::<Vec<_>>();
 
     // Then we go over all the possible tasks
-    for task in updatable_structures.get_unfixed_tasks() {
+    let mut task_index = 0;
+    while task_index < updatable_structures.number_of_unfixed_tasks() {
+        let task = updatable_structures.get_unfixed_task_at_index(task_index);
         if context.is_fixed(&task.start_variable) {
             // If the task is fixed then we are not able to propagate it further
+            task_index += 1;
             continue;
         }
+
+        let task_has_been_updated = updatable_structures.has_task_been_updated(&task);
 
         // Then we go over all the different profiles
         let mut profile_index = 0;
@@ -58,7 +67,14 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
                 break 'profile_loop;
             }
 
-            let possible_upates = find_possible_updates(context, task, *profile, parameters);
+            if !task_has_been_updated && !profile.is_updated() {
+                // Both the task and the profile have not been updated which means that we can
+                // continue to the next profile (which might have been updated)
+                profile_index += 1;
+                continue;
+            }
+
+            let possible_upates = find_possible_updates(context, &task, *profile, parameters);
 
             if possible_upates.is_empty() {
                 // The task cannot be propagate by the profile so we move to the next one
@@ -75,7 +91,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
             // Then we check what propagations can be performed
             if lower_bound_can_be_propagated_by_profile(
                 context.as_readonly(),
-                task,
+                &task,
                 *profile,
                 parameters.capacity,
             ) {
@@ -85,7 +101,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
                     profile_index,
                     time_table.iter().map(|element| &**element),
                     context.as_readonly(),
-                    task,
+                    &task,
                     parameters.capacity,
                 );
 
@@ -96,7 +112,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
                     time_table[profile_index..last_index]
                         .iter()
                         .map(|element| &**element),
-                    task,
+                    &task,
                 )?;
 
                 // Then we set the new profile index to the last index, note that this index (since
@@ -106,7 +122,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
 
             if upper_bound_can_be_propagated_by_profile(
                 context.as_readonly(),
-                task,
+                &task,
                 *profile,
                 parameters.capacity,
             ) {
@@ -117,7 +133,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
                     profile_index,
                     time_table.iter().map(|element| &**element),
                     context.as_readonly(),
-                    task,
+                    &task,
                     parameters.capacity,
                 );
                 // Then we provide the propagation handler with the chain of profiles and propagate
@@ -127,7 +143,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
                     time_table[first_index..=profile_index]
                         .iter()
                         .map(|element| &**element),
-                    task,
+                    &task,
                 )?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
@@ -138,7 +154,7 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
             if parameters.options.allow_holes_in_domain {
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
-                propagation_handler.propagate_holes_in_domain(context, *profile, task)?;
+                propagation_handler.propagate_holes_in_domain(context, *profile, &task)?;
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index
@@ -148,6 +164,16 @@ pub(crate) fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>
             // Finally, we simply set the profile index to the index of the new profile
             profile_index = max(new_profile_index, profile_index + 1);
         }
+        if SHOULD_RESET_UPDATED {
+            updatable_structures.remove_task_from_updated(&task)
+        }
+        task_index += 1;
+    }
+
+    if SHOULD_RESET_UPDATED {
+        time_table
+            .iter_mut()
+            .for_each(|profile| profile.mark_processed());
     }
     Ok(())
 }

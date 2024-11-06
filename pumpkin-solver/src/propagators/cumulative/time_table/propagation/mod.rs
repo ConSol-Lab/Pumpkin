@@ -51,7 +51,12 @@ pub(crate) fn propagate_based_on_timetable<
     );
 
     if parameters.options.generate_sequence {
-        propagate_sequence_of_profiles(context, time_table, updatable_structures, parameters)?;
+        propagate_sequence_of_profiles::<Var, SHOULD_RESET_UPDATED>(
+            context,
+            time_table,
+            updatable_structures,
+            parameters,
+        )?;
     } else {
         propagate_single_profiles::<Var, SHOULD_RESET_UPDATED>(
             context,

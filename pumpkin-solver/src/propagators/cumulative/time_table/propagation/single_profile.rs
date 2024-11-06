@@ -100,7 +100,9 @@ pub(crate) fn propagate_single_profiles<
             }
         }
 
-        profile.mark_processed();
+        if SHOULD_RESET_UPDATED {
+            profile.mark_processed();
+        }
     }
 
     if SHOULD_RESET_UPDATED {
