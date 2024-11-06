@@ -158,7 +158,10 @@ pub(crate) fn create_synchronised_conflict_explanation<
 pub(crate) fn synchronise_time_table<'a, Var: IntegerVariable + 'static>(
     time_table: impl Iterator<Item = &'a mut (impl ResourceProfileInterface<Var> + 'a)>,
 ) {
-    time_table.for_each(|profile| sort_profile_based_on_id(profile))
+    time_table.for_each(|profile| {
+        profile.mark_udpated();
+        sort_profile_based_on_id(profile)
+    });
 }
 
 /// Sorts the provided `profile` on non-decreasing order of ID

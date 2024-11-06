@@ -21,44 +21,46 @@ pub(crate) struct UpdatableStructures<Var> {
     /// The [`Task`]s which have been updated since the last round of propagation, this structure
     /// is updated by the (incremental) propagator
     updates: Vec<UpdatedTaskInfo<Var>>,
-    /// The tasks which have been updated since the last iteration
-    updated_tasks: SparseSet<Rc<Task<Var>>>,
+    /// The tasks which have had a change in their mandatory part since the last iteration
+    tasks_with_changed_mandatory_parts: SparseSet<Rc<Task<Var>>>,
     /// The tasks which are unfixed
     unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    updated_tasks: SparseSet<Rc<Task<Var>>>,
 }
 
 impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     pub(crate) fn new(parameters: &CumulativeParameters<Var>) -> Self {
-        let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
-        updated_tasks.set_to_empty();
+        let mut tasks_with_changed_mandatory_parts =
+            SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
+        tasks_with_changed_mandatory_parts.set_to_empty();
 
         let unfixed_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
+
+        let updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         Self {
             bounds: vec![],
             updates: vec![],
-            updated_tasks,
+            tasks_with_changed_mandatory_parts,
             unfixed_tasks,
+            updated_tasks,
         }
     }
 
-    /// Returns whether there are any updates stored which have not been processed
-    pub(crate) fn has_updates(&self) -> bool {
-        !self.updated_tasks.is_empty()
+    /// Returns whether there are any tasks with changed mandatory parts stored which have not been
+    /// processed
+    pub(crate) fn has_changed_mandatory_parts(&self) -> bool {
+        !self.tasks_with_changed_mandatory_parts.is_empty()
     }
 
     /// Returns the next updated task and removes it from the updated list
-    pub(crate) fn get_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
-        if self.updated_tasks.is_empty() {
+    pub(crate) fn pop_next_updated_task(&mut self) -> Option<Rc<Task<Var>>> {
+        if self.tasks_with_changed_mandatory_parts.is_empty() {
             return None;
         }
-        let updated = Rc::clone(self.updated_tasks.get(0));
-        self.updated_tasks.remove_temporarily(&updated);
+        let updated = Rc::clone(self.tasks_with_changed_mandatory_parts.get(0));
+        self.tasks_with_changed_mandatory_parts.remove(&updated);
         let updated_task = Rc::clone(&updated);
         Some(updated_task)
-    }
-
-    pub(crate) fn remove_task_from_updated(&mut self, to_remove: &Rc<Task<Var>>) {
-        self.updated_tasks.remove(to_remove);
     }
 
     /// Get the update info for the provided task (note that this method does not actually check
@@ -222,13 +224,13 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         self.unfixed_tasks.remove_temporarily(task)
     }
 
+    pub(crate) fn remove_task_from_updated(&mut self, task: &Rc<Task<Var>>) {
+        self.updated_tasks.remove(task)
+    }
+
     // Restore all of the temporarily removed tasks
     pub(crate) fn restore_temporarily_removed(&mut self) {
         self.unfixed_tasks.restore_temporarily_removed()
-    }
-
-    pub(crate) fn restore_temporarily_removed_updated(&mut self) {
-        self.updated_tasks.restore_temporarily_removed()
     }
 
     // Returns the unfixed task at the specified index
@@ -241,13 +243,14 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
     }
 
     // Marks a task as updated in the internal structure(s)
-    pub(crate) fn task_has_been_updated(&mut self, task: &Rc<Task<Var>>) {
-        self.updated_tasks.insert(Rc::clone(task))
+    pub(crate) fn task_has_mandatory_part_changed(&mut self, task: &Rc<Task<Var>>) {
+        self.tasks_with_changed_mandatory_parts
+            .insert(Rc::clone(task))
     }
 
     // Insert the provided update for a specific task; this means that the new bounds of the tasks
     // are updated to the ones provided in the update
-    pub(crate) fn insert_update_for_task(
+    pub(crate) fn insert_changed_mandatory_part_for_task(
         &mut self,
         task: &Rc<Task<Var>>,
         updated_task_info: UpdatedTaskInfo<Var>,
@@ -273,5 +276,9 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         other.reset_all_bounds_and_remove_fixed(context, parameters);
 
         other
+    }
+
+    pub(crate) fn task_has_been_updated(&mut self, updated_task: Rc<Task<Var>>) {
+        self.updated_tasks.insert(updated_task)
     }
 }

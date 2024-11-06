@@ -15,6 +15,10 @@ pub(crate) struct UpdatableResourceProfile<Var, Profile: ResourceProfileInterfac
 impl<Var: IntegerVariable + 'static, Profile: ResourceProfileInterface<Var>>
     ResourceProfileInterface<Var> for UpdatableResourceProfile<Var, Profile>
 {
+    fn mark_udpated(&mut self) {
+        self.updated = true;
+    }
+
     fn create_default_at_time_point(time_point: i32) -> Self {
         Self {
             resource_profile: Profile::create_default_at_time_point(time_point),

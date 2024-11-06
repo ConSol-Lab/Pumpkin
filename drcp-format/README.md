@@ -18,7 +18,7 @@ Atomic constraints are used in the following proof steps:
 ### Inference
 An inference step encodes the propagation of an atomic constraint. The inference step has the following format:
 ```
-i <step_id> <premises> 0 <propagated> [c:<constraint tag>] [l:<filtering algorithm>]
+i <step_id> <premises> [0 <propagated>] [c:<constraint tag>] [l:<filtering algorithm>]
 ```
 
 The individual components:
@@ -27,6 +27,9 @@ The individual components:
   - `<propagated>` A single atomic constraint identifier.
   - `c:<constraint tag>`: _Optional_. A hint which constraint triggered the inference.
   - `l:<filtering algorithm>`: _Optional_. A hint which filtering algorithm identified the inference.
+
+  If there is no `<propagated>`, then the inference reads that the premises imply false.
+  I.e., the premises form a nogood which is enforced by a propagator.
 
 ### Nogood
 A nogood step encodes a partial assignment which cannot be extended to a solution.

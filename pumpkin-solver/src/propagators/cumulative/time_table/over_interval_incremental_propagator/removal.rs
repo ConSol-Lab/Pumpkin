@@ -74,7 +74,7 @@ fn remove_task_from_profile<
         end,
         updated_profile_tasks,
         profile.get_height() - updated_task.resource_usage,
-        false,
+        profile.is_updated(),
     )
 }
 
@@ -94,7 +94,7 @@ pub(crate) fn split_first_profile<
             min(update_range.start - 1, first_profile.get_end()),
             first_profile.get_profile_tasks().clone(),
             first_profile.get_height(),
-            false,
+            first_profile.is_updated(),
         ));
     }
 }
@@ -118,7 +118,7 @@ pub(crate) fn split_last_profile<
             last_profile.get_end(),
             last_profile.get_profile_tasks().clone(),
             last_profile.get_height(),
-            false,
+            last_profile.is_updated(),
         ))
     }
 }

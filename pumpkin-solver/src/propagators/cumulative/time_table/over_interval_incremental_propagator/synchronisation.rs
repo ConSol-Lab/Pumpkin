@@ -106,9 +106,10 @@ pub(crate) fn synchronise_time_table<
     }
 
     // And then we sort each profile according to upper-bound and then ID
-    time_table
-        .iter_mut()
-        .for_each(|profile| sort_profile_based_on_upper_bound_and_id(profile, context))
+    time_table.iter_mut().for_each(|profile| {
+        profile.mark_udpated();
+        sort_profile_based_on_upper_bound_and_id(profile, context)
+    })
 }
 
 /// Sorts the provided `profile` on non-decreasing order of upper-bound while tie-breaking in

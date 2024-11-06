@@ -36,6 +36,8 @@ pub(crate) trait ResourceProfileInterface<Var>: Clone {
 
     fn mark_processed(&mut self) {}
 
+    fn mark_udpated(&mut self) {}
+
     fn get_start(&self) -> i32;
 
     fn get_end(&self) -> i32;

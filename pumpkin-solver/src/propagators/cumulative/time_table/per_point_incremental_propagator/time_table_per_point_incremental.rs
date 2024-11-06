@@ -217,7 +217,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         let mut found_conflict = false;
 
         // Then we go over all of the updated tasks
-        while let Some(updated_task) = self.updatable_structures.get_next_updated_task() {
+        while let Some(updated_task) = self.updatable_structures.pop_next_updated_task() {
             let element = self.updatable_structures.get_update_for_task(&updated_task);
 
             // We get the adjustments based on the stored updated
@@ -246,8 +246,6 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
             self.updatable_structures
                 .reset_update_for_task(&updated_task);
         }
-        self.updatable_structures
-            .restore_temporarily_removed_updated();
 
         // After all the updates have been processed, we need to check whether there is still a
         // conflict in the time-table (if any calls have reported an overflow)

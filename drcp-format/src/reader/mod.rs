@@ -78,7 +78,7 @@ pub type ReadStep<'a, AtomicConstraint> =
 ///     hint_constraint_id: Some(NonZero::new(20).unwrap()),
 ///     hint_label: Some("linear_bound"),
 ///     premises: vec![lit(4), lit(5)],
-///     propagated: lit(-2),
+///     propagated: Some(lit(-2)),
 /// };
 /// assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
 ///
@@ -176,7 +176,7 @@ where
                     .into_iter()
                     .map(|literal| self.atomics.to_atomic(literal))
                     .collect(),
-                propagated: self.atomics.to_atomic(propagated),
+                propagated: propagated.map(|p| self.atomics.to_atomic(p)),
             }),
 
             Step::Nogood(Nogood {
@@ -228,14 +228,11 @@ fn inference_step(input: &str) -> IResult<&str, Inference<'_, Vec<NonZero<i32>>,
             step_id,
             tag(" "),
             literal_list,
-            tag(" "),
-            tag("0"),
-            tag(" "),
-            literal,
+            opt(preceded(tag(" 0 "), literal)),
             opt(preceded(tag(" c:"), constraint_id)),
             opt(preceded(tag(" l:"), identifier)),
         )),
-        |(_, id, _, premises, _, _, _, propagated, hint_constraint_id, hint_label)| Inference {
+        |(_, id, _, premises, propagated, hint_constraint_id, hint_label)| Inference {
             id,
             hint_constraint_id,
             hint_label,
@@ -305,4 +302,41 @@ fn identifier(input: &str) -> IResult<&str, &str> {
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
     ))(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inference_nogood_without_hints() {
+        let source = "i 1 4 5\n";
+        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+
+        let inference_step = reader.next_step().expect("valid drcp inference step");
+        let expected_inference = Inference {
+            id: NonZero::new(1).unwrap(),
+            hint_constraint_id: None,
+            hint_label: None,
+            premises: vec![NonZero::new(4).unwrap(), NonZero::new(5).unwrap()],
+            propagated: None,
+        };
+        assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+    }
+
+    #[test]
+    fn inference_nogood_with_constraint_tag_and_label() {
+        let source = "i 1 4 5 c:20 l:linear_bound\n";
+        let mut reader = ProofReader::new(source.as_bytes(), std::convert::identity);
+
+        let inference_step = reader.next_step().expect("valid drcp inference step");
+        let expected_inference = Inference {
+            id: NonZero::new(1).unwrap(),
+            hint_constraint_id: Some(NonZero::new(20).unwrap()),
+            hint_label: Some("linear_bound"),
+            premises: vec![NonZero::new(4).unwrap(), NonZero::new(5).unwrap()],
+            propagated: None,
+        };
+        assert_eq!(Some(Step::Inference(expected_inference)), inference_step);
+    }
 }

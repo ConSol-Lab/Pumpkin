@@ -109,7 +109,8 @@ pub(crate) fn split_profile_added_part_starts_after_profile_start<
                                                              * profile */
             profile.get_profile_tasks().clone(),
             profile.get_height(),
-            false, // This profile was present previously and could not lead to updates
+            profile.is_updated(), /* The profile is not new but could have been marked updated
+                                   * previously */
         ))
     }
 }
@@ -202,7 +203,8 @@ pub(crate) fn split_profile_added_part_ends_before_profile_end<
             profile.get_end(),
             profile.get_profile_tasks().clone(),
             profile.get_height(),
-            false, // This profile was present previously and could not lead to updates
+            profile.is_updated(), /* The profile is not new but could have been marked updated
+                                   * previously */
         ))
     }
 }

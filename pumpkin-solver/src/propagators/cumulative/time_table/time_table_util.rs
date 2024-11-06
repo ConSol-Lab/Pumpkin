@@ -80,7 +80,7 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // If there are updates then propagations might occur due to new mandatory parts being
         // added. However, if there are no updates then because we allow holes in the domain, no
         // updates can occur so we can skip propagation!
-        if updatable_structures.has_updates() || result.update.is_some() {
+        if updatable_structures.has_changed_mandatory_parts() || result.update.is_some() {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -92,7 +92,10 @@ pub(crate) fn should_enqueue<Var: IntegerVariable + 'static>(
         // been no updates since it could be the case that a task which has been updated can
         // now propagate due to an existing profile (this is due to the fact that we only
         // propagate bounds and (currently) do not create holes in the domain!).
-        if !empty_time_table || updatable_structures.has_updates() || result.update.is_some() {
+        if !empty_time_table
+            || updatable_structures.has_changed_mandatory_parts()
+            || result.update.is_some()
+        {
             EnqueueDecision::Enqueue
         } else {
             EnqueueDecision::Skip
@@ -195,9 +198,10 @@ pub(crate) fn insert_update<Var: IntegerVariable + 'static>(
     updatable_structures: &mut UpdatableStructures<Var>,
     potential_update: Option<UpdatedTaskInfo<Var>>,
 ) {
+    updatable_structures.task_has_been_updated(Rc::clone(updated_task));
     if let Some(update) = potential_update {
-        updatable_structures.task_has_been_updated(updated_task);
-        updatable_structures.insert_update_for_task(updated_task, update);
+        updatable_structures.task_has_mandatory_part_changed(updated_task);
+        updatable_structures.insert_changed_mandatory_part_for_task(updated_task, update);
     }
 }
 
@@ -206,6 +210,7 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     updatable_structures: &mut UpdatableStructures<Var>,
     updated_task: &Rc<Task<Var>>,
 ) {
+    updatable_structures.task_has_been_updated(Rc::clone(updated_task));
     // Stores whether the stored lower-bound is equal to the current lower-bound
     let lower_bound_equal_to_stored = updatable_structures.get_stored_lower_bound(updated_task)
         == context.lower_bound(&updated_task.start_variable);
@@ -229,9 +234,9 @@ pub(crate) fn backtrack_update<Var: IntegerVariable + 'static>(
     }
 
     // We insert this task into the updated category
-    updatable_structures.task_has_been_updated(updated_task);
+    updatable_structures.task_has_mandatory_part_changed(updated_task);
     // And we add the type of update
-    updatable_structures.insert_update_for_task(
+    updatable_structures.insert_changed_mandatory_part_for_task(
         updated_task,
         UpdatedTaskInfo {
             task: Rc::clone(updated_task),

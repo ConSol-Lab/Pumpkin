@@ -32,7 +32,7 @@ use crate::steps::StepId;
 ///
 /// let lit = |num: i32| NonZeroI32::new(num).unwrap();
 /// writer
-///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], lit(-2))
+///     .log_inference(None, Some("linear_bound"), [lit(4), lit(5)], Some(lit(-2)))
 ///     .unwrap();
 /// let nogood_id = writer
 ///     .log_nogood_clause([lit(1), lit(-3), lit(5)], None::<[StepId; 0]>)
@@ -131,15 +131,18 @@ where
     /// the constraint that implied the inference, and the label of the filtering algorithm which
     /// identified the inference.
     ///
+    /// If there is no conclusion, then the format prescribes that the conclusion is false, so that
+    /// the premises form a nogood.
+    ///
     /// This function wraps an IO operation, which is why it can fail with an IO error.
     pub fn log_inference(
         &mut self,
         hint_constraint_id: Option<NonZero<u32>>,
         hint_label: Option<&str>,
         premises: impl IntoIterator<Item = Literals::Literal>,
-        propagated: Literals::Literal,
+        propagated: Option<Literals::Literal>,
     ) -> std::io::Result<StepId> {
-        let propagated = self.encountered_literals.to_code(propagated);
+        let propagated = propagated.map(|p| self.encountered_literals.to_code(p));
         let id = self.next_step_id();
 
         let inference = Inference {
@@ -254,7 +257,9 @@ where
             write!(sink, " {literal}")?;
         }
 
-        write!(sink, " 0 {}", self.propagated)?;
+        if let Some(propagated) = self.propagated {
+            write!(sink, " 0 {}", propagated)?;
+        }
 
         if let Some(constraint_id) = self.hint_constraint_id {
             write!(sink, " c:{constraint_id}")?;
@@ -300,7 +305,7 @@ mod tests {
                 hint_constraint_id: None,
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
-                propagated: lit(1),
+                propagated: Some(lit(1)),
             },
             "i 1 2 -3 0 1\n",
         );
@@ -314,7 +319,7 @@ mod tests {
                 hint_constraint_id: None,
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],
-                propagated: lit(1),
+                propagated: Some(lit(1)),
             },
             "i 1 2 -3 0 1 l:inf_label\n",
         );
@@ -328,7 +333,7 @@ mod tests {
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: None,
                 premises: [lit(2), lit(-3)],
-                propagated: lit(1),
+                propagated: Some(lit(1)),
             },
             "i 1 2 -3 0 1 c:1\n",
         );
@@ -342,9 +347,37 @@ mod tests {
                 hint_constraint_id: Some(NonZero::new(1).unwrap()),
                 hint_label: Some("inf_label"),
                 premises: [lit(2), lit(-3)],
-                propagated: lit(1),
+                propagated: Some(lit(1)),
             },
             "i 1 2 -3 0 1 c:1 l:inf_label\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_without_conclusion_with_hints() {
+        test_step_serialization(
+            Inference {
+                id: TEST_ID,
+                hint_constraint_id: Some(NonZero::new(1).unwrap()),
+                hint_label: Some("inf_label"),
+                premises: [lit(2), lit(-3)],
+                propagated: None,
+            },
+            "i 1 2 -3 c:1 l:inf_label\n",
+        );
+    }
+
+    #[test]
+    fn write_inference_without_conclusion_without_hints() {
+        test_step_serialization(
+            Inference {
+                id: TEST_ID,
+                hint_constraint_id: None,
+                hint_label: None,
+                premises: [lit(2), lit(-3)],
+                propagated: None,
+            },
+            "i 1 2 -3\n",
         );
     }
 

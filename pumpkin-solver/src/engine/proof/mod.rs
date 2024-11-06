@@ -66,11 +66,13 @@ impl ProofLog {
     }
 
     /// Log an inference to the proof.
+    ///
+    /// Passing `None` for `propagated` means `premises` imply false.
     pub(crate) fn log_inference(
         &mut self,
         constraint_tag: Option<NonZero<u32>>,
         premises: impl IntoIterator<Item = Literal>,
-        propagated: Literal,
+        propagated: Option<Literal>,
     ) -> std::io::Result<NonZeroU64> {
         let Some(ProofImpl::CpProof {
             writer,
