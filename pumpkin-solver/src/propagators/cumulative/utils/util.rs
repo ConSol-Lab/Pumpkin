@@ -52,6 +52,7 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
     tasks: &[Rc<Task<Var>>],
     context: &mut PropagatorInitialisationContext<'_>,
     register_backtrack: bool,
+    allow_holes_in_domain: bool,
 ) {
     tasks.iter().for_each(|task| {
         let _ = context.register(
@@ -64,11 +65,27 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
         if register_backtrack {
             let _ = context.register_for_backtrack_events(
                 task.start_variable.clone(),
-                DomainEvents::create_with_int_events(enum_set!(
-                    IntDomainEvent::LowerBound
-                        | IntDomainEvent::UpperBound
-                        | IntDomainEvent::Assign
-                )),
+                if allow_holes_in_domain {
+                    DomainEvents::create_with_int_events(enum_set!(
+                        IntDomainEvent::LowerBound
+                            | IntDomainEvent::UpperBound
+                            | IntDomainEvent::Assign
+                            | IntDomainEvent::Removal /* This is to prevent an edge case where a
+                                                       * task is not marked as updated after it
+                                                       * has
+                                                       * propagated a hole in the domain due to
+                                                       * it
+                                                       * being updated but it is still removed
+                                                       * from
+                                                       * the updated set */
+                    ))
+                } else {
+                    DomainEvents::create_with_int_events(enum_set!(
+                        IntDomainEvent::LowerBound
+                            | IntDomainEvent::UpperBound
+                            | IntDomainEvent::Assign
+                    ))
+                },
                 task.id,
             );
         }

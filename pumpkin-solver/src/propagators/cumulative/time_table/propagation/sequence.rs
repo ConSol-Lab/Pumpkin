@@ -74,7 +74,8 @@ pub(crate) fn propagate_sequence_of_profiles<
                 continue;
             }
 
-            let possible_upates = find_possible_updates(context, &task, *profile, parameters);
+            let possible_upates =
+                find_possible_updates(context.as_readonly(), &task, *profile, parameters);
 
             if possible_upates.is_empty() {
                 // The task cannot be propagate by the profile so we move to the next one
@@ -163,6 +164,10 @@ pub(crate) fn propagate_sequence_of_profiles<
                 // If we allow the propagation of holes in the domain then we simply let the
                 // propagation handler handle it
                 propagation_handler.propagate_holes_in_domain(context, *profile, &task)?;
+
+                // The tasks has now been updated and this should be accounted for
+                // when propagating further
+                updatable_structures.task_has_been_updated(Rc::clone(&task));
 
                 // Then we set the new profile index to maximum of the previous value of the new
                 // profile index and the next profile index

@@ -156,6 +156,7 @@ fn overflows_capacity_and_is_not_part_of_profile<
 }
 
 /// An enum which represents which values can be updated by a profile
+#[derive(Debug, PartialEq)]
 enum CanUpdate {
     LowerBound,
     UpperBound,
@@ -172,33 +173,23 @@ fn find_possible_updates<
     Var: IntegerVariable + 'static,
     ResourceProfileType: ResourceProfileInterface<Var>,
 >(
-    context: &mut PropagationContextMut,
+    context: PropagationContext,
     task: &Rc<Task<Var>>,
     profile: &ResourceProfileType,
     parameters: &CumulativeParameters<Var>,
 ) -> Vec<CanUpdate> {
-    if !can_be_updated_by_profile(context.as_readonly(), task, profile, parameters.capacity) {
+    if !can_be_updated_by_profile(context, task, profile, parameters.capacity) {
         // If the task cannot be updated by the profile then we simply return the empty list
         vec![]
     } else {
         // The task could be updated by the profile!
         let mut result = vec![];
 
-        if lower_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
-            task,
-            profile,
-            parameters.capacity,
-        ) {
+        if lower_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
             // The lower-bound of the task can be updated by the profile
             result.push(CanUpdate::LowerBound)
         }
-        if upper_bound_can_be_propagated_by_profile(
-            context.as_readonly(),
-            task,
-            profile,
-            parameters.capacity,
-        ) {
+        if upper_bound_can_be_propagated_by_profile(context, task, profile, parameters.capacity) {
             // The upper-bound of the task can be updated by the profile
             result.push(CanUpdate::UpperBound)
         }

@@ -31,7 +31,6 @@ pub(crate) fn propagate_single_profiles<
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
         CumulativePropagationHandler::new(parameters.options.explanation_type);
-
     // Then we go over all of the profiles in the time-table
     'profile_loop: for profile in time_table {
         // We indicate to the propagation handler that we cannot re-use an existing profile
@@ -40,6 +39,7 @@ pub(crate) fn propagate_single_profiles<
 
         // Then we go over all the different tasks
         let mut task_index = 0;
+
         while task_index
             < if profile.is_updated() {
                 updatable_structures.number_of_unfixed_tasks()
@@ -63,9 +63,7 @@ pub(crate) fn propagate_single_profiles<
                 // receiving the notification for it (which would result in a task never becoming
                 // unfixed since no backtrack notification would occur)
                 updatable_structures.temporarily_remove_task_from_unfixed(&task);
-                if SHOULD_RESET_UPDATED {
-                    updatable_structures.remove_task_from_updated(&task);
-                }
+                updatable_structures.temporarily_remove_task_from_updated(&task);
                 if updatable_structures.has_no_unfixed_tasks() {
                     // There are no tasks left to consider, we can exit the loop
                     break 'profile_loop;
@@ -77,7 +75,8 @@ pub(crate) fn propagate_single_profiles<
 
             // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
             // update or a hole in the domain)
-            let possible_updates = find_possible_updates(context, &task, profile, parameters);
+            let possible_updates =
+                find_possible_updates(context.as_readonly(), &task, profile, parameters);
             for possible_update in possible_updates.iter() {
                 // For every possible update we let the propagation handler propagate
                 let result = match possible_update {
@@ -110,10 +109,7 @@ pub(crate) fn propagate_single_profiles<
 
     if SHOULD_RESET_UPDATED {
         // If we should reset the updated then we remove all of the updated from consideration
-        while updatable_structures.number_of_updated_tasks() > 0 {
-            let updated_task = updatable_structures.get_updated_task_at_index(0);
-            updatable_structures.remove_task_from_updated(&updated_task);
-        }
+        updatable_structures.clear_updated();
     }
     updatable_structures.restore_temporarily_removed();
     Ok(())

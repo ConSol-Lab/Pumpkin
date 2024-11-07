@@ -152,7 +152,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     ) -> Result<(), PropositionalConjunction> {
         self.updatable_structures
             .initialise_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
-        register_tasks(&self.parameters.tasks, context, false);
+        register_tasks(&self.parameters.tasks, context, false, false);
 
         Ok(())
     }

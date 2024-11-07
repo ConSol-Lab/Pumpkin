@@ -89,6 +89,7 @@ impl DebugHelper {
                 &mut assignments_propostional_clone,
                 PropagatorId(propagator_id.try_into().unwrap()),
             );
+
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
             if let Err(ref failure_reason) = propagation_status_cp {
@@ -112,15 +113,14 @@ impl DebugHelper {
                     "Propagator '{}' with id '{propagator_id}' missed predicates:",
                     propagator.name(),
                 );
-
                 for idx in num_entries_on_trail_before_propagation
                     ..assignments_integer_clone.num_trail_entries()
                 {
                     let trail_entry = assignments_integer_clone.get_trail_entry(idx);
                     let pred = trail_entry.predicate;
+
                     eprintln!("  - {pred:?}");
                 }
-
                 panic!("missed propagations");
             }
             if num_missed_propositional_propagations > 0 {

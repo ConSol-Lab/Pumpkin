@@ -449,6 +449,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         if !self.parameters.options.incremental_backtracking {
             self.updatable_structures
                 .reset_all_bounds_and_remove_fixed(context, &self.parameters);
+            self.updatable_structures.add_to_updated(&self.parameters);
             // If the time-table is already empty then backtracking will not cause it to become
             // outdated
             if !self.time_table.is_empty() {
@@ -457,6 +458,7 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         } else if SYNCHRONISE {
             self.updatable_structures
                 .remove_fixed(context, &self.parameters);
+            self.updatable_structures.add_to_updated(&self.parameters);
         }
     }
 
@@ -472,7 +474,12 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
         &mut self,
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
-        register_tasks(&self.parameters.tasks, context, true);
+        register_tasks(
+            &self.parameters.tasks,
+            context,
+            self.parameters.options.incremental_backtracking,
+            self.parameters.options.allow_holes_in_domain,
+        );
         self.updatable_structures
             .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
 

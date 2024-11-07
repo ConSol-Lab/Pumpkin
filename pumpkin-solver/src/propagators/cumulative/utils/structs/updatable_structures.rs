@@ -127,6 +127,12 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         }
     }
 
+    pub(crate) fn add_to_updated(&mut self, parameters: &CumulativeParameters<Var>) {
+        for task in parameters.tasks.iter() {
+            self.updated_tasks.insert(Rc::clone(task));
+        }
+    }
+
     /// Resets all of the bounds to the current values in the context and removes all of the fixed
     /// tasks from the internal structure(s).
     pub(crate) fn reset_all_bounds_and_remove_fixed(
@@ -224,12 +230,21 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         self.unfixed_tasks.remove_temporarily(task)
     }
 
+    pub(crate) fn temporarily_remove_task_from_updated(&mut self, task: &Rc<Task<Var>>) {
+        self.updated_tasks.remove_temporarily(task)
+    }
+
     pub(crate) fn remove_task_from_updated(&mut self, task: &Rc<Task<Var>>) {
         self.updated_tasks.remove(task)
     }
 
+    pub(crate) fn clear_updated(&mut self) {
+        self.updated_tasks.set_to_empty();
+    }
+
     // Restore all of the temporarily removed tasks
     pub(crate) fn restore_temporarily_removed(&mut self) {
+        self.updated_tasks.restore_temporarily_removed();
         self.unfixed_tasks.restore_temporarily_removed()
     }
 
