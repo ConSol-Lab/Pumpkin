@@ -22,5 +22,24 @@ again.
 
 Then, the examples (for example `nqueens`) can be run with 
 ```
-python python/examples/nqueens.py 5
+python examples/nqueens.py 5
+```
+
+### PyO3 rebuilds
+
+When developing in an IDE that runs `cargo check` on save, the PyO3 build 
+cache can get invalidated unnecessarily. See https://github.com/PyO3/pyo3/issues/1708
+for more details. One way to fix this is by making `rust-analyzer` use a
+different directory. In VSCode, you could fix this by adding the following
+to your `.vscode/settings.json` (in the main project directory):
+
+```json
+{
+    "rust-analyzer.server.extraEnv": {
+        "CARGO_TARGET_DIR": "target/analyzer"
+    },
+    "rust-analyzer.check.extraArgs": [
+        "--target-dir=target/analyzer"
+    ]
+}
 ```

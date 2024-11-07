@@ -26,7 +26,7 @@ def main(n: int, proof: Path | None):
             for row in range(n):
                 print(f"{row_separator}");
 
-                queen_col = solution.value(variables[row])
+                queen_col = solution.int_value(variables[row])
 
                 for col in range(n): 
                     string = "| * " if queen_col == col else "|   "
