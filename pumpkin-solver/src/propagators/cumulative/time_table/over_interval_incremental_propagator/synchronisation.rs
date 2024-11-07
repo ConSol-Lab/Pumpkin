@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use super::debug::are_mergeable;
 use super::debug::merge_profiles;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
@@ -10,7 +11,43 @@ use crate::propagators::cumulative::time_table::propagation_handler::create_conf
 use crate::propagators::CumulativeParameters;
 use crate::propagators::OverIntervalTimeTableType;
 use crate::propagators::ResourceProfile;
+#[cfg(doc)]
+use crate::propagators::TimeTableOverIntervalPropagator;
 use crate::variables::IntegerVariable;
+
+/// Finds the conflicting profile which would have been found by the
+/// [`TimeTableOverIntervalPropagator`]; this is the first conflicting profile in terms of start
+/// time, however, the returned profile should be merged with adjacent profiles to create the
+/// returned conflict profile.
+pub(crate) fn find_synchronised_conflict<Var: IntegerVariable + 'static>(
+    time_table: &mut OverIntervalTimeTableType<Var>,
+    parameters: &CumulativeParameters<Var>,
+) -> Option<ResourceProfile<Var>> {
+    if time_table.is_empty() {
+        return None;
+    }
+
+    let first_conflict_profile_index = time_table
+        .iter()
+        .position(|profile| profile.height > parameters.capacity);
+    if let Some(mut first_conflict_profile_index) = first_conflict_profile_index {
+        let mut new_profile = time_table[first_conflict_profile_index].clone();
+
+        while first_conflict_profile_index < time_table.len() - 1 {
+            if are_mergeable(
+                &time_table[first_conflict_profile_index],
+                &time_table[first_conflict_profile_index + 1],
+            ) {
+                new_profile.end = time_table[first_conflict_profile_index + 1].end;
+                first_conflict_profile_index += 1;
+            } else {
+                break;
+            }
+        }
+        return Some(new_profile);
+    }
+    None
+}
 
 /// Returns whether the synchronised conflict explanation created by
 /// [`TimeTableOverIntervalIncrementalPropgator`] is the same as that created by
