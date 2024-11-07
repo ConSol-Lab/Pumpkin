@@ -229,21 +229,51 @@ impl DebugHelper {
                 // Note that it could be the case that the propagation leads to conflict, in this
                 // case it should be the result of a propagation (i.e. an EmptyDomain)
                 if let Err(conflict) = debug_propagation_status_cp {
+                    // If we have found an error then it should either be derived by an empty
+                    // domain due to the same propagation holding
+                    //
+                    // or
+                    //
+                    // The conflict explanation should be a subset of the reason literals for the
+                    // propagation
+
                     assert!(
-                        matches!(conflict, Inconsistency::EmptyDomain),
+                        {
+                            let is_empty_domain = matches!(conflict, Inconsistency::EmptyDomain);
+                            let has_propagated_predicate =
+                                assignments.is_predicate_satisfied(propagated_predicate);
+                            if is_empty_domain && has_propagated_predicate {
+                                // We check whether an empty domain was derived, if this is indeed
+                                // the case then we check whether the propagated predicate was
+                                // reproduced
+                                return true;
+                            }
+
+                            // If this is not the case then we check whether the explanation is a
+                            // subset of the premises
+                            if let Inconsistency::Conflict {
+                                conflict_nogood: found_inconsistency,
+                            } = conflict
+                            {
+                                found_inconsistency
+                                    .iter()
+                                    .all(|&predicate| reason.contains(predicate))
+                            } else {
+                                false
+                            }
+                        },
                         "Debug propagation detected a conflict other than a propagation\n
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
                          Reported reason: {reason}\n
-                         Reported propagation: {propagated_predicate}",
+                         Reported propagation: {propagated_predicate}\n",
                         propagator.name()
                     );
-                }
-
-                // The predicate was either a propagation for the assignments or
-                // assignments_propositional
-                assert!(
-                    assignments_clone.evaluate_predicate(propagated_predicate).is_some_and(|x| x),
+                } else {
+                    // The predicate was either a propagation for the assignments_integer or
+                    // assignments_propositional
+                    assert!(
+                    assignments.is_predicate_satisfied(propagated_predicate),
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n
@@ -251,6 +281,7 @@ impl DebugHelper {
                      Reported propagation: {propagated_predicate}",
                     propagator.name()
                 );
+                }
             } else {
                 // Adding the predicates of the reason to the assignments led to failure
                 panic!(

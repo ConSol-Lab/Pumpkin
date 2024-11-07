@@ -24,7 +24,15 @@ impl PropositionalConjunction {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.predicates_in_conjunction.is_empty()
+    }
+
+    pub fn contains(&self, predicate: Predicate) -> bool {
+        self.predicates_in_conjunction.contains(&predicate)
+    }
+
+    pub fn num_predicates(&self) -> u32 {
+        self.predicates_in_conjunction.len() as u32
     }
 
     pub fn add(&mut self, predicate: Predicate) {
