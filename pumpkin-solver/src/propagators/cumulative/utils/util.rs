@@ -66,18 +66,32 @@ pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(
             let _ = context.register_for_backtrack_events(
                 task.start_variable.clone(),
                 if allow_holes_in_domain {
+                    // We differentiate between these two cases due to this example:
+                    //
+                    // Recall that for every non-updated profile, we only go through the tasks
+                    // which have been updated.
+                    //
+                    // Now imagine a situation in which we are propagating holes in the domain but
+                    // have not subscribed to the `Removal` events. Let's say we have a task `x`
+                    // which has been updated at some trail entry `y`; we
+                    // now propagate holes in the domain for this profile due to an updated profile
+                    // `z` and then mark `x` and `z` as non-updated.
+                    //
+                    // Now we backtrack to a trail position `>y` and since we have not subscribed to
+                    // `Removal` events, we are not notified that the holes in
+                    // the domain of `x` have been undone. Now both `x` and `z`
+                    // are marked as non-updated and `x` is thus not propagated due to `z` while we
+                    // should have propagated `x` again since it was updated at
+                    // the trail position to which we backtracked.
+                    //
+                    // This is the reason that we also subscribe to the backtrack Removal event when
+                    // allowing holes in the domain and incrementally
+                    // backtracking.
                     DomainEvents::create_with_int_events(enum_set!(
                         IntDomainEvent::LowerBound
                             | IntDomainEvent::UpperBound
                             | IntDomainEvent::Assign
-                            | IntDomainEvent::Removal /* This is to prevent an edge case where a
-                                                       * task is not marked as updated after it
-                                                       * has
-                                                       * propagated a hole in the domain due to
-                                                       * it
-                                                       * being updated but it is still removed
-                                                       * from
-                                                       * the updated set */
+                            | IntDomainEvent::Removal
                     ))
                 } else {
                     DomainEvents::create_with_int_events(enum_set!(
