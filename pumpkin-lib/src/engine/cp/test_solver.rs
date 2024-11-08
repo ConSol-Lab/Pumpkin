@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::PropagatorInitialisationContext;
 use crate::basic_types::Inconsistency;
@@ -248,7 +249,7 @@ impl TestSolver {
     pub(crate) fn get_reason_int_new<'a>(
         &'a mut self,
         predicate: Predicate,
-        propagators: &'a mut Vec<Box<(dyn Propagator + 'static)>>,
+        propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
         let reason_ref = self
             .assignments

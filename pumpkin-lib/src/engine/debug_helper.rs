@@ -8,6 +8,7 @@ use log::warn;
 
 use super::conflict_analysis::SemanticMinimiser;
 use super::predicates::predicate::Predicate;
+use super::propagation::store::PropagatorStore;
 use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
@@ -25,7 +26,7 @@ impl<'a> DebugDyn<'a> {
     }
 }
 
-impl<'a> Debug for DebugDyn<'a> {
+impl Debug for DebugDyn<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "<dyn {}>", self.trait_name)
     }
@@ -41,7 +42,7 @@ impl DebugHelper {
     // of the clausal propagator are okay and consistent with the assignments_propositional
     pub(crate) fn debug_fixed_point_propagation(
         assignments: &Assignments,
-        propagators: &[Box<dyn Propagator>],
+        propagators: &PropagatorStore,
     ) -> bool {
         let mut assignments_clone = assignments.clone();
         // check whether constraint programming propagators missed anything
@@ -53,7 +54,7 @@ impl DebugHelper {
         //         may be detected when debug-checking the reason for propagation
         //      2. we assume fixed-point propagation, it could be in the future that this may change
         //  todo expand the output given by the debug check
-        for (propagator_id, propagator) in propagators.iter().enumerate() {
+        for (propagator_id, propagator) in propagators.iter_propagators().enumerate() {
             let num_entries_on_trail_before_propagation = assignments_clone.num_trail_entries();
 
             let mut reason_store = Default::default();

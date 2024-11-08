@@ -2,6 +2,7 @@ mod dimacs;
 mod proof_literals;
 
 use std::fs::File;
+use std::num::NonZero;
 use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
@@ -29,7 +30,7 @@ pub struct ProofLog {
 
 impl ProofLog {
     /// Create a CP proof logger.
-    pub fn cp(file_path: &Path, format: Format) -> std::io::Result<ProofLog> {
+    pub fn cp(file_path: &Path, format: Format, log_inferences: bool) -> std::io::Result<ProofLog> {
         let definitions_path = file_path.with_extension("lits");
         let file = File::create(file_path)?;
 
@@ -38,6 +39,7 @@ impl ProofLog {
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::CpProof {
                 writer,
+                log_inferences,
                 definitions_path,
             }),
         })
@@ -49,6 +51,27 @@ impl ProofLog {
         Ok(ProofLog {
             internal_proof: Some(ProofImpl::DimacsProof(DimacsProof::new(file))),
         })
+    }
+
+    /// Log an inference to the proof.
+    #[allow(unused)]
+    pub(crate) fn log_inference(
+        &mut self,
+        constraint_tag: Option<NonZero<u32>>,
+        premises: impl IntoIterator<Item = Predicate>,
+        propagated: Predicate,
+    ) -> std::io::Result<()> {
+        if let Some(ProofImpl::CpProof {
+            writer,
+            log_inferences: true,
+            ..
+        }) = self.internal_proof.as_mut()
+        {
+            // TODO: Log the inference label.
+            writer.log_inference(constraint_tag, None, premises, propagated)?;
+        }
+
+        Ok(())
     }
 
     /// Log a learned clause to the proof.
@@ -74,6 +97,7 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
+                log_inferences: _,
                 definitions_path,
             }) => {
                 let literals = writer.unsat()?;
@@ -95,6 +119,7 @@ impl ProofLog {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
+                log_inferences: _,
                 definitions_path,
             }) => {
                 let literals = writer.optimal(objective_bound)?;
@@ -115,6 +140,7 @@ impl ProofLog {
 enum ProofImpl {
     CpProof {
         writer: ProofWriter<File, ProofLiterals>,
+        log_inferences: bool,
         definitions_path: PathBuf,
     },
     DimacsProof(DimacsProof<File>),

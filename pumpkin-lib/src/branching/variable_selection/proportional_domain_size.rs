@@ -1,7 +1,6 @@
 use super::VariableSelector;
 use crate::branching::SelectionContext;
 use crate::pumpkin_assert_extreme;
-use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 #[derive(Debug)]

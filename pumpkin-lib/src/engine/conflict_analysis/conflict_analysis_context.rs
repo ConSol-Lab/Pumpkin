@@ -4,8 +4,8 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::constraint_satisfaction_solver::Counters;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
-use crate::engine::propagation::Propagator;
 use crate::engine::reason::ReasonStore;
 use crate::engine::Assignments;
 use crate::engine::IntDomainEvent;
@@ -22,7 +22,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) counters: &'a mut Counters,
     pub(crate) brancher: &'a mut dyn Brancher,
-    pub(crate) propagators: &'a mut Vec<Box<dyn Propagator>>,
+    pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
     pub(crate) last_notified_cp_trail_index: usize,
@@ -68,9 +68,9 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for propagator_id in 0..self.propagators.len() {
+        for propagator in self.propagators.iter_propagators_mut() {
             let context = PropagationContext::new(self.assignments);
-            self.propagators[propagator_id].synchronise(&context);
+            propagator.synchronise(&context);
         }
 
         self.brancher.synchronise(self.assignments);
@@ -95,7 +95,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                     .watch_list_cp
                     .get_backtrack_affected_propagators(event, domain)
                 {
-                    let propagator = &mut self.propagators[propagator_var.propagator.0 as usize];
+                    let propagator = &mut self.propagators[propagator_var.propagator];
                     let context = PropagationContext::new(self.assignments);
 
                     propagator.notify_backtrack(&context, propagator_var.variable, event.into())
@@ -142,7 +142,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         predicate: Predicate,
         assignments: &Assignments,
         reason_store: &'a mut ReasonStore,
-        propagators: &'a mut Vec<Box<dyn Propagator>>,
+        propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
         // probably this function should go into the reason store?
 

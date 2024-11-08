@@ -18,6 +18,7 @@ drcp-format = { path = "../drcp-format" }
 downcast-rs = "1.2.1"
 
 [dev-dependencies]
+clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
 
 [lints]

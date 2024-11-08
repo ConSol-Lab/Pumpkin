@@ -13,6 +13,8 @@ use super::conflict_analysis::ConflictAnalysisNogoodContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
+use super::propagation::store::PropagatorStore;
+use super::propagation::PropagatorId;
 use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
@@ -32,14 +34,12 @@ use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
-use crate::engine::debug_helper::DebugDyn;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
-use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
@@ -126,13 +126,14 @@ use crate::Solver;
 ///
 /// \[3\] F. Rossi, P. Van Beek, and T. Walsh, ‘Constraint programming’, Foundations of Artificial
 /// Intelligence, vol. 3, pp. 181–211, 2008.
+#[derive(Debug)]
 pub struct ConstraintSatisfactionSolver {
     /// The solver continuously changes states during the search.
     /// The state helps track additional information and contributes to making the code clearer.
     pub(crate) state: CSPSolverState,
     /// The list of propagators. Propagators live here and are queried when events (domain changes)
     /// happen. The list is only traversed during synchronisation for now.
-    propagators: Vec<Box<dyn Propagator>>,
+    propagators: PropagatorStore,
     /// Tracks information about the restarts. Occassionally the solver will undo all its decisions
     /// and start the search from the root note. Note that learned clauses and other state
     /// information is kept after a restart.
@@ -166,24 +167,6 @@ pub struct ConstraintSatisfactionSolver {
     variable_names: VariableNames,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
-}
-
-impl Debug for ConstraintSatisfactionSolver {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let cp_propagators: Vec<_> = self
-            .propagators
-            .iter()
-            .map(|_| DebugDyn::from("Propagator"))
-            .collect();
-        f.debug_struct("ConstraintSatisfactionSolver")
-            .field("state", &self.state)
-            .field("assumptions", &self.assumptions)
-            .field("restart_strategy", &self.restart_strategy)
-            .field("cp_propagators", &cp_propagators)
-            .field("counters", &self.counters)
-            .field("internal_parameters", &self.internal_parameters)
-            .finish()
-    }
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -261,7 +244,7 @@ impl ConstraintSatisfactionSolver {
                     .watch_list_cp
                     .get_backtrack_affected_propagators(event, domain)
                 {
-                    let propagator = &mut self.propagators[propagator_var.propagator.0 as usize];
+                    let propagator = &mut self.propagators[propagator_var.propagator];
                     let context = PropagationContext::new(&self.assignments);
 
                     propagator.notify_backtrack(&context, propagator_var.variable, event.into())
@@ -274,11 +257,13 @@ impl ConstraintSatisfactionSolver {
     fn notify_nogood_propagator(
         event: IntDomainEvent,
         domain: DomainId,
-        cp_propagators: &mut [Box<dyn Propagator>],
+        cp_propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
     ) {
-        pumpkin_assert_moderate!(cp_propagators[0].name() == "NogoodPropagator");
+        pumpkin_assert_moderate!(
+            cp_propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
+        );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
         // For this reason, its local id matches the domain id.
@@ -298,20 +283,18 @@ impl ConstraintSatisfactionSolver {
         propagator_id: PropagatorId,
         local_id: LocalId,
         event: IntDomainEvent,
-        cp_propagators: &mut [Box<dyn Propagator>],
+        cp_propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
     ) {
         let context = PropagationContext::new(assignments);
 
         let enqueue_decision =
-            cp_propagators[propagator_id.0 as usize].notify(context, local_id, event.into());
+            cp_propagators[propagator_id].notify(context, local_id, event.into());
 
         if enqueue_decision == EnqueueDecision::Enqueue {
-            propagator_queue.enqueue_propagator(
-                propagator_id,
-                cp_propagators[propagator_id.0 as usize].priority(),
-            );
+            propagator_queue
+                .enqueue_propagator(propagator_id, cp_propagators[propagator_id].priority());
         }
     }
 
@@ -383,7 +366,7 @@ impl ConstraintSatisfactionSolver {
             event_drain: vec![],
             backtrack_event_drain: vec![],
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
-            propagators: vec![],
+            propagators: PropagatorStore::default(),
             counters: Counters::default(),
             internal_parameters: solver_options,
             variable_names: VariableNames::default(),
@@ -762,13 +745,8 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn decay_nogood_activities(&mut self) {
-        let nogood_propagator_index = self
-            .propagators
-            .iter()
-            .position(|propagator| propagator.name() == "NogoodPropagator")
-            .expect("There has to be a nogood propagator!");
-
-        match self.propagators[nogood_propagator_index].downcast_mut::<NogoodPropagator>() {
+        match self.propagators[Self::get_nogood_propagator_id()].downcast_mut::<NogoodPropagator>()
+        {
             Some(nogood_propagator) => {
                 nogood_propagator.decay_nogood_activities();
             }
@@ -933,11 +911,6 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
-        let nogood_propagator_index = self
-            .propagators
-            .iter()
-            .position(|propagator| propagator.name() == "NogoodPropagator")
-            .expect("There has to be a nogood propagator!");
         let mut context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
@@ -946,14 +919,14 @@ impl ConstraintSatisfactionSolver {
         );
 
         ConstraintSatisfactionSolver::add_asserting_nogood_to_nogood_propagator(
-            &mut self.propagators[nogood_propagator_index],
+            &mut self.propagators[Self::get_nogood_propagator_id()],
             learned_nogood.predicates,
             &mut context,
         )
     }
 
     pub(crate) fn add_asserting_nogood_to_nogood_propagator(
-        nogood_propagator: &mut Box<dyn Propagator>,
+        nogood_propagator: &mut dyn Propagator,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) {
@@ -1018,9 +991,9 @@ impl ConstraintSatisfactionSolver {
         // two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for propagator_id in 0..self.propagators.len() {
+        for propagator in self.propagators.iter_propagators_mut() {
             let context = PropagationContext::new(&self.assignments);
-            self.propagators[propagator_id].synchronise(&context);
+            propagator.synchronise(&context);
         }
 
         brancher.synchronise(&self.assignments);
@@ -1078,7 +1051,7 @@ impl ConstraintSatisfactionSolver {
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop_new() {
-            let propagator = &mut self.propagators[propagator_id.0 as usize];
+            let propagator = &mut self.propagators[propagator_id];
             let context = PropagationContextMut::new(
                 &mut self.assignments,
                 &mut self.reason_store,
@@ -1113,7 +1086,7 @@ impl ConstraintSatisfactionSolver {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                             &self.assignments,
                             &conflict_nogood,
-                            propagator.as_ref(),
+                            propagator,
                             propagator_id,
                         ));
 
@@ -1164,13 +1137,11 @@ impl ConstraintSatisfactionSolver {
     pub fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
-        _tag: Option<NonZero<u32>>,
+        tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
         if self.state.is_inconsistent() {
             return Err(ConstraintOperationError::InfeasiblePropagator);
         }
-
-        let new_propagator_id = PropagatorId(self.propagators.len() as u32);
 
         pumpkin_assert_simple!(
             propagator_to_add.priority() <= 3,
@@ -1179,7 +1150,7 @@ impl ConstraintSatisfactionSolver {
              but this can easily be changed if there is a good reason."
         );
 
-        self.propagators.push(Box::new(propagator_to_add));
+        let new_propagator_id = self.propagators.alloc(Box::new(propagator_to_add), tag);
 
         let new_propagator = &mut self.propagators[new_propagator_id];
 
@@ -1248,7 +1219,7 @@ impl ConstraintSatisfactionSolver {
     }
 
     fn add_nogood_to_nogood_propagator(
-        nogood_propagator: &mut Box<dyn Propagator>,
+        nogood_propagator: &mut dyn Propagator,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
     ) -> Result<(), ConstraintOperationError> {

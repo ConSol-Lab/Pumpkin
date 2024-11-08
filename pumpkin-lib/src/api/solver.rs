@@ -332,6 +332,7 @@ impl Solver {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 self.satisfaction_solver.conclude_proof_unsat();
+
                 SatisfactionResult::Unsatisfiable
             }
             CSPSolverExecutionFlag::Timeout => {
@@ -482,10 +483,11 @@ impl Solver {
             &mut best_solution,
             brancher,
         );
+
         loop {
             self.satisfaction_solver.restore_state_at_root(brancher);
 
-            let objective_bound = if is_maximising {
+            let objective_bound_predicate = if is_maximising {
                 predicate![objective_variable <= best_objective_value as i32]
             } else {
                 predicate![objective_variable >= best_objective_value as i32]
@@ -501,7 +503,7 @@ impl Solver {
                 // Reset the state whenever we return a result
                 self.satisfaction_solver.restore_state_at_root(brancher);
                 self.satisfaction_solver
-                    .conclude_proof_optimal(objective_bound);
+                    .conclude_proof_optimal(objective_bound_predicate);
                 return OptimisationResult::Optimal(best_solution);
             }
 
@@ -525,7 +527,7 @@ impl Solver {
                         // Reset the state whenever we return a result
                         self.satisfaction_solver.restore_state_at_root(brancher);
                         self.satisfaction_solver
-                            .conclude_proof_optimal(objective_bound);
+                            .conclude_proof_optimal(objective_bound_predicate);
                         return OptimisationResult::Optimal(best_solution);
                     }
                 }

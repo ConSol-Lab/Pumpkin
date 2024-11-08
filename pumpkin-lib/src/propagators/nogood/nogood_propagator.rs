@@ -1876,6 +1876,7 @@ mod tests {
 
     use super::NogoodPropagator;
     use crate::conjunction;
+    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::Propagator;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
@@ -1926,7 +1927,8 @@ mod tests {
 
         assert_eq!(solver.upper_bound(b), 0);
 
-        let mut propagators = vec![propagator];
+        let mut propagators = PropagatorStore::default();
+        let _ = propagators.alloc(propagator, None);
         let reason_lb = solver.get_reason_int_new(predicate!(b <= 0), &mut propagators);
         let reason_lb = PropositionalConjunction::from(reason_lb.to_vec());
         assert_eq!(conjunction!([a >= 2] & [c >= 10]), reason_lb);

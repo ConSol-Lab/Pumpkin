@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use super::propagation::Propagator;
+use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
@@ -45,7 +45,7 @@ impl ReasonStore {
         &'this mut self,
         reference: ReasonRef,
         context: &PropagationContext,
-        propagators: &'this mut Vec<Box<(dyn Propagator + 'static)>>,
+        propagators: &'this mut PropagatorStore,
     ) -> Option<&'this [Predicate]> {
         self.trail
             .get_mut(reference.0 as usize)
@@ -123,7 +123,7 @@ impl Reason {
         &'a mut self,
         context: &PropagationContext,
         propagator_id: PropagatorId,
-        #[allow(clippy::ptr_arg)] propagators: &'a mut Vec<Box<dyn Propagator>>,
+        propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
         // New tryout version: we do not replace the reason with an eager explanation for dynamic
         // lazy explanations.

@@ -1,5 +1,4 @@
-use std::ops::Index;
-use std::ops::IndexMut;
+use crate::containers::StorageKey;
 
 /// An identifier to a propagator instance within the solver.
 /// Each propagator is assigned a unique identifier at runtime.
@@ -13,16 +12,12 @@ impl std::fmt::Display for PropagatorId {
     }
 }
 
-impl<T> Index<PropagatorId> for Vec<T> {
-    type Output = T;
-
-    fn index(&self, index: PropagatorId) -> &Self::Output {
-        &self[index.0 as usize]
+impl StorageKey for PropagatorId {
+    fn index(&self) -> usize {
+        self.0 as usize
     }
-}
 
-impl<T> IndexMut<PropagatorId> for Vec<T> {
-    fn index_mut(&mut self, index: PropagatorId) -> &mut Self::Output {
-        &mut self[index.0 as usize]
+    fn create_from_index(index: usize) -> Self {
+        PropagatorId(index as u32)
     }
 }
