@@ -35,7 +35,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
 
 impl<'a> ConflictAnalysisNogoodContext<'a> {
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
-        self.assignments.decisions.last().copied()
+        self.assignments.find_last_decision()
     }
 
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
