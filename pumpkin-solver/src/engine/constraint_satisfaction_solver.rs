@@ -805,60 +805,48 @@ impl ConstraintSatisfactionSolver {
         // at separate decision levels.
         if let Some(assumption_literal) = self.peek_next_assumption_predicate() {
             self.declare_new_decision_level();
-            self.enqueue_assumption_predicate(assumption_literal)
-        }
-        // Otherwise proceed with standard branching.
-        else {
-            let context = &mut SelectionContext::new(
-                &self.assignments,
-                &mut self.internal_parameters.random_generator,
-            );
-            // If there is a next decision, make the decision.
-            if let Some(decision_predicate) = brancher.next_decision(context) {
-                self.declare_new_decision_level();
-                pumpkin_assert_moderate!(
-                    !self.assignments.is_predicate_satisfied(decision_predicate),
-                    "Decision should not already be assigned; double check the brancher"
-                );
 
-                self.counters.engine_statistics.num_decisions += 1;
-                self.assignments
-                    .post_decision(decision_predicate)
-                    .expect("Decisions are expected not to fail.");
-                Ok(())
-            }
+            return self
+                .assignments
+                .post_predicate(assumption_literal, None)
+                .map_err(|_| {
+                    self.state
+                        .declare_infeasible_under_assumptions(assumption_literal);
+                    CSPSolverExecutionFlag::Infeasible
+                });
+        }
+
+        // Otherwise proceed with standard branching.
+        let context = &mut SelectionContext::new(
+            &self.assignments,
+            &mut self.internal_parameters.random_generator,
+        );
+
+        // If there is a next decision, make the decision.
+        let Some(decision_predicate) = brancher.next_decision(context) else {
             // Otherwise there are no more decisions to be made,
             // all predicates have been applied without a conflict,
             // meaning the problem is feasible.
-            else {
-                self.state.declare_solution_found();
-                Err(CSPSolverExecutionFlag::Feasible)
-            }
-        }
-    }
+            self.state.declare_solution_found();
+            return Err(CSPSolverExecutionFlag::Feasible);
+        };
 
-    /// Posts the assumption predicate.
-    /// If the predicate is already true, nothing happens to the state.
-    /// If the predicate is neither true nor false, and the state is set such that the
-    /// predicate is now true.
-    /// If the predicate is false, returns an Err(CSPSolverExecutionFlag::Infeasible).
-    pub(crate) fn enqueue_assumption_predicate(
-        &mut self,
-        assumption_predicate: Predicate,
-    ) -> Result<(), CSPSolverExecutionFlag> {
-        match self.assignments.post_decision(assumption_predicate) {
-            // The assumption is set to true. Note that the predicate may have been already true.
-            // This could happen when other assumptions propagated the predicate
-            // or the assumption is already set to true at the root level.
-            Ok(_) => Ok(()),
-            // The assumption predicate is in conflict with the input assumptions,
-            // which means the instance is infeasible under the current assumptions.
-            Err(_) => {
-                self.state
-                    .declare_infeasible_under_assumptions(assumption_predicate);
-                Err(CSPSolverExecutionFlag::Infeasible)
-            }
-        }
+        self.declare_new_decision_level();
+
+        // Note: This also checks that the decision predicate is not already true. That is a
+        // stronger check than the `.expect(...)` used later on when handling the result of
+        // `Assignments::post_predicate`.
+        pumpkin_assert_moderate!(
+            !self.assignments.is_predicate_satisfied(decision_predicate),
+            "Decision should not already be assigned; double check the brancher"
+        );
+
+        self.counters.engine_statistics.num_decisions += 1;
+        self.assignments
+            .post_predicate(decision_predicate, None)
+            .expect("Decisions are expected not to fail.");
+
+        Ok(())
     }
 
     pub(crate) fn declare_new_decision_level(&mut self) {
