@@ -282,37 +282,43 @@ impl DebugHelper {
                     //
                     // The conflict explanation should be a subset of the reason literals for the
                     // propagation
-                    assert!(
-                        (matches!(conflict, Inconsistency::EmptyDomain)
-                            && (propagated_predicate.is_integer_predicate()
-                                && assignments_integer_clone.does_integer_predicate_hold(
-                                    propagated_predicate.try_into().unwrap()
-                                ))
-                            || (!propagated_predicate.is_integer_predicate()
-                                && assignments_propositional_clone.is_literal_assigned_true(
-                                    propagated_predicate
-                                        .get_literal_of_bool_predicate(
-                                            assignments_propositional_clone.true_literal
-                                        )
-                                        .unwrap()
-                                )))
-                            || {
-                                if let Inconsistency::Other(ConflictInfo::Explanation(
-                                    found_inconsistency,
-                                )) = conflict
-                                {
-                                    let test = found_inconsistency
-                                        .iter()
-                                        .all(|&predicate| reason.contains(predicate));
-                                    if !test {
-                                        eprintln!("Conflict: {found_inconsistency:?}");
-                                    }
 
-                                    test
-                                } else {
-                                    false
-                                }
-                            },
+                    assert!(
+                        {
+                            let is_empty_domain = matches!(conflict, Inconsistency::EmptyDomain);
+                            let propagated_predicate = (propagated_predicate
+                                .is_integer_predicate()
+                                && assignments_integer_clone.does_integer_predicate_hold(
+                                    propagated_predicate.try_into().unwrap(),
+                                ))
+                                || (!propagated_predicate.is_integer_predicate()
+                                    && assignments_propositional_clone.is_literal_assigned_true(
+                                        propagated_predicate
+                                            .get_literal_of_bool_predicate(
+                                                assignments_propositional_clone.true_literal,
+                                            )
+                                            .unwrap(),
+                                    ));
+                            if is_empty_domain && propagated_predicate {
+                                // We check whether an empty domain was derived, if this is indeed
+                                // the case then we check whether the propagated predicate was
+                                // reproduced
+                                return true;
+                            }
+
+                            // If this is not the case then we check whether the explanation is a
+                            // subset of the premises
+                            if let Inconsistency::Other(ConflictInfo::Explanation(
+                                found_inconsistency,
+                            )) = conflict
+                            {
+                                found_inconsistency
+                                    .iter()
+                                    .all(|&predicate| reason.contains(predicate))
+                            } else {
+                                false
+                            }
+                        },
                         "Debug propagation detected a conflict other than a propagation\n
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
