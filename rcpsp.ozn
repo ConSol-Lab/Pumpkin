@@ -1,4 +1,0 @@
-output ["Start times = ",show(s),"\n","makespan = ",show(objective),"\n"];
-int: objective;
-set of int: Tasks = 1..101;
-array [Tasks] of int: s;

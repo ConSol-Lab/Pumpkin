@@ -1,6 +1,0 @@
-output ["succ = "++format(succ)++";\n","purchaseLoc = "++format(purchaseLoc)++";\n","objective = "++format(objective)++";"];
-int: objective;
-int: numproducts = 30;
-int: numcities = 30;
-array [1..numproducts] of int: purchaseLoc;
-array [1..numcities] of int: succ;
