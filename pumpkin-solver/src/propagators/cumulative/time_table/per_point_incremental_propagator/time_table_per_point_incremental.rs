@@ -638,7 +638,7 @@ mod tests {
             ),
         );
         assert!(match result {
-            Err(Inconsistency::Conflict { conflict_nogood: x }) => {
+            Err(Inconsistency::Conflict(x)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -1230,12 +1230,11 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 7);
         let result = solver.propagate(&mut propagator);
         assert!({
-            let same = if let Err(Inconsistency::Conflict {
-                conflict_nogood: explanation
-            }) =
+            let same = if let Err(Inconsistency::Conflict (explanation
+            )) =
                 &result
             {
-                if let Err(Inconsistency::Conflict {conflict_nogood: explanation_scratch}) =
+                if let Err(Inconsistency::Conflict (explanation_scratch)) =
                     &result_scratch
                 {
                     explanation.iter().collect::<Vec<_>>()
@@ -1338,14 +1337,8 @@ mod tests {
         let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            let same = if let Err(Inconsistency::Conflict {
-                conflict_nogood: explanation,
-            }) = &result
-            {
-                if let Err(Inconsistency::Conflict {
-                    conflict_nogood: explanation_scratch,
-                }) = &result_scratch
-                {
+            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.iter().collect::<Vec<_>>()
                         == explanation_scratch.iter().collect::<Vec<_>>()
                 } else {
@@ -1444,14 +1437,8 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
         assert!({
-            let same = if let Err(Inconsistency::Conflict {
-                conflict_nogood: explanation,
-            }) = &result
-            {
-                if let Err(Inconsistency::Conflict {
-                    conflict_nogood: explanation_scratch,
-                }) = &result_scratch
-                {
+            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.iter().collect::<Vec<_>>()
                         != explanation_scratch.iter().collect::<Vec<_>>()
                 } else {
@@ -1463,6 +1450,7 @@ mod tests {
             same
         });
     }
+
     #[test]
     fn synchronisation_leads_to_same_explanation() {
         let mut solver_scratch = TestSolver::default();
@@ -1771,12 +1759,8 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict {
-                conflict_nogood: explanation,
-            }),
-            Err(Inconsistency::Conflict {
-                conflict_nogood: explanation_scratch,
-            }),
+            Err(Inconsistency::Conflict(explanation)),
+            Err(Inconsistency::Conflict(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
@@ -1898,12 +1882,8 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Conflict {
-                conflict_nogood: explanation,
-            }),
-            Err(Inconsistency::Conflict {
-                conflict_nogood: explanation_scratch,
-            }),
+            Err(Inconsistency::Conflict(explanation)),
+            Err(Inconsistency::Conflict(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_eq!(

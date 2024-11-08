@@ -9,9 +9,7 @@ pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Inconsistency {
     EmptyDomain,
-    Conflict {
-        conflict_nogood: PropositionalConjunction,
-    },
+    Conflict(PropositionalConjunction),
 }
 
 impl From<EmptyDomain> for Inconsistency {
@@ -22,7 +20,7 @@ impl From<EmptyDomain> for Inconsistency {
 
 impl From<PropositionalConjunction> for Inconsistency {
     fn from(conflict_nogood: PropositionalConjunction) -> Self {
-        Inconsistency::Conflict { conflict_nogood }
+        Inconsistency::Conflict(conflict_nogood)
     }
 }
 

@@ -424,9 +424,9 @@ impl NogoodPropagator {
 
         // If all predicates in the nogood are satisfied, there is a conflict.
         if num_satisfied_predicates == nogood_len {
-            return Err(Inconsistency::Conflict {
-                conflict_nogood: nogood.predicates.iter().copied().collect(),
-            });
+            return Err(Inconsistency::Conflict(
+                nogood.predicates.iter().copied().collect(),
+            ));
         }
         // If all but one predicate are satisfied, then we can propagate.
         // Note that this only makes sense since we know that there are no falsifying predicates at

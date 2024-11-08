@@ -24,10 +24,7 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 ) -> bool {
     let error_from_scratch = create_time_table_per_point_from_scratch(context, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
-        if let Err(Inconsistency::Conflict {
-            conflict_nogood: explanation,
-        }) = &synchronised_conflict_explanation
-        {
+        if let Err(Inconsistency::Conflict(explanation)) = &synchronised_conflict_explanation {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
             *explanation == explanation_scratch

@@ -666,12 +666,9 @@ mod tests {
             },
         ));
 
-        assert!(matches!(
-            result,
-            Err(Inconsistency::Conflict { conflict_nogood: _ })
-        ));
+        assert!(matches!(result, Err(Inconsistency::Conflict(_))));
         assert!(match result {
-            Err(Inconsistency::Conflict { conflict_nogood }) => {
+            Err(Inconsistency::Conflict(conflict_nogood)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),

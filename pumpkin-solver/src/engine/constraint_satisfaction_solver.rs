@@ -1116,7 +1116,7 @@ impl ConstraintSatisfactionSolver {
                         break;
                     }
                     // A propagator-specific reason for the current conflict.
-                    Inconsistency::Conflict { conflict_nogood } => {
+                    Inconsistency::Conflict(conflict_nogood) => {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                             &self.assignments,
                             &conflict_nogood,

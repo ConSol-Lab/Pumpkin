@@ -317,7 +317,7 @@ mod tests {
         assert!(match result {
             Err(e) => match e {
                 Inconsistency::EmptyDomain => false,
-                Inconsistency::Conflict { conflict_nogood: x } => {
+                Inconsistency::Conflict(x) => {
                     let expected = [
                         predicate!(s1 <= 1),
                         predicate!(s1 >= 1),

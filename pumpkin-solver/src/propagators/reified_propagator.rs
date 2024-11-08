@@ -151,10 +151,7 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
 
 impl<Prop: Propagator> ReifiedPropagator<Prop> {
     fn map_propagation_status(&self, mut status: PropagationStatusCP) -> PropagationStatusCP {
-        if let Err(Inconsistency::Conflict {
-            ref mut conflict_nogood,
-        }) = status
-        {
+        if let Err(Inconsistency::Conflict(ref mut conflict_nogood)) = status {
             conflict_nogood.add(self.reification_literal.get_true_predicate());
         }
         status
@@ -302,7 +299,7 @@ mod tests {
             .expect_err("eagerly triggered the conflict");
 
         match inconsistency {
-            Inconsistency::Conflict { conflict_nogood } => {
+            Inconsistency::Conflict(conflict_nogood) => {
                 assert_eq!(
                     conflict_nogood,
                     PropositionalConjunction::from(vec![

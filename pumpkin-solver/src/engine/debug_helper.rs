@@ -251,10 +251,7 @@ impl DebugHelper {
 
                             // If this is not the case then we check whether the explanation is a
                             // subset of the premises
-                            if let Inconsistency::Conflict {
-                                conflict_nogood: found_inconsistency,
-                            } = conflict
-                            {
+                            if let Inconsistency::Conflict(found_inconsistency) = conflict {
                                 found_inconsistency
                                     .iter()
                                     .all(|&predicate| reason.contains(predicate))
