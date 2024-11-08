@@ -585,7 +585,8 @@ fn cnf_problem(
     instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
-    let mut solver = parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
+    let mut solver =
+        parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?.solver;
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));

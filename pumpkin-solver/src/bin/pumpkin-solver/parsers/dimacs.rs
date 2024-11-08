@@ -16,6 +16,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::num::NonZeroI32;
+use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use pumpkin_solver::options::SolverOptions;
@@ -29,9 +30,6 @@ pub(crate) trait DimacsSink {
     /// The arguments to the dimacs sink.
     type ConstructorArgs;
 
-    /// The underlying formula type.
-    type Formula;
-
     /// Create an empty formula.
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self;
 
@@ -42,23 +40,7 @@ pub(crate) trait DimacsSink {
 
     /// Add a new soft clause to the formula. This supports non-unit soft clauses, and returns the
     /// literal which can be used in the objective function.
-    fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition;
-
-    /// Take the collected clauses and turn it into the underlying formula type.
-    fn into_formula(self) -> Self::Formula;
-}
-
-pub(crate) enum SoftClauseAddition {
-    /// The soft clause is violated at the root. In this case, there is a constant term that is
-    /// added to the objective function.
-    RootViolated,
-    /// The soft clause is satisfied at the root. In this case, the clause can be ignored for the
-    /// objective function.
-    RootSatisfied,
-    /// The soft clause is added to the formula, and the given literal is either the original unit
-    /// clause or implies the soft clause if it is not unit. In any case, it is added to the
-    /// objective function.
-    Added(Literal),
+    fn add_soft_clause(&mut self, weight: NonZeroU32, clause: &[NonZeroI32]);
 }
 
 #[derive(Debug, Error)]
@@ -91,7 +73,7 @@ pub(crate) enum DimacsParseError {
 pub(crate) fn parse_cnf<Sink: DimacsSink>(
     source: impl Read,
     sink_constructor_args: Sink::ConstructorArgs,
-) -> Result<Sink::Formula, DimacsParseError> {
+) -> Result<Sink, DimacsParseError> {
     let mut reader = BufReader::new(source);
     let mut parser =
         DimacsParser::<Sink, _, CNFHeader>::new(sink_constructor_args, |sink, clause, _| {
@@ -114,34 +96,19 @@ pub(crate) fn parse_cnf<Sink: DimacsSink>(
     }
 }
 
-pub(crate) struct WcnfInstance<Formula> {
-    pub(crate) formula: Formula,
-    pub(crate) last_instance_variable: usize,
-    pub(crate) objective: Function,
-}
-
 pub(crate) fn parse_wcnf<Sink: DimacsSink>(
     source: impl Read,
     sink_constructor_args: Sink::ConstructorArgs,
-) -> Result<WcnfInstance<Sink::Formula>, DimacsParseError> {
-    let mut objective_function = Function::default();
+) -> Result<Sink, DimacsParseError> {
     let mut reader = BufReader::new(source);
     let mut parser =
         DimacsParser::<Sink, _, WCNFHeader>::new(sink_constructor_args, |sink, clause, header| {
-            let weight = clause[0].get() as u64;
+            let weight: NonZeroU32 = clause[0].try_into().unwrap();
 
-            if weight == header.top_weight {
+            if u64::from(weight.get()) == header.top_weight {
                 sink.add_hard_clause(&clause[1..]);
             } else {
-                match sink.add_soft_clause(&clause[1..]) {
-                    SoftClauseAddition::RootViolated => {
-                        objective_function.add_constant_term(weight)
-                    }
-                    SoftClauseAddition::RootSatisfied => {}
-                    SoftClauseAddition::Added(literal) => {
-                        objective_function.add_weighted_literal(literal, weight)
-                    }
-                }
+                sink.add_soft_clause(weight, &clause[1..]);
             }
         });
 
@@ -150,18 +117,8 @@ pub(crate) fn parse_wcnf<Sink: DimacsSink>(
             let data = reader.fill_buf()?;
 
             if data.is_empty() {
-                let last_instance_variable = parser
-                    .header
-                    .as_ref()
-                    .ok_or(DimacsParseError::MissingHeader)?
-                    .num_variables;
                 let formula = parser.complete()?;
-
-                return Ok(WcnfInstance {
-                    formula,
-                    last_instance_variable,
-                    objective: objective_function,
-                });
+                return Ok(formula);
             }
 
             parser.parse_chunk(data)?;
@@ -314,7 +271,7 @@ where
         self.buffer.push(*b as char);
     }
 
-    fn complete(self) -> Result<Sink::Formula, DimacsParseError> {
+    fn complete(self) -> Result<Sink, DimacsParseError> {
         let sink = self.sink.ok_or(DimacsParseError::MissingHeader)?;
         let header = self
             .header
@@ -328,7 +285,7 @@ where
                 parsed: self.parsed_clauses,
             })
         } else {
-            Ok(sink.into_formula())
+            Ok(sink)
         }
     }
 
@@ -474,8 +431,9 @@ fn next_header_component<'a, Num: FromStr>(
 
 /// A dimacs sink that creates a fresh [`Solver`] when reading DIMACS files.
 pub(crate) struct SolverDimacsSink {
-    solver: Solver,
-    variables: Vec<Literal>,
+    pub(crate) solver: Solver,
+    pub(crate) objective: Function,
+    pub(crate) variables: Vec<Literal>,
 }
 
 /// The arguments to construct a [`Solver`]. Forwarded to
@@ -508,7 +466,6 @@ impl SolverDimacsSink {
 
 impl DimacsSink for SolverDimacsSink {
     type ConstructorArgs = SolverArgs;
-    type Formula = Solver;
 
     fn empty(args: Self::ConstructorArgs, num_variables: usize) -> Self {
         let SolverArgs { solver_options } = args;
@@ -518,7 +475,11 @@ impl DimacsSink for SolverDimacsSink {
             .map(|code| solver.new_named_literal(format!("{}", code + 1)))
             .collect::<Vec<_>>();
 
-        SolverDimacsSink { solver, variables }
+        SolverDimacsSink {
+            solver,
+            objective: Function::default(),
+            variables,
+        }
     }
 
     fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
@@ -529,22 +490,21 @@ impl DimacsSink for SolverDimacsSink {
         let _ = self.solver.add_clause(mapped);
     }
 
-    fn add_soft_clause(&mut self, clause: &[NonZeroI32]) -> SoftClauseAddition {
+    fn add_soft_clause(&mut self, weight: NonZeroU32, clause: &[NonZeroI32]) {
         let mut clause = self.mapped_clause(clause);
+
+        let is_clause_satisfied = clause
+            .iter()
+            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false));
 
         if clause.is_empty() {
             // The soft clause is violated at the root level.
-            SoftClauseAddition::RootViolated
-        } else if clause
-            .iter()
-            .any(|literal| self.solver.get_literal_value(*literal).unwrap_or(false))
-        {
+            self.objective.add_constant_term(weight.get().into());
+        } else if is_clause_satisfied {
             // The soft clause is satisfied at the root level and may be ignored.
-            SoftClauseAddition::RootSatisfied
         } else if clause.len() == 1 {
-            // The soft clause is a unit clause, we can use the literal in the objective directly
-            // without needing an additional selector variable.
-            SoftClauseAddition::Added(!clause[0])
+            self.objective
+                .add_weighted_literal(clause[0], weight.get().into());
         } else {
             // General case, a soft clause with more than one literal.
             let soft_literal = self.solver.new_literal();
@@ -555,20 +515,14 @@ impl DimacsSink for SolverDimacsSink {
                     .map(|literal| literal.get_true_predicate()),
             );
 
-            SoftClauseAddition::Added(soft_literal)
+            self.objective
+                .add_weighted_literal(soft_literal, weight.get().into());
         }
-    }
-
-    fn into_formula(self) -> Self::Formula {
-        self.solver
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use pumpkin_solver::variables::DomainId;
-
     use super::*;
 
     #[test]
@@ -659,21 +613,10 @@ mod tests {
             1 2 0
         "#;
 
-        let (formula, objective) = parse_wcnf_source(source);
+        let (objective, formula) = parse_wcnf_source(source);
 
-        assert_eq!(vec![vec![1, -2], vec![-1, 2], vec![1], vec![2]], formula);
-
-        let _objective_literals = objective
-            .get_literal_terms()
-            .map(|(&lit, &weight)| (lit, weight))
-            .collect::<Vec<_>>();
-
-        let _domain1 = DomainId::new(1);
-        let _domain2 = DomainId::new(2);
-
-        // TODO: recreate this test
-        // assert!(objective_literals.contains(&(Literal::new(predicate!(domain1 == 1)), 2)));
-        // assert!(objective_literals.contains(&(Literal::new(predicate!(domain2 == 1)), 1)));
+        assert_eq!(vec![vec![1, -2], vec![-1, 2]], formula);
+        assert_eq!(vec![(2, 1), (1, 2)], objective);
     }
 
     #[test]
@@ -714,16 +657,12 @@ mod tests {
         parse_cnf::<Vec<Vec<i32>>>(source.as_bytes(), ()).expect_err("invalid dimacs")
     }
 
-    fn parse_wcnf_source(source: &str) -> (Vec<Vec<i32>>, Function) {
-        parse_wcnf::<Vec<Vec<i32>>>(source.as_bytes(), ())
-            .map(|instance| (instance.formula, instance.objective))
-            .expect("valid dimacs")
+    fn parse_wcnf_source(source: &str) -> (Vec<(u32, i32)>, Vec<Vec<i32>>) {
+        parse_wcnf::<(Vec<(u32, i32)>, Vec<Vec<i32>>)>(source.as_bytes(), ()).expect("valid dimacs")
     }
 
     impl DimacsSink for Vec<Vec<i32>> {
         type ConstructorArgs = ();
-
-        type Formula = Vec<Vec<i32>>;
 
         fn empty(_: Self::ConstructorArgs, _: usize) -> Self {
             vec![]
@@ -733,19 +672,26 @@ mod tests {
             self.push(clause.iter().map(|lit| lit.get()).collect());
         }
 
-        fn add_soft_clause(&mut self, _clause: &[NonZeroI32]) -> SoftClauseAddition {
-            // assert_eq!(1, clause.len(), "in test instances use unit soft clauses");
-            //
-            //// todo: maybe should be -1?
-            // let domain_id = DomainId::new(clause[0].unsigned_abs().get());
-            //
-            // self.add_hard_clause(clause);
-            // SoftClauseAddition::Added(Literal::test_new(domain_id))
-            todo!()
+        fn add_soft_clause(&mut self, _: NonZeroU32, _: &[NonZeroI32]) {
+            panic!("Use (Vec<i32>, Vec<Vec<i32>>) to parse wcnf in tests");
+        }
+    }
+
+    impl DimacsSink for (Vec<(u32, i32)>, Vec<Vec<i32>>) {
+        type ConstructorArgs = ();
+
+        fn empty(_: Self::ConstructorArgs, _: usize) -> Self {
+            (vec![], vec![])
         }
 
-        fn into_formula(self) -> Self::Formula {
-            self
+        fn add_hard_clause(&mut self, clause: &[NonZeroI32]) {
+            self.1.push(clause.iter().map(|lit| lit.get()).collect());
+        }
+
+        fn add_soft_clause(&mut self, weight: NonZeroU32, clause: &[NonZeroI32]) {
+            assert_eq!(1, clause.len(), "in test instances use unit soft clauses");
+
+            self.0.push((weight.get(), clause[0].get()));
         }
     }
 }
