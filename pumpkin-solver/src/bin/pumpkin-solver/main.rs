@@ -16,24 +16,27 @@ use clap::Parser;
 use clap::ValueEnum;
 use convert_case::Case;
 use file_format::FileFormat;
+use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
+use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::encodings::PseudoBooleanEncoding;
+use pumpkin_solver::conflict_resolution::NoLearningResolver;
+use pumpkin_solver::conflict_resolution::ResolutionResolver;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::Solution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::variables::PropositionalVariable;
 use pumpkin_solver::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -42,6 +45,9 @@ use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
+
+pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
+// pub(crate) type HashSet<K, Hasher = FnvBuildHasher> = std::collections::HashSet<K, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -104,16 +110,18 @@ struct Args {
     )]
     learning_lbd_threshold: u32,
 
-    /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
-    /// based on the LBD of a clause (the number of different decision levels) or on the activity
-    /// of a clause (how often it is used in conflict analysis).
-    #[arg(
-        short = 'l',
-        long = "learning-sorting-strategy",
-        default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
-    )]
-    learning_sorting_strategy: LearnedClauseSortingStrategy,
-
+    // /// Decides which clauses will be removed when cleaning up the learned clauses. Can either
+    // be /// based on the LBD of a clause (the number of different decision levels) or on the
+    // activity /// of a clause (how often it is used in conflict analysis).
+    // ///
+    // /// Possible values: ["lbd", "activity"]
+    // #[arg(
+    //     short = 'l',
+    //     long = "learning-sorting-strategy",
+    //     value_parser = learned_clause_sorting_strategy_parser,
+    //     default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
+    // )]
+    // learning_sorting_strategy: LearnedClauseSortingStrategy,
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
@@ -339,6 +347,12 @@ struct Args {
     #[arg(long = "cumulative-generate-sequence")]
     cumulative_generate_sequence: bool,
 
+    /// Determines whether the solver performs no learning or not
+    ///
+    /// Possible values: bool
+    #[arg(long = "no-learning")]
+    no_learning: bool,
+
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
     ///
@@ -475,13 +489,6 @@ fn run() -> PumpkinResult<()> {
         warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
     };
 
-    let learning_options = LearningOptions {
-        num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
-        high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy,
-        lbd_threshold: args.learning_lbd_threshold,
-        ..Default::default()
-    };
-
     let proof_log = if let Some(path_buf) = args.proof_path {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
@@ -499,21 +506,42 @@ fn run() -> PumpkinResult<()> {
         ProofLog::default()
     };
 
-    let solver_options = SolverOptions {
-        restart_options: RestartOptions {
-            sequence_generator_type: args.restart_sequence_generator_type,
-            base_interval: args.restart_base_interval,
-            min_num_conflicts_before_first_restart: args
-                .restart_min_num_conflicts_before_first_restart,
-            lbd_coef: args.restart_lbd_coef,
-            num_assigned_coef: args.restart_num_assigned_coef,
-            num_assigned_window: args.restart_num_assigned_window,
-            geometric_coef: args.restart_geometric_coef,
-            no_restarts: args.no_restarts,
-        },
-        proof_log,
-        learning_clause_minimisation: !args.no_learning_clause_minimisation,
-        random_generator: SmallRng::seed_from_u64(args.random_seed),
+    let solver_options = if args.no_learning {
+        SolverOptions {
+            restart_options: RestartOptions {
+                sequence_generator_type: args.restart_sequence_generator_type,
+                base_interval: args.restart_base_interval,
+                min_num_conflicts_before_first_restart: args
+                    .restart_min_num_conflicts_before_first_restart,
+                lbd_coef: args.restart_lbd_coef,
+                num_assigned_coef: args.restart_num_assigned_coef,
+                num_assigned_window: args.restart_num_assigned_window,
+                geometric_coef: args.restart_geometric_coef,
+                no_restarts: args.no_restarts,
+            },
+            learning_clause_minimisation: !args.no_learning_clause_minimisation,
+            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            proof_log,
+            conflict_resolver: Box::new(NoLearningResolver),
+        }
+    } else {
+        SolverOptions {
+            restart_options: RestartOptions {
+                sequence_generator_type: args.restart_sequence_generator_type,
+                base_interval: args.restart_base_interval,
+                min_num_conflicts_before_first_restart: args
+                    .restart_min_num_conflicts_before_first_restart,
+                lbd_coef: args.restart_lbd_coef,
+                num_assigned_coef: args.restart_num_assigned_coef,
+                num_assigned_window: args.restart_num_assigned_window,
+                geometric_coef: args.restart_geometric_coef,
+                no_restarts: args.no_restarts,
+            },
+            learning_clause_minimisation: !args.no_learning_clause_minimisation,
+            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            proof_log,
+            conflict_resolver: Box::new(ResolutionResolver::default()),
+        }
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
@@ -523,18 +551,15 @@ fn run() -> PumpkinResult<()> {
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
     match file_format {
-        FileFormat::CnfDimacsPLine => {
-            cnf_problem(learning_options, solver_options, time_limit, instance_path)?
-        }
+        FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
         FileFormat::WcnfDimacsPLine => wcnf_problem(
-            learning_options,
             solver_options,
             time_limit,
             instance_path,
             args.upper_bound_encoding,
         )?,
         FileFormat::FlatZinc => flatzinc::solve(
-            Solver::with_options(learning_options, solver_options),
+            Solver::with_options(solver_options),
             instance_path,
             time_limit,
             FlatZincOptions {
@@ -555,35 +580,28 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn cnf_problem(
-    learning_options: LearningOptions,
     solver_options: SolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
-    let mut solver = parse_cnf::<SolverDimacsSink>(
-        instance_file,
-        SolverArgs::new(learning_options, solver_options),
-    )?;
+    let mut solver = parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(solution) => {
             solver.log_statistics();
             println!("s SATISFIABLE");
-            let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(&solution, num_propositional_variables, true)
+                stringify_solution(&solution, solution.num_domains(), true)
             );
         }
         SatisfactionResult::Unsatisfiable => {
             solver.log_statistics();
-            if solver.conclude_proof_unsat().is_err() {
-                warn!("Failed to log solver conclusion");
-            };
+            solver.conclude_proof_unsat();
 
             println!("s UNSATISFIABLE");
         }
@@ -598,16 +616,20 @@ fn cnf_problem(
 
 fn stringify_solution(
     solution: &Solution,
-    num_variables: usize,
+    number_of_variables: usize,
     terminate_with_zero: bool,
 ) -> String {
-    (1..num_variables)
-        .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
-        .map(|var| {
-            if solution.get_propositional_variable_value(var) {
-                format!("{} ", var.get_index())
+    solution
+        .get_domains()
+        .skip(1)
+        .take(number_of_variables)
+        .map(|domain_id| {
+            let value = solution.get_integer_value(domain_id);
+            pumpkin_assert_simple!((0..=1).contains(&value));
+            if value == 1 {
+                format!("{} ", domain_id.id - 1)
             } else {
-                format!("-{} ", var.get_index())
+                format!("-{} ", domain_id.id - 1)
             }
         })
         .chain(if terminate_with_zero {

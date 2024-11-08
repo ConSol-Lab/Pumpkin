@@ -132,7 +132,7 @@ fn main() {
         }
     }
 
-    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
         SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(bibd.columns as usize));

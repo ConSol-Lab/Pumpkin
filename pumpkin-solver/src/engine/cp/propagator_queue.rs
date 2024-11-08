@@ -38,6 +38,14 @@ impl PropagatorQueue {
         }
     }
 
+    pub(crate) fn pop_new(&mut self) -> Option<PropagatorId> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.pop())
+        }
+    }
+
     pub(crate) fn pop(&mut self) -> PropagatorId {
         pumpkin_assert_moderate!(!self.is_empty());
 

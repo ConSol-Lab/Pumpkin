@@ -1,12 +1,12 @@
 use log::debug;
+use pumpkin_solver::pumpkin_assert_moderate;
+use pumpkin_solver::pumpkin_assert_simple;
+use pumpkin_solver::variables::Literal;
 
 use super::pseudo_boolean_constraint_encoder::EncodingError;
 use super::pseudo_boolean_constraint_encoder::PseudoBooleanConstraintEncoderInterface;
-use crate::basic_types::HashMap;
-use crate::basic_types::WeightedLiteral;
-use crate::engine::variables::Literal;
-use crate::pumpkin_assert_moderate;
-use crate::pumpkin_assert_simple;
+use super::WeightedLiteral;
+use crate::HashMap;
 use crate::Solver;
 
 /// Implementation of the generalized totalizer encoding for pseudo-boolean constraints.
@@ -64,7 +64,10 @@ impl PseudoBooleanConstraintEncoderInterface for GeneralisedTotaliserEncoder {
                 self.num_clauses_added += 1;
                 self.index_last_added_weighted_literal = i;
 
-                if solver.add_clause([!weighted_literals[i].literal]).is_err() {
+                if solver
+                    .add_clause([(!weighted_literals[i].literal).get_true_predicate()])
+                    .is_err()
+                {
                     return Err(EncodingError::CannotStrengthen);
                 }
             } else {
@@ -183,7 +186,6 @@ impl GeneralisedTotaliserEncoder {
                     next_layer_node.push(WeightedLiteral {
                         literal,
                         weight: *partial_sum,
-                        bound: None,
                     });
                 }
 
@@ -194,8 +196,9 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node1] {
                     solver
                         .add_clause(vec![
-                            !weighted_literal.literal,
-                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
                         ])
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
@@ -205,8 +208,9 @@ impl GeneralisedTotaliserEncoder {
                 for weighted_literal in &self.layers[index_current_layer].nodes[index_node2] {
                     solver
                         .add_clause(vec![
-                            !weighted_literal.literal,
-                            *value_to_literal_map.get(&weighted_literal.weight).unwrap(),
+                            (!weighted_literal.literal).get_true_predicate(),
+                            (*value_to_literal_map.get(&weighted_literal.weight).unwrap())
+                                .get_true_predicate(),
                         ])
                         .expect("Adding encoding clause should not lead to conflict");
                     self.num_clauses_added += 1;
@@ -220,9 +224,10 @@ impl GeneralisedTotaliserEncoder {
                         if combined_weight <= k {
                             solver
                                 .add_clause(vec![
-                                    !wl1.literal,
-                                    !wl2.literal,
-                                    *value_to_literal_map.get(&combined_weight).unwrap(),
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                    (*value_to_literal_map.get(&combined_weight).unwrap())
+                                        .get_true_predicate(),
                                 ])
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
@@ -233,7 +238,10 @@ impl GeneralisedTotaliserEncoder {
                         // makes sense      I think it is necessary
                         } else {
                             solver
-                                .add_clause(vec![!wl1.literal, !wl2.literal])
+                                .add_clause(vec![
+                                    (!wl1.literal).get_true_predicate(),
+                                    (!wl2.literal).get_true_predicate(),
+                                ])
                                 .expect("Adding encoding clause should not lead to conflict");
                             self.num_clauses_added += 1;
                         }

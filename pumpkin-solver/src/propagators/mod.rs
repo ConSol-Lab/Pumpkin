@@ -3,9 +3,9 @@
 //! See the [`crate::engine::cp::propagation`] for info on propagators.
 
 pub(crate) mod arithmetic;
-pub(crate) mod clausal;
 mod cumulative;
 pub(crate) mod element;
+pub(crate) mod nogood;
 mod reified_propagator;
 pub(crate) use arithmetic::*;
 pub use cumulative::CumulativeExplanationType;

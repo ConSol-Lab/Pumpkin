@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use crate::basic_types::ConflictInfo;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::PropagationContext;
@@ -25,8 +24,9 @@ pub(crate) fn check_synchronisation_conflict_explanation_per_point<
 ) -> bool {
     let error_from_scratch = create_time_table_per_point_from_scratch(context, parameters);
     if let Err(explanation_scratch) = error_from_scratch {
-        if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
-            &synchronised_conflict_explanation
+        if let Err(Inconsistency::Conflict {
+            conflict_nogood: explanation,
+        }) = &synchronised_conflict_explanation
         {
             // We check whether both inconsistencies are of the same type and then we check their
             // corresponding explanations
@@ -164,7 +164,7 @@ mod tests {
 
     use super::find_synchronised_conflict;
     use crate::engine::propagation::LocalId;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::propagators::CumulativeParameters;
     use crate::propagators::CumulativePropagatorOptions;
     use crate::propagators::PerPointTimeTableType;

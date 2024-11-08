@@ -48,10 +48,10 @@ pub(crate) enum Output {
 }
 
 impl Output {
-    pub(crate) fn bool(id: Rc<str>, literal: Literal) -> Output {
+    pub(crate) fn bool(id: Rc<str>, boolean: Literal) -> Output {
         Output::Bool(VariableOutput {
             id,
-            variable: literal,
+            variable: boolean,
         })
     }
 

@@ -10,6 +10,7 @@ use crate::branching::InDomainRandom;
 #[cfg(doc)]
 use crate::branching::SelectionContext;
 use crate::pumpkin_assert_moderate;
+use crate::variables::DomainId;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -68,6 +69,13 @@ pub trait Random: Debug {
     /// assert!(selected_index >= 0 && selected_index < elements.len());
     /// ```
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize;
+
+    fn generate_f64(&mut self) -> f64;
+
+    fn weighted_choice_domain_id(
+        &mut self,
+        items_with_weights: &[(DomainId, i32)],
+    ) -> Option<DomainId>;
 }
 
 // We provide a blanket implementation of the trait for any type which implements `SeedableRng`,
@@ -89,6 +97,36 @@ where
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize {
         self.gen_range(range)
     }
+
+    fn generate_f64(&mut self) -> f64 {
+        self.gen_range(0.0..1.0)
+    }
+
+    fn weighted_choice_domain_id(
+        &mut self,
+        items_with_weights: &[(DomainId, i32)],
+    ) -> Option<DomainId> {
+        // Taken from https://docs.rs/random_choice/latest/src/random_choice/lib.rs.html
+        if items_with_weights.is_empty() {
+            return None;
+        }
+
+        let sum = items_with_weights
+            .iter()
+            .map(|(_, weight)| *weight)
+            .sum::<i32>() as f64;
+
+        let spin = self.generate_f64() * sum;
+
+        let mut i: usize = 0;
+        let mut accumulated_weights = items_with_weights[0].1 as f64;
+
+        while accumulated_weights < spin {
+            i += 1;
+            accumulated_weights += items_with_weights[i].1 as f64;
+        }
+        Some(items_with_weights[i].0)
+    }
 }
 
 #[cfg(test)]
@@ -98,6 +136,7 @@ pub(crate) mod tests {
 
     use super::Random;
     use crate::pumpkin_assert_simple;
+    use crate::variables::DomainId;
 
     /// A test "random" generator which takes as input a list of elements of [`usize`] and [`bool`]
     /// and returns them in order. If more values are attempted to be generated than are provided
@@ -131,6 +170,23 @@ pub(crate) mod tests {
                 "The selected element by `TestRandom` ({selected}) is not in the provided range ({range:?}) and thus should not be returned, please ensure that your test cases are correctly defined"
             );
             selected
+        }
+
+        fn generate_f64(&mut self) -> f64 {
+            // TODO: implement properly here
+            1.0
+        }
+
+        fn weighted_choice_domain_id(
+            &mut self,
+            items_with_weights: &[(DomainId, i32)],
+        ) -> Option<DomainId> {
+            // TODO: implement properly here
+            if items_with_weights.is_empty() {
+                None
+            } else {
+                Some(items_with_weights[0].0)
+            }
         }
     }
 }

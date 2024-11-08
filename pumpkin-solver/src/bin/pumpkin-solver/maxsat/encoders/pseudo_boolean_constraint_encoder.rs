@@ -4,17 +4,31 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use log::debug;
+use pumpkin_solver::pumpkin_assert_simple;
+use pumpkin_solver::Function;
 use thiserror::Error;
 
 use super::CardinalityNetworkEncoder;
 use super::GeneralisedTotaliserEncoder;
-use super::SingleIntegerEncoder;
-use crate::basic_types::Function;
-use crate::basic_types::WeightedLiteral;
-use crate::engine::variables::Literal;
-use crate::engine::DebugDyn;
-use crate::pumpkin_assert_simple;
+use super::WeightedLiteral;
 use crate::Solver;
+
+#[derive(Copy, Clone)]
+pub(crate) struct DebugDyn<'a> {
+    trait_name: &'a str,
+}
+
+impl<'a> DebugDyn<'a> {
+    pub(crate) fn from(trait_name: &'a str) -> Self {
+        DebugDyn { trait_name }
+    }
+}
+
+impl Debug for DebugDyn<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<dyn {}>", self.trait_name)
+    }
+}
 
 /// The following facilitates easier reuse and consistency amongst pseudo-Boolean encoders
 /// The idea is to separate the 'preprocessing' of the input and encoding algorithm
@@ -55,7 +69,7 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
 /// [`PseudoBooleanConstraintEncoder`].
 #[derive(Clone, Copy, Debug, ValueEnum)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum PseudoBooleanEncoding {
+pub(crate) enum PseudoBooleanEncoding {
     /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
     /// \[1\].
     ///
@@ -71,11 +85,6 @@ pub enum PseudoBooleanEncoding {
     /// \[1\] R. Asín, R. Nieuwenhuis, A. Oliveras, and E. Rodríguez-Carbonell, ‘Cardinality
     /// networks: a theoretical and empirical study’, Constraints, vol. 16, pp. 195–221, 2011.
     CardinalityNetwork,
-    /// Specifies the usage of an econding which takes as input a single integer.
-    ///
-    /// Note that if this case occurs, it is recommended to use [`Solver::maximise`] or
-    /// [Solver::minimise] directly.
-    SingleInteger,
 }
 
 impl std::fmt::Display for PseudoBooleanEncoding {
@@ -83,14 +92,13 @@ impl std::fmt::Display for PseudoBooleanEncoding {
         match self {
             PseudoBooleanEncoding::GeneralizedTotalizer => write!(f, "generalized-totalizer"),
             PseudoBooleanEncoding::CardinalityNetwork => write!(f, "cardinality-network"),
-            PseudoBooleanEncoding::SingleInteger => write!(f, "single-integer"),
         }
     }
 }
 
 /// The main struct through which the constraint encoders are to be used
 #[derive(Debug)]
-pub struct PseudoBooleanConstraintEncoder {
+pub(crate) struct PseudoBooleanConstraintEncoder {
     state: State,
     constant_term: u64,
     k_previous: u64,
@@ -102,8 +110,6 @@ enum State {
     Encoded(Box<dyn PseudoBooleanConstraintEncoderInterface>),
     Preprocessed(Vec<WeightedLiteral>),
     TriviallySatisfied,
-    SingleIntegerNew(Vec<WeightedLiteral>),
-    SingleInteger(SingleIntegerEncoder),
 }
 
 impl Debug for State {
@@ -121,20 +127,12 @@ impl Debug for State {
                 .field(&weighted_literals)
                 .finish(),
             State::TriviallySatisfied => f.debug_tuple("TriviallySatisfied").finish(),
-            State::SingleIntegerNew(weighted_literals) => f
-                .debug_tuple("SingleIntegerNew")
-                .field(&weighted_literals)
-                .finish(),
-            State::SingleInteger(_) => f
-                .debug_tuple("SingleInteger")
-                .field(&DebugDyn::from("PseudoBooleanConstraintEncoderInterface"))
-                .finish(),
         }
     }
 }
 
 impl PseudoBooleanConstraintEncoder {
-    pub fn new(
+    pub(crate) fn new(
         weighted_literals: Vec<WeightedLiteral>,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Self {
@@ -151,69 +149,61 @@ impl PseudoBooleanConstraintEncoder {
         }
     }
 
-    pub fn from_single_integer_function(weighted_literals: Vec<WeightedLiteral>) -> Self {
-        Self {
-            state: State::SingleIntegerNew(weighted_literals),
-            constant_term: 0,
-            k_previous: 0,
-            encoding_algorithm: PseudoBooleanEncoding::SingleInteger,
-        }
-    }
-
-    pub fn from_weighted_literal_vector(
-        weighted_literals: Vec<WeightedLiteral>,
-        encoding_algorithm: PseudoBooleanEncoding,
-    ) -> Self {
-        PseudoBooleanConstraintEncoder::new(weighted_literals, encoding_algorithm)
-    }
-
-    pub fn from_literal_vector(
-        literals: &[Literal],
-        encoding_algorithm: PseudoBooleanEncoding,
-    ) -> Self {
-        PseudoBooleanConstraintEncoder::new(
-            literals
-                .iter()
-                .map(|lit| WeightedLiteral {
-                    literal: *lit,
-                    weight: 1,
-                    bound: None,
-                })
-                .collect(),
-            encoding_algorithm,
-        )
-    }
-
-    pub fn from_function(
+    pub(crate) fn from_function(
         function: &Function,
         solver: &mut Solver,
         encoding_algorithm: PseudoBooleanEncoding,
     ) -> Self {
-        let single_integer_case = function.get_weighted_literals().len() == 0
-            && function.get_weighted_integers().len() == 1;
-        let mut encoder = if single_integer_case {
-            PseudoBooleanConstraintEncoder::from_single_integer_function(
-                function.get_function_as_weighted_literals_vector(solver),
-            )
-        } else {
-            PseudoBooleanConstraintEncoder::new(
-                function.get_function_as_weighted_literals_vector(solver),
-                encoding_algorithm,
-            )
-        };
-        if !single_integer_case {
-            encoder.constant_term = function.get_constant_term();
-        }
+        let mut encoder = PseudoBooleanConstraintEncoder::new(
+            PseudoBooleanConstraintEncoder::get_function_as_weighted_literals_vector(
+                function, solver,
+            ),
+            encoding_algorithm,
+        );
+        encoder.constant_term = function.get_constant_term();
 
         encoder
     }
 
-    pub fn get_constant_term(&self) -> u64 {
-        self.constant_term
+    fn get_function_as_weighted_literals_vector(
+        function: &Function,
+        _solver: &Solver,
+    ) -> Vec<WeightedLiteral> {
+        let weighted_literals: Vec<WeightedLiteral> = function
+            .get_literal_terms()
+            .map(|p| WeightedLiteral {
+                literal: *p.0,
+                weight: *p.1,
+            })
+            .collect();
+
+        for _term in function.get_terms() {
+            // todo: need to create a literal over an arbitrary predicate
+            todo!()
+            // let domain_id = *term.0;
+            // let weight = *term.1;
+
+            // let lower_bound = solver.lower_bound(&domain_id);
+            // let upper_bound = solver.upper_bound(&domain_id);
+
+            // // note that we only needs lower bound literals starting from lower_bound+1
+            // //  the literals before those contribute to the objective function but not in a way
+            // that // can be changed
+            // for i in (lower_bound + 1)..=upper_bound {
+            //     let literal = Literal::new(predicate![domain_id >= i]);
+            //     weighted_literals.push(WeightedLiteral {
+            //         literal,
+            //         weight,
+            //         bound: Some(i),
+            //     });
+            // }
+        }
+
+        weighted_literals
     }
 
     #[allow(deprecated)]
-    pub fn constrain_at_most_k(
+    pub(crate) fn constrain_at_most_k(
         &mut self,
         k: u64,
         solver: &mut Solver,
@@ -255,27 +245,6 @@ impl PseudoBooleanConstraintEncoder {
             }
 
             State::TriviallySatisfied => {}
-            State::SingleInteger(ref mut encoder) => {
-                pumpkin_assert_simple!(
-                    self.k_previous > k,
-                    "The strenthened k value for the right hand side
-                     is not smaller than the previous k."
-                );
-
-                pumpkin_assert_simple!(
-                    k >= self.constant_term,
-                    "The k is below the trivial lower bound,
-                         probably an error? k={k}, constant_term={}",
-                    self.constant_term
-                );
-                encoder.strengthen_at_most_k(k, solver)?
-            }
-            State::SingleIntegerNew(ref mut weighted_literals) => {
-                let literals = std::mem::take(weighted_literals);
-                let encoder = SingleIntegerEncoder::encode_at_most_k(literals, k, solver)?;
-                self.state = State::SingleInteger(encoder);
-                self.k_previous = k;
-            }
         }
 
         Ok(())
@@ -372,7 +341,7 @@ impl PseudoBooleanConstraintEncoder {
                 {
                     has_assigned = true;
 
-                    let result = solver.add_clause([!term.literal]);
+                    let result = solver.add_clause([(!term.literal).get_true_predicate()]);
                     if result.is_err() {
                         return Err(EncodingError::RootPropagationConflict);
                     }
@@ -413,15 +382,12 @@ impl PseudoBooleanConstraintEncoder {
                     CardinalityNetworkEncoder::encode_at_most_k(weighted_literals, k, solver)?;
                 Ok(Box::new(encoder))
             }
-            PseudoBooleanEncoding::SingleInteger => {
-                unreachable!("The SingleInteger encoder is always created in a concrete manner")
-            }
         }
     }
 }
 
 #[derive(Error, Debug, Copy, Clone)]
-pub enum EncodingError {
+pub(crate) enum EncodingError {
     #[error("Constraint detected conflict at root level by propagation")]
     RootPropagationConflict,
     #[error("Strengthening caused conflict")]

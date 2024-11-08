@@ -1,4 +1,4 @@
-//! Contains structures for tie-breaking
+//! Contains structures for tie-breaking.
 //!
 //! These structures provide an interface for deciding
 //! between two variables when there is a tie between them (for example during variable

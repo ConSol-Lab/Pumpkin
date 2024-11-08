@@ -33,14 +33,9 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(0, 10)]));
+        let assignments = SelectionContext::create_for_testing(vec![(0, 10)]);
         let mut test_rng = TestRandom::default();
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let domain_ids = context.get_domains().collect::<Vec<_>>();
 
         let mut selector = InDomainMedian;
@@ -51,20 +46,15 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_no_median() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(1, 10)]));
+        let mut assignments = SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
 
-        let domain_ids = assignments_integer.get_domains().collect::<Vec<_>>();
+        let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = assignments_integer.remove_value_from_domain(domain_ids[0], 9, None);
+        let _ = assignments.remove_value_from_domain(domain_ids[0], 9, None);
 
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] == 5))
@@ -72,20 +62,15 @@ mod tests {
 
     #[test]
     fn test_returns_correct_literal_removed_median() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(1, 0, Some(vec![(1, 10)]));
+        let mut assignments = SelectionContext::create_for_testing(vec![(1, 10)]);
         let mut test_rng = TestRandom::default();
 
-        let domain_ids = assignments_integer.get_domains().collect::<Vec<_>>();
+        let domain_ids = assignments.get_domains().collect::<Vec<_>>();
         let mut selector = InDomainMedian;
 
-        let _ = assignments_integer.remove_value_from_domain(domain_ids[0], 5, None);
+        let _ = assignments.remove_value_from_domain(domain_ids[0], 5, None);
 
-        let mut context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
         let selected_predicate = selector.select_value(&mut context, domain_ids[0]);
         assert_eq!(selected_predicate, predicate!(domain_ids[0] == 6))

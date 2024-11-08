@@ -435,12 +435,11 @@ pub(crate) fn debug_propagate_from_scratch_time_table_interval<Var: IntegerVaria
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::propagators::ArgTask;
@@ -506,18 +505,24 @@ mod tests {
                 ..Default::default()
             },
         ));
+
         assert!(match result {
-            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
-                let expected = [
-                    predicate!(s1 <= 1),
-                    predicate!(s1 >= 1),
-                    predicate!(s2 >= 1),
-                    predicate!(s2 <= 1),
-                ];
-                expected
-                    .iter()
-                    .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
-                    && x.iter().all(|y| expected.contains(y))
+            Err(e) => {
+                match e {
+                    Inconsistency::EmptyDomain => false,
+                    Inconsistency::Conflict { conflict_nogood: x } => {
+                        let expected = [
+                            predicate!(s1 <= 1),
+                            predicate!(s1 >= 1),
+                            predicate!(s2 >= 1),
+                            predicate!(s2 <= 1),
+                        ];
+                        expected
+                            .iter()
+                            .all(|y| x.iter().collect::<Vec<&Predicate>>().contains(&y))
+                            && x.iter().all(|y| expected.contains(y))
+                    }
+                }
             }
             _ => false,
         });
@@ -686,9 +691,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 8),
@@ -883,9 +886,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 >= 1),
@@ -938,9 +939,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
@@ -988,9 +987,7 @@ mod tests {
 
         for removed in 2..8 {
             assert!(!solver.contains(s2, removed));
-            let reason = solver
-                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
-                .clone();
+            let reason = solver.get_reason_int(predicate!(s2 != removed)).clone();
             assert_eq!(
                 PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
                 reason

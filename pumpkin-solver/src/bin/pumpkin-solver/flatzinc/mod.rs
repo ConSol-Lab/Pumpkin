@@ -9,7 +9,6 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
-use log::warn;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
@@ -109,20 +108,6 @@ pub(crate) fn solve(
             OptimisationResult::Optimal(optimal_solution) => {
                 let optimal_objective_value =
                     optimal_solution.get_integer_value(*objective_function.get_domain());
-                let objective_bound_literal = solver.get_literal(get_bound_predicate(
-                    *objective_function,
-                    optimal_objective_value,
-                ));
-
-                if solver
-                    .conclude_proof_optimal(objective_bound_literal)
-                    .is_err()
-                {
-                    warn!("Failed to log solver conclusion");
-                };
-
-                // If `all_solutions` is not turned on then we have not printed the solution yet and
-                // need to print it!
                 if !options.all_solutions {
                     solver.log_statistics();
                     print_solution_from_solver(&optimal_solution, &instance.outputs)
@@ -136,10 +121,6 @@ pub(crate) fn solve(
                 Some(best_found_objective_value)
             }
             OptimisationResult::Unsatisfiable => {
-                if solver.conclude_proof_unsat().is_err() {
-                    warn!("Failed to log solver conclusion");
-                };
-
                 println!("{MSG_UNSATISFIABLE}");
                 None
             }
@@ -172,9 +153,10 @@ pub(crate) fn solve(
             match solver.satisfy(&mut brancher, &mut termination) {
                 SatisfactionResult::Satisfiable(_) => {}
                 SatisfactionResult::Unsatisfiable => {
-                    if solver.conclude_proof_unsat().is_err() {
-                        warn!("Failed to log solver conclusion");
-                    };
+                    // todo: add proof-logging
+                    // if solver.conclude_proof_unsat().is_err() {
+                    //     warn!("Failed to log solver conclusion");
+                    // };
 
                     println!("{MSG_UNSATISFIABLE}");
                 }
@@ -196,6 +178,7 @@ pub(crate) fn solve(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn get_bound_predicate(
     objective_function: FlatzincObjective,
     optimal_objective_value: i32,

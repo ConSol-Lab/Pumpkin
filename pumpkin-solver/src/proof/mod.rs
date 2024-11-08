@@ -12,8 +12,7 @@ pub use drcp_format::Format;
 
 use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
-use super::variables::Literal;
-use super::VariableLiteralMappings;
+use crate::predicates::Predicate;
 use crate::variable_names::VariableNames;
 #[cfg(doc)]
 use crate::Solver;
@@ -66,13 +65,12 @@ impl ProofLog {
     }
 
     /// Log an inference to the proof.
-    ///
-    /// Passing `None` for `propagated` means `premises` imply false.
+    #[allow(unused)]
     pub(crate) fn log_inference(
         &mut self,
         constraint_tag: Option<NonZero<u32>>,
-        premises: impl IntoIterator<Item = Literal>,
-        propagated: Option<Literal>,
+        premises: impl IntoIterator<Item = Predicate>,
+        propagated: Option<Predicate>,
     ) -> std::io::Result<NonZeroU64> {
         let Some(ProofImpl::CpProof {
             writer,
@@ -98,6 +96,7 @@ impl ProofLog {
     ///
     /// Inferences are automatically added as a propagation hint when they are logged, this is
     /// therefore only necessary when nogoods are used in a propagation.
+    #[allow(unused)]
     pub(crate) fn add_propagation(&mut self, step_id: NonZeroU64) {
         let Some(ProofImpl::CpProof {
             propagation_order_hint: Some(ref mut hints),
@@ -116,7 +115,8 @@ impl ProofLog {
     /// order.
     pub(crate) fn log_learned_clause(
         &mut self,
-        literals: impl IntoIterator<Item = Literal>,
+        literals: impl IntoIterator<Item = Predicate>,
+        variable_names: &VariableNames,
     ) -> std::io::Result<NonZeroU64> {
         match &mut self.internal_proof {
             Some(ProofImpl::CpProof {
@@ -137,17 +137,13 @@ impl ProofLog {
                 Ok(id)
             }
 
-            Some(ProofImpl::DimacsProof(writer)) => writer.learned_clause(literals),
+            Some(ProofImpl::DimacsProof(writer)) => writer.learned_clause(literals, variable_names),
 
             None => Ok(DUMMY_STEP_ID),
         }
     }
 
-    pub(crate) fn unsat(
-        self,
-        variable_names: &VariableNames,
-        variable_literal_mapping: &VariableLiteralMappings,
-    ) -> std::io::Result<()> {
+    pub(crate) fn unsat(self, variable_names: &VariableNames) -> std::io::Result<()> {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
                 writer,
@@ -156,20 +152,19 @@ impl ProofLog {
             }) => {
                 let literals = writer.unsat()?;
                 let file = File::create(definitions_path)?;
-                literals.write(file, variable_names, variable_literal_mapping)
+                literals.write(file, variable_names)
             }
-            Some(ProofImpl::DimacsProof(mut writer)) => {
-                writer.learned_clause(std::iter::empty()).map(|_| ())
-            }
+            Some(ProofImpl::DimacsProof(mut writer)) => writer
+                .learned_clause(std::iter::empty(), variable_names)
+                .map(|_| ()),
             None => Ok(()),
         }
     }
 
     pub(crate) fn optimal(
         self,
-        objective_bound: Literal,
+        objective_bound: Predicate,
         variable_names: &VariableNames,
-        variable_literal_mapping: &VariableLiteralMappings,
     ) -> std::io::Result<()> {
         match self.internal_proof {
             Some(ProofImpl::CpProof {
@@ -179,7 +174,7 @@ impl ProofLog {
             }) => {
                 let literals = writer.optimal(objective_bound)?;
                 let file = File::create(definitions_path)?;
-                literals.write(file, variable_names, variable_literal_mapping)
+                literals.write(file, variable_names)
             }
 
             Some(ProofImpl::DimacsProof(_)) => {
@@ -190,6 +185,7 @@ impl ProofLog {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn is_logging_inferences(&self) -> bool {
         matches!(
             self.internal_proof,

@@ -14,9 +14,10 @@ log = "0.4.17"
 bitfield = "0.14.0"
 enumset = "1.1.2"
 fnv = "1.0.3"
-rand = { version = "0.8.5", features = [ "small_rng" ] }
+rand = { version = "0.8.5", features = [ "small_rng", "alloc" ] }
 signal-hook = "0.3.17"
 once_cell = "1.19.0"
+downcast-rs = "1.2.1"
 drcp-format = { version = "0.2.0" }
 convert_case = "0.6.0"
 itertools = "0.13.0"

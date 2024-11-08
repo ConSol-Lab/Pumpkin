@@ -25,16 +25,17 @@ const ID_C: LocalId = LocalId::from(2);
 
 impl<VA, VB, VC> IntegerMultiplicationPropagator<VA, VB, VC>
 where
-    VA: IntegerVariable,
-    VB: IntegerVariable,
-    VC: IntegerVariable,
+    VA: IntegerVariable + 'static,
+    VB: IntegerVariable + 'static,
+    VC: IntegerVariable + 'static,
 {
     pub(crate) fn new(a: VA, b: VB, c: VC) -> Self {
         IntegerMultiplicationPropagator { a, b, c }
     }
 }
 
-impl<VA, VB, VC> Propagator for IntegerMultiplicationPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static> Propagator
+    for IntegerMultiplicationPropagator<VA, VB, VC>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,
@@ -129,7 +130,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     }
 
     // b >= ceil(c.min / a.max)
-    if a_max >= 1 && c_min >= 1 {
+    if a_min >= 0 && a_max >= 1 && c_min >= 1 {
         let bound = div_ceil_pos(c_min, a_max);
 
         context.set_lower_bound(
@@ -177,8 +178,8 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
 ///         - If b is negative and c is positive then a is negative
 ///         - If b is positive and c is negative then a is negative
 ///
-/// Note that this method does not propagate a value if 0 is in the domain as, for example, `0 * -3
-/// = 0` and `0 * 3 = 0` are both equally valid.
+/// Note that this method does not propagate a value if 0 is in the domain as, for example, 0 * -3 =
+/// 0 and 0 * 3 = 0 are both equally valid.
 fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable>(
     context: &mut PropagationContextMut,
     a: &VA,
@@ -274,7 +275,7 @@ fn div_ceil_pos(numerator: i32, denominator: i32) -> i32 {
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::predicate;
 
     #[test]
@@ -297,10 +298,10 @@ mod tests {
         assert_eq!(0, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![c >= 0].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![c >= 0]);
         assert_eq!(conjunction!([a >= 0] & [b >= 0]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![c <= 12].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![c <= 12]);
         assert_eq!(
             conjunction!([a >= 0] & [a <= 3] & [b >= 0] & [b <= 4]),
             *reason_ub
@@ -327,10 +328,10 @@ mod tests {
         assert_eq!(2, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![b >= 1].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![b >= 1]);
         assert_eq!(conjunction!([a >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![b <= 6].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![b <= 6]);
         assert_eq!(conjunction!([a >= 2] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 
@@ -354,10 +355,10 @@ mod tests {
         assert_eq!(3, solver.lower_bound(c));
         assert_eq!(12, solver.upper_bound(c));
 
-        let reason_lb = solver.get_reason_int(predicate![a >= 1].try_into().unwrap());
+        let reason_lb = solver.get_reason_int(predicate![a >= 1]);
         assert_eq!(conjunction!([b >= 1] & [c >= 1]), *reason_lb);
 
-        let reason_ub = solver.get_reason_int(predicate![a <= 4].try_into().unwrap());
+        let reason_ub = solver.get_reason_int(predicate![a <= 4]);
         assert_eq!(conjunction!([b >= 3] & [c >= 0] & [c <= 12]), *reason_ub);
     }
 }

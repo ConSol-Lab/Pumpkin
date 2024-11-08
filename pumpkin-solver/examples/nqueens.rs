@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use drcp_format::Format;
 use pumpkin_solver::constraints;
-use pumpkin_solver::options::LearningOptions;
+use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
@@ -48,13 +48,10 @@ fn main() {
         return;
     };
 
-    let mut solver = Solver::with_options(
-        LearningOptions::default(),
-        pumpkin_solver::options::SolverOptions {
-            proof_log,
-            ..Default::default()
-        },
-    );
+    let mut solver = Solver::with_options(SolverOptions {
+        proof_log,
+        ..Default::default()
+    });
 
     let variables = (0..n)
         .map(|i| solver.new_named_bounded_integer(0, n as i32 - 1, format!("q{i}")))
@@ -87,7 +84,7 @@ fn main() {
         .with_tag(NonZero::new(3).unwrap())
         .post();
 
-    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut Indefinite) {
         SatisfactionResult::Satisfiable(solution) => {
             let row_separator = format!("{}+", "+---".repeat(n as usize));

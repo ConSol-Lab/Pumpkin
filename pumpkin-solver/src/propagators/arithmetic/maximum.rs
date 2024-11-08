@@ -24,7 +24,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> MaximumPropagator<Elemen
     }
 }
 
-impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
+impl<ElementVar: IntegerVariable + 'static, Rhs: IntegerVariable + 'static> Propagator
     for MaximumPropagator<ElementVar, Rhs>
 {
     fn initialise_at_root(
@@ -137,7 +137,7 @@ impl<ElementVar: IntegerVariable, Rhs: IntegerVariable> Propagator
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn upper_bound_of_rhs_matches_maximum_upper_bound_of_array_at_initialise() {
@@ -155,7 +155,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 1, 5);
 
-        let reason = solver.get_reason_int(predicate![rhs <= 5].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![rhs <= 5]);
         assert_eq!(conjunction!([a <= 5] & [b <= 5] & [c <= 5]), reason.clone());
     }
 
@@ -175,7 +175,7 @@ mod tests {
 
         solver.assert_bounds(rhs, 5, 10);
 
-        let reason = solver.get_reason_int(predicate![rhs >= 5].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![rhs >= 5]);
         assert_eq!(conjunction!([c >= 5]), reason.clone());
     }
 
@@ -195,7 +195,7 @@ mod tests {
 
         for var in array.iter() {
             solver.assert_bounds(*var, 1, 3);
-            let reason = solver.get_reason_int(predicate![var <= 3].try_into().unwrap());
+            let reason = solver.get_reason_int(predicate![var <= 3]);
             assert_eq!(conjunction!([rhs <= 3]), reason.clone());
         }
     }

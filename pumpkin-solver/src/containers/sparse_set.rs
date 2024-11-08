@@ -138,7 +138,6 @@ impl<T> SparseSet<T> {
             && self.indices[(self.mapping)(element)] < self.size
     }
 
-    /// Accomodates the `element`.
     pub(crate) fn accommodate(&mut self, element: &T) {
         let index = (self.mapping)(element);
         if self.indices.len() <= index {
@@ -146,7 +145,6 @@ impl<T> SparseSet<T> {
         }
     }
 
-    /// Inserts the element if it is not already contained in the sparse set.
     pub(crate) fn insert(&mut self, element: T) {
         if !self.contains(&element) {
             self.accommodate(&element);
@@ -215,5 +213,33 @@ mod tests {
         sparse_set.remove(&1);
         sparse_set.remove(&2);
         assert!(sparse_set.is_empty());
+    }
+
+    #[test]
+    fn iter1() {
+        let sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        let v: Vec<u32> = sparse_set.iter().copied().collect();
+        assert_eq!(v.len(), 3);
+        assert!(v.contains(&10));
+        assert!(v.contains(&5));
+        assert!(v.contains(&2));
+    }
+
+    #[test]
+    fn iter2() {
+        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
+        sparse_set.insert(100);
+        sparse_set.insert(2);
+        sparse_set.insert(20);
+        sparse_set.remove(&10);
+        sparse_set.insert(10);
+        sparse_set.remove(&10);
+
+        let v: Vec<u32> = sparse_set.iter().copied().collect();
+        assert_eq!(v.len(), 5);
+        assert!(v.contains(&5));
+        assert!(v.contains(&2));
+        assert!(v.contains(&100));
+        assert!(v.contains(&20));
     }
 }

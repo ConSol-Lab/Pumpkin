@@ -1,90 +1,195 @@
-use super::integer_predicate::IntegerPredicate;
 use crate::engine::variables::DomainId;
-#[cfg(doc)]
-use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
-#[cfg(doc)]
-use crate::engine::VariableLiteralMappings;
 
-/// This structure is oftentimes used to represent propagations, explanations or decisions.
+/// Representation of a domain operation.
 ///
-/// It can either represent an [`IntegerPredicate`], a [`Literal`] which is linked to an
-/// [`IntegerPredicate`], or a domain operation which is always true (false) using
-/// [`Predicate::True`] ([`Predicate::False`]).
+/// It can either be in the form of atomic constraints over
+/// [`DomainId`]s (in the form of [`Predicate::LowerBound`],
+/// [`Predicate::UpperBound`], [`Predicate::NotEqual`] or [`Predicate::Equal`])
 #[derive(Clone, PartialEq, Eq, Copy, Hash)]
 pub enum Predicate {
-    /// A predicate representing an atomic constraint over an [`IntegerVariable`] (either `[x >=
-    /// v]`, `[x <= v]`, `[x == v]`, or `[x != v]`).
-    IntegerPredicate(IntegerPredicate),
-    /// A predicate represented with a [`Literal`]. Oftentimes this [`Literal`] is internally
-    /// linked to an [`IntegerPredicate`].
-    Literal(Literal),
-    /// A predicate which is always false.
-    False,
-    /// A predicate which is always true.
-    True,
+    LowerBound {
+        domain_id: DomainId,
+        lower_bound: i32,
+    },
+    UpperBound {
+        domain_id: DomainId,
+        upper_bound: i32,
+    },
+    NotEqual {
+        domain_id: DomainId,
+        not_equal_constant: i32,
+    },
+    Equal {
+        domain_id: DomainId,
+        equality_constant: i32,
+    },
 }
 
 impl Predicate {
-    /// Returns the [`DomainId`] corresponding with the [`Predicate::IntegerPredicate`]. Returns
-    /// [`None`] in the case of [`Predicate::Literal`], [`Predicate::False`], and
-    /// [`Predicate::True`].
-    pub fn get_domain(&self) -> Option<DomainId> {
-        match self {
-            Predicate::IntegerPredicate(integer_predicate) => Some(integer_predicate.get_domain()),
-            _ => None,
+    pub fn is_equality_predicate(&self) -> bool {
+        matches!(
+            *self,
+            Predicate::Equal {
+                domain_id: _,
+                equality_constant: _
+            }
+        )
+    }
+
+    pub fn is_lower_bound_predicate(&self) -> bool {
+        matches!(
+            *self,
+            Predicate::LowerBound {
+                domain_id: _,
+                lower_bound: _
+            }
+        )
+    }
+
+    pub fn is_upper_bound_predicate(&self) -> bool {
+        matches!(
+            *self,
+            Predicate::UpperBound {
+                domain_id: _,
+                upper_bound: _
+            }
+        )
+    }
+
+    pub fn is_not_equal_predicate(&self) -> bool {
+        matches!(
+            *self,
+            Predicate::NotEqual {
+                domain_id: _,
+                not_equal_constant: _
+            }
+        )
+    }
+
+    /// Returns the [`DomainId`] of the [`Predicate`]
+    pub fn get_domain(&self) -> DomainId {
+        match *self {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound: _,
+            } => domain_id,
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound: _,
+            } => domain_id,
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant: _,
+            } => domain_id,
+            Predicate::Equal {
+                domain_id,
+                equality_constant: _,
+            } => domain_id,
         }
     }
 
-    /// Returns the [`Literal`] corresponding with [`Predicate::Literal`], [`Predicate::False`], and
-    /// [`Predicate::True`]. Will return [`None`] in the case of [`Predicate::IntegerPredicate`].
-    pub fn get_literal_of_bool_predicate(&self, true_literal: Literal) -> Option<Literal> {
+    pub fn get_right_hand_side(&self) -> i32 {
         match self {
-            Predicate::IntegerPredicate(_) => None,
-            Predicate::Literal(literal) => Some(*literal),
-            Predicate::False => Some(!true_literal),
-            Predicate::True => Some(true_literal),
+            Predicate::LowerBound {
+                domain_id: _,
+                lower_bound,
+            } => *lower_bound,
+            Predicate::UpperBound {
+                domain_id: _,
+                upper_bound,
+            } => *upper_bound,
+            Predicate::NotEqual {
+                domain_id: _,
+                not_equal_constant,
+            } => *not_equal_constant,
+            Predicate::Equal {
+                domain_id: _,
+                equality_constant,
+            } => *equality_constant,
         }
     }
 
-    pub fn is_integer_predicate(&self) -> bool {
-        matches!(self, Predicate::IntegerPredicate(_))
+    pub fn trivially_true() -> Predicate {
+        // By convention, there is a dummy 0-1 variable set to one at root.
+        // We use it to denote the trivially true predicate.
+        Predicate::Equal {
+            domain_id: DomainId { id: 0 },
+            equality_constant: 1,
+        }
+    }
+
+    pub fn trivially_false() -> Predicate {
+        // By convention, there is a dummy 0-1 variable set to one at root.
+        // We use it to denote the trivially true predicate.
+        Predicate::NotEqual {
+            domain_id: DomainId { id: 0 },
+            not_equal_constant: 1,
+        }
     }
 }
 
 impl std::ops::Not for Predicate {
     type Output = Predicate;
-    fn not(self) -> Predicate {
+
+    fn not(self) -> Self::Output {
         match self {
-            Predicate::IntegerPredicate(integer_predicate) => {
-                Predicate::IntegerPredicate(!integer_predicate)
-            }
-            Predicate::Literal(literal) => Predicate::Literal(!literal),
-            Predicate::False => Predicate::True,
-            Predicate::True => Predicate::False,
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => Predicate::UpperBound {
+                domain_id,
+                upper_bound: lower_bound - 1,
+            },
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => Predicate::LowerBound {
+                domain_id,
+                lower_bound: upper_bound + 1,
+            },
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => Predicate::Equal {
+                domain_id,
+                equality_constant: not_equal_constant,
+            },
+            Predicate::Equal {
+                domain_id,
+                equality_constant,
+            } => Predicate::NotEqual {
+                domain_id,
+                not_equal_constant: equality_constant,
+            },
         }
-    }
-}
-
-impl From<Literal> for Predicate {
-    fn from(value: Literal) -> Self {
-        Predicate::Literal(value)
-    }
-}
-
-impl From<IntegerPredicate> for Predicate {
-    fn from(value: IntegerPredicate) -> Self {
-        Predicate::IntegerPredicate(value)
     }
 }
 
 impl std::fmt::Display for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Predicate::IntegerPredicate(integer_predicate) => write!(f, "{}", integer_predicate),
-            Predicate::Literal(literal) => write!(f, "{}", literal),
-            Predicate::False => write!(f, "false"),
-            Predicate::True => write!(f, "true"),
+        if *self == Predicate::trivially_true() {
+            write!(f, "[True]")
+        } else if *self == Predicate::trivially_false() {
+            write!(f, "[False]")
+        } else {
+            match self {
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => write!(f, "[{} >= {}]", domain_id, lower_bound),
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => write!(f, "[{} <= {}]", domain_id, upper_bound),
+                Predicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                } => write!(f, "[{} != {}]", domain_id, not_equal_constant),
+                Predicate::Equal {
+                    domain_id,
+                    equality_constant,
+                } => write!(f, "[{} == {}]", domain_id, equality_constant),
+            }
         }
     }
 }
@@ -92,5 +197,24 @@ impl std::fmt::Display for Predicate {
 impl std::fmt::Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Predicate;
+
+    #[test]
+    fn negating_trivially_true_predicate() {
+        let trivially_true = Predicate::trivially_true();
+        let trivially_false = Predicate::trivially_false();
+        assert!(!trivially_true == trivially_false);
+    }
+
+    #[test]
+    fn negating_trivially_false_predicate() {
+        let trivially_true = Predicate::trivially_true();
+        let trivially_false = Predicate::trivially_false();
+        assert!(!trivially_false == trivially_true);
     }
 }

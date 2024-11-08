@@ -4,8 +4,8 @@ use super::VariableSelector;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
+use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
 
 /// Similar to [`DynamicBrancher`], this is a pass-along structure which should be used when a
 /// [`Sized`] object is required.
@@ -26,12 +26,12 @@ impl<Var> DynamicVariableSelector<Var> {
 }
 
 impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<Var> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<Var> {
         self.selector.select_variable(context)
     }
 
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
-        self.selector.on_appearance_in_conflict_integer(variable)
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
+        self.selector.on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_conflict(&mut self) {
@@ -40,14 +40,6 @@ impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.selector.on_unassign_integer(variable, value)
-    }
-
-    fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
-        self.selector.on_appearance_in_conflict_literal(literal)
-    }
-
-    fn on_unassign_literal(&mut self, literal: Literal) {
-        self.selector.on_unassign_literal(literal)
     }
 
     fn is_restart_pointless(&mut self) -> bool {

@@ -23,7 +23,7 @@ use pumpkin_solver::branching::Smallest;
 use pumpkin_solver::pumpkin_assert_eq_simple;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::PropositionalVariable;
+use pumpkin_solver::variables::Literal;
 
 use super::error::FlatZincError;
 pub(crate) enum VariableSelectionStrategy {
@@ -40,10 +40,10 @@ pub(crate) enum VariableSelectionStrategy {
 }
 
 impl VariableSelectionStrategy {
-    pub(crate) fn create_from_propositional_variables(
+    pub(crate) fn create_from_literals(
         &self,
-        propositional_variables: &[PropositionalVariable],
-    ) -> DynamicVariableSelector<PropositionalVariable> {
+        propositional_variables: &[Literal],
+    ) -> DynamicVariableSelector<Literal> {
         DynamicVariableSelector::new(match self {
             VariableSelectionStrategy::AntiFirstFail => {
                 warn!("AntiFirstFail does not make sense for propositional variables, defaulting to input order...");
@@ -116,9 +116,7 @@ pub(crate) enum ValueSelectionStrategy {
 }
 
 impl ValueSelectionStrategy {
-    pub(crate) fn create_for_propositional_variables(
-        &self,
-    ) -> DynamicValueSelector<PropositionalVariable> {
+    pub(crate) fn create_for_literals(&self) -> DynamicValueSelector<Literal> {
         DynamicValueSelector::new(match self {
             ValueSelectionStrategy::InDomain
             | ValueSelectionStrategy::InDomainInterval

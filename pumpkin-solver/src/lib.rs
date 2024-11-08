@@ -283,7 +283,7 @@
 #[cfg(doc)]
 use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
 pub(crate) mod basic_types;
-pub(crate) mod encoders;
+pub mod containers;
 pub(crate) mod engine;
 pub(crate) mod math;
 pub(crate) mod propagators;
@@ -296,6 +296,7 @@ use crate::termination::TerminationCondition;
 
 pub mod branching;
 pub mod constraints;
+pub mod proof;
 pub mod statistics;
 
 // We declare a private module with public use, so that all exports from API are exports directly

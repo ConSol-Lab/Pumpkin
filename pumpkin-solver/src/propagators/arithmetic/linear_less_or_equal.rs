@@ -58,7 +58,7 @@ where
     }
 }
 
-impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
+impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
@@ -208,7 +208,7 @@ where
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn test_bounds_are_propagated() {
@@ -238,7 +238,7 @@ mod tests {
 
         solver.propagate(&mut propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y <= 6].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![y <= 6]);
 
         assert_eq!(conjunction!([x >= 1]), *reason);
     }

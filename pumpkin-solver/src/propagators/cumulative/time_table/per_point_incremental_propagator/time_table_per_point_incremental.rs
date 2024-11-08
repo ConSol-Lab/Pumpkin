@@ -560,12 +560,11 @@ mod debug {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
     use crate::basic_types::PropositionalConjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PredicateConstructor;
@@ -639,7 +638,7 @@ mod tests {
             ),
         );
         assert!(match result {
-            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
+            Err(Inconsistency::Conflict { conflict_nogood: x }) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -828,9 +827,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
@@ -1031,9 +1028,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 >= 4),
@@ -1090,9 +1085,7 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
         assert_eq!(
             PropositionalConjunction::from(vec![
                 predicate!(s2 <= 5),
@@ -1143,9 +1136,7 @@ mod tests {
 
         for removed in 2..8 {
             assert!(!solver.contains(s2, removed));
-            let reason = solver
-                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
-                .clone();
+            let reason = solver.get_reason_int(predicate!(s2 != removed)).clone();
             assert_eq!(
                 PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
                 reason
@@ -1239,10 +1230,12 @@ mod tests {
         let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 7);
         let result = solver.propagate(&mut propagator);
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
+            let same = if let Err(Inconsistency::Conflict {
+                conflict_nogood: explanation
+            }) =
                 &result
             {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
+                if let Err(Inconsistency::Conflict {conflict_nogood: explanation_scratch}) =
                     &result_scratch
                 {
                     explanation.iter().collect::<Vec<_>>()
@@ -1345,11 +1338,13 @@ mod tests {
         let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
-                result
+            let same = if let Err(Inconsistency::Conflict {
+                conflict_nogood: explanation,
+            }) = &result
             {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
-                    result_scratch
+                if let Err(Inconsistency::Conflict {
+                    conflict_nogood: explanation_scratch,
+                }) = &result_scratch
                 {
                     explanation.iter().collect::<Vec<_>>()
                         == explanation_scratch.iter().collect::<Vec<_>>()
@@ -1449,11 +1444,13 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
-                result
+            let same = if let Err(Inconsistency::Conflict {
+                conflict_nogood: explanation,
+            }) = &result
             {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
-                    result_scratch
+                if let Err(Inconsistency::Conflict {
+                    conflict_nogood: explanation_scratch,
+                }) = &result_scratch
                 {
                     explanation.iter().collect::<Vec<_>>()
                         != explanation_scratch.iter().collect::<Vec<_>>()
@@ -1558,11 +1555,9 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
         let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7).try_into().unwrap())
+            .get_reason_int(s3_scratch.lower_bound_predicate(7))
             .clone();
-        let reason = solver
-            .get_reason_int(s3.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
         assert_eq!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1662,11 +1657,9 @@ mod tests {
         assert_eq!(solver.lower_bound(s3), 7);
 
         let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7).try_into().unwrap())
+            .get_reason_int(s3_scratch.lower_bound_predicate(7))
             .clone();
-        let reason = solver
-            .get_reason_int(s3.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
         assert_ne!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1778,8 +1771,12 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))),
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))),
+            Err(Inconsistency::Conflict {
+                conflict_nogood: explanation,
+            }),
+            Err(Inconsistency::Conflict {
+                conflict_nogood: explanation_scratch,
+            }),
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
@@ -1901,8 +1898,12 @@ mod tests {
         let result = solver.propagate(&mut propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))),
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))),
+            Err(Inconsistency::Conflict {
+                conflict_nogood: explanation,
+            }),
+            Err(Inconsistency::Conflict {
+                conflict_nogood: explanation_scratch,
+            }),
         ) = (result, result_scratch)
         {
             assert_eq!(

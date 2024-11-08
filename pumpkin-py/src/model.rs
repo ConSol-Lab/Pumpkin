@@ -2,7 +2,6 @@ use std::num::NonZero;
 use std::path::PathBuf;
 
 use pumpkin_solver::containers::KeyedVec;
-use pumpkin_solver::options::LearningOptions;
 use pumpkin_solver::options::SolverOptions;
 use pumpkin_solver::predicate;
 use pumpkin_solver::proof::Format;
@@ -175,7 +174,7 @@ impl Model {
             ..Default::default()
         };
 
-        let mut solver = Solver::with_options(LearningOptions::default(), options);
+        let mut solver = Solver::with_options(options);
 
         let solver_setup = self
             .create_variable_map(&mut solver)
@@ -188,7 +187,7 @@ impl Model {
             return SatisfactionResult::Unsatisfiable();
         };
 
-        let mut brancher = solver.default_brancher_over_all_propositional_variables();
+        let mut brancher = solver.default_brancher();
 
         match solver.satisfy(&mut brancher, &mut Indefinite) {
             pumpkin_solver::results::SatisfactionResult::Satisfiable(solution) => {
@@ -306,15 +305,14 @@ impl ModelBoolVar {
                 // enforce equality between the integer variable and the truth of the predicate.
 
                 let affine_view = variable_map.get_integer(*int_var);
-                let int_eq_1 = solver.get_literal(predicate![affine_view == 1]);
+                let int_eq_1 = predicate![affine_view == 1];
 
-                let predicate_literal =
-                    solver.get_literal(predicate.to_solver_predicate(variable_map));
+                let predicate_literal = predicate.to_solver_predicate(variable_map);
 
                 solver.add_clause([!predicate_literal, int_eq_1])?;
                 solver.add_clause([predicate_literal, !int_eq_1])?;
 
-                int_eq_1
+                solver.new_literal_for_predicate(int_eq_1)
             }
 
             ModelBoolVar {
@@ -323,14 +321,14 @@ impl ModelBoolVar {
                 ..
             } => {
                 let affine_view = variable_map.get_integer(*int_var);
-                solver.get_literal(predicate![affine_view == 1])
+                solver.new_literal_for_predicate(predicate![affine_view == 1])
             }
 
             ModelBoolVar {
                 predicate: Some(predicate),
                 integer_equivalent: None,
                 ..
-            } => solver.get_literal(predicate.to_solver_predicate(variable_map)),
+            } => solver.new_literal_for_predicate(predicate.to_solver_predicate(variable_map)),
 
             ModelBoolVar {
                 name: Some(name), ..

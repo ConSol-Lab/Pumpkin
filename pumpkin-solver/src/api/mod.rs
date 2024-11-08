@@ -43,24 +43,15 @@ pub mod variables {
     //!   lower-bound and an upper-bound or using [`Solver::new_sparse_integer`] when creating a
     //!   variable with holes in the domain. These variables can be transformed (according to the
     //!   trait [`TransformableVariable`]) to create an [`AffineView`].
-    //! - Propositional Variables ([`PropositionalVariable`]) - These specify booleans that can be
-    //!   used when interacting with the [`Solver`]. A [`Literal`] is used when a
-    //!   [`PropositionalVariable`] is given a polarity (i.e. it is the positive [`Literal`] or its
-    //!   negated version). A [`Literal`] can be created using [`Solver::new_literal`].
+    //! - Literals ([`Literal`]) - These specify booleans that can be used when interacting with the
+    //!   [`Solver`]. A [`Literal`] can be created using [`Solver::new_literal`].
     pub use crate::engine::variables::AffineView;
     pub use crate::engine::variables::DomainId;
     pub use crate::engine::variables::IntegerVariable;
     pub use crate::engine::variables::Literal;
-    pub use crate::engine::variables::PropositionalVariable;
     pub use crate::engine::variables::TransformableVariable;
     #[cfg(doc)]
     use crate::Solver;
-}
-
-pub mod containers {
-    //! Contains containers which are used by the solver.
-    pub use crate::basic_types::KeyedVec;
-    pub use crate::basic_types::StorageKey;
 }
 
 pub mod options {
@@ -71,8 +62,6 @@ pub mod options {
     //! - The learned clause database management approach
     //! - The proof logging
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
-    pub use crate::engine::LearnedClauseSortingStrategy;
-    pub use crate::engine::LearningOptions;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::CumulativeExplanationType;
@@ -80,6 +69,14 @@ pub mod options {
     pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]
     use crate::Solver;
+}
+
+pub mod conflict_resolution {
+    pub use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
+    pub use crate::engine::conflict_analysis::ConflictResolver;
+    pub use crate::engine::conflict_analysis::LearnedNogood;
+    pub use crate::engine::conflict_analysis::NoLearningResolver;
+    pub use crate::engine::conflict_analysis::ResolutionResolver;
 }
 
 pub mod termination {
@@ -101,51 +98,50 @@ pub mod termination {
     use crate::Solver;
 }
 
-pub mod proof {
-    //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
-    //! [`ProofLog`], which is a list of deductions made by the solver.
-    //!
-    //! Proof logging for CP is supported in the DRCP format. This format explicitly supports usage
-    //! where the solver logs a proof scaffold which later processed into a full proof after search
-    //! has completed. Proof processing is very close to solving, and the
-    //! [`rp_engine::RpEngine`] exposes an API that can be used to process a proof scaffold into
-    //! a full CP proof.
+// pub mod proof {
+// //! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
+// //! [`ProofLog`], which is a list of deductions made by the solver.
+// //!
+// //! Proof logging for CP is supported in the DRCP format. This format explicitly supports usage
+// //! where the solver logs a proof scaffold which later processed into a full proof after search
+// //! has completed. Proof processing is very close to solving, and the
+// //! [`rp_engine::RpEngine`] exposes an API that can be used to process a proof scaffold into
+// //! a full CP proof.
 
-    pub use crate::engine::proof::Format;
-    pub use crate::engine::proof::ProofLog;
-    pub use crate::engine::rp_engine;
-    #[cfg(doc)]
-    use crate::Solver;
-}
+//     pub use crate::engine::proof::Format;
+//     pub use crate::engine::proof::ProofLog;
+//     pub use crate::engine::rp_engine;
+//     #[cfg(doc)]
+//     use crate::Solver;
+// }
 
 pub mod predicates {
     //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
     //!
     //! The solver only utilizes the following types of predicates:
-    //! - **Predicates over integers** - These [`IntegerPredicate`]s specify atomic constraints of
-    //!   the form `[x >= v]`, `[x <= v]`, `[x == v]`, and `[x != v]`.
-    //! - **Predicates over literals** - These [`Predicate::Literal`]s specify [`Literal`]s which
-    //!   are linked to the aforementioned [`IntegerPredicate`]s.
-    //! - **Always True/False** - The [`Predicate::True`]/[`Predicate::False`] specify logical
-    //!   predicates which are always true/false.
+    //! - A [`Predicate::LowerBound`] of the form `[x >= v]`
+    //! - A [`Predicate::UpperBound`] of the form `[x <= v]`
+    //! - A [`Predicate::Equal`] of the form `[x = v]`
+    //! - A [`Predicate::NotEqual`] of the form `[x != v]`
     //!
     //! In general, these [`Predicate`]s are used to represent propagations, explanations or
     //! decisions.
     pub use crate::basic_types::PropositionalConjunction;
-    pub use crate::engine::predicates::integer_predicate::IntegerPredicate;
     pub use crate::engine::predicates::predicate::Predicate;
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
     #[cfg(doc)]
     use crate::variables::Literal;
 }
 
-pub mod encodings {
-    //! Contains structures which encode pseudo-boolean constraints via the
-    //! [`PseudoBooleanConstraintEncoder`].
-    pub use crate::basic_types::Function;
-    pub use crate::encoders::PseudoBooleanConstraintEncoder;
-    pub use crate::encoders::PseudoBooleanEncoding;
-}
+// todo: put back the encodings
+// pub mod encodings {
+//     //! Contains structures which encode pseudo-boolean constraints via the
+//     //! [`PseudoBooleanConstraintEncoder`].
+//
+//     pub use crate::encoders::PseudoBooleanConstraintEncoder;
+//     pub use crate::encoders::PseudoBooleanEncoding;
+// }
+pub use crate::basic_types::Function;
 
 #[doc(hidden)]
 pub mod asserts {

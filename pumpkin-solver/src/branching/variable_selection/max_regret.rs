@@ -71,7 +71,7 @@ impl<TieBreaking> VariableSelector<DomainId> for MaxRegret<DomainId, TieBreaking
 where
     TieBreaking: TieBreaker<DomainId, i32>,
 {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))
@@ -101,54 +101,40 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (5, 20)]));
+        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
         let mut test_rng = TestRandom::default();
-        let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
+        let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = MaxRegret::new(&integer_variables);
 
-        let _ = assignments_integer.remove_value_from_domain(integer_variables[1], 6, None);
+        let _ = assignments.remove_value_from_domain(integer_variables[1], 6, None);
 
         {
-            let context = SelectionContext::new(
-                &assignments_integer,
-                &assignments_propositional,
-                &mut test_rng,
-            );
+            let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-            let selected = strategy.select_variable(&context);
+            let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments_integer.remove_value_from_domain(integer_variables[0], 1, None);
-        let _ = assignments_integer.remove_value_from_domain(integer_variables[0], 2, None);
+        let _ = assignments.remove_value_from_domain(integer_variables[0], 1, None);
+        let _ = assignments.remove_value_from_domain(integer_variables[0], 2, None);
 
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0])
     }
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(10, 10), (20, 20)]));
+        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = MaxRegret::new(&integer_variables);
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
     }
 }

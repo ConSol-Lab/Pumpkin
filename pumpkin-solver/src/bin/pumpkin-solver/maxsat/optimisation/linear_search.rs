@@ -1,27 +1,26 @@
 use log::info;
 use pumpkin_solver::asserts::pumpkin_assert_moderate;
 use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::encodings::Function;
-use pumpkin_solver::encodings::PseudoBooleanConstraintEncoder;
-use pumpkin_solver::encodings::PseudoBooleanEncoding;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::Solution;
 use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
 
 use super::optimisation_result::MaxSatOptimisationResult;
 use super::stopwatch::Stopwatch;
+use crate::maxsat::encoders::PseudoBooleanConstraintEncoder;
+use crate::maxsat::encoders::PseudoBooleanEncoding;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct LinearSearch {
-    upper_bound_encoding: PseudoBooleanEncoding,
+    encoding: PseudoBooleanEncoding,
 }
 
 impl LinearSearch {
-    pub(crate) fn new(upper_bound_encoding: PseudoBooleanEncoding) -> LinearSearch {
-        LinearSearch {
-            upper_bound_encoding,
-        }
+    #[allow(dead_code)]
+    pub(crate) fn new(encoding: PseudoBooleanEncoding) -> LinearSearch {
+        LinearSearch { encoding }
     }
 
     pub(crate) fn solve(
@@ -33,6 +32,8 @@ impl LinearSearch {
         mut brancher: impl Brancher,
         initial_solution: Solution,
     ) -> MaxSatOptimisationResult {
+        brancher.on_solution(initial_solution.as_reference());
+
         let mut best_solution: Solution = initial_solution;
         let mut best_objective_value = objective_function.evaluate_assignment(&best_solution);
 
@@ -47,7 +48,7 @@ impl LinearSearch {
         let mut upper_bound_encoder = PseudoBooleanConstraintEncoder::from_function(
             objective_function,
             solver,
-            self.upper_bound_encoding,
+            self.encoding,
         );
 
         loop {
@@ -87,7 +88,9 @@ impl LinearSearch {
                     best_objective_value = new_objective_value;
                     best_solution = solution;
 
+                    brancher.on_solution(best_solution.as_reference());
                     solver.log_statistics_with_objective(best_objective_value as i64);
+
                     println!("o {}", best_objective_value);
                     info!(
                         "Current objective is {} after {} seconds ({} ms)",

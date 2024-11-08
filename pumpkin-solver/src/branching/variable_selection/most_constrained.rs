@@ -15,7 +15,7 @@ use crate::pumpkin_assert_eq_simple;
 /// A [`VariableSelector`] which selects the variable with the smallest domain (similar to
 /// [`FirstFail`]).
 ///
-/// Ties are broken according to the number of attached
+/// It breaks ties according to the number of attached
 /// constraints (giving priority to variable with more attached constraints).
 pub struct MostConstrained<Var, TieBreaking> {
     variables: Vec<Var>,
@@ -72,7 +72,7 @@ impl<TieBreaking> VariableSelector<DomainId> for MostConstrained<DomainId, TieBr
 where
     TieBreaking: TieBreaker<DomainId, MostConstrainedValue>,
 {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
         self.variables
             .iter()
             .enumerate()
@@ -100,67 +100,48 @@ mod tests {
 
     #[test]
     fn test_correctly_selected() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (15, 20)]));
+        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10), (15, 20)]);
         let mut test_rng = TestRandom::default();
-        let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
+        let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = MostConstrained::new(&integer_variables, &[2, 1]);
 
         {
-            let context = SelectionContext::new(
-                &assignments_integer,
-                &assignments_propositional,
-                &mut test_rng,
-            );
+            let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-            let selected = strategy.select_variable(&context);
+            let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments_integer.tighten_upper_bound(integer_variables[0], 2, None);
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
-        let selected = strategy.select_variable(&context);
+        let _ = assignments.tighten_upper_bound(integer_variables[0], 2, None);
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0]);
     }
 
     #[test]
     fn test_correctly_selected_tie() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (10, 20)]));
+        let assignments = SelectionContext::create_for_testing(vec![(0, 10), (10, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = MostConstrained::new(&integer_variables, &[2, 1]);
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0])
     }
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(10, 10), (20, 20)]));
+        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = MostConstrained::new(&integer_variables, &[1, 2]);
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
     }
 }

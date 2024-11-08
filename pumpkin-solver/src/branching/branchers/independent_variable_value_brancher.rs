@@ -5,12 +5,14 @@ use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
+use crate::branching::InDomainMin;
+use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
 use crate::branching::ValueSelector;
 use crate::branching::VariableSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
+use crate::engine::ConstraintSatisfactionSolver;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -46,6 +48,22 @@ where
     }
 }
 
+pub type DefaultBrancher =
+    IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>;
+
+impl DefaultBrancher {
+    pub fn default_over_all_variables(solver: &ConstraintSatisfactionSolver) -> DefaultBrancher {
+        #[allow(deprecated)]
+        let variables: Vec<DomainId> = solver.assignments.get_domains().collect::<Vec<_>>();
+
+        IndependentVariableValueBrancher {
+            variable_selector: InputOrder::new(&variables),
+            value_selector: InDomainMin {},
+            variable_type: PhantomData,
+        }
+    }
+}
+
 impl<Var, VariableSelect, ValueSelect> Brancher
     for IndependentVariableValueBrancher<Var, VariableSelect, ValueSelect>
 where
@@ -65,13 +83,12 @@ where
             })
     }
 
-    fn on_conflict(&mut self) {
-        self.variable_selector.on_conflict()
+    fn on_backtrack(&mut self) {
+        self.variable_selector.on_backtrack()
     }
 
-    fn on_unassign_literal(&mut self, lit: Literal) {
-        self.variable_selector.on_unassign_literal(lit);
-        self.value_selector.on_unassign_literal(lit);
+    fn on_conflict(&mut self) {
+        self.variable_selector.on_conflict()
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
@@ -79,14 +96,9 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, lit: Literal) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.variable_selector
-            .on_appearance_in_conflict_literal(lit)
-    }
-
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
-        self.variable_selector
-            .on_appearance_in_conflict_integer(variable)
+            .on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
