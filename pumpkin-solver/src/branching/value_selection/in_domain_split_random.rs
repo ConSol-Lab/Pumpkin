@@ -46,6 +46,7 @@ mod tests {
         let mut test_random = TestRandom {
             usizes: vec![5],
             bools: vec![true],
+            ..Default::default()
         };
         let mut context = SelectionContext::new(&assignments, &mut test_random);
         let domain_ids = context.get_domains().collect::<Vec<_>>();

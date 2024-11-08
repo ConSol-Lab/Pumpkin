@@ -127,10 +127,7 @@ mod tests {
 
     #[test]
     fn test_selection_new_value() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
@@ -146,10 +143,7 @@ mod tests {
 
     #[test]
     fn test_selection_between_values_chooses_maximum() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
 
@@ -164,10 +158,7 @@ mod tests {
 
     #[test]
     fn test_selection_between_values_chooses_minimum() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
@@ -183,8 +174,8 @@ mod tests {
     #[test]
     fn test_selection_between_values_chooses_random_with_seed_second() {
         let rng = TestRandom {
-            usizes: vec![],
             bools: vec![true],
+            ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
@@ -202,8 +193,8 @@ mod tests {
     #[test]
     fn test_selection_between_values_chooses_random_with_seed_first() {
         let rng = TestRandom {
-            usizes: vec![],
             bools: vec![false],
+            ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));

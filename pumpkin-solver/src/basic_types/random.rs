@@ -1,26 +1,15 @@
-use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 
 use rand::Rng;
 use rand::SeedableRng;
 
-#[cfg(doc)]
-use crate::branching::InDomainRandom;
-#[cfg(doc)]
-use crate::branching::SelectionContext;
 use crate::pumpkin_assert_moderate;
-use crate::variables::DomainId;
-#[cfg(doc)]
-use crate::Solver;
 
-/// A trait for generating random values; an example of where this is used is in the
-/// [`InDomainRandom`] value selector where it is used to determine which value in the domain to
-/// select.
+/// Abstraction for randomness, in order to swap out different source of randomness.
 ///
-/// At the moment, the randomness in the solver is controlled by the
-/// [`Solver`] and the random number generator is by this structure to the
-/// [`SelectionContext`].
+/// This is especially useful when testing, to control which variables are generated when random
+/// values are required.
 ///
 /// # Testing
 /// We have also created an implementation of this trait which takes as input a list of `usize`s and
@@ -70,12 +59,12 @@ pub trait Random: Debug {
     /// ```
     fn generate_usize_in_range(&mut self, range: Range<usize>) -> usize;
 
+    /// Generate a random float in the range 0..1.
     fn generate_f64(&mut self) -> f64;
 
-    fn weighted_choice_domain_id(
-        &mut self,
-        items_with_weights: &[(DomainId, i32)],
-    ) -> Option<DomainId>;
+    /// Given a slice of weights, select the index with `weight` weighted probability compared to
+    /// the other weights.
+    fn get_weighted_choice(&mut self, weights: &[f64]) -> Option<usize>;
 }
 
 // We provide a blanket implementation of the trait for any type which implements `SeedableRng`,
@@ -87,10 +76,10 @@ where
 {
     fn generate_bool(&mut self, probability: f64) -> bool {
         pumpkin_assert_moderate!(
-            !matches!(probability.partial_cmp(&0.0), Some(Ordering::Less))
-                && !matches!(probability.partial_cmp(&1.0), Some(Ordering::Greater)),
+            (0.0..=1.0).contains(&probability),
             "It should hold that 0.0 <= {probability} <= 1.0"
         );
+
         self.gen_bool(probability)
     }
 
@@ -102,49 +91,54 @@ where
         self.gen_range(0.0..1.0)
     }
 
-    fn weighted_choice_domain_id(
-        &mut self,
-        items_with_weights: &[(DomainId, i32)],
-    ) -> Option<DomainId> {
+    fn get_weighted_choice(&mut self, weights: &[f64]) -> Option<usize> {
         // Taken from https://docs.rs/random_choice/latest/src/random_choice/lib.rs.html
-        if items_with_weights.is_empty() {
+        if weights.is_empty() {
             return None;
         }
 
-        let sum = items_with_weights
-            .iter()
-            .map(|(_, weight)| *weight)
-            .sum::<i32>() as f64;
-
+        let sum = weights.iter().sum::<f64>();
         let spin = self.generate_f64() * sum;
 
         let mut i: usize = 0;
-        let mut accumulated_weights = items_with_weights[0].1 as f64;
+        let mut accumulated_weights = weights[0];
 
         while accumulated_weights < spin {
             i += 1;
-            accumulated_weights += items_with_weights[i].1 as f64;
+            accumulated_weights += weights[i];
         }
-        Some(items_with_weights[i].0)
+
+        Some(i)
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use std::cmp::Ordering;
+    use std::fmt::Debug;
     use std::ops::Range;
 
     use super::Random;
     use crate::pumpkin_assert_simple;
-    use crate::variables::DomainId;
 
     /// A test "random" generator which takes as input a list of elements of [`usize`] and [`bool`]
     /// and returns them in order. If more values are attempted to be generated than are provided
     /// then this will result in panicking.
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub(crate) struct TestRandom {
         pub(crate) usizes: Vec<usize>,
         pub(crate) bools: Vec<bool>,
+        pub(crate) weighted_choice: fn(&[f64]) -> Option<usize>,
+    }
+
+    impl Default for TestRandom {
+        fn default() -> Self {
+            TestRandom {
+                usizes: vec![],
+                bools: vec![],
+                weighted_choice: |_| unimplemented!(),
+            }
+        }
     }
 
     impl Random for TestRandom {
@@ -173,20 +167,11 @@ pub(crate) mod tests {
         }
 
         fn generate_f64(&mut self) -> f64 {
-            // TODO: implement properly here
-            1.0
+            unimplemented!()
         }
 
-        fn weighted_choice_domain_id(
-            &mut self,
-            items_with_weights: &[(DomainId, i32)],
-        ) -> Option<DomainId> {
-            // TODO: implement properly here
-            if items_with_weights.is_empty() {
-                None
-            } else {
-                Some(items_with_weights[0].0)
-            }
+        fn get_weighted_choice(&mut self, weights: &[f64]) -> Option<usize> {
+            (self.weighted_choice)(weights)
         }
     }
 }

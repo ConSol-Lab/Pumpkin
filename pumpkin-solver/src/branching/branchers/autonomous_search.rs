@@ -420,9 +420,11 @@ mod tests {
             &assignments,
             &mut TestRandom {
                 usizes: vec![7],
-                bools: vec![],
+                weighted_choice: |_| Some(0),
+                ..Default::default()
             },
         ));
+
         assert_eq!(result, Some(predicate!(x == 7)));
     }
 
