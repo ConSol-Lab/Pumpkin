@@ -30,6 +30,24 @@ impl<T> Trail<T> {
         self.trail_delimiter.push(self.trail.len());
     }
 
+    pub(crate) fn values_on_decision_level(&self, decision_level: usize) -> &[T] {
+        assert!(decision_level <= self.current_decision_level);
+
+        let start = if decision_level == 0 {
+            0
+        } else {
+            self.trail_delimiter[decision_level - 1]
+        };
+
+        let end = if decision_level == self.current_decision_level {
+            self.trail.len()
+        } else {
+            self.trail_delimiter[decision_level]
+        };
+
+        &self.trail[start..end]
+    }
+
     pub(crate) fn get_decision_level(&self) -> usize {
         self.current_decision_level
     }
@@ -128,5 +146,22 @@ mod tests {
 
         let popped = trail.synchronise(0).collect::<Vec<_>>();
         assert_eq!(vec![4, 3, 2], popped);
+    }
+
+    #[test]
+    fn elements_at_current_decision_level() {
+        let mut trail = Trail::default();
+        trail.push(1);
+        trail.push(2);
+
+        trail.increase_decision_level();
+        trail.push(3);
+        trail.increase_decision_level();
+        trail.push(4);
+        trail.push(5);
+
+        assert_eq!(&[1, 2], trail.values_on_decision_level(0));
+        assert_eq!(&[3], trail.values_on_decision_level(1));
+        assert_eq!(&[4, 5], trail.values_on_decision_level(2));
     }
 }
