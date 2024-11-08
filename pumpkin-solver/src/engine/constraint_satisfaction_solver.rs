@@ -259,12 +259,12 @@ impl ConstraintSatisfactionSolver {
     fn notify_nogood_propagator(
         event: IntDomainEvent,
         domain: DomainId,
-        cp_propagators: &mut PropagatorStore,
+        propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
     ) {
         pumpkin_assert_moderate!(
-            cp_propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
+            propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
         // The nogood propagator is implicitly subscribed to every domain event for every variable.
@@ -275,7 +275,7 @@ impl ConstraintSatisfactionSolver {
             nogood_propagator_id,
             local_id,
             event,
-            cp_propagators,
+            propagators,
             propagator_queue,
             assignments,
         );
@@ -285,18 +285,17 @@ impl ConstraintSatisfactionSolver {
         propagator_id: PropagatorId,
         local_id: LocalId,
         event: IntDomainEvent,
-        cp_propagators: &mut PropagatorStore,
+        propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
     ) {
         let context = PropagationContext::new(assignments);
 
-        let enqueue_decision =
-            cp_propagators[propagator_id].notify(context, local_id, event.into());
+        let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
         if enqueue_decision == EnqueueDecision::Enqueue {
             propagator_queue
-                .enqueue_propagator(propagator_id, cp_propagators[propagator_id].priority());
+                .enqueue_propagator(propagator_id, propagators[propagator_id].priority());
         }
     }
 

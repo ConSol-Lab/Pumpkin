@@ -62,12 +62,12 @@ impl IndexMut<PropagatorId> for PropagatorStore {
 
 impl Debug for PropagatorStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cp_propagators: Vec<_> = self
+        let propagators: Vec<_> = self
             .propagators
             .iter()
             .map(|_| DebugDyn::from("Propagator"))
             .collect();
 
-        write!(f, "{cp_propagators:?}")
+        write!(f, "{propagators:?}")
     }
 }

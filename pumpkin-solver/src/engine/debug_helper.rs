@@ -145,7 +145,7 @@ impl DebugHelper {
         propagator_id: PropagatorId,
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
-        cp_propagators: &PropagatorStore,
+        propagators: &PropagatorStore,
     ) -> bool {
         if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
             return true;
@@ -167,7 +167,7 @@ impl DebugHelper {
                 trail_entry.predicate,
                 reason.expect("Expected reason to exist"),
                 assignments,
-                &cp_propagators[propagator_id],
+                &propagators[propagator_id],
                 propagator_id,
             );
         }
