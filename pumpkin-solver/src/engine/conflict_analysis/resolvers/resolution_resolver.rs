@@ -85,20 +85,32 @@ impl ConflictResolver for ResolutionResolver {
                     {
                         predicate
                     } else {
+                        // Note that we decompose [x == v] into the two predicates [x >= v] and [x
+                        // <= v] and that these have distinct trail entries (where [x >= v] has a
+                        // lower trail position than [x <= v])
+                        //
+                        // However, this can lead to [x <= v] to be processed *before* [x >= v -
+                        // y], meaning that these implied predicates should be replaced with their
+                        // reason
                         let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
                             predicate,
                             context.assignments,
                             context.reason_store,
                             context.propagators,
                         );
-                        // We expect only not equals predicates here, which just have one reason.
-                        pumpkin_assert_simple!(reason.len() == 1);
+                        pumpkin_assert_simple!(
+                                reason.len() == 1 && reason[0].is_lower_bound_predicate(),
+                                "The only non-decision predicates left should be unit reasons which consist of lower-bounds"
+                            );
                         reason[0]
                     };
+                    // We push to `predicates_lower_decision_level` since this structure will be
+                    // used for creating the final nogood
                     self.predicates_lower_decision_level
                         .push(predicate_replacement);
                 }
 
+                // The final predicate in the heap will get pushed in `extract_final_nogood`
                 self.predicates_lower_decision_level.push(next_predicate);
                 break;
             }
