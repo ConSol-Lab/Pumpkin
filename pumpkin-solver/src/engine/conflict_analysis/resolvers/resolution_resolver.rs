@@ -98,16 +98,50 @@ impl ConflictResolver for ResolutionResolver {
                             context.reason_store,
                             context.propagators,
                         );
+                        pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate");
                         pumpkin_assert_simple!(
-                                reason.len() == 1 && (reason[0].is_lower_bound_predicate() || reason[0].is_not_equal_predicate()),
-                                "The only non-decision predicates left should be unit reasons which consist of either a lower-bound predicate or a not-equals predicate"
+                                reason.len() == 1 && reason[0].is_lower_bound_predicate() ,
+                                "The reason for the only propagated predicates left on the trail should be lower-bound predicates"
                             );
                         reason[0]
                     };
+
                     // We push to `predicates_lower_decision_level` since this structure will be
                     // used for creating the final nogood
                     self.predicates_lower_decision_level
                         .push(predicate_replacement);
+                }
+                // It could be the case that the final predicate in the nogood is implied, in
+                // this case we eagerly replace it since the conflict analysis output assumes
+                // that a single variable is propagating.
+                //
+                // For example, let's say we have made the decision [x == v] (which is
+                // decomposed into [x >= v] and [x <= v]).
+                //
+                // Now let's say we have the nogood [[x>= v - 1], [x <= v]], then we have a
+                // final element [x >= v - 1] left in the heap which is
+                // implied. This could mean that we end up with 2 predicates in
+                // the conflict nogood which goes against the 2-watcher scheme so we eagerly
+                // replace it here!
+                //
+                // TODO: This leads to a less general explanation!
+                if !context
+                    .assignments
+                    .is_decision_predicate(&self.peek_predicate_from_conflict_nogood())
+                {
+                    let predicate = self.peek_predicate_from_conflict_nogood();
+                    let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                        predicate,
+                        context.assignments,
+                        context.reason_store,
+                        context.propagators,
+                    );
+                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be a lower-bound predicate");
+                    pumpkin_assert_simple!(
+                        reason.len() == 1 && reason[0].is_lower_bound_predicate(),
+                        "The reason for the decision predicate should be a lower-bound predicate"
+                    );
+                    self.replace_predicate_in_conflict_nogood(predicate, reason[0]);
                 }
 
                 // The final predicate in the heap will get pushed in `extract_final_nogood`
@@ -252,6 +286,22 @@ impl ResolutionResolver {
             .unwrap()
     }
 
+    fn peek_predicate_from_conflict_nogood(&self) -> Predicate {
+        let next_predicate_id = self.heap_current_decision_level.peek_max().unwrap().0;
+        self.predicate_id_generator
+            .get_predicate(*next_predicate_id)
+            .unwrap()
+    }
+
+    fn replace_predicate_in_conflict_nogood(
+        &mut self,
+        predicate: Predicate,
+        replacement: Predicate,
+    ) {
+        self.predicate_id_generator
+            .replace_predicate(predicate, replacement);
+    }
+
     fn extract_final_nogood(
         &mut self,
         context: &mut ConflictAnalysisNogoodContext,
@@ -286,63 +336,6 @@ impl ResolutionResolver {
             Mode::EnableEqualityMerging,
         );
 
-        // Due to reasoning with holes, it can be the case that we learn a nogood with multiple
-        // predicates from the current decision level.
-        //
-        // This does not interact well with the expectations of the solver (each nogood has an
-        // asserting predicate), so for now we work around this issue by making the nogood
-        // less general. The code below is not very elegant, but works ok as a temporary
-        // workaround.
-        if num_predicates_from_current_decision_level(&clean_nogood, context.assignments) > 1 {
-            let mut current_level_predicates: Vec<Predicate> = vec![];
-            // We retain all of the predicates which are not from the current decision level; all
-            // predicates from the current decision level are stored in `current_level_predicates`
-            clean_nogood.retain(|predicate| {
-                if context
-                    .assignments
-                    .get_decision_level_for_predicate(predicate)
-                    .unwrap()
-                    == context.assignments.get_decision_level()
-                {
-                    current_level_predicates.push(*predicate);
-                    false
-                } else {
-                    true
-                }
-            });
-
-            // Then we go over each of the predicates of the current decision level and we replace
-            // it with its reason (similar to what is done during "regular" conflict analysis).
-            let mut revised_nogood: Vec<Predicate> = vec![];
-            for predicate in current_level_predicates {
-                let predicate_replacement =
-                    if !context.assignments.is_decision_predicate(&predicate) {
-                        let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
-                            predicate,
-                            context.assignments,
-                            context.reason_store,
-                            context.propagators,
-                        );
-                        // We expect only expect single-reason substitutions, since the problem
-                        // comes from assigning a [x = v] as a decision.
-                        pumpkin_assert_simple!(reason.len() == 1);
-                        reason[0]
-                    } else {
-                        predicate
-                    };
-                revised_nogood.push(predicate_replacement);
-            }
-
-            // We perform one final round of minimisation
-            let decision_level_predicate = context.semantic_minimiser.minimise(
-                &revised_nogood,
-                context.assignments,
-                Mode::EnableEqualityMerging,
-            );
-            pumpkin_assert_simple!(decision_level_predicate.len() == 1);
-            clean_nogood.push(decision_level_predicate[0]);
-        }
-
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions
         // to be properly sorted.
@@ -357,9 +350,8 @@ impl ResolutionResolver {
                 .assignments
                 .get_decision_level_for_predicate(&clean_nogood[1])
                 .unwrap()
-        }
-        // For unit nogoods, the solver backtracks to the root level.
-        else {
+        } else {
+            // For unit nogoods, the solver backtracks to the root level.
             0
         };
 
@@ -379,21 +371,4 @@ impl ResolutionResolver {
             predicates: clean_nogood,
         }
     }
-}
-
-/// Calculates the number of predicates from the current decision level (as specified in
-/// [`Assignments`]) present in the provided `nogood`.
-fn num_predicates_from_current_decision_level(
-    nogood: &[Predicate],
-    context_assignments: &Assignments,
-) -> usize {
-    nogood
-        .iter()
-        .filter(|p| {
-            context_assignments
-                .get_decision_level_for_predicate(p)
-                .unwrap()
-                == context_assignments.get_decision_level()
-        })
-        .count()
 }
