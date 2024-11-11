@@ -99,8 +99,8 @@ impl ConflictResolver for ResolutionResolver {
                             context.propagators,
                         );
                         pumpkin_assert_simple!(
-                                reason.len() == 1 && reason[0].is_lower_bound_predicate(),
-                                "The only non-decision predicates left should be unit reasons which consist of lower-bounds"
+                                reason.len() == 1 && (reason[0].is_lower_bound_predicate() || reason[0].is_not_equal_predicate()),
+                                "The only non-decision predicates left should be unit reasons which consist of either a lower-bound predicate or a not-equals predicate"
                             );
                         reason[0]
                     };
