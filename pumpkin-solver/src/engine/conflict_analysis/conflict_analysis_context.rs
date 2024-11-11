@@ -1,4 +1,4 @@
-use super::SemanticMinimiser;
+use super::minimisers::SemanticMinimiser;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;

@@ -259,7 +259,7 @@ impl SimpleIntegerDomain {
 #[cfg(test)]
 mod tests {
     use crate::conjunction;
-    use crate::engine::conflict_analysis::semantic_minimiser::Mode;
+    use crate::engine::conflict_analysis::Mode;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::Assignments;
     use crate::predicate;
