@@ -72,8 +72,8 @@ use crate::statistics::log_statistic_postfix;
 /// // We can also create such a variable with a name
 /// let named_literal = solver.new_named_literal("z");
 ///
-/// // We can also get the propositional variable from the literal
-/// let propositional_variable = literal.get_propositional_variable();
+/// // We can also get the predicate from the literal
+/// let true_predicate = literal.get_true_predicate();
 ///
 /// // We can also create an iterator of new literals and get a number of them at once
 /// let list_of_5_literals = solver.new_literals().take(5).collect::<Vec<_>>();

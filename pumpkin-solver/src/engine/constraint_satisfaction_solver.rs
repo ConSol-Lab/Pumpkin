@@ -66,8 +66,7 @@ use crate::Solver;
 /// a Lazy Clause Generation (LCG [\[1\]](https://people.eng.unimelb.edu.au/pstuckey/papers/cp09-lc.pdf))
 /// approach.
 ///
-/// The solver maintains two views of the problem, a Constraint Programming (CP) view and a SAT
-/// view. It requires that all of the propagators which are added, are able to explain the
+/// It requires that all of the propagators which are added, are able to explain the
 /// propagations and conflicts they have made/found. It then uses standard SAT concepts such as
 /// 1UIP (see \[2\]) to learn clauses (also called nogoods in the CP field, see \[3\]) to avoid
 /// unnecessary exploration of the search space while utilizing the search procedure benefits from
@@ -75,50 +74,13 @@ use crate::Solver;
 ///
 /// # Practical
 /// The [`ConstraintSatisfactionSolver`] makes use of certain options which allow the user to
-/// influence the behaviour of the solver; see the [`SatisfactionSolverOptions`].
+/// influence the behaviour of the solver; see for example the [`SatisfactionSolverOptions`].
 ///
 /// The solver switches between making decisions using implementations of the [`Brancher`] (which
 /// are passed to the [`ConstraintSatisfactionSolver::solve`] method) and propagation (use
 /// [`ConstraintSatisfactionSolver::add_propagator`] to add a propagator). If a conflict is found by
-/// any of the propagators (including the clausal one) then the solver will analyse the conflict
+/// any of the propagators then the solver will analyse the conflict
 /// using 1UIP reasoning and backtrack if possible.
-///
-/// ## Example
-/// This example will show how to set-up the [`ConstraintSatisfactionSolver`] to solve a simple not
-/// equals problem between two variables. Note that any constraint is added in the form of
-/// propagators.
-/// ```
-/// # use pumpkin_lib::engine::ConstraintSatisfactionSolver;
-/// # use pumpkin_lib::propagators::arithmetic::linear_not_equal::LinearNotEqualConstructor;
-/// # use pumpkin_lib::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-/// # use pumpkin_lib::basic_types::CSPSolverExecutionFlag;
-/// # use pumpkin_lib::engine::variables::IntegerVariable;
-/// # use pumpkin_lib::engine::variables::TransformableVariable;
-/// # use pumpkin_lib::engine::termination::indefinite::Indefinite;
-/// // We create a solver with default options (note that this is only possible in a testing environment)
-/// let mut solver = ConstraintSatisfactionSolver::default();
-///
-/// // Now we create the two variables for which we want to define the propagator
-/// let x = solver.create_new_integer_variable(0, 10, None);
-/// let y = solver.create_new_integer_variable(0, 10, None);
-///
-/// // We add the propagator to the solver and check that adding the propagator did not cause a conflict
-/// //  'x != y' is represented using the propagator for 'x - y != 0'
-/// let no_root_level_conflict = solver.add_propagator(LinearNotEqualConstructor::new([x.into(), y.scaled(-1)].into(), 0));
-/// assert!(no_root_level_conflict);
-///
-/// // We create a branching strategy, in our case we will simply use the default one
-/// let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
-///
-/// // Then we solve the problem given a time-limit and a branching strategy
-/// let result = solver.solve(&mut Indefinite, &mut brancher);
-///
-/// // Now we check that the result is feasible and that the chosen values for the two variables are different
-/// assert_eq!(result, CSPSolverExecutionFlag::Feasible);
-/// assert!(
-///     solver.get_assigned_integer_value(&x).unwrap() != solver.get_assigned_integer_value(&y).unwrap()
-/// );
-/// ```
 ///
 /// # Bibliography
 /// \[1\] T. Feydy and P. J. Stuckey, ‘Lazy clause generation reengineered’, in International
@@ -608,16 +570,13 @@ impl ConstraintSatisfactionSolver {
     /// // And solve under the assumptions:
     /// //   !x0 /\ x1 /\ !x2
     /// # use pumpkin_solver::Solver;
-    /// # use pumpkin_solver::variables::PropositionalVariable;
-    /// # use pumpkin_solver::variables::Literal;
     /// # use pumpkin_solver::termination::Indefinite;
-    /// # use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     /// # use pumpkin_solver::results::SatisfactionResultUnderAssumptions;
     /// let mut solver = Solver::default();
     /// let x = vec![
-    ///     solver.new_literal(),
-    ///     solver.new_literal(),
-    ///     solver.new_literal(),
+    ///     solver.new_literal().get_true_predicate(),
+    ///     solver.new_literal().get_true_predicate(),
+    ///     solver.new_literal().get_true_predicate(),
     /// ];
     ///
     /// solver.add_clause([x[0], x[1], x[2]]);
@@ -625,13 +584,11 @@ impl ConstraintSatisfactionSolver {
     ///
     /// let assumptions = [!x[0], x[1], !x[2]];
     /// let mut termination = Indefinite;
-    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
-    /// let result =
-    ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
+    /// let mut brancher = solver.default_brancher();
+    /// let result = solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
     ///
-    /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(
-    ///     mut unsatisfiable,
-    /// ) = result
+    /// if let SatisfactionResultUnderAssumptions::UnsatisfiableUnderAssumptions(mut unsatisfiable) =
+    ///     result
     /// {
     ///     {
     ///         let core = unsatisfiable.extract_core();

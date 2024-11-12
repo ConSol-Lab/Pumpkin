@@ -15,28 +15,21 @@
 //! [`Solver::minimise`]:
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::variables::PropositionalVariable;
-//! # use pumpkin_solver::branching::variable_selection::Vsids;
-//! # use pumpkin_solver::branching::value_selection::PhaseSaving;
-//! # use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_solver::variables::Literal;
 //! # use pumpkin_solver::termination::Indefinite;
 //! # use pumpkin_solver::results::SatisfactionResult;
 //! # use crate::pumpkin_solver::results::ProblemSolution;
 //! let mut solver = Solver::default();
 //!
-//! let variables = vec![solver.new_literal().get_propositional_variable()];
+//! let variables = vec![solver.new_literal()];
 //!
 //! let mut termination = Indefinite;
-//! let mut brancher = IndependentVariableValueBrancher::new(
-//!     Vsids::new(&variables),
-//!     PhaseSaving::new(&variables),
-//! );
+//! let mut brancher = solver.default_brancher();
 //! let result = solver.satisfy(&mut brancher, &mut termination);
 //! if let SatisfactionResult::Satisfiable(solution) = result {
 //!     // Getting the value of the literal in the solution should not panic
 //!     variables.into_iter().for_each(|variable| {
-//!         solver.get_literal_value(Literal::new(variable, true));
+//!         solver.get_literal_value(variable);
 //!     });
 //! } else {
 //!     panic!("Solving should have returned satsifiable")
@@ -49,8 +42,6 @@
 //! [`Solver::default_brancher`].
 //! ```rust
 //! # use pumpkin_solver::Solver;
-//! # use pumpkin_solver::variables::PropositionalVariable;
-//! # use pumpkin_solver::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 //! # use pumpkin_solver::variables::Literal;
 //! # use pumpkin_solver::termination::Indefinite;
 //! # use pumpkin_solver::results::SatisfactionResult;
@@ -60,7 +51,7 @@
 //! let literals = vec![solver.new_literal()];
 //!
 //! let mut termination = Indefinite;
-//! let mut brancher = solver.default_brancher_over_all_propositional_variables();
+//! let mut brancher = solver.default_brancher();
 //! let result = solver.satisfy(&mut brancher, &mut termination);
 //! if let SatisfactionResult::Satisfiable(solution) = result {
 //!     // Getting the value of the literal in the solution should not panic
