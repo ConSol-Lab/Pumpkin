@@ -1,18 +1,18 @@
-use std::rc::Rc;
+use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
-use crate::engine::reason::LazyReason;
+use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::Assignments;
 use crate::predicate;
-use crate::predicates::PredicateConstructor;
+use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
@@ -21,17 +21,20 @@ use crate::predicates::PropositionalConjunction;
 /// Note that this propagator is 0-indexed
 #[derive(Clone, Debug)]
 pub(crate) struct ElementPropagator<VX, VI, VE> {
-    array: Rc<[VX]>,
+    array: Box<[VX]>,
     index: VI,
     rhs: VE,
+
+    rhs_reason_buffer: Vec<Predicate>,
 }
 
 impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
     pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
         Self {
-            array: array.into(),
+            array,
             index,
             rhs,
+            rhs_reason_buffer: vec![],
         }
     }
 }
@@ -89,6 +92,19 @@ where
         let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
         Ok(())
     }
+
+    fn lazy_explanation(&mut self, code: u64, _: &Assignments) -> &[Predicate] {
+        let payload = RightHandSideReason::from_bits(code);
+
+        self.rhs_reason_buffer.clear();
+        self.rhs_reason_buffer
+            .extend(self.array.iter().map(|variable| match payload.bound() {
+                Bound::Lower => predicate![variable >= payload.value()],
+                Bound::Upper => predicate![variable <= payload.value()],
+            }));
+
+        &self.rhs_reason_buffer
+    }
 }
 
 impl<VX, VI, VE> ElementPropagator<VX, VI, VE>
@@ -126,12 +142,22 @@ where
         context.set_lower_bound(
             &self.rhs,
             rhs_lb,
-            RightHandSideReason::new(Rc::clone(&self.array), Bound::Lower, rhs_lb),
+            Reason::DynamicLazy(
+                RightHandSideReason::new()
+                    .with_bound(Bound::Lower)
+                    .with_value(rhs_ub)
+                    .into_bits(),
+            ),
         )?;
         context.set_upper_bound(
             &self.rhs,
             rhs_ub,
-            RightHandSideReason::new(Rc::clone(&self.array), Bound::Upper, rhs_ub),
+            Reason::DynamicLazy(
+                RightHandSideReason::new()
+                    .with_bound(Bound::Upper)
+                    .with_value(rhs_ub)
+                    .into_bits(),
+            ),
         )?;
 
         Ok(())
@@ -195,40 +221,31 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 enum Bound {
-    Lower,
-    Upper,
+    Lower = 0,
+    Upper = 1,
 }
 
-struct RightHandSideReason<Var> {
-    variables: Rc<[Var]>,
-    bound: Bound,
-    value: i32,
-}
+impl Bound {
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
 
-impl<Var> RightHandSideReason<Var> {
-    fn new(variables: Rc<[Var]>, bound: Bound, value: i32) -> Self {
-        Self {
-            variables,
-            bound,
-            value,
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0 => Bound::Lower,
+            _ => Bound::Upper,
         }
     }
 }
 
-impl<Var> LazyReason for RightHandSideReason<Var>
-where
-    Var: PredicateConstructor<Value = i32>,
-{
-    fn compute(self: Box<Self>, _: PropagationContext) -> PropositionalConjunction {
-        self.variables
-            .iter()
-            .map(|variable| match self.bound {
-                Bound::Lower => predicate![variable >= self.value],
-                Bound::Upper => predicate![variable <= self.value],
-            })
-            .collect()
-    }
+#[bitfield(u64)]
+struct RightHandSideReason {
+    #[bits(32, from = Bound::from_bits)]
+    bound: Bound,
+    value: i32,
 }
 
 #[cfg(test)]
@@ -251,11 +268,11 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementPropagator {
-                array: vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            })
+            ))
             .expect("no empty domains");
 
         solver.assert_bounds(index, 0, 2);
@@ -284,11 +301,11 @@ mod tests {
         let rhs = solver.new_variable(0, 20);
 
         let _ = solver
-            .new_propagator(ElementPropagator {
-                array: vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            })
+            ))
             .expect("no empty domains");
 
         solver.assert_bounds(rhs, 2, 15);
@@ -317,11 +334,11 @@ mod tests {
         let rhs = solver.new_variable(6, 9);
 
         let _ = solver
-            .new_propagator(ElementPropagator {
-                array: vec![x_0, x_1, x_2, x_3].into(),
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
                 index,
                 rhs,
-            })
+            ))
             .expect("no empty domains");
 
         solver.assert_bounds(x_1, 6, 9);

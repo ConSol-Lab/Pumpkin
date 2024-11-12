@@ -210,15 +210,10 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                context.set_lower_bound(
-                    &propagating_task.start_variable,
-                    profile.end + 1,
-                    move |_context: PropagationContext| {
-                        let mut reason = (*explanation).clone();
-                        reason.add(lower_bound_predicate_propagating_task);
-                        reason
-                    },
-                )
+
+                let mut reason = (*explanation).clone();
+                reason.add(lower_bound_predicate_propagating_task);
+                context.set_lower_bound(&propagating_task.start_variable, profile.end + 1, reason)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -261,14 +256,13 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
+
+                let mut reason = (*explanation).clone();
+                reason.add(upper_bound_predicate_propagating_task);
                 context.set_upper_bound(
                     &propagating_task.start_variable,
                     profile.start - propagating_task.processing_time,
-                    move |_context: PropagationContext| {
-                        let mut reason = (*explanation).clone();
-                        reason.add(upper_bound_predicate_propagating_task);
-                        reason
-                    },
+                    reason,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -332,7 +326,7 @@ impl CumulativePropagationHandler {
                     context.remove(
                         &propagating_task.start_variable,
                         time_point,
-                        move |_context: PropagationContext| (*explanation).clone(),
+                        (*explanation).clone(),
                     )?;
                 }
                 CumulativeExplanationType::Pointwise => {
@@ -433,6 +427,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
     use crate::engine::conflict_analysis::SemanticMinimiser;
+    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
     use crate::engine::propagation::PropagationContextMut;
@@ -709,12 +704,13 @@ pub(crate) mod test_propagation_handler {
             let reason_ref = self
                 .assignments
                 .get_reason_for_predicate_brute_force(predicate);
-            let context = PropagationContext::new(&self.assignments);
+            let mut propagator_store = PropagatorStore::default();
             let reason = self
                 .reason_store
-                .get_or_compute(reason_ref, context)
+                .get_or_compute_new(reason_ref, &self.assignments, &mut propagator_store)
                 .expect("reason_ref should not be stale");
-            reason.clone()
+
+            reason.iter().copied().collect()
         }
     }
 }

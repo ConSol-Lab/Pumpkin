@@ -72,12 +72,6 @@ impl<T> Trail<T> {
     pub(crate) fn pop(&mut self) -> Option<T> {
         self.trail.pop()
     }
-
-    /// Only used in `crate::engine::cp::reason::ReasonStore` to replace a lazy reason with its
-    ///   result.
-    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.trail.get_mut(index)
-    }
 }
 
 impl<T> Deref for Trail<T> {

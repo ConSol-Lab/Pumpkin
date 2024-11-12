@@ -34,6 +34,10 @@ pub(crate) struct TestSolver {
     semantic_minimiser: SemanticMinimiser,
     watch_list: WatchListCP,
     next_propagator_id: u32,
+
+    // Hack: this is used to store conjunctions temporarily. Should be removed when refactoring is
+    // completed.
+    temp_conjunction: PropositionalConjunction,
 }
 
 impl Default for TestSolver {
@@ -44,6 +48,7 @@ impl Default for TestSolver {
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
             next_propagator_id: Default::default(),
+            temp_conjunction: PropositionalConjunction::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -262,10 +267,14 @@ impl TestSolver {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
-        let context = PropagationContext::new(&self.assignments);
-        self.reason_store
-            .get_or_compute(reason_ref, context)
-            .expect("reason_ref should not be stale")
+        let mut propagator_store = PropagatorStore::default();
+        let slice = self
+            .reason_store
+            .get_or_compute_new(reason_ref, &self.assignments, &mut propagator_store)
+            .expect("reason_ref should not be stale");
+
+        self.temp_conjunction = slice.iter().copied().collect();
+        &self.temp_conjunction
     }
 
     pub(crate) fn get_reason_int_new<'a>(
@@ -276,9 +285,8 @@ impl TestSolver {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
-        let context = PropagationContext::new(&self.assignments);
         self.reason_store
-            .get_or_compute_new(reason_ref, context, propagators)
+            .get_or_compute_new(reason_ref, &self.assignments, propagators)
             .expect("reason_ref should not be stale")
     }
 

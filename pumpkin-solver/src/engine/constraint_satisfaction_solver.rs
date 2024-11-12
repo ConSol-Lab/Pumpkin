@@ -1055,17 +1055,16 @@ impl ConstraintSatisfactionSolver {
             "One of the two bounds had to change."
         );
 
-        let propagation_context = PropagationContext::new(&self.assignments);
-
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
-        let reason_changing_bound = ReasonStore::get_or_compute_new(
-            &mut self.reason_store,
-            entry.reason.unwrap(),
-            propagation_context,
-            &mut self.propagators,
-        )
-        .unwrap();
+        let reason_changing_bound = self
+            .reason_store
+            .get_or_compute_new(
+                entry.reason.unwrap(),
+                &self.assignments,
+                &mut self.propagators,
+            )
+            .unwrap();
 
         let mut empty_domain_reason: Vec<Predicate> = vec![
             predicate!(conflict_domain >= entry.old_lower_bound),
@@ -1139,7 +1138,7 @@ impl ConstraintSatisfactionSolver {
                     propagator_id,
                     &self.assignments,
                     &mut self.reason_store,
-                    &self.propagators
+                    &mut self.propagators
                 ),
                 "Checking the propagations performed by the propagator led to inconsistencies!"
             );

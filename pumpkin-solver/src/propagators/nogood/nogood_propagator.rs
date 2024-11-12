@@ -248,9 +248,7 @@ impl NogoodPropagator {
         self.add_watcher(self.nogoods[new_id].predicates[0], new_id);
         self.add_watcher(self.nogoods[new_id].predicates[1], new_id);
 
-        let reason = Reason::DynamicLazy {
-            code: new_id.id as u64,
-        };
+        let reason = Reason::DynamicLazy(new_id.id as u64);
         context
             .post_predicate(!self.nogoods[new_id].predicates[0], reason)
             .expect("Cannot fail to add the asserting predicate.");
@@ -945,9 +943,7 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy {
-                                code: nogood_id.id as u64,
-                            };
+                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
@@ -1125,9 +1121,7 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy {
-                                code: nogood_id.id as u64,
-                            };
+                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
@@ -1353,9 +1347,7 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy {
-                                code: nogood_id.id as u64,
-                            };
+                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
@@ -1533,9 +1525,7 @@ impl Propagator for NogoodPropagator {
                             // There are two scenarios:
                             // nogood[0] is unassigned -> propagate the predicate to false
                             // nogood[0] is assigned true -> conflict.
-                            let reason = Reason::DynamicLazy {
-                                code: nogood_id.id as u64,
-                            };
+                            let reason = Reason::DynamicLazy(nogood_id.id as u64);
 
                             // println!("propagating {}", !nogood[0]);
                             let result = context.post_predicate(!nogood[0], reason);

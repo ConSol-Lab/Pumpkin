@@ -191,16 +191,12 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
         if trail_entry.predicate == predicate {
-            // We can simply return the reason given on the trail.
-            // extract_reason_from_trail(&trail_entry)
-            let propagation_context = PropagationContext::new(assignments);
-
             let reason_ref = trail_entry
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
             reason_store
-                .get_or_compute_new(reason_ref, propagation_context, propagators)
+                .get_or_compute_new(reason_ref, assignments, propagators)
                 .expect("reason reference should not be stale")
         // The predicate is implicitly due as a result of a decision.
         }
@@ -231,15 +227,10 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             if trail_lower_bound > input_lower_bound {
                                 // We can simply return the reason given on the trail.
                                 // extract_reason_from_trail(&trail_entry)
-                                let propagation_context = PropagationContext::new(assignments);
 
                                 if let Some(reason_ref) = trail_entry.reason {
                                     reason_store
-                                        .get_or_compute_new(
-                                            reason_ref,
-                                            propagation_context,
-                                            propagators,
-                                        )
+                                        .get_or_compute_new(reason_ref, assignments, propagators)
                                         .expect("reason reference should not be stale")
                                 }
                                 // Otherwise the predicate is implicitly set due to a decision
@@ -304,15 +295,10 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                             // todo: lifting could be used here
                             pumpkin_assert_simple!(trail_lower_bound > not_equal_constant);
                             // extract_reason_from_trail(&trail_entry)
-                            let propagation_context = PropagationContext::new(assignments);
 
                             if let Some(reason_ref) = trail_entry.reason {
                                 reason_store
-                                    .get_or_compute_new(
-                                        reason_ref,
-                                        propagation_context,
-                                        propagators,
-                                    )
+                                    .get_or_compute_new(reason_ref, assignments, propagators)
                                     .expect("reason reference should not be stale")
                             }
                             // Otherwise the not equals predicate is due to a decision.
@@ -380,15 +366,10 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // todo: lifting could be applied here.
                         if trail_upper_bound < input_upper_bound {
                             // extract_reason_from_trail(&trail_entry)
-                            let propagation_context = PropagationContext::new(assignments);
 
                             if let Some(reason_ref) = trail_entry.reason {
                                 reason_store
-                                    .get_or_compute_new(
-                                        reason_ref,
-                                        propagation_context,
-                                        propagators,
-                                    )
+                                    .get_or_compute_new(reason_ref, assignments, propagators)
                                     .expect("reason reference should not be stale")
                             } else {
                                 reason_store.helper.clear();
@@ -434,10 +415,9 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // The bound was set past the not equals, so we can safely returns the trail
                         // reason. todo: can do lifting here.
                         // extract_reason_from_trail(&trail_entry)
-                        let propagation_context = PropagationContext::new(assignments);
                         if let Some(reason_ref) = trail_entry.reason {
                             reason_store
-                                .get_or_compute_new(reason_ref, propagation_context, propagators)
+                                .get_or_compute_new(reason_ref, assignments, propagators)
                                 .expect("reason reference should not be stale")
                         } else {
                             reason_store.helper.clear();

@@ -74,14 +74,7 @@ impl<'a> PropagationContextMut<'a> {
                     conjunction.add(reification_literal.get_true_predicate());
                     Reason::Eager(conjunction)
                 }
-                Reason::Lazy(callback) => {
-                    Reason::Lazy(Box::new(move |context: PropagationContext| {
-                        let mut conjunction = callback.compute(context);
-                        conjunction.add(reification_literal.get_true_predicate());
-                        conjunction
-                    }))
-                }
-                Reason::DynamicLazy { code: _ } => todo!(),
+                Reason::DynamicLazy(_) => todo!(),
             }
         } else {
             reason

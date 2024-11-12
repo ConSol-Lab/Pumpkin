@@ -9,7 +9,6 @@ use log::warn;
 use super::conflict_analysis::SemanticMinimiser;
 use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
-use super::propagation::PropagationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
 use crate::basic_types::Inconsistency;
@@ -145,7 +144,7 @@ impl DebugHelper {
         propagator_id: PropagatorId,
         assignments: &Assignments,
         reason_store: &mut ReasonStore,
-        propagators: &PropagatorStore,
+        propagators: &mut PropagatorStore,
     ) -> bool {
         if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id() {
             return true;
@@ -154,18 +153,20 @@ impl DebugHelper {
         for trail_index in num_trail_entries_before..assignments.num_trail_entries() {
             let trail_entry = assignments.get_trail_entry(trail_index);
 
-            let context = PropagationContext::new(assignments);
-
-            let reason = reason_store.get_or_compute(
-                trail_entry
-                    .reason
-                    .expect("Expected checked propagation to have a reason"),
-                context,
-            );
+            let reason = reason_store
+                .get_or_compute_new(
+                    trail_entry
+                        .reason
+                        .expect("Expected checked propagation to have a reason"),
+                    assignments,
+                    propagators,
+                )
+                .expect("reason should exist for this propagation")
+                .to_vec();
 
             result &= Self::debug_propagator_reason(
                 trail_entry.predicate,
-                reason.expect("Expected reason to exist"),
+                &reason,
                 assignments,
                 &propagators[propagator_id],
                 propagator_id,
@@ -176,7 +177,7 @@ impl DebugHelper {
 
     fn debug_propagator_reason(
         propagated_predicate: Predicate,
-        reason: &PropositionalConjunction,
+        reason: &[Predicate],
         assignments: &Assignments,
         propagator: &dyn Propagator,
         propagator_id: PropagatorId,
@@ -208,7 +209,7 @@ impl DebugHelper {
         {
             let mut assignments_clone = assignments.debug_create_empty_clone();
 
-            let reason_predicates: Vec<Predicate> = reason.iter().copied().collect();
+            let reason_predicates: Vec<Predicate> = reason.to_vec();
             let adding_predicates_was_successful = DebugHelper::debug_add_predicates_to_assignments(
                 &mut assignments_clone,
                 &reason_predicates,
@@ -254,7 +255,7 @@ impl DebugHelper {
                             if let Inconsistency::Conflict(found_inconsistency) = conflict {
                                 found_inconsistency
                                     .iter()
-                                    .all(|&predicate| reason.contains(predicate))
+                                    .all(|predicate| reason.contains(predicate))
                             } else {
                                 false
                             }
@@ -262,7 +263,7 @@ impl DebugHelper {
                         "Debug propagation detected a conflict other than a propagation\n
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
-                         Reported reason: {reason}\n
+                         Reported reason: {reason:?}\n
                          Reported propagation: {propagated_predicate}\n",
                         propagator.name()
                     );
@@ -274,7 +275,7 @@ impl DebugHelper {
                     "Debug propagation could not obtain the propagated predicate given the provided reason.\n
                      Propagator: '{}'\n
                      Propagator id: {propagator_id}\n
-                     Reported reason: {reason}\n
+                     Reported reason: {reason:?}\n
                      Reported propagation: {propagated_predicate}",
                     propagator.name()
                 );
@@ -341,7 +342,7 @@ impl DebugHelper {
                             "Debug propagation could not obtain a failure by setting the reason and negating the propagated predicate.\n
                              Propagator: '{}'\n
                              Propagator id: '{propagator_id}'.\n
-                             The reported reason: {reason}\n
+                             The reported reason: {reason:?}\n
                              Reported propagated predicate: {propagated_predicate}",
                             propagator.name()
                         );

@@ -1,12 +1,10 @@
 use std::fmt::Debug;
-use std::fmt::Formatter;
 
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
+use super::Assignments;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
-use crate::engine::propagation::PropagationContext;
-use crate::engine::DebugDyn;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
@@ -31,25 +29,15 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
-    pub fn get_or_compute<'this>(
-        &'this mut self,
-        reference: ReasonRef,
-        context: PropagationContext,
-    ) -> Option<&'this PropositionalConjunction> {
-        self.trail
-            .get_mut(reference.0 as usize)
-            .map(|reason| reason.1.compute(context))
-    }
-
     pub fn get_or_compute_new<'this>(
-        &'this mut self,
+        &'this self,
         reference: ReasonRef,
-        context: PropagationContext,
+        assignments: &Assignments,
         propagators: &'this mut PropagatorStore,
     ) -> Option<&'this [Predicate]> {
         self.trail
-            .get_mut(reference.0 as usize)
-            .map(|reason| reason.1.compute_new(context, reason.0, propagators))
+            .get(reference.0 as usize)
+            .map(|reason| reason.1.compute_new(assignments, reason.0, propagators))
     }
 
     pub fn increase_decision_level(&mut self) {
@@ -76,113 +64,42 @@ impl ReasonStore {
 pub struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
+#[derive(Debug)]
 pub enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate.
     Eager(PropositionalConjunction),
-    /// A lazy reason, which contains a closure that computes the reason later. Again, the
-    /// propagated predicate is _not_ part of the reason. Lazy reasons are typically computed
-    /// only once, then replaced by an Eager version with the result.
-    /// Todo: we need to rework the lazy explanation mechanism.
-    Lazy(Box<dyn LazyReason>),
-    DynamicLazy {
-        code: u64,
-    },
-}
-
-impl Debug for Reason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Reason::Eager(prop_conj) => f.debug_tuple("Eager").field(prop_conj).finish(),
-            Reason::Lazy(_) => f
-                .debug_tuple("Lazy")
-                .field(&DebugDyn::from("Reason"))
-                .finish(),
-            Reason::DynamicLazy { code } => f.debug_tuple("ImmutableLazy").field(code).finish(),
-        }
-    }
-}
-
-/// A lazy reason, which contains a closure that computes the reason later.
-pub trait LazyReason {
-    /// The computation receives  a read-only context that provides information about the
-    ///   assignments at the time of computing the reason, not from the time when the change was
-    ///   made. The CP propagator must compute and save any required information in the closure if
-    ///   dependent on the state of the assignments at that time.
-    fn compute(self: Box<Self>, context: PropagationContext) -> PropositionalConjunction;
-}
-
-impl<F: FnOnce(PropagationContext) -> PropositionalConjunction> LazyReason for F {
-    fn compute(self: Box<Self>, context: PropagationContext) -> PropositionalConjunction {
-        self(context)
-    }
+    /// A lazy reason, which is computed on-demand rather than up-front. This is also referred to
+    /// as a 'backward' reason.
+    ///
+    /// A lazy reason contains a payload that propagators can use to identify what type of
+    /// propagation the reason is for. The payload should be enough for the propagator to construct
+    /// an explanation based on its internal state.
+    DynamicLazy(u64),
 }
 
 impl Reason {
     pub fn compute_new<'a>(
-        &'a mut self,
-        context: PropagationContext,
+        &'a self,
+        assignments: &Assignments,
         propagator_id: PropagatorId,
         propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
-        // New tryout version: we do not replace the reason with an eager explanation for dynamic
-        // lazy explanations.
-        if let Reason::DynamicLazy { code } = self {
-            return propagators[propagator_id].lazy_explanation(*code, context.assignments);
+        match self {
+            // We do not replace the reason with an eager explanation for dynamic lazy explanations.
+            //
+            // Benchmarking will have to show whether this should change or not.
+            Reason::DynamicLazy(code) => {
+                propagators[propagator_id].lazy_explanation(*code, assignments)
+            }
+            Reason::Eager(result) => result.as_slice(),
         }
-
-        // It is not possible to (1) match on the reason to see if it is Lazy, (2) use it to compute
-        // a new result, and (3) then change the Lazy into an Eager, because the closure is
-        // borrowed. instead, we first unconditionally mem::replace the reason with an
-        // eager one, so the original is moved to a local variable, then match on that
-        // original, and put the result into the eager one.
-        let reason = std::mem::replace(self, Reason::Eager(Default::default()));
-        // Get a &mut to the field in Eager to put the result there.
-        let Reason::Eager(result) = self else {
-            // (this branch gets optimised out)
-            unreachable!()
-        };
-        match reason {
-            Reason::Eager(prop_conj) => *result = prop_conj,
-            Reason::Lazy(f) => *result = f.compute(context),
-            Reason::DynamicLazy { code: _ } => unreachable!(),
-        }
-        result.as_slice()
-    }
-
-    /// Compute the reason for a propagation.
-    /// If the reason is 'Lazy', this computes the reason and replaces the lazy explanation with an
-    /// eager one that was just computed.
-    pub fn compute(&mut self, context: PropagationContext) -> &PropositionalConjunction {
-        // It is not possible to (1) match on the reason to see if it is Lazy, (2) use it to compute
-        // a new result, and (3) then change the Lazy into an Eager, because the closure is
-        // borrowed. instead, we first unconditionally mem::replace the reason with an
-        // eager one, so the original is moved to a local variable, then match on that
-        // original, and put the result into the eager one.
-        let reason = std::mem::replace(self, Reason::Eager(Default::default()));
-        // Get a &mut to the field in Eager to put the result there.
-        let Reason::Eager(result) = self else {
-            // (this branch gets optimised out)
-            unreachable!()
-        };
-        match reason {
-            Reason::Eager(prop_conj) => *result = prop_conj,
-            Reason::Lazy(f) => *result = f.compute(context),
-            Reason::DynamicLazy { code: _ } => unreachable!(),
-        }
-        result
     }
 }
 
 impl From<PropositionalConjunction> for Reason {
     fn from(value: PropositionalConjunction) -> Self {
         Reason::Eager(value)
-    }
-}
-
-impl<R: LazyReason + 'static> From<R> for Reason {
-    fn from(value: R) -> Self {
-        Reason::Lazy(Box::new(value))
     }
 }
 
@@ -196,37 +113,23 @@ mod tests {
     #[test]
     fn computing_an_eager_reason_returns_a_reference_to_the_conjunction() {
         let integers = Assignments::default();
-        let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
 
         let conjunction = conjunction!([x == 1] & [y == 2]);
-        let mut reason = Reason::Eager(conjunction.clone());
+        let reason = Reason::Eager(conjunction.clone());
 
-        assert_eq!(&conjunction, reason.compute(context));
-    }
-
-    #[test]
-    fn computing_a_lazy_reason_evaluates_the_reason_and_returns_a_reference() {
-        let integers = Assignments::default();
-        let context = PropagationContext::new(&integers);
-
-        let x = DomainId::new(0);
-        let y = DomainId::new(1);
-
-        let conjunction = conjunction!([x == 1] & [y == 2]);
-        let conjunction_to_return = conjunction.clone();
-        let mut reason = Reason::from(|_: PropagationContext| conjunction_to_return);
-
-        assert_eq!(&conjunction, reason.compute(context));
+        assert_eq!(
+            conjunction.as_slice(),
+            reason.compute_new(&integers, PropagatorId(0), &mut PropagatorStore::default())
+        );
     }
 
     #[test]
     fn pushing_a_reason_gives_a_reason_ref_that_can_be_computed() {
         let mut reason_store = ReasonStore::default();
         let integers = Assignments::default();
-        let context = PropagationContext::new(&integers);
 
         let x = DomainId::new(0);
         let y = DomainId::new(1);
@@ -237,8 +140,8 @@ mod tests {
         assert_eq!(ReasonRef(0), reason_ref);
 
         assert_eq!(
-            Some(&conjunction),
-            reason_store.get_or_compute(reason_ref, context)
+            Some(conjunction.as_slice()),
+            reason_store.get_or_compute_new(reason_ref, &integers, &mut PropagatorStore::default())
         );
     }
 }
