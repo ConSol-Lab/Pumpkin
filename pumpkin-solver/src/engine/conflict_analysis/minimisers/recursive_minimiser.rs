@@ -1,6 +1,6 @@
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
-use crate::conflict_resolution::ConflictAnalysisNogoodContext;
+use crate::conflict_resolution::ConflictAnalysisContext;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_moderate;
@@ -36,7 +36,7 @@ impl RecursiveMinimiser {
     pub(crate) fn remove_dominated_predicates(
         &mut self,
         nogood: &mut Vec<Predicate>,
-        context: &mut ConflictAnalysisNogoodContext,
+        context: &mut ConflictAnalysisContext,
     ) {
         self.num_minimisation_calls += 1;
         self.num_literals_seen_total += nogood.len();
@@ -70,11 +70,7 @@ impl RecursiveMinimiser {
         self.num_predicates_removed_total += num_predicates_removed;
     }
 
-    fn compute_label(
-        &mut self,
-        input_predicate: Predicate,
-        context: &mut ConflictAnalysisNogoodContext,
-    ) {
+    fn compute_label(&mut self, input_predicate: Predicate, context: &mut ConflictAnalysisContext) {
         pumpkin_assert_moderate!(context.assignments.is_predicate_satisfied(input_predicate));
 
         self.current_depth += 1;
@@ -117,7 +113,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we retrieve the reason each time we need it, and then drop it.
         // Here we retrieve the reason and just record the length, dropping the ownership of the
         // reason.
-        let reason_size = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+        let reason_size = ConflictAnalysisContext::get_propagation_reason_simple(
             input_predicate,
             context.assignments,
             context.reason_store,
@@ -126,7 +122,7 @@ impl RecursiveMinimiser {
         .len();
 
         for i in 0..reason_size {
-            let antecedent_predicate = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+            let antecedent_predicate = ConflictAnalysisContext::get_propagation_reason_simple(
                 input_predicate,
                 context.assignments,
                 context.reason_store,

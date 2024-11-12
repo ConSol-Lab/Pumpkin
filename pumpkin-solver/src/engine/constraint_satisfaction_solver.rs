@@ -10,7 +10,7 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 use super::conflict_analysis::AnalysisMode;
-use super::conflict_analysis::ConflictAnalysisNogoodContext;
+use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
@@ -629,7 +629,7 @@ impl ConstraintSatisfactionSolver {
         {
             CoreExtractionResult::ConflictingAssumption(violated_assumption)
         } else {
-            let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
+            let mut conflict_analysis_context = ConflictAnalysisContext {
                 assignments: &mut self.assignments,
                 counters: &mut self.counters,
                 solver_state: &mut self.state,
@@ -850,7 +850,7 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
-        let mut conflict_analysis_context = ConflictAnalysisNogoodContext {
+        let mut conflict_analysis_context = ConflictAnalysisContext {
             assignments: &mut self.assignments,
             counters: &mut self.counters,
             solver_state: &mut self.state,

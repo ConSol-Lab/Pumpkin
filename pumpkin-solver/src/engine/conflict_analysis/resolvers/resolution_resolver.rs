@@ -7,7 +7,7 @@ use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::minimisers::Mode;
 use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
-use crate::engine::conflict_analysis::ConflictAnalysisNogoodContext;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
@@ -51,10 +51,7 @@ impl ResolutionResolver {
 }
 
 impl ConflictResolver for ResolutionResolver {
-    fn resolve_conflict(
-        &mut self,
-        context: &mut ConflictAnalysisNogoodContext,
-    ) -> Option<LearnedNogood> {
+    fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood> {
         self.clean_up();
 
         // Initialise the data structures with the conflict nogood.
@@ -129,7 +126,7 @@ impl ConflictResolver for ResolutionResolver {
                         // However, this can lead to [x <= v] to be processed *before* [x >= v -
                         // y], meaning that these implied predicates should be replaced with their
                         // reason
-                        let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                        let reason = ConflictAnalysisContext::get_propagation_reason_simple(
                             predicate,
                             context.assignments,
                             context.reason_store,
@@ -167,7 +164,7 @@ impl ConflictResolver for ResolutionResolver {
                     .is_decision_predicate(&self.peek_predicate_from_conflict_nogood())
                 {
                     let predicate = self.peek_predicate_from_conflict_nogood();
-                    let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+                    let reason = ConflictAnalysisContext::get_propagation_reason_simple(
                         predicate,
                         context.assignments,
                         context.reason_store,
@@ -187,7 +184,7 @@ impl ConflictResolver for ResolutionResolver {
             }
 
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
-            let reason = ConflictAnalysisNogoodContext::get_propagation_reason_simple(
+            let reason = ConflictAnalysisContext::get_propagation_reason_simple(
                 next_predicate,
                 context.assignments,
                 context.reason_store,
@@ -208,7 +205,7 @@ impl ConflictResolver for ResolutionResolver {
 
     fn process(
         &mut self,
-        context: &mut ConflictAnalysisNogoodContext,
+        context: &mut ConflictAnalysisContext,
         learned_nogood: &Option<LearnedNogood>,
     ) -> Result<(), ()> {
         let learned_nogood = learned_nogood.as_ref().expect("Expected nogood");
@@ -353,10 +350,7 @@ impl ResolutionResolver {
             .replace_predicate(predicate, replacement);
     }
 
-    fn extract_final_nogood(
-        &mut self,
-        context: &mut ConflictAnalysisNogoodContext,
-    ) -> LearnedNogood {
+    fn extract_final_nogood(&mut self, context: &mut ConflictAnalysisContext) -> LearnedNogood {
         // The final nogood is composed of the predicates encountered from the lower decision
         // levels, plus the predicate remaining in the heap.
 

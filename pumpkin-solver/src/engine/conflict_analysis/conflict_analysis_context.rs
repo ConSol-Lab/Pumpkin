@@ -16,7 +16,7 @@ use crate::variables::DomainId;
 
 // Does not have debug because of the brancher does not support it. Could be thought through later.
 #[allow(missing_debug_implementations)]
-pub struct ConflictAnalysisNogoodContext<'a> {
+pub struct ConflictAnalysisContext<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) reason_store: &'a mut ReasonStore,
@@ -33,7 +33,7 @@ pub struct ConflictAnalysisNogoodContext<'a> {
     pub(crate) counters: &'a mut SolverStatistics,
 }
 
-impl<'a> ConflictAnalysisNogoodContext<'a> {
+impl<'a> ConflictAnalysisContext<'a> {
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
         self.assignments.find_last_decision()
     }
