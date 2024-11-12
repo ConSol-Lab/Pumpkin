@@ -284,19 +284,6 @@ impl Assignments {
     }
 
     pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
-        // println!(
-        // "{} {} {:?}",
-        // predicate,
-        // predicate.get_domain(),
-        // self.domains[predicate.get_domain()].upper_bound_updates
-        // );
-        //
-        // let m = self.domains[predicate.get_domain()]
-        // .get_update_info(predicate)
-        // .map(|u| u.decision_level)
-        // .unwrap();
-        // println!("RET VAL {}", m);
-
         self.domains[predicate.get_domain()]
             .get_update_info(predicate)
             .map(|u| u.decision_level)

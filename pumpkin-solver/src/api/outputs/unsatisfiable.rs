@@ -2,8 +2,8 @@
 
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
-use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -100,7 +100,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// search for CP’, in Integration of Constraint Programming, Artificial Intelligence, and
     /// Operations Research: 17th International Conference, CPAIOR 2020, Vienna, Austria, September
     /// 21--24, 2020, Proceedings 17, 2020, pp. 205–221.
-    pub fn extract_core(&mut self) -> Box<[Literal]> {
+    pub fn extract_core(&mut self) -> Box<[Predicate]> {
         match self.solver.extract_clausal_core(self.brancher) {
             CoreExtractionResult::ConflictingAssumption(conflicting_assumption) => {
                 panic!("Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}", !conflicting_assumption)

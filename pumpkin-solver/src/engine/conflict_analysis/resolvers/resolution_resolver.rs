@@ -25,6 +25,29 @@ pub struct ResolutionResolver {
     /// The vector may contain duplicates, but will be removed at the end.
     predicates_lower_decision_level: Vec<Predicate>,
     recursive_minimiser: RecursiveMinimiser,
+    mode: AnalysisMode,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+/// Determines which type of learning is performed by the resolver.
+pub(crate) enum AnalysisMode {
+    #[default]
+    /// Stanard conflict analysis which returns as soon as the first unit implication point is
+    /// found (i.e. when a nogood is created which only contains a single predicate from the
+    /// current decision level)
+    OneUIP,
+    /// An alternative to 1-UIP which stops as soon as the learned nogood only creates decision
+    /// predicates.
+    AllDecision,
+}
+
+impl ResolutionResolver {
+    pub(crate) fn with_mode(mode: AnalysisMode) -> Self {
+        Self {
+            mode,
+            ..Default::default()
+        }
+    }
 }
 
 impl ConflictResolver for ResolutionResolver {
@@ -40,6 +63,7 @@ impl ConflictResolver for ResolutionResolver {
                 *predicate,
                 context.assignments,
                 context.brancher,
+                self.mode,
             );
         }
         // Record conflict nogood size statistics.
@@ -52,14 +76,27 @@ impl ConflictResolver for ResolutionResolver {
             .average_conflict_size
             .add_term(num_initial_conflict_predicates as u64);
 
+        // In the case of 1UIP
         // Keep refining the conflict nogood until there is only one predicate from the current
         // decision level
+        //
+        // In the case of all-decision learning
+        // Keep refining the conflict nogood until there are no non-decision predicates left
         //
         // There is an exception special case:
         // When posting the decision [x = v], it gets decomposed into two decisions ([x >= v] & [x
         // <= v]). In this case there will be two predicates left from the current decision
         // level, and both will be decisions. This is accounted for below.
-        while self.heap_current_decision_level.num_nonremoved_elements() > 1 {
+        while {
+            match self.mode {
+                AnalysisMode::OneUIP => {
+                    self.heap_current_decision_level.num_nonremoved_elements() > 1
+                }
+                AnalysisMode::AllDecision => {
+                    self.heap_current_decision_level.num_nonremoved_elements() > 0
+                }
+            }
+        } {
             // Replace the predicate from the nogood that has been assigned last on the trail.
             //
             // This is done in two steps:
@@ -162,6 +199,7 @@ impl ConflictResolver for ResolutionResolver {
                     *predicate,
                     context.assignments,
                     context.brancher,
+                    self.mode,
                 );
             }
         }
@@ -193,6 +231,7 @@ impl ResolutionResolver {
         predicate: Predicate,
         assignments: &Assignments,
         brancher: &mut dyn Brancher,
+        mode: AnalysisMode,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -203,19 +242,23 @@ impl ResolutionResolver {
                     assignments.get_upper_bound(predicate.get_domain()),
                 )
             });
-
         // Ignore root level predicates.
         if dec_level == 0 {
             // do nothing
         }
-        // We distinguish between predicates from the current decision level and other predicates.
-        else if dec_level == assignments.get_decision_level() {
+        // We distinguish between predicates from the current decision level and other
+        // predicates.
+        else if match mode {
+            AnalysisMode::OneUIP => dec_level == assignments.get_decision_level(),
+            AnalysisMode::AllDecision => !assignments.is_decision_predicate(&predicate),
+        } {
             let predicate_id = self.predicate_id_generator.get_id(predicate);
-            // The first time we encounter the predicate, we initialise its value in the heap.
+            // The first time we encounter the predicate, we initialise its value in the
+            // heap.
             //
-            // Note that if the predicate is already in the heap, no action needs to be taken. It
-            // can happen that a predicate is returned multiple times as a reason for other
-            // predicates.
+            // Note that if the predicate is already in the heap, no action needs to be
+            // taken. It can happen that a predicate is returned
+            // multiple times as a reason for other predicates.
 
             // TODO: could improve the heap structure to be more user-friendly.
 
@@ -228,8 +271,13 @@ impl ResolutionResolver {
                 self.heap_current_decision_level.delete_key(next_id);
             }
 
-            // Then we check whether the predicate was not already present in the heap, if this is
-            // not the case then we insert it
+            // In the case of 1UIP:
+            // Then we check whether the predicate was not already present in the heap, if
+            // this is not the case then we insert it
+            //
+            // In the case of all-decision learning
+            // Then we check whether the predicate is not a decision, if it is not then we add it
+            // to the heap to keep resolving
             if !self
                 .heap_current_decision_level
                 .is_key_present(predicate_id)
@@ -241,18 +289,21 @@ impl ResolutionResolver {
 
                 // The goal is to traverse predicate in reverse order of the trail.
                 //
-                // However some predicates may share the trail position. For example, if a predicate
-                // that was posted to trail resulted in some other predicates being true, then all
+                // However some predicates may share the trail position. For example, if a
+                // predicate that was posted to trail resulted in
+                // some other predicates being true, then all
                 // these predicates would have the same trail position.
                 //
-                // When considering the predicates in reverse order of the trail, the implicitly set
-                // predicates are posted after the explicitly set one, but they all
-                // have the same trail position.
+                // When considering the predicates in reverse order of the trail, the
+                // implicitly set predicates are posted after the
+                // explicitly set one, but they all have the same
+                // trail position.
                 //
-                // To remedy this, we make a tie-breaking scheme to prioritise implied predicates
-                // over explicit predicates. This is done by assigning explicitly set predicates the
-                // value `2 * trail_position`, whereas implied predicates get `2 * trail_position +
-                // 1`.
+                // To remedy this, we make a tie-breaking scheme to prioritise implied
+                // predicates over explicit predicates. This is done
+                // by assigning explicitly set predicates the
+                // value `2 * trail_position`, whereas implied predicates get `2 *
+                // trail_position + 1`.
                 let heap_value = if assignments.trail[trail_position].predicate == predicate {
                     trail_position * 2
                 } else {
@@ -312,8 +363,12 @@ impl ResolutionResolver {
         // First we obtain a semantically minimised nogood.
         //
         // We reuse the vector with lower decision levels for simplicity.
-        let last_predicate = self.pop_predicate_from_conflict_nogood();
-        self.predicates_lower_decision_level.push(last_predicate);
+        if self.heap_current_decision_level.num_nonremoved_elements() > 0 {
+            let last_predicate = self.pop_predicate_from_conflict_nogood();
+            self.predicates_lower_decision_level.push(last_predicate);
+        } else {
+            pumpkin_assert_simple!(matches!(self.mode, AnalysisMode::AllDecision), "If the heap is empty when extracting the final nogood then we should be performing all decision learning")
+        }
 
         // First we minimise the nogood using semantic minimisation to remove duplicates but we
         // avoid equality merging (since some of these literals could potentailly be removed by
@@ -324,7 +379,7 @@ impl ResolutionResolver {
             Mode::DisableEqualityMerging,
         );
 
-        // Then we perform recrusive minimisation to remove the dominated predicates
+        // Then we perform recursive minimisation to remove the dominated predicates
         self.recursive_minimiser
             .remove_dominated_predicates(&mut clean_nogood, context);
 
