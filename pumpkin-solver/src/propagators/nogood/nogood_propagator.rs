@@ -1864,16 +1864,17 @@ mod tests {
     use super::NogoodPropagator;
     use crate::conjunction;
     use crate::engine::propagation::store::PropagatorStore;
-    use crate::engine::propagation::Propagator;
+    use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
     use crate::predicates::PropositionalConjunction;
 
     fn downcast_to_nogood_propagator(
-        nogood_propagator: &mut Box<dyn Propagator>,
+        nogood_propagator: PropagatorId,
+        propagators: &mut PropagatorStore,
     ) -> &mut NogoodPropagator {
-        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+        match propagators[nogood_propagator].downcast_mut::<NogoodPropagator>() {
             Some(nogood_propagator) => nogood_propagator,
             None => panic!("Provided propagator should be the nogood propagator"),
         }
@@ -1887,36 +1888,38 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, dummy.id as i32, dummy, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let context = &mut solver.get_propagation_context_mut(PropagatorId(0));
-            downcast_to_nogood_propagator(&mut propagator)
-                .add_nogood(nogood.into(), context)
+            let mut context = PropagationContextMut::new(
+                &mut solver.assignments,
+                &mut solver.reason_store,
+                &mut solver.semantic_minimiser,
+                propagator,
+            );
+
+            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+                .add_nogood(nogood.into(), &mut context)
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, a.id as i32, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, b.id as i32, b, 0);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 0);
 
-        solver
-            .propagate_until_fixed_point(&mut propagator)
-            .expect("");
+        solver.propagate_until_fixed_point(propagator).expect("");
 
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, c.id as i32, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
 
-        solver.propagate(&mut propagator).expect("");
+        solver.propagate(propagator).expect("");
 
         assert_eq!(solver.upper_bound(b), 0);
 
-        let mut propagators = PropagatorStore::default();
-        let _ = propagators.alloc(propagator, None);
-        let reason_lb = solver.get_reason_int_new(predicate!(b <= 0), &mut propagators);
+        let reason_lb = solver.get_reason_int_new(predicate!(b <= 0));
         let reason_lb = PropositionalConjunction::from(reason_lb.to_vec());
         assert_eq!(conjunction!([a >= 2] & [c >= 10]), reason_lb);
     }
@@ -1928,23 +1931,29 @@ mod tests {
         let b = solver.new_variable(-4, 4);
         let c = solver.new_variable(-10, 20);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
-            let context = &mut solver.get_propagation_context_mut(PropagatorId(0));
-            downcast_to_nogood_propagator(&mut propagator)
-                .add_nogood(nogood.into(), context)
+            let mut context = PropagationContextMut::new(
+                &mut solver.assignments,
+                &mut solver.reason_store,
+                &mut solver.semantic_minimiser,
+                propagator,
+            );
+
+            downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
+                .add_nogood(nogood.into(), &mut context)
                 .expect("");
         }
 
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, a.id as i32, a, 3);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, b.id as i32, b, 1);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, c.id as i32, c, 15);
+        let _ = solver.increase_lower_bound_and_notify(propagator, a.id, a, 3);
+        let _ = solver.increase_lower_bound_and_notify(propagator, b.id, b, 1);
+        let _ = solver.increase_lower_bound_and_notify(propagator, c.id, c, 15);
 
-        let result = solver.propagate_until_fixed_point(&mut propagator);
+        let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_err());
     }
 }

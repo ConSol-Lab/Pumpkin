@@ -2,7 +2,6 @@
 //! This module exposes helpers that aid testing of CP propagators. The [`TestSolver`] allows
 //! setting up specific scenarios under which to test the various operations of a propagator.
 use std::fmt::Debug;
-use std::fmt::Formatter;
 
 use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
@@ -29,11 +28,11 @@ use crate::engine::WatchListCP;
 /// A container for CP variables, which can be used to test propagators.
 #[derive(Debug)]
 pub(crate) struct TestSolver {
-    assignments: Assignments,
-    reason_store: ReasonStore,
-    semantic_minimiser: SemanticMinimiser,
+    pub assignments: Assignments,
+    pub propagator_store: PropagatorStore,
+    pub reason_store: ReasonStore,
+    pub semantic_minimiser: SemanticMinimiser,
     watch_list: WatchListCP,
-    next_propagator_id: u32,
 
     // Hack: this is used to store conjunctions temporarily. Should be removed when refactoring is
     // completed.
@@ -45,22 +44,14 @@ impl Default for TestSolver {
         let mut solver = Self {
             assignments: Default::default(),
             reason_store: Default::default(),
+            propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
-            next_propagator_id: Default::default(),
             temp_conjunction: PropositionalConjunction::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
         solver
-    }
-}
-
-type BoxedPropagator = Box<dyn Propagator>;
-
-impl Debug for BoxedPropagator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "test_helper::Propagator(<boxed value>)")
     }
 }
 
@@ -78,19 +69,24 @@ impl TestSolver {
     pub(crate) fn new_propagator(
         &mut self,
         propagator: impl Propagator + 'static,
-    ) -> Result<BoxedPropagator, Inconsistency> {
-        let id = PropagatorId(self.next_propagator_id);
-        self.next_propagator_id += 1;
+    ) -> Result<PropagatorId, Inconsistency> {
+        let propagator: Box<dyn Propagator> = Box::new(propagator);
+        let id = self.propagator_store.alloc(propagator, None);
 
-        let mut propagator: Box<dyn Propagator> = Box::new(propagator);
-        propagator.initialise_at_root(&mut PropagatorInitialisationContext::new(
+        self.propagator_store[id].initialise_at_root(&mut PropagatorInitialisationContext::new(
             &mut self.watch_list,
             id,
             &self.assignments,
         ))?;
-        self.propagate(&mut propagator)?;
+        let context = PropagationContextMut::new(
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.semantic_minimiser,
+            PropagatorId(0),
+        );
+        self.propagator_store[id].propagate(context)?;
 
-        Ok(propagator)
+        Ok(id)
     }
 
     pub(crate) fn contains<Var: IntegerVariable>(&self, var: Var, value: i32) -> bool {
@@ -101,31 +97,19 @@ impl TestSolver {
         self.assignments.get_lower_bound(var)
     }
 
-    pub(crate) fn get_propagation_context_mut(
-        &mut self,
-        propagator_id: PropagatorId,
-    ) -> PropagationContextMut {
-        PropagationContextMut::new(
-            &mut self.assignments,
-            &mut self.reason_store,
-            &mut self.semantic_minimiser,
-            propagator_id,
-        )
-    }
-
     pub(crate) fn increase_lower_bound_and_notify(
         &mut self,
-        propagator: &mut BoxedPropagator,
-        id: i32,
+        propagator: PropagatorId,
+        local_id: u32,
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let context = PropagationContext::new(&self.assignments);
-        propagator.notify(
+        self.propagator_store[propagator].notify(
             context,
-            LocalId::from(id as u32),
+            LocalId::from(local_id),
             OpaqueDomainEvent::from(
                 DomainEvents::LOWER_BOUND
                     .get_int_events()
@@ -138,17 +122,17 @@ impl TestSolver {
 
     pub(crate) fn decrease_upper_bound_and_notify(
         &mut self,
-        propagator: &mut BoxedPropagator,
-        id: i32,
+        propagator: PropagatorId,
+        local_id: u32,
         var: DomainId,
         value: i32,
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
         let context = PropagationContext::new(&self.assignments);
-        propagator.notify(
+        self.propagator_store[propagator].notify(
             context,
-            LocalId::from(id as u32),
+            LocalId::from(local_id),
             OpaqueDomainEvent::from(
                 DomainEvents::UPPER_BOUND
                     .get_int_events()
@@ -197,22 +181,19 @@ impl TestSolver {
         }
     }
 
-    pub(crate) fn propagate(
-        &mut self,
-        propagator: &mut BoxedPropagator,
-    ) -> Result<(), Inconsistency> {
+    pub(crate) fn propagate(&mut self, propagator: PropagatorId) -> Result<(), Inconsistency> {
         let context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             PropagatorId(0),
         );
-        propagator.propagate(context)
+        self.propagator_store[propagator].propagate(context)
     }
 
     pub(crate) fn propagate_until_fixed_point(
         &mut self,
-        propagator: &mut BoxedPropagator,
+        propagator: PropagatorId,
     ) -> Result<(), Inconsistency> {
         let mut num_trail_entries = self.assignments.num_trail_entries();
         self.notify_propagator(propagator);
@@ -225,7 +206,7 @@ impl TestSolver {
                     &mut self.semantic_minimiser,
                     PropagatorId(0),
                 );
-                propagator.propagate(context)?;
+                self.propagator_store[propagator].propagate(context)?;
                 self.notify_propagator(propagator);
             }
             if self.assignments.num_trail_entries() == num_trail_entries {
@@ -236,57 +217,46 @@ impl TestSolver {
         Ok(())
     }
 
-    pub(crate) fn notify_propagator(&mut self, propagator: &mut BoxedPropagator) {
+    pub(crate) fn notify_propagator(&mut self, propagator: PropagatorId) {
         let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
         let context = PropagationContext::new(&self.assignments);
         for (event, domain) in events {
             // The nogood propagator is treated in a special way, since it is not explicitly
             // subscribed to any domain updates, but implicitly is subscribed to all updates.
-            if propagator.name() == "NogoodPropagator" {
+            if self.propagator_store[propagator].name() == "NogoodPropagator" {
                 let local_id = LocalId::from(domain.id);
-                let _ = propagator.notify(context, local_id, event.into());
+                let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
                 for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
-                    let _ = propagator.notify(context, propagator_var.variable, event.into());
+                    let _ = self.propagator_store[propagator].notify(
+                        context,
+                        propagator_var.variable,
+                        event.into(),
+                    );
                 }
             }
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn notify(
-        &self,
-        propagator: &mut BoxedPropagator,
-        event: OpaqueDomainEvent,
-        local_id: LocalId,
-    ) -> EnqueueDecision {
-        propagator.notify(PropagationContext::new(&self.assignments), local_id, event)
     }
 
     pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
-        let mut propagator_store = PropagatorStore::default();
         let slice = self
             .reason_store
-            .get_or_compute_new(reason_ref, &self.assignments, &mut propagator_store)
+            .get_or_compute_new(reason_ref, &self.assignments, &mut self.propagator_store)
             .expect("reason_ref should not be stale");
 
         self.temp_conjunction = slice.iter().copied().collect();
         &self.temp_conjunction
     }
 
-    pub(crate) fn get_reason_int_new<'a>(
-        &'a mut self,
-        predicate: Predicate,
-        propagators: &'a mut PropagatorStore,
-    ) -> &'a [Predicate] {
+    pub(crate) fn get_reason_int_new(&mut self, predicate: Predicate) -> &[Predicate] {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
         self.reason_store
-            .get_or_compute_new(reason_ref, &self.assignments, propagators)
+            .get_or_compute_new(reason_ref, &self.assignments, &mut self.propagator_store)
             .expect("reason_ref should not be stale")
     }
 

@@ -350,14 +350,14 @@ mod tests {
         let x = solver.new_variable(2, 2);
         let y = solver.new_variable(1, 5);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
             ))
             .expect("non-empty domain");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 2, 2);
         solver.assert_bounds(y, 1, 5);
@@ -387,11 +387,11 @@ mod tests {
         let x = solver.new_variable(2, 2).scaled(1);
         let y = solver.new_variable(1, 5).scaled(-1);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearNotEqualPropagator::new([x, y].into(), 0))
             .expect("non-empty domain");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
         let reason = solver.get_reason_int(predicate![y != -2]);
 
@@ -404,7 +404,7 @@ mod tests {
         let x = solver.new_variable(0, 3);
         let y = solver.new_variable(0, 3);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearNotEqualPropagator::new(
                 [x.scaled(1), y.scaled(-1)].into(),
                 0,
@@ -419,8 +419,8 @@ mod tests {
         solver.remove(y, 1).expect("non-empty domain");
         solver.remove(y, 2).expect("non-empty domain");
 
-        solver.notify_propagator(&mut propagator);
+        solver.notify_propagator(propagator);
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
     }
 }

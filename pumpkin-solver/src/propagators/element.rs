@@ -145,7 +145,7 @@ where
             Reason::DynamicLazy(
                 RightHandSideReason::new()
                     .with_bound(Bound::Lower)
-                    .with_value(rhs_ub)
+                    .with_value(rhs_lb)
                     .into_bits(),
             ),
         )?;

@@ -426,7 +426,7 @@ mod tests {
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -450,13 +450,13 @@ mod tests {
         assert_eq!(solver.upper_bound(s2), 10);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 0, s1, 5);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
 
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 7);
         assert_eq!(solver.upper_bound(s2), 10);
@@ -470,7 +470,7 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -493,7 +493,7 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let result = solver.propagate_until_fixed_point(&mut propagator);
+        let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
@@ -521,7 +521,7 @@ mod tests {
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -574,12 +574,12 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 3, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 3, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -595,7 +595,7 @@ mod tests {
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -651,12 +651,12 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 4, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 4, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }

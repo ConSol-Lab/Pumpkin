@@ -216,11 +216,11 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 1, 5);
         solver.assert_bounds(y, 0, 6);
@@ -232,11 +232,11 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
         let reason = solver.get_reason_int(predicate![y <= 6]);
 

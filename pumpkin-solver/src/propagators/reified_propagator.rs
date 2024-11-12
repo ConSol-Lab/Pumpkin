@@ -251,7 +251,7 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |mut ctx: PropagationContextMut| {
@@ -268,7 +268,7 @@ mod tests {
         solver.assert_bounds(var, 1, 5);
 
         let _ = solver.set_literal(reification_literal, true);
-        solver.propagate(&mut propagator).expect("no conflict");
+        solver.propagate(propagator).expect("no conflict");
 
         solver.assert_bounds(var, 3, 5);
         let reason = solver.get_reason_int(predicate![var >= 3]);
@@ -341,7 +341,7 @@ mod tests {
         let reification_literal = solver.new_literal();
         let var = solver.new_variable(1, 5);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
@@ -359,7 +359,7 @@ mod tests {
             ))
             .expect("No conflict expected");
 
-        let enqueue = solver.increase_lower_bound_and_notify(&mut propagator, 0, var, 5);
+        let enqueue = solver.increase_lower_bound_and_notify(propagator, 0, var, 5);
         assert!(matches!(enqueue, EnqueueDecision::Enqueue))
     }
 
