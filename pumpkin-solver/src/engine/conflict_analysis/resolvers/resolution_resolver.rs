@@ -12,19 +12,26 @@ use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
 #[derive(Clone, Debug, Default)]
 pub struct ResolutionResolver {
-    /// Heap containing the current decision level predicates.
-    /// It sorts the predicates based on trail position.
-    heap_current_decision_level: KeyValueHeap<PredicateId, u32>,
-    /// The generator is used in combination with the heap.
+    /// Heap containing the predicates which still need to be processed; sorted non-increasing
+    /// based on trail-index where implied predicates are processed first.
+    to_process_heap: KeyValueHeap<PredicateId, u32>,
+    /// The generator is used in combination with the heap to keep track of which predicates are
+    /// stored in the heap.
     predicate_id_generator: PredicateIdGenerator,
-    /// Vector containing predicates above the current decision level.
-    /// The vector may contain duplicates, but will be removed at the end.
-    predicates_lower_decision_level: Vec<Predicate>,
+    /// Predicates which have been processed and have been determined to be (potentially) part of
+    /// the nogood.
+    ///
+    /// Note that this structure may contain duplicates which are removed at the end by semantic
+    /// minimisation.
+    processed_nogood_predicates: Vec<Predicate>,
+    /// A minimiser which recursively determines whether a predicate is redundant in the nogood
     recursive_minimiser: RecursiveMinimiser,
+    /// Whether the resolver employs 1-UIP or all-decision learning.
     mode: AnalysisMode,
 }
 
@@ -68,8 +75,7 @@ impl ConflictResolver for ResolutionResolver {
         }
         // Record conflict nogood size statistics.
         let num_initial_conflict_predicates =
-            self.heap_current_decision_level.num_nonremoved_elements()
-                + self.predicates_lower_decision_level.len();
+            self.to_process_heap.num_nonremoved_elements() + self.processed_nogood_predicates.len();
         context
             .counters
             .learned_clause_statistics
@@ -89,12 +95,8 @@ impl ConflictResolver for ResolutionResolver {
         // level, and both will be decisions. This is accounted for below.
         while {
             match self.mode {
-                AnalysisMode::OneUIP => {
-                    self.heap_current_decision_level.num_nonremoved_elements() > 1
-                }
-                AnalysisMode::AllDecision => {
-                    self.heap_current_decision_level.num_nonremoved_elements() > 0
-                }
+                AnalysisMode::OneUIP => self.to_process_heap.num_nonremoved_elements() > 1,
+                AnalysisMode::AllDecision => self.to_process_heap.num_nonremoved_elements() > 0,
             }
         } {
             // Replace the predicate from the nogood that has been assigned last on the trail.
@@ -114,7 +116,7 @@ impl ConflictResolver for ResolutionResolver {
                 //
                 // Semantic minimisation will ensure the bound predicates get converted into an
                 // equality decision predicate.
-                while self.heap_current_decision_level.num_nonremoved_elements() != 1 {
+                while self.to_process_heap.num_nonremoved_elements() != 1 {
                     let predicate = self.pop_predicate_from_conflict_nogood();
                     let predicate_replacement = if context
                         .assignments
@@ -145,8 +147,7 @@ impl ConflictResolver for ResolutionResolver {
 
                     // We push to `predicates_lower_decision_level` since this structure will be
                     // used for creating the final nogood
-                    self.predicates_lower_decision_level
-                        .push(predicate_replacement);
+                    self.processed_nogood_predicates.push(predicate_replacement);
                 }
                 // It could be the case that the final predicate in the nogood is implied, in
                 // this case we eagerly replace it since the conflict analysis output assumes
@@ -182,7 +183,7 @@ impl ConflictResolver for ResolutionResolver {
                 }
 
                 // The final predicate in the heap will get pushed in `extract_final_nogood`
-                self.predicates_lower_decision_level.push(next_predicate);
+                self.processed_nogood_predicates.push(next_predicate);
                 break;
             }
 
@@ -221,9 +222,9 @@ impl ConflictResolver for ResolutionResolver {
 impl ResolutionResolver {
     /// Clears all data structures to prepare for the new conflict analysis.
     fn clean_up(&mut self) {
-        self.predicates_lower_decision_level.clear();
+        self.processed_nogood_predicates.clear();
         self.predicate_id_generator.clear();
-        self.heap_current_decision_level.clear();
+        self.to_process_heap.clear();
     }
 
     fn add_predicate_to_conflict_nogood(
@@ -246,8 +247,13 @@ impl ResolutionResolver {
         if dec_level == 0 {
             // do nothing
         }
-        // We distinguish between predicates from the current decision level and other
-        // predicates.
+        // 1UIP
+        // If the variables are from the current decision level then we want to potentially add
+        // them to the heap, otherwise we add it to the predicates from lower-decision levels
+        //
+        // All-decision Learning
+        // If the variables are not decisions then we want to potentially add them to the heap,
+        // otherwise we add it to the decision predicates which have been discovered previously
         else if match mode {
             AnalysisMode::OneUIP => dec_level == assignments.get_decision_level(),
             AnalysisMode::AllDecision => !assignments.is_decision_predicate(&predicate),
@@ -263,25 +269,18 @@ impl ResolutionResolver {
             // TODO: could improve the heap structure to be more user-friendly.
 
             // Here we manually adjust the size of the heap to accommodate new elements.
-            while self.heap_current_decision_level.len() <= predicate_id.index() {
+            while self.to_process_heap.len() <= predicate_id.index() {
                 let next_id = PredicateId {
-                    id: self.heap_current_decision_level.len() as u32,
+                    id: self.to_process_heap.len() as u32,
                 };
-                self.heap_current_decision_level.grow(next_id, 0);
-                self.heap_current_decision_level.delete_key(next_id);
+                self.to_process_heap.grow(next_id, 0);
+                self.to_process_heap.delete_key(next_id);
             }
 
-            // In the case of 1UIP:
             // Then we check whether the predicate was not already present in the heap, if
             // this is not the case then we insert it
-            //
-            // In the case of all-decision learning
-            // Then we check whether the predicate is not a decision, if it is not then we add it
-            // to the heap to keep resolving
-            if !self
-                .heap_current_decision_level
-                .is_key_present(predicate_id)
-                && *self.heap_current_decision_level.get_value(predicate_id) == 0
+            if !self.to_process_heap.is_key_present(predicate_id)
+                && *self.to_process_heap.get_value(predicate_id) == 0
             {
                 brancher.on_appearance_in_conflict_predicate(predicate);
 
@@ -312,33 +311,31 @@ impl ResolutionResolver {
 
                 // We restore the key and since we know that the value is 0, we can safely
                 // increment with `heap_value`
-                self.heap_current_decision_level.restore_key(predicate_id);
-                self.heap_current_decision_level
+                self.to_process_heap.restore_key(predicate_id);
+                self.to_process_heap
                     .increment(predicate_id, heap_value as u32);
 
-                // TODO: Likely not needed, but double check.
-                if *self.heap_current_decision_level.get_value(predicate_id)
-                    != heap_value.try_into().unwrap()
-                {
-                    self.heap_current_decision_level.delete_key(predicate_id);
-                }
+                pumpkin_assert_moderate!(
+                    *self.to_process_heap.get_value(predicate_id) == heap_value.try_into().unwrap(),
+                    "The value in the heap should be the same as was added"
+                )
             }
         } else {
             // We do not check for duplicate, we simply add the predicate.
             // Semantic minimisation will later remove duplicates and do other processing.
-            self.predicates_lower_decision_level.push(predicate);
+            self.processed_nogood_predicates.push(predicate);
         }
     }
 
     fn pop_predicate_from_conflict_nogood(&mut self) -> Predicate {
-        let next_predicate_id = self.heap_current_decision_level.pop_max().unwrap();
+        let next_predicate_id = self.to_process_heap.pop_max().unwrap();
         self.predicate_id_generator
             .get_predicate(next_predicate_id)
             .unwrap()
     }
 
     fn peek_predicate_from_conflict_nogood(&self) -> Predicate {
-        let next_predicate_id = self.heap_current_decision_level.peek_max().unwrap().0;
+        let next_predicate_id = self.to_process_heap.peek_max().unwrap().0;
         self.predicate_id_generator
             .get_predicate(*next_predicate_id)
             .unwrap()
@@ -363,9 +360,9 @@ impl ResolutionResolver {
         // First we obtain a semantically minimised nogood.
         //
         // We reuse the vector with lower decision levels for simplicity.
-        if self.heap_current_decision_level.num_nonremoved_elements() > 0 {
+        if self.to_process_heap.num_nonremoved_elements() > 0 {
             let last_predicate = self.pop_predicate_from_conflict_nogood();
-            self.predicates_lower_decision_level.push(last_predicate);
+            self.processed_nogood_predicates.push(last_predicate);
         } else {
             pumpkin_assert_simple!(matches!(self.mode, AnalysisMode::AllDecision), "If the heap is empty when extracting the final nogood then we should be performing all decision learning")
         }
@@ -374,7 +371,7 @@ impl ResolutionResolver {
         // avoid equality merging (since some of these literals could potentailly be removed by
         // recursive minimisation)
         let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
-            &self.predicates_lower_decision_level,
+            &self.processed_nogood_predicates,
             context.assignments,
             Mode::DisableEqualityMerging,
         );
@@ -385,11 +382,17 @@ impl ResolutionResolver {
 
         // We perform a final semantic minimisation call which allows the merging of the equality
         // predicates which remain in the nogood
+        let size_before_semantic_minimisation = clean_nogood.len();
         clean_nogood = context.semantic_minimiser.minimise(
             &clean_nogood,
             context.assignments,
             Mode::EnableEqualityMerging,
         );
+        context
+            .counters
+            .learned_clause_statistics
+            .average_number_of_removed_literals_semantic
+            .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
 
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions

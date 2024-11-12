@@ -988,6 +988,11 @@ impl ConstraintSatisfactionSolver {
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
 
+        self.counters
+            .learned_clause_statistics
+            .average_backtrack_amount
+            .add_term((self.get_decision_level() - backtrack_level) as u64);
+
         brancher.on_backtrack();
 
         self.assignments

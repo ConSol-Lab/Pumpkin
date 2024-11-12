@@ -110,18 +110,6 @@ struct Args {
     )]
     learning_lbd_threshold: u32,
 
-    // /// Decides which clauses will be removed when cleaning up the learned clauses. Can either
-    // be /// based on the LBD of a clause (the number of different decision levels) or on the
-    // activity /// of a clause (how often it is used in conflict analysis).
-    // ///
-    // /// Possible values: ["lbd", "activity"]
-    // #[arg(
-    //     short = 'l',
-    //     long = "learning-sorting-strategy",
-    //     value_parser = learned_clause_sorting_strategy_parser,
-    //     default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
-    // )]
-    // learning_sorting_strategy: LearnedClauseSortingStrategy,
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
     /// Strengthening for Satisfiability Solvers - Allen van Gelder (2011)".
