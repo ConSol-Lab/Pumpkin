@@ -154,7 +154,7 @@ impl DebugHelper {
             let trail_entry = assignments.get_trail_entry(trail_index);
 
             let reason = reason_store
-                .get_or_compute_new(
+                .get_or_compute(
                     trail_entry
                         .reason
                         .expect("Expected checked propagation to have a reason"),

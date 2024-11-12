@@ -240,6 +240,6 @@ mod tests {
 
         let reason = solver.get_reason_int(predicate![y <= 6]);
 
-        assert_eq!(conjunction!([x >= 1]), *reason);
+        assert_eq!(conjunction!([x >= 1]).as_slice(), reason);
     }
 }

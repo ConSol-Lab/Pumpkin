@@ -1046,7 +1046,7 @@ impl ConstraintSatisfactionSolver {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let reason_changing_bound = reason_store
-            .get_or_compute_new(entry.reason.unwrap(), assignments, propagators)
+            .get_or_compute(entry.reason.unwrap(), assignments, propagators)
             .unwrap();
 
         let mut empty_domain_reason: Vec<Predicate> = vec![

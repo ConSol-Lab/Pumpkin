@@ -1868,7 +1868,6 @@ mod tests {
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
     use crate::predicate;
-    use crate::predicates::PropositionalConjunction;
 
     fn downcast_to_nogood_propagator(
         nogood_propagator: PropagatorId,
@@ -1919,9 +1918,8 @@ mod tests {
 
         assert_eq!(solver.upper_bound(b), 0);
 
-        let reason_lb = solver.get_reason_int_new(predicate!(b <= 0));
-        let reason_lb = PropositionalConjunction::from(reason_lb.to_vec());
-        assert_eq!(conjunction!([a >= 2] & [c >= 10]), reason_lb);
+        let reason_lb = solver.get_reason_int(predicate!(b <= 0));
+        assert_eq!(conjunction!([a >= 2] & [c >= 10]).as_slice(), reason_lb);
     }
 
     #[test]

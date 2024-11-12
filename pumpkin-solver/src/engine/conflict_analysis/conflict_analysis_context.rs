@@ -196,7 +196,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                 .expect("Cannot be a null reason for propagation.");
 
             reason_store
-                .get_or_compute_new(reason_ref, assignments, propagators)
+                .get_or_compute(reason_ref, assignments, propagators)
                 .expect("reason reference should not be stale")
         // The predicate is implicitly due as a result of a decision.
         }
@@ -230,7 +230,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                                 if let Some(reason_ref) = trail_entry.reason {
                                     reason_store
-                                        .get_or_compute_new(reason_ref, assignments, propagators)
+                                        .get_or_compute(reason_ref, assignments, propagators)
                                         .expect("reason reference should not be stale")
                                 }
                                 // Otherwise the predicate is implicitly set due to a decision
@@ -298,7 +298,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                             if let Some(reason_ref) = trail_entry.reason {
                                 reason_store
-                                    .get_or_compute_new(reason_ref, assignments, propagators)
+                                    .get_or_compute(reason_ref, assignments, propagators)
                                     .expect("reason reference should not be stale")
                             }
                             // Otherwise the not equals predicate is due to a decision.
@@ -369,7 +369,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
 
                             if let Some(reason_ref) = trail_entry.reason {
                                 reason_store
-                                    .get_or_compute_new(reason_ref, assignments, propagators)
+                                    .get_or_compute(reason_ref, assignments, propagators)
                                     .expect("reason reference should not be stale")
                             } else {
                                 reason_store.helper.clear();
@@ -417,7 +417,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
                         // extract_reason_from_trail(&trail_entry)
                         if let Some(reason_ref) = trail_entry.reason {
                             reason_store
-                                .get_or_compute_new(reason_ref, assignments, propagators)
+                                .get_or_compute(reason_ref, assignments, propagators)
                                 .expect("reason reference should not be stale")
                         } else {
                             reason_store.helper.clear();

@@ -156,7 +156,10 @@ mod tests {
         solver.assert_bounds(rhs, 1, 5);
 
         let reason = solver.get_reason_int(predicate![rhs <= 5]);
-        assert_eq!(conjunction!([a <= 5] & [b <= 5] & [c <= 5]), reason.clone());
+        assert_eq!(
+            conjunction!([a <= 5] & [b <= 5] & [c <= 5]).as_slice(),
+            reason
+        );
     }
 
     #[test]
@@ -176,7 +179,7 @@ mod tests {
         solver.assert_bounds(rhs, 5, 10);
 
         let reason = solver.get_reason_int(predicate![rhs >= 5]);
-        assert_eq!(conjunction!([c >= 5]), reason.clone());
+        assert_eq!(conjunction!([c >= 5]).as_slice(), reason);
     }
 
     #[test]
@@ -196,7 +199,7 @@ mod tests {
         for var in array.iter() {
             solver.assert_bounds(*var, 1, 3);
             let reason = solver.get_reason_int(predicate![var <= 3]);
-            assert_eq!(conjunction!([rhs <= 3]), reason.clone());
+            assert_eq!(conjunction!([rhs <= 3]).as_slice(), reason);
         }
     }
 

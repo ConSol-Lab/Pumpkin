@@ -7,7 +7,6 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::PropagatorInitialisationContext;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PropositionalConjunction;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
@@ -33,10 +32,6 @@ pub(crate) struct TestSolver {
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
     watch_list: WatchListCP,
-
-    // Hack: this is used to store conjunctions temporarily. Should be removed when refactoring is
-    // completed.
-    temp_conjunction: PropositionalConjunction,
 }
 
 impl Default for TestSolver {
@@ -47,7 +42,6 @@ impl Default for TestSolver {
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
-            temp_conjunction: PropositionalConjunction::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -238,33 +232,16 @@ impl TestSolver {
         }
     }
 
-    pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> &PropositionalConjunction {
-        let reason_ref = self
-            .assignments
-            .get_reason_for_predicate_brute_force(predicate);
-        let slice = self
-            .reason_store
-            .get_or_compute_new(reason_ref, &self.assignments, &mut self.propagator_store)
-            .expect("reason_ref should not be stale");
-
-        self.temp_conjunction = slice.iter().copied().collect();
-        &self.temp_conjunction
-    }
-
-    pub(crate) fn get_reason_int_new(&mut self, predicate: Predicate) -> &[Predicate] {
+    pub(crate) fn get_reason_int(&mut self, predicate: Predicate) -> &[Predicate] {
         let reason_ref = self
             .assignments
             .get_reason_for_predicate_brute_force(predicate);
         self.reason_store
-            .get_or_compute_new(reason_ref, &self.assignments, &mut self.propagator_store)
+            .get_or_compute(reason_ref, &self.assignments, &mut self.propagator_store)
             .expect("reason_ref should not be stale")
     }
 
-    pub(crate) fn get_reason_bool(
-        &mut self,
-        literal: Literal,
-        truth_value: bool,
-    ) -> &PropositionalConjunction {
+    pub(crate) fn get_reason_bool(&mut self, literal: Literal, truth_value: bool) -> &[Predicate] {
         let predicate = match truth_value {
             true => literal.get_true_predicate(),
             false => (!literal).get_true_predicate(),

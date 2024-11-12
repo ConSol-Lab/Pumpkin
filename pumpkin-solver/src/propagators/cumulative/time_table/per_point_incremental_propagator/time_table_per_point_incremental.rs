@@ -561,7 +561,7 @@ mod debug {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::PropositionalConjunction;
+    use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
@@ -827,13 +827,9 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver.get_reason_int(predicate!(s2 <= 3)).clone();
+        let reason = solver.get_reason_int(predicate!(s2 <= 3));
         assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 <= 5),
-                predicate!(s1 >= 6),
-                predicate!(s1 <= 6),
-            ]),
+            conjunction!([s2 <= 5] & [s1 >= 6] & [s1 <= 6]).as_slice(),
             reason
         );
     }
@@ -1028,15 +1024,16 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver.get_reason_int(predicate!(s2 >= 5)).clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5));
         assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 >= 4),
-                predicate!(s1 >= 1),
-                predicate!(s1 <= 1), /* Note that this not the most general explanation, if s2
-                                      * could have started at 0 then it would still have
-                                      * overlapped with the current interval */
-            ]),
+            conjunction!([s2 >= 4] & [s1 >= 1] & [s1 <= 1]).as_slice(), /* Note that this not
+                                                                         * the most general
+                                                                         * explanation, if s2
+                                                                         * could have started at
+                                                                         * 0 then it would still
+                                                                         * have
+                                                                         * overlapped with the
+                                                                         * current interval */
             reason
         );
     }
@@ -1085,14 +1082,13 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver.get_reason_int(predicate!(s3 >= 7)).clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7));
         assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 <= 5),
-                predicate!(s2 >= 5),
-                predicate!(s3 >= 6), /* Note that s3 would have been able to propagate
-                                      * this bound even if it started at time 0 */
-            ]),
+            conjunction!([s2 <= 5] & [s2 >= 5] & [s3 >= 6]).as_slice(), /* Note that s3 would
+                                                                         * have been able to
+                                                                         * propagate
+                                                                         * this bound even if it
+                                                                         * started at time 0 */
             reason
         );
     }
@@ -1136,11 +1132,8 @@ mod tests {
 
         for removed in 2..8 {
             assert!(!solver.contains(s2, removed));
-            let reason = solver.get_reason_int(predicate!(s2 != removed)).clone();
-            assert_eq!(
-                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
-                reason
-            );
+            let reason = solver.get_reason_int(predicate!(s2 != removed));
+            assert_eq!(conjunction!([s1 <= 4] & [s1 >= 4]).as_slice(), reason);
         }
     }
 
@@ -1510,10 +1503,8 @@ mod tests {
         let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
-        let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7))
-            .clone();
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
         assert_eq!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1604,10 +1595,8 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
 
-        let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7))
-            .clone();
-        let reason = solver.get_reason_int(s3.lower_bound_predicate(7)).clone();
+        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
         assert_ne!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()

@@ -707,7 +707,7 @@ pub(crate) mod test_propagation_handler {
             let mut propagator_store = PropagatorStore::default();
             let reason = self
                 .reason_store
-                .get_or_compute_new(reason_ref, &self.assignments, &mut propagator_store)
+                .get_or_compute(reason_ref, &self.assignments, &mut propagator_store)
                 .expect("reason_ref should not be stale");
 
             reason.iter().copied().collect()

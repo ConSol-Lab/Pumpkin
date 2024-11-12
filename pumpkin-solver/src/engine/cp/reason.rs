@@ -29,7 +29,7 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
-    pub fn get_or_compute_new<'this>(
+    pub fn get_or_compute<'this>(
         &'this self,
         reference: ReasonRef,
         assignments: &Assignments,
@@ -37,7 +37,7 @@ impl ReasonStore {
     ) -> Option<&'this [Predicate]> {
         self.trail
             .get(reference.0 as usize)
-            .map(|reason| reason.1.compute_new(assignments, reason.0, propagators))
+            .map(|reason| reason.1.compute(assignments, reason.0, propagators))
     }
 
     pub fn increase_decision_level(&mut self) {
@@ -79,7 +79,7 @@ pub enum Reason {
 }
 
 impl Reason {
-    pub fn compute_new<'a>(
+    pub fn compute<'a>(
         &'a self,
         assignments: &Assignments,
         propagator_id: PropagatorId,
@@ -122,7 +122,7 @@ mod tests {
 
         assert_eq!(
             conjunction.as_slice(),
-            reason.compute_new(&integers, PropagatorId(0), &mut PropagatorStore::default())
+            reason.compute(&integers, PropagatorId(0), &mut PropagatorStore::default())
         );
     }
 
@@ -141,7 +141,7 @@ mod tests {
 
         assert_eq!(
             Some(conjunction.as_slice()),
-            reason_store.get_or_compute_new(reason_ref, &integers, &mut PropagatorStore::default())
+            reason_store.get_or_compute(reason_ref, &integers, &mut PropagatorStore::default())
         );
     }
 }
