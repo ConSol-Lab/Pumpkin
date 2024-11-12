@@ -1,4 +1,4 @@
-use super::SemanticMinimiser;
+use super::minimisers::SemanticMinimiser;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
@@ -144,7 +144,7 @@ impl<'a> ConflictAnalysisNogoodContext<'a> {
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
-        // probably this function should go into the reason store?
+        // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision
         // predicates. Furthermore only predicate from the current decision level will be

@@ -16,7 +16,6 @@ pub(crate) struct PredicateIdGenerator {
 }
 
 impl PredicateIdGenerator {
-    #[cfg(test)]
     pub(crate) fn has_id_for_predicate(&self, predicate: Predicate) -> bool {
         self.predicate_to_id.contains_key(&predicate)
     }
@@ -79,6 +78,12 @@ impl PredicateIdGenerator {
     /// since the function internally sortes the inactive predicate ids.
     pub(crate) fn iter(&self) -> PredicateIdIterator {
         PredicateIdIterator::new(self.next_id, self.deleted_ids.clone())
+    }
+
+    pub(crate) fn replace_predicate(&mut self, predicate: Predicate, replacement: Predicate) {
+        pumpkin_assert_moderate!(self.has_id_for_predicate(predicate));
+        let predicate_id = self.get_id(predicate);
+        let _ = self.id_to_predicate.insert(predicate_id, replacement);
     }
 }
 

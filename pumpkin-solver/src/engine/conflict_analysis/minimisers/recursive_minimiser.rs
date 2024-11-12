@@ -1,6 +1,6 @@
-use super::ConflictAnalysisNogoodContext;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
+use crate::conflict_resolution::ConflictAnalysisNogoodContext;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_moderate;
