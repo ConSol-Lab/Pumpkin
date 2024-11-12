@@ -367,26 +367,35 @@ impl ResolutionResolver {
         let mut clean_nogood: Vec<Predicate> = context.semantic_minimiser.minimise(
             &self.processed_nogood_predicates,
             context.assignments,
-            Mode::DisableEqualityMerging,
+            if !context.should_minimise {
+                // If we do not minimise then we do the equality
+                // merging in the first iteration of removing
+                // duplicates
+                Mode::EnableEqualityMerging
+            } else {
+                Mode::DisableEqualityMerging
+            },
         );
 
-        // Then we perform recursive minimisation to remove the dominated predicates
-        self.recursive_minimiser
-            .remove_dominated_predicates(&mut clean_nogood, context);
+        if context.should_minimise {
+            // Then we perform recursive minimisation to remove the dominated predicates
+            self.recursive_minimiser
+                .remove_dominated_predicates(&mut clean_nogood, context);
 
-        // We perform a final semantic minimisation call which allows the merging of the equality
-        // predicates which remain in the nogood
-        let size_before_semantic_minimisation = clean_nogood.len();
-        clean_nogood = context.semantic_minimiser.minimise(
-            &clean_nogood,
-            context.assignments,
-            Mode::EnableEqualityMerging,
-        );
-        context
-            .counters
-            .learned_clause_statistics
-            .average_number_of_removed_literals_semantic
-            .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
+            // We perform a final semantic minimisation call which allows the merging of the
+            // equality predicates which remain in the nogood
+            let size_before_semantic_minimisation = clean_nogood.len();
+            clean_nogood = context.semantic_minimiser.minimise(
+                &clean_nogood,
+                context.assignments,
+                Mode::EnableEqualityMerging,
+            );
+            context
+                .counters
+                .learned_clause_statistics
+                .average_number_of_removed_literals_semantic
+                .add_term((size_before_semantic_minimisation - clean_nogood.len()) as u64);
+        }
 
         // Sorting does the trick with placing the correct predicates at the first two positions,
         // however this can be done more efficiently, since we only need the first two positions

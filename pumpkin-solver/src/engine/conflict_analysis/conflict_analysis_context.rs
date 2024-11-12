@@ -31,6 +31,7 @@ pub struct ConflictAnalysisContext<'a> {
 
     pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
     pub(crate) counters: &'a mut SolverStatistics,
+    pub(crate) should_minimise: bool,
 }
 
 impl<'a> ConflictAnalysisContext<'a> {

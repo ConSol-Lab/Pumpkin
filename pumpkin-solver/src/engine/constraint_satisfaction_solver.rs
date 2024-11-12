@@ -642,6 +642,7 @@ impl ConstraintSatisfactionSolver {
                 propagator_queue: &mut self.propagator_queue,
                 event_drain: &mut self.event_drain,
                 backtrack_event_drain: &mut self.backtrack_event_drain,
+                should_minimise: self.internal_parameters.learning_clause_minimisation,
             };
 
             let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -850,6 +851,8 @@ impl ConstraintSatisfactionSolver {
     fn resolve_conflict_with_nogood(&mut self, brancher: &mut impl Brancher) {
         pumpkin_assert_moderate!(self.state.is_conflicting());
 
+        let current_decision_level = self.get_decision_level();
+
         let mut conflict_analysis_context = ConflictAnalysisContext {
             assignments: &mut self.assignments,
             counters: &mut self.counters,
@@ -863,6 +866,7 @@ impl ConstraintSatisfactionSolver {
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
+            should_minimise: self.internal_parameters.learning_clause_minimisation,
         };
 
         let learned_nogood = self
@@ -874,6 +878,12 @@ impl ConstraintSatisfactionSolver {
         // the trail -> although in the current version this does nothing but notify that a
         // conflict happened
         if let Some(learned_nogood) = learned_nogood.as_ref() {
+            conflict_analysis_context
+                .counters
+                .learned_clause_statistics
+                .average_backtrack_amount
+                .add_term((current_decision_level - learned_nogood.backjump_level) as u64);
+
             self.restart_strategy.notify_conflict(
                 self.lbd_helper.compute_lbd(
                     &learned_nogood.predicates,
@@ -987,11 +997,6 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
         pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
-
-        self.counters
-            .learned_clause_statistics
-            .average_backtrack_amount
-            .add_term((self.get_decision_level() - backtrack_level) as u64);
 
         brancher.on_backtrack();
 
