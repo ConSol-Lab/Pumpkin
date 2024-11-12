@@ -1,3 +1,4 @@
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::conflict_resolution::ConflictAnalysisContext;
@@ -12,9 +13,6 @@ pub(crate) struct RecursiveMinimiser {
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,
-    num_minimisation_calls: usize,
-    num_predicates_removed_total: usize,
-    num_literals_seen_total: usize,
 }
 
 impl RecursiveMinimiser {
@@ -38,8 +36,6 @@ impl RecursiveMinimiser {
         nogood: &mut Vec<Predicate>,
         context: &mut ConflictAnalysisContext,
     ) {
-        self.num_minimisation_calls += 1;
-        self.num_literals_seen_total += nogood.len();
         let num_literals_before_minimisation = nogood.len();
 
         self.initialise_minimisation_data_structures(nogood, context.assignments);
@@ -67,7 +63,11 @@ impl RecursiveMinimiser {
         self.clean_up_minimisation();
 
         let num_predicates_removed = num_literals_before_minimisation - nogood.len();
-        self.num_predicates_removed_total += num_predicates_removed;
+        context
+            .counters
+            .learned_clause_statistics
+            .average_number_of_removed_literals_recursive
+            .add_term(num_predicates_removed as u64);
     }
 
     fn compute_label(&mut self, input_predicate: Predicate, context: &mut ConflictAnalysisContext) {
