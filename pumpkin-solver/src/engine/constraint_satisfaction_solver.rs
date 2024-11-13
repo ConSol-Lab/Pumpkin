@@ -50,7 +50,7 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
 use crate::proof::ProofLog;
-use crate::propagators::nogood::NogoodPropagator;
+use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
@@ -274,7 +274,6 @@ impl ConstraintSatisfactionSolver {
         });
 
         for (event, domain) in self.event_drain.drain(..) {
-            // println!("\tnoti {} {}", domain, event);
             // Special case: the nogood propagator is notified about each event.
             Self::notify_nogood_propagator(
                 event,
