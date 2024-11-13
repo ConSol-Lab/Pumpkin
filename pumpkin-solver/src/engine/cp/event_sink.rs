@@ -37,9 +37,6 @@ impl EventSink {
     pub(crate) fn event_occurred(&mut self, event: IntDomainEvent, domain: DomainId) {
         let elem = &mut self.present[domain];
 
-        // println!("EO {} {}", domain, event);
-        // println!("\tpresent: {}", elem.contains(event));
-
         if elem.insert(event) {
             self.events.push((event, domain));
         } else {
