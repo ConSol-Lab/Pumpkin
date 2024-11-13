@@ -65,7 +65,6 @@ impl ProofLog {
     }
 
     /// Log an inference to the proof.
-    #[allow(unused)]
     pub(crate) fn log_inference(
         &mut self,
         constraint_tag: Option<NonZero<u32>>,
@@ -96,7 +95,6 @@ impl ProofLog {
     ///
     /// Inferences are automatically added as a propagation hint when they are logged, this is
     /// therefore only necessary when nogoods are used in a propagation.
-    #[allow(unused)]
     pub(crate) fn add_propagation(&mut self, step_id: NonZeroU64) {
         let Some(ProofImpl::CpProof {
             propagation_order_hint: Some(ref mut hints),

@@ -1,10 +1,12 @@
 //! Houses the solver which attempts to find a solution to a Constraint Satisfaction Problem (CSP)
 //! using a Lazy Clause Generation approach.
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::num::NonZero;
 use std::time::Instant;
 
+use drcp_format::steps::StepId;
 use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -24,6 +26,7 @@ use super::ResolutionResolver;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
@@ -133,6 +136,8 @@ pub struct ConstraintSatisfactionSolver {
     variable_names: VariableNames,
     /// Computes the LBD for nogoods.
     lbd_helper: Lbd,
+    /// A map from clause references to nogood step ids in the proof.
+    unit_nogood_step_ids: HashMap<Predicate, StepId>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -338,29 +343,35 @@ impl ConstraintSatisfactionSolver {
             self.is_conflicting(),
             "Proof attempted to be completed while not in conflicting state"
         );
+        let mut conflict_analysis_context = ConflictAnalysisContext {
+            assignments: &mut self.assignments,
+            counters: &mut self.counters,
+            solver_state: &mut self.state,
+            reason_store: &mut self.reason_store,
+            brancher: &mut DummyBrancher,
+            semantic_minimiser: &mut self.semantic_minimiser,
+            propagators: &mut self.propagators,
+            last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+            watch_list_cp: &mut self.watch_list_cp,
+            propagator_queue: &mut self.propagator_queue,
+            event_drain: &mut self.event_drain,
+            backtrack_event_drain: &mut self.backtrack_event_drain,
+            should_minimise: self.internal_parameters.learning_clause_minimisation,
+            proof_log: &mut self.internal_parameters.proof_log,
+            is_completing_proof: true,
+        };
 
-        warn!("Haven't implemented complete_proof");
-        // let result = self.compute_learned_clause(&mut DummyBrancher);
-        // let _ = self
-        //    .internal_parameters
-        //    .proof_log
-        //    .log_learned_clause(result.learned_literals);
+        let result = self
+            .internal_parameters
+            .conflict_resolver
+            .resolve_conflict(&mut conflict_analysis_context)
+            .expect("Should have a nogood");
+
+        let _ = self
+            .internal_parameters
+            .proof_log
+            .log_learned_clause(result.predicates, &self.variable_names);
     }
-
-    // fn debug_check_consistency(&self, cp_data_structures: &CPEngineDataStructures) -> bool {
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() as usize
-    // == self.mapping_domain_to_lower_bound_literals.len()
-    // );
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() as usize
-    // == self.mapping_domain_to_equality_literals.len()
-    // );
-    // pumpkin_assert_simple!(
-    // assignments_integer.num_domains() == cp_data_structures.watch_list_cp.num_domains()
-    // );
-    // true
-    // }
 }
 
 // methods that offer basic functionality
@@ -383,6 +394,7 @@ impl ConstraintSatisfactionSolver {
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
             lbd_helper: Lbd::default(),
+            unit_nogood_step_ids: Default::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -649,6 +661,7 @@ impl ConstraintSatisfactionSolver {
                 backtrack_event_drain: &mut self.backtrack_event_drain,
                 should_minimise: self.internal_parameters.learning_clause_minimisation,
                 proof_log: &mut self.internal_parameters.proof_log,
+                is_completing_proof: false,
             };
 
             let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -874,6 +887,7 @@ impl ConstraintSatisfactionSolver {
             backtrack_event_drain: &mut self.backtrack_event_drain,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
+            is_completing_proof: false,
         };
 
         let learned_nogood = self
@@ -1083,16 +1097,25 @@ impl ConstraintSatisfactionSolver {
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
         while let Some(propagator_id) = self.propagator_queue.pop_new() {
-            let propagator = &mut self.propagators[propagator_id];
+            let tag = self.propagators.get_tag(propagator_id);
             let num_trail_entries_before = self.assignments.num_trail_entries();
-            let context = PropagationContextMut::new(
-                &mut self.assignments,
-                &mut self.reason_store,
-                &mut self.semantic_minimiser,
-                propagator_id,
-            );
 
-            match propagator.propagate(context) {
+            let propagation_status = {
+                let propagator = &mut self.propagators[propagator_id];
+                let context = PropagationContextMut::new(
+                    &mut self.assignments,
+                    &mut self.reason_store,
+                    &mut self.semantic_minimiser,
+                    propagator_id,
+                );
+                propagator.propagate(context)
+            };
+            if self.assignments.get_decision_level() == 0
+                && self.internal_parameters.proof_log.is_logging_inferences()
+            {
+                self.log_root_propagation_to_proof(num_trail_entries_before, tag);
+            }
+            match propagation_status {
                 Ok(_) => {
                     // Notify other propagators of the propagations and continue.
                     self.notify_propagators_about_domain_events();
@@ -1124,7 +1147,7 @@ impl ConstraintSatisfactionSolver {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
                             &self.assignments,
                             &conflict_nogood,
-                            propagator,
+                            &self.propagators[propagator_id],
                             propagator_id,
                         ));
 
@@ -1158,6 +1181,77 @@ impl ConstraintSatisfactionSolver {
             self.state.is_conflicting()
                 || DebugHelper::debug_fixed_point_propagation(&self.assignments, &self.propagators,)
         );
+    }
+
+    /// Introduces any root-level propagations to the proof by introducing them as
+    /// nogoods.
+    ///
+    /// The inference `R -> l` is logged to the proof as follows:
+    /// 1. Infernce `R /\ ~l -> false`
+    /// 2. Nogood (clause) `l`
+    fn log_root_propagation_to_proof(
+        &mut self,
+        start_trail_index: usize,
+        tag: Option<NonZero<u32>>,
+    ) {
+        for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
+            let entry = self.assignments.get_trail_entry(trail_idx);
+            let reason = entry
+                .reason
+                .expect("Added by a propagator and must therefore have a reason");
+
+            // Get the conjunction of predicates explaining the propagation.
+            let reason = self
+                .reason_store
+                .get_or_compute(reason, &self.assignments, &mut self.propagators)
+                .expect("Reason ref is valid");
+
+            let propagated = entry.predicate;
+
+            // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
+            let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(tag, inference_premises, None);
+
+            // Since inference steps are only related to the nogood they directly precede,
+            // facts derived at the root are also logged as nogoods so they can be used in the
+            // derivation of other nogoods.
+            //
+            // In case we are logging hints, we must therefore identify what proof steps contribute
+            // to the derivation of the current nogood, and therefore are in the premise of the
+            // previously logged inference. These proof steps are necessarily unit nogoods, and
+            // therefore we recursively look up which unit nogoods are involved in the premise of
+            // the inference.
+
+            let mut to_explain: VecDeque<Predicate> = reason.iter().copied().collect();
+
+            while let Some(premise) = to_explain.pop_front() {
+                pumpkin_assert_simple!(self.assignments.is_predicate_satisfied(premise));
+
+                if premise == Predicate::trivially_true() {
+                    continue;
+                }
+
+                if let Some(step_id) = self.unit_nogood_step_ids.get(&premise) {
+                    self.internal_parameters.proof_log.add_propagation(*step_id);
+                } else {
+                    // TODO: what should occur here?
+                    continue;
+                }
+            }
+
+            // Log the nogood which adds the root-level knowledge to the proof.
+            let nogood_step_id = self
+                .internal_parameters
+                .proof_log
+                .log_learned_clause([propagated], &self.variable_names);
+
+            if let Ok(nogood_step_id) = nogood_step_id {
+                let _ = self.unit_nogood_step_ids.insert(propagated, nogood_step_id);
+            }
+        }
     }
 
     fn peek_next_assumption_predicate(&self) -> Option<Predicate> {
@@ -1470,6 +1564,13 @@ impl CSPSolverState {
         self.internal_state = CSPSolverStateInternal::InfeasibleUnderAssumptions {
             violated_assumption,
         }
+    }
+}
+
+struct DummyBrancher;
+impl Brancher for DummyBrancher {
+    fn next_decision(&mut self, _context: &mut SelectionContext) -> Option<Predicate> {
+        todo!()
     }
 }
 

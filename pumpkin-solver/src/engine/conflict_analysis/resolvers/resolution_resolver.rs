@@ -62,12 +62,16 @@ impl ConflictResolver for ResolutionResolver {
         self.clean_up();
 
         // Initialise the data structures with the conflict nogood.
-        for predicate in context.get_conflict_nogood().iter() {
+        for predicate in context
+            .get_conflict_nogood(context.is_completing_proof)
+            .iter()
+        {
             self.add_predicate_to_conflict_nogood(
                 *predicate,
                 context.assignments,
                 context.brancher,
                 self.mode,
+                context.is_completing_proof,
             );
         }
         // Record conflict nogood size statistics.
@@ -201,6 +205,7 @@ impl ConflictResolver for ResolutionResolver {
                     context.assignments,
                     context.brancher,
                     self.mode,
+                    context.is_completing_proof,
                 );
             }
         }
@@ -233,6 +238,7 @@ impl ResolutionResolver {
         assignments: &Assignments,
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
+        is_logging_complete_proof: bool,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -244,7 +250,7 @@ impl ResolutionResolver {
                 )
             });
         // Ignore root level predicates.
-        if dec_level == 0 {
+        if !is_logging_complete_proof && dec_level == 0 {
             // do nothing
         }
         // 1UIP

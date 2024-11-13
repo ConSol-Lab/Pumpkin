@@ -35,6 +35,8 @@ pub struct ConflictAnalysisContext<'a> {
 
     pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
+
+    pub(crate) is_completing_proof: bool,
 }
 
 impl<'a> ConflictAnalysisContext<'a> {
@@ -109,7 +111,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         true
     }
 
-    pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
+    pub(crate) fn get_conflict_nogood(&mut self, is_completing_proof: bool) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
@@ -131,7 +133,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                         // filter out root predicates
                         self.assignments
                             .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0)
+                            .is_some_and(|dl| dl > 0 || is_completing_proof)
                     })
                     .copied()
                     .collect()
