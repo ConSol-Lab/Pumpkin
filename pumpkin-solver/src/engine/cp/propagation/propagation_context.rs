@@ -149,7 +149,6 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.lower_bound(self.assignments())
     }
 
-    #[allow(dead_code)]
     fn lower_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,
@@ -162,7 +161,6 @@ pub(crate) trait ReadDomains: HasAssignments {
         var.upper_bound(self.assignments())
     }
 
-    #[allow(dead_code)]
     fn upper_bound_at_trail_position<Var: IntegerVariable>(
         &self,
         var: &Var,

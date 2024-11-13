@@ -289,8 +289,16 @@ impl NogoodPropagator {
         };
 
         // Now we add two watchers to the first two predicates in the nogood
-        self.add_watcher(self.nogoods[new_id].predicates[0], new_id);
-        self.add_watcher(self.nogoods[new_id].predicates[1], new_id);
+        NogoodPropagator::add_watcher(
+            &mut self.watch_lists,
+            self.nogoods[new_id].predicates[0],
+            new_id,
+        );
+        NogoodPropagator::add_watcher(
+            &mut self.watch_lists,
+            self.nogoods[new_id].predicates[1],
+            new_id,
+        );
 
         // Then we propagate the asserting predicate and as reason we give the index to the
         // asserting nogood such that we can re-create the reason when asked for it
@@ -387,8 +395,16 @@ impl NogoodPropagator {
 
             self.permanent_nogoods.push(new_id);
 
-            self.add_watcher(self.nogoods[new_id].predicates[0], new_id);
-            self.add_watcher(self.nogoods[new_id].predicates[1], new_id);
+            NogoodPropagator::add_watcher(
+                &mut self.watch_lists,
+                self.nogoods[new_id].predicates[0],
+                new_id,
+            );
+            NogoodPropagator::add_watcher(
+                &mut self.watch_lists,
+                self.nogoods[new_id].predicates[1],
+                new_id,
+            );
 
             Ok(())
         }
@@ -397,78 +413,6 @@ impl NogoodPropagator {
 
 /// Propagation methods
 impl NogoodPropagator {
-    /// Similar to [`NogoodPropagator::add_watcher`] but with different input parameters to avoid
-    /// issues with borrow checks and handles the special case with holes in the domain.
-    ///
-    /// Special case with holes in the domain:
-    /// In the case that a watcher is going to replace the current watcher (due to it now being
-    /// satisfied) and the following two conditions hold:
-    ///     1. It has a predicate with the same [`DomainId`]
-    ///     2. It is also a not-equals predicate
-    /// Then the current watcher should not be removed from the list but instead only its
-    /// right-hand side should be updated; this is stored in `kept_watcher_new_rhs`
-    fn add_new_nogood_watcher(
-        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
-        predicate: Predicate,
-        nogood_id: NogoodId,
-        domain_event: IntDomainEvent,
-        updated_domain_id: DomainId,
-        kept_watcher_new_rhs: &mut Option<i32>,
-    ) {
-        // Add this nogood to the watch list of the new watcher.
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => watch_lists[domain_id].lower_bound.push(NogoodWatcher {
-                right_hand_side: lower_bound,
-                nogood_id,
-            }),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => watch_lists[domain_id].upper_bound.push(NogoodWatcher {
-                right_hand_side: upper_bound,
-                nogood_id,
-            }),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                if let IntDomainEvent::Removal = domain_event {
-                    if domain_id != updated_domain_id {
-                        // The domain ids of the watchers are not the same, we default to the
-                        // regular case and simply replace the watcher
-                        watch_lists[domain_id].hole.push(NogoodWatcher {
-                            right_hand_side: not_equal_constant,
-                            nogood_id,
-                        })
-                    } else {
-                        // The watcher should stay in this list, but change
-                        // its right hand side to reflect the new watching
-                        // predicate
-                        //
-                        // Here we only note that the watcher should stay, and later it actually
-                        // gets copied.
-                        *kept_watcher_new_rhs = Some(not_equal_constant);
-                    }
-                } else {
-                    watch_lists[domain_id].hole.push(NogoodWatcher {
-                        right_hand_side: not_equal_constant,
-                        nogood_id,
-                    })
-                }
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => watch_lists[domain_id].equals.push(NogoodWatcher {
-                right_hand_side: equality_constant,
-                nogood_id,
-            }),
-        }
-    }
-
     fn propagate_or_find_new_watcher(
         nogoods: &mut KeyedVec<NogoodId, Nogood>,
         domain_event: IntDomainEvent,
@@ -477,109 +421,10 @@ impl NogoodPropagator {
         context: &mut PropagationContextMut<'_>,
         updated_domain_id: DomainId,
     ) -> Result<(), Inconsistency> {
-        // A helper function for getting the right watch-list for a [`DomainId`] based on the
-        // provided [`IntDomainEvent`]
-        fn get_watch_list(
-            domain_id: DomainId,
-            domain_event: IntDomainEvent,
-            watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
-        ) -> &mut Vec<NogoodWatcher> {
-            match domain_event {
-                IntDomainEvent::Assign => &mut watch_lists[domain_id].equals,
-                IntDomainEvent::LowerBound => &mut watch_lists[domain_id].lower_bound,
-                IntDomainEvent::UpperBound => &mut watch_lists[domain_id].upper_bound,
-                IntDomainEvent::Removal => &mut watch_lists[domain_id].hole,
-            }
-        }
-
-        // A helper function for determining whether an update of the watched predicate has taken
-        // place
-
-        fn has_been_updated(
-            domain_event: IntDomainEvent,
-            right_hand_side: i32,
-            context: &PropagationContext,
-            updated_domain_id: DomainId,
-            last_index_on_trail: usize,
-        ) -> bool {
-            // First we get the values for checking whether or not the predicate was previously not
-            // satisfied and now is
-            let (old_lower_bound, new_lower_bound, old_upper_bound, new_upper_bound) =
-                match domain_event {
-                    IntDomainEvent::LowerBound => (
-                        context
-                            .lower_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
-                        context.lower_bound(&updated_domain_id),
-                        0,
-                        0,
-                    ),
-                    IntDomainEvent::UpperBound => (
-                        0,
-                        0,
-                        context
-                            .upper_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
-                        context.upper_bound(&updated_domain_id),
-                    ),
-                    IntDomainEvent::Removal | IntDomainEvent::Assign => (
-                        context
-                            .lower_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
-                        context.lower_bound(&updated_domain_id),
-                        context
-                            .upper_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
-                        context.upper_bound(&updated_domain_id),
-                    ),
-                };
-            match domain_event {
-                IntDomainEvent::Assign => {
-                    // We perform a simple check that the new bounds are the same and that it is
-                    // equal to the right-hand side
-                    pumpkin_assert_simple!(new_lower_bound == new_upper_bound);
-                    right_hand_side == new_lower_bound
-                }
-                IntDomainEvent::LowerBound => {
-                    // We check whether the previous lower-bound is smaller than the right-hand
-                    // side but the new lower-bound is larger than the right-hand side
-                    old_lower_bound < right_hand_side && right_hand_side <= new_lower_bound
-                }
-                IntDomainEvent::UpperBound => {
-                    // We check whether the previous upper-bound is larger than the right-hand side
-                    // but the new upper-bound is smaller than the right-hand side
-                    old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound
-                }
-                IntDomainEvent::Removal => {
-                    // A more involved check, we look at the watcher if:
-                    //      1) The removed value was definitely removed due to a bound change
-                    //      2) The removed value is within the bounds, and was actually removed
-
-                    // The first condition checks whether the upper-bound used to be larger than the
-                    // right-hand side (i.e. the right-hand side was within the upper-bound) and
-                    // now it is not
-                    let value_removed_by_upper_bound_change =
-                        old_upper_bound >= right_hand_side && right_hand_side > new_upper_bound;
-                    // The second condition checks whether the lower-bound used to be smaller than
-                    // the right-hand side (i.e. the right-hand side was within the lower-bound)
-                    // and now it is not
-                    let value_removed_by_lower_bound_change =
-                        old_lower_bound <= right_hand_side && right_hand_side < new_lower_bound;
-                    // The third condition checks whether the right-hand is within the new
-                    // lower-bound and upper-bound but whether the value is explicitly not in the
-                    // domain
-                    let value_explicitly_removed = new_lower_bound < right_hand_side
-                        && right_hand_side < new_lower_bound
-                        && context.is_predicate_satisfied(predicate!(
-                            updated_domain_id != right_hand_side
-                        ));
-                    value_removed_by_upper_bound_change
-                        || value_removed_by_lower_bound_change
-                        || value_explicitly_removed
-                }
-            }
-        }
-
         let mut current_index = 0;
         let mut end_index = 0;
 
-        let num_watchers = get_watch_list(updated_domain_id, domain_event, watch_lists).len();
+        let num_watchers = Self::get_watch_list(updated_domain_id, domain_event, watch_lists).len();
 
         // We go through all of the watchers for the watch list of the provided domain event (e.g.
         // if the event was a lower-bound event then we only go through the lower-bound watchers
@@ -589,11 +434,11 @@ impl NogoodPropagator {
             let NogoodWatcher {
                 right_hand_side,
                 nogood_id,
-            } = get_watch_list(updated_domain_id, domain_event, watch_lists)[current_index];
+            } = Self::get_watch_list(updated_domain_id, domain_event, watch_lists)[current_index];
 
             // Then we check whether the watcher has been updated since the last time that we
             // checked
-            if has_been_updated(
+            if Self::has_been_updated(
                 domain_event,
                 right_hand_side,
                 &context.as_readonly(),
@@ -650,8 +495,9 @@ impl NogoodPropagator {
                     // Keep the watchers, the nogood is falsified,
                     //
                     // No propagation can take place.
-                    get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
-                        get_watch_list(updated_domain_id, domain_event, watch_lists)[current_index];
+                    Self::get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
+                        Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                            [current_index];
                     current_index += 1;
                     end_index += 1;
                     continue;
@@ -695,10 +541,12 @@ impl NogoodPropagator {
                     if let Some(new_rhs) = kept_watcher_new_rhs {
                         // Keep the current watch for this predicate,
                         // and update its right hand side.
-                        get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
-                            get_watch_list(updated_domain_id, domain_event, watch_lists)
+                        Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                            [end_index] =
+                            Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
                                 [current_index];
-                        get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index]
+                        Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                            [end_index]
                             .right_hand_side = new_rhs;
 
                         end_index += 1;
@@ -718,8 +566,9 @@ impl NogoodPropagator {
                 // We have not found a replacement watcher and we should propagate now
 
                 // Keep the current watch for this predicate.
-                get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
-                    get_watch_list(updated_domain_id, domain_event, watch_lists)[current_index];
+                Self::get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
+                    Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                        [current_index];
                 end_index += 1;
                 current_index += 1;
 
@@ -740,21 +589,23 @@ impl NogoodPropagator {
                     // Stop any further propagation and report the conflict.
                     // Readd the remaining watchers to the watch list.
                     while current_index < num_watchers {
-                        get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
-                            get_watch_list(updated_domain_id, domain_event, watch_lists)
+                        Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                            [end_index] =
+                            Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
                                 [current_index];
                         current_index += 1;
                         end_index += 1;
                     }
-                    get_watch_list(updated_domain_id, domain_event, watch_lists)
+                    Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
                         .truncate(end_index);
                     return Err(e.into());
                 }
             } else {
                 // If no update has taken place then we simply keep the current watch for this
                 // predicate.
-                get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
-                    get_watch_list(updated_domain_id, domain_event, watch_lists)[current_index];
+                Self::get_watch_list(updated_domain_id, domain_event, watch_lists)[end_index] =
+                    Self::get_watch_list(updated_domain_id, domain_event, watch_lists)
+                        [current_index];
                 end_index += 1;
                 current_index += 1;
             }
@@ -762,19 +613,150 @@ impl NogoodPropagator {
 
         // We have traversed all of the watchers
         if num_watchers > 0 {
-            get_watch_list(updated_domain_id, domain_event, watch_lists).truncate(end_index);
+            Self::get_watch_list(updated_domain_id, domain_event, watch_lists).truncate(end_index);
         }
         Ok(())
+    }
+
+    /// A helper function for determining whether an update of the watched predicate has taken
+    /// place
+    fn has_been_updated(
+        domain_event: IntDomainEvent,
+        right_hand_side: i32,
+        context: &PropagationContext,
+        updated_domain_id: DomainId,
+        last_index_on_trail: usize,
+    ) -> bool {
+        // First we get the values for checking whether or not the predicate was previously not
+        // satisfied and now is
+        let (old_lower_bound, new_lower_bound, old_upper_bound, new_upper_bound) =
+            match domain_event {
+                IntDomainEvent::LowerBound => (
+                    context.lower_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
+                    context.lower_bound(&updated_domain_id),
+                    0,
+                    0,
+                ),
+                IntDomainEvent::UpperBound => (
+                    0,
+                    0,
+                    context.upper_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
+                    context.upper_bound(&updated_domain_id),
+                ),
+                IntDomainEvent::Removal | IntDomainEvent::Assign => (
+                    context.lower_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
+                    context.lower_bound(&updated_domain_id),
+                    context.upper_bound_at_trail_position(&updated_domain_id, last_index_on_trail),
+                    context.upper_bound(&updated_domain_id),
+                ),
+            };
+        match domain_event {
+            IntDomainEvent::Assign => {
+                // We perform a simple check that the new bounds are the same and that it is
+                // equal to the right-hand side
+                pumpkin_assert_simple!(new_lower_bound == new_upper_bound);
+                right_hand_side == new_lower_bound
+            }
+            IntDomainEvent::LowerBound => {
+                // We check whether the previous lower-bound is smaller than the right-hand
+                // side but the new lower-bound is larger than the right-hand side
+                old_lower_bound < right_hand_side && right_hand_side <= new_lower_bound
+            }
+            IntDomainEvent::UpperBound => {
+                // We check whether the previous upper-bound is larger than the right-hand side
+                // but the new upper-bound is smaller than the right-hand side
+                old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound
+            }
+            IntDomainEvent::Removal => {
+                // A more involved check, we look at the watcher if:
+                //      1) The removed value was definitely removed due to a bound change
+                //      2) The removed value is within the bounds, and was actually removed
+
+                // The first condition checks whether the upper-bound used to be larger than the
+                // right-hand side (i.e. the right-hand side was within the upper-bound) and
+                // now it is not
+                let value_removed_by_upper_bound_change =
+                    old_upper_bound >= right_hand_side && right_hand_side > new_upper_bound;
+                // The second condition checks whether the lower-bound used to be smaller than
+                // the right-hand side (i.e. the right-hand side was within the lower-bound)
+                // and now it is not
+                let value_removed_by_lower_bound_change =
+                    old_lower_bound <= right_hand_side && right_hand_side < new_lower_bound;
+                // The third condition checks whether the right-hand is within the new
+                // lower-bound and upper-bound but whether the value is explicitly not in the
+                // domain
+                let value_explicitly_removed = new_lower_bound < right_hand_side
+                    && right_hand_side < new_lower_bound
+                    && context
+                        .is_predicate_satisfied(predicate!(updated_domain_id != right_hand_side));
+                value_removed_by_upper_bound_change
+                    || value_removed_by_lower_bound_change
+                    || value_explicitly_removed
+            }
+        }
+    }
+
+    /// A helper function for getting the right watch-list for a [`DomainId`] based on the
+    /// provided [`IntDomainEvent`]
+    fn get_watch_list(
+        domain_id: DomainId,
+        domain_event: IntDomainEvent,
+        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
+    ) -> &mut Vec<NogoodWatcher> {
+        match domain_event {
+            IntDomainEvent::Assign => &mut watch_lists[domain_id].equals,
+            IntDomainEvent::LowerBound => &mut watch_lists[domain_id].lower_bound,
+            IntDomainEvent::UpperBound => &mut watch_lists[domain_id].upper_bound,
+            IntDomainEvent::Removal => &mut watch_lists[domain_id].hole,
+        }
+    }
+
+    /// Similar to [`NogoodPropagator::add_watcher`] but with different input parameters to avoid
+    /// issues with borrow checks and handles the special case with holes in the domain.
+    ///
+    /// Special case with holes in the domain:
+    /// In the case that a watcher is going to replace the current watcher (due to it now being
+    /// satisfied) and the following two conditions hold:
+    ///     1. It has a predicate with the same [`DomainId`]
+    ///     2. It is also a not-equals predicate
+    /// Then the current watcher should not be removed from the list but instead only its
+    /// right-hand side should be updated; this is stored in `kept_watcher_new_rhs`
+    fn add_new_nogood_watcher(
+        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
+        predicate: Predicate,
+        nogood_id: NogoodId,
+        domain_event: IntDomainEvent,
+        updated_domain_id: DomainId,
+        kept_watcher_new_rhs: &mut Option<i32>,
+    ) {
+        if domain_event.is_removal()
+            && predicate.is_not_equal_predicate()
+            && predicate.get_domain() == updated_domain_id
+        {
+            // The watcher should stay in this list, but change
+            // its right hand side to reflect the new watching
+            // predicate
+            //
+            // Here we only note that the watcher should stay, and later it actually
+            // gets copied.
+            *kept_watcher_new_rhs = Some(predicate.get_right_hand_side());
+            return;
+        }
+        NogoodPropagator::add_watcher(watch_lists, predicate, nogood_id);
     }
 }
 
 /// Methods concerning the watchers and watch lists
 impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
-    fn add_watcher(&mut self, predicate: Predicate, nogood_id: NogoodId) {
+    fn add_watcher(
+        watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
+        predicate: Predicate,
+        nogood_id: NogoodId,
+    ) {
         // First we resize the watch list to accomodate the new nogood
-        if predicate.get_domain().id as usize >= self.watch_lists.len() {
-            self.watch_lists.resize(
+        if predicate.get_domain().id as usize >= watch_lists.len() {
+            watch_lists.resize(
                 (predicate.get_domain().id + 1) as usize,
                 NogoodWatchList::default(),
             );
@@ -785,28 +767,28 @@ impl NogoodPropagator {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => self.watch_lists[domain_id].lower_bound.push(NogoodWatcher {
+            } => watch_lists[domain_id].lower_bound.push(NogoodWatcher {
                 right_hand_side: lower_bound,
                 nogood_id,
             }),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => self.watch_lists[domain_id].upper_bound.push(NogoodWatcher {
+            } => watch_lists[domain_id].upper_bound.push(NogoodWatcher {
                 right_hand_side: upper_bound,
                 nogood_id,
             }),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => self.watch_lists[domain_id].hole.push(NogoodWatcher {
+            } => watch_lists[domain_id].hole.push(NogoodWatcher {
                 right_hand_side: not_equal_constant,
                 nogood_id,
             }),
             Predicate::Equal {
                 domain_id,
                 equality_constant,
-            } => self.watch_lists[domain_id].equals.push(NogoodWatcher {
+            } => watch_lists[domain_id].equals.push(NogoodWatcher {
                 right_hand_side: equality_constant,
                 nogood_id,
             }),

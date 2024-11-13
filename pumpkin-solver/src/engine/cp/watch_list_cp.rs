@@ -38,6 +38,13 @@ pub enum IntDomainEvent {
     Removal,
 }
 
+impl IntDomainEvent {
+    #[doc(hidden)]
+    pub(crate) fn is_removal(&self) -> bool {
+        matches!(self, IntDomainEvent::Removal)
+    }
+}
+
 impl Display for IntDomainEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
