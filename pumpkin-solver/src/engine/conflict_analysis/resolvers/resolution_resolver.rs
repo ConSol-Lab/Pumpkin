@@ -133,6 +133,7 @@ impl ConflictResolver for ResolutionResolver {
                             context.assignments,
                             context.reason_store,
                             context.propagators,
+                            context.proof_log,
                         );
                         pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate");
                         pumpkin_assert_simple!(
@@ -170,6 +171,7 @@ impl ConflictResolver for ResolutionResolver {
                         context.assignments,
                         context.reason_store,
                         context.propagators,
+                        context.proof_log,
                     );
                     pumpkin_assert_simple!(predicate.is_lower_bound_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be a lower-bound predicate");
                     pumpkin_assert_simple!(
@@ -190,6 +192,7 @@ impl ConflictResolver for ResolutionResolver {
                 context.assignments,
                 context.reason_store,
                 context.propagators,
+                context.proof_log,
             );
 
             for predicate in reason.iter() {

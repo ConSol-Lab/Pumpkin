@@ -11,6 +11,7 @@ use crate::engine::Assignments;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::WatchListCP;
+use crate::proof::ProofLog;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
@@ -31,6 +32,8 @@ pub struct ConflictAnalysisContext<'a> {
 
     pub(crate) backtrack_event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
     pub(crate) counters: &'a mut SolverStatistics,
+
+    pub(crate) proof_log: &'a mut ProofLog,
     pub(crate) should_minimise: bool,
 }
 
@@ -144,6 +147,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         assignments: &Assignments,
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
+        proof_log: &'a mut ProofLog,
     ) -> &'a [Predicate] {
         // TODO: this function could be put into the reason store
 
@@ -174,9 +178,13 @@ impl<'a> ConflictAnalysisContext<'a> {
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
-            reason_store
+            let constraint_tag = propagators.get_tag(reason_store.get_propagator(reason_ref));
+            let reason = reason_store
                 .get_or_compute(reason_ref, assignments, propagators)
-                .expect("reason reference should not be stale")
+                .expect("reason reference should not be stale");
+            let _ =
+                proof_log.log_inference(constraint_tag, reason.iter().copied(), Some(predicate));
+            reason
         // The predicate is implicitly due as a result of a decision.
         }
         // 2) The predicate is true due to a propagation, and not explicitly on the trail.

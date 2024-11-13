@@ -648,6 +648,7 @@ impl ConstraintSatisfactionSolver {
                 event_drain: &mut self.event_drain,
                 backtrack_event_drain: &mut self.backtrack_event_drain,
                 should_minimise: self.internal_parameters.learning_clause_minimisation,
+                proof_log: &mut self.internal_parameters.proof_log,
             };
 
             let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -872,6 +873,7 @@ impl ConstraintSatisfactionSolver {
             event_drain: &mut self.event_drain,
             backtrack_event_drain: &mut self.backtrack_event_drain,
             should_minimise: self.internal_parameters.learning_clause_minimisation,
+            proof_log: &mut self.internal_parameters.proof_log,
         };
 
         let learned_nogood = self

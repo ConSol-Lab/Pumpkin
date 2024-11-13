@@ -30,7 +30,6 @@ impl PropagatorStore {
         id
     }
 
-    #[allow(unused)]
     pub(crate) fn get_tag(&self, propagator_id: PropagatorId) -> Option<NonZero<u32>> {
         self.tags[propagator_id]
     }
