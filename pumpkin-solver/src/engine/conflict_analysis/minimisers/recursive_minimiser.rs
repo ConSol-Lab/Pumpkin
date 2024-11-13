@@ -113,7 +113,7 @@ impl RecursiveMinimiser {
         // Due to ownership rules, we retrieve the reason each time we need it, and then drop it.
         // Here we retrieve the reason and just record the length, dropping the ownership of the
         // reason.
-        let reason_size = ConflictAnalysisContext::get_propagation_reason_simple(
+        let reason_size = ConflictAnalysisContext::get_propagation_reason(
             input_predicate,
             context.assignments,
             context.reason_store,
@@ -122,7 +122,7 @@ impl RecursiveMinimiser {
         .len();
 
         for i in 0..reason_size {
-            let antecedent_predicate = ConflictAnalysisContext::get_propagation_reason_simple(
+            let antecedent_predicate = ConflictAnalysisContext::get_propagation_reason(
                 input_predicate,
                 context.assignments,
                 context.reason_store,

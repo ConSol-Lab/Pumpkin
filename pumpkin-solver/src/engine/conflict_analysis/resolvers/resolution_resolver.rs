@@ -128,7 +128,7 @@ impl ConflictResolver for ResolutionResolver {
                         // However, this can lead to [x <= v] to be processed *before* [x >= v -
                         // y], meaning that these implied predicates should be replaced with their
                         // reason
-                        let reason = ConflictAnalysisContext::get_propagation_reason_simple(
+                        let reason = ConflictAnalysisContext::get_propagation_reason(
                             predicate,
                             context.assignments,
                             context.reason_store,
@@ -165,7 +165,7 @@ impl ConflictResolver for ResolutionResolver {
                     .is_decision_predicate(&self.peek_predicate_from_conflict_nogood())
                 {
                     let predicate = self.peek_predicate_from_conflict_nogood();
-                    let reason = ConflictAnalysisContext::get_propagation_reason_simple(
+                    let reason = ConflictAnalysisContext::get_propagation_reason(
                         predicate,
                         context.assignments,
                         context.reason_store,
@@ -185,7 +185,7 @@ impl ConflictResolver for ResolutionResolver {
             }
 
             // 2.b) Standard case, get the reason for the predicate and add it to the nogood.
-            let reason = ConflictAnalysisContext::get_propagation_reason_simple(
+            let reason = ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
                 context.assignments,
                 context.reason_store,
