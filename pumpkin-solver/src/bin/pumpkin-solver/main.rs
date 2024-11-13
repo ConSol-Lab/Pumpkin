@@ -90,13 +90,13 @@ struct Args {
     /// Learned clauses are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
     ///
-    /// Possible values: u64
+    /// Possible values: usize
     #[arg(
         long = "learning-max-num-clauses",
         default_value_t = 4000,
         verbatim_doc_comment
     )]
-    learning_max_num_clauses: u64,
+    learning_max_num_clauses: usize,
 
     /// Learned clauses with this threshold LBD or lower are kept permanently
     /// Learned clauses are kept based on the tiered system introduced "Improving
@@ -109,6 +109,16 @@ struct Args {
         verbatim_doc_comment
     )]
     learning_lbd_threshold: u32,
+
+    /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
+    /// based on the LBD of a clause (the number of different decision levels) or on the activity
+    /// of a clause (how often it is used in conflict analysis).
+    #[arg(
+        short = 'l',
+        long = "learning-sorting-strategy",
+        default_value_t = LearnedNogoodSortingStrategy::Activity, verbatim_doc_comment
+    )]
+    learning_sorting_strategy: LearnedNogoodSortingStrategy,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
@@ -494,41 +504,44 @@ fn run() -> PumpkinResult<()> {
         ProofLog::default()
     };
 
+    let restart_options = RestartOptions {
+        sequence_generator_type: args.restart_sequence_generator_type,
+        base_interval: args.restart_base_interval,
+        min_num_conflicts_before_first_restart: args.restart_min_num_conflicts_before_first_restart,
+        lbd_coef: args.restart_lbd_coef,
+        num_assigned_coef: args.restart_num_assigned_coef,
+        num_assigned_window: args.restart_num_assigned_window,
+        geometric_coef: args.restart_geometric_coef,
+        no_restarts: args.no_restarts,
+    };
+    let random_generator = SmallRng::seed_from_u64(args.random_seed);
+    let learning_clause_minimisation = !args.no_learning_clause_minimisation;
+    let learning_options = LearningOptions {
+        max_activity: 1e20,
+        activity_decay_factor: 0.99,
+        limit_num_high_lbd_nogoods: args.learning_max_num_clauses,
+        lbd_threshold: args.learning_lbd_threshold,
+        nogood_sorting_strategy: args.learning_sorting_strategy,
+        activity_bump_increment: 1.0,
+    };
+
     let solver_options = if args.no_learning {
         SolverOptions {
-            restart_options: RestartOptions {
-                sequence_generator_type: args.restart_sequence_generator_type,
-                base_interval: args.restart_base_interval,
-                min_num_conflicts_before_first_restart: args
-                    .restart_min_num_conflicts_before_first_restart,
-                lbd_coef: args.restart_lbd_coef,
-                num_assigned_coef: args.restart_num_assigned_coef,
-                num_assigned_window: args.restart_num_assigned_window,
-                geometric_coef: args.restart_geometric_coef,
-                no_restarts: args.no_restarts,
-            },
-            learning_clause_minimisation: !args.no_learning_clause_minimisation,
-            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            restart_options,
+            learning_clause_minimisation,
+            random_generator,
             proof_log,
             conflict_resolver: Box::new(NoLearningResolver),
+            learning_options,
         }
     } else {
         SolverOptions {
-            restart_options: RestartOptions {
-                sequence_generator_type: args.restart_sequence_generator_type,
-                base_interval: args.restart_base_interval,
-                min_num_conflicts_before_first_restart: args
-                    .restart_min_num_conflicts_before_first_restart,
-                lbd_coef: args.restart_lbd_coef,
-                num_assigned_coef: args.restart_num_assigned_coef,
-                num_assigned_window: args.restart_num_assigned_window,
-                geometric_coef: args.restart_geometric_coef,
-                no_restarts: args.no_restarts,
-            },
-            learning_clause_minimisation: !args.no_learning_clause_minimisation,
-            random_generator: SmallRng::seed_from_u64(args.random_seed),
+            restart_options,
+            learning_clause_minimisation,
+            random_generator,
             proof_log,
             conflict_resolver: Box::new(ResolutionResolver::default()),
+            learning_options,
         }
     };
 

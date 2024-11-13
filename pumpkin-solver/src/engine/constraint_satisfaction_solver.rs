@@ -50,6 +50,7 @@ use crate::engine::RestartOptions;
 use crate::engine::RestartStrategy;
 use crate::predicate;
 use crate::proof::ProofLog;
+use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
@@ -168,6 +169,7 @@ pub struct SatisfactionSolverOptions {
     /// The proof log for the solver.
     pub proof_log: ProofLog,
     pub conflict_resolver: Box<dyn ConflictResolver>,
+    pub learning_options: LearningOptions,
 }
 
 impl Debug for SatisfactionSolverOptions {
@@ -184,6 +186,7 @@ impl Default for SatisfactionSolverOptions {
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
             conflict_resolver: Box::new(ResolutionResolver::default()),
+            learning_options: LearningOptions::default(),
         }
     }
 }
@@ -392,7 +395,10 @@ impl ConstraintSatisfactionSolver {
             .variable_names
             .add_integer(dummy_id, "Dummy".to_owned());
 
-        let _ = csp_solver.add_propagator(NogoodPropagator::default(), None);
+        let _ = csp_solver.add_propagator(
+            NogoodPropagator::with_options(csp_solver.internal_parameters.learning_options),
+            None,
+        );
 
         assert!(dummy_id.id == 0);
         assert!(csp_solver.assignments.get_lower_bound(dummy_id) == 1);

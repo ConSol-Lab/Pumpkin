@@ -80,6 +80,15 @@ struct LearnedNogoodIds {
     high_lbd: Vec<NogoodId>,
 }
 
+impl NogoodPropagator {
+    pub(crate) fn with_options(parameters: LearningOptions) -> Self {
+        Self {
+            parameters,
+            ..Default::default()
+        }
+    }
+}
+
 impl Propagator for NogoodPropagator {
     fn name(&self) -> &str {
         // It is important to keep this name exactly this.

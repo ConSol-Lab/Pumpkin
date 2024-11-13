@@ -4,7 +4,7 @@ mod nogood_id;
 mod nogood_propagator;
 mod nogood_watching;
 
-pub(crate) use learning_options::*;
+pub use learning_options::*;
 pub(crate) use nogood::*;
 pub(crate) use nogood_id::*;
 pub(crate) use nogood_propagator::*;

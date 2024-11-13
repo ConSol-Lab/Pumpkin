@@ -1,22 +1,25 @@
-/// Options which determine how the learned clauses are handled within the [`NogoodPropagator`].
+use clap::ValueEnum;
+
+/// Options which determine how the learned clauses are handled .
+///
 /// These options influence when the learned clause database removed clauses.
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct LearningOptions {
+pub struct LearningOptions {
     /// Determines when to rescale the activites of the learned clauses in the database.
-    pub(crate) max_activity: f32,
+    pub max_activity: f32,
     /// Determines the factor by which the activities are divided when a conflict is found.
-    pub(crate) activity_decay_factor: f32,
+    pub activity_decay_factor: f32,
     /// The maximum number of clauses with an LBD higher than [`LearningOptions::lbd_threshold`]
     /// allowed by the learned clause database. If there are more clauses with an LBD higher than
     /// [`LearningOptions::lbd_threshold`] then removal from the database will be considered.
-    pub(crate) limit_num_high_lbd_nogoods: usize,
+    pub limit_num_high_lbd_nogoods: usize,
     /// The treshold which specifies whether a learned clause database is considered to be with
     /// "High" LBD or "Low" LBD. Learned clauses with high LBD will be considered for removal.
-    pub(crate) lbd_threshold: u32,
+    pub lbd_threshold: u32,
     /// Specifies how the learned clauses are sorted when considering removal.
-    pub(crate) nogood_sorting_strategy: LearnedNogoodSortingStrategy,
+    pub nogood_sorting_strategy: LearnedNogoodSortingStrategy,
     /// Specifies by how much the activity is increased when a nogood is bumped.
-    pub(crate) activity_bump_increment: f32,
+    pub activity_bump_increment: f32,
 }
 impl Default for LearningOptions {
     fn default() -> Self {
@@ -32,8 +35,8 @@ impl Default for LearningOptions {
 }
 
 /// The sorting strategy which is used when considering removal from the clause database.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LearnedNogoodSortingStrategy {
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LearnedNogoodSortingStrategy {
     /// Sorts based on the activity, the activity is bumped when a literal is encountered during
     /// conflict analysis.
     #[allow(dead_code)]
