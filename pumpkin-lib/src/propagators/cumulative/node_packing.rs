@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::statistics::statistic_logger::StatisticLogger;
+use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -30,6 +31,8 @@ pub(crate) struct NodePackingPropagator<Var> {
     n_calls: usize,
     n_propagations: usize,
     n_conflicts: usize,
+    n_lft_conflicts: usize,
+
     average_size_of_propagation: CumulativeMovingAverage,
 }
 
@@ -67,6 +70,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             n_calls: 0,
             n_propagations: 0,
             n_conflicts: 0,
+            n_lft_conflicts: 0,
             average_size_of_propagation: CumulativeMovingAverage::default(),
         }
     }
@@ -106,7 +110,10 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         })
     }
 
-    fn node_packing_bound(&self, context: PropagationContext<'_>) -> (i32, Vec<Rc<Task<Var>>>) {
+    fn node_packing_bound(
+        &self,
+        context: PropagationContext<'_>,
+    ) -> Result<(i32, Vec<Rc<Task<Var>>>), PropositionalConjunction> {
         let mut max_lower_bound = i32::MIN;
         let mut tasks = vec![];
 
@@ -119,7 +126,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             let mut activities = initial_activity_list.clone();
             let result = self.rotate_activities(cycle_number, &mut activities);
             if result.is_err() {
-                return (max_lower_bound, tasks);
+                return Ok((max_lower_bound, tasks));
             }
 
             // We attempt to find the smallest clique which are mutually exclusive such that it
@@ -144,6 +151,32 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             let mut updated = false;
             let mut index = 0;
             for (activity_index, selected_activity) in selected_activities.iter().enumerate() {
+                let maximum_finish_time = selected_activities[activity_index..]
+                    .iter()
+                    .max_by_key(|a| context.upper_bound(&a.start_variable) + a.processing_time)
+                    .map(|task| context.upper_bound(&task.start_variable) + task.processing_time)
+                    .expect("Expected at least 1 task");
+
+                if context.lower_bound(&selected_activity.start_variable) + sum_duration_selected
+                    > maximum_finish_time
+                {
+                    return Err(selected_activities[activity_index..]
+                        .iter()
+                        .flat_map(|task| {
+                            [
+                                predicate!(
+                                    task.start_variable
+                                        >= context.lower_bound(&task.start_variable)
+                                ),
+                                predicate!(
+                                    task.start_variable
+                                        <= context.upper_bound(&task.start_variable)
+                                ),
+                            ]
+                        })
+                        .collect());
+                }
+
                 if context.lower_bound(&selected_activity.start_variable) + sum_duration_selected
                     > max_lower_bound
                 {
@@ -158,7 +191,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 tasks = selected_activities;
             }
         }
-        (max_lower_bound, tasks)
+        Ok((max_lower_bound, tasks))
     }
 }
 
@@ -171,6 +204,7 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         statistic_logger.log_statistic("numberOfCalls", self.n_calls);
         statistic_logger.log_statistic("numberOfPropagations", self.n_propagations);
         statistic_logger.log_statistic("numberOfConflicts", self.n_conflicts);
+        statistic_logger.log_statistic("numberOfLFTConflicts", self.n_lft_conflicts);
         statistic_logger.log_statistic(
             "averageSizeOfPropagation",
             self.average_size_of_propagation.value(),
@@ -180,8 +214,12 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         self.n_calls += 1;
 
-        let (node_packing_bound, tasks) = self.node_packing_bound(context.as_readonly());
+        let result = self.node_packing_bound(context.as_readonly());
+        if result.is_err() {
+            self.n_lft_conflicts += 1;
+        }
 
+        let (node_packing_bound, tasks) = result?;
         if node_packing_bound > context.lower_bound(&self.makespan_variable) {
             self.average_size_of_propagation.add_term(
                 (node_packing_bound - context.lower_bound(&self.makespan_variable)) as u64,
@@ -216,7 +254,7 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        let (node_packing_bound, tasks) = self.node_packing_bound(context.as_readonly());
+        let (node_packing_bound, tasks) = self.node_packing_bound(context.as_readonly())?;
 
         if node_packing_bound > context.lower_bound(&self.makespan_variable) {
             let result = context.set_lower_bound(
