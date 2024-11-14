@@ -138,6 +138,7 @@ impl ConflictResolver for ResolutionResolver {
                             context.reason_store,
                             context.propagators,
                             context.proof_log,
+                            context.unit_nogood_step_ids,
                         );
                         pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate");
                         pumpkin_assert_simple!(
@@ -164,10 +165,16 @@ impl ConflictResolver for ResolutionResolver {
                 // the conflict nogood which goes against the 2-watcher scheme so we eagerly
                 // replace it here!
                 //
+                // If it is an initial bound then it will be removed by semantic minimisation when
+                // extracting the final nogood.
+                //
                 // TODO: This leads to a less general explanation!
                 if !context
                     .assignments
                     .is_decision_predicate(&self.peek_predicate_from_conflict_nogood())
+                    && !context
+                        .assignments
+                        .is_initial_bound(self.peek_predicate_from_conflict_nogood())
                 {
                     let predicate = self.peek_predicate_from_conflict_nogood();
                     let reason = ConflictAnalysisContext::get_propagation_reason(
@@ -176,11 +183,12 @@ impl ConflictResolver for ResolutionResolver {
                         context.reason_store,
                         context.propagators,
                         context.proof_log,
+                        context.unit_nogood_step_ids,
                     );
                     pumpkin_assert_simple!(predicate.is_lower_bound_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be a lower-bound predicate");
                     pumpkin_assert_simple!(
                         reason.len() == 1 && reason[0].is_lower_bound_predicate(),
-                        "The reason for the decision predicate should be a lower-bound predicate"
+                        "The reason for the decision predicate should be a lower-bound predicate but was {}", reason[0]
                     );
                     self.replace_predicate_in_conflict_nogood(predicate, reason[0]);
                 }
@@ -197,6 +205,7 @@ impl ConflictResolver for ResolutionResolver {
                 context.reason_store,
                 context.propagators,
                 context.proof_log,
+                context.unit_nogood_step_ids,
             );
 
             for predicate in reason.iter() {

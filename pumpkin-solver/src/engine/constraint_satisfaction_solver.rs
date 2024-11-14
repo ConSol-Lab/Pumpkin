@@ -7,7 +7,6 @@ use std::num::NonZero;
 use std::time::Instant;
 
 use drcp_format::steps::StepId;
-use log::warn;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -359,6 +358,7 @@ impl ConstraintSatisfactionSolver {
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: true,
+            unit_nogood_step_ids: &self.unit_nogood_step_ids,
         };
 
         let result = self
@@ -526,39 +526,16 @@ impl ConstraintSatisfactionSolver {
     /// Creates an integer variable with a domain containing only the values in `values`
     pub fn create_new_integer_variable_sparse(
         &mut self,
-        mut values: Vec<i32>,
+        values: Vec<i32>,
         name: Option<String>,
     ) -> DomainId {
-        assert!(
-            !values.is_empty(),
-            "cannot create a variable with an empty domain"
-        );
+        let domain_id = self.assignments.create_new_integer_variable_sparse(values);
 
-        values.sort();
-        values.dedup();
+        self.watch_list_cp.grow();
 
-        let lower_bound = values[0];
-        let upper_bound = values[values.len() - 1];
-
-        let domain_id = self.create_new_integer_variable(lower_bound, upper_bound, name);
-
-        let mut next_idx = 0;
-        for value in lower_bound..=upper_bound {
-            if value == values[next_idx] {
-                next_idx += 1;
-            } else {
-                self.assignments
-                    .remove_value_from_domain(domain_id, value, None)
-                    .expect("the domain should not be empty");
-            }
+        if let Some(name) = name {
+            self.variable_names.add_integer(domain_id, name);
         }
-        pumpkin_assert_simple!(
-            next_idx == values.len(),
-            "Expected all values to have been processed"
-        );
-
-        self.propagate();
-        pumpkin_assert_simple!(!self.is_conflicting());
 
         domain_id
     }
@@ -662,6 +639,7 @@ impl ConstraintSatisfactionSolver {
                 should_minimise: self.internal_parameters.learning_clause_minimisation,
                 proof_log: &mut self.internal_parameters.proof_log,
                 is_completing_proof: false,
+                unit_nogood_step_ids: &self.unit_nogood_step_ids,
             };
 
             let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -888,6 +866,7 @@ impl ConstraintSatisfactionSolver {
             should_minimise: self.internal_parameters.learning_clause_minimisation,
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: false,
+            unit_nogood_step_ids: &self.unit_nogood_step_ids,
         };
 
         let learned_nogood = self
@@ -921,9 +900,7 @@ impl ConstraintSatisfactionSolver {
             .conflict_resolver
             .process(&mut conflict_analysis_context, &learned_nogood);
         if result.is_err() {
-            // Root level conflict?
-            self.state.declare_infeasible();
-            return;
+            unreachable!("Cannot resolve nogood and reach error")
         }
 
         if let Some(learned_nogood) = learned_nogood {
@@ -931,15 +908,16 @@ impl ConstraintSatisfactionSolver {
                 .predicates
                 .iter()
                 .map(|&predicate| !predicate);
-            if let Err(write_error) = self
+            let step_id = self
                 .internal_parameters
                 .proof_log
                 .log_learned_clause(learned_clause, &self.variable_names)
-            {
-                warn!(
-                    "Failed to update the certificate file, error message: {}",
-                    write_error
-                );
+                .expect("Failed to write proof log");
+
+            if learned_nogood.predicates.len() == 1 {
+                let _ = self
+                    .unit_nogood_step_ids
+                    .insert(!learned_nogood.predicates[0], step_id);
             }
 
             self.counters
@@ -1234,11 +1212,16 @@ impl ConstraintSatisfactionSolver {
                     continue;
                 }
 
-                if let Some(step_id) = self.unit_nogood_step_ids.get(&premise) {
+                let index = self
+                    .assignments
+                    .get_trail_position(&premise)
+                    .expect("Expected premise to be true");
+                let trail_entry = self.assignments.get_trail_entry(index);
+
+                if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
                 } else {
-                    // TODO: what should occur here?
-                    continue;
+                    unreachable!()
                 }
             }
 

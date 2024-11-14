@@ -119,6 +119,7 @@ impl RecursiveMinimiser {
             context.reason_store,
             context.propagators,
             context.proof_log,
+            context.unit_nogood_step_ids,
         )
         .len();
 
@@ -129,6 +130,7 @@ impl RecursiveMinimiser {
                 context.reason_store,
                 context.propagators,
                 context.proof_log,
+                context.unit_nogood_step_ids,
             )[i];
 
             // Root assignments can be safely ignored.
