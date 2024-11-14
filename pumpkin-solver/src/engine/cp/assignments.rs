@@ -184,9 +184,18 @@ impl Assignments {
     pub(crate) fn debug_create_empty_clone(&self) -> Self {
         let mut domains = self.domains.clone();
         let event_sink = EventSink::new(domains.len());
-        self.trail.iter().rev().for_each(|entry| {
-            domains[entry.predicate.get_domain()].undo_trail_entry(entry);
-        });
+        let maximum_trail_entry = domains
+            .iter()
+            .map(|domain| domain.initial_bounds_below_trail + 1)
+            .max()
+            .unwrap_or(0);
+        self.trail
+            .iter()
+            .skip(maximum_trail_entry)
+            .rev()
+            .for_each(|entry| {
+                domains[entry.predicate.get_domain()].undo_trail_entry(entry);
+            });
 
         Assignments {
             trail: Default::default(),

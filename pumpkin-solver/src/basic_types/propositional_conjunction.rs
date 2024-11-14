@@ -110,9 +110,12 @@ impl FromIterator<Predicate> for PropositionalConjunction {
     }
 }
 
-impl From<Vec<Predicate>> for PropositionalConjunction {
-    fn from(vec: Vec<Predicate>) -> Self {
-        PropositionalConjunction::new(vec)
+impl<T> From<T> for PropositionalConjunction
+where
+    T: AsRef<[Predicate]>,
+{
+    fn from(slice: T) -> Self {
+        PropositionalConjunction::new(slice.as_ref().to_vec())
     }
 }
 

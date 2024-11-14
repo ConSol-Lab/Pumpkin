@@ -1218,7 +1218,7 @@ mod tests {
         assert_eq!(solver.upper_bound(b), 0);
 
         let reason_lb = solver.get_reason_int(predicate!(b <= 0));
-        assert_eq!(conjunction!([a >= 2] & [c >= 10]).as_slice(), reason_lb);
+        assert_eq!(conjunction!([a >= 2] & [c >= 10]), reason_lb);
     }
 
     #[test]

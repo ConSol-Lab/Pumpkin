@@ -434,8 +434,9 @@ impl ResolutionResolver {
             0
         };
 
-        pumpkin_assert_advanced!(clean_nogood[1..]
+        pumpkin_assert_advanced!(clean_nogood
             .iter()
+            .skip(1)
             .all(|p| context.assignments.is_predicate_satisfied(*p)));
 
         // TODO: asserting predicate may be bumped twice, probably not a problem.

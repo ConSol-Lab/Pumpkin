@@ -241,7 +241,7 @@ mod tests {
         assert!(solver.is_literal_false(reification_literal));
 
         let reason = solver.get_reason_bool(reification_literal, false);
-        assert_eq!(reason, triggered_conflict.as_slice());
+        assert_eq!(reason, triggered_conflict);
     }
 
     #[test]
@@ -274,7 +274,7 @@ mod tests {
         let reason = solver.get_reason_int(predicate![var >= 3]);
         assert_eq!(
             reason,
-            PropositionalConjunction::from(reification_literal.get_true_predicate()).as_slice()
+            PropositionalConjunction::from(reification_literal.get_true_predicate())
         );
     }
 

@@ -279,12 +279,12 @@ mod tests {
 
         assert_eq!(
             solver.get_reason_int(predicate![index != 3]),
-            conjunction!([x_3 >= 10] & [rhs <= 9]).as_slice()
+            conjunction!([x_3 >= 10] & [rhs <= 9])
         );
 
         assert_eq!(
             solver.get_reason_int(predicate![index != 1]),
-            conjunction!([x_1 <= 5] & [rhs >= 6]).as_slice()
+            conjunction!([x_1 <= 5] & [rhs >= 6])
         );
     }
 
@@ -312,12 +312,12 @@ mod tests {
 
         assert_eq!(
             solver.get_reason_int(predicate![rhs >= 2]),
-            conjunction!([x_0 >= 2] & [x_1 >= 2] & [x_2 >= 2] & [x_3 >= 2]).as_slice()
+            conjunction!([x_0 >= 2] & [x_1 >= 2] & [x_2 >= 2] & [x_3 >= 2])
         );
 
         assert_eq!(
             solver.get_reason_int(predicate![rhs <= 15]),
-            conjunction!([x_0 <= 15] & [x_1 <= 15] & [x_2 <= 15] & [x_3 <= 15]).as_slice()
+            conjunction!([x_0 <= 15] & [x_1 <= 15] & [x_2 <= 15] & [x_3 <= 15])
         );
     }
 
@@ -345,12 +345,12 @@ mod tests {
 
         assert_eq!(
             solver.get_reason_int(predicate![x_1 >= 6]),
-            conjunction!([index == 1] & [rhs >= 6]).as_slice()
+            conjunction!([index == 1] & [rhs >= 6])
         );
 
         assert_eq!(
             solver.get_reason_int(predicate![x_1 <= 9]),
-            conjunction!([index == 1] & [rhs <= 9]).as_slice()
+            conjunction!([index == 1] & [rhs <= 9])
         );
     }
 }
