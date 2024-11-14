@@ -1208,15 +1208,15 @@ impl ConstraintSatisfactionSolver {
             while let Some(premise) = to_explain.pop_front() {
                 pumpkin_assert_simple!(self.assignments.is_predicate_satisfied(premise));
 
-                if premise == Predicate::trivially_true() {
-                    continue;
-                }
-
                 let index = self
                     .assignments
                     .get_trail_position(&premise)
                     .expect("Expected premise to be true");
                 let trail_entry = self.assignments.get_trail_entry(index);
+
+                if self.assignments.is_initial_bound(trail_entry.predicate) {
+                    continue;
+                }
 
                 if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
