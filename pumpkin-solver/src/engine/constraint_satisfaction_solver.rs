@@ -1404,6 +1404,19 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
+        if predicates.len() == 1 {
+            let _ = self
+                .internal_parameters
+                .proof_log
+                .log_inference(None, [predicates[0]], None);
+            let step_id = self
+                .internal_parameters
+                .proof_log
+                .log_learned_clause([!predicates[0]], &self.variable_names)
+                .expect("Expected to be able to write proof");
+            let _ = self.unit_nogood_step_ids.insert(!predicates[0], step_id);
+        }
+
         if let Err(constraint_operation_error) = self.add_nogood(predicates) {
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(

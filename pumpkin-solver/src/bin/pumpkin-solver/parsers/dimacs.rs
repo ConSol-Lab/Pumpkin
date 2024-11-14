@@ -516,7 +516,7 @@ impl DimacsSink for SolverDimacsSink {
             );
 
             self.objective
-                .add_weighted_literal(soft_literal, weight.get().into());
+                .add_weighted_literal(!soft_literal, weight.get().into());
         }
     }
 }

@@ -24,7 +24,7 @@ impl Function {
     }
 
     pub fn add_weighted_literal(&mut self, literal: Literal, weight: u64) {
-        *self.literals.entry(literal).or_insert(0) += weight;
+        *self.literals.entry(!literal).or_insert(0) += weight;
     }
 
     pub fn add_constant_term(&mut self, value: u64) {
@@ -64,7 +64,7 @@ impl Function {
             value += weight * solution.get_integer_value(*domain_id) as u64;
         }
         for (literal, weight) in self.get_literal_terms() {
-            value += weight * (solution.get_literal_value(*literal)) as u64;
+            value += weight * solution.get_literal_value(*literal) as u32 as u64;
         }
         value
     }
