@@ -67,7 +67,7 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
 
 /// Specifies the type of pseudo-boolean encoding which is used by the
 /// [`PseudoBooleanConstraintEncoder`].
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum PseudoBooleanEncoding {
     /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
     /// \[1\].
@@ -75,6 +75,7 @@ pub(crate) enum PseudoBooleanEncoding {
     /// # Bibliography
     /// \[1] "Generalized totalizer encoding for pseudo-boolean constraints.", Joshi Saurabh, Ruben
     /// Martins, Vasco Manquinho; CP '15
+    #[default]
     GeneralizedTotalizer,
     /// Specifies the usage of the cardinality network \[1\] encoding for unweighted cardinality
     /// constraints in the form `x1 + ... + xn <= k`. The encoding is arc-consistent and

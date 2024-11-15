@@ -80,7 +80,7 @@ struct Args {
     /// What type of proof to log.
     ///
     /// If the `proof_path` option is not provided, this is ignored.
-    #[arg(long, default_value_t = ProofType::Scaffold)]
+    #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
     /// The number of high lbd learned clauses that are kept in the database.
@@ -110,11 +110,7 @@ struct Args {
     /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
     /// based on the LBD of a clause (the number of different decision levels) or on the activity
     /// of a clause (how often it is used in conflict analysis).
-    #[arg(
-        short = 'l',
-        long = "learning-sorting-strategy",
-        default_value_t = LearnedNogoodSortingStrategy::Activity, verbatim_doc_comment
-    )]
+    #[arg(long, value_enum, default_value_t)]
     learning_sorting_strategy: LearnedNogoodSortingStrategy,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
@@ -128,18 +124,9 @@ struct Args {
     no_learning_clause_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
-    /// - The "constant" approach uses a constant number of conflicts before another restart is
-    ///   triggered
-    /// - The "geometric" approach uses a geometrically increasing sequence
-    /// - The "luby" approach uses a recursive sequence of the form 1, 1, 2, 1, 1, 2, 4, 1, 1, 2,
-    ///   1, 1, 2, 4, 8, 1, 1, 2.... (see "Optimal speedup of Las Vegas algorithms - Luby et al.
-    ///   (1993)")
     ///
     /// To be used in combination with "--restarts-base-interval".
-    #[arg(
-        long = "restart-sequence",
-        default_value_t = SequenceGeneratorType::Constant, verbatim_doc_comment
-    )]
+    #[arg(long, value_enum, default_value_t)]
     restart_sequence_generator_type: SequenceGeneratorType,
 
     /// The base interval length is used as a multiplier to the restart sequence.
@@ -300,16 +287,7 @@ struct Args {
     omit_call_site: bool,
 
     /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
-    ///
-    /// The "gte" value specifies that the solver should use the Generalized Totalizer Encoding
-    /// (see "Generalized totalizer encoding for pseudo-boolean constraints - Saurabh et al.
-    /// (2015)"), and the "cne" value specifies that the solver should use the Cardinality Network
-    /// Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et al.
-    /// (2011)").
-    #[arg(
-        long = "upper-bound-encoding",
-        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer, verbatim_doc_comment
-    )]
+    #[arg(long, value_enum, default_value_t)]
     upper_bound_encoding: PseudoBooleanEncoding,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
@@ -323,16 +301,17 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "no-restarts", verbatim_doc_comment)]
     no_restarts: bool,
+
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
-    #[arg(long = "cumulative-explanation-type", default_value_t = CumulativeExplanationType::default())]
+    #[arg(long, value_enum, default_value_t)]
     cumulative_explanation_type: CumulativeExplanationType,
 
     /// Determines the type of propagator which is used by the cumulative propagator(s) to
     /// propagate the constraint.
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
-    #[arg(long = "cumulative-propagation-method",  default_value_t = CumulativePropagationMethod::default())]
+    #[arg(long, value_enum, default_value_t)]
     cumulative_propagation_method: CumulativePropagationMethod,
 
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
@@ -343,7 +322,7 @@ struct Args {
     cumulative_generate_sequence: bool,
 
     /// Determines the conflict resolver.
-    #[arg(long = "conflict-resolver")]
+    #[arg(long, value_enum, default_value_t)]
     conflict_resolver: ConflictResolver,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
@@ -623,9 +602,10 @@ fn stringify_solution(
         .collect::<String>()
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
 enum ProofType {
     /// Log only the proof scaffold.
+    #[default]
     Scaffold,
     /// Log the full proof without hints.
     Full,

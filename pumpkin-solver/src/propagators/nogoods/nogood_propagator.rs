@@ -112,16 +112,9 @@ impl Propagator for NogoodPropagator {
 
         let old_trail_position = context.assignments.trail.len() - 1;
 
-        // Because drain lazily removes and updates internal data structures, in case a conflict is
-        // detected and the loop exits, some elements might not get cleaned up properly.
-        //
-        // So we eager call each elements here by copying. Could think about avoiding this in the
-        // future.
-        let events: Vec<(IntDomainEvent, DomainId)> = self.enqueued_updates.drain().collect();
-
         // We go over all of the events which we have been notified of to determine whether the
         // watchers should be updated or whether a propagation can take place
-        for (update_event, updated_domain_id) in events {
+        for (update_event, updated_domain_id) in self.enqueued_updates.drain() {
             NogoodPropagator::propagate_or_find_new_watcher(
                 &mut self.nogoods,
                 update_event,
