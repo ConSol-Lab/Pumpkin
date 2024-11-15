@@ -43,19 +43,11 @@ impl<Key: StorageKey, Value> Default for KeyValueHeap<Key, Value> {
     }
 }
 
-impl<
-        Key: StorageKey + Copy,
-        Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
-    > KeyValueHeap<Key, Value>
+impl<Key, Value> KeyValueHeap<Key, Value>
+where
+    Key: StorageKey + Copy,
+    Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
 {
-    // pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
-    //     let idx = key.index();
-
-    //     while idx >= self.len() {
-    //         self.grow(Key::create_from_index(self.len()), default_value);
-    //     }
-    // }
-
     /// Return the key with maximum value from the heap, or None if the heap is empty. Note that
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///

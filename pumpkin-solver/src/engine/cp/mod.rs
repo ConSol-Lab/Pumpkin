@@ -94,29 +94,4 @@ mod tests {
         }
         assert_eq!(reason_store.len(), 0);
     }
-
-    // todo: restore test
-    // #[test]
-    // fn test_no_update_reason_store_if_fixed_literal() {
-    // let mut assignments = Assignments::default();
-    // let mut reason_store = ReasonStore::default();
-    //
-    // let literal = Literal::new(PropositionalVariable::new(0), true);
-    // assignments_propositional.enqueue_decision_literal(literal);
-    //
-    // assert!(assignments_propositional.is_literal_assigned_true(literal));
-    // assert_eq!(reason_store.len(), 0);
-    // {
-    // let mut context = PropagationContextMut::new(
-    // &mut assignments,
-    // &mut reason_store,
-    // &mut assignments_propositional,
-    // PropagatorId(0),
-    // );
-    //
-    // let result = context.assign_boolean(literal, false, conjunction!());
-    // assert!(result.is_ok());
-    // }
-    // assert_eq!(reason_store.len(), 0);
-    // }
 }
