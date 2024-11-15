@@ -26,6 +26,107 @@ pub enum Predicate {
 }
 
 impl Predicate {
+    pub(crate) fn is_mutually_exclusive_with(self, other: Predicate) -> bool {
+        match (self, other) {
+            (Predicate::LowerBound { .. }, Predicate::LowerBound { .. })
+            | (Predicate::LowerBound { .. }, Predicate::NotEqual { .. })
+            | (Predicate::UpperBound { .. }, Predicate::UpperBound { .. })
+            | (Predicate::UpperBound { .. }, Predicate::NotEqual { .. })
+            | (Predicate::NotEqual { .. }, Predicate::LowerBound { .. })
+            | (Predicate::NotEqual { .. }, Predicate::UpperBound { .. })
+            | (Predicate::NotEqual { .. }, Predicate::NotEqual { .. }) => false,
+            (
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                },
+                Predicate::UpperBound {
+                    domain_id: domain_id_other,
+                    upper_bound,
+                },
+            )
+            | (
+                Predicate::UpperBound {
+                    domain_id: domain_id_other,
+                    upper_bound,
+                },
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                },
+            ) => domain_id == domain_id_other && lower_bound > upper_bound,
+            (
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                },
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+            )
+            | (
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                },
+            ) => domain_id == domain_id_other && lower_bound > equality_constant,
+            (
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                },
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+            )
+            | (
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                },
+            ) => domain_id == domain_id_other && upper_bound < equality_constant,
+            (
+                Predicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                },
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+            )
+            | (
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant,
+                },
+                Predicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                },
+            ) => domain_id == domain_id_other && equality_constant == not_equal_constant,
+            (
+                Predicate::Equal {
+                    domain_id,
+                    equality_constant,
+                },
+                Predicate::Equal {
+                    domain_id: domain_id_other,
+                    equality_constant: equality_constant_other,
+                },
+            ) => domain_id == domain_id_other && equality_constant != equality_constant_other,
+        }
+    }
     pub fn is_equality_predicate(&self) -> bool {
         matches!(
             *self,

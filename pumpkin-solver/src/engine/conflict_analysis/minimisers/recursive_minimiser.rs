@@ -9,7 +9,6 @@ use crate::pumpkin_assert_simple;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RecursiveMinimiser {
-    // data structures used for clause minimisation after conflict analysis
     current_depth: usize,
     allowed_decision_levels: HashSet<usize>, // could consider direct hashing here
     label_assignments: HashMap<Predicate, Option<Label>>,

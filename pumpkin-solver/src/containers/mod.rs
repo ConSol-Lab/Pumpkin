@@ -1,3 +1,4 @@
+//! Contains containers which are used by the solver.
 mod key_value_heap;
 mod keyed_vec;
 mod sparse_set;

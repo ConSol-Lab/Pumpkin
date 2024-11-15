@@ -20,6 +20,7 @@ pub trait VariableSelector<Var> {
     /// does not provide any additional information.
     fn on_conflict(&mut self) {}
 
+    /// A function which is called whenever a backtrack occurs in the solver.
     fn on_backtrack(&mut self) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when

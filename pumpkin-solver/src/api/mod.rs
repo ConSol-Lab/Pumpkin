@@ -80,6 +80,7 @@ pub mod conflict_resolution {
     //!
     //! The manner in which conflict resolution is done greatly impacts the performance of the
     //! solver.
+    pub use crate::engine::conflict_analysis::ConflictResolver;
     pub use crate::engine::conflict_analysis::NoLearningResolver;
     pub use crate::engine::conflict_analysis::ResolutionResolver;
 }

@@ -2,7 +2,6 @@
 //! using a Lazy Clause Generation approach.
 use std::collections::VecDeque;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::num::NonZero;
 use std::time::Instant;
 
@@ -149,7 +148,7 @@ impl Default for ConstraintSatisfactionSolver {
 /// 1. In the case of [`CoreExtractionResult::ConflictingAssumption`], two assumptions have been
 ///    given which directly conflict with one another; e.g. if the assumptions `[x, !x]` have been
 ///    given then the result of [`ConstraintSatisfactionSolver::extract_clausal_core`] will be a
-///    [`CoreExtractionResult::ConflictingAssumption`] containing `!x`.
+///    [`CoreExtractionResult::ConflictingAssumption`] containing `x`.
 /// 2. The standard case is when a [`CoreExtractionResult::Core`] is returned which contains (a
 ///    subset of) the assumptions which led to conflict.
 #[derive(Debug, Clone)]
@@ -163,6 +162,7 @@ pub enum CoreExtractionResult {
 }
 
 /// Options for the [`Solver`] which determine how it behaves.
+#[derive(Debug)]
 pub struct SatisfactionSolverOptions {
     /// The options used by the restart strategy.
     pub restart_options: RestartOptions,
@@ -172,14 +172,10 @@ pub struct SatisfactionSolverOptions {
     pub random_generator: SmallRng,
     /// The proof log for the solver.
     pub proof_log: ProofLog,
+    /// The [`ConflictResolver`] which is used to resolve a conflict when it occurs.
     pub conflict_resolver: Box<dyn ConflictResolver>,
+    /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
-}
-
-impl Debug for SatisfactionSolverOptions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SatisfactionSolverOptions").finish()
-    }
 }
 
 impl Default for SatisfactionSolverOptions {
@@ -600,48 +596,47 @@ impl ConstraintSatisfactionSolver {
             return CoreExtractionResult::Core(vec![]);
         }
 
-        let violated_assumption = self.state.get_violated_assumption();
-
-        if self.assumptions.contains(&violated_assumption)
-            && self.assumptions.contains(&(!violated_assumption))
-            && self
-                .assumptions
-                .iter()
-                .position(|predicate| *predicate == violated_assumption)
-                .unwrap()
-                > self
-                    .assumptions
+        self.assumptions
+            .iter()
+            .enumerate()
+            .find(|(index, assumption)| {
+                self.assumptions
                     .iter()
-                    .position(|predicate| *predicate == !violated_assumption)
-                    .unwrap()
-        {
-            CoreExtractionResult::ConflictingAssumption(violated_assumption)
-        } else {
-            let mut conflict_analysis_context = ConflictAnalysisContext {
-                assignments: &mut self.assignments,
-                counters: &mut self.counters,
-                solver_state: &mut self.state,
-                reason_store: &mut self.reason_store,
-                brancher,
-                semantic_minimiser: &mut self.semantic_minimiser,
-                propagators: &mut self.propagators,
-                last_notified_cp_trail_index: self.last_notified_cp_trail_index,
-                watch_list_cp: &mut self.watch_list_cp,
-                propagator_queue: &mut self.propagator_queue,
-                event_drain: &mut self.event_drain,
-                backtrack_event_drain: &mut self.backtrack_event_drain,
-                should_minimise: self.internal_parameters.learning_clause_minimisation,
-                proof_log: &mut self.internal_parameters.proof_log,
-                is_completing_proof: false,
-                unit_nogood_step_ids: &self.unit_nogood_step_ids,
-            };
+                    .skip(index + 1)
+                    .any(|other_assumptiion| {
+                        assumption.is_mutually_exclusive_with(*other_assumptiion)
+                    })
+            })
+            .map(|(_, conflicting_assumption)| {
+                CoreExtractionResult::ConflictingAssumption(*conflicting_assumption)
+            })
+            .unwrap_or_else(|| {
+                let mut conflict_analysis_context = ConflictAnalysisContext {
+                    assignments: &mut self.assignments,
+                    counters: &mut self.counters,
+                    solver_state: &mut self.state,
+                    reason_store: &mut self.reason_store,
+                    brancher,
+                    semantic_minimiser: &mut self.semantic_minimiser,
+                    propagators: &mut self.propagators,
+                    last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+                    watch_list_cp: &mut self.watch_list_cp,
+                    propagator_queue: &mut self.propagator_queue,
+                    event_drain: &mut self.event_drain,
+                    backtrack_event_drain: &mut self.backtrack_event_drain,
+                    should_minimise: self.internal_parameters.learning_clause_minimisation,
+                    proof_log: &mut self.internal_parameters.proof_log,
+                    is_completing_proof: false,
+                    unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                };
 
-            let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
-            let learned_nogood = resolver
-                .resolve_conflict(&mut conflict_analysis_context)
-                .expect("Expected core extraction to be able to extract a core");
-            CoreExtractionResult::Core(learned_nogood.predicates.clone())
-        }
+                let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
+                let learned_nogood = resolver
+                    .resolve_conflict(&mut conflict_analysis_context)
+                    .expect("Expected core extraction to be able to extract a core");
+
+                CoreExtractionResult::Core(learned_nogood.predicates.clone())
+            })
     }
 
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
@@ -1674,14 +1669,13 @@ mod tests {
     }
 
     #[test]
-    fn simple_core_extraction_1_core_before_inconsistency() {
+    fn simple_core_extraction_1_core_conflicting() {
         let (solver, lits) = create_instance1();
         run_test(
             solver,
             vec![!lits[1], lits[1]],
             CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[1]]), /* The core gets computed before
-                                                         * inconsistency is detected */
+            CoreExtractionResult::ConflictingAssumption(!lits[1]),
         );
     }
     fn create_instance2() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {
@@ -1713,12 +1707,7 @@ mod tests {
             solver,
             vec![!lits[0], lits[1], !lits[2], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::Core(vec![!lits[0], lits[1], !lits[2]]), /* could return
-                                                                            * inconsistent
-                                                                            * assumptions,
-                                                                            * however inconsistency will not be detected
-                                                                            * given the order of
-                                                                            * the assumptions */
+            CoreExtractionResult::ConflictingAssumption(!lits[0]),
         );
     }
 
@@ -1729,7 +1718,7 @@ mod tests {
             solver,
             vec![!lits[0], !lits[0], !lits[1], !lits[1], lits[0]],
             CSPSolverExecutionFlag::Infeasible,
-            CoreExtractionResult::ConflictingAssumption(lits[0]),
+            CoreExtractionResult::ConflictingAssumption(!lits[0]),
         );
     }
     fn create_instance3() -> (ConstraintSatisfactionSolver, Vec<Predicate>) {

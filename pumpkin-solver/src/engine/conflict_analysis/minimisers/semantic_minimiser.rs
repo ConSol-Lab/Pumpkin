@@ -130,7 +130,6 @@ impl SemanticMinimiser {
 
     pub fn clean_up(&mut self) {
         // Remove the domain ids from the present domain ids.
-        // todo: introduce a clear method for sparse set.
         let vals: Vec<DomainId> = self.present_ids.iter().copied().collect();
         for domain_id in vals {
             self.present_ids.remove(&domain_id);

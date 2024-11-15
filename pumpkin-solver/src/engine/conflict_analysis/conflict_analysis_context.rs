@@ -10,6 +10,7 @@ use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::propagation::PropagationContext;
+use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
@@ -21,7 +22,9 @@ use crate::proof::ProofLog;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
-// Does not have debug because of the brancher does not support it. Could be thought through later.
+/// Used during conflict analysis to provide the necessary information.
+///
+/// All fields are made public for the time being for simplicity. In the future that may change.
 pub struct ConflictAnalysisContext<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
@@ -52,16 +55,19 @@ impl Debug for ConflictAnalysisContext<'_> {
 }
 
 impl<'a> ConflictAnalysisContext<'a> {
+    /// Returns the last decision which was made by the solver.
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
         self.assignments.find_last_decision()
     }
 
+    /// Posts the predicate with reason an empty reason.
     pub(crate) fn enqueue_propagated_predicate(&mut self, predicate: Predicate) {
         self.assignments
-            .post_predicate(predicate, None)
+            .post_predicate(predicate, Some(ReasonRef(0)))
             .expect("Expected enqueued predicate to not lead to conflict directly")
     }
 
+    /// Backtracks the solver to the provided backtrack level.
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
         pumpkin_assert_simple!(backtrack_level < self.assignments.get_decision_level());
 
@@ -97,6 +103,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         self.event_drain.clear();
     }
 
+    /// Processes the backtrack events which have been created when backtracking
     fn process_backtrack_events(&mut self) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
@@ -123,6 +130,8 @@ impl<'a> ConflictAnalysisContext<'a> {
         true
     }
 
+    /// Returns a nogood which led to the conflict; if `is_completing_proof` is set to true, then
+    /// it will also return predicates from the root decision level.
     pub(crate) fn get_conflict_nogood(&mut self, is_completing_proof: bool) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
@@ -163,6 +172,8 @@ impl<'a> ConflictAnalysisContext<'a> {
         }
     }
 
+    /// Returns the reason for a propagation; if it is implied then the reason will be the decision
+    /// which implied the predicate.
     pub(crate) fn get_propagation_reason(
         predicate: Predicate,
         assignments: &Assignments,
