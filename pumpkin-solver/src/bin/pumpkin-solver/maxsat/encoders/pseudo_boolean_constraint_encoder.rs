@@ -176,28 +176,6 @@ impl PseudoBooleanConstraintEncoder {
             })
             .collect();
 
-        for _term in function.get_terms() {
-            // todo: need to create a literal over an arbitrary predicate
-            todo!()
-            // let domain_id = *term.0;
-            // let weight = *term.1;
-
-            // let lower_bound = solver.lower_bound(&domain_id);
-            // let upper_bound = solver.upper_bound(&domain_id);
-
-            // // note that we only needs lower bound literals starting from lower_bound+1
-            // //  the literals before those contribute to the objective function but not in a way
-            // that // can be changed
-            // for i in (lower_bound + 1)..=upper_bound {
-            //     let literal = Literal::new(predicate![domain_id >= i]);
-            //     weighted_literals.push(WeightedLiteral {
-            //         literal,
-            //         weight,
-            //         bound: Some(i),
-            //     });
-            // }
-        }
-
         weighted_literals
     }
 

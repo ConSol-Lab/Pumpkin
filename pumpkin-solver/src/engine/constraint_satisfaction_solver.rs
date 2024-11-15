@@ -1102,7 +1102,7 @@ impl ConstraintSatisfactionSolver {
                                 &mut self.propagators,
                             );
 
-                        // todo: As a temporary solution, we remove the last trail element.
+                        // TODO: As a temporary solution, we remove the last trail element.
                         // This way we guarantee that the assignment is consistent, which is needed
                         // for the conflict analysis data structures. The proper alternative would
                         // be to forbid the assignments from getting into an inconsistent state.

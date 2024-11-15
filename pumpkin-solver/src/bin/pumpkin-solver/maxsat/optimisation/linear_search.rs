@@ -87,7 +87,6 @@ impl LinearSearch {
                     best_objective_value = new_objective_value;
                     best_solution = solution;
 
-                    brancher.on_solution(best_solution.as_reference());
                     solver.log_statistics_with_objective(best_objective_value as i64);
 
                     println!("o {}", best_objective_value);

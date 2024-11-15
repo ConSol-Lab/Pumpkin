@@ -66,9 +66,10 @@ impl<T> Trail<T> {
         self.trail.push(elem)
     }
 
-    /// todo: this is a temporary hack, because we do not check whether the current decision
-    /// level needs updating. For now this is okay since we never pop the decision predicate, but
-    /// in general this could be an issue.
+    /// This method pops an entry from the trail without doing any checks.
+    ///
+    /// Note that this method should *only* be used to prevent the assignments from being in an
+    /// inconsistent state.
     pub(crate) fn pop(&mut self) -> Option<T> {
         self.trail.pop()
     }

@@ -496,9 +496,9 @@ impl Solver {
             self.satisfaction_solver.restore_state_at_root(brancher);
 
             let objective_bound_predicate = if is_maximising {
-                predicate![objective_variable <= best_objective_value as i32]
+                predicate![objective_variable >= best_objective_value as i32 * objective_multiplier]
             } else {
-                predicate![objective_variable >= best_objective_value as i32]
+                predicate![objective_variable <= best_objective_value as i32 * objective_multiplier]
             };
 
             if self

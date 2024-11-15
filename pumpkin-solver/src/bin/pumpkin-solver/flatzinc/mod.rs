@@ -139,11 +139,6 @@ pub(crate) fn solve(
             match solver.satisfy(&mut brancher, &mut termination) {
                 SatisfactionResult::Satisfiable(_) => {}
                 SatisfactionResult::Unsatisfiable => {
-                    // todo: add proof-logging
-                    // if solver.conclude_proof_unsat().is_err() {
-                    //     warn!("Failed to log solver conclusion");
-                    // };
-
                     println!("{MSG_UNSATISFIABLE}");
                 }
                 SatisfactionResult::Unknown => {

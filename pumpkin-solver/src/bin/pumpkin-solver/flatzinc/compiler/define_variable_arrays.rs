@@ -35,8 +35,8 @@ pub(crate) fn run(
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.true_literal, // context.constant_bool_true,
-                                BoolExpr::Bool(false) => context.false_literal, // context.constant_bool_false,
+                                BoolExpr::Bool(true) => context.true_literal,
+                                BoolExpr::Bool(false) => context.false_literal,
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
                                     let representative =

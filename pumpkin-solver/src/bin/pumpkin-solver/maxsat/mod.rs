@@ -2,7 +2,6 @@ use std::fs::File;
 use std::path::Path;
 use std::time::Duration;
 
-use pumpkin_solver::pumpkin_assert_simple;
 pub(crate) mod encoders;
 pub(crate) mod optimisation;
 pub(crate) use encoders::PseudoBooleanEncoding;
@@ -30,11 +29,6 @@ pub(crate) fn wcnf_problem(
         objective,
         variables,
     } = parse_wcnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?;
-
-    pumpkin_assert_simple!(
-        objective.get_terms().count() == 0,
-        "Should not be any domain ids in the objective function for a MaxSAT problem"
-    );
 
     let brancher = solver.default_brancher();
     let mut termination = time_limit.map(TimeBudget::starting_now);

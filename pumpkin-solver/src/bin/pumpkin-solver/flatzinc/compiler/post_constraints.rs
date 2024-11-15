@@ -394,7 +394,7 @@ fn compile_bool_eq(
 ) -> Result<bool, FlatZincError> {
     // TODO: Take this constraint into account when merging equivalence classes. Unsure how often
     // this actually appears in models though.
-    // check_parameters!(exprs, 2, "bool_eq");
+    check_parameters!(exprs, 2, "bool_eq");
 
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;

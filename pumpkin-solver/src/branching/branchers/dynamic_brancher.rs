@@ -11,6 +11,7 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
 /// sequentially applies [`Brancher::next_decision`] until all of them return [`None`].
@@ -97,6 +98,18 @@ impl Brancher for DynamicBrancher {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_solution(solution));
+    }
+
+    fn on_restart(&mut self) {
+        self.branchers
+            .iter_mut()
+            .for_each(|brancher| brancher.on_restart());
+    }
+
+    fn synchronise(&mut self, assignments: &Assignments) {
+        self.branchers
+            .iter_mut()
+            .for_each(|brancher| brancher.synchronise(assignments));
     }
 
     fn is_restart_pointless(&mut self) -> bool {

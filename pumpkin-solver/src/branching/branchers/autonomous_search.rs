@@ -249,15 +249,12 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
 
 impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     fn next_decision(&mut self, context: &mut SelectionContext) -> Option<Predicate> {
-        let result = self
-            .next_candidate_predicate(context)
-            .map(|predicate| self.determine_polarity(predicate));
-        if result.is_none() && !context.are_all_variables_assigned() {
-            // There are variables for which we do not have a predicate, rely on the backup
-            self.backup_brancher.next_decision(context)
-        } else {
-            result
-        }
+        self.next_candidate_predicate(context)
+            .map(|predicate| self.determine_polarity(predicate))
+            .or_else(|| {
+                // There are variables for which we do not have a predicate, rely on the backup
+                self.backup_brancher.next_decision(context)
+            })
     }
 
     fn on_backtrack(&mut self) {
