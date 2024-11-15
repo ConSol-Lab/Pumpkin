@@ -22,10 +22,6 @@ impl PropagatorQueue {
         }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.present_propagators.is_empty()
-    }
-
     pub(crate) fn enqueue_propagator(&mut self, propagator_id: PropagatorId, priority: u32) {
         pumpkin_assert_moderate!((priority as usize) < self.queues.len());
 
@@ -38,27 +34,23 @@ impl PropagatorQueue {
         }
     }
 
-    pub(crate) fn pop_new(&mut self) -> Option<PropagatorId> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.pop())
+    pub(crate) fn pop(&mut self) -> Option<PropagatorId> {
+        if self.present_priorities.is_empty() {
+            return None;
         }
-    }
-
-    pub(crate) fn pop(&mut self) -> PropagatorId {
-        pumpkin_assert_moderate!(!self.is_empty());
 
         let top_priority = self.present_priorities.peek().unwrap().0 as usize;
         pumpkin_assert_moderate!(!self.queues[top_priority].is_empty());
 
-        let next_propagator_id = self.queues[top_priority].pop_front().unwrap();
+        let next_propagator_id = self.queues[top_priority].pop_front();
 
-        let _ = self.present_propagators.remove(&next_propagator_id);
+        next_propagator_id.iter().for_each(|next_propagator_id| {
+            let _ = self.present_propagators.remove(next_propagator_id);
 
-        if self.queues[top_priority].is_empty() {
-            let _ = self.present_priorities.pop();
-        }
+            if self.queues[top_priority].is_empty() {
+                let _ = self.present_priorities.pop();
+            }
+        });
 
         next_propagator_id
     }

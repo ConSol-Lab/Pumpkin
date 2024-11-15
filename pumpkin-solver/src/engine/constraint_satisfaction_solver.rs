@@ -1081,7 +1081,7 @@ impl ConstraintSatisfactionSolver {
         // The initial domain events are due to the decision predicate.
         self.notify_propagators_about_domain_events();
         // Keep propagating until there are unprocessed propagators, or a conflict is detected.
-        while let Some(propagator_id) = self.propagator_queue.pop_new() {
+        while let Some(propagator_id) = self.propagator_queue.pop() {
             let tag = self.propagators.get_tag(propagator_id);
             let num_trail_entries_before = self.assignments.num_trail_entries();
 

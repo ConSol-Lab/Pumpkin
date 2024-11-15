@@ -9,8 +9,6 @@ use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
-///   This trail makes is easy to garbage collect reasons by simply synchronising whenever
-///   the `Assignments` and `AssignmentsPropositional` are synchronised.
 #[derive(Default, Debug)]
 pub struct ReasonStore {
     trail: Trail<(PropagatorId, Reason)>,
