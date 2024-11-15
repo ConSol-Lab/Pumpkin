@@ -15,6 +15,11 @@ use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 
+/// Resolve conflicts according to the CDCL procedure.
+///
+/// This conflict resolver will derive a nogood that is implied by the constraints already present
+/// in the solver. This new nogood is added as a constraint to the solver, and the solver
+/// backtracks to the decision level at which the new constraint propagates.
 #[derive(Clone, Debug, Default)]
 pub struct ResolutionResolver {
     /// Heap containing the predicates which still need to be processed; sorted non-increasing

@@ -74,6 +74,12 @@ pub mod options {
 }
 
 pub mod conflict_resolution {
+    //! During search, the CP solver will inevitably evaluate partial assignments that violate at
+    //! least one constraint. When this happens, conflict resolution is applied to restore the
+    //! solver to a state from which it can continue the search.
+    //!
+    //! The manner in which conflict resolution is done greatly impacts the performance of the
+    //! solver.
     pub use crate::engine::conflict_analysis::NoLearningResolver;
     pub use crate::engine::conflict_analysis::ResolutionResolver;
 }

@@ -3,6 +3,7 @@ use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
 use crate::pumpkin_assert_simple;
 
+/// Resolve conflicts by backtracking one decision level trying the opposite of the last decision.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct NoLearningResolver;
 
