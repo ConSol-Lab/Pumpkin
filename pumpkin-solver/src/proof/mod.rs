@@ -1,3 +1,9 @@
+//! Pumpkin supports proof logging for SAT and CP problems. During search, the solver produces a
+//! [`ProofLog`], which is a list of deductions made by the solver.
+//!
+//! Proof logging for CP is supported in the DRCP format. This format explicitly supports usage
+//! where the solver logs a proof scaffold which later processed into a full proof after search
+//! has completed.
 mod dimacs;
 mod proof_literals;
 

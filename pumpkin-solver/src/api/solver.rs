@@ -93,9 +93,8 @@ pub struct Solver {
 
 impl Default for Solver {
     fn default() -> Self {
-        let mut satisfaction_solver = ConstraintSatisfactionSolver::default();
-        let true_literal =
-            satisfaction_solver.create_new_literal_for_predicate(Predicate::trivially_true(), None);
+        let satisfaction_solver = ConstraintSatisfactionSolver::default();
+        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
             solution_callback: create_empty_function(),
@@ -120,9 +119,8 @@ impl std::fmt::Debug for Solver {
 impl Solver {
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
-        let mut satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
-        let true_literal =
-            satisfaction_solver.create_new_literal_for_predicate(Predicate::trivially_true(), None);
+        let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);
+        let true_literal = Literal::new(Predicate::trivially_true().get_domain());
         Self {
             satisfaction_solver,
             solution_callback: create_empty_function(),
@@ -162,6 +160,8 @@ impl Solver {
 
 /// Methods to retrieve information about variables
 impl Solver {
+    /// Get the value of the given [`Literal`] at the root level (after propagation), which could be
+    /// unassigned.
     pub fn get_literal_value(&self, literal: Literal) -> Option<bool> {
         self.satisfaction_solver.get_literal_value(literal)
     }

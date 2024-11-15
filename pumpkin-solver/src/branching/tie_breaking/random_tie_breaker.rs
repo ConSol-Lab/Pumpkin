@@ -19,7 +19,6 @@ use crate::basic_types::Random;
 ///     - If the values are equal then we randomly select the newly considered variable with
 ///       probability `1 / num_previously_seen_variables` where `num_previously_seen_variables` is
 ///       the number of variables which have been previously considered with the same value
-#[allow(dead_code)]
 pub struct RandomTieBreaker<Var, Value> {
     /// The selected variable, could be [None] if no variable has been considered yet
     selected_variable: Option<Var>,
@@ -42,8 +41,7 @@ impl<Var, Value> std::fmt::Debug for RandomTieBreaker<Var, Value> {
 
 impl<Var, Value> RandomTieBreaker<Var, Value> {
     // Currently the struct is not used
-    #[allow(dead_code)]
-    pub(crate) fn new(direction: Direction, rng: Box<dyn Random>) -> Self {
+    pub fn new(direction: Direction, rng: Box<dyn Random>) -> Self {
         Self {
             selected_variable: None,
             selected_value: None,
