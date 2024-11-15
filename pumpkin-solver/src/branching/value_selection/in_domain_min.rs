@@ -21,9 +21,9 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMin {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::InDomainMin;
+    use crate::branching::value_selection::InDomainMin;
+    use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
-    use crate::branching::ValueSelector;
     use crate::predicate;
 
     #[test]

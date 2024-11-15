@@ -1,5 +1,5 @@
+use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
-use crate::branching::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::predicate;
@@ -32,9 +32,9 @@ impl ValueSelector<DomainId> for OutDomainRandom {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::OutDomainRandom;
+    use crate::branching::value_selection::OutDomainRandom;
+    use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
-    use crate::branching::ValueSelector;
     use crate::predicate;
 
     #[test]

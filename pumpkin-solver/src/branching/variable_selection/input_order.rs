@@ -1,7 +1,7 @@
 use log::warn;
 
+use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
-use crate::branching::VariableSelector;
 use crate::engine::variables::DomainId;
 use crate::variables::Literal;
 
@@ -43,10 +43,8 @@ impl VariableSelector<Literal> for InputOrder<Literal> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::InputOrder;
-    use crate::branching::SelectionContext;
-    use crate::branching::VariableSelector;
 
     #[test]
     fn test_correctly_selected() {

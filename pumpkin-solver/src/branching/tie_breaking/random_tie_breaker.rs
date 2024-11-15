@@ -123,7 +123,7 @@ mod tests {
     use super::RandomTieBreaker;
     use crate::basic_types::tests::TestRandom;
     use crate::branching::tie_breaking::random_tie_breaker::Direction;
-    use crate::branching::TieBreaker;
+    use crate::branching::tie_breaking::TieBreaker;
 
     #[test]
     fn test_selection_new_value() {

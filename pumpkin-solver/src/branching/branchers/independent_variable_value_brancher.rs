@@ -4,12 +4,12 @@
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
+use crate::branching::value_selection::InDomainMin;
+use crate::branching::value_selection::ValueSelector;
+use crate::branching::variable_selection::InputOrder;
+use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
-use crate::branching::InDomainMin;
-use crate::branching::InputOrder;
 use crate::branching::SelectionContext;
-use crate::branching::ValueSelector;
-use crate::branching::VariableSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::ConstraintSatisfactionSolver;

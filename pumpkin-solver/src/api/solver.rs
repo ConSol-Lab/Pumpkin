@@ -9,13 +9,13 @@ use crate::basic_types::HashSet;
 use crate::basic_types::Solution;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
+use crate::branching::value_selection::InDomainRandom;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
+use crate::branching::variable_selection::ProportionalDomainSize;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
-use crate::branching::InDomainRandom;
-use crate::branching::ProportionalDomainSize;
 use crate::constraints::ConstraintPoster;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::Propagator;

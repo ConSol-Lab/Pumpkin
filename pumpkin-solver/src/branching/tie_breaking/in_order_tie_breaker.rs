@@ -76,8 +76,8 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for InOrderTieBreaker<
 #[cfg(test)]
 mod tests {
     use super::InOrderTieBreaker;
-    use crate::branching::Direction;
-    use crate::branching::TieBreaker;
+    use crate::branching::tie_breaking::Direction;
+    use crate::branching::tie_breaking::TieBreaker;
     use crate::engine::variables::DomainId;
 
     #[test]

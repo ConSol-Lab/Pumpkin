@@ -1,5 +1,5 @@
+use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
-use crate::branching::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -21,9 +21,9 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMax {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::InDomainMax;
+    use crate::branching::value_selection::InDomainMax;
+    use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
-    use crate::branching::ValueSelector;
     use crate::predicate;
 
     #[test]

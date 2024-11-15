@@ -2,9 +2,9 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
+use crate::branching::value_selection::InDomainRandom;
+use crate::branching::variable_selection::ProportionalDomainSize;
 use crate::branching::Brancher;
-use crate::branching::InDomainRandom;
-use crate::branching::ProportionalDomainSize;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
 use crate::containers::StorageKey;

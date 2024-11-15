@@ -1,7 +1,7 @@
 #[cfg(doc)]
-use crate::branching::InDomainMedian;
+use crate::branching::value_selection::InDomainMedian;
+use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
-use crate::branching::ValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::IntegerVariable;
 use crate::predicate;
@@ -50,9 +50,9 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMiddle {
 #[cfg(test)]
 mod tests {
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::InDomainMiddle;
+    use crate::branching::value_selection::InDomainMiddle;
+    use crate::branching::value_selection::ValueSelector;
     use crate::branching::SelectionContext;
-    use crate::branching::ValueSelector;
     use crate::predicate;
 
     #[test]

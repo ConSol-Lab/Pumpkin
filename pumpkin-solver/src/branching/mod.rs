@@ -74,14 +74,13 @@ pub mod variable_selection;
 
 pub use brancher::Brancher;
 pub use selection_context::SelectionContext;
-pub use tie_breaking::*;
-pub use value_selection::*;
-pub use variable_selection::*;
 
 #[cfg(doc)]
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
+#[cfg(doc)]
+use crate::branching::variable_selection::AntiFirstFail;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 #[cfg(doc)]

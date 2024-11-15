@@ -22,10 +22,10 @@
 //! select the first variable with the lowest-value that it has found.
 //!
 //! ```rust
-//! # use pumpkin_solver::branching::InOrderTieBreaker;
+//! # use pumpkin_solver::branching::tie_breaking::InOrderTieBreaker;
 //! # use pumpkin_solver::variables::DomainId;
-//! # use pumpkin_solver::branching::Direction;
-//! # use pumpkin_solver::branching::TieBreaker;
+//! # use pumpkin_solver::branching::tie_breaking::Direction;
+//! # use pumpkin_solver::branching::tie_breaking::TieBreaker;
 //! let mut breaker = InOrderTieBreaker::new(Direction::Minimum);
 //!
 //! // We consider 3 variables, where only variables with ID 1 and ID 2 should be considered.
@@ -49,6 +49,6 @@ pub use random_tie_breaker::*;
 pub use tie_breaker::*;
 
 #[cfg(doc)]
-use crate::branching::Smallest;
+use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
-use crate::branching::VariableSelector;
+use crate::branching::variable_selection::VariableSelector;
