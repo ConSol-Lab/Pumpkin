@@ -62,6 +62,7 @@ pub mod options {
     //! - The learned clause database management approach
     //! - The proof logging
     pub use crate::basic_types::sequence_generators::SequenceGeneratorType;
+    pub use crate::engine::ConflictResolver;
     pub use crate::engine::RestartOptions;
     pub use crate::engine::SatisfactionSolverOptions as SolverOptions;
     pub use crate::propagators::nogoods::LearnedNogoodSortingStrategy;
@@ -71,18 +72,6 @@ pub mod options {
     pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]
     use crate::Solver;
-}
-
-pub mod conflict_resolution {
-    //! During search, the CP solver will inevitably evaluate partial assignments that violate at
-    //! least one constraint. When this happens, conflict resolution is applied to restore the
-    //! solver to a state from which it can continue the search.
-    //!
-    //! The manner in which conflict resolution is done greatly impacts the performance of the
-    //! solver.
-    pub use crate::engine::conflict_analysis::ConflictResolver;
-    pub use crate::engine::conflict_analysis::NoLearningResolver;
-    pub use crate::engine::conflict_analysis::ResolutionResolver;
 }
 
 pub mod termination {

@@ -9,4 +9,4 @@ mod resolvers;
 pub(crate) use conflict_analysis_context::ConflictAnalysisContext;
 pub(crate) use learned_nogood::*;
 pub(crate) use minimisers::*;
-pub use resolvers::*;
+pub(crate) use resolvers::*;

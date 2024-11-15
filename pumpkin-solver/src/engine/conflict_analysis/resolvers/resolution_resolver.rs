@@ -21,7 +21,7 @@ use crate::pumpkin_assert_simple;
 /// in the solver. This new nogood is added as a constraint to the solver, and the solver
 /// backtracks to the decision level at which the new constraint propagates.
 #[derive(Clone, Debug, Default)]
-pub struct ResolutionResolver {
+pub(crate) struct ResolutionResolver {
     /// Heap containing the predicates which still need to be processed; sorted non-increasing
     /// based on trail-index where implied predicates are processed first.
     to_process_heap: KeyValueHeap<PredicateId, u32>,

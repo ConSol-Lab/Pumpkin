@@ -10,6 +10,7 @@ pub(crate) mod termination;
 pub(crate) mod variables;
 
 pub(crate) use conflict_analysis::ResolutionResolver;
+pub use constraint_satisfaction_solver::ConflictResolver;
 pub(crate) use constraint_satisfaction_solver::ConstraintSatisfactionSolver;
 pub use constraint_satisfaction_solver::SatisfactionSolverOptions;
 pub(crate) use cp::*;

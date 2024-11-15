@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::num::NonZero;
 use std::time::Instant;
 
+use clap::ValueEnum;
 use drcp_format::steps::StepId;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -12,6 +13,7 @@ use rand::SeedableRng;
 use super::conflict_analysis::AnalysisMode;
 use super::conflict_analysis::ConflictAnalysisContext;
 use super::conflict_analysis::LearnedNogood;
+use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
 use super::propagation::store::PropagatorStore;
@@ -32,7 +34,7 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::engine::conflict_analysis::ConflictResolver;
+use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
@@ -136,6 +138,8 @@ pub struct ConstraintSatisfactionSolver {
     lbd_helper: Lbd,
     /// A map from clause references to nogood step ids in the proof.
     unit_nogood_step_ids: HashMap<Predicate, StepId>,
+    /// The resolver which is used upon a conflict.
+    conflict_resolver: Box<dyn Resolver>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -161,6 +165,19 @@ pub enum CoreExtractionResult {
     Core(Vec<Predicate>),
 }
 
+/// During search, the CP solver will inevitably evaluate partial assignments that violate at
+/// least one constraint. When this happens, conflict resolution is applied to restore the
+/// solver to a state from which it can continue the search.
+///
+/// The manner in which conflict resolution is done greatly impacts the performance of the
+/// solver.
+#[derive(ValueEnum, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum ConflictResolver {
+    NoLearning,
+    #[default]
+    UIP,
+}
+
 /// Options for the [`Solver`] which determine how it behaves.
 #[derive(Debug)]
 pub struct SatisfactionSolverOptions {
@@ -172,8 +189,8 @@ pub struct SatisfactionSolverOptions {
     pub random_generator: SmallRng,
     /// The proof log for the solver.
     pub proof_log: ProofLog,
-    /// The [`ConflictResolver`] which is used to resolve a conflict when it occurs.
-    pub conflict_resolver: Box<dyn ConflictResolver>,
+    /// The resolver used for conflict analysis
+    pub conflict_resolver: ConflictResolver,
     /// The options which influence the learning of the solver.
     pub learning_options: LearningOptions,
 }
@@ -185,7 +202,7 @@ impl Default for SatisfactionSolverOptions {
             learning_clause_minimisation: true,
             random_generator: SmallRng::seed_from_u64(42),
             proof_log: ProofLog::default(),
-            conflict_resolver: Box::new(ResolutionResolver::default()),
+            conflict_resolver: ConflictResolver::default(),
             learning_options: LearningOptions::default(),
         }
     }
@@ -352,7 +369,6 @@ impl ConstraintSatisfactionSolver {
         };
 
         let result = self
-            .internal_parameters
             .conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context)
             .expect("Should have a nogood");
@@ -380,11 +396,15 @@ impl ConstraintSatisfactionSolver {
             restart_strategy: RestartStrategy::new(solver_options.restart_options),
             propagators: PropagatorStore::default(),
             counters: SolverStatistics::default(),
-            internal_parameters: solver_options,
             variable_names: VariableNames::default(),
             semantic_minimiser: SemanticMinimiser::default(),
             lbd_helper: Lbd::default(),
             unit_nogood_step_ids: Default::default(),
+            conflict_resolver: match solver_options.conflict_resolver {
+                ConflictResolver::NoLearning => Box::new(NoLearningResolver),
+                ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
+            },
+            internal_parameters: solver_options,
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -859,7 +879,6 @@ impl ConstraintSatisfactionSolver {
         };
 
         let learned_nogood = self
-            .internal_parameters
             .conflict_resolver
             .resolve_conflict(&mut conflict_analysis_context);
 
@@ -885,7 +904,6 @@ impl ConstraintSatisfactionSolver {
         }
 
         let result = self
-            .internal_parameters
             .conflict_resolver
             .process(&mut conflict_analysis_context, &learned_nogood);
         if result.is_err() {

@@ -5,7 +5,7 @@ use crate::pumpkin_assert_simple;
 
 /// Resolve conflicts by backtracking one decision level trying the opposite of the last decision.
 #[derive(Default, Debug, Clone, Copy)]
-pub struct NoLearningResolver;
+pub(crate) struct NoLearningResolver;
 
 impl ConflictResolver for NoLearningResolver {
     fn resolve_conflict(

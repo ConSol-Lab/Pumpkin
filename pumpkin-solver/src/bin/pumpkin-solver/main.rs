@@ -26,8 +26,6 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::conflict_resolution::NoLearningResolver;
-use pumpkin_solver::conflict_resolution::ResolutionResolver;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
@@ -344,11 +342,9 @@ struct Args {
     #[arg(long = "cumulative-generate-sequence")]
     cumulative_generate_sequence: bool,
 
-    /// Determines whether the solver performs no learning or not
-    ///
-    /// Possible values: bool
-    #[arg(long = "no-learning")]
-    no_learning: bool,
+    /// Determines the conflict resolver.
+    #[arg(long = "conflict-resolver")]
+    conflict_resolver: ConflictResolver,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
@@ -513,8 +509,6 @@ fn run() -> PumpkinResult<()> {
         geometric_coef: args.restart_geometric_coef,
         no_restarts: args.no_restarts,
     };
-    let random_generator = SmallRng::seed_from_u64(args.random_seed);
-    let learning_clause_minimisation = !args.no_learning_clause_minimisation;
     let learning_options = LearningOptions {
         max_activity: 1e20,
         activity_decay_factor: 0.99,
@@ -524,24 +518,13 @@ fn run() -> PumpkinResult<()> {
         activity_bump_increment: 1.0,
     };
 
-    let solver_options = if args.no_learning {
-        SolverOptions {
-            restart_options,
-            learning_clause_minimisation,
-            random_generator,
-            proof_log,
-            conflict_resolver: Box::new(NoLearningResolver),
-            learning_options,
-        }
-    } else {
-        SolverOptions {
-            restart_options,
-            learning_clause_minimisation,
-            random_generator,
-            proof_log,
-            conflict_resolver: Box::new(ResolutionResolver::default()),
-            learning_options,
-        }
+    let solver_options = SolverOptions {
+        restart_options,
+        learning_clause_minimisation: !args.no_learning_clause_minimisation,
+        random_generator: SmallRng::seed_from_u64(args.random_seed),
+        proof_log,
+        conflict_resolver: args.conflict_resolver,
+        learning_options,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);

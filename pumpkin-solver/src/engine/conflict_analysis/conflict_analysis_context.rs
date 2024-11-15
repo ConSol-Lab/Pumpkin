@@ -25,7 +25,7 @@ use crate::variables::DomainId;
 /// Used during conflict analysis to provide the necessary information.
 ///
 /// All fields are made public for the time being for simplicity. In the future that may change.
-pub struct ConflictAnalysisContext<'a> {
+pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
     pub(crate) reason_store: &'a mut ReasonStore,
