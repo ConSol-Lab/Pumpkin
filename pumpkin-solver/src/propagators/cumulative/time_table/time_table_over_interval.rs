@@ -53,7 +53,7 @@ pub(crate) struct Event<Var> {
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-#[allow(unused)]
+
 pub(crate) struct TimeTableOverIntervalPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -70,7 +70,6 @@ pub(crate) struct TimeTableOverIntervalPropagator<Var> {
 pub(crate) type OverIntervalTimeTableType<Var> = Vec<ResourceProfile<Var>>;
 
 impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
-    #[allow(unused)]
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,

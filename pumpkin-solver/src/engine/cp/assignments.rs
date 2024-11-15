@@ -787,10 +787,9 @@ struct BoundUpdateInfo {
 #[derive(Clone, Debug)]
 struct HoleUpdateInfo {
     removed_value: i32,
-    #[allow(dead_code)]
+
     decision_level: usize,
-    #[allow(dead_code)]
-    trail_position: usize,
+
     triggered_lower_bound_update: bool,
     triggered_upper_bound_update: bool,
 }
@@ -929,7 +928,6 @@ impl IntegerDomain {
             .bound
     }
 
-    #[allow(dead_code)]
     fn domain_iterator(&self) -> IntegerDomainIterator {
         // Ideally we use into_iter but I did not manage to get it to work,
         // because the iterator takes a lifelines
@@ -984,7 +982,6 @@ impl IntegerDomain {
         self.hole_updates.push(HoleUpdateInfo {
             removed_value,
             decision_level,
-            trail_position,
             triggered_lower_bound_update: false,
             triggered_upper_bound_update: false,
         });
@@ -1326,7 +1323,6 @@ pub(crate) struct IntegerDomainIterator<'a> {
 }
 
 impl IntegerDomainIterator<'_> {
-    #[allow(dead_code)]
     fn new(domain: &IntegerDomain) -> IntegerDomainIterator {
         IntegerDomainIterator {
             domain,

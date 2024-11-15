@@ -45,6 +45,7 @@ mod random_tie_breaker;
 mod tie_breaker;
 
 pub use in_order_tie_breaker::*;
+pub use random_tie_breaker::*;
 pub use tie_breaker::*;
 
 #[cfg(doc)]

@@ -43,7 +43,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-#[allow(unused)]
+
 pub(crate) struct TimeTablePerPointPropagator<Var> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
@@ -63,7 +63,6 @@ pub(crate) struct TimeTablePerPointPropagator<Var> {
 pub(crate) type PerPointTimeTableType<Var> = BTreeMap<u32, ResourceProfile<Var>>;
 
 impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
-    #[allow(unused)]
     pub(crate) fn new(
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,

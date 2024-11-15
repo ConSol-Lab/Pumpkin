@@ -62,11 +62,6 @@ impl WatchListCP {
         let _ = self.watchers.push(WatcherCP::default());
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn is_watching_anything(&self) -> bool {
-        self.is_watching_anything
-    }
-
     pub(crate) fn is_watching_any_backtrack_events(&self) -> bool {
         self.is_watching_any_backtrack_events
     }

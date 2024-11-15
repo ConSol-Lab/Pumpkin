@@ -207,7 +207,6 @@ impl RecursiveMinimiser {
         let _ = self.label_assignments.insert(predicate, Some(label));
     }
 
-    #[allow(dead_code)]
     fn is_predicate_label_already_computed(&self, predicate: Predicate) -> bool {
         let entry = self.label_assignments.get(&predicate);
         if let Some(label) = entry {
@@ -259,7 +258,6 @@ impl RecursiveMinimiser {
         self.label_assignments.clear();
     }
 
-    #[allow(dead_code)]
     fn is_at_max_allowed_depth(&self) -> bool {
         pumpkin_assert_moderate!(self.current_depth <= 500);
         self.current_depth == 500

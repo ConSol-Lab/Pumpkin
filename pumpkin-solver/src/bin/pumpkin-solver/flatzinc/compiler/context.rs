@@ -125,7 +125,6 @@ impl CompilationContext<'_> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn resolve_bool_variable_from_identifier(
         &self,
         identifier: &str,

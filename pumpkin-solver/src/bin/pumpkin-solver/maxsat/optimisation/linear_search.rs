@@ -18,7 +18,6 @@ pub(crate) struct LinearSearch {
 }
 
 impl LinearSearch {
-    #[allow(dead_code)]
     pub(crate) fn new(encoding: PseudoBooleanEncoding) -> LinearSearch {
         LinearSearch { encoding }
     }

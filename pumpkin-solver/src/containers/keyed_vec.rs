@@ -33,14 +33,6 @@ impl<Key, Value> Default for KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
-    #[allow(dead_code)]
-    pub(crate) fn new(elements: Vec<Value>) -> Self {
-        KeyedVec {
-            key: PhantomData,
-            elements,
-        }
-    }
-
     pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }
@@ -70,14 +62,6 @@ impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     pub(crate) fn swap(&mut self, a: usize, b: usize) {
         self.elements.swap(a, b)
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn into_entries(self) -> impl Iterator<Item = (Key, Value)> {
-        self.elements
-            .into_iter()
-            .enumerate()
-            .map(|(idx, value)| (Key::create_from_index(idx), value))
-    }
 }
 
 impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
@@ -87,17 +71,6 @@ impl<Key: StorageKey, Value: Clone> KeyedVec<Key, Value> {
 
     pub(crate) fn clear(&mut self) {
         self.elements.clear();
-    }
-
-    /// Ensure the storage can accomodate the given key. Values for keys that are between the
-    /// current last key and the given key will be `default_value`.
-    #[allow(dead_code)]
-    pub(crate) fn accomodate(&mut self, key: Key, default_value: Value) {
-        let idx = key.index();
-
-        if idx >= self.elements.len() {
-            self.elements.resize(idx + 1, default_value);
-        }
     }
 }
 
@@ -135,6 +108,6 @@ impl StorageKey for usize {
 /// A simple trait which requires that the structures implementing this trait can generate an index.
 pub trait StorageKey {
     fn index(&self) -> usize;
-    #[allow(dead_code)]
+
     fn create_from_index(index: usize) -> Self;
 }

@@ -39,7 +39,6 @@ impl Default for LearningOptions {
 pub enum LearnedNogoodSortingStrategy {
     /// Sorts based on the activity, the activity is bumped when a literal is encountered during
     /// conflict analysis.
-    #[allow(dead_code)]
     Activity,
     /// Sorts based on the literal block distance (LBD) which is an indication of how "good" a
     /// learned clause is.

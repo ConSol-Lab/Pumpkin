@@ -183,7 +183,6 @@ impl ProofLog {
         }
     }
 
-    #[allow(unused)]
     pub(crate) fn is_logging_inferences(&self) -> bool {
         matches!(
             self.internal_proof,

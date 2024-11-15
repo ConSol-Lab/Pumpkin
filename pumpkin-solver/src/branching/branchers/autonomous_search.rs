@@ -56,7 +56,7 @@ use crate::DefaultBrancher;
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 #[derive(Debug)]
-#[allow(dead_code)]
+
 pub struct AutonomousSearch<BackupBrancher> {
     /// Predicates are mapped to ids. This is used internally in the heap.
     predicate_id_info: PredicateIdGenerator,

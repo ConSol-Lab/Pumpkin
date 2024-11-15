@@ -15,8 +15,6 @@ use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::options::CumulativeOptions;
-use pumpkin_solver::predicate;
-use pumpkin_solver::predicates::Predicate;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
@@ -176,17 +174,6 @@ pub(crate) fn solve(
     }
 
     Ok(())
-}
-
-#[allow(dead_code)]
-fn get_bound_predicate(
-    objective_function: FlatzincObjective,
-    optimal_objective_value: i32,
-) -> Predicate {
-    match objective_function {
-        FlatzincObjective::Maximize(domain) => predicate![domain <= optimal_objective_value],
-        FlatzincObjective::Minimize(domain) => predicate![domain >= optimal_objective_value],
-    }
 }
 
 fn parse_and_compile(

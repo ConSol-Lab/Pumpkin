@@ -97,13 +97,6 @@ impl<
         }
     }
 
-    #[allow(dead_code)]
-    fn is_max_at_top(&self) -> bool {
-        self.values[0..self.end_position]
-            .iter()
-            .all(|v| *v <= self.values[0])
-    }
-
     /// Increments the value of the element of 'key' by 'increment'
     ///
     /// The worst-case time-complexity of this operation is O(logn); average case is likely to be

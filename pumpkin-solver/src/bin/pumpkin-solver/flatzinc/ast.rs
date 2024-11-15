@@ -370,23 +370,18 @@ pub(crate) enum SingleVarDecl {
     IntInSet {
         id: String,
         set: Vec<i128>,
-        #[allow(dead_code)]
-        expr: Option<flatzinc::IntExpr>,
+
         annos: flatzinc::expressions::Annotations,
     },
 }
 
 pub(crate) enum VarArrayDecl {
     Bool {
-        #[allow(dead_code)]
-        ix: flatzinc::IndexSet,
         id: String,
         annos: Vec<flatzinc::Annotation>,
         array_expr: Option<flatzinc::ArrayOfBoolExpr>,
     },
     Int {
-        #[allow(dead_code)]
-        ix: flatzinc::IndexSet,
         id: String,
         annos: Vec<flatzinc::Annotation>,
         array_expr: Option<flatzinc::ArrayOfIntExpr>,

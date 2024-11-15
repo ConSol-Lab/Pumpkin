@@ -12,7 +12,7 @@ use super::stopwatch::Stopwatch;
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.
 #[derive(Debug)]
-#[allow(dead_code)]
+
 pub(crate) struct OptimisationSolver {
     solver: Solver,
     objective_function: Function,
@@ -20,7 +20,6 @@ pub(crate) struct OptimisationSolver {
 }
 
 impl OptimisationSolver {
-    #[allow(dead_code)]
     pub(crate) fn new(
         csp_solver: Solver,
         objective_function: Function,
@@ -35,7 +34,6 @@ impl OptimisationSolver {
 }
 
 impl OptimisationSolver {
-    #[allow(dead_code)]
     pub(crate) fn solve(
         &mut self,
         termination: &mut impl TerminationCondition,

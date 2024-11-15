@@ -25,7 +25,6 @@ pub(crate) fn run(
     for array_decl in &ast.variable_arrays {
         match array_decl {
             VarArrayDecl::Bool {
-                ix: _,
                 id,
                 annos,
                 array_expr,
@@ -36,7 +35,7 @@ pub(crate) fn run(
                         ArrayOfBoolExpr::Array(array) => array
                             .iter()
                             .map(|expr| match expr {
-                                BoolExpr::Bool(true) => context.true_literal,  // context.constant_bool_true,
+                                BoolExpr::Bool(true) => context.true_literal, // context.constant_bool_true,
                                 BoolExpr::Bool(false) => context.false_literal, // context.constant_bool_false,
                                 BoolExpr::VarParIdentifier(identifier) => {
                                     let other_id = context.identifiers.get_interned(identifier);
@@ -69,7 +68,6 @@ pub(crate) fn run(
             }
 
             VarArrayDecl::Int {
-                ix: _,
                 id,
                 annos,
                 array_expr,

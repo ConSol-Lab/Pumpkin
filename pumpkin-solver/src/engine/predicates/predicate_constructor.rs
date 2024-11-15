@@ -119,7 +119,7 @@ macro_rules! predicate {
         $($var).+$([$index])?.equality_predicate($value)
     }};
     ($($var:ident).+$([$index:expr])? != $value:expr) => {{
-        #[allow(unused)]
+
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.disequality_predicate($value)
     }};

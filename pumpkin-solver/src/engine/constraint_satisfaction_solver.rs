@@ -311,14 +311,8 @@ impl ConstraintSatisfactionSolver {
         SolutionReference::new(&self.assignments)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn is_conflicting(&self) -> bool {
         self.state.is_conflicting()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn declare_ready(&mut self) {
-        self.state.declare_ready()
     }
 
     /// Conclude the proof with the unsatisfiable claim.

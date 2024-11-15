@@ -143,16 +143,6 @@ impl TestSolver {
             .is_some_and(|truth_value| !truth_value)
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn set_lower_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments.tighten_lower_bound(var, bound, None)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn set_upper_bound(&mut self, var: DomainId, bound: i32) -> Result<(), EmptyDomain> {
-        self.assignments.tighten_upper_bound(var, bound, None)
-    }
-
     pub(crate) fn upper_bound(&self, var: DomainId) -> i32 {
         self.assignments.get_upper_bound(var)
     }
