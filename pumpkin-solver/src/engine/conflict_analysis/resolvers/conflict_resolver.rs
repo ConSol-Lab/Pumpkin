@@ -4,7 +4,7 @@ use crate::engine::conflict_analysis::LearnedNogood;
 pub trait ConflictResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood>;
 
-    #[allow(clippy::result_unit_err)]
+    #[allow(clippy::result_unit_err, reason = "unknown, this should be refactored")]
     fn process(
         &mut self,
         context: &mut ConflictAnalysisContext,

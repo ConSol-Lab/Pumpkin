@@ -33,7 +33,7 @@ use crate::flatzinc::error::FlatZincError;
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct FlatZincOptions {
     /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
     pub(crate) free_search: bool,
@@ -44,18 +44,6 @@ pub(crate) struct FlatZincOptions {
 
     /// Options used for the cumulative constraint (see [`cumulative`]).
     pub(crate) cumulative_options: CumulativeOptions,
-}
-
-#[cfg(test)]
-#[allow(clippy::derivable_impls)]
-impl Default for FlatZincOptions {
-    fn default() -> Self {
-        Self {
-            free_search: false,
-            all_solutions: false,
-            cumulative_options: CumulativeOptions::default(),
-        }
-    }
 }
 
 pub(crate) fn solve(

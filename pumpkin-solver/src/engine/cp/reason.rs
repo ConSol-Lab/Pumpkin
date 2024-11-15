@@ -48,9 +48,12 @@ impl ReasonStore {
         let _ = self.trail.synchronise(level);
     }
 
-    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.trail.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Get the propagator which generated the given reason.

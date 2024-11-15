@@ -1,7 +1,7 @@
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
-use crate::conflict_resolution::ConflictAnalysisContext;
+use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_moderate;

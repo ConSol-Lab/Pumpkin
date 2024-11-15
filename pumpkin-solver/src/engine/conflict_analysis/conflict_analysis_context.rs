@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use drcp_format::steps::StepId;
 
 use super::minimisers::SemanticMinimiser;
@@ -20,7 +22,6 @@ use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
 // Does not have debug because of the brancher does not support it. Could be thought through later.
-#[allow(missing_debug_implementations)]
 pub struct ConflictAnalysisContext<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
@@ -42,6 +43,12 @@ pub struct ConflictAnalysisContext<'a> {
 
     pub(crate) is_completing_proof: bool,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
+}
+
+impl Debug for ConflictAnalysisContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(std::any::type_name::<Self>()).finish()
+    }
 }
 
 impl<'a> ConflictAnalysisContext<'a> {

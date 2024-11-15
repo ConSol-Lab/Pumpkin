@@ -53,7 +53,6 @@ pub type DefaultBrancher =
 
 impl DefaultBrancher {
     pub fn default_over_all_variables(solver: &ConstraintSatisfactionSolver) -> DefaultBrancher {
-        #[allow(deprecated)]
         let variables: Vec<DomainId> = solver.assignments.get_domains().collect::<Vec<_>>();
 
         IndependentVariableValueBrancher {

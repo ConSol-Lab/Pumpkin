@@ -20,8 +20,7 @@ use pumpkin_solver::termination::Indefinite;
 use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::Solver;
 
-#[allow(clippy::upper_case_acronyms)]
-struct BIBD {
+struct Bibd {
     /// The number of rows in the matrix.
     rows: u32,
     /// The number of columns in the matrix.
@@ -34,8 +33,8 @@ struct BIBD {
     max_dot_product: u32,
 }
 
-impl BIBD {
-    fn from_args() -> Option<BIBD> {
+impl Bibd {
+    fn from_args() -> Option<Bibd> {
         let args = std::env::args()
             .skip(1)
             .map(|arg| arg.parse::<u32>())
@@ -63,7 +62,7 @@ impl BIBD {
     }
 }
 
-fn create_matrix(solver: &mut Solver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
+fn create_matrix(solver: &mut Solver, bibd: &Bibd) -> Vec<Vec<DomainId>> {
     (0..bibd.rows)
         .map(|_| {
             (0..bibd.columns)
@@ -76,7 +75,7 @@ fn create_matrix(solver: &mut Solver, bibd: &BIBD) -> Vec<Vec<DomainId>> {
 fn main() {
     env_logger::init();
 
-    let Some(bibd) = BIBD::from_args() else {
+    let Some(bibd) = Bibd::from_args() else {
         eprintln!("Usage: {} <v> <k> <l>", std::env::args().next().unwrap());
         return;
     };

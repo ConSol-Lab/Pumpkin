@@ -68,7 +68,6 @@ pub(crate) trait PseudoBooleanConstraintEncoderInterface {
 /// Specifies the type of pseudo-boolean encoding which is used by the
 /// [`PseudoBooleanConstraintEncoder`].
 #[derive(Clone, Copy, Debug, ValueEnum)]
-#[allow(clippy::upper_case_acronyms)]
 pub(crate) enum PseudoBooleanEncoding {
     /// Specifies the usage of the generalized totalizer encoding for pseudo-boolean constraints
     /// \[1\].
@@ -202,7 +201,6 @@ impl PseudoBooleanConstraintEncoder {
         weighted_literals
     }
 
-    #[allow(deprecated)]
     pub(crate) fn constrain_at_most_k(
         &mut self,
         k: u64,

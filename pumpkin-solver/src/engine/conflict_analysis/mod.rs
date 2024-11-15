@@ -6,7 +6,7 @@ mod learned_nogood;
 mod minimisers;
 mod resolvers;
 
-pub use conflict_analysis_context::ConflictAnalysisContext;
-pub use learned_nogood::*;
+pub(crate) use conflict_analysis_context::ConflictAnalysisContext;
+pub(crate) use learned_nogood::*;
 pub(crate) use minimisers::*;
 pub use resolvers::*;

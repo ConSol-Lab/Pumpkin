@@ -74,9 +74,6 @@ pub mod options {
 }
 
 pub mod conflict_resolution {
-    pub use crate::engine::conflict_analysis::ConflictAnalysisContext;
-    pub use crate::engine::conflict_analysis::ConflictResolver;
-    pub use crate::engine::conflict_analysis::LearnedNogood;
     pub use crate::engine::conflict_analysis::NoLearningResolver;
     pub use crate::engine::conflict_analysis::ResolutionResolver;
 }
