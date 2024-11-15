@@ -1496,7 +1496,7 @@ impl CSPSolverState {
         }
     }
 
-    pub fn get_conflict_info(&self) -> StoredConflictInfo {
+    pub(crate) fn get_conflict_info(&self) -> StoredConflictInfo {
         match &self.internal_state {
             CSPSolverStateInternal::Conflict { conflict_info } => conflict_info.clone(),
             CSPSolverStateInternal::InfeasibleUnderAssumptions {

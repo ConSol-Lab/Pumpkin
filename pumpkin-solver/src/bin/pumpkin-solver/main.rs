@@ -623,15 +623,14 @@ fn stringify_solution(
 ) -> String {
     solution
         .get_domains()
-        .skip(1)
         .take(number_of_variables)
         .map(|domain_id| {
             let value = solution.get_integer_value(domain_id);
             pumpkin_assert_simple!((0..=1).contains(&value));
             if value == 1 {
-                format!("{} ", domain_id.id - 1)
+                format!("{} ", domain_id.id)
             } else {
-                format!("-{} ", domain_id.id - 1)
+                format!("-{} ", domain_id.id)
             }
         })
         .chain(if terminate_with_zero {

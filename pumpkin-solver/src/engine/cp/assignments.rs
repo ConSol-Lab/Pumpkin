@@ -211,11 +211,11 @@ impl Assignments {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => lower_bound == self.domains[domain_id].initial_lower_bound(),
+            } => lower_bound <= self.domains[domain_id].initial_lower_bound(),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => upper_bound == self.domains[domain_id].initial_upper_bound(),
+            } => upper_bound >= self.domains[domain_id].initial_upper_bound(),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant: _,

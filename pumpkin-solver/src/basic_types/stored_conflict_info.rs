@@ -11,7 +11,7 @@ use crate::ConstraintOperationError;
 /// 1) A propagator explicitly detects a conflict.
 /// 2) A propagator post a domain change that results in a variable having an empty domain.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum StoredConflictInfo {
+pub(crate) enum StoredConflictInfo {
     Propagator {
         conflict_nogood: PropositionalConjunction,
         propagator_id: PropagatorId,
