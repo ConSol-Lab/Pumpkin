@@ -190,7 +190,7 @@ impl ConflictResolver for ResolutionResolver {
                         context.proof_log,
                         context.unit_nogood_step_ids,
                     );
-                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be a lower-bound predicate but was {predicate}");
+                    pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate() , "If the final predicate in the conflict nogood is not a decision predicate then it should be either a lower-bound predicate or a not-equals predicate but was {predicate}");
                     pumpkin_assert_simple!(
                         reason.len() == 1 && reason[0].is_lower_bound_predicate(),
                         "The reason for the decision predicate should be a lower-bound predicate but was {}", reason[0]

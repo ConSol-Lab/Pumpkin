@@ -18,6 +18,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::WatchListCP;
+use crate::predicate;
 use crate::proof::ProofLog;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -225,7 +226,21 @@ impl<'a> ConflictAnalysisContext<'a> {
             {
                 // This means that a unit nogood was propagated, we indicate that this nogood step
                 // was used
-                let step_id = unit_nogood_step_ids.get(&predicate).expect("Expected unit propagation without reason by the nogood propagator to have a step ID");
+                //
+                // It could be that the predicate is implied by another unit nogood
+
+                let step_id = unit_nogood_step_ids
+                    .get(&predicate)
+                    .or_else(|| {
+                        // It could be the case that we attempt to get the reason for the predicate
+                        // [x >= v] but that the corresponding unit nogood idea is the one for the
+                        // predicate [x == v]
+                        let domain_id = predicate.get_domain();
+                        let right_hand_side = predicate.get_right_hand_side();
+
+                        unit_nogood_step_ids.get(&predicate!(domain_id == right_hand_side))
+                    })
+                    .expect("Expected to be able to retrieve step id for unit nogood");
                 proof_log.add_propagation(*step_id);
             } else {
                 // Otherwise we log the inference which was used to derive the nogood
