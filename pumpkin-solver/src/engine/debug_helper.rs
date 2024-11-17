@@ -236,7 +236,8 @@ impl DebugHelper {
                     // or
                     //
                     // The conflict explanation should be a subset of the reason literals for the
-                    // propagation
+                    // propagation or all of the reason literals should be in the conflict
+                    // explanation
 
                     assert!(
                         {
@@ -252,10 +253,13 @@ impl DebugHelper {
 
                             // If this is not the case then we check whether the explanation is a
                             // subset of the premises
-                            if let Inconsistency::Conflict(found_inconsistency) = conflict {
+                            if let Inconsistency::Conflict(ref found_inconsistency) = conflict {
                                 found_inconsistency
                                     .iter()
                                     .all(|predicate| reason.contains(predicate))
+                                    || reason
+                                        .iter()
+                                        .all(|predicate| found_inconsistency.contains(*predicate))
                             } else {
                                 false
                             }
@@ -264,7 +268,8 @@ impl DebugHelper {
                          Propagator: '{}'\n
                          Propagator id: {propagator_id}\n
                          Reported reason: {reason:?}\n
-                         Reported propagation: {propagated_predicate}\n",
+                         Reported propagation: {propagated_predicate}\n
+                         Reported Conflict: {conflict:?}",
                         propagator.name()
                     );
                 } else {
