@@ -688,7 +688,7 @@ impl NogoodPropagator {
                 // lower-bound and upper-bound but whether the value is explicitly not in the
                 // domain
                 let value_explicitly_removed = new_lower_bound < right_hand_side
-                    && right_hand_side < new_lower_bound
+                    && right_hand_side < new_upper_bound
                     && context
                         .is_predicate_satisfied(predicate!(updated_domain_id != right_hand_side));
                 value_removed_by_upper_bound_change
