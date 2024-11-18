@@ -9,7 +9,6 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
@@ -34,7 +33,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
 
-    pub(crate) last_notified_cp_trail_index: usize,
+    pub(crate) last_notified_cp_trail_index: &'a mut usize,
     pub(crate) watch_list_cp: &'a mut WatchListCP,
     pub(crate) propagator_queue: &'a mut PropagatorQueue,
     pub(crate) event_drain: &'a mut Vec<(IntDomainEvent, DomainId)>,
@@ -70,65 +69,18 @@ impl<'a> ConflictAnalysisContext<'a> {
 
     /// Backtracks the solver to the provided backtrack level.
     pub(crate) fn backtrack(&mut self, backtrack_level: usize) {
-        pumpkin_assert_simple!(backtrack_level < self.assignments.get_decision_level());
-
-        self.brancher.on_backtrack();
-
-        self.assignments
-            .synchronise(
-                backtrack_level,
-                self.last_notified_cp_trail_index,
-                self.watch_list_cp.is_watching_any_backtrack_events(),
-            )
-            .iter()
-            .for_each(|(domain_id, previous_value)| {
-                self.brancher
-                    .on_unassign_integer(*domain_id, *previous_value)
-            });
-        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
-
-        self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
-        // For now all propagators are called to synchronise, in the future this will be improved in
-        // two ways:
-        //      + allow incremental synchronisation
-        //      + only call the subset of propagators that were notified since last backtrack
-        for propagator in self.propagators.iter_propagators_mut() {
-            let context = PropagationContext::new(self.assignments);
-            propagator.synchronise(context);
-        }
-
-        self.brancher.synchronise(self.assignments);
-        let _ = self.process_backtrack_events();
-
-        self.event_drain.clear();
-    }
-
-    /// Processes the backtrack events which have been created when backtracking
-    fn process_backtrack_events(&mut self) -> bool {
-        // If there are no variables being watched then there is no reason to perform these
-        // operations
-        if self.watch_list_cp.is_watching_any_backtrack_events() {
-            self.backtrack_event_drain
-                .extend(self.assignments.drain_backtrack_domain_events());
-
-            if self.backtrack_event_drain.is_empty() {
-                return false;
-            }
-
-            for (event, domain) in self.backtrack_event_drain.drain(..) {
-                for propagator_var in self
-                    .watch_list_cp
-                    .get_backtrack_affected_propagators(event, domain)
-                {
-                    let propagator = &mut self.propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(self.assignments);
-
-                    propagator.notify_backtrack(context, propagator_var.variable, event.into())
-                }
-            }
-        }
-        true
+        ConstraintSatisfactionSolver::backtrack(
+            self.assignments,
+            self.last_notified_cp_trail_index,
+            self.reason_store,
+            self.propagator_queue,
+            self.watch_list_cp,
+            self.propagators,
+            self.event_drain,
+            self.backtrack_event_drain,
+            backtrack_level,
+            self.brancher,
+        )
     }
 
     /// Returns a nogood which led to the conflict; if `is_completing_proof` is set to true, then

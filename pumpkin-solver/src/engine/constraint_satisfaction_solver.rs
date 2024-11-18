@@ -213,24 +213,27 @@ impl ConstraintSatisfactionSolver {
         PropagatorId(0)
     }
 
-    fn process_backtrack_events(&mut self) -> bool {
+    fn process_backtrack_events(
+        watch_list_cp: &mut WatchListCP,
+        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
+        assignments: &mut Assignments,
+        propagators: &mut PropagatorStore,
+    ) -> bool {
         // If there are no variables being watched then there is no reason to perform these
         // operations
-        if self.watch_list_cp.is_watching_any_backtrack_events() {
-            self.backtrack_event_drain
-                .extend(self.assignments.drain_backtrack_domain_events());
+        if watch_list_cp.is_watching_any_backtrack_events() {
+            backtrack_event_drain.extend(assignments.drain_backtrack_domain_events());
 
-            if self.backtrack_event_drain.is_empty() {
+            if backtrack_event_drain.is_empty() {
                 return false;
             }
 
-            for (event, domain) in self.backtrack_event_drain.drain(..) {
-                for propagator_var in self
-                    .watch_list_cp
-                    .get_backtrack_affected_propagators(event, domain)
+            for (event, domain) in backtrack_event_drain.drain(..) {
+                for propagator_var in
+                    watch_list_cp.get_backtrack_affected_propagators(event, domain)
                 {
-                    let propagator = &mut self.propagators[propagator_var.propagator];
-                    let context = PropagationContext::new(&self.assignments);
+                    let propagator = &mut propagators[propagator_var.propagator];
+                    let context = PropagationContext::new(assignments);
 
                     propagator.notify_backtrack(context, propagator_var.variable, event.into())
                 }
@@ -357,7 +360,7 @@ impl ConstraintSatisfactionSolver {
             brancher: &mut DummyBrancher,
             semantic_minimiser: &mut self.semantic_minimiser,
             propagators: &mut self.propagators,
-            last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+            last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
             watch_list_cp: &mut self.watch_list_cp,
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
@@ -639,7 +642,7 @@ impl ConstraintSatisfactionSolver {
                     brancher,
                     semantic_minimiser: &mut self.semantic_minimiser,
                     propagators: &mut self.propagators,
-                    last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+                    last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
                     watch_list_cp: &mut self.watch_list_cp,
                     propagator_queue: &mut self.propagator_queue,
                     event_drain: &mut self.event_drain,
@@ -707,7 +710,18 @@ impl ConstraintSatisfactionSolver {
 
     pub fn restore_state_at_root(&mut self, brancher: &mut impl Brancher) {
         if self.assignments.get_decision_level() != 0 {
-            self.backtrack(0, brancher);
+            ConstraintSatisfactionSolver::backtrack(
+                &mut self.assignments,
+                &mut self.last_notified_cp_trail_index,
+                &mut self.reason_store,
+                &mut self.propagator_queue,
+                &mut self.watch_list_cp,
+                &mut self.propagators,
+                &mut self.event_drain,
+                &mut self.backtrack_event_drain,
+                0,
+                brancher,
+            );
             self.state.declare_ready();
         }
     }
@@ -867,7 +881,7 @@ impl ConstraintSatisfactionSolver {
             brancher,
             semantic_minimiser: &mut self.semantic_minimiser,
             propagators: &mut self.propagators,
-            last_notified_cp_trail_index: self.last_notified_cp_trail_index,
+            last_notified_cp_trail_index: &mut self.last_notified_cp_trail_index,
             watch_list_cp: &mut self.watch_list_cp,
             propagator_queue: &mut self.propagator_queue,
             event_drain: &mut self.event_drain,
@@ -996,44 +1010,75 @@ impl ConstraintSatisfactionSolver {
 
         self.counters.engine_statistics.num_restarts += 1;
 
-        self.backtrack(0, brancher);
+        ConstraintSatisfactionSolver::backtrack(
+            &mut self.assignments,
+            &mut self.last_notified_cp_trail_index,
+            &mut self.reason_store,
+            &mut self.propagator_queue,
+            &mut self.watch_list_cp,
+            &mut self.propagators,
+            &mut self.event_drain,
+            &mut self.backtrack_event_drain,
+            0,
+            brancher,
+        );
 
         self.restart_strategy.notify_restart();
     }
 
-    pub(crate) fn backtrack(&mut self, backtrack_level: usize, brancher: &mut impl Brancher) {
-        pumpkin_assert_simple!(backtrack_level < self.get_decision_level());
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
+    )]
+    pub(crate) fn backtrack<BrancherType: Brancher + ?Sized>(
+        assignments: &mut Assignments,
+        last_notified_cp_trail_index: &mut usize,
+        reason_store: &mut ReasonStore,
+        propagator_queue: &mut PropagatorQueue,
+        watch_list_cp: &mut WatchListCP,
+        propagators: &mut PropagatorStore,
+        event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
+        backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
+        backtrack_level: usize,
+        brancher: &mut BrancherType,
+    ) {
+        pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
         brancher.on_backtrack();
 
-        self.assignments
+        assignments
             .synchronise(
                 backtrack_level,
-                self.last_notified_cp_trail_index,
-                self.watch_list_cp.is_watching_any_backtrack_events(),
+                *last_notified_cp_trail_index,
+                watch_list_cp.is_watching_any_backtrack_events(),
             )
             .iter()
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
-        self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
+        *last_notified_cp_trail_index = assignments.num_trail_entries();
 
-        self.reason_store.synchronise(backtrack_level);
-        self.propagator_queue.clear();
+        reason_store.synchronise(backtrack_level);
+        propagator_queue.clear();
         // For now all propagators are called to synchronise, in the future this will be improved in
         // two ways:
         //      + allow incremental synchronisation
         //      + only call the subset of propagators that were notified since last backtrack
-        for propagator in self.propagators.iter_propagators_mut() {
-            let context = PropagationContext::new(&self.assignments);
+        for propagator in propagators.iter_propagators_mut() {
+            let context = PropagationContext::new(assignments);
             propagator.synchronise(context);
         }
 
-        brancher.synchronise(&self.assignments);
+        brancher.synchronise(assignments);
 
-        let _ = self.process_backtrack_events();
+        let _ = ConstraintSatisfactionSolver::process_backtrack_events(
+            watch_list_cp,
+            backtrack_event_drain,
+            assignments,
+            propagators,
+        );
 
-        self.event_drain.clear();
+        event_drain.clear();
     }
 
     pub(crate) fn compute_reason_for_empty_domain(
