@@ -758,7 +758,9 @@ impl ConstraintSatisfactionSolver {
                 // place. Since one assumption is posted per decision level, all assumptions are
                 // assigned when the decision level is strictly larger than the number of
                 // assumptions.
-                if self.restart_strategy.should_restart() {
+                if self.get_decision_level() > self.assumptions.len()
+                    && self.restart_strategy.should_restart()
+                {
                     self.restart_during_search(brancher);
                 }
 
