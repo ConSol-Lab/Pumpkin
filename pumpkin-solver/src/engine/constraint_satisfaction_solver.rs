@@ -1627,12 +1627,12 @@ mod tests {
     use super::ConstraintSatisfactionSolver;
     use super::CoreExtractionResult;
     use crate::basic_types::CSPSolverExecutionFlag;
-    use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::propagators::linear_not_equal::LinearNotEqualPropagator;
     use crate::termination::Indefinite;
     use crate::variables::TransformableVariable;
+    use crate::DefaultBrancher;
 
     fn is_same_core(core1: &[Predicate], core2: &[Predicate]) -> bool {
         core1.len() == core2.len() && core2.iter().all(|lit| core1.contains(lit))
@@ -1657,7 +1657,7 @@ mod tests {
         expected_flag: CSPSolverExecutionFlag,
         expected_result: CoreExtractionResult,
     ) {
-        let mut brancher = IndependentVariableValueBrancher::default_over_all_variables(&solver);
+        let mut brancher = DefaultBrancher::default_over_all_variables(&solver.assignments);
         let flag = solver.solve_under_assumptions(&assumptions, &mut Indefinite, &mut brancher);
         assert!(flag == expected_flag, "The flags do not match.");
 

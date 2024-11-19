@@ -146,11 +146,22 @@ impl ConflictResolver for ResolutionResolver {
                             context.unit_nogood_step_ids,
                         );
                         pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate");
-                        pumpkin_assert_simple!(
-                                reason.len() == 1 && reason[0].is_lower_bound_predicate() ,
-                                "The reason for the only propagated predicates left on the trail should be lower-bound predicates"
+
+                        if reason.is_empty() {
+                            // In the case when the proof is being completed, it could be the case
+                            // that the reason for a root-level propagation is empty; this
+                            // predicate will be filtered out by the semantic minimisation
+                            pumpkin_assert_simple!(context.is_completing_proof);
+                            predicate
+                        } else {
+                            pumpkin_assert_simple!(
+                                reason.len() == 1 && reason[0].is_lower_bound_predicate(),
+                                "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
+                                reason
                             );
-                        reason[0]
+
+                            reason[0]
+                        }
                     };
 
                     // We push to `predicates_lower_decision_level` since this structure will be

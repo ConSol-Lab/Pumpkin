@@ -2,8 +2,8 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::InDomainRandom;
-use crate::branching::variable_selection::ProportionalDomainSize;
+use crate::branching::value_selection::InDomainMin;
+use crate::branching::variable_selection::Smallest;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::containers::KeyValueHeap;
@@ -11,8 +11,6 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
-use crate::variables::DomainId;
-#[cfg(doc)]
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
@@ -90,18 +88,14 @@ const DEFAULT_VSIDS_MAX_THRESHOLD: f64 = 1e100;
 const DEFAULT_VSIDS_DECAY_FACTOR: f64 = 0.95;
 const DEFAULT_VSIDS_VALUE: f64 = 0.0;
 
-impl
-    AutonomousSearch<
-        IndependentVariableValueBrancher<DomainId, ProportionalDomainSize, InDomainRandom>,
-    >
-{
+impl DefaultBrancher {
     /// Creates a new instance with default values for
     /// the parameters (`1.0` for the increment, `1e100` for the max threshold,
     /// `0.95` for the decay factor and `0.0` for the initial VSIDS value).
     ///
     /// If there are no more predicates left to select, this [`Brancher`] switches to
-    /// [`ProportionalDomainSize`] with [`InDomainRandom`].
-    pub fn default_over_all_variables(assignments: &Assignments) -> Self {
+    /// [`Smallest`] with [`InDomainMin`].
+    pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         let variables = assignments.get_domains().collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
@@ -112,8 +106,8 @@ impl
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                ProportionalDomainSize::new(&variables),
-                InDomainRandom,
+                Smallest::new(&variables),
+                InDomainMin,
             ),
         }
     }

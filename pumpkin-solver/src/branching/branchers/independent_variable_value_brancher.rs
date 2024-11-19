@@ -4,15 +4,12 @@
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
-use crate::branching::value_selection::InDomainMin;
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::InputOrder;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::ConstraintSatisfactionSolver;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -43,21 +40,6 @@ where
         IndependentVariableValueBrancher {
             variable_selector: var_selector,
             value_selector: val_selector,
-            variable_type: PhantomData,
-        }
-    }
-}
-
-pub type DefaultBrancher =
-    IndependentVariableValueBrancher<DomainId, InputOrder<DomainId>, InDomainMin>;
-
-impl DefaultBrancher {
-    pub fn default_over_all_variables(solver: &ConstraintSatisfactionSolver) -> DefaultBrancher {
-        let variables: Vec<DomainId> = solver.assignments.get_domains().collect::<Vec<_>>();
-
-        IndependentVariableValueBrancher {
-            variable_selector: InputOrder::new(&variables),
-            value_selector: InDomainMin {},
             variable_type: PhantomData,
         }
     }

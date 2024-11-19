@@ -9,10 +9,11 @@ use crate::basic_types::HashSet;
 use crate::basic_types::Solution;
 use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
-use crate::branching::value_selection::InDomainRandom;
+use crate::branching::tie_breaking::InOrderTieBreaker;
+use crate::branching::value_selection::InDomainMin;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
-use crate::branching::variable_selection::ProportionalDomainSize;
+use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
@@ -729,8 +730,8 @@ impl Solver {
 /// A brancher which makes use of VSIDS \[1\] and solution-based phase saving (both adapted for CP).
 ///
 /// If VSIDS does not contain any (unfixed) predicates then it will default to the
-/// [`IndependentVariableValueBrancher`] using [`ProportionalDomainSize`] for variable selection
-/// (over the variables in the order in which they were defined) and [`InDomainRandom`] for value
+/// [`IndependentVariableValueBrancher`] using [`Smallest`] for variable selection
+/// (over the variables in the order in which they were defined) and [`InDomainMin`] for value
 /// selection.
 ///
 /// # Bibliography
@@ -741,5 +742,9 @@ impl Solver {
 /// value-selection heuristic to simulate local search behavior in complete solvers’, in the
 /// proceedings of the Principles and Practice of Constraint Programming (CP 2018).
 pub type DefaultBrancher = AutonomousSearch<
-    IndependentVariableValueBrancher<DomainId, ProportionalDomainSize, InDomainRandom>,
+    IndependentVariableValueBrancher<
+        DomainId,
+        Smallest<DomainId, InOrderTieBreaker<DomainId, i32>>,
+        InDomainMin,
+    >,
 >;
