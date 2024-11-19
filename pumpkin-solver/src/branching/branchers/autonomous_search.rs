@@ -413,13 +413,13 @@ mod tests {
         let result = brancher.next_decision(&mut SelectionContext::new(
             &assignments,
             &mut TestRandom {
-                usizes: vec![7],
-                weighted_choice: |_| Some(0),
+                usizes: vec![],
+                weighted_choice: |_| unreachable!(),
                 ..Default::default()
             },
         ));
 
-        assert_eq!(result, Some(predicate!(x == 7)));
+        assert_eq!(result, Some(predicate!(x <= 0)));
     }
 
     #[test]
