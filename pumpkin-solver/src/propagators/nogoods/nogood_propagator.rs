@@ -6,6 +6,7 @@ use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
@@ -28,6 +29,7 @@ use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
+use crate::engine::SolverStatistics;
 use crate::predicate;
 use crate::propagators::nogoods::Nogood;
 use crate::propagators::nogoods::NogoodWatcher;
@@ -825,6 +827,7 @@ impl NogoodPropagator {
         &mut self,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
+        statistics: &mut SolverStatistics,
     ) {
         // We treat unit nogoods in a special way by adding it as a permanent nogood at the
         // root-level; this is essentially the same as adding a predicate at the root level
@@ -843,6 +846,11 @@ impl NogoodPropagator {
         let lbd = self
             .lbd_helper
             .compute_lbd(&nogood.as_slice()[1..], context.assignments());
+
+        statistics
+            .learned_clause_statistics
+            .average_lbd
+            .add_term(lbd as u64);
 
         // Add the nogood to the database.
         //

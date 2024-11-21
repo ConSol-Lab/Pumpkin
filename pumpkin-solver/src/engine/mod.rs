@@ -19,3 +19,4 @@ pub(crate) use debug_helper::DebugHelper;
 pub(crate) use domain_events::DomainEvents;
 pub use restart_strategy::RestartOptions;
 pub(crate) use restart_strategy::RestartStrategy;
+pub(crate) use solver_statistics::SolverStatistics;
