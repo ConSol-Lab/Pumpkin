@@ -145,7 +145,6 @@ impl ConflictResolver for ResolutionResolver {
                             context.proof_log,
                             context.unit_nogood_step_ids,
                         );
-                        pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate");
 
                         if reason.is_empty() {
                             // In the case when the proof is being completed, it could be the case
@@ -154,6 +153,7 @@ impl ConflictResolver for ResolutionResolver {
                             pumpkin_assert_simple!(context.is_completing_proof);
                             predicate
                         } else {
+                            pumpkin_assert_simple!(predicate.is_lower_bound_predicate() || predicate.is_not_equal_predicate(), "A non-decision predicate in the nogood should be either a lower-bound or a not-equals predicate but it was {predicate} with reason {reason:?}");
                             pumpkin_assert_simple!(
                                 reason.len() == 1 && reason[0].is_lower_bound_predicate(),
                                 "The reason for the only propagated predicates left on the trail should be lower-bound predicates, but the reason for {predicate} was {:?}",
