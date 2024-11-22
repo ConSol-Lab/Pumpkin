@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 
 macro_rules! submodule {
     ($module:ident, $python:ident, $m:ident) => {{
-        let submodule = PyModule::new_bound($m.py(), stringify!($module))?;
+        let submodule = PyModule::new($m.py(), stringify!($module))?;
 
         // See https://github.com/PyO3/pyo3/issues/1517#issuecomment-808664021
         pyo3::py_run!(
