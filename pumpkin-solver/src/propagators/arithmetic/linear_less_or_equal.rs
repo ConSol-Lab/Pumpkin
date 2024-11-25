@@ -141,11 +141,9 @@ where
             return Err(conjunction.into());
         }
 
-        for (i, x_i) in self.x.iter().enumerate() {
-            let bound = match TryInto::<i32>::try_into(self.lower_bound_left_hand_side) {
-                Ok(lower_bound_left_hand_side) => {
-                    self.c - (lower_bound_left_hand_side - context.lower_bound(x_i))
-                }
+        let lower_bound_left_hand_side =
+            match TryInto::<i32>::try_into(self.lower_bound_left_hand_side) {
+                Ok(bound) => bound,
                 Err(_) if self.lower_bound_left_hand_side.is_positive() => {
                     // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
                     // overflow (hence the check that the lower-bound on the left-hand side is
@@ -164,6 +162,9 @@ where
                     return Ok(());
                 }
             };
+
+        for (i, x_i) in self.x.iter().enumerate() {
+            let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
                 let reason: PropositionalConjunction = self
@@ -196,29 +197,30 @@ where
             .map(|var| context.lower_bound(var) as i64)
             .sum::<i64>();
 
+        let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
+        {
+            Ok(bound) => bound,
+            Err(_) if self.lower_bound_left_hand_side.is_positive() => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // overflow (hence the check that the lower-bound on the left-hand side is
+                // positive)
+                //
+                // This means that the lower-bounds of the current variables will always be
+                // higher than the right-hand side (with a maximum value of i32). We thus
+                // return a conflict
+                return Err(self.create_conflict_reason(context.as_readonly()).into());
+            }
+            Err(_) => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // underflow
+                //
+                // This means that the constraint is always satisfied
+                return Ok(());
+            }
+        };
+
         for (i, x_i) in self.x.iter().enumerate() {
-            let bound = match TryInto::<i32>::try_into(lower_bound_left_hand_side) {
-                Ok(lower_bound_left_hand_side) => {
-                    self.c - (lower_bound_left_hand_side - context.lower_bound(x_i))
-                }
-                Err(_) if lower_bound_left_hand_side.is_positive() => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // overflow (hence the check that the lower-bound on the left-hand side is
-                    // positive)
-                    //
-                    // This means that the lower-bounds of the current variables will always be
-                    // higher than the right-hand side (with a maximum value of i32). We thus
-                    // return a conflict
-                    return Err(self.create_conflict_reason(context.as_readonly()).into());
-                }
-                Err(_) => {
-                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
-                    // underflow
-                    //
-                    // This means that the constraint is always satisfied
-                    return Ok(());
-                }
-            };
+            let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
                 let reason: PropositionalConjunction = self
