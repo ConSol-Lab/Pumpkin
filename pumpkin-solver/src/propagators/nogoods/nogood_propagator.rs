@@ -1362,6 +1362,15 @@ impl NogoodPropagator {
                 id: nogood.0 as u32,
             };
 
+            if nogood.1.is_deleted {
+                // If the clause is deleted then it will have no watchers
+                assert!(
+                    !is_watching(nogood.1.predicates[0], nogood_id)
+                        && !is_watching(nogood.1.predicates[1], nogood_id)
+                );
+                continue;
+            }
+
             if !(is_watching(nogood.1.predicates[0], nogood_id)
                 && is_watching(nogood.1.predicates[1], nogood_id))
             {
