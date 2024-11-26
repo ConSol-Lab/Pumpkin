@@ -38,6 +38,16 @@ impl ReasonStore {
             .map(|reason| reason.1.compute(assignments, reason.0, propagators))
     }
 
+    pub fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
+        match self.trail.get(reference.0 as usize) {
+            Some(reason) => match &reason.1 {
+                Reason::Eager(_) => None,
+                Reason::DynamicLazy(code) => Some(code),
+            },
+            None => None,
+        }
+    }
+
     pub fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }

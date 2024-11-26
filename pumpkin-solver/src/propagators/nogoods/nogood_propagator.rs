@@ -98,7 +98,7 @@ impl NogoodPropagator {
     /// - The predicate at position 0 is falsified; this is one of the conventions of the nogood
     ///   propagator
     /// - The reason for the predicate is the nogood propagator
-    fn is_clause_propagating(
+    fn is_nogood_propagating(
         &self,
         context: PropagationContext,
         reason_store: &ReasonStore,
@@ -112,8 +112,15 @@ impl NogoodPropagator {
             let trail_entry = context.assignments().get_trail_entry(trail_position);
             if let Some(reason_ref) = trail_entry.reason {
                 let propagator_id = reason_store.get_propagator(reason_ref);
-                return trail_entry.predicate == self.nogoods[id].predicates[0]
-                    && propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id();
+                let code = reason_store.get_lazy_code(reason_ref);
+
+                // We check whether the predicate was propagated by the nogood propagator first
+                let propagated_by_nogood_propagator =
+                    propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id();
+                // Then we check whether the lazy reason for the propagation was this particular
+                // nogood
+                let code_matches_id = code.is_none() || *code.unwrap() == id.id as u64;
+                return propagated_by_nogood_propagator && code_matches_id;
             }
         }
         false
@@ -793,6 +800,7 @@ impl Propagator for NogoodPropagator {
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
     fn lazy_explanation(&mut self, code: u64, assignments: &Assignments) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
+
         // Update the LBD and activity of the nogood, if appropriate.
         //
         // Note that low lbd nogoods are kept permanently, so these are not updated.
@@ -1166,7 +1174,7 @@ impl NogoodPropagator {
                 continue;
             }
 
-            if self.is_clause_propagating(context, reason_store, id) {
+            if self.is_nogood_propagating(context, reason_store, id) {
                 continue;
             }
 
