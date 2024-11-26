@@ -197,6 +197,28 @@ impl Assignments {
                 domains[entry.predicate.get_domain()].undo_trail_entry(entry);
             });
 
+        for domain in domains.iter_mut() {
+            domain
+                .lower_bound_updates
+                .retain(|update| update.trail_position < domain.initial_bounds_below_trail);
+            domain
+                .upper_bound_updates
+                .retain(|update| update.trail_position < domain.initial_bounds_below_trail);
+            domain.holes.retain(|value, update| {
+                let is_initial_bound = update.trail_position < domain.initial_bounds_below_trail;
+                if !is_initial_bound {
+                    let to_remove_index = domain
+                        .hole_updates
+                        .iter()
+                        .position(|update| update.removed_value == *value)
+                        .unwrap();
+                    let _ = domain.hole_updates.remove(to_remove_index);
+                }
+
+                is_initial_bound
+            });
+        }
+
         Assignments {
             trail: Default::default(),
             domains,
