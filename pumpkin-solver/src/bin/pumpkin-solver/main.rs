@@ -125,6 +125,13 @@ struct Args {
 
     /// Decides the sequence based on which the restarts are performed.
     ///
+    /// - The "constant" approach uses a constant number of conflicts before another restart is
+    ///   triggered
+    /// - The "geometric" approach uses a geometrically increasing sequence
+    /// - The "luby" approach uses a recursive sequence of the form 1, 1, 2, 1, 1, 2, 4, 1, 1, 2,
+    ///   1, 1, 2, 4, 8, 1, 1, 2.... (see "Optimal speedup of Las Vegas algorithms - Luby et al.
+    ///   (1993)")
+    ///
     /// To be used in combination with "--restarts-base-interval".
     #[arg(long, value_enum, default_value_t)]
     restart_sequence_generator_type: SequenceGeneratorType,
@@ -287,20 +294,31 @@ struct Args {
     omit_call_site: bool,
 
     /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
+    ///
+    /// - The "generalised-totalizer" value specifies that the solver should use the Generalized
+    ///   Totalizer Encoding (see "Generalized totalizer encoding for pseudo-boolean constraints -
+    ///   Saurabh et al. (2015)")
+    /// - The "cardinality-network" value specifies that the solver should use the Cardinality
+    ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
+    ///   al. (2011)").
     #[arg(long, value_enum, default_value_t)]
     upper_bound_encoding: PseudoBooleanEncoding,
-
-    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
-    ///
-    /// Possible values: bool
-    #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
-    cumulative_allow_holes: bool,
 
     /// Determines that no restarts are allowed by the solver.
     ///
     /// Possible values: bool
     #[arg(long = "no-restarts", verbatim_doc_comment)]
     no_restarts: bool,
+
+    /// Determines the conflict resolver.
+    #[arg(long, value_enum, default_value_t)]
+    conflict_resolver: ConflictResolver,
+
+    /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
+    ///
+    /// Possible values: bool
+    #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
+    cumulative_allow_holes: bool,
 
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
@@ -320,10 +338,6 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-generate-sequence")]
     cumulative_generate_sequence: bool,
-
-    /// Determines the conflict resolver.
-    #[arg(long, value_enum, default_value_t)]
-    conflict_resolver: ConflictResolver,
 
     /// Determines whether incremental backtracking is applied or whether the cumulative
     /// propagators compute the time-table from scratch upon backtracking
