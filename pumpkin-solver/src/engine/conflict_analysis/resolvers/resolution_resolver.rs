@@ -66,11 +66,23 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood> {
         self.clean_up();
 
-        // Initialise the data structures with the conflict nogood.
-        for predicate in context
-            .get_conflict_nogood(context.is_completing_proof)
+        let conflict_nogood = context.get_conflict_nogood();
+
+        let maximum_decision_level_in_conflict = conflict_nogood
             .iter()
-        {
+            .filter_map(|predicate| {
+                context
+                    .assignments
+                    .get_decision_level_for_predicate(predicate)
+            })
+            .max()
+            .unwrap_or(context.assignments.get_decision_level());
+        if maximum_decision_level_in_conflict < context.assignments.get_decision_level() {
+            context.backtrack(maximum_decision_level_in_conflict);
+        }
+
+        // Initialise the data structures with the conflict nogood.
+        for predicate in conflict_nogood.iter() {
             self.add_predicate_to_conflict_nogood(
                 *predicate,
                 context.assignments,

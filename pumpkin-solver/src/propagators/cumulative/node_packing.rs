@@ -150,7 +150,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             });
 
             let mut updated = false;
-            let mut _index = 0;
+            let mut index = 0;
             for (activity_index, selected_activity) in selected_activities.iter().enumerate() {
                 let maximum_finish_time = selected_activities[activity_index..]
                     .iter()
@@ -182,14 +182,14 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                     > max_lower_bound
                 {
                     updated = true;
-                    _index = activity_index;
+                    index = activity_index;
                     max_lower_bound = context.lower_bound(&selected_activity.start_variable)
                         + sum_duration_selected;
                 }
                 sum_duration_selected -= selected_activity.processing_time;
             }
             if updated {
-                tasks = selected_activities;
+                tasks = selected_activities[index..].to_vec();
             }
         }
         Ok((max_lower_bound, tasks))
