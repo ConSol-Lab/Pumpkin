@@ -48,14 +48,6 @@ struct Args {
     #[arg(short='c', long, default_value_t=usize::MAX)]
     number_of_cycles: usize,
 
-    /// The minimum number of machines passed to the parallel-machine propagator
-    #[arg(short = 'i', long, default_value_t = 2)]
-    minimum_number_of_machines: usize,
-
-    /// The maximum number of machines passed to the parallel-machine propagator
-    #[arg(short = 'a', long, default_value_t = 5)]
-    maximum_number_of_machines: usize,
-
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
@@ -308,15 +300,20 @@ fn run() -> SchedulingResult<()> {
             )
         }
         pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
+            println!("------------------Final Statistics------------------");
+            solver.log_statistics();
             println!(
                 "Found satisfiable solution with makespan {}",
                 solution.get_integer_value(makespan)
             )
         }
         pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
+            solver.log_statistics();
             println!("Unsatisfiable")
         }
         pumpkin_solver::results::OptimisationResult::Unknown => {
+            println!("------------------Final Statistics------------------");
+            solver.log_statistics();
             println!("Unknown")
         }
     }
