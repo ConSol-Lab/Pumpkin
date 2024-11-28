@@ -116,6 +116,8 @@ pub use time_table::CumulativeExplanationType;
 pub(crate) use time_table::*;
 mod options;
 pub use options::*;
+mod node_packing;
+pub(crate) use node_packing::*;
 
 mod utils;
 pub(crate) use utils::*;
