@@ -33,6 +33,37 @@ impl MovingAverage for CumulativeMovingAverage {
     }
 }
 
+#[derive(Default, Debug, Copy, Clone)]
+pub(crate) struct CumulativeMovingAverageFloat {
+    sum: f64,
+    num_terms: u64,
+}
+
+impl Display for CumulativeMovingAverageFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value())
+    }
+}
+
+impl MovingAverage for CumulativeMovingAverageFloat {
+    fn add_term_float(&mut self, new_term: f64) {
+        self.sum += new_term;
+        self.num_terms += 1
+    }
+
+    fn value(&self) -> f64 {
+        if self.num_terms > 0 {
+            self.sum / (self.num_terms as f64)
+        } else {
+            0.0
+        }
+    }
+
+    fn adapt(&mut self, _interval_length: u64) {
+        // do nothing
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::CumulativeMovingAverage;

@@ -6,6 +6,7 @@ use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
+use crate::basic_types::moving_averages::cumulative_moving_average::CumulativeMovingAverageFloat;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
@@ -101,7 +102,9 @@ create_statistics_struct!(NogoodPropagatorStatistics {
     lower_bound: LowerBoundStatistics,
     upper_bound: UpperBoundStatistics,
     inequality: InequalityStatistics,
-    equality: EqualityStatistics
+    equality: EqualityStatistics,
+
+    ratio_dedupped: CumulativeMovingAverageFloat
 });
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -216,6 +219,11 @@ impl Propagator for NogoodPropagator {
         let old_trail_position = context.assignments.trail.len() - 1;
 
         for (domain_event, updated_domain_id) in self.enqueued_updates.drain() {
+            let _new_term = self.watch_lists[updated_domain_id].ratio_unique_elements();
+            if !_new_term.is_nan() {
+                self.statistics.ratio_dedupped.add_term_float(_new_term);
+            }
+
             let mut current_index = 0;
             let mut end_index = 0;
 

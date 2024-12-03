@@ -1,4 +1,5 @@
 use super::NogoodId;
+use crate::basic_types::HashSet;
 
 /// The watch list is specific to a domain id.
 #[derive(Default, Clone, Debug)]
@@ -20,6 +21,24 @@ impl NogoodWatchList {
             .position(|w| w.right_hand_side == value && w.nogood_id == id)
             .expect("NogoodWatcher must be present.");
         let _ = watch_list.swap_remove(position);
+    }
+
+    pub(crate) fn ratio_unique_elements(&self) -> f64 {
+        let total =
+            self.lower_bound.len() + self.upper_bound.len() + self.hole.len() + self.equals.len();
+        let dedup = |watchers: &Vec<NogoodWatcher>| -> usize {
+            watchers
+                .iter()
+                .map(|watcher| watcher.right_hand_side)
+                .collect::<HashSet<_>>()
+                .len()
+        };
+
+        let unique = dedup(&self.lower_bound)
+            + dedup(&self.upper_bound)
+            + dedup(&self.hole)
+            + dedup(&self.equals);
+        unique as f64 / total as f64
     }
 }
 

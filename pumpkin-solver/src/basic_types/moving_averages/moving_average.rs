@@ -1,7 +1,13 @@
 use std::fmt::Debug;
 
 pub(crate) trait MovingAverage: Debug {
-    fn add_term(&mut self, _new_term: u64);
+    fn add_term_float(&mut self, _new_term: f64) {
+        unimplemented!();
+    }
+
+    fn add_term(&mut self, _new_term: u64) {
+        unimplemented!()
+    }
 
     /// Returns the moving average value; in case there are no terms, the convention is to return 0
     fn value(&self) -> f64;
