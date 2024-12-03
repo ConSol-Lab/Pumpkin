@@ -12,6 +12,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::containers::KeyedVec;
+use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -37,6 +38,8 @@ use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -73,7 +76,33 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+
+    statistics: NogoodPropagatorStatistics,
 }
+
+create_statistics_struct!(LowerBoundStatistics {
+    number_of_watchers_traversed: usize,
+    number_of_falsified_watchers_traversed: usize,
+});
+create_statistics_struct!(UpperBoundStatistics {
+    number_of_watchers_traversed: usize,
+    number_of_falsified_watchers_traversed: usize,
+});
+create_statistics_struct!(InequalityStatistics {
+    number_of_watchers_traversed: usize,
+    number_of_falsified_watchers_traversed: usize,
+});
+create_statistics_struct!(EqualityStatistics {
+    number_of_watchers_traversed: usize,
+    number_of_falsified_watchers_traversed: usize,
+});
+
+create_statistics_struct!(NogoodPropagatorStatistics {
+    lower_bound: LowerBoundStatistics,
+    upper_bound: UpperBoundStatistics,
+    inequality: InequalityStatistics,
+    equality: EqualityStatistics
+});
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
 /// considered "low" LBD.
@@ -137,6 +166,39 @@ impl Propagator for NogoodPropagator {
         0
     }
 
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger.clone());
+        let total_number_traversed = self.statistics.lower_bound.number_of_watchers_traversed
+            + self.statistics.upper_bound.number_of_watchers_traversed
+            + self.statistics.inequality.number_of_watchers_traversed
+            + self.statistics.equality.number_of_watchers_traversed;
+        statistic_logger
+            .attach_to_prefix("TotalNumberTraversed")
+            .log_statistic(total_number_traversed);
+        let total_falsified_traversed = self
+            .statistics
+            .lower_bound
+            .number_of_falsified_watchers_traversed
+            + self
+                .statistics
+                .upper_bound
+                .number_of_falsified_watchers_traversed
+            + self
+                .statistics
+                .inequality
+                .number_of_falsified_watchers_traversed
+            + self
+                .statistics
+                .equality
+                .number_of_falsified_watchers_traversed;
+        statistic_logger
+            .attach_to_prefix("TotalFalsifiedTraversed")
+            .log_statistic(total_falsified_traversed);
+        statistic_logger
+            .attach_to_prefix("RatioFalsifiedAndTotal")
+            .log_statistic(total_falsified_traversed as f64 / total_number_traversed as f64);
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
@@ -171,9 +233,18 @@ impl Propagator for NogoodPropagator {
                         self.watch_lists[updated_domain_id].num_lower_bound_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
+                        self.statistics.lower_bound.number_of_watchers_traversed += 1;
                         let right_hand_side = self.watch_lists[updated_domain_id]
                             .get_lower_bound_watcher_at_index(current_index)
                             .right_hand_side;
+
+                        if context.is_predicate_falsified(predicate!(
+                            updated_domain_id >= right_hand_side
+                        )) {
+                            self.statistics
+                                .lower_bound
+                                .number_of_falsified_watchers_traversed += 1;
+                        }
 
                         if old_lower_bound < right_hand_side && right_hand_side <= new_lower_bound {
                             let nogood_id = self.watch_lists[updated_domain_id]
@@ -310,9 +381,18 @@ impl Propagator for NogoodPropagator {
                         self.watch_lists[updated_domain_id].num_upper_bound_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
+                        self.statistics.upper_bound.number_of_watchers_traversed += 1;
                         let right_hand_side = self.watch_lists[updated_domain_id]
                             .get_upper_bound_watcher_at_index(current_index)
                             .right_hand_side;
+
+                        if context.is_predicate_falsified(predicate!(
+                            updated_domain_id <= right_hand_side
+                        )) {
+                            self.statistics
+                                .upper_bound
+                                .number_of_falsified_watchers_traversed += 1;
+                        }
 
                         if old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound {
                             let nogood_id = self.watch_lists[updated_domain_id]
@@ -449,9 +529,18 @@ impl Propagator for NogoodPropagator {
                         self.watch_lists[updated_domain_id].num_inequality_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
+                        self.statistics.inequality.number_of_watchers_traversed += 1;
                         let right_hand_side = self.watch_lists[updated_domain_id]
                             .get_inequality_watcher_at_index(current_index)
                             .right_hand_side;
+
+                        if context.is_predicate_falsified(predicate!(
+                            updated_domain_id != right_hand_side
+                        )) {
+                            self.statistics
+                                .inequality
+                                .number_of_falsified_watchers_traversed += 1;
+                        }
 
                         let update_domain = updated_domain_id;
                         // Only look at the watcher if:
@@ -637,9 +726,18 @@ impl Propagator for NogoodPropagator {
                     // Iterate through all watchers.
 
                     while current_index < num_watchers {
+                        self.statistics.equality.number_of_watchers_traversed += 1;
                         let right_hand_side = self.watch_lists[updated_domain_id]
                             .get_equality_watcher_at_index(current_index)
                             .right_hand_side;
+
+                        if context.is_predicate_falsified(predicate!(
+                            updated_domain_id == right_hand_side
+                        )) {
+                            self.statistics
+                                .equality
+                                .number_of_falsified_watchers_traversed += 1;
+                        }
 
                         if assigned_value == right_hand_side {
                             let nogood_id = self.watch_lists[updated_domain_id]
