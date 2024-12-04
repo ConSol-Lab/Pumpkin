@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use super::insertion;
 use super::removal;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -46,6 +47,7 @@ use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -328,6 +330,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
+    fn log_statistics(&self, statistic_logger: crate::statistics::StatisticLogger) {
+        self.updatable_structures.statistics.log(statistic_logger)
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
@@ -339,6 +345,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         );
 
         self.update_time_table(&mut context)?;
+
+        self.updatable_structures
+            .statistics
+            .average_size_of_time_table
+            .add_term(self.time_table.len());
 
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(

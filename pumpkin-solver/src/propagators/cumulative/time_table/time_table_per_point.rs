@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -29,6 +30,7 @@ use crate::propagators::CumulativePropagatorOptions;
 use crate::propagators::ResourceProfile;
 use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_extreme;
+use crate::statistics::Statistic;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -82,10 +84,20 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
 }
 
 impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<Var> {
+    fn log_statistics(&self, statistic_logger: crate::statistics::StatisticLogger) {
+        self.updatable_structures.statistics.log(statistic_logger)
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         let time_table =
             create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
+
+        self.updatable_structures
+            .statistics
+            .average_size_of_time_table
+            .add_term(time_table.len());
+
         // No error has been found -> Check for updates (i.e. go over all profiles and all tasks and
         // check whether an update can take place)
         propagate_based_on_timetable(
