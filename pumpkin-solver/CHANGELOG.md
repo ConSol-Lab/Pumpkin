@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.4...pumpkin-solver-v0.1.5) (2024-12-04)
+
+
+### Bug Fixes
+
+* issue with integer multiplication + correct path in msc file ([#117](https://github.com/ConSol-Lab/Pumpkin/issues/117)) ([ce25710](https://github.com/ConSol-Lab/Pumpkin/commit/ce25710071e58af84b6cdd0925b4099ab0d924a9))
+
 ## [0.1.4](https://github.com/ConSol-Lab/Pumpkin/compare/pumpkin-solver-v0.1.3...pumpkin-solver-v0.1.4) (2024-11-07)
 
 
