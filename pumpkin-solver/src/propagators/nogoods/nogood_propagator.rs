@@ -84,18 +84,22 @@ pub(crate) struct NogoodPropagator {
 create_statistics_struct!(LowerBoundStatistics {
     number_of_watchers_traversed: usize,
     number_of_falsified_watchers_traversed: usize,
+    number_of_skipped_watchers: usize,
 });
 create_statistics_struct!(UpperBoundStatistics {
     number_of_watchers_traversed: usize,
     number_of_falsified_watchers_traversed: usize,
+    number_of_skipped_watchers: usize,
 });
 create_statistics_struct!(InequalityStatistics {
     number_of_watchers_traversed: usize,
     number_of_falsified_watchers_traversed: usize,
+    number_of_skipped_watchers: usize,
 });
 create_statistics_struct!(EqualityStatistics {
     number_of_watchers_traversed: usize,
     number_of_falsified_watchers_traversed: usize,
+    number_of_skipped_watchers: usize,
 });
 
 create_statistics_struct!(NogoodPropagatorStatistics {
@@ -361,6 +365,7 @@ impl Propagator for NogoodPropagator {
                                 return Err(e.into());
                             }
                         } else {
+                            self.statistics.lower_bound.number_of_skipped_watchers += 1;
                             // Keep the current watch for this predicate.
                             self.watch_lists[updated_domain_id]
                                 .set_lower_bound_watcher_to_other_watcher(end_index, current_index);
@@ -505,6 +510,7 @@ impl Propagator for NogoodPropagator {
                                 return Err(e.into());
                             }
                         } else {
+                            self.statistics.upper_bound.number_of_skipped_watchers += 1;
                             // Keep the current watch for this predicate.
                             self.watch_lists[updated_domain_id]
                                 .set_upper_bound_watcher_to_other_watcher(end_index, current_index);
@@ -709,6 +715,7 @@ impl Propagator for NogoodPropagator {
                                 return Err(e.into());
                             }
                         } else {
+                            self.statistics.inequality.number_of_skipped_watchers += 1;
                             // Keep the current watch for this predicate.
                             self.watch_lists[updated_domain_id]
                                 .set_inequality_watcher_to_other_watcher(end_index, current_index);
@@ -855,6 +862,7 @@ impl Propagator for NogoodPropagator {
                                 return Err(e.into());
                             }
                         } else {
+                            self.statistics.equality.number_of_skipped_watchers += 1;
                             // Keep the current watch for this predicate.
                             self.watch_lists[updated_domain_id]
                                 .set_equality_watcher_to_other_watcher(end_index, current_index);
