@@ -277,9 +277,11 @@ fn propagate_single_profiles_interval_tree<'a, Var: IntegerVariable + 'static>(
         // explanation
         propagation_handler.next_profile();
 
+        updatable_structures.statistics.number_of_profiles_traversed += 1;
+
         // Then we go over all the different tasks
         for task_entry in interval_tree.find(profile.start..profile.end + 1) {
-            updatable_structures.statistics.number_of_profiles_traversed += 1;
+            updatable_structures.statistics.number_of_tasks_traversed += 1;
             let task = task_entry.data();
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating
@@ -350,6 +352,7 @@ fn propagate_single_profiles_incremental<'a, Var: IntegerVariable + 'static>(
         // We indicate to the propagation handler that we cannot re-use an existing profile
         // explanation
         propagation_handler.next_profile();
+        updatable_structures.statistics.number_of_profiles_traversed += 1;
 
         // Then we go over all the different tasks
         let seek = updatable_structures.interval_manager.seek(
@@ -361,7 +364,7 @@ fn propagate_single_profiles_incremental<'a, Var: IntegerVariable + 'static>(
         );
         first_iteration = false;
         for task in seek {
-            updatable_structures.statistics.number_of_profiles_traversed += 1;
+            updatable_structures.statistics.number_of_tasks_traversed += 1;
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating
                 //
@@ -441,10 +444,13 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
         // explanation
         propagation_handler.next_profile();
 
+        updatable_structures.statistics.number_of_profiles_traversed += 1;
+
         // Then we go over all the different tasks
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
-            updatable_structures.statistics.number_of_profiles_traversed += 1;
+            updatable_structures.statistics.number_of_tasks_traversed += 1;
+
             let task = updatable_structures.get_unfixed_task_at_index(task_index);
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating
@@ -512,7 +518,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     context: &mut PropagationContextMut,
     time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
-    updatable_structures: &UpdatableStructures<Var>,
+    updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
     // We create the structure responsible for propagations and explanations
@@ -523,7 +529,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
     let time_table = time_table.collect::<Vec<_>>();
 
     // Then we go over all the possible tasks
-    for task in updatable_structures.get_unfixed_tasks() {
+    for task in updatable_structures.unfixed_tasks.iter() {
+        updatable_structures.statistics.number_of_tasks_traversed += 1;
         if context.is_fixed(&task.start_variable) {
             // If the task is fixed then we are not able to propagate it further
             continue;
@@ -532,6 +539,8 @@ fn propagate_sequence_of_profiles<'a, Var: IntegerVariable + 'static>(
         // Then we go over all the different profiles
         let mut profile_index = 0;
         'profile_loop: while profile_index < time_table.len() {
+            updatable_structures.statistics.number_of_profiles_traversed += 1;
+
             let profile = time_table[profile_index];
 
             if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
