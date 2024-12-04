@@ -4,10 +4,11 @@ use super::SatisfactionResult::Satisfiable;
 use super::SatisfactionResult::Unknown;
 use super::SatisfactionResult::Unsatisfiable;
 use crate::branching::Brancher;
-use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::predicate;
+use crate::predicates::Predicate;
+use crate::results::ProblemSolution;
 use crate::results::Solution;
 use crate::termination::TerminationCondition;
-use crate::variables::Literal;
 use crate::Solver;
 
 /// A struct which allows the retrieval of multiple solutions to a satisfaction problem.
@@ -16,7 +17,7 @@ pub struct SolutionIterator<'solver, 'brancher, 'termination, B: Brancher, T> {
     solver: &'solver mut Solver,
     brancher: &'brancher mut B,
     termination: &'termination mut T,
-    next_blocking_clause: Option<Vec<Literal>>,
+    next_blocking_clause: Option<Vec<Predicate>>,
     has_solution: bool,
 }
 
@@ -71,27 +72,17 @@ impl<'solver, 'brancher, 'termination, B: Brancher, T: TerminationCondition>
 /// being assigned.
 ///
 /// This method is used when attempting to find multiple solutions.
-fn get_blocking_clause(solution: &Solution) -> Vec<Literal> {
+fn get_blocking_clause(solution: &Solution) -> Vec<Predicate> {
     solution
-        .assignments_propositional()
-        .get_propositional_variables()
-        .filter(|propositional_variable| {
-            solution
-                .assignments_propositional()
-                .is_variable_assigned(*propositional_variable)
-        })
-        .map(|propositional_variable| {
-            !Literal::new(
-                propositional_variable,
-                solution
-                    .assignments_propositional()
-                    .is_variable_assigned_true(propositional_variable),
-            )
-        })
+        .get_domains()
+        .map(|variable| predicate!(variable != solution.get_integer_value(variable)))
         .collect::<Vec<_>>()
 }
 /// Enum which specifies the status of the call to [`SolutionIterator::next_solution`].
-#[allow(clippy::large_enum_variant)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "these will not be stored in bulk, so this is not an issue"
+)]
 #[derive(Debug)]
 pub enum IteratedSolution {
     /// A new solution was identified.

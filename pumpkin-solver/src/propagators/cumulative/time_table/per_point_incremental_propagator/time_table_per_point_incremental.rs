@@ -62,7 +62,7 @@ use crate::pumpkin_assert_extreme;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
-#[allow(unused)]
+
 pub(crate) struct TimeTablePerPointIncrementalPropagator<Var, const SYNCHRONISE: bool> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
@@ -560,12 +560,11 @@ mod debug {
 
 #[cfg(test)]
 mod tests {
-    use crate::basic_types::ConflictInfo;
     use crate::basic_types::Inconsistency;
-    use crate::basic_types::PropositionalConjunction;
+    use crate::conjunction;
     use crate::engine::predicates::predicate::Predicate;
     use crate::engine::propagation::EnqueueDecision;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
     use crate::predicate;
     use crate::predicates::PredicateConstructor;
@@ -639,7 +638,7 @@ mod tests {
             ),
         );
         assert!(match result {
-            Err(Inconsistency::Other(ConflictInfo::Explanation(x))) => {
+            Err(Inconsistency::Conflict(x)) => {
                 let expected = [
                     predicate!(s1 <= 1),
                     predicate!(s1 >= 1),
@@ -750,7 +749,7 @@ mod tests {
         let s1 = solver.new_variable(0, 6);
         let s2 = solver.new_variable(6, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -776,13 +775,13 @@ mod tests {
         assert_eq!(solver.upper_bound(s2), 10);
         assert_eq!(solver.lower_bound(s1), 0);
         assert_eq!(solver.upper_bound(s1), 6);
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 0, s1, 5);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
 
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 7);
         assert_eq!(solver.upper_bound(s2), 10);
@@ -796,7 +795,7 @@ mod tests {
         let s1 = solver.new_variable(6, 6);
         let s2 = solver.new_variable(1, 8);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -821,24 +820,15 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let result = solver.propagate_until_fixed_point(&mut propagator);
+        let result = solver.propagate_until_fixed_point(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s2), 1);
         assert_eq!(solver.upper_bound(s2), 3);
         assert_eq!(solver.lower_bound(s1), 6);
         assert_eq!(solver.upper_bound(s1), 6);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 <= 3).try_into().unwrap())
-            .clone();
-        assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 <= 5),
-                predicate!(s1 >= 6),
-                predicate!(s1 <= 6),
-            ]),
-            reason
-        );
+        let reason = solver.get_reason_int(predicate!(s2 <= 3));
+        assert_eq!(conjunction!([s2 <= 5] & [s1 >= 6] & [s1 <= 6]), reason);
     }
 
     #[test]
@@ -851,7 +841,7 @@ mod tests {
         let b = solver.new_variable(2, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -906,12 +896,12 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 3, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 3, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -927,7 +917,7 @@ mod tests {
         let b1 = solver.new_variable(3, 3);
         let a = solver.new_variable(0, 1);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -985,12 +975,12 @@ mod tests {
         assert_eq!(solver.lower_bound(f), 0);
         assert_eq!(solver.upper_bound(f), 14);
 
-        let notification_status = solver.increase_lower_bound_and_notify(&mut propagator, 4, e, 3);
+        let notification_status = solver.increase_lower_bound_and_notify(propagator, 4, e, 3);
         assert!(match notification_status {
             EnqueueDecision::Enqueue => true,
             EnqueueDecision::Skip => false,
         });
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(f), 10);
     }
@@ -1031,17 +1021,16 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 1);
         assert_eq!(solver.upper_bound(s1), 1);
 
-        let reason = solver
-            .get_reason_int(predicate!(s2 >= 5).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s2 >= 5));
         assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 >= 4),
-                predicate!(s1 >= 1),
-                predicate!(s1 <= 1), /* Note that this not the most general explanation, if s2
-                                      * could have started at 0 then it would still have
-                                      * overlapped with the current interval */
-            ]),
+            conjunction!([s2 >= 4] & [s1 >= 1] & [s1 <= 1]), /* Note that this not
+                                                              * the most general
+                                                              * explanation, if s2
+                                                              * could have started at
+                                                              * 0 then it would still
+                                                              * have
+                                                              * overlapped with the
+                                                              * current interval */
             reason
         );
     }
@@ -1090,16 +1079,13 @@ mod tests {
         assert_eq!(solver.lower_bound(s1), 3);
         assert_eq!(solver.upper_bound(s1), 3);
 
-        let reason = solver
-            .get_reason_int(predicate!(s3 >= 7).try_into().unwrap())
-            .clone();
+        let reason = solver.get_reason_int(predicate!(s3 >= 7));
         assert_eq!(
-            PropositionalConjunction::from(vec![
-                predicate!(s2 <= 5),
-                predicate!(s2 >= 5),
-                predicate!(s3 >= 6), /* Note that s3 would have been able to propagate
-                                      * this bound even if it started at time 0 */
-            ]),
+            conjunction!([s2 <= 5] & [s2 >= 5] & [s3 >= 6]), /* Note that s3 would
+                                                              * have been able to
+                                                              * propagate
+                                                              * this bound even if it
+                                                              * started at time 0 */
             reason
         );
     }
@@ -1143,13 +1129,8 @@ mod tests {
 
         for removed in 2..8 {
             assert!(!solver.contains(s2, removed));
-            let reason = solver
-                .get_reason_int(predicate!(s2 != removed).try_into().unwrap())
-                .clone();
-            assert_eq!(
-                PropositionalConjunction::from(vec![predicate!(s1 <= 4), predicate!(s1 >= 4),]),
-                reason
-            );
+            let reason = solver.get_reason_int(predicate!(s2 != removed));
+            assert_eq!(conjunction!([s1 <= 4] & [s1 >= 4]), reason);
         }
     }
 
@@ -1159,7 +1140,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(5, 5);
         let s2_scratch = solver_scratch.new_variable(1, 10);
         let s3_scratch = solver_scratch.new_variable(1, 10);
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1187,25 +1168,17 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s2_scratch,
-            7,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            2,
-            s3_scratch,
-            7,
-        );
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 7);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s3_scratch, 7);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(5, 5);
         let s2 = solver.new_variable(1, 10);
         let s3 = solver.new_variable(1, 10);
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
                     &[
@@ -1235,14 +1208,15 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 2, s3, 7);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 7);
-        let result = solver.propagate(&mut propagator);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
+        let result = solver.propagate(propagator);
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
+            let same = if let Err(Inconsistency::Conflict (explanation
+            )) =
                 &result
             {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
+                if let Err(Inconsistency::Conflict (explanation_scratch)) =
                     &result_scratch
                 {
                     explanation.iter().collect::<Vec<_>>()
@@ -1263,7 +1237,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(5, 5);
         let s2_scratch = solver_scratch.new_variable(1, 10);
         let s3_scratch = solver_scratch.new_variable(1, 10);
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1291,24 +1265,16 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            2,
-            s3_scratch,
-            7,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s2_scratch,
-            7,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s3_scratch, 7);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 7);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(5, 5);
         let s2 = solver.new_variable(1, 10);
         let s3 = solver.new_variable(1, 10);
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
                     &[
@@ -1338,19 +1304,15 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 2, s3, 7);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 7);
-        let result = solver.propagate(&mut propagator);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
+        let result = solver.propagate(propagator);
         assert!(result.is_err());
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
-                result
-            {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
-                    result_scratch
-                {
+            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.iter().collect::<Vec<_>>()
                         == explanation_scratch.iter().collect::<Vec<_>>()
                 } else {
@@ -1369,7 +1331,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(5, 5);
         let s2_scratch = solver_scratch.new_variable(1, 10);
         let s3_scratch = solver_scratch.new_variable(1, 10);
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1397,24 +1359,16 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            2,
-            s3_scratch,
-            7,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s2_scratch,
-            7,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s3_scratch, 7);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 7);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(5, 5);
         let s2 = solver.new_variable(1, 10);
         let s3 = solver.new_variable(1, 10);
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -1444,17 +1398,13 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 2, s3, 7);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 7);
-        let result = solver.propagate(&mut propagator);
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 2, s3, 7);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 7);
+        let result = solver.propagate(propagator);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!({
-            let same = if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))) =
-                result
-            {
-                if let Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))) =
-                    result_scratch
-                {
+            let same = if let Err(Inconsistency::Conflict(explanation)) = &result {
+                if let Err(Inconsistency::Conflict(explanation_scratch)) = &result_scratch {
                     explanation.iter().collect::<Vec<_>>()
                         != explanation_scratch.iter().collect::<Vec<_>>()
                 } else {
@@ -1466,13 +1416,14 @@ mod tests {
             same
         });
     }
+
     #[test]
     fn synchronisation_leads_to_same_explanation() {
         let mut solver_scratch = TestSolver::default();
         let s1_scratch = solver_scratch.new_variable(1, 6);
         let s2_scratch = solver_scratch.new_variable(1, 6);
         let s3_scratch = solver_scratch.new_variable(5, 11);
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1500,24 +1451,16 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s2_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s1_scratch,
-            5,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 0, s1_scratch, 5);
 
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 6);
         let s2 = solver.new_variable(1, 6);
         let s3 = solver.new_variable(5, 11);
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
                     &[
@@ -1547,22 +1490,18 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 5);
-        let result = solver.propagate(&mut propagator);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 5);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 0, s1, 5);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_ok());
         assert_eq!(solver_scratch.lower_bound(s3_scratch), 7);
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
-        let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
-        let reason = solver
-            .get_reason_int(s3.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
+        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
         assert_eq!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1574,7 +1513,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(1, 6);
         let s2_scratch = solver_scratch.new_variable(1, 6);
         let s3_scratch = solver_scratch.new_variable(5, 11);
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1602,23 +1541,15 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s2_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s1_scratch,
-            5,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s2_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 0, s1_scratch, 5);
         let mut solver = TestSolver::default();
         let s1 = solver.new_variable(1, 6);
         let s2 = solver.new_variable(1, 6);
         let s3 = solver.new_variable(5, 11);
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -1648,25 +1579,21 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s2, 5);
-        let result = solver.propagate(&mut propagator);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s2, 5);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 0, s1, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 0, s1, 5);
 
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_ok());
         assert_eq!(solver_scratch.lower_bound(s3_scratch), 7);
 
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_ok());
         assert_eq!(solver.lower_bound(s3), 7);
 
-        let reason_scratch = solver_scratch
-            .get_reason_int(s3_scratch.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
-        let reason = solver
-            .get_reason_int(s3.lower_bound_predicate(7).try_into().unwrap())
-            .clone();
+        let reason_scratch = solver_scratch.get_reason_int(s3_scratch.lower_bound_predicate(7));
+        let reason = solver.get_reason_int(s3.lower_bound_predicate(7));
         assert_ne!(
             reason_scratch.iter().collect::<Vec<_>>(),
             reason.iter().collect::<Vec<_>>()
@@ -1680,7 +1607,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(1, 5);
         let s2_scratch = solver_scratch.new_variable(1, 5);
 
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1708,37 +1635,21 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            2,
-            s2_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s1_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s0_scratch,
-            5,
-        );
-        let _ = solver_scratch.decrease_upper_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s0_scratch,
-            5,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s2_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s1_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 0, s0_scratch, 5);
+        let _ =
+            solver_scratch.decrease_upper_bound_and_notify(propagator_scratch, 0, s0_scratch, 5);
 
         let mut solver = TestSolver::default();
         let s0 = solver.new_variable(1, 11);
         let s1 = solver.new_variable(1, 5);
         let s2 = solver.new_variable(1, 5);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, false>::new(
                     &[
@@ -1768,18 +1679,18 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 2, s2, 5);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s1, 5);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 0, s0, 5);
-        let _ = solver.decrease_upper_bound_and_notify(&mut propagator, 0, s0, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 2, s2, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s1, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 0, s0, 5);
+        let _ = solver.decrease_upper_bound_and_notify(propagator, 0, s0, 5);
 
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))),
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))),
+            Err(Inconsistency::Conflict(explanation)),
+            Err(Inconsistency::Conflict(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_ne!(explanation, explanation_scratch);
@@ -1803,7 +1714,7 @@ mod tests {
         let s1_scratch = solver_scratch.new_variable(1, 5);
         let s2_scratch = solver_scratch.new_variable(1, 5);
 
-        let mut propagator_scratch = solver_scratch
+        let propagator_scratch = solver_scratch
             .new_propagator(TimeTablePerPointPropagator::new(
                 &[
                     ArgTask {
@@ -1831,37 +1742,21 @@ mod tests {
                 },
             ))
             .expect("No conflict");
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            2,
-            s2_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            1,
-            s1_scratch,
-            5,
-        );
-        let _ = solver_scratch.increase_lower_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s0_scratch,
-            5,
-        );
-        let _ = solver_scratch.decrease_upper_bound_and_notify(
-            &mut propagator_scratch,
-            0,
-            s0_scratch,
-            5,
-        );
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 2, s2_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 1, s1_scratch, 5);
+        let _ =
+            solver_scratch.increase_lower_bound_and_notify(propagator_scratch, 0, s0_scratch, 5);
+        let _ =
+            solver_scratch.decrease_upper_bound_and_notify(propagator_scratch, 0, s0_scratch, 5);
 
         let mut solver = TestSolver::default();
         let s0 = solver.new_variable(1, 11);
         let s1 = solver.new_variable(1, 5);
         let s2 = solver.new_variable(1, 5);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(
                 TimeTablePerPointIncrementalPropagator::<DomainId, true>::new(
                     &[
@@ -1891,18 +1786,18 @@ mod tests {
                 ),
             )
             .expect("No conflict");
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 2, s2, 5);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 1, s1, 5);
-        let _ = solver.increase_lower_bound_and_notify(&mut propagator, 0, s0, 5);
-        let _ = solver.decrease_upper_bound_and_notify(&mut propagator, 0, s0, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 2, s2, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 1, s1, 5);
+        let _ = solver.increase_lower_bound_and_notify(propagator, 0, s0, 5);
+        let _ = solver.decrease_upper_bound_and_notify(propagator, 0, s0, 5);
 
-        let result_scratch = solver_scratch.propagate(&mut propagator_scratch);
+        let result_scratch = solver_scratch.propagate(propagator_scratch);
         assert!(result_scratch.is_err());
-        let result = solver.propagate(&mut propagator);
+        let result = solver.propagate(propagator);
         assert!(result.is_err());
         if let (
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation))),
-            Err(Inconsistency::Other(ConflictInfo::Explanation(explanation_scratch))),
+            Err(Inconsistency::Conflict(explanation)),
+            Err(Inconsistency::Conflict(explanation_scratch)),
         ) = (result, result_scratch)
         {
             assert_eq!(

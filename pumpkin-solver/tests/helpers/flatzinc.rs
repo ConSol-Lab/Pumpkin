@@ -6,7 +6,10 @@ use std::str::FromStr;
 use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(variant_size_differences)]
+#[allow(
+    variant_size_differences,
+    reason = "this is what a FlatZinc value can be, so we have no choice"
+)]
 pub(crate) enum Value {
     Int(i32),
     Bool(bool),

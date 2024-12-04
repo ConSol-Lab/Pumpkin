@@ -4,13 +4,12 @@
 use std::marker::PhantomData;
 
 use crate::basic_types::SolutionReference;
+use crate::branching::value_selection::ValueSelector;
+use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-use crate::branching::ValueSelector;
-use crate::branching::VariableSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
 
 /// An implementation of a [`Brancher`] which simply uses a single
 /// [`VariableSelector`] and a single [`ValueSelector`] independently of one another.
@@ -65,13 +64,12 @@ where
             })
     }
 
-    fn on_conflict(&mut self) {
-        self.variable_selector.on_conflict()
+    fn on_backtrack(&mut self) {
+        self.variable_selector.on_backtrack()
     }
 
-    fn on_unassign_literal(&mut self, lit: Literal) {
-        self.variable_selector.on_unassign_literal(lit);
-        self.value_selector.on_unassign_literal(lit);
+    fn on_conflict(&mut self) {
+        self.variable_selector.on_conflict()
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
@@ -79,14 +77,9 @@ where
         self.value_selector.on_unassign_integer(variable, value)
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, lit: Literal) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.variable_selector
-            .on_appearance_in_conflict_literal(lit)
-    }
-
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
-        self.variable_selector
-            .on_appearance_in_conflict_integer(variable)
+            .on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {

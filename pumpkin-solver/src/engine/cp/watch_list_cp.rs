@@ -1,7 +1,9 @@
+use std::fmt::Display;
+
 use enumset::EnumSet;
 use enumset::EnumSetType;
 
-use crate::basic_types::KeyedVec;
+use crate::containers::KeyedVec;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::DomainId;
 
@@ -22,7 +24,7 @@ pub struct Watchers<'a> {
 }
 
 /// A description of the kinds of events that can happen on a domain variable.
-#[derive(Debug, EnumSetType)]
+#[derive(Debug, EnumSetType, Hash)]
 pub enum IntDomainEvent {
     /// Event where an (integer) variable domain collapses to a single value.
     Assign,
@@ -36,14 +38,21 @@ pub enum IntDomainEvent {
     Removal,
 }
 
+impl Display for IntDomainEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IntDomainEvent::Assign => write!(f, "[Event:Assign]"),
+            IntDomainEvent::LowerBound => write!(f, "[Event:LB]"),
+            IntDomainEvent::UpperBound => write!(f, "[Event:UB]"),
+            IntDomainEvent::Removal => write!(f, "[Event:Remove]"),
+        }
+    }
+}
+
 // public functions
 impl WatchListCP {
     pub(crate) fn grow(&mut self) {
         let _ = self.watchers.push(WatcherCP::default());
-    }
-
-    pub(crate) fn is_watching_anything(&self) -> bool {
-        self.is_watching_anything
     }
 
     pub(crate) fn is_watching_any_backtrack_events(&self) -> bool {

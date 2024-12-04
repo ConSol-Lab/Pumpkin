@@ -1,19 +1,19 @@
-use std::cell::OnceCell;
-use std::cmp::max;
-use std::cmp::min;
-use std::rc::Rc;
+use bitfield_struct::bitfield;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
+use crate::engine::propagation::ReadDomains;
+use crate::engine::reason::Reason;
 use crate::engine::variables::IntegerVariable;
+use crate::engine::Assignments;
 use crate::predicate;
+use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
 
 /// Arc-consistent propagator for constraint `element([x_1, \ldots, x_n], i, e)`, where `x_j` are
 ///  variables, `i` is an integer variable, and `e` is a variable, which holds iff `x_i = e`
@@ -21,168 +21,37 @@ use crate::predicate;
 /// Note that this propagator is 0-indexed
 #[derive(Clone, Debug)]
 pub(crate) struct ElementPropagator<VX, VI, VE> {
-    array: Rc<[VX]>,
+    array: Box<[VX]>,
     index: VI,
     rhs: VE,
+
+    rhs_reason_buffer: Vec<Predicate>,
+}
+
+impl<VX, VI, VE> ElementPropagator<VX, VI, VE> {
+    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
+        Self {
+            array,
+            index,
+            rhs,
+            rhs_reason_buffer: vec![],
+        }
+    }
 }
 
 const ID_INDEX: LocalId = LocalId::from(0);
 const ID_RHS: LocalId = LocalId::from(1);
+
 // local ids of array vars are shifted by ID_X_OFFSET
 const ID_X_OFFSET: u32 = 2;
 
-/// Iterator through the domain values of an IntegerVariable; keeps a reference to the context
-/// Use `for_domain_values!` if you want mutable access to the context while iterating
-fn iter_values<'c, Var: IntegerVariable>(
-    context: PropagationContext<'c>,
-    var: &'c Var,
-) -> impl Iterator<Item = i32> + 'c {
-    (context.lower_bound(var)..=context.upper_bound(var)).filter(move |i| context.contains(var, *i))
-}
-
-/// Helper to loop through the domain values of an IntegerVariable without keeping a reference to
-/// the context
-macro_rules! for_domain_values {
-    ($context:expr, $var:expr, |$val:ident| $body:expr) => {
-        for $val in ($context.lower_bound($var)..=$context.upper_bound($var)) {
-            if $context.contains($var, $val) {
-                $body
-            }
-        }
-    };
-}
-
-impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable>
-    ElementPropagator<VX, VI, VE>
+impl<VX, VI, VE> Propagator for ElementPropagator<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
 {
-    pub(crate) fn new(array: Box<[VX]>, index: VI, rhs: VE) -> Self {
-        // local ids of array vars are shifted by ID_X_OFFSET
-        ElementPropagator {
-            array: array.into(),
-            index,
-            rhs,
-        }
-    }
-}
-
-impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Propagator
-    for ElementPropagator<VX, VI, VE>
-{
-    fn initialise_at_root(
-        &mut self,
-        context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
-        self.array.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(
-                x_i.clone(),
-                DomainEvents::ANY_INT,
-                LocalId::from(i as u32 + ID_X_OFFSET),
-            );
-        });
-        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
-        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
-
-        Ok(())
-    }
-
-    fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
-        // Ensure index is non-negative
-        context.set_lower_bound(&self.index, 0, conjunction!())?;
-        // Ensure index <= no. of x_j
-        context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
-
-        // For incremental solving: use the doubly linked list data-structure
-        if context.is_fixed(&self.index) {
-            // At this point, we should post x_i = e as a new constraint, but that's not an option
-            //  in Pumpkin right now. So instead we manually make them equal
-            let i = context.lower_bound(&self.index);
-            let x_i = &self.array[i as usize];
-
-            let lb = max(context.lower_bound(&self.rhs), context.lower_bound(x_i));
-            let ub = min(context.upper_bound(&self.rhs), context.upper_bound(x_i));
-
-            context.set_lower_bound(
-                &self.rhs,
-                lb,
-                conjunction!([self.index == i] & [x_i >= lb]),
-            )?;
-            context.set_lower_bound(x_i, lb, conjunction!([self.index == i] & [self.rhs >= lb]))?;
-            context.set_upper_bound(
-                &self.rhs,
-                ub,
-                conjunction!([self.index == i] & [x_i <= ub]),
-            )?;
-            context.set_upper_bound(x_i, ub, conjunction!([self.index == i] & [self.rhs <= ub]))?;
-
-            for v in lb..=ub {
-                if !context.contains(&self.rhs, v) && context.contains(x_i, v) {
-                    context.remove(x_i, v, conjunction!([self.index == i] & [self.rhs != v]))?;
-                } else if context.contains(&self.rhs, v) && !context.contains(x_i, v) {
-                    context.remove(
-                        &self.rhs,
-                        v,
-                        conjunction!([self.index == i] & [self.array[i as usize] != v]),
-                    )?;
-                }
-            }
-        } else {
-            // Remove values from i when for no values of e: x_i = e
-            let index_reason = OnceCell::new();
-            for_domain_values!(context, &self.index, |i| {
-                let x_i = &self.array[i as usize];
-                if !iter_values(context.as_readonly(), &self.rhs).any(|e| context.contains(x_i, e))
-                {
-                    // N.B. index_reason is loop-independent
-                    let reason_info = Rc::clone(index_reason.get_or_init(|| {
-                        Rc::new((
-                            context.describe_domain(&self.rhs),
-                            iter_values(context.as_readonly(), &self.rhs).collect::<Vec<_>>(),
-                        ))
-                    }));
-                    let x_i = (*x_i).clone();
-                    context.remove(&self.index, i, move |_context: PropagationContext| {
-                        let mut reason = reason_info.0.clone();
-                        reason_info
-                            .1
-                            .iter()
-                            .for_each(|e| reason.push(predicate![x_i != *e]));
-                        reason.into()
-                    })?;
-                }
-            });
-
-            // Remove values from e when for no values of i: x_i = e
-            let rhs_reason = OnceCell::new();
-            for_domain_values!(context, &self.rhs, |e| {
-                if !iter_values(context.as_readonly(), &self.index)
-                    .map(|i| &self.array[i as usize])
-                    .any(|x_i| context.contains(x_i, e))
-                {
-                    // N.B. rhs_reason is loop-independent
-                    let reason_info = Rc::clone(rhs_reason.get_or_init(|| {
-                        Rc::new((
-                            context.describe_domain(&self.index),
-                            iter_values(context.as_readonly(), &self.index).collect::<Vec<_>>(),
-                        ))
-                    }));
-                    let array = Rc::clone(&self.array);
-                    context.remove(&self.rhs, e, move |_context: PropagationContext| {
-                        let mut reason = reason_info.0.clone();
-                        reason_info
-                            .1
-                            .iter()
-                            .for_each(|i| reason.push(predicate![array[*i as usize] != e]));
-                        reason.into()
-                    })?;
-                }
-            });
-        }
-        Ok(())
-    }
-
     fn priority(&self) -> u32 {
-        // Priority higher than int_times/linear_eq/not_eq_propagator because it's much more
-        //  expensive looping over multiple domains
         2
     }
 
@@ -194,152 +63,294 @@ impl<VX: IntegerVariable + 'static, VI: IntegerVariable, VE: IntegerVariable> Pr
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        // Ensure index is non-negative
-        context.set_lower_bound(&self.index, 0, conjunction!())?;
-        // Ensure index <= no. of x_j
-        context.set_upper_bound(&self.index, self.array.len() as i32, conjunction!())?;
+        self.propagate_index_bounds_within_array(&mut context)?;
 
-        // Close to duplicate of `propagate` for now, without saving reason stuff...
+        self.propagate_rhs_bounds_based_on_array(&mut context)?;
+
+        self.propagate_index_based_on_domain_intersection_with_rhs(&mut context)?;
+
         if context.is_fixed(&self.index) {
-            let i = context.lower_bound(&self.index);
-            let x_i = &self.array[i as usize];
-
-            let lb = min(context.lower_bound(&self.rhs), context.lower_bound(x_i));
-            let ub = max(context.upper_bound(&self.rhs), context.upper_bound(x_i));
-
-            context.set_lower_bound(&self.rhs, lb, conjunction!())?;
-            context.set_lower_bound(x_i, lb, conjunction!())?;
-            context.set_upper_bound(&self.rhs, ub, conjunction!())?;
-            context.set_upper_bound(x_i, ub, conjunction!())?;
-
-            for_domain_values!(context, x_i, |e| {
-                if !context.contains(&self.rhs, e) {
-                    context.remove(x_i, e, conjunction!())?;
-                }
-            });
-            for_domain_values!(context, &self.rhs, |e| {
-                if !context.contains(x_i, e) {
-                    context.remove(&self.rhs, e, conjunction!())?;
-                }
-            });
-        } else {
-            // Remove values from i when for no values of e: x_i = e
-            for_domain_values!(context, &self.index, |i| {
-                let x_i = &self.array[i as usize];
-                if !iter_values(context.as_readonly(), &self.rhs).any(|e| context.contains(x_i, e))
-                {
-                    context.remove(&self.index, i, conjunction!())?;
-                }
-            });
-            // Remove values from e when for no values of i: x_i = e
-            for_domain_values!(context, &self.rhs, |e| {
-                if !iter_values(context.as_readonly(), &self.index)
-                    .map(|i| &self.array[i as usize])
-                    .any(|x_i| context.contains(x_i, e))
-                {
-                    context.remove(&self.rhs, e, conjunction!())?;
-                }
-            });
+            let idx = context.lower_bound(&self.index);
+            self.propagate_equality(&mut context, idx)?;
         }
+
         Ok(())
     }
+
+    fn initialise_at_root(
+        &mut self,
+        context: &mut PropagatorInitialisationContext,
+    ) -> Result<(), PropositionalConjunction> {
+        self.array.iter().enumerate().for_each(|(i, x_i)| {
+            let _ = context.register(
+                x_i.clone(),
+                DomainEvents::ANY_INT,
+                LocalId::from(i as u32 + ID_X_OFFSET),
+            );
+        });
+        let _ = context.register(self.index.clone(), DomainEvents::ANY_INT, ID_INDEX);
+        let _ = context.register(self.rhs.clone(), DomainEvents::ANY_INT, ID_RHS);
+        Ok(())
+    }
+
+    fn lazy_explanation(&mut self, code: u64, _: &Assignments) -> &[Predicate] {
+        let payload = RightHandSideReason::from_bits(code);
+
+        self.rhs_reason_buffer.clear();
+        self.rhs_reason_buffer
+            .extend(self.array.iter().map(|variable| match payload.bound() {
+                Bound::Lower => predicate![variable >= payload.value()],
+                Bound::Upper => predicate![variable <= payload.value()],
+            }));
+
+        &self.rhs_reason_buffer
+    }
+}
+
+impl<VX, VI, VE> ElementPropagator<VX, VI, VE>
+where
+    VX: IntegerVariable + 'static,
+    VI: IntegerVariable + 'static,
+    VE: IntegerVariable + 'static,
+{
+    /// Propagate the bounds of `self.index` to be in the range `[0, self.array.len())`.
+    fn propagate_index_bounds_within_array(
+        &self,
+        context: &mut PropagationContextMut<'_>,
+    ) -> PropagationStatusCP {
+        context.set_lower_bound(&self.index, 0, conjunction!())?;
+        context.set_upper_bound(&self.index, self.array.len() as i32 - 1, conjunction!())?;
+        Ok(())
+    }
+
+    /// The lower bound (resp. upper bound) of the right-hand side can be the minimum lower
+    /// bound (res. maximum upper bound) of the elements.
+    fn propagate_rhs_bounds_based_on_array(
+        &self,
+        context: &mut PropagationContextMut<'_>,
+    ) -> PropagationStatusCP {
+        let (rhs_lb, rhs_ub) =
+            self.array
+                .iter()
+                .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), element| {
+                    (
+                        i32::min(rhs_lb, context.lower_bound(element)),
+                        i32::max(rhs_ub, context.upper_bound(element)),
+                    )
+                });
+
+        context.set_lower_bound(
+            &self.rhs,
+            rhs_lb,
+            Reason::DynamicLazy(
+                RightHandSideReason::new()
+                    .with_bound(Bound::Lower)
+                    .with_value(rhs_lb)
+                    .into_bits(),
+            ),
+        )?;
+        context.set_upper_bound(
+            &self.rhs,
+            rhs_ub,
+            Reason::DynamicLazy(
+                RightHandSideReason::new()
+                    .with_bound(Bound::Upper)
+                    .with_value(rhs_ub)
+                    .into_bits(),
+            ),
+        )?;
+
+        Ok(())
+    }
+
+    /// Go through the array. For every element for which the domain does not intersect with the
+    /// right-hand side, remove it from index.
+    fn propagate_index_based_on_domain_intersection_with_rhs(
+        &self,
+        context: &mut PropagationContextMut<'_>,
+    ) -> PropagationStatusCP {
+        let rhs_lb = context.lower_bound(&self.rhs);
+        let rhs_ub = context.upper_bound(&self.rhs);
+        let mut to_remove = vec![];
+        for idx in context.iterate_domain(&self.index) {
+            let element = &self.array[idx as usize];
+
+            let element_ub = context.upper_bound(element);
+            let element_lb = context.lower_bound(element);
+
+            let reason = if rhs_lb > element_ub {
+                conjunction!([element <= rhs_lb - 1] & [self.rhs >= rhs_lb])
+            } else if rhs_ub < element_lb {
+                conjunction!([element >= rhs_ub + 1] & [self.rhs <= rhs_ub])
+            } else {
+                continue;
+            };
+
+            to_remove.push((idx, reason));
+        }
+
+        for (idx, reason) in to_remove.drain(..) {
+            context.remove(&self.index, idx, reason)?;
+        }
+
+        Ok(())
+    }
+
+    /// Propagate equality between lhs and rhs. This assumes the bounds of rhs have already been
+    /// tightened to the bounds of lhs, through a previous propagation rule.
+    fn propagate_equality(
+        &self,
+        context: &mut PropagationContextMut<'_>,
+        index: i32,
+    ) -> PropagationStatusCP {
+        let rhs_lb = context.lower_bound(&self.rhs);
+        let rhs_ub = context.upper_bound(&self.rhs);
+        let lhs = &self.array[index as usize];
+
+        context.set_lower_bound(
+            lhs,
+            rhs_lb,
+            conjunction!([self.rhs >= rhs_lb] & [self.index == index]),
+        )?;
+        context.set_upper_bound(
+            lhs,
+            rhs_ub,
+            conjunction!([self.rhs <= rhs_ub] & [self.index == index]),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum Bound {
+    Lower = 0,
+    Upper = 1,
+}
+
+impl Bound {
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
+
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0 => Bound::Lower,
+            _ => Bound::Upper,
+        }
+    }
+}
+
+#[bitfield(u64)]
+struct RightHandSideReason {
+    #[bits(32, from = Bound::from_bits)]
+    bound: Bound,
+    value: i32,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
+    use crate::predicate;
 
     #[test]
-    fn cocp_m4co_example() {
-        // source: https://user.it.uu.se/~pierref/courses/COCP/slides/T16-Propagators.pdf#Navigation24
+    fn elements_from_array_with_disjoint_domains_to_rhs_are_filtered_from_index() {
         let mut solver = TestSolver::default();
-        let x_0 = solver.new_variable(4, 4);
-        let x_1 = solver.new_variable(5, 5);
-        let x_2 = solver.new_variable(9, 9);
-        let x_3 = solver.new_variable(7, 7);
-        let index = solver.new_variable(1, 3);
-        let rhs = solver.new_variable(2, 8);
-        let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator = solver
-            .new_propagator(ElementPropagator::new(array, index, rhs))
-            .expect("no empty domains");
-
-        solver.propagate(&mut propagator).expect("no empty domains");
-
-        assert_eq!(1, solver.lower_bound(index));
-        assert_eq!(3, solver.upper_bound(index));
-        assert!(!solver.contains(index, 2));
-        assert_eq!(5, solver.lower_bound(rhs));
-        assert_eq!(7, solver.upper_bound(rhs));
-        assert!(!solver.contains(rhs, 6));
-    }
-
-    #[test]
-    fn reason_test() {
-        let mut solver = TestSolver::default();
         let x_0 = solver.new_variable(4, 6);
-        let x_1 = solver.new_variable(7, 8);
+        let x_1 = solver.new_variable(2, 3);
         let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(10, 11);
-        let index = solver.new_variable(1, 3);
+        let x_3 = solver.new_variable(14, 15);
+
+        let index = solver.new_variable(0, 3);
         let rhs = solver.new_variable(6, 9);
-        let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
 
-        let mut propagator = solver
-            .new_propagator(ElementPropagator::new(array, index, rhs))
+        let _ = solver
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
+                index,
+                rhs,
+            ))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("no empty domains");
+        solver.assert_bounds(index, 0, 2);
 
-        let index_reason = solver.get_reason_int(predicate![index != 3].try_into().unwrap());
-        // reason for index removal 3 is that `x_3 != e`
         assert_eq!(
-            *index_reason,
-            conjunction!(
-                [rhs >= 6] & [rhs <= 9] & [x_3 != 6] & [x_3 != 7] & [x_3 != 8] & [x_3 != 9]
-            )
+            solver.get_reason_int(predicate![index != 3]),
+            conjunction!([x_3 >= 10] & [rhs <= 9])
         );
 
-        let rhs_reason = solver.get_reason_int(predicate![rhs != 6].try_into().unwrap());
-        // reason for rhs removal 6 is that for all valid indices i `x_i != 6`
         assert_eq!(
-            *rhs_reason,
-            conjunction!([index >= 1] & [index <= 2] & [x_1 != 6] & [x_2 != 6])
+            solver.get_reason_int(predicate![index != 1]),
+            conjunction!([x_1 <= 5] & [rhs >= 6])
         );
     }
 
     #[test]
-    fn reason_test_fixed_index() {
+    fn bounds_of_rhs_are_min_and_max_of_lower_and_upper_in_array() {
         let mut solver = TestSolver::default();
-        let x_0 = solver.new_variable(4, 6);
-        let x_1 = solver.new_variable(7, 10);
+
+        let x_0 = solver.new_variable(3, 10);
+        let x_1 = solver.new_variable(2, 3);
         let x_2 = solver.new_variable(7, 9);
-        let x_3 = solver.new_variable(10, 11);
+        let x_3 = solver.new_variable(14, 15);
+
+        let index = solver.new_variable(0, 3);
+        let rhs = solver.new_variable(0, 20);
+
+        let _ = solver
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
+                index,
+                rhs,
+            ))
+            .expect("no empty domains");
+
+        solver.assert_bounds(rhs, 2, 15);
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs >= 2]),
+            conjunction!([x_0 >= 2] & [x_1 >= 2] & [x_2 >= 2] & [x_3 >= 2])
+        );
+
+        assert_eq!(
+            solver.get_reason_int(predicate![rhs <= 15]),
+            conjunction!([x_0 <= 15] & [x_1 <= 15] & [x_2 <= 15] & [x_3 <= 15])
+        );
+    }
+
+    #[test]
+    fn fixed_index_propagates_bounds_on_element() {
+        let mut solver = TestSolver::default();
+
+        let x_0 = solver.new_variable(3, 10);
+        let x_1 = solver.new_variable(0, 15);
+        let x_2 = solver.new_variable(7, 9);
+        let x_3 = solver.new_variable(14, 15);
+
         let index = solver.new_variable(1, 1);
         let rhs = solver.new_variable(6, 9);
-        solver.remove(rhs, 8).expect("no empty domains");
 
-        let array = vec![x_0, x_1, x_2, x_3].into_boxed_slice();
-
-        let mut propagator = solver
-            .new_propagator(ElementPropagator::new(array, index, rhs))
+        let _ = solver
+            .new_propagator(ElementPropagator::new(
+                vec![x_0, x_1, x_2, x_3].into(),
+                index,
+                rhs,
+            ))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("no empty domains");
+        solver.assert_bounds(x_1, 6, 9);
 
-        let x1_ub_reason = solver.get_reason_int(predicate![x_1 <= 9].try_into().unwrap());
-        // reason for x_1 <= 9 is that `x_1 == e` and `e <= 9`
-        assert_eq!(*x1_ub_reason, conjunction!([index == 1] & [rhs <= 9]));
+        assert_eq!(
+            solver.get_reason_int(predicate![x_1 >= 6]),
+            conjunction!([index == 1] & [rhs >= 6])
+        );
 
-        let x1_8_reason = solver.get_reason_int(predicate![x_1 != 8].try_into().unwrap());
-        // reason for x_1 removal 8 is that `x_1 == e` and `e != 8`
-        assert_eq!(*x1_8_reason, conjunction!([index == 1] & [rhs != 8]));
-
-        let rhs_reason = solver.get_reason_int(predicate![rhs >= 7].try_into().unwrap());
-        // reason for `rhs >= 7` is that `x_1 >= 7`
-        assert_eq!(*rhs_reason, conjunction!([index == 1] & [x_1 >= 7]));
+        assert_eq!(
+            solver.get_reason_int(predicate![x_1 <= 9]),
+            conjunction!([index == 1] & [rhs <= 9])
+        );
     }
 }

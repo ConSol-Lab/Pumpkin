@@ -43,7 +43,7 @@ unused_results = "warn"
 variant_size_differences = "warn"
 
 [workspace.lints.clippy]
-# allow_attributes_without_reason = "deny" # Lint reasons are experimental :(
+allow_attributes_without_reason = "deny"
 # cargo_common_metadata = "warn" # Temporarily off while crate is not published yet
 clone_on_ref_ptr = "warn"
 default_union_representation = "deny"

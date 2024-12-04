@@ -11,14 +11,12 @@ use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
+use crate::engine::Assignments;
 
 /// An implementation of a [`Brancher`] which takes a [`Vec`] of `Box<dyn Brancher>` and
-/// sequentially applies them.
+/// sequentially applies [`Brancher::next_decision`] until all of them return [`None`].
 ///
-/// It runs [`Brancher::next_decision`] on all of them until all of them return [`None`] in which
-/// case this [`Brancher`] will also return [`None`] in its [`DynamicBrancher::next_decision`]
-/// method. For any other method in [`Brancher`] it will simply pass it along to all of the provided
+/// For any other method in [`Brancher`] it will simply pass it along to all of the provided
 /// `Box<dyn Brancher>`s. This structure should be used if you want to use dynamic [`Brancher`]s but
 /// require a [`Sized`] object (e.g. when a function takes as input `impl Brancher`).
 ///
@@ -77,10 +75,10 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_conflict());
     }
 
-    fn on_unassign_literal(&mut self, literal: Literal) {
+    fn on_backtrack(&mut self) {
         self.branchers
             .iter_mut()
-            .for_each(|brancher| brancher.on_unassign_literal(literal));
+            .for_each(|brancher| brancher.on_backtrack());
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
@@ -89,16 +87,10 @@ impl Brancher for DynamicBrancher {
             .for_each(|brancher| brancher.on_unassign_integer(variable, value));
     }
 
-    fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.branchers
             .iter_mut()
-            .for_each(|brancher| brancher.on_appearance_in_conflict_literal(literal));
-    }
-
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_appearance_in_conflict_integer(variable));
+            .for_each(|brancher| brancher.on_appearance_in_conflict_predicate(predicate));
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
@@ -106,6 +98,18 @@ impl Brancher for DynamicBrancher {
         self.branchers
             .iter_mut()
             .for_each(|brancher| brancher.on_solution(solution));
+    }
+
+    fn on_restart(&mut self) {
+        self.branchers
+            .iter_mut()
+            .for_each(|brancher| brancher.on_restart());
+    }
+
+    fn synchronise(&mut self, assignments: &Assignments) {
+        self.branchers
+            .iter_mut()
+            .for_each(|brancher| brancher.synchronise(assignments));
     }
 
     fn is_restart_pointless(&mut self) -> bool {

@@ -5,7 +5,7 @@ use std::ops::IndexMut;
 
 use super::Propagator;
 use super::PropagatorId;
-use crate::basic_types::KeyedVec;
+use crate::containers::KeyedVec;
 use crate::engine::DebugDyn;
 
 /// A central store for propagators.
@@ -13,7 +13,7 @@ use crate::engine::DebugDyn;
 /// The propagator store associates tags with propagators, whenever a tag is provided for a
 /// propagator.
 #[derive(Default)]
-pub(crate) struct PropagatorStore {
+pub struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
     tags: KeyedVec<PropagatorId, Option<NonZero<u32>>>,
 }
@@ -61,12 +61,12 @@ impl IndexMut<PropagatorId> for PropagatorStore {
 
 impl Debug for PropagatorStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cp_propagators: Vec<_> = self
+        let propagators: Vec<_> = self
             .propagators
             .iter()
             .map(|_| DebugDyn::from("Propagator"))
             .collect();
 
-        write!(f, "{cp_propagators:?}")
+        write!(f, "{propagators:?}")
     }
 }

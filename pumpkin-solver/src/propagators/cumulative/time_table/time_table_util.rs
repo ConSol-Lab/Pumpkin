@@ -5,8 +5,6 @@
 use std::cmp::max;
 use std::rc::Rc;
 
-#[cfg(doc)]
-use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
@@ -690,20 +688,18 @@ mod tests {
     use super::find_index_last_profile_which_propagates_lower_bound;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
-    use crate::engine::AssignmentsInteger;
-    use crate::engine::AssignmentsPropositional;
+    use crate::engine::Assignments;
     use crate::propagators::cumulative::time_table::time_table_util::find_index_last_profile_which_propagates_upper_bound;
     use crate::propagators::ResourceProfile;
     use crate::propagators::Task;
 
     #[test]
     fn test_finding_last_index_lower_bound() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let assignments_propositional = AssignmentsPropositional::default();
+        let mut assignments = Assignments::default();
 
-        let x = assignments_integer.grow(0, 10);
-        let y = assignments_integer.grow(5, 5);
-        let z = assignments_integer.grow(8, 8);
+        let x = assignments.grow(0, 10);
+        let y = assignments.grow(5, 5);
+        let z = assignments.grow(8, 8);
 
         let time_table = [
             &ResourceProfile {
@@ -733,7 +729,7 @@ mod tests {
         let last_index = find_index_last_profile_which_propagates_lower_bound(
             0,
             &time_table,
-            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            PropagationContext::new(&assignments),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,
@@ -747,12 +743,11 @@ mod tests {
 
     #[test]
     fn test_finding_last_index_upper_bound() {
-        let mut assignments_integer = AssignmentsInteger::default();
-        let assignments_propositional = AssignmentsPropositional::default();
+        let mut assignments = Assignments::default();
 
-        let x = assignments_integer.grow(7, 7);
-        let y = assignments_integer.grow(5, 5);
-        let z = assignments_integer.grow(8, 8);
+        let x = assignments.grow(7, 7);
+        let y = assignments.grow(5, 5);
+        let z = assignments.grow(8, 8);
 
         let time_table = [
             &ResourceProfile {
@@ -782,7 +777,7 @@ mod tests {
         let last_index = find_index_last_profile_which_propagates_upper_bound(
             1,
             &time_table,
-            PropagationContext::new(&assignments_integer, &assignments_propositional),
+            PropagationContext::new(&assignments),
             &Rc::new(Task {
                 start_variable: x,
                 processing_time: 6,

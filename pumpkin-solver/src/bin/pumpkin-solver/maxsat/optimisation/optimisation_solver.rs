@@ -1,8 +1,8 @@
 use log::debug;
 use pumpkin_solver::branching::Brancher;
-use pumpkin_solver::encodings::Function;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::TerminationCondition;
+use pumpkin_solver::Function;
 use pumpkin_solver::Solver;
 
 use super::linear_search::LinearSearch;
@@ -12,6 +12,7 @@ use super::stopwatch::Stopwatch;
 /// Attempt to find optimal solutions to a constraint satisfaction problem with respect to an
 /// objective function.
 #[derive(Debug)]
+
 pub(crate) struct OptimisationSolver {
     solver: Solver,
     objective_function: Function,

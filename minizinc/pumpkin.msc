@@ -2,7 +2,7 @@
     "name": "Pumpkin",
     "id": "nl.tudelft.algorithmics.pumpkin",
     "version": "0.1",
-    "executable": "../target/release/pumpkin-cli",
+    "executable": "../target/release/pumpkin-solver",
     "mznlib": "./lib",
     "stdFlags": ["-v", "-f", "-r", "-t", "-s", "-a"],
 
@@ -79,6 +79,12 @@
             "bool",
             "false"
         ],
+        [
+            "--proof-path",
+            "The path to the proof file.",
+            "string",
+            "",
+        ]
     ],
 
     "tags": ["cp", "lcg", "int"]

@@ -76,13 +76,13 @@ impl BooleanLessThanOrEqual {
                 let corresponding_domain_id = solver.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
                 let _ = solver.add_clause([
-                    !*bool,
-                    solver.get_literal(predicate![corresponding_domain_id >= 1]),
+                    !(*bool).get_true_predicate(),
+                    predicate![corresponding_domain_id >= 1],
                 ]);
                 // !bool -> [domain = 0]
                 let _ = solver.add_clause([
-                    *bool,
-                    solver.get_literal(predicate![corresponding_domain_id <= 0]),
+                    bool.get_true_predicate(),
+                    predicate![corresponding_domain_id <= 0],
                 ]);
                 corresponding_domain_id.scaled(self.weights[index])
             })
@@ -129,13 +129,13 @@ impl BooleanEqual {
                 let corresponding_domain_id = solver.new_bounded_integer(0, 1);
                 // bool -> [domain = 1]
                 let _ = solver.add_clause([
-                    !*bool,
-                    solver.get_literal(predicate![corresponding_domain_id >= 1]),
+                    !(*bool).get_true_predicate(),
+                    predicate![corresponding_domain_id >= 1],
                 ]);
                 // !bool -> [domain = 0]
                 let _ = solver.add_clause([
-                    *bool,
-                    solver.get_literal(predicate![corresponding_domain_id <= 0]),
+                    (*bool).get_true_predicate(),
+                    predicate![corresponding_domain_id <= 0],
                 ]);
                 corresponding_domain_id.scaled(self.weights[index])
             })

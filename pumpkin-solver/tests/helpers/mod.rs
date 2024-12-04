@@ -1,5 +1,8 @@
 //! Crate to run integration tests for the solver.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "is used in integration tests but unable to find a way to silence these warnings"
+)]
 
 pub(crate) mod flatzinc;
 
