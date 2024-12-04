@@ -4,11 +4,9 @@
 use crate::basic_types::SolutionReference;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
-#[cfg(doc)]
-use crate::branching::SolutionGuidedValueSelector;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
+use crate::engine::Assignments;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -70,7 +68,7 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             even_number_of_solutions: true,
             is_using_default_brancher: false,
             other_brancher,
-            default_brancher: solver.default_brancher_over_all_propositional_variables(),
+            default_brancher: solver.default_brancher(),
             strategy,
             has_considered_restart: false,
         }
@@ -98,16 +96,9 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         }
     }
 
-    fn on_appearance_in_conflict_integer(&mut self, variable: DomainId) {
+    fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
         self.other_brancher
-            .on_appearance_in_conflict_integer(variable)
-    }
-
-    fn on_appearance_in_conflict_literal(&mut self, literal: Literal) {
-        self.other_brancher
-            .on_appearance_in_conflict_literal(literal);
-        self.default_brancher
-            .on_appearance_in_conflict_literal(literal)
+            .on_appearance_in_conflict_predicate(predicate)
     }
 
     fn on_conflict(&mut self) {
@@ -147,11 +138,6 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         self.other_brancher.on_unassign_integer(variable, value)
     }
 
-    fn on_unassign_literal(&mut self, literal: Literal) {
-        self.other_brancher.on_unassign_literal(literal);
-        self.default_brancher.on_unassign_literal(literal)
-    }
-
     fn on_restart(&mut self) {
         if self.strategy == AlternatingStrategy::EveryRestart {
             // We have considered a restart and we should switch
@@ -184,6 +170,16 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
             }
         }
     }
+
+    fn on_backtrack(&mut self) {
+        self.default_brancher.on_backtrack();
+        self.other_brancher.on_backtrack();
+    }
+
+    fn synchronise(&mut self, assignments: &Assignments) {
+        self.default_brancher.synchronise(assignments);
+        self.other_brancher.synchronise(assignments);
+    }
 }
 
 #[cfg(test)]
@@ -193,8 +189,7 @@ mod tests {
     use crate::basic_types::tests::TestRandom;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
-    use crate::engine::AssignmentsInteger;
-    use crate::engine::AssignmentsPropositional;
+    use crate::engine::Assignments;
     use crate::results::SolutionReference;
     use crate::Solver;
 
@@ -203,14 +198,12 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EverySolution,
         );
 
-        let assignments_propositional = AssignmentsPropositional::default();
-        let assignments_integer = AssignmentsInteger::default();
-        let empty_solution_reference =
-            SolutionReference::new(&assignments_propositional, &assignments_integer);
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
 
         assert!(!brancher.is_using_default_brancher);
         brancher.on_solution(empty_solution_reference);
@@ -224,14 +217,12 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EveryOtherSolution,
         );
 
-        let assignments_propositional = AssignmentsPropositional::default();
-        let assignments_integer = AssignmentsInteger::default();
-        let empty_solution_reference =
-            SolutionReference::new(&assignments_propositional, &assignments_integer);
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
 
         assert!(!brancher.is_using_default_brancher);
         brancher.on_solution(empty_solution_reference);
@@ -249,14 +240,12 @@ mod tests {
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution,
         );
 
-        let assignments_propositional = AssignmentsPropositional::default();
-        let assignments_integer = AssignmentsInteger::default();
-        let empty_solution_reference =
-            SolutionReference::new(&assignments_propositional, &assignments_integer);
+        let assignments = Assignments::default();
+        let empty_solution_reference = SolutionReference::new(&assignments);
 
         assert!(!brancher.is_using_default_brancher);
         brancher.on_solution(empty_solution_reference);
@@ -269,13 +258,11 @@ mod tests {
 
     #[test]
     fn test_every_other_restart() {
-        let assignments_integer = AssignmentsInteger::default();
-        let assignments_propositional = AssignmentsPropositional::default();
-
+        let assignments = Assignments::default();
         let solver = Solver::default();
         let mut brancher = AlternatingBrancher::new(
             &solver,
-            solver.default_brancher_over_all_propositional_variables(),
+            solver.default_brancher(),
             AlternatingStrategy::EveryRestart,
         );
 
@@ -283,24 +270,21 @@ mod tests {
         brancher.on_restart();
         // next_decision is called to ensure that the brancher has actually switched
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
+            &assignments,
             &mut TestRandom::default(),
         ));
         assert!(brancher.is_using_default_brancher);
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
+            &assignments,
             &mut TestRandom::default(),
         ));
         assert!(!brancher.is_using_default_brancher);
 
         brancher.on_restart();
         let _ = brancher.next_decision(&mut SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
+            &assignments,
             &mut TestRandom::default(),
         ));
 

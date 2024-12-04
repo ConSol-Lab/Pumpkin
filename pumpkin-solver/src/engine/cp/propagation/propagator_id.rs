@@ -1,4 +1,4 @@
-use crate::basic_types::StorageKey;
+use crate::containers::StorageKey;
 
 /// An identifier to a propagator instance within the solver.
 /// Each propagator is assigned a unique identifier at runtime.

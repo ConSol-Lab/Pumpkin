@@ -12,6 +12,8 @@ pub(crate) struct Trail<T> {
     trail: Vec<T>,
 }
 
+// We explicitly implement the Default and not as a macro, because we want to avoid imposing Default
+// on the generic type T.
 impl<T> Default for Trail<T> {
     fn default() -> Self {
         Trail {
@@ -26,6 +28,24 @@ impl<T> Trail<T> {
     pub(crate) fn increase_decision_level(&mut self) {
         self.current_decision_level += 1;
         self.trail_delimiter.push(self.trail.len());
+    }
+
+    pub(crate) fn values_on_decision_level(&self, decision_level: usize) -> &[T] {
+        assert!(decision_level <= self.current_decision_level);
+
+        let start = if decision_level == 0 {
+            0
+        } else {
+            self.trail_delimiter[decision_level - 1]
+        };
+
+        let end = if decision_level == self.current_decision_level {
+            self.trail.len()
+        } else {
+            self.trail_delimiter[decision_level]
+        };
+
+        &self.trail[start..end]
     }
 
     pub(crate) fn get_decision_level(&self) -> usize {
@@ -46,10 +66,12 @@ impl<T> Trail<T> {
         self.trail.push(elem)
     }
 
-    /// Only used in `crate::engine::cp::reason::ReasonStore` to replace a lazy reason with its
-    ///   result.
-    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.trail.get_mut(index)
+    /// This method pops an entry from the trail without doing any checks.
+    ///
+    /// Note that this method should *only* be used to prevent the assignments from being in an
+    /// inconsistent state.
+    pub(crate) fn pop(&mut self) -> Option<T> {
+        self.trail.pop()
     }
 }
 
@@ -119,5 +141,22 @@ mod tests {
 
         let popped = trail.synchronise(0).collect::<Vec<_>>();
         assert_eq!(vec![4, 3, 2], popped);
+    }
+
+    #[test]
+    fn elements_at_current_decision_level() {
+        let mut trail = Trail::default();
+        trail.push(1);
+        trail.push(2);
+
+        trail.increase_decision_level();
+        trail.push(3);
+        trail.increase_decision_level();
+        trail.push(4);
+        trail.push(5);
+
+        assert_eq!(&[1, 2], trail.values_on_decision_level(0));
+        assert_eq!(&[3], trail.values_on_decision_level(1));
+        assert_eq!(&[4, 5], trail.values_on_decision_level(2));
     }
 }

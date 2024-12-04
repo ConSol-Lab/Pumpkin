@@ -1,13 +1,12 @@
 use enumset::EnumSet;
 
 use super::TransformableVariable;
-use crate::basic_types::StorageKey;
+use crate::containers::StorageKey;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::AffineView;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -28,25 +27,50 @@ impl DomainId {
 impl IntegerVariable for DomainId {
     type AffineView = AffineView<Self>;
 
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound(&self, assignment: &Assignments) -> i32 {
         assignment.get_lower_bound(*self)
     }
 
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        assignment.get_lower_bound_at_trail_position(*self, trail_position)
+    }
+
+    fn upper_bound(&self, assignment: &Assignments) -> i32 {
         assignment.get_upper_bound(*self)
     }
 
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        assignment.get_upper_bound_at_trail_position(*self, trail_position)
+    }
+
+    fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         assignment.is_value_in_domain(*self, value)
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
-        assignment.get_domain_description(*self)
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        assignment.is_value_in_domain_at_trail_position(*self, value, trail_position)
+    }
+
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+        assignment.get_domain_iterator(*self)
     }
 
     fn remove(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -55,7 +79,7 @@ impl IntegerVariable for DomainId {
 
     fn set_lower_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -64,7 +88,7 @@ impl IntegerVariable for DomainId {
 
     fn set_upper_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {

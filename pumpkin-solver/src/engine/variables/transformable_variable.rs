@@ -1,4 +1,4 @@
-/// Trait for transforming a variable
+/// Trait for transforming a variable.
 ///
 /// At the moment this allows creating a scaled version of a
 /// variable using [`TransformableVariable::scaled`] or creating a variable with a constant offset

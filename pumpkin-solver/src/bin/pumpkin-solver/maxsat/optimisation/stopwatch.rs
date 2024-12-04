@@ -3,6 +3,7 @@ use std::time::Instant;
 
 /// A time keeping utility which keeps track of the elapsed time since creation.
 #[derive(Debug, Copy, Clone)]
+
 pub(crate) struct Stopwatch {
     time_start: Instant,
 }

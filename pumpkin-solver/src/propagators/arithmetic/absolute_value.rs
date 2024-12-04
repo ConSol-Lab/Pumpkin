@@ -24,7 +24,9 @@ impl<VA, VB> AbsoluteValuePropagator<VA, VB> {
     }
 }
 
-impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropagator<VA, VB> {
+impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
+    for AbsoluteValuePropagator<VA, VB>
+{
     fn initialise_at_root(
         &mut self,
         context: &mut PropagatorInitialisationContext,
@@ -121,7 +123,7 @@ impl<VA: IntegerVariable, VB: IntegerVariable> Propagator for AbsoluteValuePropa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn absolute_bounds_are_propagated_at_initialise() {

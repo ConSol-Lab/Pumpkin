@@ -4,7 +4,7 @@ use super::TieBreaker;
 /// A tie-breaker which simply selects the first variable that it receives with the "best" value
 /// according to the provided [`Direction`].
 ///
-/// For example, if the provided direction is [`Direction::Minimum`] and there are two variables
+///  For example, if the provided direction is [`Direction::Minimum`] and there are two variables
 /// `x1` with value 5 and `x2` with value 5, if the tie-breaker first receives `x2` and then `x1`
 /// then it will return `x2` because it was the first variable with the minimum value (of 5 in this
 /// example) which was provided.
@@ -76,8 +76,8 @@ impl<Var: Copy, Value: PartialOrd> TieBreaker<Var, Value> for InOrderTieBreaker<
 #[cfg(test)]
 mod tests {
     use super::InOrderTieBreaker;
-    use crate::branching::Direction;
-    use crate::branching::TieBreaker;
+    use crate::branching::tie_breaking::Direction;
+    use crate::branching::tie_breaking::TieBreaker;
     use crate::engine::variables::DomainId;
 
     #[test]

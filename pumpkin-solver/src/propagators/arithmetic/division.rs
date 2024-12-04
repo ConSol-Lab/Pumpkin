@@ -37,7 +37,7 @@ impl<VA, VB, VC> DivisionPropagator<VA, VB, VC> {
     }
 }
 
-impl<VA, VB, VC> Propagator for DivisionPropagator<VA, VB, VC>
+impl<VA: 'static, VB: 'static, VC: 'static> Propagator for DivisionPropagator<VA, VB, VC>
 where
     VA: IntegerVariable,
     VB: IntegerVariable,
@@ -322,7 +322,7 @@ fn propagate_signs<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVariable
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn detects_conflicts() {

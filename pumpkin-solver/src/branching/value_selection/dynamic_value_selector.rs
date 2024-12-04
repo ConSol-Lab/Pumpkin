@@ -7,7 +7,6 @@ use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
 
 /// Similar to [`DynamicBrancher`], this is a pass-along structure which should be used when a
 /// [`Sized`] object is required.
@@ -42,10 +41,6 @@ impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
         self.selector.on_unassign_integer(variable, value)
-    }
-
-    fn on_unassign_literal(&mut self, literal: Literal) {
-        self.selector.on_unassign_literal(literal)
     }
 
     fn is_restart_pointless(&mut self) -> bool {

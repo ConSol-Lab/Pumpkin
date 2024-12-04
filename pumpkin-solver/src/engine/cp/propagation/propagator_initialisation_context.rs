@@ -1,5 +1,5 @@
-use super::propagation_context::HasAssignments;
 use super::PropagationContext;
+use super::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::LocalId;
 #[cfg(doc)]
@@ -7,13 +7,9 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
 use crate::engine::propagation::PropagatorVarId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::variables::Literal;
-use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
+use crate::engine::Assignments;
 use crate::engine::WatchListCP;
-use crate::engine::WatchListPropositional;
 use crate::engine::Watchers;
-use crate::engine::WatchersPropositional;
 
 /// [`PropagatorInitialisationContext`] is used when [`Propagator`]s are initialised after creation.
 ///
@@ -23,7 +19,6 @@ use crate::engine::WatchersPropositional;
 #[derive(Debug)]
 pub struct PropagatorInitialisationContext<'a> {
     watch_list: &'a mut WatchListCP,
-    watch_list_propositional: &'a mut WatchListPropositional,
     propagator_id: PropagatorId,
     next_local_id: LocalId,
 
@@ -33,23 +28,20 @@ pub struct PropagatorInitialisationContext<'a> {
 impl PropagatorInitialisationContext<'_> {
     pub(crate) fn new<'a>(
         watch_list: &'a mut WatchListCP,
-        watch_list_propositional: &'a mut WatchListPropositional,
         propagator_id: PropagatorId,
-        assignments_integer: &'a AssignmentsInteger,
-        assignments_propositional: &'a AssignmentsPropositional,
+        assignments: &'a Assignments,
     ) -> PropagatorInitialisationContext<'a> {
         PropagatorInitialisationContext {
             watch_list,
-            watch_list_propositional,
             propagator_id,
             next_local_id: LocalId::from(0),
 
-            context: PropagationContext::new(assignments_integer, assignments_propositional),
+            context: PropagationContext::new(assignments),
         }
     }
 
     pub(crate) fn as_readonly(&self) -> PropagationContext {
-        PropagationContext::new(self.assignments_integer(), self.assignments_propositional())
+        self.context
     }
 
     /// Subscribes the propagator to the given [`DomainEvents`].
@@ -69,6 +61,9 @@ impl PropagatorInitialisationContext<'_> {
         domain_events: DomainEvents,
         local_id: LocalId,
     ) -> Var {
+        if self.context.is_fixed(&var) {
+            return var;
+        }
         let propagator_var = PropagatorVarId {
             propagator: self.propagator_id,
             variable: local_id,
@@ -114,26 +109,6 @@ impl PropagatorInitialisationContext<'_> {
         var
     }
 
-    pub fn register_literal(
-        &mut self,
-        var: Literal,
-        domain_events: DomainEvents,
-        local_id: LocalId,
-    ) -> Literal {
-        let propagator_var = PropagatorVarId {
-            propagator: self.propagator_id,
-            variable: local_id,
-        };
-
-        self.next_local_id = self.next_local_id.max(LocalId::from(local_id.unpack() + 1));
-
-        let mut watchers =
-            WatchersPropositional::new(propagator_var, self.watch_list_propositional);
-        watchers.watch_all(var, domain_events.get_bool_events());
-
-        var
-    }
-
     pub fn get_next_local_id(&self) -> LocalId {
         self.next_local_id
     }
@@ -144,12 +119,8 @@ mod private {
     use crate::engine::propagation::propagation_context::HasAssignments;
 
     impl HasAssignments for PropagatorInitialisationContext<'_> {
-        fn assignments_integer(&self) -> &AssignmentsInteger {
-            self.context.assignments_integer()
-        }
-
-        fn assignments_propositional(&self) -> &AssignmentsPropositional {
-            self.context.assignments_propositional()
+        fn assignments(&self) -> &Assignments {
+            self.context.assignments
         }
     }
 }

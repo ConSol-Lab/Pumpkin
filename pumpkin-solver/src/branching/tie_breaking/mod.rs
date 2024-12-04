@@ -1,4 +1,4 @@
-//! Contains structures for tie-breaking
+//! Contains structures for tie-breaking.
 //!
 //! These structures provide an interface for deciding
 //! between two variables when there is a tie between them (for example during variable
@@ -22,10 +22,10 @@
 //! select the first variable with the lowest-value that it has found.
 //!
 //! ```rust
-//! # use pumpkin_solver::branching::InOrderTieBreaker;
+//! # use pumpkin_solver::branching::tie_breaking::InOrderTieBreaker;
 //! # use pumpkin_solver::variables::DomainId;
-//! # use pumpkin_solver::branching::Direction;
-//! # use pumpkin_solver::branching::TieBreaker;
+//! # use pumpkin_solver::branching::tie_breaking::Direction;
+//! # use pumpkin_solver::branching::tie_breaking::TieBreaker;
 //! let mut breaker = InOrderTieBreaker::new(Direction::Minimum);
 //!
 //! // We consider 3 variables, where only variables with ID 1 and ID 2 should be considered.
@@ -45,9 +45,10 @@ mod random_tie_breaker;
 mod tie_breaker;
 
 pub use in_order_tie_breaker::*;
+pub use random_tie_breaker::*;
 pub use tie_breaker::*;
 
 #[cfg(doc)]
-use crate::branching::Smallest;
+use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
-use crate::branching::VariableSelector;
+use crate::branching::variable_selection::VariableSelector;

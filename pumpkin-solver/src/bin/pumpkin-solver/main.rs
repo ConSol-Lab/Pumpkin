@@ -16,24 +16,25 @@ use clap::Parser;
 use clap::ValueEnum;
 use convert_case::Case;
 use file_format::FileFormat;
+use fnv::FnvBuildHasher;
 use log::error;
 use log::info;
 use log::warn;
 use log::Level;
 use log::LevelFilter;
+use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
-use pumpkin_solver::encodings::PseudoBooleanEncoding;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
+use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::Solution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
-use pumpkin_solver::variables::PropositionalVariable;
 use pumpkin_solver::Solver;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
@@ -42,6 +43,8 @@ use result::PumpkinResult;
 
 use crate::flatzinc::FlatZincOptions;
 use crate::maxsat::wcnf_problem;
+
+pub(crate) type HashMap<K, V, Hasher = FnvBuildHasher> = std::collections::HashMap<K, V, Hasher>;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -77,20 +80,20 @@ struct Args {
     /// What type of proof to log.
     ///
     /// If the `proof_path` option is not provided, this is ignored.
-    #[arg(long, default_value_t = ProofType::Scaffold)]
+    #[arg(long, value_enum, default_value_t)]
     proof_type: ProofType,
 
     /// The number of high lbd learned clauses that are kept in the database.
     /// Learned clauses are kept based on the tiered system introduced in "Improving
     /// SAT Solvers by Exploiting Empirical Characteristics of CDCL - Chanseok Oh (2016)".
     ///
-    /// Possible values: u64
+    /// Possible values: usize
     #[arg(
         long = "learning-max-num-clauses",
         default_value_t = 4000,
         verbatim_doc_comment
     )]
-    learning_max_num_clauses: u64,
+    learning_max_num_clauses: usize,
 
     /// Learned clauses with this threshold LBD or lower are kept permanently
     /// Learned clauses are kept based on the tiered system introduced "Improving
@@ -107,12 +110,8 @@ struct Args {
     /// Decides which clauses will be removed when cleaning up the learned clauses. Can either be
     /// based on the LBD of a clause (the number of different decision levels) or on the activity
     /// of a clause (how often it is used in conflict analysis).
-    #[arg(
-        short = 'l',
-        long = "learning-sorting-strategy",
-        default_value_t = LearnedClauseSortingStrategy::Activity, verbatim_doc_comment
-    )]
-    learning_sorting_strategy: LearnedClauseSortingStrategy,
+    #[arg(long, value_enum, default_value_t)]
+    learning_sorting_strategy: LearnedNogoodSortingStrategy,
 
     /// Decides whether learned clauses are minimised as a post-processing step after computing the
     /// 1-UIP Minimisation is done; according to the idea proposed in "Generalized Conflict-Clause
@@ -125,6 +124,7 @@ struct Args {
     no_learning_clause_minimisation: bool,
 
     /// Decides the sequence based on which the restarts are performed.
+    ///
     /// - The "constant" approach uses a constant number of conflicts before another restart is
     ///   triggered
     /// - The "geometric" approach uses a geometrically increasing sequence
@@ -133,10 +133,7 @@ struct Args {
     ///   (1993)")
     ///
     /// To be used in combination with "--restarts-base-interval".
-    #[arg(
-        long = "restart-sequence",
-        default_value_t = SequenceGeneratorType::Constant, verbatim_doc_comment
-    )]
+    #[arg(long, value_enum, default_value_t)]
     restart_sequence_generator_type: SequenceGeneratorType,
 
     /// The base interval length is used as a multiplier to the restart sequence.
@@ -298,16 +295,24 @@ struct Args {
 
     /// The encoding to use for the upper bound constraint in a MaxSAT optimisation problem.
     ///
-    /// The "gte" value specifies that the solver should use the Generalized Totalizer Encoding
-    /// (see "Generalized totalizer encoding for pseudo-boolean constraints - Saurabh et al.
-    /// (2015)"), and the "cne" value specifies that the solver should use the Cardinality Network
-    /// Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et al.
-    /// (2011)").
-    #[arg(
-        long = "upper-bound-encoding",
-        default_value_t = PseudoBooleanEncoding::GeneralizedTotalizer, verbatim_doc_comment
-    )]
+    /// - The "generalised-totalizer" value specifies that the solver should use the Generalized
+    ///   Totalizer Encoding (see "Generalized totalizer encoding for pseudo-boolean constraints -
+    ///   Saurabh et al. (2015)")
+    /// - The "cardinality-network" value specifies that the solver should use the Cardinality
+    ///   Network Encoding (see "Cardinality networks: a theoretical and empirical study - Asín et
+    ///   al. (2011)").
+    #[arg(long, value_enum, default_value_t)]
     upper_bound_encoding: PseudoBooleanEncoding,
+
+    /// Determines that no restarts are allowed by the solver.
+    ///
+    /// Possible values: bool
+    #[arg(long = "no-restarts", verbatim_doc_comment)]
+    no_restarts: bool,
+
+    /// Determines the conflict resolver.
+    #[arg(long, value_enum, default_value_t)]
+    conflict_resolver: ConflictResolver,
 
     /// Determines that the cumulative propagator(s) are allowed to create holes in the domain.
     ///
@@ -315,21 +320,16 @@ struct Args {
     #[arg(long = "cumulative-allow-holes", verbatim_doc_comment)]
     cumulative_allow_holes: bool,
 
-    /// Determines that no restarts are allowed by the solver.
-    ///
-    /// Possible values: bool
-    #[arg(long = "no-restarts", verbatim_doc_comment)]
-    no_restarts: bool,
     /// Determines the type of explanation used by the cumulative propagator(s) to explain
     /// propagations/conflicts.
-    #[arg(long = "cumulative-explanation-type", default_value_t = CumulativeExplanationType::default())]
+    #[arg(long, value_enum, default_value_t)]
     cumulative_explanation_type: CumulativeExplanationType,
 
     /// Determines the type of propagator which is used by the cumulative propagator(s) to
     /// propagate the constraint.
     ///
     /// Currently, the solver only supports variations on time-tabling methods.
-    #[arg(long = "cumulative-propagation-method",  default_value_t = CumulativePropagationMethod::default())]
+    #[arg(long, value_enum, default_value_t)]
     cumulative_propagation_method: CumulativePropagationMethod,
 
     /// Determines whether a sequence of profiles is generated when explaining a propagation for
@@ -475,13 +475,6 @@ fn run() -> PumpkinResult<()> {
         warn!("Potential performance degradation: the Pumpkin assert level is set to {}, meaning many debug asserts are active which may result in performance degradation.", pumpkin_solver::asserts::PUMPKIN_ASSERT_LEVEL_DEFINITION);
     };
 
-    let learning_options = LearningOptions {
-        num_high_lbd_learned_clauses_max: args.learning_max_num_clauses,
-        high_lbd_learned_clause_sorting_strategy: args.learning_sorting_strategy,
-        lbd_threshold: args.learning_lbd_threshold,
-        ..Default::default()
-    };
-
     let proof_log = if let Some(path_buf) = args.proof_path {
         match file_format {
             FileFormat::CnfDimacsPLine => ProofLog::dimacs(&path_buf)?,
@@ -499,21 +492,32 @@ fn run() -> PumpkinResult<()> {
         ProofLog::default()
     };
 
+    let restart_options = RestartOptions {
+        sequence_generator_type: args.restart_sequence_generator_type,
+        base_interval: args.restart_base_interval,
+        min_num_conflicts_before_first_restart: args.restart_min_num_conflicts_before_first_restart,
+        lbd_coef: args.restart_lbd_coef,
+        num_assigned_coef: args.restart_num_assigned_coef,
+        num_assigned_window: args.restart_num_assigned_window,
+        geometric_coef: args.restart_geometric_coef,
+        no_restarts: args.no_restarts,
+    };
+    let learning_options = LearningOptions {
+        max_activity: 1e20,
+        activity_decay_factor: 0.99,
+        limit_num_high_lbd_nogoods: args.learning_max_num_clauses,
+        lbd_threshold: args.learning_lbd_threshold,
+        nogood_sorting_strategy: args.learning_sorting_strategy,
+        activity_bump_increment: 1.0,
+    };
+
     let solver_options = SolverOptions {
-        restart_options: RestartOptions {
-            sequence_generator_type: args.restart_sequence_generator_type,
-            base_interval: args.restart_base_interval,
-            min_num_conflicts_before_first_restart: args
-                .restart_min_num_conflicts_before_first_restart,
-            lbd_coef: args.restart_lbd_coef,
-            num_assigned_coef: args.restart_num_assigned_coef,
-            num_assigned_window: args.restart_num_assigned_window,
-            geometric_coef: args.restart_geometric_coef,
-            no_restarts: args.no_restarts,
-        },
-        proof_log,
+        restart_options,
         learning_clause_minimisation: !args.no_learning_clause_minimisation,
         random_generator: SmallRng::seed_from_u64(args.random_seed),
+        proof_log,
+        conflict_resolver: args.conflict_resolver,
+        learning_options,
     };
 
     let time_limit = args.time_limit.map(Duration::from_millis);
@@ -523,18 +527,15 @@ fn run() -> PumpkinResult<()> {
         .ok_or(PumpkinError::invalid_instance(args.instance_path.display()))?;
 
     match file_format {
-        FileFormat::CnfDimacsPLine => {
-            cnf_problem(learning_options, solver_options, time_limit, instance_path)?
-        }
+        FileFormat::CnfDimacsPLine => cnf_problem(solver_options, time_limit, instance_path)?,
         FileFormat::WcnfDimacsPLine => wcnf_problem(
-            learning_options,
             solver_options,
             time_limit,
             instance_path,
             args.upper_bound_encoding,
         )?,
         FileFormat::FlatZinc => flatzinc::solve(
-            Solver::with_options(learning_options, solver_options),
+            Solver::with_options(solver_options),
             instance_path,
             time_limit,
             FlatZincOptions {
@@ -555,35 +556,29 @@ fn run() -> PumpkinResult<()> {
 }
 
 fn cnf_problem(
-    learning_options: LearningOptions,
     solver_options: SolverOptions,
     time_limit: Option<Duration>,
     instance_path: impl AsRef<Path>,
 ) -> Result<(), PumpkinError> {
     let instance_file = File::open(instance_path)?;
-    let mut solver = parse_cnf::<SolverDimacsSink>(
-        instance_file,
-        SolverArgs::new(learning_options, solver_options),
-    )?;
+    let mut solver =
+        parse_cnf::<SolverDimacsSink>(instance_file, SolverArgs::new(solver_options))?.solver;
 
     let mut termination =
         TimeBudget::starting_now(time_limit.unwrap_or(Duration::from_secs(u64::MAX)));
-    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let mut brancher = solver.default_brancher();
     match solver.satisfy(&mut brancher, &mut termination) {
         SatisfactionResult::Satisfiable(solution) => {
             solver.log_statistics();
             println!("s SATISFIABLE");
-            let num_propositional_variables = solution.num_propositional_variables();
             println!(
                 "v {}",
-                stringify_solution(&solution, num_propositional_variables, true)
+                stringify_solution(&solution, solution.num_domains(), true)
             );
         }
         SatisfactionResult::Unsatisfiable => {
             solver.log_statistics();
-            if solver.conclude_proof_unsat().is_err() {
-                warn!("Failed to log solver conclusion");
-            };
+            solver.conclude_proof_unsat();
 
             println!("s UNSATISFIABLE");
         }
@@ -598,16 +593,19 @@ fn cnf_problem(
 
 fn stringify_solution(
     solution: &Solution,
-    num_variables: usize,
+    number_of_variables: usize,
     terminate_with_zero: bool,
 ) -> String {
-    (1..num_variables)
-        .map(|index| PropositionalVariable::new(index.try_into().unwrap()))
-        .map(|var| {
-            if solution.get_propositional_variable_value(var) {
-                format!("{} ", var.get_index())
+    solution
+        .get_domains()
+        .take(number_of_variables)
+        .map(|domain_id| {
+            let value = solution.get_integer_value(domain_id);
+            pumpkin_assert_simple!((0..=1).contains(&value));
+            if value == 1 {
+                format!("{} ", domain_id.id)
             } else {
-                format!("-{} ", var.get_index())
+                format!("-{} ", domain_id.id)
             }
         })
         .chain(if terminate_with_zero {
@@ -618,9 +616,10 @@ fn stringify_solution(
         .collect::<String>()
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
 enum ProofType {
     /// Log only the proof scaffold.
+    #[default]
     Scaffold,
     /// Log the full proof without hints.
     Full,

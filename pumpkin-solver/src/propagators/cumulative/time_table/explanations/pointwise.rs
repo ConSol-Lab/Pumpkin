@@ -68,9 +68,9 @@ pub(crate) fn propagate_lower_bounds_with_pointwise_explanations<Var: IntegerVar
                 Some(time_point),
             );
             pumpkin_assert_extreme!(
-                explanation.iter().all(|predicate| context
-                    .assignments_integer()
-                    .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                explanation
+                    .iter()
+                    .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
                 "All of the predicates in the reason should hold"
             );
             context.set_lower_bound(
@@ -176,9 +176,9 @@ pub(crate) fn propagate_upper_bounds_with_pointwise_explanations<Var: IntegerVar
                 Some(time_point),
             );
             pumpkin_assert_extreme!(
-                explanation.iter().all(|predicate| context
-                    .assignments_integer()
-                    .does_integer_predicate_hold((*predicate).try_into().unwrap())),
+                explanation
+                    .iter()
+                    .all(|predicate| context.assignments().is_predicate_satisfied(*predicate)),
                 "All of the predicates in the reason should hold"
             );
             context.set_upper_bound(

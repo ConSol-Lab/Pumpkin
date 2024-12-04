@@ -22,6 +22,10 @@ pub(crate) struct CompilationContext<'a> {
     /// Identifiers of variables that are outputs.
     pub(crate) outputs: Vec<Output>,
 
+    /// Literal which is always true
+    pub(crate) true_literal: Literal,
+    /// Literal which is always false
+    pub(crate) false_literal: Literal,
     /// All boolean parameters.
     pub(crate) boolean_parameters: HashMap<Rc<str>, bool>,
     /// All boolean array parameters.
@@ -32,11 +36,10 @@ pub(crate) struct CompilationContext<'a> {
     pub(crate) boolean_variable_arrays: HashMap<Rc<str>, Rc<[Literal]>>,
     /// The equivalence classes for literals.
     pub(crate) literal_equivalences: VariableEquivalences,
-    /// A literal which is always true, can be used when using bool constants in the solver
-    pub(crate) constant_bool_true: Literal,
-    /// A literal which is always false, can be used when using bool constants in the solver
-    pub(crate) constant_bool_false: Literal,
-
+    // A literal which is always true, can be used when using bool constants in the solver
+    // pub(crate) constant_bool_true: BooleanDomainId,
+    // A literal which is always false, can be used when using bool constants in the solver
+    // pub(crate) constant_bool_false: BooleanDomainId,
     /// All integer parameters.
     pub(crate) integer_parameters: HashMap<Rc<str>, i32>,
     /// All integer array parameters.
@@ -75,14 +78,13 @@ impl CompilationContext<'_> {
 
             outputs: Default::default(),
 
+            true_literal,
+            false_literal,
             boolean_parameters: Default::default(),
             boolean_array_parameters: Default::default(),
             boolean_variable_map: Default::default(),
             boolean_variable_arrays: Default::default(),
             literal_equivalences: Default::default(),
-            constant_bool_true: true_literal,
-            constant_bool_false: false_literal,
-
             integer_parameters: Default::default(),
             integer_array_parameters: Default::default(),
             integer_variable_map: Default::default(),
@@ -114,9 +116,9 @@ impl CompilationContext<'_> {
             flatzinc::Expr::VarParIdentifier(id) => self.resolve_bool_variable_from_identifier(id),
             flatzinc::Expr::Bool(value) => {
                 if *value {
-                    Ok(self.constant_bool_true)
+                    Ok(self.solver.get_true_literal())
                 } else {
-                    Ok(self.constant_bool_false)
+                    Ok(self.solver.get_false_literal())
                 }
             }
             _ => Err(FlatZincError::UnexpectedExpr),
@@ -137,9 +139,9 @@ impl CompilationContext<'_> {
                 .get(&self.literal_equivalences.representative(identifier))
                 .map(|value| {
                     if *value {
-                        self.constant_bool_true
+                        self.solver.get_true_literal()
                     } else {
-                        self.constant_bool_false
+                        self.solver.get_false_literal()
                     }
                 })
                 .ok_or_else(|| FlatZincError::InvalidIdentifier {
@@ -165,9 +167,9 @@ impl CompilationContext<'_> {
                                 .iter()
                                 .map(|value| {
                                     if *value {
-                                        self.constant_bool_true
+                                        self.solver.get_true_literal()
                                     } else {
-                                        self.constant_bool_false
+                                        self.solver.get_false_literal()
                                     }
                                 })
                                 .collect()
@@ -184,8 +186,8 @@ impl CompilationContext<'_> {
                     flatzinc::BoolExpr::VarParIdentifier(id) => {
                         self.resolve_bool_variable_from_identifier(id)
                     }
-                    flatzinc::BoolExpr::Bool(true) => Ok(self.constant_bool_true),
-                    flatzinc::BoolExpr::Bool(false) => Ok(self.constant_bool_false),
+                    flatzinc::BoolExpr::Bool(true) => Ok(self.solver.get_true_literal()),
+                    flatzinc::BoolExpr::Bool(false) => Ok(self.solver.get_false_literal()),
                 })
                 .collect(),
             flatzinc::Expr::ArrayOfInt(array) => array
@@ -467,8 +469,8 @@ impl VariableEquivalences {
     ///
     /// We distinguish between the following edge cases:
     ///  - The two variables are already in the same equivalence class: this is a no-op.
-    ///  - One of the variables, or both, have do not belong to an equivalence class. In this case
-    ///    the method will panic.
+    ///  - One of the variables, or both, do not belong to an equivalence class. In this case the
+    ///    method will panic.
     pub(crate) fn merge(&mut self, variable_1: Rc<str>, variable_2: Rc<str>) {
         let equiv_1_idx = self.belongs_to.get(&variable_1).copied().unwrap();
         let equiv_2_idx = self.belongs_to.get(&variable_2).copied().unwrap();
@@ -611,7 +613,7 @@ impl Domain {
         Domain::IntervalDomain { lb, ub }
     }
 
-    pub(crate) fn into_literal(self, solver: &mut Solver, name: String) -> Literal {
+    pub(crate) fn into_boolean(self, solver: &mut Solver, name: String) -> Literal {
         match self {
             Domain::IntervalDomain { lb, ub } => {
                 if lb == ub && lb == 1 {

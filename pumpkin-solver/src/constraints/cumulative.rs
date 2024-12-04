@@ -67,7 +67,7 @@ use crate::Solver;
 ///     .post();
 ///
 /// let mut termination = Indefinite;
-/// let mut brancher = solver.default_brancher_over_all_propositional_variables();
+/// let mut brancher = solver.default_brancher();
 ///
 /// let result = solver.satisfy(&mut brancher, &mut termination);
 ///

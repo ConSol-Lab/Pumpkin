@@ -1,10 +1,10 @@
 use log::warn;
 
-use crate::branching::Direction;
-use crate::branching::InOrderTieBreaker;
+use crate::branching::tie_breaking::Direction;
+use crate::branching::tie_breaking::InOrderTieBreaker;
+use crate::branching::tie_breaking::TieBreaker;
+use crate::branching::variable_selection::VariableSelector;
 use crate::branching::SelectionContext;
-use crate::branching::TieBreaker;
-use crate::branching::VariableSelector;
 use crate::engine::variables::DomainId;
 use crate::pumpkin_assert_eq_simple;
 
@@ -66,7 +66,7 @@ impl<TieBreaking> VariableSelector<DomainId> for Largest<DomainId, TieBreaking>
 where
     TieBreaking: TieBreaker<DomainId, i32>,
 {
-    fn select_variable(&mut self, context: &SelectionContext) -> Option<DomainId> {
+    fn select_variable(&mut self, context: &mut SelectionContext) -> Option<DomainId> {
         self.variables
             .iter()
             .filter(|variable| !context.is_integer_fixed(**variable))
@@ -80,58 +80,42 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::Largest;
-    use crate::branching::SelectionContext;
-    use crate::branching::VariableSelector;
 
     #[test]
     fn test_correctly_selected() {
-        let (mut assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(0, 10), (5, 20)]));
+        let mut assignments = SelectionContext::create_for_testing(vec![(0, 10), (5, 20)]);
         let mut test_rng = TestRandom::default();
-        let integer_variables = assignments_integer.get_domains().collect::<Vec<_>>();
+        let integer_variables = assignments.get_domains().collect::<Vec<_>>();
         let mut strategy = Largest::new(&integer_variables);
 
         {
-            let context = SelectionContext::new(
-                &assignments_integer,
-                &assignments_propositional,
-                &mut test_rng,
-            );
+            let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-            let selected = strategy.select_variable(&context);
+            let selected = strategy.select_variable(&mut context);
             assert!(selected.is_some());
             assert_eq!(selected.unwrap(), integer_variables[1]);
         }
 
-        let _ = assignments_integer.tighten_upper_bound(integer_variables[1], 9, None);
+        let _ = assignments.tighten_upper_bound(integer_variables[1], 9, None);
 
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
 
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_some());
         assert_eq!(selected.unwrap(), integer_variables[0]);
     }
 
     #[test]
     fn fixed_variables_are_not_selected() {
-        let (assignments_integer, assignments_propositional) =
-            SelectionContext::create_for_testing(2, 0, Some(vec![(10, 10), (20, 20)]));
+        let assignments = SelectionContext::create_for_testing(vec![(10, 10), (20, 20)]);
         let mut test_rng = TestRandom::default();
-        let context = SelectionContext::new(
-            &assignments_integer,
-            &assignments_propositional,
-            &mut test_rng,
-        );
+        let mut context = SelectionContext::new(&assignments, &mut test_rng);
         let integer_variables = context.get_domains().collect::<Vec<_>>();
 
         let mut strategy = Largest::new(&integer_variables);
-        let selected = strategy.select_variable(&context);
+        let selected = strategy.select_variable(&mut context);
         assert!(selected.is_none());
     }
 }

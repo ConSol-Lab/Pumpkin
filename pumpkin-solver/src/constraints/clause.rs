@@ -30,7 +30,7 @@ impl Constraint for Clause {
     ) -> Result<(), ConstraintOperationError> {
         assert!(tag.is_none(), "tagging clauses is not implemented");
 
-        solver.add_clause(self.0)
+        solver.add_clause(self.0.iter().map(|literal| literal.get_true_predicate()))
     }
 
     fn implied_by(
@@ -44,7 +44,8 @@ impl Constraint for Clause {
         solver.add_clause(
             self.0
                 .into_iter()
-                .chain(std::iter::once(!reification_literal)),
+                .chain(std::iter::once(!reification_literal))
+                .map(|literal| literal.get_true_predicate()),
         )
     }
 }
@@ -69,7 +70,7 @@ impl Constraint for Conjunction {
 
         self.0
             .into_iter()
-            .try_for_each(|lit| solver.add_clause([lit]))
+            .try_for_each(|lit| solver.add_clause([lit.get_true_predicate()]))
     }
 
     fn implied_by(
@@ -80,9 +81,12 @@ impl Constraint for Conjunction {
     ) -> Result<(), ConstraintOperationError> {
         assert!(tag.is_none(), "tagging clauses is not implemented");
 
-        self.0
-            .into_iter()
-            .try_for_each(|lit| solver.add_clause([!reification_literal, lit]))
+        self.0.into_iter().try_for_each(|lit| {
+            solver.add_clause([
+                (!(reification_literal)).get_true_predicate(),
+                lit.get_true_predicate(),
+            ])
+        })
     }
 }
 
