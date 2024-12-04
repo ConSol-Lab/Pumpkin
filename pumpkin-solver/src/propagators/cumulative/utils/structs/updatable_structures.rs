@@ -4,6 +4,7 @@ use super::CumulativeParameters;
 use super::IntervalManager;
 use super::Task;
 use super::UpdatedTaskInfo;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::create_statistics_struct;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
@@ -12,7 +13,9 @@ use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 
 create_statistics_struct!(CumulativeStatistics {
+    number_of_tasks_traversed: usize,
     number_of_profiles_traversed: usize,
+    average_size_of_time_table: CumulativeMovingAverage<usize>
 });
 
 /// Structures which are adjusted during search; either due to incrementality or to keep track of

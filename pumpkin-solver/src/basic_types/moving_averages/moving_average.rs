@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-pub(crate) trait MovingAverage: Debug {
-    fn add_term(&mut self, new_term: u64);
+pub(crate) trait MovingAverage<Term>: Debug {
+    fn add_term(&mut self, new_term: Term);
 
     /// Returns the moving average value; in case there are no terms, the convention is to return 0
     fn value(&self) -> f64;
@@ -11,3 +11,4 @@ pub(crate) trait MovingAverage: Debug {
     /// average
     fn adapt(&mut self, interval_length: u64);
 }
+

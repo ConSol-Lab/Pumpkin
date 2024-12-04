@@ -1,28 +1,38 @@
+use std::fmt::Debug;
 use std::fmt::Display;
+
+use num::cast::AsPrimitive;
+use num::traits::NumAssign;
 
 use super::MovingAverage;
 
 #[derive(Default, Debug, Copy, Clone)]
-pub(crate) struct CumulativeMovingAverage {
-    sum: u64,
+pub(crate) struct CumulativeMovingAverage<Term> {
+    sum: Term,
     num_terms: u64,
 }
 
-impl Display for CumulativeMovingAverage {
+impl<Term> Display for CumulativeMovingAverage<Term>
+where
+    Term: Debug + NumAssign + AsPrimitive<f64>,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value())
     }
 }
 
-impl MovingAverage for CumulativeMovingAverage {
-    fn add_term(&mut self, new_term: u64) {
+impl<Term> MovingAverage<Term> for CumulativeMovingAverage<Term>
+where
+    Term: Debug + NumAssign + AsPrimitive<f64>,
+{
+    fn add_term(&mut self, new_term: Term) {
         self.sum += new_term;
         self.num_terms += 1
     }
 
     fn value(&self) -> f64 {
         if self.num_terms > 0 {
-            (self.sum as f64) / (self.num_terms as f64)
+            self.sum.as_() / (self.num_terms as f64)
         } else {
             0.0
         }
@@ -50,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        let empty_sum = CumulativeMovingAverage::default();
+        let empty_sum: CumulativeMovingAverage<u64> = CumulativeMovingAverage::default();
         assert!(empty_sum.value() == 0.0);
     }
 
@@ -65,3 +75,4 @@ mod tests {
         assert!(constant_average.value() == 20.0);
     }
 }
+

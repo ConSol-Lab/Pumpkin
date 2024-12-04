@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use super::insertion;
 use super::removal;
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::EnqueueDecision;
@@ -383,6 +384,11 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         );
 
         self.update_time_table(&mut context)?;
+
+        self.updatable_structures
+            .statistics
+            .average_size_of_time_table
+            .add_term(self.time_table.len());
 
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(

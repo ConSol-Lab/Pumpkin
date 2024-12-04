@@ -21,7 +21,7 @@ impl WindowedMovingAverage {
     }
 }
 
-impl MovingAverage for WindowedMovingAverage {
+impl MovingAverage<u64> for WindowedMovingAverage {
     fn add_term(&mut self, new_term: u64) {
         pumpkin_assert_simple!(self.values_in_window.len() <= self.window_size as usize);
 

@@ -112,20 +112,20 @@ pub(crate) struct RestartStrategy {
     /// The minimum number of conflicts until the first restart is able to take place
     minimum_number_of_conflicts_before_first_restart: u64,
     /// The recent average of LBD values, used in [`RestartStrategy::should_restart`].
-    lbd_short_term_moving_average: Box<dyn MovingAverage>,
+    lbd_short_term_moving_average: Box<dyn MovingAverage<u64>>,
     /// A coefficient which influences the decision whether a restart should take place in
     /// [`RestartStrategy::should_restart`], the higher this value, the fewer restarts are
     /// performed.
     lbd_coefficient: f64,
     /// The long-term average of LBD values, used in [`RestartStrategy::should_restart`].
-    lbd_long_term_moving_average: Box<dyn MovingAverage>,
+    lbd_long_term_moving_average: Box<dyn MovingAverage<u64>>,
     /// A coefficient influencing whether a restart will be blocked in
     /// [`RestartStrategy::notify_conflict`], the higher the value, the fewer restarts are
     /// performed.
     number_of_variables_coefficient: f64,
     /// The average number of variables which are assigned, used in
     /// [`RestartStrategy::notify_conflict`].
-    number_of_assigned_variables_moving_average: Box<dyn MovingAverage>,
+    number_of_assigned_variables_moving_average: Box<dyn MovingAverage<u64>>,
     /// The number of restarts which have been performed.
     number_of_restarts: u64,
     /// The number of restarts which have been blocked.
@@ -168,7 +168,7 @@ impl RestartStrategy {
                 options.base_interval,
             )),
             lbd_coefficient: options.lbd_coef,
-            lbd_long_term_moving_average: Box::<CumulativeMovingAverage>::default(),
+            lbd_long_term_moving_average: Box::<CumulativeMovingAverage<u64>>::default(),
             number_of_variables_coefficient: options.num_assigned_coef,
             number_of_assigned_variables_moving_average: Box::new(WindowedMovingAverage::new(
                 options.num_assigned_window,
