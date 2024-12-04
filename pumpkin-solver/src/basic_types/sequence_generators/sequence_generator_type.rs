@@ -2,9 +2,10 @@ use clap::ValueEnum;
 
 /// Specifies the type of sequence which is used to generate conflict limits before a restart
 /// occurs.
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
 pub enum SequenceGeneratorType {
     /// Indicates that the restart strategy should restart every `x` conflicts.
+    #[default]
     Constant,
     /// Indicates that the restarts strategy should use geometric restarts.
     ///

@@ -56,9 +56,16 @@ where
                 *bound = context.lower_bound(&self.x[index]);
             });
     }
+
+    fn create_conflict_reason(&self, context: PropagationContext) -> PropositionalConjunction {
+        self.x
+            .iter()
+            .map(|var| predicate![var >= context.lower_bound(var)])
+            .collect()
+    }
 }
 
-impl<Var> Propagator for LinearLessOrEqualPropagator<Var>
+impl<Var: 'static> Propagator for LinearLessOrEqualPropagator<Var>
 where
     Var: IntegerVariable,
 {
@@ -88,12 +95,7 @@ where
         context: PropagationContext,
     ) -> Option<PropositionalConjunction> {
         if (self.c as i64) < self.lower_bound_left_hand_side {
-            let reason: PropositionalConjunction = self
-                .x
-                .iter()
-                .map(|var| predicate![var >= context.lower_bound(var)])
-                .collect();
-            Some(reason)
+            Some(self.create_conflict_reason(context))
         } else {
             None
         }
@@ -139,11 +141,30 @@ where
             return Err(conjunction.into());
         }
 
+        let lower_bound_left_hand_side =
+            match TryInto::<i32>::try_into(self.lower_bound_left_hand_side) {
+                Ok(bound) => bound,
+                Err(_) if self.lower_bound_left_hand_side.is_positive() => {
+                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                    // overflow (hence the check that the lower-bound on the left-hand side is
+                    // positive)
+                    //
+                    // This means that the lower-bounds of the current variables will always be
+                    // higher than the right-hand side (with a maximum value of i32). We thus
+                    // return a conflict
+                    return Err(self.create_conflict_reason(context.as_readonly()).into());
+                }
+                Err(_) => {
+                    // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                    // underflow
+                    //
+                    // This means that the constraint is always satisfied
+                    return Ok(());
+                }
+            };
+
         for (i, x_i) in self.x.iter().enumerate() {
-            let bound = (self.c as i64
-                - (self.lower_bound_left_hand_side - context.lower_bound(x_i) as i64))
-                .try_into()
-                .expect("Could not fit the lower-bound of lhs in an i32");
+            let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
                 let reason: PropositionalConjunction = self
@@ -176,11 +197,30 @@ where
             .map(|var| context.lower_bound(var) as i64)
             .sum::<i64>();
 
+        let lower_bound_left_hand_side = match TryInto::<i32>::try_into(lower_bound_left_hand_side)
+        {
+            Ok(bound) => bound,
+            Err(_) if self.lower_bound_left_hand_side.is_positive() => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // overflow (hence the check that the lower-bound on the left-hand side is
+                // positive)
+                //
+                // This means that the lower-bounds of the current variables will always be
+                // higher than the right-hand side (with a maximum value of i32). We thus
+                // return a conflict
+                return Err(self.create_conflict_reason(context.as_readonly()).into());
+            }
+            Err(_) => {
+                // We cannot fit the `lower_bound_left_hand_side` into an i32 due to an
+                // underflow
+                //
+                // This means that the constraint is always satisfied
+                return Ok(());
+            }
+        };
+
         for (i, x_i) in self.x.iter().enumerate() {
-            let bound = (self.c as i64
-                - (lower_bound_left_hand_side - context.lower_bound(x_i) as i64))
-                .try_into()
-                .expect("Could not fit the lower-bound of lhs in an i32");
+            let bound = self.c - (lower_bound_left_hand_side - context.lower_bound(x_i));
 
             if context.upper_bound(x_i) > bound {
                 let reason: PropositionalConjunction = self
@@ -208,7 +248,7 @@ where
 mod tests {
     use super::*;
     use crate::conjunction;
-    use crate::engine::test_helper::TestSolver;
+    use crate::engine::test_solver::TestSolver;
 
     #[test]
     fn test_bounds_are_propagated() {
@@ -216,11 +256,11 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
         solver.assert_bounds(x, 1, 5);
         solver.assert_bounds(y, 0, 6);
@@ -232,14 +272,38 @@ mod tests {
         let x = solver.new_variable(1, 5);
         let y = solver.new_variable(0, 10);
 
-        let mut propagator = solver
+        let propagator = solver
             .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), 7))
             .expect("no empty domains");
 
-        solver.propagate(&mut propagator).expect("non-empty domain");
+        solver.propagate(propagator).expect("non-empty domain");
 
-        let reason = solver.get_reason_int(predicate![y <= 6].try_into().unwrap());
+        let reason = solver.get_reason_int(predicate![y <= 6]);
 
-        assert_eq!(conjunction!([x >= 1]), *reason);
+        assert_eq!(conjunction!([x >= 1]), reason);
+    }
+
+    #[test]
+    fn overflow_leads_to_conflict() {
+        let mut solver = TestSolver::default();
+
+        let x = solver.new_variable(i32::MAX, i32::MAX);
+        let y = solver.new_variable(1, 1);
+
+        let _ = solver
+            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), i32::MAX))
+            .expect_err("Expected overflow to be detected");
+    }
+
+    #[test]
+    fn underflow_leads_to_no_propagation() {
+        let mut solver = TestSolver::default();
+
+        let x = solver.new_variable(i32::MIN, i32::MIN);
+        let y = solver.new_variable(-1, -1);
+
+        let _ = solver
+            .new_propagator(LinearLessOrEqualPropagator::new([x, y].into(), i32::MIN))
+            .expect("Expected no error to be detected");
     }
 }

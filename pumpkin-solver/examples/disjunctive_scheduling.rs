@@ -66,11 +66,14 @@ fn main() {
                 .implied_by(&mut solver, literal, None);
 
             // Either x starts before y or y start before x
-            let _ = solver.add_clause([literal, precedence_literals[y][x]]);
+            let _ = solver.add_clause([
+                literal.get_true_predicate(),
+                precedence_literals[y][x].get_true_predicate(),
+            ]);
         }
     }
 
-    let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    let mut brancher = solver.default_brancher();
     if matches!(
         solver.satisfy(&mut brancher, &mut Indefinite),
         SatisfactionResult::Unsatisfiable,

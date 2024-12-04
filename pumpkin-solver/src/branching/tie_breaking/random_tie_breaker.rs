@@ -19,7 +19,7 @@ use crate::basic_types::Random;
 ///     - If the values are equal then we randomly select the newly considered variable with
 ///       probability `1 / num_previously_seen_variables` where `num_previously_seen_variables` is
 ///       the number of variables which have been previously considered with the same value
-pub(crate) struct RandomTieBreaker<Var, Value> {
+pub struct RandomTieBreaker<Var, Value> {
     /// The selected variable, could be [None] if no variable has been considered yet
     selected_variable: Option<Var>,
     /// The selected value, could be [None] if no variable has been considered yet
@@ -40,8 +40,8 @@ impl<Var, Value> std::fmt::Debug for RandomTieBreaker<Var, Value> {
 }
 
 impl<Var, Value> RandomTieBreaker<Var, Value> {
-    #[allow(dead_code)] // Currently the struct is not used
-    pub(crate) fn new(direction: Direction, rng: Box<dyn Random>) -> Self {
+    // Currently the struct is not used
+    pub fn new(direction: Direction, rng: Box<dyn Random>) -> Self {
         Self {
             selected_variable: None,
             selected_value: None,
@@ -123,14 +123,11 @@ mod tests {
     use super::RandomTieBreaker;
     use crate::basic_types::tests::TestRandom;
     use crate::branching::tie_breaking::random_tie_breaker::Direction;
-    use crate::branching::TieBreaker;
+    use crate::branching::tie_breaking::TieBreaker;
 
     #[test]
     fn test_selection_new_value() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
@@ -146,10 +143,7 @@ mod tests {
 
     #[test]
     fn test_selection_between_values_chooses_maximum() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
 
@@ -164,10 +158,7 @@ mod tests {
 
     #[test]
     fn test_selection_between_values_chooses_minimum() {
-        let rng = TestRandom {
-            usizes: vec![],
-            bools: vec![],
-        };
+        let rng = TestRandom::default();
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Minimum, Box::new(rng));
 
@@ -183,8 +174,8 @@ mod tests {
     #[test]
     fn test_selection_between_values_chooses_random_with_seed_second() {
         let rng = TestRandom {
-            usizes: vec![],
             bools: vec![true],
+            ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));
@@ -202,8 +193,8 @@ mod tests {
     #[test]
     fn test_selection_between_values_chooses_random_with_seed_first() {
         let rng = TestRandom {
-            usizes: vec![],
             bools: vec![false],
+            ..Default::default()
         };
         let mut breaker: RandomTieBreaker<i32, i32> =
             RandomTieBreaker::new(Direction::Maximum, Box::new(rng));

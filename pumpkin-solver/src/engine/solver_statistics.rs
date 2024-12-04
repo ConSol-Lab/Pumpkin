@@ -31,15 +31,17 @@ create_statistics_struct!(
     /// The statistics related to clause learning
     LearnedClauseStatistics {
         /// The average number of elements in the conflict explanation
-        average_conflict_size: CumulativeMovingAverage,
+        average_conflict_size: CumulativeMovingAverage<u64>,
         /// The average number of literals removed by recursive minimisation during conflict analysis
-        average_number_of_removed_literals_recursive: CumulativeMovingAverage,
+        average_number_of_removed_literals_recursive: CumulativeMovingAverage<u64>,
         /// The average number of literals removed by semantic minimisation during conflict analysis
-        average_number_of_removed_literals_semantic: CumulativeMovingAverage,
+        average_number_of_removed_literals_semantic: CumulativeMovingAverage<u64>,
         /// The number of learned clauses which have a size of 1
         num_unit_clauses_learned: u64,
         /// The average length of the learned clauses
-        average_learned_clause_length: CumulativeMovingAverage,
+        average_learned_clause_length: CumulativeMovingAverage<u64>,
         /// The average number of levels which have been backtracked by the solver (e.g. when a learned clause is created)
-         average_backtrack_amount: CumulativeMovingAverage,
+        average_backtrack_amount: CumulativeMovingAverage<u64>,
+        /// The average literal-block distance (LBD) metric for newly added learned nogoods
+        average_lbd: CumulativeMovingAverage<u64>,
 });

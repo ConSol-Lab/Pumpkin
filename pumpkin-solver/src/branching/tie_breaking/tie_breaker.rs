@@ -1,5 +1,5 @@
 #[cfg(doc)]
-use crate::branching::VariableSelector;
+use crate::branching::variable_selection::VariableSelector;
 
 /// The interface for a tie-breaker which considers additional elements with values; depending on
 /// the [`Direction`] it should only consider variables with the "best" value for selection.

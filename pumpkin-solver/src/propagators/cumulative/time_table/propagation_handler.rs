@@ -40,11 +40,11 @@ pub(crate) struct CumulativePropagationHandler {
 
 fn check_explanation(explanation: &PropositionalConjunction, context: PropagationContext) -> bool {
     explanation.iter().all(|&predicate| {
-        let integer_predicate = predicate.try_into().unwrap();
+        let integer_predicate = predicate;
 
         context
-            .assignments_integer()
-            .does_integer_predicate_hold(integer_predicate)
+            .assignments()
+            .is_predicate_satisfied(integer_predicate)
     })
 }
 
@@ -210,15 +210,10 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
-                context.set_lower_bound(
-                    &propagating_task.start_variable,
-                    profile.end + 1,
-                    move |_context: PropagationContext| {
-                        let mut reason = (*explanation).clone();
-                        reason.add(lower_bound_predicate_propagating_task);
-                        reason
-                    },
-                )
+
+                let mut reason = (*explanation).clone();
+                reason.add(lower_bound_predicate_propagating_task);
+                context.set_lower_bound(&propagating_task.start_variable, profile.end + 1, reason)
             }
             CumulativeExplanationType::Pointwise => {
                 pointwise::propagate_lower_bounds_with_pointwise_explanations(
@@ -261,14 +256,13 @@ impl CumulativePropagationHandler {
                         None,
                     );
                 pumpkin_assert_extreme!(check_explanation(&explanation, context.as_readonly()));
+
+                let mut reason = (*explanation).clone();
+                reason.add(upper_bound_predicate_propagating_task);
                 context.set_upper_bound(
                     &propagating_task.start_variable,
                     profile.start - propagating_task.processing_time,
-                    move |_context: PropagationContext| {
-                        let mut reason = (*explanation).clone();
-                        reason.add(upper_bound_predicate_propagating_task);
-                        reason
-                    },
+                    reason,
                 )
             }
             CumulativeExplanationType::Pointwise => {
@@ -332,7 +326,7 @@ impl CumulativePropagationHandler {
                     context.remove(
                         &propagating_task.start_variable,
                         time_point,
-                        move |_context: PropagationContext| (*explanation).clone(),
+                        (*explanation).clone(),
                     )?;
                 }
                 CumulativeExplanationType::Pointwise => {
@@ -432,13 +426,14 @@ pub(crate) mod test_propagation_handler {
     use super::create_conflict_explanation;
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
+    use crate::engine::conflict_analysis::SemanticMinimiser;
+    use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
-    use crate::engine::AssignmentsInteger;
-    use crate::engine::AssignmentsPropositional;
+    use crate::engine::Assignments;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
@@ -449,8 +444,7 @@ pub(crate) mod test_propagation_handler {
     pub(crate) struct TestPropagationHandler {
         propagation_handler: CumulativePropagationHandler,
         reason_store: ReasonStore,
-        assignments_integer: AssignmentsInteger,
-        assignments_propositional: AssignmentsPropositional,
+        assignments: Assignments,
     }
 
     impl TestPropagationHandler {
@@ -458,18 +452,16 @@ pub(crate) mod test_propagation_handler {
             let propagation_handler = CumulativePropagationHandler::new(explanation_type);
 
             let reason_store = ReasonStore::default();
-            let assignments_propositional = AssignmentsPropositional::default();
-            let assignments_integer = AssignmentsInteger::default();
+            let assignments = Assignments::default();
             Self {
                 propagation_handler,
                 reason_store,
-                assignments_integer,
-                assignments_propositional,
+                assignments,
             }
         }
 
         pub(crate) fn set_up_conflict_example(&mut self) -> (PropositionalConjunction, DomainId) {
-            let y = self.assignments_integer.grow(15, 16);
+            let y = self.assignments.grow(15, 16);
 
             let profile_task = Task {
                 start_variable: y,
@@ -486,7 +478,7 @@ pub(crate) mod test_propagation_handler {
             };
 
             let reason = create_conflict_explanation(
-                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional),
+                PropagationContext::new(&self.assignments),
                 &profile,
                 self.propagation_handler.explanation_type,
             );
@@ -497,8 +489,8 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_lower_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId) {
-            let x = self.assignments_integer.grow(11, 20);
-            let y = self.assignments_integer.grow(15, 16);
+            let x = self.assignments.grow(11, 20);
+            let y = self.assignments.grow(15, 16);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -525,16 +517,16 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.assignments_integer,
+                        &mut self.assignments,
                         &mut self.reason_store,
-                        &mut self.assignments_propositional,
+                        &mut SemanticMinimiser::default(),
                         PropagatorId(0),
                     ),
                     &profile,
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_lower_bound(x), 19);
+            assert_eq!(self.assignments.get_lower_bound(x), 19);
 
             let reason = self.get_reason_for(predicate!(x >= 19));
 
@@ -544,9 +536,9 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_sequence_lower_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
-            let x = self.assignments_integer.grow(11, 25);
-            let y = self.assignments_integer.grow(15, 16);
-            let z = self.assignments_integer.grow(15, 19);
+            let x = self.assignments.grow(11, 25);
+            let y = self.assignments.grow(15, 16);
+            let z = self.assignments.grow(15, 19);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -585,16 +577,16 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.assignments_integer,
+                        &mut self.assignments,
                         &mut self.reason_store,
-                        &mut self.assignments_propositional,
+                        &mut SemanticMinimiser::default(),
                         PropagatorId(0),
                     ),
                     &[&profile_y, &profile_z],
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_lower_bound(x), 22);
+            assert_eq!(self.assignments.get_lower_bound(x), 22);
 
             let reason = self.get_reason_for(predicate!(x >= 22));
 
@@ -604,8 +596,8 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_upper_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId) {
-            let x = self.assignments_integer.grow(5, 16);
-            let y = self.assignments_integer.grow(15, 16);
+            let x = self.assignments.grow(5, 16);
+            let y = self.assignments.grow(15, 16);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -632,16 +624,16 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.assignments_integer,
+                        &mut self.assignments,
                         &mut self.reason_store,
-                        &mut self.assignments_propositional,
+                        &mut SemanticMinimiser::default(),
                         PropagatorId(0),
                     ),
                     &profile,
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_upper_bound(x), 10);
+            assert_eq!(self.assignments.get_upper_bound(x), 10);
 
             let reason = self.get_reason_for(predicate!(x <= 10));
 
@@ -651,9 +643,9 @@ pub(crate) mod test_propagation_handler {
         pub(crate) fn set_up_example_sequence_upper_bound(
             &mut self,
         ) -> (PropositionalConjunction, DomainId, DomainId, DomainId) {
-            let x = self.assignments_integer.grow(0, 16);
-            let y = self.assignments_integer.grow(15, 16);
-            let z = self.assignments_integer.grow(7, 9);
+            let x = self.assignments.grow(0, 16);
+            let y = self.assignments.grow(15, 16);
+            let z = self.assignments.grow(7, 9);
 
             let propagating_task = Task {
                 start_variable: x,
@@ -692,16 +684,16 @@ pub(crate) mod test_propagation_handler {
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
                     &mut PropagationContextMut::new(
-                        &mut self.assignments_integer,
+                        &mut self.assignments,
                         &mut self.reason_store,
-                        &mut self.assignments_propositional,
+                        &mut SemanticMinimiser::default(),
                         PropagatorId(0),
                     ),
                     &[&profile_z, &profile_y],
                     &Rc::new(propagating_task),
                 );
             assert!(result.is_ok());
-            assert_eq!(self.assignments_integer.get_upper_bound(x), 3);
+            assert_eq!(self.assignments.get_upper_bound(x), 3);
 
             let reason = self.get_reason_for(predicate!(x <= 3));
 
@@ -710,15 +702,15 @@ pub(crate) mod test_propagation_handler {
 
         pub(crate) fn get_reason_for(&mut self, predicate: Predicate) -> PropositionalConjunction {
             let reason_ref = self
-                .assignments_integer
-                .get_reason_for_predicate(predicate.try_into().unwrap());
-            let context =
-                PropagationContext::new(&self.assignments_integer, &self.assignments_propositional);
+                .assignments
+                .get_reason_for_predicate_brute_force(predicate);
+            let mut propagator_store = PropagatorStore::default();
             let reason = self
                 .reason_store
-                .get_or_compute(reason_ref, context)
+                .get_or_compute(reason_ref, &self.assignments, &mut propagator_store)
                 .expect("reason_ref should not be stale");
-            reason.clone()
+
+            reason.iter().copied().collect()
         }
     }
 }

@@ -6,6 +6,3 @@ mod structs;
 pub(crate) use structs::*;
 
 pub(crate) mod util;
-
-mod sparse_set;
-pub(crate) use sparse_set::*;

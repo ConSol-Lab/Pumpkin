@@ -6,7 +6,8 @@ use crate::branching::value_selection::InDomainRandom;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
-use crate::engine::variables::Literal;
+#[cfg(doc)]
+use crate::engine::ConstraintSatisfactionSolver;
 
 /// A trait containing the interface for [`ValueSelector`]s,
 /// specifying the appropriate hooks into the solver and the methods required for selecting a value
@@ -14,16 +15,10 @@ use crate::engine::variables::Literal;
 pub trait ValueSelector<Var> {
     /// Determines which value in the domain of `decision_variable` to branch next on.
     /// The domain of the `decision_variable` variable should have at least 2 values in it (as it
-    /// otherwise should not have been selected as `decision_variable`). Returns a [`Predicate`]
-    /// specifying the required change in the domain.
+    /// otherwise should not have been selected as `decision_variable`). Returns a
+    /// [`Predicate`] specifying the required change in the domain.
     fn select_value(&mut self, context: &mut SelectionContext, decision_variable: Var)
         -> Predicate;
-
-    /// A function which is called after a [`Literal`] is unassigned during backtracking (i.e. when
-    /// it was fixed but is no longer), specifically, it provides `literal` which is the
-    /// [`Literal`] which has been reset. This method could thus be called multiple times in a
-    /// single backtracking operation by the solver.
-    fn on_unassign_literal(&mut self, _literal: Literal) {}
 
     /// A function which is called after a [`DomainId`] is unassigned during backtracking (i.e. when
     /// it was fixed but is no longer), specifically, it provides `variable` which is the

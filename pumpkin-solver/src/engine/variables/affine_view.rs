@@ -9,7 +9,7 @@ use crate::engine::predicates::predicate_constructor::PredicateConstructor;
 use crate::engine::reason::ReasonRef;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::IntegerVariable;
-use crate::engine::AssignmentsInteger;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::engine::IntDomainEvent;
 use crate::engine::Watchers;
@@ -55,7 +55,7 @@ where
 {
     type AffineView = Self;
 
-    fn lower_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound(&self, assignment: &Assignments) -> i32 {
         if self.scale < 0 {
             self.map(self.inner.upper_bound(assignment))
         } else {
@@ -63,7 +63,25 @@ where
         }
     }
 
-    fn upper_bound(&self, assignment: &AssignmentsInteger) -> i32 {
+    fn lower_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if self.scale < 0 {
+            self.map(
+                self.inner
+                    .upper_bound_at_trail_position(assignment, trail_position),
+            )
+        } else {
+            self.map(
+                self.inner
+                    .lower_bound_at_trail_position(assignment, trail_position),
+            )
+        }
+    }
+
+    fn upper_bound(&self, assignment: &Assignments) -> i32 {
         if self.scale < 0 {
             self.map(self.inner.lower_bound(assignment))
         } else {
@@ -71,7 +89,25 @@ where
         }
     }
 
-    fn contains(&self, assignment: &AssignmentsInteger, value: i32) -> bool {
+    fn upper_bound_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        trail_position: usize,
+    ) -> i32 {
+        if self.scale < 0 {
+            self.map(
+                self.inner
+                    .lower_bound_at_trail_position(assignment, trail_position),
+            )
+        } else {
+            self.map(
+                self.inner
+                    .upper_bound_at_trail_position(assignment, trail_position),
+            )
+        }
+    }
+
+    fn contains(&self, assignment: &Assignments, value: i32) -> bool {
         if (value - self.offset) % self.scale == 0 {
             let inverted = self.invert(value, Rounding::Up);
             self.inner.contains(assignment, inverted)
@@ -80,15 +116,30 @@ where
         }
     }
 
-    fn describe_domain(&self, assignment: &AssignmentsInteger) -> Vec<Predicate> {
-        // The description should not actually change. It is a description of the domain as seen by
-        // the solver, not as seen by the user of this view.
-        self.inner.describe_domain(assignment)
+    fn contains_at_trail_position(
+        &self,
+        assignment: &Assignments,
+        value: i32,
+        trail_position: usize,
+    ) -> bool {
+        if (value - self.offset) % self.scale == 0 {
+            let inverted = self.invert(value, Rounding::Up);
+            self.inner
+                .contains_at_trail_position(assignment, inverted, trail_position)
+        } else {
+            false
+        }
+    }
+
+    fn iterate_domain(&self, assignment: &Assignments) -> impl Iterator<Item = i32> {
+        self.inner
+            .iterate_domain(assignment)
+            .map(|value| self.map(value))
     }
 
     fn remove(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -102,7 +153,7 @@ where
 
     fn set_lower_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -117,7 +168,7 @@ where
 
     fn set_upper_bound(
         &self,
-        assignment: &mut AssignmentsInteger,
+        assignment: &mut Assignments,
         value: i32,
         reason: Option<ReasonRef>,
     ) -> Result<(), EmptyDomain> {
@@ -231,7 +282,7 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
             let inverted_bound = self.invert(bound, Rounding::Up);
             self.inner.equality_predicate(inverted_bound)
         } else {
-            Predicate::False
+            Predicate::trivially_false()
         }
     }
 
@@ -240,7 +291,7 @@ impl<Var: PredicateConstructor<Value = i32>> PredicateConstructor for AffineView
             let inverted_bound = self.invert(bound, Rounding::Up);
             self.inner.disequality_predicate(inverted_bound)
         } else {
-            Predicate::True
+            Predicate::trivially_true()
         }
     }
 }

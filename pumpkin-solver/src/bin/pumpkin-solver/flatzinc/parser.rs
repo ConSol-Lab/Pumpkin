@@ -66,26 +66,20 @@ fn parse_var_decl(
         flatzinc::VarDeclItem::IntInSet {
             id,
             set,
-            expr,
+            expr: _,
             annos,
         } => {
-            ast.add_variable_decl(SingleVarDecl::IntInSet {
-                id,
-                set,
-                expr,
-                annos,
-            });
+            ast.add_variable_decl(SingleVarDecl::IntInSet { id, set, annos });
             Ok(())
         }
 
         flatzinc::VarDeclItem::ArrayOfBool {
-            ix,
+            ix: _,
             id,
             annos,
             array_expr,
         } => {
             ast.add_variable_array(VarArrayDecl::Bool {
-                ix,
                 id,
                 annos,
                 array_expr,
@@ -95,13 +89,12 @@ fn parse_var_decl(
         }
 
         flatzinc::VarDeclItem::ArrayOfInt {
-            ix,
+            ix: _,
             id,
             annos,
             array_expr,
         } => {
             ast.add_variable_array(VarArrayDecl::Int {
-                ix,
                 id,
                 annos,
                 array_expr,
@@ -109,14 +102,13 @@ fn parse_var_decl(
             Ok(())
         }
         flatzinc::VarDeclItem::ArrayOfIntInRange {
-            ix,
+            ix: _,
             id,
             annos,
             array_expr,
             ..
         } => {
             ast.add_variable_array(VarArrayDecl::Int {
-                ix,
                 id,
                 annos,
                 array_expr,
@@ -125,14 +117,13 @@ fn parse_var_decl(
         }
 
         flatzinc::VarDeclItem::ArrayOfIntInSet {
-            ix,
+            ix: _,
             id,
             annos,
             array_expr,
             set: _,
         } => {
             ast.add_variable_array(VarArrayDecl::Int {
-                ix,
                 id,
                 annos,
                 array_expr,

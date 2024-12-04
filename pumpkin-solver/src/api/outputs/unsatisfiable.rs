@@ -2,8 +2,8 @@
 
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CoreExtractionResult;
-use crate::engine::variables::Literal;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::predicates::Predicate;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -66,13 +66,13 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// // We create a termination condition which allows the solver to run indefinitely
     /// let mut termination = Indefinite;
     /// // And we create a search strategy (in this case, simply the default)
-    /// let mut brancher = solver.default_brancher_over_all_propositional_variables();
+    /// let mut brancher = solver.default_brancher();
     ///
     /// // Then we solve to satisfaction
     /// let assumptions = vec![
-    ///     solver.get_literal(predicate!(x == 1)),
-    ///     solver.get_literal(predicate!(y <= 1)),
-    ///     solver.get_literal(predicate!(y != 0)),
+    ///     predicate!(x == 1),
+    ///     predicate!(y <= 1),
+    ///     predicate!(y != 0),
     /// ];
     /// let result =
     ///     solver.satisfy_under_assumptions(&mut brancher, &mut termination, &assumptions);
@@ -84,10 +84,8 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     ///     {
     ///         let core = unsatisfiable.extract_core();
     ///
-    ///         // In this case, the core should be equal to all assumption literals
-    ///         assert!(assumptions
-    ///             .into_iter()
-    ///             .all(|literal| core.contains(&literal)));
+    ///         // In this case, the core should be equal to all assumption predicates
+    ///         assert_eq!(core, vec![predicate!(y == 1), predicate!(x == 1)].into());
     ///     }
     /// }
     ///  ```
@@ -100,7 +98,7 @@ impl<'solver, 'brancher, B: Brancher> UnsatisfiableUnderAssumptions<'solver, 'br
     /// search for CP’, in Integration of Constraint Programming, Artificial Intelligence, and
     /// Operations Research: 17th International Conference, CPAIOR 2020, Vienna, Austria, September
     /// 21--24, 2020, Proceedings 17, 2020, pp. 205–221.
-    pub fn extract_core(&mut self) -> Box<[Literal]> {
+    pub fn extract_core(&mut self) -> Box<[Predicate]> {
         match self.solver.extract_clausal_core(self.brancher) {
             CoreExtractionResult::ConflictingAssumption(conflicting_assumption) => {
                 panic!("Conflicting assumptions were provided, found both {conflicting_assumption:?} and {:?}", !conflicting_assumption)

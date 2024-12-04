@@ -23,5 +23,5 @@ pub fn run_mzn_infeasible_test(instance_name: &str, folder_name: &str) {
     let files = run_solver_with_options(instance_path, false, ["-a"], None);
 
     let output = std::fs::read_to_string(files.log_file).expect("Failed to read solver output");
-    assert_eq!(output, "=====UNSATISFIABLE=====\n");
+    assert!(output.ends_with("=====UNSATISFIABLE=====\n"));
 }

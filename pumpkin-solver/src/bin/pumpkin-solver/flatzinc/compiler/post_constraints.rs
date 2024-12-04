@@ -6,9 +6,9 @@ use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::predicate;
+use pumpkin_solver::predicates::Predicate;
 use pumpkin_solver::variables::AffineView;
 use pumpkin_solver::variables::DomainId;
-use pumpkin_solver::variables::Literal;
 use pumpkin_solver::variables::TransformableVariable;
 
 use super::context::CompilationContext;
@@ -295,19 +295,15 @@ fn compile_set_in_reif(
             let forward = context
                 .solver
                 .add_clause([
-                    !reif,
-                    context
-                        .solver
-                        .get_literal(predicate![variable >= lower_bound]),
+                    !reif.get_true_predicate(),
+                    predicate![variable >= lower_bound],
                 ])
                 .is_ok()
                 && context
                     .solver
                     .add_clause([
-                        !reif,
-                        !context
-                            .solver
-                            .get_literal(predicate![variable >= upper_bound + 1]),
+                        !reif.get_true_predicate(),
+                        !predicate![variable >= upper_bound + 1],
                     ])
                     .is_ok();
 
@@ -316,13 +312,9 @@ fn compile_set_in_reif(
             let backward = context
                 .solver
                 .add_clause([
-                    reif,
-                    !context
-                        .solver
-                        .get_literal(predicate![variable >= lower_bound]),
-                    context
-                        .solver
-                        .get_literal(predicate![variable >= upper_bound + 1]),
+                    reif.get_true_predicate(),
+                    !predicate![variable >= lower_bound],
+                    predicate![variable >= upper_bound + 1],
                 ])
                 .is_ok();
 
@@ -332,7 +324,11 @@ fn compile_set_in_reif(
         Set::Sparse { values } => {
             let clause = values
                 .iter()
-                .map(|&value| context.solver.get_literal(predicate![variable == value]))
+                .map(|&value| {
+                    context
+                        .solver
+                        .new_literal_for_predicate(predicate![variable == value])
+                })
                 .collect::<Vec<_>>();
 
             constraints::clause(clause)
@@ -364,20 +360,17 @@ fn compile_bool_not(
     exprs: &[flatzinc::Expr],
 ) -> Result<bool, FlatZincError> {
     // TODO: Take this constraint into account when creating variables, as these can be opposite
-    // literals of the same PropositionalVariable. Unsure how often this actually appears in
-    // models though.
+    // literals of the same PropositionalVariable. Unsure how often this actually appears in models
+    // though.
+
     check_parameters!(exprs, 2, "bool_not");
 
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    // a != b
-    // -> !(a /\ b) /\ !(!a /\ !b)
-    // -> (!a \/ !b) /\ (a \/ b)
-    let c1 = context.solver.add_clause([a, b]).is_ok();
-    let c2 = context.solver.add_clause([!a, !b]).is_ok();
-
-    Ok(c1 && c2)
+    Ok(constraints::binary_not_equals(a, b)
+        .post(context.solver, None)
+        .is_ok())
 }
 
 fn compile_bool_eq_reif(
@@ -390,12 +383,9 @@ fn compile_bool_eq_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_clause([!a, !b, r]).is_ok();
-    let c2 = context.solver.add_clause([!a, b, !r]).is_ok();
-    let c3 = context.solver.add_clause([a, !b, !r]).is_ok();
-    let c4 = context.solver.add_clause([a, b, r]).is_ok();
-
-    Ok(c1 && c2 && c3 && c4)
+    Ok(constraints::binary_equals(a, b)
+        .reify(context.solver, r, None)
+        .is_ok())
 }
 
 fn compile_bool_eq(
@@ -409,10 +399,9 @@ fn compile_bool_eq(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_bool_variable(&exprs[1])?;
 
-    let c1 = context.solver.add_clause([!a, b]).is_ok();
-    let c2 = context.solver.add_clause([!b, a]).is_ok();
-
-    Ok(c1 && c2)
+    Ok(constraints::binary_equals(a, b)
+        .post(context.solver, None)
+        .is_ok())
 }
 
 fn compile_bool_clause(
@@ -424,11 +413,13 @@ fn compile_bool_clause(
     let clause_1 = context.resolve_bool_variable_array(&exprs[0])?;
     let clause_2 = context.resolve_bool_variable_array(&exprs[1])?;
 
-    let clause: Vec<Literal> = clause_1
+    let clause: Vec<Predicate> = clause_1
         .iter()
-        .copied()
-        .chain(clause_2.iter().map(|&literal| !literal))
+        .cloned()
+        .chain(clause_2.iter().map(|literal| !*literal))
+        .map(|literal| literal.get_true_predicate())
         .collect();
+
     Ok(context.solver.add_clause(clause).is_ok())
 }
 
@@ -442,12 +433,9 @@ fn compile_bool_and(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_clause([!r, a]).is_ok();
-    let c2 = context.solver.add_clause([!r, b]).is_ok();
-
-    let c3 = context.solver.add_clause([!a, !b, r]).is_ok();
-
-    Ok(c1 && c2 && c3)
+    Ok(constraints::conjunction([a, b])
+        .reify(context.solver, r, None)
+        .is_ok())
 }
 
 fn compile_bool2int(
@@ -457,17 +445,18 @@ fn compile_bool2int(
     // TODO: Perhaps we want to add a phase in the compiler that directly uses the literal
     // corresponding to the predicate [b = 1] for the boolean parameter in this constraint.
     // See https://emir-demirovic.atlassian.net/browse/PUM-89
+
     check_parameters!(exprs, 2, "bool2int");
 
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    let b_lit = context.solver.get_literal(predicate![b == 1]);
-
-    let c1 = context.solver.add_clause([!a, b_lit]).is_ok();
-    let c2 = context.solver.add_clause([!b_lit, a]).is_ok();
-
-    Ok(c1 && c2)
+    Ok(constraints::binary_equals(
+        a,
+        context.solver.new_literal_for_predicate(predicate!(b == 1)),
+    )
+    .post(context.solver, None)
+    .is_ok())
 }
 
 fn compile_bool_or(
@@ -490,8 +479,12 @@ fn compile_bool_xor(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 2, "pumpkin_bool_xor");
 
-    let a = context.resolve_bool_variable(&exprs[0])?;
-    let b = context.resolve_bool_variable(&exprs[1])?;
+    let a = context
+        .resolve_bool_variable(&exprs[0])?
+        .get_true_predicate();
+    let b = context
+        .resolve_bool_variable(&exprs[1])?
+        .get_true_predicate();
 
     let c1 = context.solver.add_clause([!a, !b]).is_ok();
     let c2 = context.solver.add_clause([b, a]).is_ok();
@@ -509,10 +502,18 @@ fn compile_bool_xor_reif(
     let b = context.resolve_bool_variable(&exprs[1])?;
     let r = context.resolve_bool_variable(&exprs[2])?;
 
-    let c1 = context.solver.add_clause([!a, !b, !r]).is_ok();
-    let c2 = context.solver.add_clause([!a, b, r]).is_ok();
-    let c3 = context.solver.add_clause([a, !b, r]).is_ok();
-    let c4 = context.solver.add_clause([a, b, !r]).is_ok();
+    let c1 = constraints::clause([!a, !b, !r])
+        .post(context.solver, None)
+        .is_ok();
+    let c2 = constraints::clause([!a, b, r])
+        .post(context.solver, None)
+        .is_ok();
+    let c3 = constraints::clause([a, !b, r])
+        .post(context.solver, None)
+        .is_ok();
+    let c4 = constraints::clause([a, b, !r])
+        .post(context.solver, None)
+        .is_ok();
 
     Ok(c1 && c2 && c3 && c4)
 }
@@ -524,31 +525,13 @@ fn compile_array_var_bool_element(
 ) -> Result<bool, FlatZincError> {
     check_parameters!(exprs, 3, name);
 
-    let index = context.resolve_integer_variable(&exprs[0])?;
+    let index = context.resolve_integer_variable(&exprs[0])?.offset(-1);
     let array = context.resolve_bool_variable_array(&exprs[1])?;
     let rhs = context.resolve_bool_variable(&exprs[2])?;
 
-    let mut success = true;
-
-    for i in 0..array.len() {
-        // Note: minizinc arrays are 1-indexed.
-        let mzn_index = i as i32 + 1;
-
-        // [index = mzn_index] -> (rhs <-> array[i])
-
-        let predicate_lit = context.solver.get_literal(predicate![index == mzn_index]);
-
-        success &= context
-            .solver
-            .add_clause([!predicate_lit, !rhs, array[i]])
-            .is_ok();
-        success &= context
-            .solver
-            .add_clause([!predicate_lit, !array[i], rhs])
-            .is_ok();
-    }
-
-    Ok(success)
+    Ok(constraints::element(index, array.iter().cloned(), rhs)
+        .post(context.solver, None)
+        .is_ok())
 }
 
 fn compile_array_bool_and(

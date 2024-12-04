@@ -1,13 +1,11 @@
 use super::PropagatorId;
-use crate::basic_types::ConstraintReference;
-use crate::basic_types::Inconsistency;
+use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
-use crate::engine::AssignmentsInteger;
-use crate::engine::AssignmentsPropositional;
+use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
 use crate::pumpkin_assert_simple;
 
@@ -21,44 +19,40 @@ use crate::pumpkin_assert_simple;
 /// the propagations and the solver during propagation.
 #[derive(Clone, Copy, Debug)]
 pub struct PropagationContext<'a> {
-    assignments_integer: &'a AssignmentsInteger,
-    assignments_propositional: &'a AssignmentsPropositional,
+    pub assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContext<'a> {
-    pub fn new(
-        assignments_integer: &'a AssignmentsInteger,
-        assignments_propositional: &'a AssignmentsPropositional,
-    ) -> Self {
-        PropagationContext {
-            assignments_integer,
-            assignments_propositional,
-        }
+    pub fn new(assignments: &'a Assignments) -> Self {
+        PropagationContext { assignments }
+    }
+
+    pub fn get_decision_level(&self) -> usize {
+        self.assignments.get_decision_level()
     }
 }
 
 #[derive(Debug)]
 pub struct PropagationContextMut<'a> {
-    assignments_integer: &'a mut AssignmentsInteger,
-    reason_store: &'a mut ReasonStore,
-    assignments_propositional: &'a mut AssignmentsPropositional,
-    propagator: PropagatorId,
-
+    pub(crate) assignments: &'a mut Assignments,
+    pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) propagator_id: PropagatorId,
+    pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
     reification_literal: Option<Literal>,
 }
 
 impl<'a> PropagationContextMut<'a> {
     pub fn new(
-        assignments_integer: &'a mut AssignmentsInteger,
+        assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
-        assignments_propositional: &'a mut AssignmentsPropositional,
-        propagator: PropagatorId,
+        semantic_minimiser: &'a mut SemanticMinimiser,
+        propagator_id: PropagatorId,
     ) -> Self {
         PropagationContextMut {
-            assignments_integer,
+            assignments,
             reason_store,
-            assignments_propositional,
-            propagator,
+            propagator_id,
+            semantic_minimiser,
             reification_literal: None,
         }
     }
@@ -77,16 +71,10 @@ impl<'a> PropagationContextMut<'a> {
         if let Some(reification_literal) = self.reification_literal {
             match reason {
                 Reason::Eager(mut conjunction) => {
-                    conjunction.add(reification_literal.into());
+                    conjunction.add(reification_literal.get_true_predicate());
                     Reason::Eager(conjunction)
                 }
-                Reason::Lazy(callback) => {
-                    Reason::Lazy(Box::new(move |context: PropagationContext| {
-                        let mut conjunction = callback.compute(context);
-                        conjunction.add(reification_literal.into());
-                        conjunction
-                    }))
-                }
+                Reason::DynamicLazy(_) => todo!(),
             }
         } else {
             reason
@@ -95,59 +83,61 @@ impl<'a> PropagationContextMut<'a> {
 
     pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
         PropagationContext {
-            assignments_integer: self.assignments_integer,
-            assignments_propositional: self.assignments_propositional,
+            assignments: self.assignments,
         }
+    }
+
+    pub fn get_decision_level(&self) -> usize {
+        self.assignments.get_decision_level()
     }
 }
 
-/// A trait which defines common methods for retrieving the [`AssignmentsInteger`] and
+/// A trait which defines common methods for retrieving the [`Assignments`] and
 /// [`AssignmentsPropositional`] from the structure which implements this trait.
 pub trait HasAssignments {
-    /// Returns the stored [`AssignmentsInteger`].
-    fn assignments_integer(&self) -> &AssignmentsInteger;
-
-    /// Returns the stored [`AssignmentsPropositional`].
-    fn assignments_propositional(&self) -> &AssignmentsPropositional;
+    /// Returns the stored [`Assignments`].
+    fn assignments(&self) -> &Assignments;
 }
 
 mod private {
     use super::*;
 
     impl HasAssignments for PropagationContext<'_> {
-        fn assignments_integer(&self) -> &AssignmentsInteger {
-            self.assignments_integer
-        }
-
-        fn assignments_propositional(&self) -> &AssignmentsPropositional {
-            self.assignments_propositional
+        fn assignments(&self) -> &Assignments {
+            self.assignments
         }
     }
 
     impl HasAssignments for PropagationContextMut<'_> {
-        fn assignments_integer(&self) -> &AssignmentsInteger {
-            self.assignments_integer
-        }
-
-        fn assignments_propositional(&self) -> &AssignmentsPropositional {
-            self.assignments_propositional
+        fn assignments(&self) -> &Assignments {
+            self.assignments
         }
     }
 }
 
 pub(crate) trait ReadDomains: HasAssignments {
-    fn is_literal_fixed(&self, var: Literal) -> bool {
-        self.assignments_propositional().is_literal_assigned(var)
+    fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
+        self.assignments()
+            .evaluate_predicate(predicate)
+            .is_some_and(|truth_value| truth_value)
     }
 
-    fn is_literal_true(&self, var: Literal) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned_true(var)
+    fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
+        self.assignments()
+            .evaluate_predicate(predicate)
+            .is_some_and(|truth_value| !truth_value)
     }
 
-    fn is_literal_false(&self, var: Literal) -> bool {
-        self.assignments_propositional()
-            .is_literal_assigned_false(var)
+    fn is_literal_true(&self, literal: &Literal) -> bool {
+        self.is_predicate_satisfied(literal.get_true_predicate())
+    }
+
+    fn is_literal_false(&self, literal: &Literal) -> bool {
+        self.is_predicate_satisfied(literal.get_false_predicate())
+    }
+
+    fn is_literal_fixed(&self, literal: &Literal) -> bool {
+        self.is_fixed(literal)
     }
 
     /// Returns `true` if the domain of the given variable is singleton.
@@ -156,19 +146,35 @@ pub(crate) trait ReadDomains: HasAssignments {
     }
 
     fn lower_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.lower_bound(self.assignments_integer())
+        var.lower_bound(self.assignments())
+    }
+
+    fn lower_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.lower_bound_at_trail_position(self.assignments(), trail_position)
     }
 
     fn upper_bound<Var: IntegerVariable>(&self, var: &Var) -> i32 {
-        var.upper_bound(self.assignments_integer())
+        var.upper_bound(self.assignments())
+    }
+
+    fn upper_bound_at_trail_position<Var: IntegerVariable>(
+        &self,
+        var: &Var,
+        trail_position: usize,
+    ) -> i32 {
+        var.upper_bound_at_trail_position(self.assignments(), trail_position)
     }
 
     fn contains<Var: IntegerVariable>(&self, var: &Var, value: i32) -> bool {
-        var.contains(self.assignments_integer(), value)
+        var.contains(self.assignments(), value)
     }
 
-    fn describe_domain<Var: IntegerVariable>(&self, var: &Var) -> Vec<Predicate> {
-        var.describe_domain(self.assignments_integer())
+    fn iterate_domain<Var: IntegerVariable>(&self, var: &Var) -> impl Iterator<Item = i32> {
+        var.iterate_domain(self.assignments())
     }
 }
 
@@ -181,10 +187,10 @@ impl PropagationContextMut<'_> {
         value: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if var.contains(self.assignments_integer, value) {
+        if var.contains(self.assignments, value) {
             let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var.remove(self.assignments_integer, value, Some(reason_ref));
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.remove(self.assignments, value, Some(reason_ref));
         }
         Ok(())
     }
@@ -195,10 +201,10 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound < var.upper_bound(self.assignments_integer) {
+        if bound < var.upper_bound(self.assignments) {
             let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var.set_upper_bound(self.assignments_integer, bound, Some(reason_ref));
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.set_upper_bound(self.assignments, bound, Some(reason_ref));
         }
         Ok(())
     }
@@ -209,32 +215,65 @@ impl PropagationContextMut<'_> {
         bound: i32,
         reason: R,
     ) -> Result<(), EmptyDomain> {
-        if bound > var.lower_bound(self.assignments_integer) {
+        if bound > var.lower_bound(self.assignments) {
             let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator, reason);
-            return var.set_lower_bound(self.assignments_integer, bound, Some(reason_ref));
+            let reason_ref = self.reason_store.push(self.propagator_id, reason);
+            return var.set_lower_bound(self.assignments, bound, Some(reason_ref));
         }
+
         Ok(())
     }
 
-    pub fn assign_literal<R: Into<Reason>>(
+    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+        self.assignments.evaluate_predicate(predicate)
+    }
+
+    pub fn post_predicate<R: Into<Reason>>(
         &mut self,
-        var: Literal,
-        bound: bool,
+        predicate: Predicate,
         reason: R,
-    ) -> Result<(), Inconsistency> {
-        if !self.assignments_propositional.is_literal_assigned(var) {
-            let reason = self.build_reason(reason.into());
-            let reason_ref = self.reason_store.push(self.propagator, reason);
-            let enqueue_result = self.assignments_propositional.enqueue_propagated_literal(
-                if bound { var } else { !var },
-                ConstraintReference::create_reason_reference(reason_ref),
-            );
-            if let Some(conflict_info) = enqueue_result {
-                return Err(Inconsistency::Other(conflict_info));
+    ) -> Result<(), EmptyDomain> {
+        match predicate {
+            Predicate::LowerBound {
+                domain_id,
+                lower_bound,
+            } => self.set_lower_bound(&domain_id, lower_bound, reason),
+            Predicate::UpperBound {
+                domain_id,
+                upper_bound,
+            } => self.set_upper_bound(&domain_id, upper_bound, reason),
+            Predicate::NotEqual {
+                domain_id,
+                not_equal_constant,
+            } => self.remove(&domain_id, not_equal_constant, reason),
+            Predicate::Equal {
+                domain_id,
+                equality_constant,
+            } => {
+                if self
+                    .assignments
+                    .is_value_in_domain(domain_id, equality_constant)
+                    && !self.assignments.is_domain_assigned(&domain_id)
+                {
+                    let reason = self.reason_store.push(self.propagator_id, reason.into());
+                    self.assignments
+                        .make_assignment(domain_id, equality_constant, Some(reason))?;
+                }
+
+                Ok(())
             }
         }
+    }
 
-        Ok(())
+    pub fn assign_literal<R: Into<Reason> + Clone>(
+        &mut self,
+        boolean: &Literal,
+        truth_value: bool,
+        reason: R,
+    ) -> Result<(), EmptyDomain> {
+        match truth_value {
+            true => self.set_lower_bound(boolean, 1, reason),
+            false => self.set_upper_bound(boolean, 0, reason),
+        }
     }
 }

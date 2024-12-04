@@ -79,6 +79,12 @@
             "bool",
             "false"
         ],
+        [
+            "--proof-path",
+            "The path to the proof file.",
+            "string",
+            "",
+        ]
     ],
 
     "tags": ["cp", "lcg", "int"]

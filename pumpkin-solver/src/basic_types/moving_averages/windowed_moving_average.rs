@@ -1,28 +1,35 @@
 use std::collections::VecDeque;
+use std::fmt::Debug;
+
+use num::cast::AsPrimitive;
+use num::traits::NumAssign;
 
 use super::MovingAverage;
 use crate::pumpkin_assert_simple;
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
-pub(crate) struct WindowedMovingAverage {
+pub(crate) struct WindowedMovingAverage<Term> {
     window_size: u64,
-    windowed_sum: u64,
-    values_in_window: VecDeque<u64>,
+    windowed_sum: Term,
+    values_in_window: VecDeque<Term>,
 }
 
-impl WindowedMovingAverage {
-    pub(crate) fn new(window_size: u64) -> WindowedMovingAverage {
+impl<Term: Default> WindowedMovingAverage<Term> {
+    pub(crate) fn new(window_size: u64) -> WindowedMovingAverage<Term> {
         pumpkin_assert_simple!(window_size > 0);
         WindowedMovingAverage {
             window_size,
-            windowed_sum: 0,
+            windowed_sum: Term::default(),
             values_in_window: VecDeque::with_capacity(window_size as usize),
         }
     }
 }
 
-impl MovingAverage for WindowedMovingAverage {
-    fn add_term(&mut self, new_term: u64) {
+impl<Term> MovingAverage<Term> for WindowedMovingAverage<Term>
+where
+    Term: Debug + NumAssign + AsPrimitive<f64>,
+{
+    fn add_term(&mut self, new_term: Term) {
         pumpkin_assert_simple!(self.values_in_window.len() <= self.window_size as usize);
 
         // if the window is full, then remove an element to make room for the new term
@@ -35,13 +42,8 @@ impl MovingAverage for WindowedMovingAverage {
     }
 
     fn value(&self) -> f64 {
-        // pumpkin_assert_simple!(
-        // self.values_in_window.len() == self.window_size as usize,
-        // "Todo double check this condition, not sure if needed."
-        // );
-
         if !self.values_in_window.is_empty() {
-            (self.windowed_sum as f64) / (self.values_in_window.len() as f64)
+            self.windowed_sum.as_() / (self.values_in_window.len() as f64)
         } else {
             0.0
         }
@@ -84,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        let empty_sum = WindowedMovingAverage::new(10);
+        let empty_sum: WindowedMovingAverage<u64> = WindowedMovingAverage::new(10);
         assert!(empty_sum.value() == 0.0);
     }
 

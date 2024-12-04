@@ -26,7 +26,7 @@ pub(crate) fn run(
                 let literal = *context
                     .boolean_variable_map
                     .entry(representative)
-                    .or_insert_with(|| domain.into_literal(context.solver, id.to_string()));
+                    .or_insert_with(|| domain.into_boolean(context.solver, id.to_string()));
 
                 if is_output_variable(annos) {
                     context.outputs.push(Output::bool(id, literal));
