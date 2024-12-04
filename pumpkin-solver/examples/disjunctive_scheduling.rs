@@ -3,6 +3,8 @@
 //! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
 //! either job i starts after j or job j starts after i)
 
+use std::ops::Not;
+
 use pumpkin_solver::constraints;
 use pumpkin_solver::constraints::Constraint;
 use pumpkin_solver::results::ProblemSolution;
@@ -60,10 +62,13 @@ fn main() {
                 constraints::less_than_or_equals(variables.clone(), -(processing_times[y] as i32))
                     .implied_by(&mut solver, literal, None);
 
-            //-literal => -s_y + s_x <= p_y)
+            //-literal => -s_y + s_x <= p_y - 1)
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = constraints::less_than_or_equals(variables.clone(), processing_times[y] as i32)
-                .implied_by(&mut solver, literal, None);
+            let _ = constraints::less_than_or_equals(
+                variables.clone(),
+                (processing_times[y] as i32) - 1,
+            )
+            .implied_by(&mut solver, literal.not(), None);
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([literal, precedence_literals[y][x]]);
