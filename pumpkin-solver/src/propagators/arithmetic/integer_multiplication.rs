@@ -129,7 +129,7 @@ fn perform_propagation<VA: IntegerVariable, VB: IntegerVariable, VC: IntegerVari
     }
 
     // b >= ceil(c.min / a.max)
-    if a_max >= 1 && c_min >= 1 {
+    if a_min >= 0 && a_max >= 1 && c_min >= 1 {
         let bound = div_ceil_pos(c_min, a_max);
 
         context.set_lower_bound(
