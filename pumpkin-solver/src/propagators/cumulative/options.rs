@@ -3,6 +3,7 @@ use std::fmt::Display;
 use clap::ValueEnum;
 
 use super::CumulativeExplanationType;
+use super::CumulativeMergeStrategy;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct CumulativePropagatorOptions {
@@ -17,6 +18,7 @@ pub(crate) struct CumulativePropagatorOptions {
     pub(crate) generate_sequence: bool,
     /// Determines whether to incrementally backtrack or to calculate from scratch
     pub(crate) incremental_backtracking: bool,
+    pub(crate) extended_statistics: bool,
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -27,6 +29,7 @@ pub struct CumulativeOptions {
     pub(crate) propagation_method: CumulativePropagationMethod,
     /// The options which are passed to the propagator itself
     pub(crate) propagator_options: CumulativePropagatorOptions,
+    pub(crate) merge_strategy: CumulativeMergeStrategy,
 }
 
 impl CumulativeOptions {
@@ -36,6 +39,8 @@ impl CumulativeOptions {
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
         incremental_backtracking: bool,
+        extended_statistics: bool,
+        merge_strategy: CumulativeMergeStrategy,
     ) -> Self {
         Self {
             propagation_method,
@@ -44,7 +49,9 @@ impl CumulativeOptions {
                 explanation_type,
                 generate_sequence,
                 incremental_backtracking,
+                extended_statistics,
             },
+            merge_strategy,
         }
     }
 }

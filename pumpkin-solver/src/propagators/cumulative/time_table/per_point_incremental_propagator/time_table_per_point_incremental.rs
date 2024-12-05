@@ -349,6 +349,10 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool> Propagator
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        self.updatable_structures
+            .statistics
+            .number_of_propagation_calls += 1;
+
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
                 context.as_readonly(),

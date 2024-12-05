@@ -400,23 +400,6 @@ impl SimpleIntegerDomain {
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) {
-        // We add an assignment predicate if the variable is not assigned at the root
-        if self.lower_bound == self.upper_bound
-            && self.lower_bound != original_domain.lower_bound
-            && self.upper_bound != original_domain.upper_bound
-        {
-            description.push(
-                variable_literal_mappings.get_literal(
-                    predicate![domain_id == self.lower_bound]
-                        .try_into()
-                        .unwrap(),
-                    assignments_propositional,
-                    assignments_integer,
-                ),
-            );
-            return;
-        }
-
         // Add the lower-bound to the description if it is different from the root-level bound
         if self.lower_bound != original_domain.lower_bound {
             description.push(

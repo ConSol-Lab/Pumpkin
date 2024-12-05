@@ -89,6 +89,10 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        self.updatable_structures
+            .statistics
+            .number_of_propagation_calls += 1;
+
         let time_table =
             create_time_table_per_point_from_scratch(context.as_readonly(), &self.parameters)?;
         self.is_time_table_empty = time_table.is_empty();
