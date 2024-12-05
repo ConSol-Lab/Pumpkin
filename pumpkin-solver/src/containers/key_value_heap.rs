@@ -18,7 +18,7 @@ use crate::pumpkin_assert_moderate;
 /// which allows for generalised `Key`s (required to implement [StorageKey]) and `Value`s (which are
 /// required to be ordered, divisible and addable).
 #[derive(Debug, Clone)]
-pub struct KeyValueHeap<Key: StorageKey, Value> {
+pub struct KeyValueHeap<Key, Value> {
     /// Contains the values stored as a heap; the value of key `i` is at index
     /// [`KeyValueHeap::map_key_to_position\[i\]`][KeyValueHeap::map_key_to_position]
     values: Vec<Value>,
@@ -43,11 +43,29 @@ impl<Key: StorageKey, Value> Default for KeyValueHeap<Key, Value> {
     }
 }
 
+impl<Key, Value> KeyValueHeap<Key, Value> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            values: Vec::new(),
+            map_key_to_position: KeyedVec::new(),
+            map_position_to_key: Vec::new(),
+            end_position: 0,
+        }
+    }
+}
+
 impl<Key, Value> KeyValueHeap<Key, Value>
 where
     Key: StorageKey + Copy,
     Value: AddAssign<Value> + DivAssign<Value> + PartialOrd + Default + Copy,
 {
+    /// Get the keys in the heap.
+    ///
+    /// The order in which the keys are yielded is unspecified.
+    pub(crate) fn keys(&self) -> impl Iterator<Item = Key> + '_ {
+        self.map_position_to_key.iter().copied()
+    }
+
     /// Return the key with maximum value from the heap, or None if the heap is empty. Note that
     /// this does not delete the key (see [`KeyValueHeap::pop_max`] to get and delete).
     ///

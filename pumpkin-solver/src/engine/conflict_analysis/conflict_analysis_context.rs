@@ -9,6 +9,8 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
@@ -130,6 +132,7 @@ impl<'a> ConflictAnalysisContext<'a> {
     pub(crate) fn get_propagation_reason(
         predicate: Predicate,
         assignments: &Assignments,
+        current_nogood: CurrentNogood<'_>,
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
         proof_log: &'a mut ProofLog,
@@ -170,8 +173,11 @@ impl<'a> ConflictAnalysisContext<'a> {
 
             let propagator_id = reason_store.get_propagator(reason_ref);
             let constraint_tag = propagators.get_tag(propagator_id);
+
+            let explanation_context = ExplanationContext::new(assignments, current_nogood);
+
             let reason = reason_store
-                .get_or_compute(reason_ref, assignments, propagators)
+                .get_or_compute(reason_ref, explanation_context, propagators)
                 .expect("reason reference should not be stale");
             if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id()
                 && reason.is_empty()

@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorId;
-use super::Assignments;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Trail;
 use crate::predicates::Predicate;
@@ -31,12 +30,12 @@ impl ReasonStore {
     pub(crate) fn get_or_compute<'this>(
         &'this self,
         reference: ReasonRef,
-        assignments: &Assignments,
+        context: ExplanationContext<'_>,
         propagators: &'this mut PropagatorStore,
     ) -> Option<&'this [Predicate]> {
         self.trail
             .get(reference.0 as usize)
-            .map(|reason| reason.1.compute(assignments, reason.0, propagators))
+            .map(|reason| reason.1.compute(context, reason.0, propagators))
     }
 
     pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
@@ -85,7 +84,7 @@ pub(crate) enum Reason {
 impl Reason {
     pub(crate) fn compute<'a>(
         &'a self,
-        assignments: &Assignments,
+        context: ExplanationContext<'_>,
         propagator_id: PropagatorId,
         propagators: &'a mut PropagatorStore,
     ) -> &'a [Predicate] {
@@ -93,8 +92,9 @@ impl Reason {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            Reason::DynamicLazy(code) => propagators[propagator_id]
-                .lazy_explanation(*code, ExplanationContext::new(assignments)),
+            Reason::DynamicLazy(code) => {
+                propagators[propagator_id].lazy_explanation(*code, context)
+            }
             Reason::Eager(result) => result.as_slice(),
         }
     }
@@ -125,7 +125,11 @@ mod tests {
 
         assert_eq!(
             conjunction.as_slice(),
-            reason.compute(&integers, PropagatorId(0), &mut PropagatorStore::default())
+            reason.compute(
+                ExplanationContext::from(&integers),
+                PropagatorId(0),
+                &mut PropagatorStore::default()
+            )
         );
     }
 
@@ -144,7 +148,11 @@ mod tests {
 
         assert_eq!(
             Some(conjunction.as_slice()),
-            reason_store.get_or_compute(reason_ref, &integers, &mut PropagatorStore::default())
+            reason_store.get_or_compute(
+                reason_ref,
+                ExplanationContext::from(&integers),
+                &mut PropagatorStore::default()
+            )
         );
     }
 }

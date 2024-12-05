@@ -32,6 +32,15 @@ impl<Key, Value> Default for KeyedVec<Key, Value> {
     }
 }
 
+impl<Key, Value> KeyedVec<Key, Value> {
+    pub(crate) const fn new() -> Self {
+        Self {
+            key: PhantomData,
+            elements: Vec::new(),
+        }
+    }
+}
+
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
     pub(crate) fn len(&self) -> usize {
         self.elements.len()

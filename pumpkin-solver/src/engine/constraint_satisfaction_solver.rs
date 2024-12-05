@@ -38,7 +38,9 @@ use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -1114,7 +1116,11 @@ impl ConstraintSatisfactionSolver {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let reason_changing_bound = reason_store
-            .get_or_compute(entry.reason.unwrap(), assignments, propagators)
+            .get_or_compute(
+                entry.reason.unwrap(),
+                ExplanationContext::from(&*assignments),
+                propagators,
+            )
             .unwrap();
 
         let mut empty_domain_reason: Vec<Predicate> = vec![
@@ -1241,7 +1247,11 @@ impl ConstraintSatisfactionSolver {
             // Get the conjunction of predicates explaining the propagation.
             let reason = self
                 .reason_store
-                .get_or_compute(reason, &self.assignments, &mut self.propagators)
+                .get_or_compute(
+                    reason,
+                    ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
+                    &mut self.propagators,
+                )
                 .expect("Reason ref is valid");
 
             let propagated = entry.predicate;

@@ -85,6 +85,7 @@ pub(crate) mod propagator_initialisation_context;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
+pub(crate) use explanation_context::CurrentNogood;
 pub(crate) use explanation_context::ExplanationContext;
 pub(crate) use local_id::LocalId;
 pub(crate) use propagation_context::PropagationContext;
