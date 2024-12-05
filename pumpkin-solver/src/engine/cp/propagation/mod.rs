@@ -76,6 +76,7 @@
 //! International Workshop on Constraint Solving and Constraint Logic Programming, 2005, pp.
 //! 118–132.
 
+mod explanation_context;
 pub(crate) mod local_id;
 pub(crate) mod propagation_context;
 pub(crate) mod propagator;
@@ -84,6 +85,7 @@ pub(crate) mod propagator_initialisation_context;
 pub(crate) mod propagator_var_id;
 pub(crate) mod store;
 
+pub(crate) use explanation_context::ExplanationContext;
 pub(crate) use local_id::LocalId;
 pub(crate) use propagation_context::PropagationContext;
 pub(crate) use propagation_context::PropagationContextMut;

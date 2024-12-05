@@ -1317,7 +1317,7 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator(
+    pub(crate) fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
         tag: Option<NonZero<u32>>,

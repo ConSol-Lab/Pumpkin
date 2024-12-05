@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use super::propagation::store::PropagatorStore;
+use super::propagation::ExplanationContext;
 use super::propagation::PropagatorId;
 use super::Assignments;
 use crate::basic_types::PropositionalConjunction;
@@ -10,13 +11,13 @@ use crate::pumpkin_assert_simple;
 
 /// The reason store holds a reason for each change made by a CP propagator on a trail.
 #[derive(Default, Debug)]
-pub struct ReasonStore {
+pub(crate) struct ReasonStore {
     trail: Trail<(PropagatorId, Reason)>,
     pub helper: PropositionalConjunction,
 }
 
 impl ReasonStore {
-    pub fn push(&mut self, propagator: PropagatorId, reason: Reason) -> ReasonRef {
+    pub(crate) fn push(&mut self, propagator: PropagatorId, reason: Reason) -> ReasonRef {
         let index = self.trail.len();
         self.trail.push((propagator, reason));
         pumpkin_assert_simple!(
@@ -27,7 +28,7 @@ impl ReasonStore {
         ReasonRef(index as u32)
     }
 
-    pub fn get_or_compute<'this>(
+    pub(crate) fn get_or_compute<'this>(
         &'this self,
         reference: ReasonRef,
         assignments: &Assignments,
@@ -38,7 +39,7 @@ impl ReasonStore {
             .map(|reason| reason.1.compute(assignments, reason.0, propagators))
     }
 
-    pub fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
+    pub(crate) fn get_lazy_code(&self, reference: ReasonRef) -> Option<&u64> {
         match self.trail.get(reference.0 as usize) {
             Some(reason) => match &reason.1 {
                 Reason::Eager(_) => None,
@@ -48,24 +49,16 @@ impl ReasonStore {
         }
     }
 
-    pub fn increase_decision_level(&mut self) {
+    pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
 
-    pub fn synchronise(&mut self, level: usize) {
+    pub(crate) fn synchronise(&mut self, level: usize) {
         let _ = self.trail.synchronise(level);
     }
 
-    pub fn len(&self) -> usize {
-        self.trail.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     /// Get the propagator which generated the given reason.
-    pub fn get_propagator(&self, reason_ref: ReasonRef) -> PropagatorId {
+    pub(crate) fn get_propagator(&self, reason_ref: ReasonRef) -> PropagatorId {
         self.trail.get(reason_ref.0 as usize).unwrap().0
     }
 }
@@ -76,7 +69,7 @@ pub struct ReasonRef(pub(crate) u32);
 
 /// A reason for CP propagator to make a change
 #[derive(Debug)]
-pub enum Reason {
+pub(crate) enum Reason {
     /// An eager reason contains the propositional conjunction with the reason, without the
     ///   propagated predicate.
     Eager(PropositionalConjunction),
@@ -90,7 +83,7 @@ pub enum Reason {
 }
 
 impl Reason {
-    pub fn compute<'a>(
+    pub(crate) fn compute<'a>(
         &'a self,
         assignments: &Assignments,
         propagator_id: PropagatorId,
@@ -100,9 +93,8 @@ impl Reason {
             // We do not replace the reason with an eager explanation for dynamic lazy explanations.
             //
             // Benchmarking will have to show whether this should change or not.
-            Reason::DynamicLazy(code) => {
-                propagators[propagator_id].lazy_explanation(*code, assignments)
-            }
+            Reason::DynamicLazy(code) => propagators[propagator_id]
+                .lazy_explanation(*code, ExplanationContext::new(assignments)),
             Reason::Eager(result) => result.as_slice(),
         }
     }

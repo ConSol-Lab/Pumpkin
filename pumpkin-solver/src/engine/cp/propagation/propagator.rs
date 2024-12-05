@@ -1,6 +1,7 @@
 use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
+use super::explanation_context::ExplanationContext;
 use super::propagator_initialisation_context::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
@@ -11,7 +12,6 @@ use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::propagation::local_id::LocalId;
 use crate::engine::propagation::propagation_context::PropagationContext;
 use crate::engine::propagation::propagation_context::PropagationContextMut;
-use crate::engine::Assignments;
 #[cfg(doc)]
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::predicates::Predicate;
@@ -36,7 +36,7 @@ impl_downcast!(Propagator);
 /// enough, but a more mature implementation considers all functions in most cases.
 ///
 /// See the [`crate::engine::cp::propagation`] documentation for more details.
-pub trait Propagator: Downcast {
+pub(crate) trait Propagator: Downcast {
     /// Return the name of the propagator, this is a convenience method that is used for printing.
     fn name(&self) -> &str;
 
@@ -162,7 +162,7 @@ pub trait Propagator: Downcast {
         None
     }
 
-    fn lazy_explanation(&mut self, _code: u64, _assignments: &Assignments) -> &[Predicate] {
+    fn lazy_explanation(&mut self, _code: u64, _context: ExplanationContext) -> &[Predicate] {
         panic!(
             "{}",
             format!(
@@ -179,7 +179,7 @@ pub trait Propagator: Downcast {
 
 /// Indicator of what to do when a propagator is notified.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EnqueueDecision {
+pub(crate) enum EnqueueDecision {
     /// The propagator should be enqueued.
     Enqueue,
     /// The propagator should not be enqueued.
