@@ -63,7 +63,9 @@ where
     ///
     /// The order in which the keys are yielded is unspecified.
     pub(crate) fn keys(&self) -> impl Iterator<Item = Key> + '_ {
-        self.map_position_to_key.iter().copied()
+        self.map_position_to_key[..=self.end_position]
+            .iter()
+            .copied()
     }
 
     /// Return the key with maximum value from the heap, or None if the heap is empty. Note that

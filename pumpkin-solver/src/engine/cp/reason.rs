@@ -56,6 +56,11 @@ impl ReasonStore {
         let _ = self.trail.synchronise(level);
     }
 
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.trail.len()
+    }
+
     /// Get the propagator which generated the given reason.
     pub(crate) fn get_propagator(&self, reason_ref: ReasonRef) -> PropagatorId {
         self.trail.get(reason_ref.0 as usize).unwrap().0
