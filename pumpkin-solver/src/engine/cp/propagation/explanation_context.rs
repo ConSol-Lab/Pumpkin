@@ -1,11 +1,10 @@
 use std::sync::LazyLock;
 
-use crate::{
-    basic_types::{PredicateId, PredicateIdGenerator},
-    containers::KeyValueHeap,
-    engine::Assignments,
-    predicates::Predicate,
-};
+use crate::basic_types::PredicateId;
+use crate::basic_types::PredicateIdGenerator;
+use crate::containers::KeyValueHeap;
+use crate::engine::Assignments;
+use crate::predicates::Predicate;
 
 /// The context that is available when lazily explaining propagations.
 ///
