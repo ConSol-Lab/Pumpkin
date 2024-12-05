@@ -246,6 +246,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.options.merge_strategy,
                 )
                 .post(solver, tag)
             }
@@ -254,6 +255,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.options.merge_strategy,
                 )
                 .post(solver, tag)
             }
@@ -302,6 +304,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.options.merge_strategy,
                 )
                 .implied_by(solver, reification_literal, tag)
             }
@@ -310,6 +313,7 @@ impl<Var: IntegerVariable + 'static + Debug> Constraint for CumulativeConstraint
                     &self.tasks,
                     self.resource_capacity,
                     self.options.propagator_options,
+                    self.options.merge_strategy,
                 )
                 .implied_by(solver, reification_literal, tag)
             }

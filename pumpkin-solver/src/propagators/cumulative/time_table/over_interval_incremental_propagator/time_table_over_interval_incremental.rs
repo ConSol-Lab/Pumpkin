@@ -3,6 +3,8 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use super::insertion;
+use super::merge_strategy::CumulativeMergeStrategy;
+use super::merge_strategy::MergeChecker;
 use super::removal;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
@@ -18,6 +20,7 @@ use crate::engine::IntDomainEvent;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
+use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug::merge_profiles;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::create_synchronised_conflict_explanation;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::find_synchronised_conflict;
@@ -90,6 +93,7 @@ pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRON
     /// scratch or not; note that this variable is only used if
     /// [`CumulativePropagatorOptions::incremental_backtracking`] is set to false.
     is_time_table_outdated: bool,
+    merge_checker: MergeChecker,
 }
 
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
@@ -99,6 +103,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         arg_tasks: &[ArgTask<Var>],
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
+        merge_strategy: CumulativeMergeStrategy,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE> {
         let tasks = create_tasks(arg_tasks);
         let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
@@ -110,6 +115,7 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             updatable_structures,
             found_previous_conflict: false,
             is_time_table_outdated: false,
+            merge_checker: MergeChecker::new(merge_strategy),
         }
     }
 
@@ -335,6 +341,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
+        self.updatable_structures
+            .statistics
+            .number_of_propagation_calls += 1;
+
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
                 context.as_readonly(),
@@ -350,6 +360,27 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             .statistics
             .average_size_of_time_table
             .add_term(self.time_table.len());
+
+        if !self.time_table.is_empty()
+            && self
+                .merge_checker
+                .should_merge(&self.time_table, &self.updatable_structures.statistics)
+        {
+            self.updatable_structures.statistics.number_of_merges += 1;
+            let end_index = self.time_table.len() - 1;
+            merge_profiles(&mut self.time_table, 0, end_index);
+            self.updatable_structures
+                .statistics
+                .average_reduction_after_merge
+                .add_term((end_index + 1 - self.time_table.len()) as f64 / (end_index + 1) as f64);
+        } else if !self.time_table.is_empty() && self.parameters.options.extended_statistics {
+            let mut time_table_clone = self.time_table.clone();
+            merge_profiles(&mut time_table_clone, 0, self.time_table.len() - 1);
+            self.updatable_structures
+                .statistics
+                .average_fragmentation_ratio
+                .add_term(time_table_clone.len() as f64 / self.time_table.len() as f64);
+        }
 
         pumpkin_assert_extreme!(
             debug::time_tables_are_the_same_interval::<Var, SYNCHRONISE>(
@@ -606,6 +637,7 @@ mod tests {
     use crate::engine::propagation::EnqueueDecision;
     use crate::engine::test_solver::TestSolver;
     use crate::options::CumulativeExplanationType;
+    use crate::options::CumulativeMergeStrategy;
     use crate::predicate;
     use crate::propagators::ArgTask;
     use crate::propagators::CumulativePropagatorOptions;
@@ -637,6 +669,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -675,6 +708,7 @@ mod tests {
                 explanation_type: CumulativeExplanationType::Naive,
                 ..Default::default()
             },
+            CumulativeMergeStrategy::Never,
         ));
 
         assert!(matches!(result, Err(Inconsistency::Conflict(_))));
@@ -722,6 +756,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -780,6 +815,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -811,6 +847,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     1,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -860,6 +897,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -921,6 +959,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -1002,6 +1041,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                     5,
                     CumulativePropagatorOptions::default(),
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -1054,6 +1094,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -1100,6 +1141,7 @@ mod tests {
                         explanation_type: CumulativeExplanationType::Naive,
                         ..Default::default()
                     },
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");
@@ -1143,6 +1185,7 @@ mod tests {
                         allow_holes_in_domain: true,
                         ..Default::default()
                     },
+                    CumulativeMergeStrategy::Never,
                 ),
             )
             .expect("No conflict");

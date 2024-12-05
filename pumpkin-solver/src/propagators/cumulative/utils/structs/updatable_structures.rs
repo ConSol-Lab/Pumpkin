@@ -12,9 +12,13 @@ use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 
 create_statistics_struct!(CumulativeStatistics {
+    number_of_propagation_calls: usize,
     number_of_tasks_traversed: usize,
     number_of_profiles_traversed: usize,
-    average_size_of_time_table: CumulativeMovingAverage<usize>
+    average_size_of_time_table: CumulativeMovingAverage<usize>,
+    average_fragmentation_ratio: CumulativeMovingAverage<f64>,
+    number_of_merges: usize,
+    average_reduction_after_merge: CumulativeMovingAverage<f64>
 });
 
 /// Structures which are adjusted during search; either due to incrementality or to keep track of

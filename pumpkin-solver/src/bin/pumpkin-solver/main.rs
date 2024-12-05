@@ -345,6 +345,15 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
+
+    #[arg(long = "cumulative-extended-statistics")]
+    cumulative_extended_statistics: bool,
+
+    #[arg(long = "cumulative-merge-strategy", value_parser = cumulative_merge_strategy_parser, default_value_t = CumulativeMergeStrategy::default())]
+    cumulative_merge_strategy: CumulativeMergeStrategy,
+
+    #[arg(long = "cumulative-merge-constant", default_value_t = 10000)]
+    cumulative_merge_constant: usize,
 }
 
 fn configure_logging(
@@ -534,22 +543,30 @@ fn run() -> PumpkinResult<()> {
             instance_path,
             args.upper_bound_encoding,
         )?,
-        FileFormat::FlatZinc => flatzinc::solve(
-            Solver::with_options(solver_options),
-            instance_path,
-            time_limit,
-            FlatZincOptions {
-                free_search: args.free_search,
-                all_solutions: args.all_solutions,
-                cumulative_options: CumulativeOptions::new(
-                    args.cumulative_allow_holes,
-                    args.cumulative_explanation_type,
-                    args.cumulative_generate_sequence,
-                    args.cumulative_propagation_method,
-                    args.cumulative_incremental_backtracking,
-                ),
-            },
-        )?,
+        FileFormat::FlatZinc => {
+            let mut merge_strategy = args.cumulative_merge_strategy;
+            if let CumulativeMergeStrategy::Constant(constant_value) = &mut merge_strategy {
+                *constant_value = args.cumulative_merge_constant;
+            }
+            flatzinc::solve(
+                Solver::with_options(solver_options),
+                instance_path,
+                time_limit,
+                FlatZincOptions {
+                    free_search: args.free_search,
+                    all_solutions: args.all_solutions,
+                    cumulative_options: CumulativeOptions::new(
+                        args.cumulative_allow_holes,
+                        args.cumulative_explanation_type,
+                        args.cumulative_generate_sequence,
+                        args.cumulative_propagation_method,
+                        args.cumulative_incremental_backtracking,
+                        args.cumulative_extended_statistics,
+                        merge_strategy,
+                    ),
+                },
+            )?
+        }
     }
 
     Ok(())
@@ -634,5 +651,14 @@ impl Display for ProofType {
             ProofType::Full => write!(f, "full"),
             ProofType::WithHints => write!(f, "with-hints"),
         }
+    }
+}
+
+fn cumulative_merge_strategy_parser(s: &str) -> Result<CumulativeMergeStrategy, String> {
+    match s {
+        "never" => Ok(CumulativeMergeStrategy::Never),
+        "constant" => Ok(CumulativeMergeStrategy::Constant(1000)),
+        "average-time-table" => Ok(CumulativeMergeStrategy::AverageTimeTableSize),
+        value => Err(format!("'{value}' is not a valid cumulative merge strategy. Possible values: ['never', 'constant', 'average-time-table']"))
     }
 }
