@@ -1104,7 +1104,7 @@ impl ConstraintSatisfactionSolver {
             entry.reason.is_some(),
             "Cannot cause an empty domain using a decision."
         );
-        let conflict_domain = entry.predicate.get_domain();
+        let conflict_domain = entry.atom.get_domain();
         assert!(
             entry.old_lower_bound != assignments.get_lower_bound(conflict_domain)
                 || entry.old_upper_bound != assignments.get_upper_bound(conflict_domain),
@@ -1244,7 +1244,7 @@ impl ConstraintSatisfactionSolver {
                 .get_or_compute(reason, &self.assignments, &mut self.propagators)
                 .expect("Reason ref is valid");
 
-            let propagated = entry.predicate;
+            let propagated = entry.atom;
 
             // The proof inference for the propagation `R -> l` is `R /\ ~l -> false`.
             let inference_premises = reason.iter().copied().chain(std::iter::once(!propagated));
@@ -1274,11 +1274,11 @@ impl ConstraintSatisfactionSolver {
                     .expect("Expected premise to be true");
                 let trail_entry = self.assignments.get_trail_entry(index);
 
-                if self.assignments.is_initial_bound(trail_entry.predicate) {
+                if self.assignments.is_initial_bound(trail_entry.atom) {
                     continue;
                 }
 
-                if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
+                if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.atom) {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
                 } else {
                     unreachable!()

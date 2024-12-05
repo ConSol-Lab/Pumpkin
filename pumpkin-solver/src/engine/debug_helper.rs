@@ -101,7 +101,7 @@ impl DebugHelper {
                     num_entries_on_trail_before_propagation..assignments_clone.num_trail_entries()
                 {
                     let trail_entry = assignments_clone.get_trail_entry(idx);
-                    let pred = trail_entry.predicate;
+                    let pred = trail_entry.atom;
                     eprintln!("  - {pred:?}");
                 }
 
@@ -165,7 +165,7 @@ impl DebugHelper {
                 .to_vec();
 
             result &= Self::debug_propagator_reason(
-                trail_entry.predicate,
+                trail_entry.atom,
                 &reason,
                 assignments,
                 &propagators[propagator_id],

@@ -3,6 +3,7 @@ use std::cmp;
 use crate::basic_types::HashSet;
 use crate::containers::KeyedVec;
 use crate::containers::SparseSet;
+use crate::engine::predicates::predicate::Comparator;
 use crate::engine::Assignments;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -66,32 +67,28 @@ impl SemanticMinimiser {
         // Apply the predicates to the domains in a straight-forward way.
         // Later we will take into account the effect of holes on the domain.
         for predicate in nogood {
-            self.present_ids.insert(predicate.get_domain());
+            let atom = match predicate {
+                Predicate::True => continue,
+                Predicate::False => panic!("The false predicate should never be applied"),
+                Predicate::Atom(atom) => *atom,
+            };
 
-            match *predicate {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => {
-                    self.domains[domain_id].tighten_lower_bound(lower_bound);
+            self.present_ids.insert(atom.domain_id);
+
+            let domain = &mut self.domains[atom.domain_id];
+
+            match atom.comparator {
+                Comparator::GreaterEqual => {
+                    domain.tighten_lower_bound(atom.value);
                 }
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => {
-                    self.domains[domain_id].tighten_upper_bound(upper_bound);
+                Comparator::LessEqual => {
+                    domain.tighten_upper_bound(atom.value);
                 }
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => {
-                    self.domains[domain_id].add_hole(not_equal_constant);
+                Comparator::NotEqual => {
+                    domain.add_hole(atom.value);
                 }
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => {
-                    self.domains[domain_id].assign(equality_constant);
+                Comparator::Equal => {
+                    domain.assign(atom.value);
                 }
             }
         }

@@ -4,6 +4,8 @@ use crate::containers::KeyedVec;
 use crate::engine::cp::event_sink::EventSink;
 use crate::engine::cp::reason::ReasonRef;
 use crate::engine::cp::IntDomainEvent;
+use crate::engine::predicates::predicate::Atom;
+use crate::engine::predicates::predicate::Comparator;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
@@ -65,7 +67,7 @@ impl Assignments {
             let entry = values_on_current_decision_level[0];
             pumpkin_assert_eq_simple!(None, entry.reason);
 
-            Some(entry.predicate)
+            Some(entry.atom)
         }
     }
 
@@ -113,13 +115,13 @@ impl Assignments {
         };
 
         self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate: predicate!(id >= lower_bound),
+            atom: predicate!(id >= lower_bound),
             old_lower_bound: lower_bound,
             old_upper_bound: upper_bound,
             reason: None,
         });
         self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate: predicate!(id <= upper_bound),
+            atom: predicate!(id <= upper_bound),
             old_lower_bound: lower_bound,
             old_upper_bound: upper_bound,
             reason: None,
@@ -194,7 +196,7 @@ impl Assignments {
             .skip(maximum_trail_entry)
             .rev()
             .for_each(|entry| {
-                domains[entry.predicate.get_domain()].undo_trail_entry(entry);
+                domains[entry.atom.get_domain()].undo_trail_entry(entry);
             });
 
         for domain in domains.iter_mut() {
@@ -228,30 +230,22 @@ impl Assignments {
         }
     }
 
-    pub(crate) fn is_initial_bound(&self, predicate: Predicate) -> bool {
-        match predicate {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => lower_bound <= self.domains[domain_id].initial_lower_bound(),
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => upper_bound >= self.domains[domain_id].initial_upper_bound(),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant: _,
-            } => {
-                self.get_trail_position(&predicate).unwrap_or_else(|| {
-                    panic!("Expected to be able to get trail entry of {predicate}")
-                }) <= self.domains[domain_id].initial_bounds_below_trail
+    pub(crate) fn is_initial_bound(&self, atom: Atom) -> bool {
+        match atom.comparator {
+            Comparator::LessEqual => {
+                atom.value >= self.domains[atom.domain_id].initial_upper_bound()
             }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                equality_constant == self.domains[domain_id].initial_lower_bound()
-                    && equality_constant == self.domains[domain_id].initial_upper_bound()
+            Comparator::GreaterEqual => {
+                atom.value <= self.domains[atom.domain_id].initial_lower_bound()
+            }
+            Comparator::NotEqual => {
+                self.get_trail_position(&Predicate::Atom(atom))
+                    .unwrap_or_else(|| panic!("Expected to be able to get trail entry of {atom}"))
+                    <= self.domains[atom.domain_id].initial_bounds_below_trail
+            }
+            Comparator::Equal => {
+                atom.value == self.domains[atom.domain_id].initial_lower_bound()
+                    && atom.value == self.domains[atom.domain_id].initial_upper_bound()
             }
         }
     }
@@ -310,7 +304,7 @@ impl Assignments {
     pub(crate) fn is_decision_predicate(&self, predicate: &Predicate) -> bool {
         if let Some(trail_position) = self.get_trail_position(predicate) {
             self.trail[trail_position].reason.is_none()
-                && self.trail[trail_position].predicate == *predicate
+                && self.trail[trail_position].atom == *predicate
         } else {
             false
         }
@@ -384,15 +378,21 @@ impl Assignments {
     /// e.g., if [x >= 10] is explicitly present on the trail but not [x >= 6], then the
     /// trail position for [x >= 10] will be returned for the case [x >= 6].
     pub(crate) fn get_trail_position(&self, predicate: &Predicate) -> Option<usize> {
-        self.domains[predicate.get_domain()]
-            .get_update_info(predicate)
-            .map(|u| u.trail_position)
+        match predicate {
+            Predicate::True | Predicate::False => Some(0),
+            Predicate::Atom(atom) => self.domains[atom.domain_id]
+                .get_update_info(*atom)
+                .map(|u| u.trail_position),
+        }
     }
 
     pub(crate) fn get_decision_level_for_predicate(&self, predicate: &Predicate) -> Option<usize> {
-        self.domains[predicate.get_domain()]
-            .get_update_info(predicate)
-            .map(|u| u.decision_level)
+        match predicate {
+            Predicate::True | Predicate::False => Some(0),
+            Predicate::Atom(atom) => self.domains[atom.domain_id]
+                .get_update_info(*atom)
+                .map(|u| u.decision_level),
+        }
     }
 
     pub fn get_domain_descriptions(&self) -> Vec<Predicate> {
@@ -432,7 +432,7 @@ impl Assignments {
         let trail_position = self.trail.len();
 
         self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate,
+            atom: predicate,
             old_lower_bound,
             old_upper_bound,
             reason,
@@ -476,7 +476,7 @@ impl Assignments {
         let trail_position = self.trail.len();
 
         self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate,
+            atom: predicate,
             old_lower_bound,
             old_upper_bound,
             reason,
@@ -539,7 +539,7 @@ impl Assignments {
         let trail_position = self.trail.len();
 
         self.trail.push(ConstraintProgrammingTrailEntry {
-            predicate,
+            atom: predicate,
             old_lower_bound,
             old_upper_bound,
             reason,
@@ -688,12 +688,12 @@ impl Assignments {
 
         self.trail.synchronise(new_decision_level).enumerate().for_each(|(index, entry)| {
             pumpkin_assert_moderate!(
-                !entry.predicate.is_equality_predicate(),
+                !entry.atom.is_equality_predicate(),
                 "For now we do not expect equality predicates on the trail, since currently equality predicates are split into lower and upper bound predicates."
             );
 
             // Calculate how many values are re-introduced into the domain.
-            let domain_id = entry.predicate.get_domain();
+            let domain_id = entry.atom.get_domain();
             let lower_bound_before = self.domains[domain_id].lower_bound();
             let upper_bound_before = self.domains[domain_id].upper_bound();
 
@@ -703,7 +703,7 @@ impl Assignments {
             let add_on_lower_bound = lower_bound_before.abs_diff(entry.old_lower_bound) as u64;
             self.pruned_values -= add_on_upper_bound + add_on_lower_bound;
 
-            if let Predicate::NotEqual { .. } = entry.predicate {
+            if let Predicate::NotEqual { .. } = entry.atom {
                 if add_on_lower_bound + add_on_upper_bound == 0 {
                     self.pruned_values -= 1;
                 }
@@ -729,7 +729,7 @@ impl Assignments {
                 if upper_bound_before != self.domains[domain_id].upper_bound() {
                     self.backtrack_events.event_occurred(IntDomainEvent::UpperBound, domain_id)
                 }
-                if matches!(entry.predicate, Predicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
+                if matches!(entry.atom, Predicate::NotEqual { domain_id: _, not_equal_constant: _ }) {
                     self.backtrack_events.event_occurred(IntDomainEvent::Removal, domain_id)
                 }
             }
@@ -751,7 +751,7 @@ impl Assignments {
         // entry.predicate,
         // entry.reason.is_none()
         // );
-        let domain_id = entry.predicate.get_domain();
+        let domain_id = entry.atom.get_domain();
         self.domains[domain_id].undo_trail_entry(&entry);
     }
 
@@ -770,7 +770,7 @@ impl Assignments {
         self.trail
             .iter()
             .find_map(|entry| {
-                if entry.predicate == predicate {
+                if entry.atom == predicate {
                     entry.reason
                 } else {
                     None
@@ -782,7 +782,7 @@ impl Assignments {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ConstraintProgrammingTrailEntry {
-    pub(crate) predicate: Predicate,
+    pub(crate) atom: Atom,
     /// Explicitly store the bound before the predicate was applied so that it is easier later on
     ///  to update the bounds when backtracking.
     pub(crate) old_lower_bound: i32,
@@ -1155,7 +1155,7 @@ impl IntegerDomain {
     }
 
     fn undo_trail_entry(&mut self, entry: &ConstraintProgrammingTrailEntry) {
-        match entry.predicate {
+        match entry.atom {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound: _,
@@ -1220,15 +1220,12 @@ impl IntegerDomain {
         pumpkin_assert_moderate!(self.debug_bounds_check());
     }
 
-    fn get_update_info(&self, predicate: &Predicate) -> Option<PairDecisionLevelTrailPosition> {
+    fn get_update_info(&self, atom: Atom) -> Option<PairDecisionLevelTrailPosition> {
         // Perhaps the recursion could be done in a cleaner way,
-        // e.g., separate functions dependibng on the type of predicate.
+        // e.g., separate functions depending on the type of predicate.
         // For the initial version, the current version is okay.
-        match predicate {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => {
+        match atom.comparator {
+            Comparator::GreaterEqual => {
                 // Recall that by the nature of the updates,
                 // the updates are stored in increasing order of the lower bound.
 
@@ -1239,16 +1236,13 @@ impl IntegerDomain {
                 // that is greater than or equal to the input lower bound
                 self.lower_bound_updates
                     .iter()
-                    .find(|u| u.bound >= *lower_bound)
+                    .find(|u| u.bound >= atom.value)
                     .map(|u| PairDecisionLevelTrailPosition {
                         decision_level: u.decision_level,
                         trail_position: u.trail_position,
                     })
             }
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => {
+            Comparator::LessEqual => {
                 // Recall that by the nature of the updates,
                 // the updates are stored in decreasing order of the upper bound.
 
@@ -1259,20 +1253,17 @@ impl IntegerDomain {
                 // that is smaller than or equal to the input upper bound
                 self.upper_bound_updates
                     .iter()
-                    .find(|u| u.bound <= *upper_bound)
+                    .find(|u| u.bound <= atom.value)
                     .map(|u| PairDecisionLevelTrailPosition {
                         decision_level: u.decision_level,
                         trail_position: u.trail_position,
                     })
             }
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
+            Comparator::NotEqual => {
                 // Check the explictly stored holes.
                 // If the value has been removed explicitly,
                 // then the stored time is the first time the value was removed.
-                if let Some(hole_info) = self.holes.get(not_equal_constant) {
+                if let Some(hole_info) = self.holes.get(&atom.value) {
                     Some(*hole_info)
                 } else {
                     // Otherwise, check the case when the lower/upper bound surpassed the value.
@@ -1283,9 +1274,10 @@ impl IntegerDomain {
                     // So we can stop as soon as we find one of the two.
 
                     // Check the lower bound first.
-                    if let Some(trail_position) = self.get_update_info(&Predicate::LowerBound {
-                        domain_id: *domain_id,
-                        lower_bound: not_equal_constant + 1,
+                    if let Some(trail_position) = self.get_update_info(Atom {
+                        domain_id: atom.domain_id,
+                        comparator: Comparator::GreaterEqual,
+                        value: atom.value + 1,
                     }) {
                         // The lower bound removed the value from the domain,
                         // report the trail position of the lower bound.
@@ -1293,22 +1285,21 @@ impl IntegerDomain {
                     } else {
                         // The lower bound did not surpass the value,
                         // now check the upper bound.
-                        self.get_update_info(&Predicate::UpperBound {
-                            domain_id: *domain_id,
-                            upper_bound: not_equal_constant - 1,
+                        self.get_update_info(Atom {
+                            domain_id: atom.domain_id,
+                            comparator: Comparator::LessEqual,
+                            value: atom.value - 1,
                         })
                     }
                 }
             }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
+            Comparator::Equal => {
                 // For equality to hold, both the lower and upper bound predicates must hold.
                 // Check lower bound first.
-                if let Some(lb_trail_position) = self.get_update_info(&Predicate::LowerBound {
-                    domain_id: *domain_id,
-                    lower_bound: *equality_constant,
+                if let Some(lb_trail_position) = self.get_update_info(Atom {
+                    domain_id: atom.domain_id,
+                    comparator: Comparator::GreaterEqual,
+                    value: atom.value,
                 }) {
                     // The lower bound found,
                     // now the check depends on the upper bound.
@@ -1316,9 +1307,10 @@ impl IntegerDomain {
                     // If both the lower and upper bounds are present,
                     // report the trail position of the bound that was set last.
                     // Otherwise, return that the predicate is not on the trail.
-                    self.get_update_info(&Predicate::UpperBound {
-                        domain_id: *domain_id,
-                        upper_bound: *equality_constant,
+                    self.get_update_info(Atom {
+                        domain_id: atom.domain_id,
+                        comparator: Comparator::LessEqual,
+                        value: atom.value,
                     })
                     .map(|ub_trail_position| {
                         if lb_trail_position.trail_position > ub_trail_position.trail_position {

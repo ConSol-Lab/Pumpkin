@@ -7,6 +7,8 @@ use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
+use crate::engine::predicates::predicate::Atom;
+use crate::engine::predicates::predicate::Comparator;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
 use crate::engine::reason::ReasonRef;
@@ -45,7 +47,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) should_minimise: bool,
 
     pub(crate) is_completing_proof: bool,
-    pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
+    pub(crate) unit_nogood_step_ids: &'a HashMap<Atom, StepId>,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -133,7 +135,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
         proof_log: &'a mut ProofLog,
-        unit_nogood_step_ids: &HashMap<Predicate, StepId>,
+        unit_nogood_step_ids: &HashMap<Atom, StepId>,
     ) -> &'a [Predicate] {
         // TODO: this function could be put into the reason store
 
@@ -151,8 +153,13 @@ impl<'a> ConflictAnalysisContext<'a> {
         // reason, it is safe to assume that in the following, that any input predicate is
         // indeed a propagated predicate.
         reason_store.helper.clear();
-        if assignments.is_initial_bound(predicate) {
-            return reason_store.helper.as_slice();
+
+        let Predicate::Atom(atom) = predicate else {
+            return &[];
+        };
+
+        if assignments.is_initial_bound(atom) {
+            return &[];
         }
 
         let trail_position = assignments
@@ -163,7 +170,7 @@ impl<'a> ConflictAnalysisContext<'a> {
 
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
-        if trail_entry.predicate == predicate {
+        if trail_entry.atom == atom {
             let reason_ref = trail_entry
                 .reason
                 .expect("Cannot be a null reason for propagation.");
@@ -182,15 +189,16 @@ impl<'a> ConflictAnalysisContext<'a> {
                 // It could be that the predicate is implied by another unit nogood
 
                 let step_id = unit_nogood_step_ids
-                    .get(&predicate)
+                    .get(&atom)
                     .or_else(|| {
                         // It could be the case that we attempt to get the reason for the predicate
                         // [x >= v] but that the corresponding unit nogood idea is the one for the
                         // predicate [x == v]
-                        let domain_id = predicate.get_domain();
-                        let right_hand_side = predicate.get_right_hand_side();
-
-                        unit_nogood_step_ids.get(&predicate!(domain_id == right_hand_side))
+                        unit_nogood_step_ids.get(&Atom {
+                            domain_id: atom.domain_id,
+                            comparator: Comparator::Equal,
+                            value: atom.value,
+                        })
                     })
                     .expect("Expected to be able to retrieve step id for unit nogood");
                 proof_log.add_propagation(*step_id);
@@ -211,15 +219,17 @@ impl<'a> ConflictAnalysisContext<'a> {
             // The reason for propagation depends on:
             // 1) The predicate on the trail at the moment the input predicate became true, and
             // 2) The input predicate.
-            match (trail_entry.predicate, predicate) {
+            match (trail_entry.atom, atom) {
                 (
-                    Predicate::LowerBound {
+                    Atom {
                         domain_id: _,
-                        lower_bound: trail_lower_bound,
+                        comparator: Comparator::GreaterEqual,
+                        value: trail_lower_bound,
                     },
-                    Predicate::LowerBound {
+                    Atom {
                         domain_id,
-                        lower_bound: input_lower_bound,
+                        comparator: Comparator::GreaterEqual,
+                        value: input_lower_bound,
                     },
                 ) => {
                     // Both the input predicate and the trail predicate are lower bound
@@ -231,7 +241,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                     //  todo: could consider lifting here, since the trail bound
                     //  might be too strong.
                     if trail_lower_bound > input_lower_bound {
-                        reason_store.helper.push(trail_entry.predicate);
+                        reason_store.helper.push(trail_entry.atom.into());
                     }
                     // Otherwise, the input bound is strictly greater than the trailed
                     // bound. This means the reason is due to holes in the domain.
@@ -252,27 +262,24 @@ impl<'a> ConflictAnalysisContext<'a> {
                         // only look for reasons for predicates from the current decision
                         // level, and we never look for reasons at the root level.
 
-                        let one_less_bound_predicate = Predicate::LowerBound {
-                            domain_id,
-                            lower_bound: input_lower_bound - 1,
-                        };
-
-                        let not_equals_predicate = Predicate::NotEqual {
-                            domain_id,
-                            not_equal_constant: input_lower_bound - 1,
-                        };
-                        reason_store.helper.push(one_less_bound_predicate);
-                        reason_store.helper.push(not_equals_predicate);
+                        reason_store
+                            .helper
+                            .push(predicate![domain_id >= input_lower_bound - 1]);
+                        reason_store
+                            .helper
+                            .push(predicate![domain_id != input_lower_bound - 1]);
                     }
                 }
                 (
-                    Predicate::LowerBound {
+                    Atom {
                         domain_id: _,
-                        lower_bound: trail_lower_bound,
+                        comparator: Comparator::GreaterEqual,
+                        value: trail_lower_bound,
                     },
-                    Predicate::NotEqual {
+                    Atom {
                         domain_id: _,
-                        not_equal_constant,
+                        comparator: Comparator::NotEqual,
+                        value: not_equal_constant,
                     },
                 ) => {
                     // The trail entry is a lower bound literal,
@@ -282,16 +289,18 @@ impl<'a> ConflictAnalysisContext<'a> {
                     // so it safe to take the reason from the trail.
                     // todo: lifting could be used here
                     pumpkin_assert_simple!(trail_lower_bound > not_equal_constant);
-                    reason_store.helper.push(trail_entry.predicate);
+                    reason_store.helper.push(trail_entry.atom.into());
                 }
                 (
-                    Predicate::LowerBound {
+                    Atom {
                         domain_id: _,
-                        lower_bound: _,
+                        comparator: Comparator::GreaterEqual,
+                        value: _,
                     },
-                    Predicate::Equal {
+                    Atom {
                         domain_id,
-                        equality_constant,
+                        comparator: Comparator::Equal,
+                        value: equality_constant,
                     },
                 ) => {
                     // The input predicate is an equality predicate, and the trail predicate
@@ -306,25 +315,23 @@ impl<'a> ConflictAnalysisContext<'a> {
                     // For example, {1, 2, 3, 10}, then posting [x >= 5] will raise the
                     // lower bound to x >= 10.
 
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id >= equality_constant]);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id <= equality_constant]);
                 }
                 (
-                    Predicate::UpperBound {
+                    Atom {
                         domain_id: _,
-                        upper_bound: trail_upper_bound,
+                        comparator: Comparator::LessEqual,
+                        value: trail_upper_bound,
                     },
-                    Predicate::UpperBound {
+                    Atom {
                         domain_id,
-                        upper_bound: input_upper_bound,
+                        comparator: Comparator::LessEqual,
+                        value: input_upper_bound,
                     },
                 ) => {
                     // Both the input and trail predicates are upper bound predicates.
@@ -335,7 +342,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                     //    reason for the input predicate.
                     // todo: lifting could be applied here.
                     if trail_upper_bound < input_upper_bound {
-                        reason_store.helper.push(trail_entry.predicate);
+                        reason_store.helper.push(trail_entry.atom.into());
                     } else {
                         // I think it cannot be that the bounds are equal, since otherwise we
                         // would have found the predicate explicitly on the trail.
@@ -348,26 +355,24 @@ impl<'a> ConflictAnalysisContext<'a> {
                         // The reason of the input predicate [x <= a] is computed recursively as
                         // the reason for [x <= a + 1] & [x != a + 1].
 
-                        let new_ub_predicate = Predicate::UpperBound {
-                            domain_id,
-                            upper_bound: input_upper_bound + 1,
-                        };
-                        let not_equal_predicate = Predicate::NotEqual {
-                            domain_id,
-                            not_equal_constant: input_upper_bound + 1,
-                        };
-                        reason_store.helper.push(new_ub_predicate);
-                        reason_store.helper.push(not_equal_predicate);
+                        reason_store
+                            .helper
+                            .push(predicate![domain_id <= input_upper_bound + 1]);
+                        reason_store
+                            .helper
+                            .push(predicate![domain_id != input_upper_bound + 1]);
                     }
                 }
                 (
-                    Predicate::UpperBound {
+                    Atom {
                         domain_id: _,
-                        upper_bound: trail_upper_bound,
+                        comparator: Comparator::LessEqual,
+                        value: trail_upper_bound,
                     },
-                    Predicate::NotEqual {
+                    Atom {
                         domain_id: _,
-                        not_equal_constant,
+                        comparator: Comparator::NotEqual,
+                        value: not_equal_constant,
                     },
                 ) => {
                     // The input predicate is a not equal predicate, and the trail predicate is
@@ -378,16 +383,17 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                     // The bound was set past the not equals, so we can safely returns the trail
                     // reason. todo: can do lifting here.
-                    reason_store.helper.push(trail_entry.predicate);
+                    reason_store.helper.push(trail_entry.atom.into());
                 }
                 (
-                    Predicate::UpperBound {
-                        domain_id: _,
-                        upper_bound: _,
+                    Atom {
+                        comparator: Comparator::LessEqual,
+                        ..
                     },
-                    Predicate::Equal {
+                    Atom {
                         domain_id,
-                        equality_constant,
+                        comparator: Comparator::Equal,
+                        value: equality_constant,
                     },
                 ) => {
                     // The input predicate is an equality predicate, and the trail predicate
@@ -405,25 +411,23 @@ impl<'a> ConflictAnalysisContext<'a> {
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
 
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id >= equality_constant]);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id <= equality_constant]);
                 }
                 (
-                    Predicate::NotEqual {
+                    Atom {
                         domain_id: _,
-                        not_equal_constant,
+                        comparator: Comparator::NotEqual,
+                        value: not_equal_constant,
                     },
-                    Predicate::LowerBound {
+                    Atom {
                         domain_id,
-                        lower_bound: input_lower_bound,
+                        comparator: Comparator::GreaterEqual,
+                        value: input_lower_bound,
                     },
                 ) => {
                     // The trail predicate is not equals, but the input predicate is a lower
@@ -439,26 +443,23 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                     // The reason for the input predicate [x >= a] is computed recursively as
                     // the reason for [x >= a - 1] & [x != a - 1].
-                    let new_lb_predicate = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: input_lower_bound - 1,
-                    };
-                    let new_not_equals_predicate = Predicate::NotEqual {
-                        domain_id,
-                        not_equal_constant: input_lower_bound - 1,
-                    };
-
-                    reason_store.helper.push(new_lb_predicate);
-                    reason_store.helper.push(new_not_equals_predicate);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id >= input_lower_bound - 1]);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id != input_lower_bound - 1]);
                 }
                 (
-                    Predicate::NotEqual {
+                    Atom {
                         domain_id: _,
-                        not_equal_constant,
+                        comparator: Comparator::NotEqual,
+                        value: not_equal_constant,
                     },
-                    Predicate::UpperBound {
+                    Atom {
                         domain_id,
-                        upper_bound: input_upper_bound,
+                        comparator: Comparator::LessEqual,
+                        value: input_upper_bound,
                     },
                 ) => {
                     // The trail predicate is not equals, but the input predicate is an upper
@@ -474,26 +475,22 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                     // The reason for the input predicate [x <= a] is computed recursively as
                     // the reason for [x <= a + 1] & [x != a + 1].
-                    let new_ub_predicate = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: input_upper_bound + 1,
-                    };
-                    let new_not_equals_predicate = Predicate::NotEqual {
-                        domain_id,
-                        not_equal_constant: input_upper_bound + 1,
-                    };
-
-                    reason_store.helper.push(new_ub_predicate);
-                    reason_store.helper.push(new_not_equals_predicate);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id <= input_upper_bound + 1]);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id != input_upper_bound + 1]);
                 }
                 (
-                    Predicate::NotEqual {
-                        domain_id: _,
-                        not_equal_constant: _,
+                    Atom {
+                        comparator: Comparator::NotEqual,
+                        ..
                     },
-                    Predicate::Equal {
+                    Atom {
                         domain_id,
-                        equality_constant,
+                        comparator: Comparator::Equal,
+                        value: equality_constant,
                     },
                 ) => {
                     // The trail predicate is not equals, but the input predicate is
@@ -503,22 +500,16 @@ impl<'a> ConflictAnalysisContext<'a> {
 
                     // Note that it could be that one of the two predicates are decision
                     // predicates, so we need to use the substitute functions.
-
-                    let predicate_lb = Predicate::LowerBound {
-                        domain_id,
-                        lower_bound: equality_constant,
-                    };
-                    let predicate_ub = Predicate::UpperBound {
-                        domain_id,
-                        upper_bound: equality_constant,
-                    };
-
-                    reason_store.helper.push(predicate_lb);
-                    reason_store.helper.push(predicate_ub);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id >= equality_constant]);
+                    reason_store
+                        .helper
+                        .push(predicate![domain_id <= equality_constant]);
                 }
                 _ => unreachable!(
                     "Unreachable combination of {} and {}",
-                    trail_entry.predicate, predicate
+                    trail_entry.atom, predicate
                 ),
             };
             reason_store.helper.as_slice()

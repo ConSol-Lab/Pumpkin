@@ -266,7 +266,7 @@ impl ResolutionResolver {
         is_logging_complete_proof: bool,
     ) {
         let dec_level = assignments
-            .get_decision_level_for_predicate(&predicate)
+            .get_decision_level_for_atom(&predicate)
             .unwrap_or_else(|| {
                 panic!(
                     "Expected predicate {predicate} to be assigned but bounds were ({}, {})",
@@ -334,7 +334,7 @@ impl ResolutionResolver {
                 // by assigning explicitly set predicates the
                 // value `2 * trail_position`, whereas implied predicates get `2 *
                 // trail_position + 1`.
-                let heap_value = if assignments.trail[trail_position].predicate == predicate {
+                let heap_value = if assignments.trail[trail_position].atom == predicate {
                     trail_position * 2
                 } else {
                     trail_position * 2 + 1
@@ -443,7 +443,7 @@ impl ResolutionResolver {
         let backjump_level = if clean_nogood.len() > 1 {
             context
                 .assignments
-                .get_decision_level_for_predicate(&clean_nogood[1])
+                .get_decision_level_for_atom(&clean_nogood[1])
                 .unwrap()
         } else {
             // For unit nogoods, the solver backtracks to the root level.

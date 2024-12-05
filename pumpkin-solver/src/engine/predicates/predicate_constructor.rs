@@ -1,4 +1,4 @@
-use super::predicate::Predicate;
+use super::predicate::{Atom, Comparator, Predicate};
 use crate::engine::variables::DomainId;
 
 /// A trait which defines methods for creating a [`Predicate`].
@@ -23,31 +23,35 @@ impl PredicateConstructor for DomainId {
     type Value = i32;
 
     fn lower_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::LowerBound {
+        Predicate::Atom(Atom {
             domain_id: *self,
-            lower_bound: bound,
-        }
+            comparator: Comparator::GreaterEqual,
+            value: bound,
+        })
     }
 
     fn upper_bound_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::UpperBound {
+        Predicate::Atom(Atom {
             domain_id: *self,
-            upper_bound: bound,
-        }
+            comparator: Comparator::LessEqual,
+            value: bound,
+        })
     }
 
     fn equality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::Equal {
+        Predicate::Atom(Atom {
             domain_id: *self,
-            equality_constant: bound,
-        }
+            comparator: Comparator::Equal,
+            value: bound,
+        })
     }
 
     fn disequality_predicate(&self, bound: Self::Value) -> Predicate {
-        Predicate::NotEqual {
+        Predicate::Atom(Atom {
             domain_id: *self,
-            not_equal_constant: bound,
-        }
+            comparator: Comparator::NotEqual,
+            value: bound,
+        })
     }
 }
 
@@ -131,29 +135,33 @@ mod tests {
 
     #[test]
     fn macro_local_identifiers_are_matched() {
-        let x = DomainId { id: 0 };
+        let domain_id = DomainId { id: 0 };
 
-        let lower_bound_predicate = Predicate::LowerBound {
-            domain_id: x,
-            lower_bound: 2,
-        };
-        let upper_bound_predicate = Predicate::UpperBound {
-            domain_id: x,
-            upper_bound: 3,
-        };
-        let equality_predicate = Predicate::Equal {
-            domain_id: x,
-            equality_constant: 5,
-        };
-        let disequality_predicate = Predicate::NotEqual {
-            domain_id: x,
-            not_equal_constant: 5,
-        };
+        let lower_bound_predicate = Predicate::Atom(Atom {
+            domain_id,
+            comparator: Comparator::GreaterEqual,
+            value: 2,
+        });
+        let upper_bound_predicate = Predicate::Atom(Atom {
+            domain_id,
+            comparator: Comparator::LessEqual,
+            value: 3,
+        });
+        let equality_predicate = Predicate::Atom(Atom {
+            domain_id,
+            comparator: Comparator::Equal,
+            value: 5,
+        });
+        let disequality_predicate = Predicate::Atom(Atom {
+            domain_id,
+            comparator: Comparator::Equal,
+            value: 5,
+        });
 
-        assert_eq!(lower_bound_predicate, predicate![x >= 2]);
-        assert_eq!(upper_bound_predicate, predicate![x <= 3]);
-        assert_eq!(equality_predicate, predicate![x == 5]);
-        assert_eq!(disequality_predicate, predicate![x != 5]);
+        assert_eq!(lower_bound_predicate, predicate![domain_id >= 2]);
+        assert_eq!(upper_bound_predicate, predicate![domain_id <= 3]);
+        assert_eq!(equality_predicate, predicate![domain_id == 5]);
+        assert_eq!(disequality_predicate, predicate![domain_id != 5]);
     }
 
     #[test]
@@ -166,28 +174,32 @@ mod tests {
             x: DomainId { id: 0 },
         };
 
-        let lower_bound_predicate = Predicate::LowerBound {
+        let lower_bound_predicate = Predicate::Atom(Atom {
             domain_id: wrapper.x,
-            lower_bound: 2,
-        };
+            comparator: Comparator::GreaterEqual,
+            value: 2,
+        });
         assert_eq!(lower_bound_predicate, predicate![wrapper.x >= 2]);
 
-        let upper_bound_predicate = Predicate::UpperBound {
+        let upper_bound_predicate = Predicate::Atom(Atom {
             domain_id: wrapper.x,
-            upper_bound: 3,
-        };
+            comparator: Comparator::LessEqual,
+            value: 3,
+        });
         assert_eq!(upper_bound_predicate, predicate![wrapper.x <= 3]);
 
-        let equality_predicate = Predicate::Equal {
+        let equality_predicate = Predicate::Atom(Atom {
             domain_id: wrapper.x,
-            equality_constant: 5,
-        };
+            comparator: Comparator::Equal,
+            value: 5,
+        });
         assert_eq!(equality_predicate, predicate![wrapper.x == 5]);
 
-        let disequality_predicate = Predicate::NotEqual {
+        let disequality_predicate = Predicate::Atom(Atom {
             domain_id: wrapper.x,
-            not_equal_constant: 5,
-        };
+            comparator: Comparator::NotEqual,
+            value: 5,
+        });
         assert_eq!(disequality_predicate, predicate![wrapper.x != 5]);
     }
 
@@ -195,28 +207,32 @@ mod tests {
     fn macro_index_expressions_are_matched() {
         let wrapper = [DomainId { id: 0 }];
 
-        let lower_bound_predicate = Predicate::LowerBound {
+        let lower_bound_predicate = Predicate::Atom(Atom {
             domain_id: wrapper[0],
-            lower_bound: 2,
-        };
+            comparator: Comparator::GreaterEqual,
+            value: 2,
+        });
         assert_eq!(lower_bound_predicate, predicate![wrapper[0] >= 2]);
 
-        let upper_bound_predicate = Predicate::UpperBound {
+        let upper_bound_predicate = Predicate::Atom(Atom {
             domain_id: wrapper[0],
-            upper_bound: 3,
-        };
+            comparator: Comparator::LessEqual,
+            value: 3,
+        });
         assert_eq!(upper_bound_predicate, predicate![wrapper[0] <= 3]);
 
-        let equality_predicate = Predicate::Equal {
+        let equality_predicate = Predicate::Atom(Atom {
             domain_id: wrapper[0],
-            equality_constant: 5,
-        };
+            comparator: Comparator::Equal,
+            value: 5,
+        });
         assert_eq!(equality_predicate, predicate![wrapper[0] == 5]);
 
-        let disequality_predicate = Predicate::NotEqual {
+        let disequality_predicate = Predicate::Atom(Atom {
             domain_id: wrapper[0],
-            not_equal_constant: 5,
-        };
+            comparator: Comparator::NotEqual,
+            value: 5,
+        });
         assert_eq!(disequality_predicate, predicate![wrapper[0] != 5]);
     }
 }

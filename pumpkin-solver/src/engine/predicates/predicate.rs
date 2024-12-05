@@ -1,308 +1,257 @@
+use std::{
+    fmt::{Debug, Display},
+    ops::Not,
+};
+
 use crate::engine::variables::DomainId;
 
-/// Representation of a domain operation.
-///
-/// It can either be in the form of atomic constraints over
-/// [`DomainId`]s (in the form of [`Predicate::LowerBound`],
-/// [`Predicate::UpperBound`], [`Predicate::NotEqual`] or [`Predicate::Equal`])
-#[derive(Clone, PartialEq, Eq, Copy, Hash)]
-pub enum Predicate {
-    LowerBound {
-        domain_id: DomainId,
-        lower_bound: i32,
-    },
-    UpperBound {
-        domain_id: DomainId,
-        upper_bound: i32,
-    },
-    NotEqual {
-        domain_id: DomainId,
-        not_equal_constant: i32,
-    },
-    Equal {
-        domain_id: DomainId,
-        equality_constant: i32,
-    },
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Comparator {
+    LessEqual,
+    GreaterEqual,
+    NotEqual,
+    Equal,
 }
 
-impl Predicate {
-    pub(crate) fn is_mutually_exclusive_with(self, other: Predicate) -> bool {
-        match (self, other) {
-            (Predicate::LowerBound { .. }, Predicate::LowerBound { .. })
-            | (Predicate::LowerBound { .. }, Predicate::NotEqual { .. })
-            | (Predicate::UpperBound { .. }, Predicate::UpperBound { .. })
-            | (Predicate::UpperBound { .. }, Predicate::NotEqual { .. })
-            | (Predicate::NotEqual { .. }, Predicate::LowerBound { .. })
-            | (Predicate::NotEqual { .. }, Predicate::UpperBound { .. })
-            | (Predicate::NotEqual { .. }, Predicate::NotEqual { .. }) => false,
-            (
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                },
-                Predicate::UpperBound {
-                    domain_id: domain_id_other,
-                    upper_bound,
-                },
-            )
-            | (
-                Predicate::UpperBound {
-                    domain_id: domain_id_other,
-                    upper_bound,
-                },
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                },
-            ) => domain_id == domain_id_other && lower_bound > upper_bound,
-            (
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                },
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-            )
-            | (
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                },
-            ) => domain_id == domain_id_other && lower_bound > equality_constant,
-            (
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                },
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-            )
-            | (
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                },
-            ) => domain_id == domain_id_other && upper_bound < equality_constant,
-            (
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                },
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-            )
-            | (
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant,
-                },
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                },
-            ) => domain_id == domain_id_other && equality_constant == not_equal_constant,
-            (
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                },
-                Predicate::Equal {
-                    domain_id: domain_id_other,
-                    equality_constant: equality_constant_other,
-                },
-            ) => domain_id == domain_id_other && equality_constant != equality_constant_other,
-        }
-    }
-    pub fn is_equality_predicate(&self) -> bool {
-        matches!(
-            *self,
-            Predicate::Equal {
-                domain_id: _,
-                equality_constant: _
-            }
-        )
-    }
+impl Comparator {
+    pub fn opposite(self) -> Comparator {
+        use Comparator::*;
 
-    pub fn is_lower_bound_predicate(&self) -> bool {
-        matches!(
-            *self,
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound: _
-            }
-        )
-    }
-
-    pub fn is_upper_bound_predicate(&self) -> bool {
-        matches!(
-            *self,
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound: _
-            }
-        )
-    }
-
-    pub fn is_not_equal_predicate(&self) -> bool {
-        matches!(
-            *self,
-            Predicate::NotEqual {
-                domain_id: _,
-                not_equal_constant: _
-            }
-        )
-    }
-
-    /// Returns the [`DomainId`] of the [`Predicate`]
-    pub fn get_domain(&self) -> DomainId {
-        match *self {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound: _,
-            } => domain_id,
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound: _,
-            } => domain_id,
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant: _,
-            } => domain_id,
-            Predicate::Equal {
-                domain_id,
-                equality_constant: _,
-            } => domain_id,
-        }
-    }
-
-    pub fn get_right_hand_side(&self) -> i32 {
         match self {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => *lower_bound,
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => *upper_bound,
-            Predicate::NotEqual {
-                domain_id: _,
-                not_equal_constant,
-            } => *not_equal_constant,
-            Predicate::Equal {
-                domain_id: _,
-                equality_constant,
-            } => *equality_constant,
-        }
-    }
-
-    pub fn trivially_true() -> Predicate {
-        // By convention, there is a dummy 0-1 variable set to one at root.
-        // We use it to denote the trivially true predicate.
-        Predicate::Equal {
-            domain_id: DomainId { id: 0 },
-            equality_constant: 1,
-        }
-    }
-
-    pub fn trivially_false() -> Predicate {
-        // By convention, there is a dummy 0-1 variable set to one at root.
-        // We use it to denote the trivially true predicate.
-        Predicate::NotEqual {
-            domain_id: DomainId { id: 0 },
-            not_equal_constant: 1,
+            LessEqual => GreaterEqual,
+            GreaterEqual => LessEqual,
+            NotEqual => Equal,
+            Equal => NotEqual,
         }
     }
 }
 
-impl std::ops::Not for Predicate {
-    type Output = Predicate;
+impl Debug for Comparator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Comparator::*;
+
+        let string = match self {
+            LessEqual => "<=",
+            GreaterEqual => ">=",
+            NotEqual => "!=",
+            Equal => "==",
+        };
+
+        write!(f, "{string}")
+    }
+}
+
+impl Display for Comparator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+/// Representation of a domain operation.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Atom {
+    pub domain_id: DomainId,
+    pub comparator: Comparator,
+    pub value: i32,
+}
+
+impl Not for Atom {
+    type Output = Atom;
 
     fn not(self) -> Self::Output {
-        match self {
-            Predicate::LowerBound {
-                domain_id,
-                lower_bound,
-            } => Predicate::UpperBound {
-                domain_id,
-                upper_bound: lower_bound - 1,
-            },
-            Predicate::UpperBound {
-                domain_id,
-                upper_bound,
-            } => Predicate::LowerBound {
-                domain_id,
-                lower_bound: upper_bound + 1,
-            },
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => Predicate::Equal {
-                domain_id,
-                equality_constant: not_equal_constant,
-            },
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => Predicate::NotEqual {
-                domain_id,
-                not_equal_constant: equality_constant,
-            },
+        use Comparator::*;
+
+        let Atom {
+            domain_id,
+            comparator,
+            value,
+        } = self;
+
+        let not_comparator = comparator.opposite();
+
+        let not_value = match comparator {
+            LessEqual => value + 1,
+            GreaterEqual => value - 1,
+            Equal | NotEqual => value,
+        };
+
+        Atom {
+            domain_id,
+            comparator: not_comparator,
+            value: not_value,
         }
     }
 }
 
-impl std::fmt::Display for Predicate {
+impl Atom {
+    /// Returns true if `self /\ other -> false`
+    pub fn is_mutually_exclusive(&self, other: Atom) -> bool {
+        if self.domain_id != other.domain_id {
+            // Atoms over different domains are never mutually exclusive.
+            return false;
+        }
+
+        match (self.comparator, other.comparator) {
+            (Comparator::GreaterEqual, Comparator::GreaterEqual)
+            | (Comparator::GreaterEqual, Comparator::NotEqual)
+            | (Comparator::LessEqual, Comparator::LessEqual)
+            | (Comparator::LessEqual, Comparator::NotEqual)
+            | (Comparator::NotEqual, Comparator::GreaterEqual)
+            | (Comparator::NotEqual, Comparator::LessEqual)
+            | (Comparator::NotEqual, Comparator::NotEqual) => false,
+
+            (Comparator::GreaterEqual, Comparator::LessEqual)
+            | (Comparator::GreaterEqual, Comparator::Equal)
+            | (Comparator::Equal, Comparator::LessEqual) => self.value > other.value,
+
+            (Comparator::LessEqual, Comparator::GreaterEqual)
+            | (Comparator::LessEqual, Comparator::Equal)
+            | (Comparator::Equal, Comparator::GreaterEqual) => self.value < other.value,
+
+            (Comparator::Equal, Comparator::NotEqual)
+            | (Comparator::NotEqual, Comparator::Equal) => self.value == other.value,
+
+            (Comparator::Equal, Comparator::Equal) => self.value != other.value,
+        }
+    }
+}
+
+impl Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *self == Predicate::trivially_true() {
-            write!(f, "[True]")
-        } else if *self == Predicate::trivially_false() {
-            write!(f, "[False]")
-        } else {
-            match self {
-                Predicate::LowerBound {
-                    domain_id,
-                    lower_bound,
-                } => write!(f, "[{} >= {}]", domain_id, lower_bound),
-                Predicate::UpperBound {
-                    domain_id,
-                    upper_bound,
-                } => write!(f, "[{} <= {}]", domain_id, upper_bound),
-                Predicate::NotEqual {
-                    domain_id,
-                    not_equal_constant,
-                } => write!(f, "[{} != {}]", domain_id, not_equal_constant),
-                Predicate::Equal {
-                    domain_id,
-                    equality_constant,
-                } => write!(f, "[{} == {}]", domain_id, equality_constant),
-            }
-        }
+        let Atom {
+            domain_id,
+            comparator,
+            value,
+        } = self;
+
+        write!(f, "[{domain_id} {comparator} {value}]")
     }
 }
 
-impl std::fmt::Debug for Predicate {
+impl Debug for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Copy, Hash)]
+pub enum Predicate {
+    True,
+    False,
+    Atom(Atom),
+}
+
+impl Display for Predicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Predicate::True => write!(f, "true"),
+            Predicate::False => write!(f, "false"),
+            Predicate::Atom(atom) => write!(f, "{atom}"),
+        }
+    }
+}
+
+impl Debug for Predicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl From<Atom> for Predicate {
+    fn from(value: Atom) -> Self {
+        Predicate::Atom(value)
+    }
+}
+
+impl Predicate {
+    /// Returns true if `self /\ other -> false`
+    pub(crate) fn is_mutually_exclusive_with(self, other: Predicate) -> bool {
+        match (self, other) {
+            (Predicate::Atom(atom), Predicate::Atom(other)) => atom.is_mutually_exclusive(other),
+            (s, o) => todo!("implement mutual exclusivity for {s} and {o}"),
+        }
+    }
+
+    pub fn is_equality_predicate(&self) -> bool {
+        matches!(
+            self,
+            Predicate::Atom(Atom {
+                comparator: Comparator::Equal,
+                ..
+            })
+        )
+    }
+
+    pub fn is_lower_bound_predicate(&self) -> bool {
+        matches!(
+            self,
+            Predicate::Atom(Atom {
+                comparator: Comparator::GreaterEqual,
+                ..
+            })
+        )
+    }
+
+    pub fn is_upper_bound_predicate(&self) -> bool {
+        matches!(
+            self,
+            Predicate::Atom(Atom {
+                comparator: Comparator::LessEqual,
+                ..
+            })
+        )
+    }
+
+    pub fn is_not_equal_predicate(&self) -> bool {
+        matches!(
+            self,
+            Predicate::Atom(Atom {
+                comparator: Comparator::NotEqual,
+                ..
+            })
+        )
+    }
+
+    /// Returns the [`DomainId`] of the [`Predicate`]
+    pub fn get_domain(&self) -> Option<DomainId> {
+        match self {
+            Predicate::True | Predicate::False => None,
+            Predicate::Atom(atom) => Some(atom.domain_id),
+        }
+    }
+
+    pub fn get_right_hand_side(&self) -> Option<i32> {
+        match self {
+            Predicate::True | Predicate::False => None,
+            Predicate::Atom(atom) => Some(atom.value),
+        }
+    }
+
+    pub fn trivially_true() -> Predicate {
+        Predicate::True
+    }
+
+    pub fn trivially_false() -> Predicate {
+        Predicate::False
+    }
+}
+
+impl Not for Predicate {
+    type Output = Predicate;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Predicate::True => Predicate::False,
+            Predicate::False => Predicate::True,
+            Predicate::Atom(atom) => Predicate::Atom(!atom),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use crate::{predicate, variables::DomainId};
+
     use super::Predicate;
 
     #[test]
@@ -317,5 +266,35 @@ mod test {
         let trivially_true = Predicate::trivially_true();
         let trivially_false = Predicate::trivially_false();
         assert!(!trivially_false == trivially_true);
+    }
+
+    #[test]
+    fn mutual_exclusivity_of_upper_bound_and_lower_bound() {
+        let dom = DomainId { id: 1 };
+
+        let p1 = predicate![dom <= 4];
+        let p2 = predicate![dom >= 5];
+
+        assert!(p1.is_mutually_exclusive_with(p2));
+    }
+
+    #[test]
+    fn mutual_exclusivity_of_upper_bound_and_equality() {
+        let dom = DomainId { id: 1 };
+
+        let p1 = predicate![dom <= 4];
+        let p2 = predicate![dom == 5];
+
+        assert!(p1.is_mutually_exclusive_with(p2));
+    }
+
+    #[test]
+    fn mutual_exclusivity_of_lower_bound_and_equality() {
+        let dom = DomainId { id: 1 };
+
+        let p1 = predicate![dom >= 6];
+        let p2 = predicate![dom == 5];
+
+        assert!(p1.is_mutually_exclusive_with(p2));
     }
 }
