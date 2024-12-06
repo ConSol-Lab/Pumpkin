@@ -2,6 +2,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::HashMap;
 use crate::basic_types::HashSet;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
+use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_moderate;
@@ -45,7 +46,7 @@ impl RecursiveMinimiser {
         for i in 0..initial_nogood_size {
             let learned_predicate = nogood[i];
 
-            self.compute_label(learned_predicate, context);
+            self.compute_label(learned_predicate, context, nogood);
 
             let label = self.get_predicate_label(learned_predicate);
             // Keep the predicate in case it was not deemed deemed redundant.
@@ -69,7 +70,12 @@ impl RecursiveMinimiser {
             .add_term(num_predicates_removed as u64);
     }
 
-    fn compute_label(&mut self, input_predicate: Predicate, context: &mut ConflictAnalysisContext) {
+    fn compute_label(
+        &mut self,
+        input_predicate: Predicate,
+        context: &mut ConflictAnalysisContext,
+        current_nogood: &[Predicate],
+    ) {
         pumpkin_assert_moderate!(context.assignments.is_predicate_satisfied(input_predicate));
 
         self.current_depth += 1;
@@ -109,29 +115,20 @@ impl RecursiveMinimiser {
             return;
         }
 
-        // Due to ownership rules, we retrieve the reason each time we need it, and then drop it.
-        // Here we retrieve the reason and just record the length, dropping the ownership of the
-        // reason.
-        let reason_size = ConflictAnalysisContext::get_propagation_reason(
+        // Due to ownership rules, we have to take ownership of the reason.
+        // TODO: Reuse the allocation if it becomes a bottleneck.
+        let reason = ConflictAnalysisContext::get_propagation_reason(
             input_predicate,
             context.assignments,
+            CurrentNogood::from(current_nogood),
             context.reason_store,
             context.propagators,
             context.proof_log,
             context.unit_nogood_step_ids,
         )
-        .len();
+        .to_vec();
 
-        for i in 0..reason_size {
-            let antecedent_predicate = ConflictAnalysisContext::get_propagation_reason(
-                input_predicate,
-                context.assignments,
-                context.reason_store,
-                context.propagators,
-                context.proof_log,
-                context.unit_nogood_step_ids,
-            )[i];
-
+        for antecedent_predicate in reason {
             // Root assignments can be safely ignored.
             if context
                 .assignments
@@ -143,7 +140,7 @@ impl RecursiveMinimiser {
             }
 
             // Compute the label of the antecedent predicate.
-            self.compute_label(antecedent_predicate, context);
+            self.compute_label(antecedent_predicate, context, current_nogood);
 
             // In case one of the antecedents is Poison,
             // the input predicate is not deemed redundant.

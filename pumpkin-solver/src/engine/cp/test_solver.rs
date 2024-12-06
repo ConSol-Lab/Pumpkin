@@ -5,6 +5,7 @@ use std::fmt::Debug;
 
 use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
+use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
 use crate::basic_types::Inconsistency;
 use crate::engine::conflict_analysis::SemanticMinimiser;
@@ -229,7 +230,11 @@ impl TestSolver {
             .get_reason_for_predicate_brute_force(predicate);
         let predicates = self
             .reason_store
-            .get_or_compute(reason_ref, &self.assignments, &mut self.propagator_store)
+            .get_or_compute(
+                reason_ref,
+                ExplanationContext::from(&self.assignments),
+                &mut self.propagator_store,
+            )
             .expect("reason_ref should not be stale");
 
         PropositionalConjunction::from(predicates)

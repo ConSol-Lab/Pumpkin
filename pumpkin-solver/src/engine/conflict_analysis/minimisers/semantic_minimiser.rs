@@ -9,7 +9,7 @@ use crate::predicates::Predicate;
 use crate::variables::DomainId;
 
 #[derive(Clone, Debug)]
-pub struct SemanticMinimiser {
+pub(crate) struct SemanticMinimiser {
     original_domains: KeyedVec<DomainId, SimpleIntegerDomain>,
     domains: KeyedVec<DomainId, SimpleIntegerDomain>,
     present_ids: SparseSet<DomainId>,
@@ -29,13 +29,13 @@ impl Default for SemanticMinimiser {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Mode {
+pub(crate) enum Mode {
     EnableEqualityMerging,
     DisableEqualityMerging,
 }
 
 impl SemanticMinimiser {
-    pub fn minimise(
+    pub(crate) fn minimise(
         &mut self,
         nogood: &Vec<Predicate>,
         assignments: &Assignments,
@@ -128,7 +128,7 @@ impl SemanticMinimiser {
         let _ = self.domains.push(initial_domain);
     }
 
-    pub fn clean_up(&mut self) {
+    pub(crate) fn clean_up(&mut self) {
         // Remove the domain ids from the present domain ids.
         let vals: Vec<DomainId> = self.present_ids.iter().copied().collect();
         for domain_id in vals {

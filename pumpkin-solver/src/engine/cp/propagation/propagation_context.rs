@@ -18,22 +18,18 @@ use crate::pumpkin_assert_simple;
 /// Note that the [`PropagationContext`] is the only point of communication beween
 /// the propagations and the solver during propagation.
 #[derive(Clone, Copy, Debug)]
-pub struct PropagationContext<'a> {
+pub(crate) struct PropagationContext<'a> {
     pub assignments: &'a Assignments,
 }
 
 impl<'a> PropagationContext<'a> {
-    pub fn new(assignments: &'a Assignments) -> Self {
+    pub(crate) fn new(assignments: &'a Assignments) -> Self {
         PropagationContext { assignments }
-    }
-
-    pub fn get_decision_level(&self) -> usize {
-        self.assignments.get_decision_level()
     }
 }
 
 #[derive(Debug)]
-pub struct PropagationContextMut<'a> {
+pub(crate) struct PropagationContextMut<'a> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
@@ -42,7 +38,7 @@ pub struct PropagationContextMut<'a> {
 }
 
 impl<'a> PropagationContextMut<'a> {
-    pub fn new(
+    pub(crate) fn new(
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
@@ -87,7 +83,7 @@ impl<'a> PropagationContextMut<'a> {
         }
     }
 
-    pub fn get_decision_level(&self) -> usize {
+    pub(crate) fn get_decision_level(&self) -> usize {
         self.assignments.get_decision_level()
     }
 }
@@ -181,7 +177,7 @@ pub(crate) trait ReadDomains: HasAssignments {
 impl<T: HasAssignments> ReadDomains for T {}
 
 impl PropagationContextMut<'_> {
-    pub fn remove<Var: IntegerVariable, R: Into<Reason>>(
+    pub(crate) fn remove<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &Var,
         value: i32,
@@ -195,7 +191,7 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn set_upper_bound<Var: IntegerVariable, R: Into<Reason>>(
+    pub(crate) fn set_upper_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &Var,
         bound: i32,
@@ -209,7 +205,7 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn set_lower_bound<Var: IntegerVariable, R: Into<Reason>>(
+    pub(crate) fn set_lower_bound<Var: IntegerVariable, R: Into<Reason>>(
         &mut self,
         var: &Var,
         bound: i32,
@@ -224,11 +220,11 @@ impl PropagationContextMut<'_> {
         Ok(())
     }
 
-    pub fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
+    pub(crate) fn evaluate_predicate(&self, predicate: Predicate) -> Option<bool> {
         self.assignments.evaluate_predicate(predicate)
     }
 
-    pub fn post_predicate<R: Into<Reason>>(
+    pub(crate) fn post_predicate<R: Into<Reason>>(
         &mut self,
         predicate: Predicate,
         reason: R,
@@ -265,7 +261,7 @@ impl PropagationContextMut<'_> {
         }
     }
 
-    pub fn assign_literal<R: Into<Reason> + Clone>(
+    pub(crate) fn assign_literal<R: Into<Reason> + Clone>(
         &mut self,
         boolean: &Literal,
         truth_value: bool,
