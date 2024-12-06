@@ -9,6 +9,7 @@ use log::warn;
 use super::conflict_analysis::SemanticMinimiser;
 use super::predicates::predicate::Predicate;
 use super::propagation::store::PropagatorStore;
+use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
 use crate::basic_types::Inconsistency;
@@ -158,7 +159,7 @@ impl DebugHelper {
                     trail_entry
                         .reason
                         .expect("Expected checked propagation to have a reason"),
-                    assignments,
+                    ExplanationContext::from(assignments),
                     propagators,
                 )
                 .expect("reason should exist for this propagation")

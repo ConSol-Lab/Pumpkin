@@ -18,6 +18,7 @@ use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -27,7 +28,6 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
@@ -826,7 +826,7 @@ impl Propagator for NogoodPropagator {
     ///
     /// In case of the noogood propagator, lazy explanations internally also update information
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
-    fn lazy_explanation(&mut self, code: u64, assignments: &Assignments) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
         // Update the LBD and activity of the nogood, if appropriate.
@@ -841,9 +841,11 @@ impl Propagator for NogoodPropagator {
             // LBD update.
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.
-            let current_lbd = self
-                .lbd_helper
-                .compute_lbd(&self.nogoods[id].predicates.as_slice()[1..], assignments);
+            let current_lbd = self.lbd_helper.compute_lbd(
+                &self.nogoods[id].predicates.as_slice()[1..],
+                #[allow(deprecated, reason = "should be refactored later")]
+                context.assignments(),
+            );
 
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogoods[id].lbd {

@@ -428,6 +428,7 @@ pub(crate) mod test_propagation_handler {
     use super::CumulativePropagationHandler;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::propagation::store::PropagatorStore;
+    use crate::engine::propagation::ExplanationContext;
     use crate::engine::propagation::LocalId;
     use crate::engine::propagation::PropagationContext;
     use crate::engine::propagation::PropagationContextMut;
@@ -707,7 +708,11 @@ pub(crate) mod test_propagation_handler {
             let mut propagator_store = PropagatorStore::default();
             let reason = self
                 .reason_store
-                .get_or_compute(reason_ref, &self.assignments, &mut propagator_store)
+                .get_or_compute(
+                    reason_ref,
+                    ExplanationContext::from(&self.assignments),
+                    &mut propagator_store,
+                )
                 .expect("reason_ref should not be stale");
 
             reason.iter().copied().collect()

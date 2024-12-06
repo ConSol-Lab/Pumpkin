@@ -13,7 +13,7 @@ use crate::engine::DebugDyn;
 /// The propagator store associates tags with propagators, whenever a tag is provided for a
 /// propagator.
 #[derive(Default)]
-pub struct PropagatorStore {
+pub(crate) struct PropagatorStore {
     propagators: KeyedVec<PropagatorId, Box<dyn Propagator>>,
     tags: KeyedVec<PropagatorId, Option<NonZero<u32>>>,
 }
