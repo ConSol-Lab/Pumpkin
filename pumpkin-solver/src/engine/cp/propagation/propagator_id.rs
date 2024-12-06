@@ -4,7 +4,7 @@ use crate::containers::StorageKey;
 /// Each propagator is assigned a unique identifier at runtime.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub struct PropagatorId(pub(crate) u32);
+pub(crate) struct PropagatorId(pub(crate) u32);
 
 impl std::fmt::Display for PropagatorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
