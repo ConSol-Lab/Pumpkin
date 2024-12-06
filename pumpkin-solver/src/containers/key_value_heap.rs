@@ -63,7 +63,7 @@ where
     ///
     /// The order in which the keys are yielded is unspecified.
     pub(crate) fn keys(&self) -> impl Iterator<Item = Key> + '_ {
-        self.map_position_to_key[..=self.end_position]
+        self.map_position_to_key[..self.end_position]
             .iter()
             .copied()
     }
