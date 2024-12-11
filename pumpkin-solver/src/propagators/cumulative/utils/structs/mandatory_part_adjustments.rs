@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::ops::Range;
 
 use super::UpdatedTaskInfo;
+use crate::variables::IntegerVariable;
 
 /// Represents adjustments to a mandatory part due to bound changes.
 ///
@@ -76,7 +77,7 @@ impl MandatoryPartAdjustments {
     }
 }
 
-impl<Var> UpdatedTaskInfo<Var> {
+impl<Var: IntegerVariable> UpdatedTaskInfo<Var> {
     /// Returns the adjustments which need to be made to the time-table in the form of a
     /// [`MandatoryPartAdjustments`].
     pub(crate) fn get_mandatory_part_adjustments(&self) -> MandatoryPartAdjustments {

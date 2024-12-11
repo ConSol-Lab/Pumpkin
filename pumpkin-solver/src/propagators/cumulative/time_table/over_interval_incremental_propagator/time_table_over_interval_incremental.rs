@@ -14,7 +14,9 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
+use crate::options::CumulativeIntervalType;
 use crate::predicates::PropositionalConjunction;
+use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::propagators::create_time_table_over_interval_from_scratch;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::debug;
 use crate::propagators::cumulative::time_table::over_interval_incremental_propagator::synchronisation::check_synchronisation_conflict_explanation_over_interval;
@@ -46,6 +48,7 @@ use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -67,7 +70,10 @@ use crate::pumpkin_assert_simple;
 /// \[1\] A. Schutt, Improving scheduling by learning. University of Melbourne, Department of
 /// Computer Science and Software Engineering, 2011.
 #[derive(Clone, Debug)]
-pub(crate) struct TimeTableOverIntervalIncrementalPropagator<Var, const SYNCHRONISE: bool> {
+pub(crate) struct TimeTableOverIntervalIncrementalPropagator<
+    Var: IntegerVariable,
+    const SYNCHRONISE: bool,
+> {
     /// The key `t` (representing a time-point) holds the mandatory resource consumption of
     /// [`Task`]s at that time (stored in a [`ResourceProfile`]); the [`ResourceProfile`]s are
     /// sorted based on start time and they are assumed to be non-overlapping
@@ -208,6 +214,13 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
             // And we clear all of the updates since they have now necessarily been processed
             self.updatable_structures
                 .reset_all_bounds_and_remove_fixed(context.as_readonly(), &self.parameters);
+            self.updatable_structures.notified_tasks.set_to_empty();
+
+            if let CumulativeIntervalType::Incremental = self.parameters.options.interval_trees {
+                self.updatable_structures
+                    .interval_manager
+                    .reset_from_scratch(context.as_readonly());
+            }
 
             return Ok(());
         }
@@ -238,12 +251,39 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
                 &updated_task,
             );
 
+            if let CumulativeIntervalType::Incremental = self.parameters.options.interval_trees {
+                self.updatable_structures
+                    .notified_tasks
+                    .remove(&updated_task);
+                self.updatable_structures.interval_manager.update_task(
+                    &updated_task,
+                    &(context.lower_bound(&updated_task.start_variable)
+                        ..context.upper_bound(&updated_task.start_variable)
+                            + updated_task.processing_time),
+                );
+            }
+
             // If we have found an overflow then we mark that we need to check the profile
             found_conflict |= result.is_err();
 
             // Then we reset the update for the task since it has been processed
             self.updatable_structures
                 .reset_update_for_task(&updated_task);
+        }
+
+        if let CumulativeIntervalType::Incremental = self.parameters.options.interval_trees {
+            while !self.updatable_structures.notified_tasks.is_empty() {
+                let updated_task = Rc::clone(self.updatable_structures.notified_tasks.get(0));
+                self.updatable_structures.interval_manager.update_task(
+                    &updated_task,
+                    &(context.lower_bound(&updated_task.start_variable)
+                        ..context.upper_bound(&updated_task.start_variable)
+                            + updated_task.processing_time),
+                );
+                self.updatable_structures
+                    .notified_tasks
+                    .remove(&updated_task);
+            }
         }
 
         // After all the updates have been processed, we need to check whether there is still a
@@ -328,6 +368,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
+    fn log_statistics(&self, statistic_logger: crate::statistics::StatisticLogger) {
+        self.updatable_structures.statistics.log(statistic_logger);
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(
@@ -368,6 +412,9 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
+        self.updatable_structures
+            .notified_tasks
+            .insert(Rc::clone(&updated_task));
         // Note that we do not take into account the fact that the time-table could be outdated
         // here; the time-table can only become outdated due to backtracking which means that if the
         // time-table is empty before backtracking then it will necessarily be so after
@@ -412,6 +459,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
         pumpkin_assert_simple!(self.parameters.options.incremental_backtracking);
 
         let updated_task = Rc::clone(&self.parameters.tasks[local_id.unpack() as usize]);
+
+        self.updatable_structures
+            .notified_tasks
+            .insert(Rc::clone(&updated_task));
 
         backtrack_update(context, &mut self.updatable_structures, &updated_task);
 
@@ -466,6 +517,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
             context,
             self.parameters.options.incremental_backtracking,
         );
+
+        self.updatable_structures
+            .interval_manager
+            .initialise(&self.parameters.tasks, context.as_readonly());
 
         // First we store the bounds in the parameters
         self.updatable_structures

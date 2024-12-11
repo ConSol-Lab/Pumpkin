@@ -345,6 +345,9 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
+
+    #[arg(long = "cumulative-interval-type", default_value_t)]
+    cumulative_interval_type: CumulativeIntervalType,
 }
 
 fn configure_logging(
@@ -546,6 +549,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_generate_sequence,
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
+                    args.cumulative_interval_type,
                 ),
             },
         )?,

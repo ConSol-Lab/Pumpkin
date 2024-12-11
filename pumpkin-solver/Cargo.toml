@@ -23,6 +23,7 @@ itertools = "0.13.0"
 flatzinc = "0.3.21"
 clap = { version = "4.5.17", features = ["derive"] }
 env_logger = "0.10.0"
+bio = "2.0.3"
 
 [dev-dependencies]
 clap = { version = "4.5.17", features = ["derive"] }

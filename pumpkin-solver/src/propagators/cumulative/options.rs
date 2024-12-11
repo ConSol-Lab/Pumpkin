@@ -17,6 +17,25 @@ pub(crate) struct CumulativePropagatorOptions {
     pub(crate) generate_sequence: bool,
     /// Determines whether to incrementally backtrack or to calculate from scratch
     pub(crate) incremental_backtracking: bool,
+    pub(crate) interval_trees: CumulativeIntervalType,
+}
+
+#[derive(Debug, Default, Clone, Copy, ValueEnum)]
+pub enum CumulativeIntervalType {
+    #[default]
+    NoTree,
+    BioTree,
+    Incremental,
+}
+
+impl Display for CumulativeIntervalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CumulativeIntervalType::NoTree => write!(f, "no-tree"),
+            CumulativeIntervalType::BioTree => write!(f, "bio-tree"),
+            CumulativeIntervalType::Incremental => write!(f, "incremental"),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -36,6 +55,7 @@ impl CumulativeOptions {
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
         incremental_backtracking: bool,
+        interval_trees: CumulativeIntervalType,
     ) -> Self {
         Self {
             propagation_method,
@@ -44,6 +64,7 @@ impl CumulativeOptions {
                 explanation_type,
                 generate_sequence,
                 incremental_backtracking,
+                interval_trees,
             },
         }
     }

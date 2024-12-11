@@ -1,18 +1,24 @@
 use std::rc::Rc;
 
 use super::CumulativeParameters;
+use super::IntervalManager;
 use super::Task;
 use super::UpdatedTaskInfo;
+use crate::create_statistics_struct;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::propagators::SparseSet;
 use crate::pumpkin_assert_moderate;
 use crate::variables::IntegerVariable;
 
+create_statistics_struct!(CumulativeStatistics {
+    number_of_profiles_traversed: usize,
+});
+
 /// Structures which are adjusted during search; either due to incrementality or to keep track of
 /// bounds.
 #[derive(Debug, Clone)]
-pub(crate) struct UpdatableStructures<Var> {
+pub(crate) struct UpdatableStructures<Var: IntegerVariable> {
     /// The current known bounds of the different [tasks][CumulativeParameters::tasks]; stored as
     /// (lower bound, upper bound)
     ///
@@ -24,7 +30,10 @@ pub(crate) struct UpdatableStructures<Var> {
     /// The tasks which have been updated since the last iteration
     updated_tasks: SparseSet<Rc<Task<Var>>>,
     /// The tasks which are unfixed
-    unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    pub(crate) unfixed_tasks: SparseSet<Rc<Task<Var>>>,
+    pub(crate) statistics: CumulativeStatistics,
+    pub(crate) interval_manager: IntervalManager<Var>,
+    pub(crate) notified_tasks: SparseSet<Rc<Task<Var>>>,
 }
 
 impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
@@ -32,12 +41,18 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
         let mut updated_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         updated_tasks.set_to_empty();
 
+        let mut notified_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
+        notified_tasks.set_to_empty();
+
         let unfixed_tasks = SparseSet::new(parameters.tasks.to_vec(), Task::get_id);
         Self {
             bounds: vec![],
             updates: vec![],
+            notified_tasks,
             updated_tasks,
             unfixed_tasks,
+            statistics: CumulativeStatistics::default(),
+            interval_manager: IntervalManager::new(),
         }
     }
 
@@ -254,6 +269,7 @@ impl<Var: IntegerVariable + 'static> UpdatableStructures<Var> {
             .iter()
             .for_each(|task| other.unfix_task(Rc::clone(task)));
         other.reset_all_bounds_and_remove_fixed(context, parameters);
+        other.interval_manager.reset_from_scratch(context);
 
         other
     }
