@@ -5,6 +5,8 @@
 use std::cmp::max;
 use std::rc::Rc;
 
+use bio::data_structures::interval_tree::IntervalTree;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
@@ -14,6 +16,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
+use crate::propagators::CumulativeIntervalType;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
 use crate::propagators::Task;
@@ -25,7 +28,7 @@ use crate::pumpkin_assert_moderate;
 /// The result of [`should_enqueue`], contains the [`EnqueueDecision`] whether the propagator should
 /// currently be enqueued and potentially the updated [`Task`] (in the form of a
 /// [`UpdatedTaskInfo`]) if the mandatory part of this [`Task`] has changed.
-pub(crate) struct ShouldEnqueueResult<Var> {
+pub(crate) struct ShouldEnqueueResult<Var: IntegerVariable> {
     /// Whether the propagator which called this method should be enqueued
     pub(crate) decision: EnqueueDecision,
     /// If the mandatory part of the task passed to [`should_enqueue`] has changed then this field
@@ -225,9 +228,191 @@ pub(crate) fn propagate_based_on_timetable<'a, Var: IntegerVariable + 'static>(
     if parameters.options.generate_sequence {
         propagate_sequence_of_profiles(context, time_table, updatable_structures, parameters)?;
     } else {
-        propagate_single_profiles(context, time_table, updatable_structures, parameters)?;
+        match parameters.options.interval_trees {
+            CumulativeIntervalType::NoTree => {
+                propagate_single_profiles(context, time_table, updatable_structures, parameters)?;
+            }
+            CumulativeIntervalType::BioTree => {
+                propagate_single_profiles_interval_tree(
+                    context,
+                    time_table,
+                    updatable_structures,
+                    parameters,
+                )?;
+            }
+            CumulativeIntervalType::Incremental => propagate_single_profiles_incremental(
+                context,
+                time_table,
+                updatable_structures,
+                parameters,
+            )?,
+        }
     }
 
+    Ok(())
+}
+
+fn propagate_single_profiles_interval_tree<'a, Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    updatable_structures: &mut UpdatableStructures<Var>,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    // We create the structure responsible for propagations and explanations
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type);
+
+    let mut interval_tree = IntervalTree::new();
+    for task in updatable_structures.get_unfixed_tasks() {
+        interval_tree.insert(
+            context.lower_bound(&task.start_variable)
+                ..context.upper_bound(&task.start_variable) + task.processing_time,
+            Rc::clone(task),
+        );
+    }
+
+    // Then we go over all of the profiles in the time-table
+    'profile_loop: for profile in time_table {
+        // We indicate to the propagation handler that we cannot re-use an existing profile
+        // explanation
+        propagation_handler.next_profile();
+
+        // Then we go over all the different tasks
+        for task_entry in interval_tree.find(profile.start..profile.end + 1) {
+            updatable_structures.statistics.number_of_profiles_traversed += 1;
+            let task = task_entry.data();
+            if context.is_fixed(&task.start_variable) {
+                // The task is currently fixed after propagating
+                //
+                // Note that we fix this task temporarily and then wait for the notification to
+                // come in before properly fixing it - this is to avoid fixing a task without ever
+                // receiving the notification for it (which would result in a task never becoming
+                // unfixed since no backtrack notification would occur)
+                updatable_structures.temporarily_remove_task_from_unfixed(task);
+                if updatable_structures.has_no_unfixed_tasks() {
+                    // There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
+                }
+                continue;
+            }
+            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+                // The start of the current profile is necessarily after the latest
+                // completion time of the task under consideration The profiles are
+                // sorted by start time (and non-overlapping) so we can remove the task from
+                // consideration
+                updatable_structures.temporarily_remove_task_from_unfixed(task);
+                if updatable_structures.has_no_unfixed_tasks() {
+                    // There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
+                }
+                continue;
+            }
+
+            // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
+            // update or a hole in the domain)
+            let possible_updates = find_possible_updates(context, task, profile, parameters);
+            for possible_update in possible_updates {
+                // For every possible update we let the propagation handler propagate
+                let result = match possible_update {
+                    CanUpdate::LowerBound => propagation_handler
+                        .propagate_lower_bound_with_explanations(context, profile, task),
+                    CanUpdate::UpperBound => propagation_handler
+                        .propagate_upper_bound_with_explanations(context, profile, task),
+                    CanUpdate::Holes => {
+                        propagation_handler.propagate_holes_in_domain(context, profile, task)
+                    }
+                };
+                if result.is_err() {
+                    updatable_structures.restore_temporarily_removed();
+                    result?;
+                }
+            }
+        }
+    }
+    updatable_structures.restore_temporarily_removed();
+    Ok(())
+}
+
+fn propagate_single_profiles_incremental<'a, Var: IntegerVariable + 'static>(
+    context: &mut PropagationContextMut,
+    time_table: impl Iterator<Item = &'a ResourceProfile<Var>> + Clone,
+    updatable_structures: &mut UpdatableStructures<Var>,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    // We create the structure responsible for propagations and explanations
+    let mut propagation_handler =
+        CumulativePropagationHandler::new(parameters.options.explanation_type);
+
+    let mut cursor = 0;
+    let mut first_iteration = true;
+    // Then we go over all of the profiles in the time-table
+    'profile_loop: for profile in time_table {
+        // We indicate to the propagation handler that we cannot re-use an existing profile
+        // explanation
+        propagation_handler.next_profile();
+
+        // Then we go over all the different tasks
+        let seek = updatable_structures.interval_manager.seek(
+            profile.start,
+            profile.end,
+            &mut cursor,
+            context.as_readonly(),
+            first_iteration,
+        );
+        first_iteration = false;
+        for task in seek {
+            updatable_structures.statistics.number_of_profiles_traversed += 1;
+            if context.is_fixed(&task.start_variable) {
+                // The task is currently fixed after propagating
+                //
+                // Note that we fix this task temporarily and then wait for the notification to
+                // come in before properly fixing it - this is to avoid fixing a task without ever
+                // receiving the notification for it (which would result in a task never becoming
+                // unfixed since no backtrack notification would occur)
+                updatable_structures.unfixed_tasks.remove_temporarily(task);
+                if updatable_structures.unfixed_tasks.is_empty() {
+                    // There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
+                }
+                continue;
+            }
+            if profile.start > context.upper_bound(&task.start_variable) + task.processing_time {
+                // The start of the current profile is necessarily after the latest
+                // completion time of the task under consideration The profiles are
+                // sorted by start time (and non-overlapping) so we can remove the task from
+                // consideration
+                updatable_structures.unfixed_tasks.remove_temporarily(task);
+                if updatable_structures.unfixed_tasks.is_empty() {
+                    // There are no tasks left to consider, we can exit the loop
+                    break 'profile_loop;
+                }
+                continue;
+            }
+
+            // We get the updates which are possible (i.e. a lower-bound update, an upper-bound
+            // update or a hole in the domain)
+            let possible_updates = find_possible_updates(context, task, profile, parameters);
+            for possible_update in possible_updates {
+                // For every possible update we let the propagation handler propagate
+                let result = match possible_update {
+                    CanUpdate::LowerBound => propagation_handler
+                        .propagate_lower_bound_with_explanations(context, profile, task),
+                    CanUpdate::UpperBound => propagation_handler
+                        .propagate_upper_bound_with_explanations(context, profile, task),
+                    CanUpdate::Holes => {
+                        propagation_handler.propagate_holes_in_domain(context, profile, task)
+                    }
+                };
+                if result.is_err() {
+                    updatable_structures
+                        .unfixed_tasks
+                        .restore_temporarily_removed();
+                    result?;
+                }
+            }
+        }
+    }
+    updatable_structures.restore_temporarily_removed();
     Ok(())
 }
 
@@ -259,6 +444,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
         // Then we go over all the different tasks
         let mut task_index = 0;
         while task_index < updatable_structures.number_of_unfixed_tasks() {
+            updatable_structures.statistics.number_of_profiles_traversed += 1;
             let task = updatable_structures.get_unfixed_task_at_index(task_index);
             if context.is_fixed(&task.start_variable) {
                 // The task is currently fixed after propagating

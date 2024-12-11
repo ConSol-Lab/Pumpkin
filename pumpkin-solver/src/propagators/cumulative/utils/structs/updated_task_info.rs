@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use super::Task;
+use crate::variables::IntegerVariable;
 
 /// Stores the information of an updated task; for example in the context of
 /// [`TimeTablePerPointPropagator`] this is a task whose mandatory part has changed.
 #[derive(Debug, Clone)]
-pub(crate) struct UpdatedTaskInfo<Var> {
+pub(crate) struct UpdatedTaskInfo<Var: IntegerVariable> {
     /// The task which has been updated (where "updated" is according to some context-dependent
     /// definition)
     pub(crate) task: Rc<Task<Var>>,

@@ -68,6 +68,7 @@ pub mod options {
     pub use crate::propagators::nogoods::LearnedNogoodSortingStrategy;
     pub use crate::propagators::nogoods::LearningOptions;
     pub use crate::propagators::CumulativeExplanationType;
+    pub use crate::propagators::CumulativeIntervalType;
     pub use crate::propagators::CumulativeOptions;
     pub use crate::propagators::CumulativePropagationMethod;
     #[cfg(doc)]

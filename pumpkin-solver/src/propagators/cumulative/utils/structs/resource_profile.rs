@@ -20,12 +20,13 @@ pub(crate) struct ResourceProfile<Var> {
     pub(crate) height: i32,
 }
 
-impl<Var> Debug for ResourceProfile<Var> {
+impl<Var: IntegerVariable> Debug for ResourceProfile<Var> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceProfile")
             .field("start", &self.start)
             .field("end", &self.end)
             .field("height", &self.height)
+            .field("tasks", &self.profile_tasks)
             .finish()
     }
 }

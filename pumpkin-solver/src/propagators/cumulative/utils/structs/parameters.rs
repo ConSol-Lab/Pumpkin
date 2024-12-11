@@ -9,7 +9,7 @@ use crate::variables::IntegerVariable;
 /// - The capacity of the resource
 /// - The options for propagating the cumulative constraint
 #[derive(Debug, Clone)]
-pub(crate) struct CumulativeParameters<Var> {
+pub(crate) struct CumulativeParameters<Var: IntegerVariable> {
     /// The Set of [`Task`]s; for each [`Task`], the [`Task::id`] is assumed to correspond to its
     /// index in this [`Vec`]; this is stored as a [`Box`] of [`Rc`]'s to accomodate the
     /// sharing of the tasks

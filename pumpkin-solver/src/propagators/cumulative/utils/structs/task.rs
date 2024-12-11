@@ -18,12 +18,13 @@ pub(crate) struct Task<Var> {
     pub(crate) id: LocalId,
 }
 
-impl<Var> Debug for Task<Var> {
+impl<Var: IntegerVariable> Debug for Task<Var> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Task")
             .field("processing_time", &self.processing_time)
             .field("resource_usage", &self.resource_usage)
             .field("local_id", &self.id)
+            .field("start_variable", &self.start_variable)
             .finish()
     }
 }

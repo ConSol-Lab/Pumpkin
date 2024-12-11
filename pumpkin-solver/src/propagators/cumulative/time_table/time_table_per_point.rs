@@ -44,7 +44,7 @@ use crate::pumpkin_assert_extreme;
 /// Computer Science and Software Engineering, 2011.
 #[derive(Debug)]
 
-pub(crate) struct TimeTablePerPointPropagator<Var> {
+pub(crate) struct TimeTablePerPointPropagator<Var: IntegerVariable> {
     /// Stores whether the time-table is empty
     is_time_table_empty: bool,
     /// Stores the input parameters to the cumulative constraint
