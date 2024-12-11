@@ -20,6 +20,7 @@ use self::dimacs::DimacsProof;
 use self::proof_literals::ProofLiterals;
 use crate::predicates::Predicate;
 use crate::variable_names::VariableNames;
+use crate::variables::Literal;
 #[cfg(doc)]
 use crate::Solver;
 
@@ -195,6 +196,14 @@ impl ProofLog {
                 ..
             })
         )
+    }
+
+    pub(crate) fn reify_predicate(&mut self, literal: Literal, predicate: Predicate) {
+        let Some(ProofImpl::CpProof { ref mut writer, .. }) = self.internal_proof else {
+            return;
+        };
+
+        writer.literals_mut().reify_predicate(literal, predicate);
     }
 }
 

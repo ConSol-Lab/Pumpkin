@@ -511,6 +511,10 @@ impl ConstraintSatisfactionSolver {
     ) -> Literal {
         let literal = self.create_new_literal(name);
 
+        self.internal_parameters
+            .proof_log
+            .reify_predicate(literal, predicate);
+
         // If literal --> predicate
         let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
 
