@@ -7,6 +7,7 @@ use crate::basic_types::PropositionalConjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::propagation_context::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -72,7 +73,7 @@ where
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
         local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -250,7 +251,7 @@ where
                     .expect("Expected to be able to fit i64 into i32"),
                 reason,
             )?;
-        } else if num_fixed == self.terms.len() && lhs == self.rhs.into() {
+        } else if num_fixed == self.terms.len() && lhs == self.rhs as i64 {
             let failure_reason: PropositionalConjunction = self
                 .terms
                 .iter()
@@ -318,7 +319,7 @@ impl<Var: IntegerVariable + 'static> LinearNotEqualPropagator<Var> {
         let number_of_fixed_terms_is_correct =
             self.number_of_fixed_terms == expected_number_of_fixed_terms;
 
-        let expected_fixed_lhs = self
+        let expected_fixed_lhs: i32 = self
             .terms
             .iter()
             .filter_map(|x_i| {

@@ -7,12 +7,14 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::EnqueueDecision;
 use super::propagation::ExplanationContext;
 use super::propagation::PropagatorInitialisationContext;
+use super::StateChange;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::Trail;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::propagation_context::StatefulPropagationContext;
 use crate::engine::propagation::LocalId;
-use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorId;
@@ -33,6 +35,7 @@ pub(crate) struct TestSolver {
     pub propagator_store: PropagatorStore,
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
+    stateful_trail: Trail<StateChange>,
     watch_list: WatchListCP,
 }
 
@@ -44,6 +47,7 @@ impl Default for TestSolver {
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
             watch_list: Default::default(),
+            stateful_trail: Default::default(),
         };
         // We allocate space for the zero-th dummy variable at the root level of the assignments.
         solver.watch_list.grow();
@@ -71,8 +75,9 @@ impl TestSolver {
 
         self.propagator_store[id].initialise_at_root(&mut PropagatorInitialisationContext::new(
             &mut self.watch_list,
+            &mut self.stateful_trail,
             id,
-            &self.assignments,
+            &mut self.assignments,
         ))?;
         let context = PropagationContextMut::new(
             &mut self.assignments,
@@ -102,7 +107,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_lower_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let context = PropagationContext::new(&self.assignments);
+        let context = StatefulPropagationContext::new(&mut self.stateful_trail, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -125,7 +130,7 @@ impl TestSolver {
     ) -> EnqueueDecision {
         let result = self.assignments.tighten_upper_bound(var, value, None);
         assert!(result.is_ok(), "The provided value to `increase_lower_bound` caused an empty domain, generally the propagator should not be notified of this change!");
-        let context = PropagationContext::new(&self.assignments);
+        let context = StatefulPropagationContext::new(&mut self.stateful_trail, &self.assignments);
         self.propagator_store[propagator].notify(
             context,
             LocalId::from(local_id),
@@ -205,15 +210,20 @@ impl TestSolver {
 
     pub(crate) fn notify_propagator(&mut self, propagator: PropagatorId) {
         let events = self.assignments.drain_domain_events().collect::<Vec<_>>();
-        let context = PropagationContext::new(&self.assignments);
         for (event, domain) in events {
             // The nogood propagator is treated in a special way, since it is not explicitly
             // subscribed to any domain updates, but implicitly is subscribed to all updates.
             if self.propagator_store[propagator].name() == "NogoodPropagator" {
+                let context =
+                    StatefulPropagationContext::new(&mut self.stateful_trail, &self.assignments);
                 let local_id = LocalId::from(domain.id);
                 let _ = self.propagator_store[propagator].notify(context, local_id, event.into());
             } else {
                 for propagator_var in self.watch_list.get_affected_propagators(event, domain) {
+                    let context = StatefulPropagationContext::new(
+                        &mut self.stateful_trail,
+                        &self.assignments,
+                    );
                     let _ = self.propagator_store[propagator].notify(
                         context,
                         propagator_var.variable,

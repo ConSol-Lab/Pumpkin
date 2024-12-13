@@ -16,6 +16,7 @@ use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
+use super::propagation::propagation_context::StatefulPropagationContext;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
@@ -23,6 +24,7 @@ use super::termination::TerminationCondition;
 use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::ResolutionResolver;
+use super::StateChange;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
@@ -32,6 +34,7 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
+use crate::basic_types::Trail;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
@@ -142,6 +145,8 @@ pub struct ConstraintSatisfactionSolver {
     unit_nogood_step_ids: HashMap<Predicate, StepId>,
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
+
+    pub(crate) stateful_trail: Trail<StateChange>,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -250,6 +255,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
+        stateful_trail: &mut Trail<StateChange>,
     ) {
         pumpkin_assert_moderate!(
             propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
@@ -266,6 +272,7 @@ impl ConstraintSatisfactionSolver {
             propagators,
             propagator_queue,
             assignments,
+            stateful_trail,
         );
     }
 
@@ -276,8 +283,9 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
+        stateful_trail: &mut Trail<StateChange>,
     ) {
-        let context = PropagationContext::new(assignments);
+        let context = StatefulPropagationContext::new(stateful_trail, assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
@@ -306,6 +314,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.propagators,
                 &mut self.propagator_queue,
                 &mut self.assignments,
+                &mut self.stateful_trail,
             );
             // Now notify other propagators subscribed to this event.
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
@@ -318,6 +327,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.propagators,
                     &mut self.propagator_queue,
                     &mut self.assignments,
+                    &mut self.stateful_trail,
                 );
             }
         }
@@ -371,6 +381,7 @@ impl ConstraintSatisfactionSolver {
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: true,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
+            stateful_trail: &mut self.stateful_trail,
         };
 
         let result = self
@@ -410,6 +421,7 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
             },
             internal_parameters: solver_options,
+            stateful_trail: Trail::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -654,6 +666,7 @@ impl ConstraintSatisfactionSolver {
                     proof_log: &mut self.internal_parameters.proof_log,
                     is_completing_proof: false,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
+                    stateful_trail: &mut self.stateful_trail,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -724,6 +737,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.backtrack_event_drain,
                 0,
                 brancher,
+                &mut self.stateful_trail,
             );
             self.state.declare_ready();
         }
@@ -860,6 +874,7 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments.increase_decision_level();
+        self.stateful_trail.increase_decision_level();
         self.reason_store.increase_decision_level();
     }
 
@@ -895,6 +910,7 @@ impl ConstraintSatisfactionSolver {
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: false,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
+            stateful_trail: &mut self.stateful_trail,
         };
 
         let learned_nogood = self
@@ -1030,6 +1046,7 @@ impl ConstraintSatisfactionSolver {
             &mut self.backtrack_event_drain,
             0,
             brancher,
+            &mut self.stateful_trail,
         );
 
         self.restart_strategy.notify_restart();
@@ -1050,6 +1067,7 @@ impl ConstraintSatisfactionSolver {
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
+        stateful_trail: &mut Trail<StateChange>,
     ) {
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
@@ -1065,6 +1083,10 @@ impl ConstraintSatisfactionSolver {
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
+        stateful_trail
+            .synchronise(backtrack_level)
+            .for_each(|change| change.undo());
+
         *last_notified_cp_trail_index = assignments.num_trail_entries();
 
         reason_store.synchronise(backtrack_level);
@@ -1349,8 +1371,9 @@ impl ConstraintSatisfactionSolver {
 
         let mut initialisation_context = PropagatorInitialisationContext::new(
             &mut self.watch_list_cp,
+            &mut self.stateful_trail,
             new_propagator_id,
-            &self.assignments,
+            &mut self.assignments,
         );
 
         let initialisation_status = new_propagator.initialise_at_root(&mut initialisation_context);
