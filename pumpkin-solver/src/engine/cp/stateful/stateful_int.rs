@@ -26,8 +26,12 @@ impl StatefulInt {
 
     /// Update the value in a trail-aware manner.
     pub(crate) fn write(&mut self, value: i64, trail_writer: &mut Trail<StateChange>) {
+        let old_value = self.read();
+        if old_value == value {
+            return;
+        }
         let entry = StateChange {
-            old_value: self.read(),
+            old_value,
             reference: Rc::clone(&self.value),
         };
         trail_writer.push(entry);
