@@ -4,6 +4,7 @@ use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::{LocalId, PropagationContextMut, Propagator, PropagatorInitialisationContext};
 use crate::engine::variables::IntegerVariable;
+use std::collections::HashSet;
 
 /// Propagator for the inverse constraint.
 /// 
@@ -83,13 +84,144 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static, const N: usiz
                 }
             }
         }
-    
 
+        let mut graph = vec![vec![]; 2 * N];
+        for i in 0..N {
+            for value in context.iterate_domain(&self.lhs[i]) {
+                let j = value as usize;
+                graph[i].push(N + j);
+                graph[N + j].push(i);
+            }
+        }
+
+        // Compute maximum matching
+        let matching = maximum_matching(&graph, N);
+        if matching.iter().any(|x| x.is_none()) {
+            let dm_result = dm_decomposition(&graph, &matching, N);
+
+            return Err(conjunction!().into());//todo
+        }
 
         Ok(())
     }    
 }
 
+fn maximum_matching(graph: &[Vec<usize>], n: usize) -> Vec<Option<usize>> {
+    let mut pair_u = vec![None; n];
+    let mut pair_v = vec![None; n];
+    let mut visited = vec![false; n];
+
+    fn dfs(
+        u: usize,
+        graph: &[Vec<usize>],
+        pair_u: &mut [Option<usize>],
+        pair_v: &mut [Option<usize>],
+        visited: &mut [bool],
+        n: usize,
+    ) -> bool {
+        if visited[u] {
+            return false;
+        }
+        visited[u] = true;
+
+        for &v in &graph[u] {
+            let right_index = v - n;
+            if pair_v[right_index].is_none() || dfs(pair_v[right_index].unwrap(), graph, pair_u, pair_v, visited, n) {
+                pair_u[u] = Some(v);
+                pair_v[right_index] = Some(u);
+                return true;
+            }
+        }
+
+        false
+    }
+
+    for u in 0..n {
+        visited.fill(false);
+        dfs(u, graph, &mut pair_u, &mut pair_v, &mut visited, n);
+    }
+    [pair_u, pair_v].concat()
+}
+
+fn alternating_bfs(
+    graph: &[Vec<usize>],
+    exposed_vertices: &[usize],
+    matching: &[Option<usize>],
+    n: usize,
+) -> (HashSet<usize>, HashSet<usize>) {
+    use std::collections::{HashSet, VecDeque};
+
+    let mut d1 = HashSet::new(); // even level set
+    let mut a2 = HashSet::new(); // odd level set
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+
+    // initialize the queue with exposed vertices
+    for &v in exposed_vertices {
+        queue.push_back((v, 0)); // (vertex, level)
+        visited.insert(v);
+    }
+
+    while let Some((current, level)) = queue.pop_front() {
+        if level % 2 == 0 {
+            d1.insert(current);
+        } else {
+            a2.insert(current);
+        }
+
+        for &neighbor in &graph[current] {
+            if visited.contains(&neighbor) {
+                continue;
+            }
+
+            if level % 2 == 0 && matching[current] != Some(neighbor) {
+                // even level: unmatched edges
+                queue.push_back((neighbor, level + 1));
+                visited.insert(neighbor);
+            } else if level % 2 == 1 &&  matching[neighbor] == Some(current) {
+                // odd level: matched edges
+                queue.push_back((neighbor, level + 1));
+                visited.insert(neighbor);
+            }
+        }
+    }
+
+    (d1, a2)
+}
+
+fn dm_decomposition(
+    graph: &[Vec<usize>],
+    matching: &[Option<usize>],
+    n: usize,
+) -> (HashSet<usize>, HashSet<usize>, HashSet<usize>, HashSet<usize>, HashSet<usize>, HashSet<usize>) {
+    let mut exposed_left: Vec<usize> = Vec::new();
+    let mut exposed_right: Vec<usize> = Vec::new();
+
+    for i in 0..n {
+        if matching[i].is_none() {
+            exposed_left.push(i);
+        }
+    }
+
+    for i in 0..n {
+        if !matching.iter().any(|&v| v == Some(n + i)) {
+            exposed_right.push(n + i);
+        }
+    }
+
+    let (d1, a2) = alternating_bfs(graph, &exposed_left, matching, n);
+    let (d2, a1) = alternating_bfs(graph, &exposed_right, matching, n);
+
+    let v1: HashSet<_> = (0..n).collect();
+    let v2: HashSet<_> = (n..2 * n).collect();
+
+    let c1: HashSet<_> = v1.difference(&d1).cloned().collect::<HashSet<_>>()
+                           .difference(&a1).cloned().collect();
+    let c2: HashSet<_> = v2.difference(&d2).cloned().collect::<HashSet<_>>()
+                           .difference(&a2).cloned().collect();
+
+    (d1, c1, a1, d2, c2, a2)
+}
 
 
 #[cfg(test)]
@@ -217,5 +349,150 @@ mod tests {
             "Propagator should detect inconsistency due to empty domain in rhs[1]"
         );
     }
-    
+
+
+
+    //MAXIMUM MATCHING TESTING
+    #[test]
+    fn test_maximum_matching_full_matching() {
+        let graph = vec![
+            vec![3, 4],
+            vec![3, 5],
+            vec![4],
+        ];
+        let n = 3;
+
+        let matching = maximum_matching(&graph, n);
+
+        assert_eq!(matching.len(), n*2);
+        assert_eq!(matching[0], Some(3));
+        assert_eq!(matching[1], Some(5));
+        assert_eq!(matching[2], Some(4));
+        assert_eq!(matching[3], Some(0));
+        assert_eq!(matching[5], Some(1));
+        assert_eq!(matching[4], Some(2));
+    }
+
+    #[test]
+    fn test_maximum_matching_partial_matching() {
+        let graph = vec![
+            vec![3],
+            vec![4],
+            vec![],
+        ];
+        let n = 3;
+
+        let matching = maximum_matching(&graph, n);
+
+        assert_eq!(matching.len(), n*2);
+        assert_eq!(matching[0], Some(3));
+        assert_eq!(matching[1], Some(4));
+        assert!(matching[2].is_none());
+        assert_eq!(matching[3], Some(0));
+        assert_eq!(matching[4], Some(1));
+        assert!(matching[5].is_none());
+    }
+
+    #[test]
+    fn test_maximum_matching_no_edges() {
+        let graph = vec![vec![], vec![], vec![]];
+        let n = 3;
+
+        let matching = maximum_matching(&graph, n);
+
+        assert_eq!(matching, vec![None, None, None, None, None, None]);
+    }
+
+    #[test]
+    fn test_maximum_matching_cycle_graph() {
+        let graph = vec![
+            vec![3],
+            vec![4],
+            vec![5],
+        ];
+        let n = 3;
+
+        let matching = maximum_matching(&graph, n);
+
+        assert_eq!(matching.len(), n*2);
+        assert_eq!(matching[0], Some(3));
+        assert_eq!(matching[1], Some(4));
+        assert_eq!(matching[2], Some(5));
+        assert_eq!(matching[3], Some(0));
+        assert_eq!(matching[4], Some(1));
+        assert_eq!(matching[5], Some(2));
+    }
+
+    #[test]
+    fn test_maximum_matching_multiple_vals() {
+        let graph = vec![
+            vec![3],
+            vec![4],
+            vec![4],
+        ];
+        let n = 3;
+
+        let matching = maximum_matching(&graph, n);
+
+        assert_eq!(matching.len(), n*2);
+        assert_eq!(matching[0],Some(3));
+        assert_eq!(matching[3],Some(0));
+        assert!((matching[1] == Some(4) && matching[4] == Some(1))|| (matching[2] == Some(4) && matching[4] == Some(2)));
+        assert!(matching[1].is_none() || matching[2].is_none());
+        assert_ne!(matching[1], matching[2])
+    }
+
+
+
+    //DM DECOMPOSITION TESTING
+    fn create_hashset(vec: Vec<usize>) -> HashSet<usize> {
+        vec.into_iter().collect()
+    }
+
+    #[test]
+    fn test_disconnected_graph() {
+        let graph = vec![vec![], vec![], vec![], vec![]];
+        let matching = vec![None, None, None, None];
+        let n = 2;
+
+        let (d1, c1, a1, d2, c2, a2) = dm_decomposition(&graph, &matching, n);
+
+        assert_eq!(d1, create_hashset(vec![0, 1]));
+        assert_eq!(c1, create_hashset(vec![]));
+        assert_eq!(a1, create_hashset(vec![]));
+        assert_eq!(d2, create_hashset(vec![2, 3]));
+        assert_eq!(c2, create_hashset(vec![]));
+        assert_eq!(a2, create_hashset(vec![]));
+    }
+
+    #[test]
+    fn test_fully_connected_graph() {
+        let graph = vec![vec![2, 3], vec![2, 3], vec![0, 1], vec![0, 1]];
+        let matching = vec![Some(2), Some(3), Some(0), Some(1)];
+        let n = 2;
+
+        let (d1, c1, a1, d2, c2, a2) = dm_decomposition(&graph, &matching, n);
+
+        assert_eq!(d1, create_hashset(vec![]));
+        assert_eq!(c1, create_hashset(vec![0, 1]));
+        assert_eq!(a1, create_hashset(vec![]));
+        assert_eq!(d2, create_hashset(vec![]));
+        assert_eq!(c2, create_hashset(vec![2, 3]));
+        assert_eq!(a2, create_hashset(vec![]));
+    }
+
+    #[test]
+    fn test_partial_matching() {
+        let graph = vec![vec![5], vec![5], vec![5, 6], vec![6, 7], vec![6,7,8], vec![0,1,2], vec![2,3,4], vec![3,4], vec![4],vec![4]];
+        let n = 5;
+        let matching = maximum_matching(&graph, n);
+        let (d1, c1, a1, d2, c2, a2) = dm_decomposition(&graph, &matching, n);
+
+        assert_eq!(d1, create_hashset(vec![0,1]));
+        assert_eq!(c1, create_hashset(vec![2,3]));
+        assert_eq!(a1, create_hashset(vec![4]));
+        assert_eq!(d2, create_hashset(vec![8,9]));
+        assert_eq!(c2, create_hashset(vec![6,7]));
+        assert_eq!(a2, create_hashset(vec![5]));
+    }
 }
