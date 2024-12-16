@@ -1035,10 +1035,7 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
-    )]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn backtrack<BrancherType: Brancher + ?Sized>(
         assignments: &mut Assignments,
         last_notified_cp_trail_index: &mut usize,

@@ -104,22 +104,22 @@ impl PredicateConstructor for DomainId {
 #[macro_export]
 macro_rules! predicate {
     ($($var:ident).+$([$index:expr])? >= $bound:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
+        #[allow(unused)]
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.lower_bound_predicate($bound)
     }};
     ($($var:ident).+$([$index:expr])? <= $bound:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
+        #[allow(unused)]
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.upper_bound_predicate($bound)
     }};
     ($($var:ident).+$([$index:expr])? == $value:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
+        #[allow(unused)]
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.equality_predicate($value)
     }};
     ($($var:ident).+$([$index:expr])? != $value:expr) => {{
-        #[allow(unused, reason = "could be imported at call-site")]
+        #[allow(unused)]
         use $crate::predicates::PredicateConstructor;
         $($var).+$([$index])?.disequality_predicate($value)
     }};

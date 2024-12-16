@@ -915,7 +915,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated, reason = "should be refactored later")]
+                #[allow(deprecated)]
                 context.assignments(),
             );
 

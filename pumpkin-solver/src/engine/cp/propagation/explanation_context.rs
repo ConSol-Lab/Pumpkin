@@ -42,7 +42,7 @@ impl<'a> ExplanationContext<'a> {
     /// The working nogood does not necessarily contain the predicate that is being explained.
     /// However, the explanation will be used to either resolve with the working nogood or minimize
     /// it some other way.
-    #[allow(unused, reason = "it will be part of the public API at some point")]
+    #[allow(unused)]
     pub(crate) fn working_nogood(&self) -> impl Iterator<Item = Predicate> + '_ {
         self.current_nogood.iter()
     }
