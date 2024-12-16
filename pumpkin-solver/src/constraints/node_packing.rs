@@ -29,7 +29,6 @@ same!"
             })
             .collect::<Vec<_>>(),
         makespan_variable,
-        num_cycles,
         static_incompatibilities,
     )
 }
