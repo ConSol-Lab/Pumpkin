@@ -6,12 +6,15 @@ use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
+use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::containers::KeyedVec;
+use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -37,6 +40,18 @@ use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
+
+create_statistics_struct!(NogoodStatistics {
+    average_number_of_added_single_variable_nogoods: CumulativeMovingAverage<usize>,
+    number_of_single_variable_nogoods: usize,
+    number_of_non_single_variable_nogoods: usize,
+    average_number_of_variables_in_nogood: CumulativeMovingAverage<usize>,
+    number_of_calls: usize,
+    average_number_of_nogoods: CumulativeMovingAverage<usize>,
+    average_number_of_predicates_in_single_variable_nogood: CumulativeMovingAverage<usize>,
+});
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -73,6 +88,8 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+    statistics: NogoodStatistics,
+    nogood_to_decision_level: HashMap<NogoodId, usize>,
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -137,7 +154,12 @@ impl Propagator for NogoodPropagator {
         0
     }
 
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger)
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
+        self.statistics.number_of_calls += 1;
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -768,10 +790,60 @@ impl Propagator for NogoodPropagator {
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
 
+        // Collect statistics
+        self.statistics.average_number_of_nogoods.add_term(
+            self.learned_nogood_ids.low_lbd.len() + self.learned_nogood_ids.high_lbd.len(),
+        );
+        let mut number_of_found_single_variable_nogoods_in_this_iteration = 0;
+        for nogood_id in self
+            .learned_nogood_ids
+            .low_lbd
+            .iter()
+            .chain(self.learned_nogood_ids.high_lbd.iter())
+            .filter(|nogood_id| !self.nogood_to_decision_level.contains_key(nogood_id))
+            .collect::<Vec<_>>()
+        {
+            if self.is_nogood_propagating(context.as_readonly(), context.reason_store, *nogood_id) {
+                continue;
+            }
+            let nogood = &self.nogoods[nogood_id];
+            let mut variables: HashMap<DomainId, usize> = HashMap::default();
+            nogood
+                .predicates
+                .iter()
+                .filter(|predicate| !context.is_predicate_satisfied(**predicate))
+                .for_each(|predicate| {
+                    let domain = predicate.get_domain();
+                    *variables.entry(domain).or_default() += 1;
+                });
+            if variables.len() == 1 {
+                let _ = self
+                    .nogood_to_decision_level
+                    .insert(*nogood_id, context.assignments.get_decision_level());
+                self.statistics.number_of_single_variable_nogoods += 1;
+                self.statistics
+                    .average_number_of_predicates_in_single_variable_nogood
+                    .add_term(*variables.values().next().unwrap());
+
+                number_of_found_single_variable_nogoods_in_this_iteration += 1;
+            } else if variables.len() > 1 {
+                self.statistics.number_of_non_single_variable_nogoods += 1;
+            }
+            self.statistics
+                .average_number_of_variables_in_nogood
+                .add_term(variables.len());
+        }
+        self.statistics
+            .average_number_of_added_single_variable_nogoods
+            .add_term(number_of_found_single_variable_nogoods_in_this_iteration);
+
         Ok(())
     }
 
     fn synchronise(&mut self, context: PropagationContext) {
+        self.nogood_to_decision_level.retain(|_, decision_level| {
+            *decision_level <= context.assignments.get_decision_level()
+        });
         self.last_index_on_trail = context.assignments().trail.len() - 1;
         let _ = self.enqueued_updates.drain();
     }
