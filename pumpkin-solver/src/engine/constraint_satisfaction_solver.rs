@@ -28,6 +28,7 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -58,6 +59,7 @@ use crate::proof::ProofLog;
 use crate::propagators::nogoods::LearningOptions;
 use crate::propagators::nogoods::NogoodPropagator;
 use crate::pumpkin_assert_advanced;
+use crate::pumpkin_assert_eq_simple;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -378,10 +380,20 @@ impl ConstraintSatisfactionSolver {
             .resolve_conflict(&mut conflict_analysis_context)
             .expect("Should have a nogood");
 
+        pumpkin_assert_simple!(
+            result
+                .predicates
+                .iter()
+                .copied()
+                .all(Predicate::is_trivially_true),
+            "At the root, conflict analysis should result in a trivial conflict: {:?}",
+            result.predicates,
+        );
+
         let _ = self
             .internal_parameters
             .proof_log
-            .log_learned_clause(result.predicates, &self.variable_names);
+            .log_learned_clause([], &self.variable_names);
     }
 }
 
@@ -499,6 +511,10 @@ impl ConstraintSatisfactionSolver {
         name: Option<String>,
     ) -> Literal {
         let literal = self.create_new_literal(name);
+
+        self.internal_parameters
+            .proof_log
+            .reify_predicate(literal, predicate);
 
         // If literal --> predicate
         let _ = self.add_clause(vec![!literal.get_true_predicate(), predicate]);
@@ -1166,23 +1182,7 @@ impl ConstraintSatisfactionSolver {
                 Err(inconsistency) => match inconsistency {
                     // A propagator did a change that resulted in an empty domain.
                     Inconsistency::EmptyDomain => {
-                        let empty_domain_reason =
-                            ConstraintSatisfactionSolver::compute_reason_for_empty_domain(
-                                &mut self.assignments,
-                                &mut self.reason_store,
-                                &mut self.propagators,
-                            );
-
-                        // TODO: As a temporary solution, we remove the last trail element.
-                        // This way we guarantee that the assignment is consistent, which is needed
-                        // for the conflict analysis data structures. The proper alternative would
-                        // be to forbid the assignments from getting into an inconsistent state.
-                        self.assignments.remove_last_trail_element();
-
-                        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
-                            conflict_nogood: empty_domain_reason,
-                        };
-                        self.state.declare_conflict(stored_conflict_info);
+                        self.prepare_for_conflict_resolution();
                         break;
                     }
                     // A propagator-specific reason for the current conflict.
@@ -1227,6 +1227,25 @@ impl ConstraintSatisfactionSolver {
         );
     }
 
+    fn prepare_for_conflict_resolution(&mut self) {
+        let empty_domain_reason = ConstraintSatisfactionSolver::compute_reason_for_empty_domain(
+            &mut self.assignments,
+            &mut self.reason_store,
+            &mut self.propagators,
+        );
+
+        // TODO: As a temporary solution, we remove the last trail element.
+        // This way we guarantee that the assignment is consistent, which is needed
+        // for the conflict analysis data structures. The proper alternative would
+        // be to forbid the assignments from getting into an inconsistent state.
+        self.assignments.remove_last_trail_element();
+
+        let stored_conflict_info = StoredConflictInfo::EmptyDomain {
+            conflict_nogood: empty_domain_reason,
+        };
+        self.state.declare_conflict(stored_conflict_info);
+    }
+
     /// Introduces any root-level propagations to the proof by introducing them as
     /// nogoods.
     ///
@@ -1240,6 +1259,7 @@ impl ConstraintSatisfactionSolver {
     ) {
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
+
             let reason = entry
                 .reason
                 .expect("Added by a propagator and must therefore have a reason");
@@ -1397,6 +1417,9 @@ impl ConstraintSatisfactionSolver {
     }
 
     pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
+        pumpkin_assert_eq_simple!(self.get_decision_level(), 0);
+
+        let num_trail_entries = self.assignments.num_trail_entries();
         let mut propagation_context = PropagationContextMut::new(
             &mut self.assignments,
             &mut self.reason_store,
@@ -1404,11 +1427,20 @@ impl ConstraintSatisfactionSolver {
             Self::get_nogood_propagator_id(),
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
-        ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
+        if ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(
             &mut self.propagators[nogood_propagator_id],
             nogood,
             &mut propagation_context,
-        )?;
+        )
+        .is_err()
+        {
+            self.log_root_propagation_to_proof(num_trail_entries, None);
+            self.prepare_for_conflict_resolution();
+            self.complete_proof();
+            return Err(ConstraintOperationError::InfeasibleNogood);
+        }
+
+        self.log_root_propagation_to_proof(num_trail_entries, None);
         // temporary hack for the nogood propagator that does propagation from scratch
         self.propagator_queue.enqueue_propagator(PropagatorId(0), 0);
         self.propagate();
@@ -1423,7 +1455,7 @@ impl ConstraintSatisfactionSolver {
         nogood_propagator: &mut dyn Propagator,
         nogood: Vec<Predicate>,
         context: &mut PropagationContextMut,
-    ) -> Result<(), ConstraintOperationError> {
+    ) -> PropagationStatusCP {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
             Some(nogood_propagator) => nogood_propagator.add_nogood(nogood, context),
             None => {
@@ -1449,13 +1481,9 @@ impl ConstraintSatisfactionSolver {
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`
-        let mut are_all_falsified_at_root = true;
         let predicates = predicates
             .into_iter()
-            .map(|predicate| {
-                are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
-                !predicate
-            })
+            .map(|predicate| !predicate)
             .collect::<Vec<_>>();
 
         if predicates.is_empty() {
@@ -1466,27 +1494,6 @@ impl ConstraintSatisfactionSolver {
             return Err(ConstraintOperationError::InfeasibleClause);
         }
 
-        if are_all_falsified_at_root {
-            self.state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
-        if predicates.len() == 1 {
-            let _ = self
-                .internal_parameters
-                .proof_log
-                .log_inference(None, [predicates[0]], None);
-            let step_id = self
-                .internal_parameters
-                .proof_log
-                .log_learned_clause([!predicates[0]], &self.variable_names)
-                .expect("Expected to be able to write proof");
-            let _ = self.unit_nogood_step_ids.insert(!predicates[0], step_id);
-        }
-
         if let Err(constraint_operation_error) = self.add_nogood(predicates) {
             self.state
                 .declare_conflict(StoredConflictInfo::RootLevelConflict(
@@ -1494,6 +1501,7 @@ impl ConstraintSatisfactionSolver {
                 ));
             return Err(constraint_operation_error);
         }
+
         Ok(())
     }
 
@@ -1611,7 +1619,6 @@ impl CSPSolverState {
     }
 
     fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
-        pumpkin_assert_simple!(!self.is_conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
 
