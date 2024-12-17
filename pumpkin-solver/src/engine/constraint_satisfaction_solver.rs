@@ -775,7 +775,6 @@ impl ConstraintSatisfactionSolver {
         termination: &mut impl TerminationCondition,
         brancher: &mut impl Brancher,
     ) -> CSPSolverExecutionFlag {
-        println!("======= starting solve");
         loop {
             if termination.should_stop() {
                 self.state.declare_timeout();
@@ -1171,8 +1170,6 @@ impl ConstraintSatisfactionSolver {
 
     /// Main propagation loop.
     pub(crate) fn propagate(&mut self) {
-        println!("PROPAGATING");
-
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
@@ -1287,13 +1284,8 @@ impl ConstraintSatisfactionSolver {
         start_trail_index: usize,
         tag: Option<NonZero<u32>>,
     ) {
-        println!(
-            "Logging from trail inex {start_trail_index}..{}",
-            self.assignments.num_trail_entries()
-        );
         for trail_idx in start_trail_index..self.assignments.num_trail_entries() {
             let entry = self.assignments.get_trail_entry(trail_idx);
-            println!("logging root propagation of {entry:?}");
 
             let reason = entry
                 .reason
@@ -1346,7 +1338,6 @@ impl ConstraintSatisfactionSolver {
                 if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
                 } else {
-                    println!("getting id for {:?}", trail_entry.predicate);
                     unreachable!()
                 }
             }
@@ -1515,8 +1506,6 @@ impl ConstraintSatisfactionSolver {
             self.get_decision_level() == 0,
             "Clauses can only be added in the root"
         );
-
-        println!("ADDING CLAUSE");
 
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
