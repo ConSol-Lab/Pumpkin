@@ -803,10 +803,14 @@ impl Propagator for NogoodPropagator {
             .filter(|nogood_id| !self.nogood_to_decision_level.contains_key(nogood_id))
             .collect::<Vec<_>>()
         {
-            if self.is_nogood_propagating(context.as_readonly(), context.reason_store, *nogood_id) {
+            let nogood = &self.nogoods[nogood_id];
+            if nogood
+                .predicates
+                .iter()
+                .any(|predicate| context.is_predicate_falsified(*predicate))
+            {
                 continue;
             }
-            let nogood = &self.nogoods[nogood_id];
             let mut variables: HashMap<DomainId, usize> = HashMap::default();
             nogood
                 .predicates
