@@ -228,6 +228,7 @@ impl Predicate {
         }
     }
 
+    /// Tests whether `self` is a trivially true predicate.
     pub fn is_trivially_true(self) -> bool {
         matches!(
             self,
