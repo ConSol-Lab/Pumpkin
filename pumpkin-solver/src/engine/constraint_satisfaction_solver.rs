@@ -390,10 +390,19 @@ impl ConstraintSatisfactionSolver {
             .resolve_conflict(&mut conflict_analysis_context)
             .expect("Should have a nogood");
 
+        pumpkin_assert_simple!(
+            result
+                .predicates
+                .iter()
+                .copied()
+                .all(Predicate::is_trivially_true),
+            "At the root, conflict analysis should result in a trivial conflict"
+        );
+
         let _ = self
             .internal_parameters
             .proof_log
-            .log_learned_clause(result.predicates, &self.variable_names);
+            .log_learned_clause([], &self.variable_names);
     }
 }
 
@@ -1463,8 +1472,9 @@ impl ConstraintSatisfactionSolver {
         )
         .is_err()
         {
-            self.prepare_for_conflict_resolution();
             self.log_root_propagation_to_proof(num_trail_entries, None);
+            self.prepare_for_conflict_resolution();
+            self.complete_proof();
             return Err(ConstraintOperationError::InfeasibleNogood);
         }
 
@@ -1511,13 +1521,9 @@ impl ConstraintSatisfactionSolver {
         // We can simply negate the clause and retrieve a nogood, e.g. if we have the
         // clause `[x1 >= 5] \/ [x2 != 3] \/ [x3 <= 5]`, then it **cannot** be the case that `[x1 <
         // 5] /\ [x2 = 3] /\ [x3 > 5]`
-        let mut are_all_falsified_at_root = true;
         let predicates = predicates
             .into_iter()
-            .map(|predicate| {
-                are_all_falsified_at_root &= self.assignments.is_predicate_falsified(predicate);
-                !predicate
-            })
+            .map(|predicate| !predicate)
             .collect::<Vec<_>>();
 
         if predicates.is_empty() {
@@ -1526,27 +1532,6 @@ impl ConstraintSatisfactionSolver {
                     ConstraintOperationError::InfeasibleClause,
                 ));
             return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
-        if are_all_falsified_at_root {
-            self.state
-                .declare_conflict(StoredConflictInfo::RootLevelConflict(
-                    ConstraintOperationError::InfeasibleClause,
-                ));
-            return Err(ConstraintOperationError::InfeasibleClause);
-        }
-
-        if predicates.len() == 1 {
-            let _ = self
-                .internal_parameters
-                .proof_log
-                .log_inference(None, [predicates[0]], None);
-            let step_id = self
-                .internal_parameters
-                .proof_log
-                .log_learned_clause([!predicates[0]], &self.variable_names)
-                .expect("Expected to be able to write proof");
-            let _ = self.unit_nogood_step_ids.insert(!predicates[0], step_id);
         }
 
         if let Err(constraint_operation_error) = self.add_nogood(predicates) {
@@ -1674,7 +1659,6 @@ impl CSPSolverState {
     }
 
     fn declare_conflict(&mut self, conflict_info: StoredConflictInfo) {
-        pumpkin_assert_simple!(!self.is_conflicting());
         self.internal_state = CSPSolverStateInternal::Conflict { conflict_info };
     }
 

@@ -227,6 +227,22 @@ impl Predicate {
             not_equal_constant: 1,
         }
     }
+
+    pub fn is_trivially_true(self) -> bool {
+        matches!(
+            self,
+            Predicate::LowerBound {
+                domain_id: DomainId { id: 0 },
+                lower_bound: 1,
+            } | Predicate::Equal {
+                domain_id: DomainId { id: 0 },
+                equality_constant: 1,
+            } | Predicate::NotEqual {
+                domain_id: DomainId { id: 0 },
+                not_equal_constant: 0,
+            }
+        )
+    }
 }
 
 impl std::ops::Not for Predicate {
