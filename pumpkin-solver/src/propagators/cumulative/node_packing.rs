@@ -28,7 +28,7 @@ create_statistics_struct!(NodePackingStatistics {
     n_conflicts: usize,
     n_lft_conflicts: usize,
 
-    average_size_of_propagation: CumulativeMovingAverage,
+    average_size_of_propagation: CumulativeMovingAverage<i32>,
 });
 
 pub(crate) struct NodePackingPropagator<Var> {
@@ -215,9 +215,9 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
 
         let (node_packing_bound, tasks) = result?;
         if node_packing_bound > context.lower_bound(&self.makespan_variable) {
-            self.statistics.average_size_of_propagation.add_term(
-                (node_packing_bound - context.lower_bound(&self.makespan_variable)) as u64,
-            );
+            self.statistics
+                .average_size_of_propagation
+                .add_term(node_packing_bound - context.lower_bound(&self.makespan_variable));
             self.statistics.n_propagations += 1;
             let result = context.set_lower_bound(
                 &self.makespan_variable,

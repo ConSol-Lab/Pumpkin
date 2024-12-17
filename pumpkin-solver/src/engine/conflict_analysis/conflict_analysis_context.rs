@@ -9,6 +9,8 @@ use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::store::PropagatorStore;
+use crate::engine::propagation::CurrentNogood;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::reason::ReasonRef;
 use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
@@ -19,7 +21,6 @@ use crate::engine::PropagatorQueue;
 use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::ProofLog;
-use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
 
@@ -86,7 +87,7 @@ impl<'a> ConflictAnalysisContext<'a> {
 
     /// Returns a nogood which led to the conflict; if `is_completing_proof` is set to true, then
     /// it will also return predicates from the root decision level.
-    pub(crate) fn get_conflict_nogood(&mut self) -> Vec<Predicate> {
+    pub(crate) fn get_conflict_nogood(&mut self, is_completing_proof: bool) -> Vec<Predicate> {
         match self.solver_state.get_conflict_info() {
             StoredConflictInfo::Propagator {
                 conflict_nogood,
@@ -103,7 +104,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                         // filter out root predicates
                         self.assignments
                             .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0 || self.is_completing_proof)
+                            .is_some_and(|dl| dl > 0 || is_completing_proof)
                     })
                     .copied()
                     .collect()
@@ -115,7 +116,7 @@ impl<'a> ConflictAnalysisContext<'a> {
                         // filter out root predicates
                         self.assignments
                             .get_decision_level_for_predicate(p)
-                            .is_some_and(|dl| dl > 0 || self.is_completing_proof)
+                            .is_some_and(|dl| dl > 0 || is_completing_proof)
                     })
                     .copied()
                     .collect()
@@ -131,6 +132,7 @@ impl<'a> ConflictAnalysisContext<'a> {
     pub(crate) fn get_propagation_reason(
         predicate: Predicate,
         assignments: &Assignments,
+        current_nogood: CurrentNogood<'_>,
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
         proof_log: &'a mut ProofLog,
@@ -164,15 +166,18 @@ impl<'a> ConflictAnalysisContext<'a> {
 
         // We distinguish between three cases:
         // 1) The predicate is explicitly present on the trail.
-        let reason = if trail_entry.predicate == predicate {
+        if trail_entry.predicate == predicate {
             let reason_ref = trail_entry
                 .reason
                 .expect("Cannot be a null reason for propagation.");
 
             let propagator_id = reason_store.get_propagator(reason_ref);
             let constraint_tag = propagators.get_tag(propagator_id);
+
+            let explanation_context = ExplanationContext::new(assignments, current_nogood);
+
             let reason = reason_store
-                .get_or_compute(reason_ref, assignments, propagators)
+                .get_or_compute(reason_ref, explanation_context, propagators)
                 .expect("reason reference should not be stale");
             if propagator_id == ConstraintSatisfactionSolver::get_nogood_propagator_id()
                 && reason.is_empty()
@@ -523,12 +528,6 @@ impl<'a> ConflictAnalysisContext<'a> {
                 ),
             };
             reason_store.helper.as_slice()
-        };
-
-        pumpkin_assert_extreme!(reason
-            .iter()
-            .all(|predicate| { assignments.is_predicate_satisfied(*predicate) }));
-
-        reason
+        }
     }
 }

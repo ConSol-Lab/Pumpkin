@@ -45,11 +45,11 @@ impl<Value: Display> Statistic for Value {
 /// ```
 #[macro_export]
 macro_rules! create_statistics_struct {
-    ($(#[$struct_documentation:meta])* $name:ident { $($(#[$variable_documentation:meta])* $field:ident : $type:ident),+ $(,)? }) => {
+    ($(#[$struct_documentation:meta])* $name:ident { $($(#[$variable_documentation:meta])* $field:ident : $type:ident $(< $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >)?),+ $(,)? }) => {
         $(#[$struct_documentation])*
         #[derive(Default, Debug, Copy, Clone)]
         pub(crate) struct $name {
-            $($(#[$variable_documentation])* pub(crate) $field: $type),+
+            $($(#[$variable_documentation])* pub(crate) $field: $type $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?),+
         }
 
         impl $crate::statistics::Statistic for $name {
