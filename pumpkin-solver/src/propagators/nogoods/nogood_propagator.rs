@@ -808,6 +808,7 @@ impl Propagator for NogoodPropagator {
                 .predicates
                 .iter()
                 .any(|predicate| context.is_predicate_falsified(*predicate))
+                || nogood.is_deleted
             {
                 continue;
             }
@@ -821,14 +822,19 @@ impl Propagator for NogoodPropagator {
                     *variables.entry(domain).or_default() += 1;
                 });
             if variables.len() == 1 {
+                if *variables.values().next().unwrap() == 1 {
+                    // Will propagate when it is next called, this can be due to an update in the
+                    // propagation loop which will require another round of notification
+                    continue;
+                }
                 let _ = self
                     .nogood_to_decision_level
                     .insert(*nogood_id, context.assignments.get_decision_level());
+
                 self.statistics.number_of_single_variable_nogoods += 1;
                 self.statistics
                     .average_number_of_predicates_in_single_variable_nogood
                     .add_term(*variables.values().next().unwrap());
-
                 number_of_found_single_variable_nogoods_in_this_iteration += 1;
             } else if variables.len() > 1 {
                 self.statistics.number_of_non_single_variable_nogoods += 1;
