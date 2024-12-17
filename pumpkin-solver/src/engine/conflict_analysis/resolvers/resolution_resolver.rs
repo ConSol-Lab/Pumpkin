@@ -1,5 +1,8 @@
+use std::num::NonZero;
+
 use super::ConflictResolver;
 use crate::basic_types::moving_averages::MovingAverage;
+use crate::basic_types::HashMap;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::branching::Brancher;
@@ -12,6 +15,7 @@ use crate::engine::conflict_analysis::LearnedNogood;
 use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
+use crate::proof::ProofLog;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -75,6 +79,8 @@ impl ConflictResolver for ResolutionResolver {
             self.add_predicate_to_conflict_nogood(
                 *predicate,
                 context.assignments,
+                context.proof_log,
+                context.unit_nogood_step_ids,
                 context.brancher,
                 self.mode,
                 context.is_completing_proof,
@@ -244,6 +250,8 @@ impl ConflictResolver for ResolutionResolver {
                 self.add_predicate_to_conflict_nogood(
                     *predicate,
                     context.assignments,
+                    context.proof_log,
+                    context.unit_nogood_step_ids,
                     context.brancher,
                     self.mode,
                     context.is_completing_proof,
@@ -273,13 +281,19 @@ impl ResolutionResolver {
         self.to_process_heap.clear();
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "borrow checker complains if passing through the context"
+    )]
     fn add_predicate_to_conflict_nogood(
         &mut self,
         predicate: Predicate,
         assignments: &Assignments,
+        proof_log: &mut ProofLog,
+        unit_nogood_step_ids: &HashMap<Predicate, NonZero<u64>>,
         brancher: &mut dyn Brancher,
         mode: AnalysisMode,
-        is_logging_complete_proof: bool,
+        is_completing_proof: bool,
     ) {
         let dec_level = assignments
             .get_decision_level_for_predicate(&predicate)
@@ -290,10 +304,26 @@ impl ResolutionResolver {
                     assignments.get_upper_bound(predicate.get_domain()),
                 )
             });
-        // Ignore root level predicates.
-        if !is_logging_complete_proof && dec_level == 0 {
-            // do nothing
+
+        // Log all non-initial bounds to the proof.
+        if dec_level == 0 && !is_completing_proof {
+            if !assignments.is_initial_bound(predicate) {
+                let trail_index = assignments
+                    .get_trail_position(&predicate)
+                    .expect("all predicates in reason are true");
+                let trail_entry = assignments.get_trail_entry(trail_index);
+
+                // We do indicate their usage in the proof.
+                let step_id = unit_nogood_step_ids
+                    .get(&trail_entry.predicate)
+                    .copied()
+                    .unwrap();
+                proof_log.add_propagation(step_id);
+            }
+
+            return;
         }
+
         // 1UIP
         // If the variables are from the current decision level then we want to potentially add
         // them to the heap, otherwise we add it to the predicates from lower-decision levels
@@ -301,7 +331,7 @@ impl ResolutionResolver {
         // All-decision Learning
         // If the variables are not decisions then we want to potentially add them to the heap,
         // otherwise we add it to the decision predicates which have been discovered previously
-        else if match mode {
+        if match mode {
             AnalysisMode::OneUIP => dec_level == assignments.get_decision_level(),
             AnalysisMode::AllDecision => !assignments.is_decision_predicate(&predicate),
         } {

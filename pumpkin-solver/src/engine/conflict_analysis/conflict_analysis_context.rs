@@ -28,10 +28,10 @@ use crate::variables::DomainId;
 /// Used during conflict analysis to provide the necessary information.
 ///
 /// All fields are made public for the time being for simplicity. In the future that may change.
-pub(crate) struct ConflictAnalysisContext<'a> {
+pub(crate) struct ConflictAnalysisContext<'a, 'reasons> {
     pub(crate) assignments: &'a mut Assignments,
     pub(crate) solver_state: &'a mut CSPSolverState,
-    pub(crate) reason_store: &'a mut ReasonStore,
+    pub(crate) reason_store: &'reasons mut ReasonStore,
     pub(crate) brancher: &'a mut dyn Brancher,
     pub(crate) propagators: &'a mut PropagatorStore,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
@@ -52,13 +52,13 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) stateful_assignments: &'a mut TrailedAssignments,
 }
 
-impl Debug for ConflictAnalysisContext<'_> {
+impl Debug for ConflictAnalysisContext<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(std::any::type_name::<Self>()).finish()
     }
 }
 
-impl<'a> ConflictAnalysisContext<'a> {
+impl<'reasons> ConflictAnalysisContext<'_, 'reasons> {
     /// Returns the last decision which was made by the solver.
     pub(crate) fn find_last_decision(&mut self) -> Option<Predicate> {
         self.assignments.find_last_decision()
@@ -136,11 +136,11 @@ impl<'a> ConflictAnalysisContext<'a> {
         predicate: Predicate,
         assignments: &Assignments,
         current_nogood: CurrentNogood<'_>,
-        reason_store: &'a mut ReasonStore,
-        propagators: &'a mut PropagatorStore,
-        proof_log: &'a mut ProofLog,
+        reason_store: &'reasons mut ReasonStore,
+        propagators: &'reasons mut PropagatorStore,
+        proof_log: &mut ProofLog,
         unit_nogood_step_ids: &HashMap<Predicate, StepId>,
-    ) -> &'a [Predicate] {
+    ) -> &'reasons [Predicate] {
         // TODO: this function could be put into the reason store
 
         // Note that this function can only be called with propagations, and never decision

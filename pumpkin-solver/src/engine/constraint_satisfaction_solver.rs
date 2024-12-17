@@ -396,7 +396,8 @@ impl ConstraintSatisfactionSolver {
                 .iter()
                 .copied()
                 .all(Predicate::is_trivially_true),
-            "At the root, conflict analysis should result in a trivial conflict"
+            "At the root, conflict analysis should result in a trivial conflict: {:?}",
+            result.predicates,
         );
 
         let _ = self
