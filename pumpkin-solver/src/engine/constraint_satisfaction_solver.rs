@@ -1339,7 +1339,10 @@ impl ConstraintSatisfactionSolver {
                 if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
                 } else {
-                    unreachable!()
+                    panic!(
+                        "Failed to obtain step id for predicate {:?}. Available step ids: {:?}",
+                        trail_entry.predicate, self.unit_nogood_step_ids,
+                    );
                 }
             }
 
@@ -1464,8 +1467,8 @@ impl ConstraintSatisfactionSolver {
         )
         .is_err()
         {
-            self.log_root_propagation_to_proof(num_trail_entries, None);
             self.prepare_for_conflict_resolution();
+            self.log_root_propagation_to_proof(num_trail_entries, None);
             self.complete_proof();
             return Err(ConstraintOperationError::InfeasibleNogood);
         }

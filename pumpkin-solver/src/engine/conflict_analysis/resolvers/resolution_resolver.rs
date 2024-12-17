@@ -307,7 +307,7 @@ impl ResolutionResolver {
 
         // Log all non-initial bounds to the proof.
         if dec_level == 0 && !is_completing_proof {
-            if !assignments.is_initial_bound(predicate) {
+            if !assignments.is_initial_bound(predicate) && proof_log.is_logging_inferences() {
                 let trail_index = assignments
                     .get_trail_position(&predicate)
                     .expect("all predicates in reason are true");
@@ -317,7 +317,12 @@ impl ResolutionResolver {
                 let step_id = unit_nogood_step_ids
                     .get(&trail_entry.predicate)
                     .copied()
-                    .unwrap();
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to get step id for unit clause {:?}. Available steps: {:?}",
+                            trail_entry.predicate, unit_nogood_step_ids
+                        )
+                    });
                 proof_log.add_propagation(step_id);
             }
 
