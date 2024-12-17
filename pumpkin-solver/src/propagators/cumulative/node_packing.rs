@@ -21,6 +21,7 @@ use crate::propagators::Task;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
 
 create_statistics_struct!(NodePackingStatistics {
     n_calls: usize,
@@ -48,7 +49,7 @@ pub(crate) struct NodePackingParameters<Var> {
     pub(crate) tasks: Box<[Rc<Task<Var>>]>,
     /// The capacity of the resource (i.e. how much resource consumption can be maximally
     /// accomodated at each time point)
-    pub(crate) static_incompatibilities: Vec<Vec<bool>>,
+    pub(crate) disjointness: Vec<Vec<Literal>>,
 }
 
 impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
@@ -56,7 +57,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         arg_tasks: &[ArgTask<Var>],
         makespan_variable: Var,
         number_of_cycles: usize,
-        static_incompatibilities: Vec<Vec<bool>>,
+        disjointness: Vec<Vec<Literal>>,
     ) -> Self {
         let parameters = NodePackingParameters {
             tasks: create_tasks(arg_tasks)
@@ -64,7 +65,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 .map(Rc::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            static_incompatibilities,
+            disjointness,
         };
 
         NodePackingPropagator {
@@ -100,13 +101,14 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         activities.retain(|activity| {
             // Either they would exceed the resource capacities or their executions times cannot
             // overlap
-            self.parameters.static_incompatibilities[selected_activity.id.unpack() as usize]
-                [activity.id.unpack() as usize]
-                || !(context.lower_bound(&activity.start_variable)
-                    <= context.upper_bound(&selected_activity.start_variable)
-                        + selected_activity.processing_time
-                    && context.lower_bound(&selected_activity.start_variable)
-                        <= context.upper_bound(&activity.start_variable) + activity.processing_time)
+            context.is_literal_true(
+                &self.parameters.disjointness[selected_activity.id.unpack() as usize]
+                    [activity.id.unpack() as usize],
+            ) || !(context.lower_bound(&activity.start_variable)
+                <= context.upper_bound(&selected_activity.start_variable)
+                    + selected_activity.processing_time
+                && context.lower_bound(&selected_activity.start_variable)
+                    <= context.upper_bound(&activity.start_variable) + activity.processing_time)
         })
     }
 

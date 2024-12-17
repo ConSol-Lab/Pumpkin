@@ -24,6 +24,7 @@ use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::variables::Literal;
 use pumpkin_solver::variables::TransformableVariable;
 use pumpkin_solver::Solver;
 use rcpsp_instance::parse_rcpsp_dzn;
@@ -172,39 +173,49 @@ fn run() -> SchedulingResult<()> {
         panic!("Adding precedence for makespan led to unsatisfiability");
     }
 
-    let mut incompatibility_matrix = vec![
-        vec![false; rcpsp_instance.processing_times.len()];
-        rcpsp_instance.processing_times.len()
-    ];
-
     let (transitive_closure, rev_map) = create_transitive_closure_of_graph(
         &rcpsp_instance.dependencies,
         rcpsp_instance.processing_times.len() as u32,
     );
 
-    // Keep track of the resource infeasibilities and the incompatibilities due to precedence
-    // constraints
+    let mut incompatibility_matrix: Vec<Vec<Literal>> =
+        Vec::with_capacity(rcpsp_instance.processing_times.len());
     for index in 0..rcpsp_instance.processing_times.len() {
+        let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
         for other_index in 0..rcpsp_instance.processing_times.len() {
-            if index == other_index {
-                continue;
-            }
-            for resource_index in 0..rcpsp_instance.resource_capacities.len() {
-                if rcpsp_instance.resource_requirements[resource_index][index]
-                    + rcpsp_instance.resource_requirements[resource_index][other_index]
-                    > rcpsp_instance.resource_capacities[resource_index]
-                {
-                    incompatibility_matrix[index][other_index] = true;
-                    incompatibility_matrix[other_index][index] = true;
+            let result = match index.cmp(&other_index) {
+                std::cmp::Ordering::Less => {
+                    let mut is_resource_infeasible = false;
+                    for resource_index in 0..rcpsp_instance.resource_capacities.len() {
+                        if rcpsp_instance.resource_requirements[resource_index][index]
+                            + rcpsp_instance.resource_requirements[resource_index][other_index]
+                            > rcpsp_instance.resource_capacities[resource_index]
+                        {
+                            is_resource_infeasible = true;
+                            break;
+                        }
+                    }
+                    let mut is_connected_by_precedence = false;
+                    if !is_resource_infeasible
+                        && (transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
+                            || transitive_closure
+                                .contains_edge(rev_map[other_index], rev_map[index]))
+                    {
+                        is_connected_by_precedence = true;
+                    }
+
+                    if is_resource_infeasible || is_connected_by_precedence {
+                        solver.get_true_literal()
+                    } else {
+                        solver.new_literal()
+                    }
                 }
-            }
-            if transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
-                || transitive_closure.contains_edge(rev_map[other_index], rev_map[index])
-            {
-                incompatibility_matrix[index][other_index] = true;
-                incompatibility_matrix[other_index][index] = true;
-            }
+                std::cmp::Ordering::Equal => solver.get_false_literal(),
+                std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
+            };
+            new_vec.push(result);
         }
+        incompatibility_matrix.push(new_vec)
     }
 
     for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
