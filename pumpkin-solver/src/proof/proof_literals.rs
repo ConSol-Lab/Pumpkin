@@ -22,6 +22,10 @@ pub(crate) struct ProofLiterals {
     /// of the predicates in the map.
     variables: HashMap<Predicate, NonZeroU32>,
 
+    /// Maps the domain id of a 0-1 integer `x` to the predicate `p` that it reifies:
+    /// `[x == 1] <-> p`.
+    ///
+    /// Used in substituting the reification domain with the predicate when logging reasons.
     reification_domains: HashMap<DomainId, Predicate>,
 }
 
