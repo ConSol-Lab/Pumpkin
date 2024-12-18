@@ -1,6 +1,8 @@
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::engine::propagation::propagation_context::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -50,13 +52,17 @@ impl<WrappedPropagator: Propagator> ReifiedPropagator<WrappedPropagator> {
 impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedPropagator> {
     fn notify(
         &mut self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
         if local_id < self.reification_literal_id {
-            let decision = self.propagator.notify(context, local_id, event);
-            self.filter_enqueue_decision(context, decision)
+            let decision = self.propagator.notify(
+                StatefulPropagationContext::new(context.stateful_trail, context.assignments),
+                local_id,
+                event,
+            );
+            self.filter_enqueue_decision(PropagationContext::new(context.assignments()), decision)
         } else {
             pumpkin_assert_simple!(local_id == self.reification_literal_id);
             EnqueueDecision::Enqueue

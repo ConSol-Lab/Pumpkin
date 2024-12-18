@@ -10,6 +10,7 @@ use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::propagation_context::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -102,7 +103,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -116,14 +117,14 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTablePerPointPropagator<
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context,
+            context.as_readonly(),
             self.is_time_table_empty,
         );
 
         // Note that the non-incremental proapgator does not make use of `result.updated` since it
         // propagates from scratch anyways
         update_bounds_task(
-            context,
+            context.as_readonly(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );

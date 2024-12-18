@@ -1,4 +1,5 @@
 use super::PropagatorId;
+use crate::basic_types::Trail;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::reason::Reason;
@@ -7,7 +8,30 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::EmptyDomain;
+use crate::engine::StateChange;
 use crate::pumpkin_assert_simple;
+
+pub(crate) struct StatefulPropagationContext<'a> {
+    pub(crate) stateful_trail: &'a mut Trail<StateChange>,
+    pub(crate) assignments: &'a Assignments,
+}
+
+impl<'a> StatefulPropagationContext<'a> {
+    pub(crate) fn new(
+        stateful_trail: &'a mut Trail<StateChange>,
+        assignments: &'a Assignments,
+    ) -> Self {
+        Self {
+            stateful_trail,
+            assignments,
+        }
+    }
+    pub(crate) fn as_readonly(&self) -> PropagationContext<'_> {
+        PropagationContext {
+            assignments: self.assignments,
+        }
+    }
+}
 
 /// [`PropagationContext`] is passed to propagators during propagation.
 /// It may be queried to retrieve information about the current variable domains such as the
@@ -105,6 +129,12 @@ mod private {
     }
 
     impl HasAssignments for PropagationContextMut<'_> {
+        fn assignments(&self) -> &Assignments {
+            self.assignments
+        }
+    }
+
+    impl HasAssignments for StatefulPropagationContext<'_> {
         fn assignments(&self) -> &Assignments {
             self.assignments
         }

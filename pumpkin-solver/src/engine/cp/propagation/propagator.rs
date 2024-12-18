@@ -2,6 +2,7 @@ use downcast_rs::impl_downcast;
 use downcast_rs::Downcast;
 
 use super::explanation_context::ExplanationContext;
+use super::propagation_context::StatefulPropagationContext;
 use super::propagator_initialisation_context::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
@@ -90,7 +91,7 @@ pub(crate) trait Propagator: Downcast {
     /// [`PropagatorInitialisationContext::register()`].
     fn notify(
         &mut self,
-        _context: PropagationContext,
+        _context: StatefulPropagationContext,
         _local_id: LocalId,
         _event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
