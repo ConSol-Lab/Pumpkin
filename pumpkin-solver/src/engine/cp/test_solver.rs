@@ -13,7 +13,7 @@ use crate::basic_types::Trail;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
-use crate::engine::propagation::propagation_context::StatefulPropagationContext;
+use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;

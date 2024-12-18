@@ -1,7 +1,7 @@
-use super::PropagatorId;
 use crate::basic_types::Trail;
 use crate::engine::conflict_analysis::SemanticMinimiser;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::PropagatorId;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;

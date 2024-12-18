@@ -121,7 +121,7 @@ impl PropagatorInitialisationContext<'_> {
 
 mod private {
     use super::*;
-    use crate::engine::propagation::propagation_context::HasAssignments;
+    use crate::engine::propagation::contexts::HasAssignments;
 
     impl HasAssignments for PropagatorInitialisationContext<'_> {
         fn assignments(&self) -> &Assignments {

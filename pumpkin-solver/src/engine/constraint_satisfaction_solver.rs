@@ -16,7 +16,7 @@ use super::conflict_analysis::LearnedNogood;
 use super::conflict_analysis::NoLearningResolver;
 use super::conflict_analysis::SemanticMinimiser;
 use super::nogoods::Lbd;
-use super::propagation::propagation_context::StatefulPropagationContext;
+use super::propagation::contexts::StatefulPropagationContext;
 use super::propagation::store::PropagatorStore;
 use super::propagation::PropagatorId;
 use super::solver_statistics::SolverStatistics;
