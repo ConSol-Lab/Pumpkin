@@ -10,6 +10,7 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::Trail;
 use crate::conjunction;
 use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::Mode;
@@ -30,9 +31,11 @@ use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::DomainFaithfulness;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
 use crate::engine::SolverStatistics;
+use crate::engine::StateChange;
 use crate::predicate;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
@@ -230,7 +233,13 @@ impl Propagator for NogoodPropagator {
                                         nogood[i].get_domain() == updated_domain_id
                                     );
                                     // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
+                                    Self::add_watcher(
+                                        context.domain_faithfulness,
+                                        context.stateful_trail,
+                                        &mut self.watch_lists,
+                                        nogood[1],
+                                        nogood_id,
+                                    );
 
                                     // No propagation is taking place, go to the next nogood.
                                     break;
@@ -365,7 +374,13 @@ impl Propagator for NogoodPropagator {
                                         nogood[i].get_domain() == updated_domain_id
                                     );
                                     // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
+                                    Self::add_watcher(
+                                        context.domain_faithfulness,
+                                        context.stateful_trail,
+                                        &mut self.watch_lists,
+                                        nogood[1],
+                                        nogood_id,
+                                    );
 
                                     // No propagation is taking place, go to the next nogood.
                                     break;
@@ -537,6 +552,8 @@ impl Propagator for NogoodPropagator {
                                     } else {
                                         // Add this nogood to the watch list of the new watcher.
                                         Self::add_watcher(
+                                            context.domain_faithfulness,
+                                            context.stateful_trail,
                                             &mut self.watch_lists,
                                             nogood[1],
                                             nogood_id,
@@ -695,7 +712,13 @@ impl Propagator for NogoodPropagator {
                                     // Add this nogood to the watch list of the new watcher.
                                     // Ensure there is an entry.
                                     // Add this nogood to the watch list of the new watcher.
-                                    Self::add_watcher(&mut self.watch_lists, nogood[1], nogood_id);
+                                    Self::add_watcher(
+                                        context.domain_faithfulness,
+                                        context.stateful_trail,
+                                        &mut self.watch_lists,
+                                        nogood[1],
+                                        nogood_id,
+                                    );
 
                                     // No propagation is taking place, go to the next nogood.
                                     break;
@@ -938,11 +961,15 @@ impl NogoodPropagator {
 
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
+            context.domain_faithfulness,
+            context.stateful_trail,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
         );
         NogoodPropagator::add_watcher(
+            context.domain_faithfulness,
+            context.stateful_trail,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
@@ -1044,11 +1071,15 @@ impl NogoodPropagator {
             self.permanent_nogoods.push(new_id);
 
             NogoodPropagator::add_watcher(
+                context.domain_faithfulness,
+                context.stateful_trail,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
             );
             NogoodPropagator::add_watcher(
+                context.domain_faithfulness,
+                context.stateful_trail,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
@@ -1063,6 +1094,8 @@ impl NogoodPropagator {
 impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
+        domain_faithfulness: &mut DomainFaithfulness,
+        stateful_trail: &mut Trail<StateChange>,
         watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
@@ -1074,6 +1107,8 @@ impl NogoodPropagator {
                 NogoodWatchList::default(),
             );
         }
+
+        domain_faithfulness.watch_predicate(predicate, stateful_trail);
 
         // Then we add this nogood to the watch list of the new watcher.
         match predicate {

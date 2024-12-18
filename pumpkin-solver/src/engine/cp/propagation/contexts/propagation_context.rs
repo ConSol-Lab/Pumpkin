@@ -7,6 +7,7 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
+use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
 use crate::engine::StateChange;
 use crate::pumpkin_assert_simple;
@@ -58,6 +59,8 @@ pub(crate) struct PropagationContextMut<'a> {
     pub(crate) reason_store: &'a mut ReasonStore,
     pub(crate) propagator_id: PropagatorId,
     pub(crate) semantic_minimiser: &'a mut SemanticMinimiser,
+    pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
+    pub(crate) stateful_trail: &'a mut Trail<StateChange>,
     reification_literal: Option<Literal>,
 }
 
@@ -66,14 +69,18 @@ impl<'a> PropagationContextMut<'a> {
         assignments: &'a mut Assignments,
         reason_store: &'a mut ReasonStore,
         semantic_minimiser: &'a mut SemanticMinimiser,
+        domain_faithfulness: &'a mut DomainFaithfulness,
         propagator_id: PropagatorId,
+        stateful_trail: &'a mut Trail<StateChange>,
     ) -> Self {
         PropagationContextMut {
             assignments,
             reason_store,
             propagator_id,
+            domain_faithfulness,
             semantic_minimiser,
             reification_literal: None,
+            stateful_trail,
         }
     }
 
