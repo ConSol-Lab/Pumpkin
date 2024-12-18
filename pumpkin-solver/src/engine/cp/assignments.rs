@@ -51,6 +51,14 @@ impl Default for Assignments {
 pub struct EmptyDomain;
 
 impl Assignments {
+    pub(crate) fn get_holes_on_decision_level(
+        &self,
+        domain_id: DomainId,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + use<'_> {
+        self.domains[domain_id].get_holes_from_decision_level(decision_level)
+    }
+
     pub(crate) fn increase_decision_level(&mut self) {
         self.trail.increase_decision_level()
     }
@@ -1329,6 +1337,16 @@ impl IntegerDomain {
                 }
             }
         }
+    }
+
+    pub(crate) fn get_holes_from_decision_level(
+        &self,
+        decision_level: usize,
+    ) -> impl Iterator<Item = i32> + use<'_> {
+        self.hole_updates
+            .iter()
+            .filter(move |entry| entry.decision_level == decision_level)
+            .map(|entry| entry.removed_value)
     }
 }
 

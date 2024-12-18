@@ -315,23 +315,33 @@ impl ConstraintSatisfactionSolver {
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
                         &mut self.stateful_trail,
+                        &self.assignments,
                     );
                 }
                 IntDomainEvent::LowerBound => {
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
                         &mut self.stateful_trail,
+                        &self.assignments,
                     );
                 }
                 IntDomainEvent::UpperBound => {
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
                         &mut self.stateful_trail,
+                        &self.assignments,
                     );
                 }
-                IntDomainEvent::Removal => {
-                    todo!()
-                }
+                IntDomainEvent::Removal => self
+                    .assignments
+                    .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
+                    .for_each(|value| {
+                        self.domain_faithfulness.has_been_updated(
+                            predicate!(domain != value),
+                            &mut self.stateful_trail,
+                            &self.assignments,
+                        );
+                    }),
             }
             Self::notify_nogood_propagator(
                 event,
@@ -356,6 +366,38 @@ impl ConstraintSatisfactionSolver {
                 );
             }
         }
+
+        let falsified = self
+            .domain_faithfulness
+            .drain_falsified_predicates()
+            .collect::<Vec<_>>();
+        let satisfied = self
+            .domain_faithfulness
+            .drain_satisfied_predicates()
+            .collect::<Vec<_>>();
+        if !falsified.is_empty() {
+            println!(
+                "Falsified: {:?}",
+                falsified
+                    .iter()
+                    .map(|predicate_id| self
+                        .domain_faithfulness
+                        .get_predicate_for_id(*predicate_id))
+                    .collect::<Vec<_>>()
+            );
+        }
+        if !satisfied.is_empty() {
+            println!(
+                "Satisfied: {:?}",
+                satisfied
+                    .iter()
+                    .map(|predicate_id| self
+                        .domain_faithfulness
+                        .get_predicate_for_id(*predicate_id))
+                    .collect::<Vec<_>>()
+            );
+        }
+
         self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
     }
 

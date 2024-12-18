@@ -1,5 +1,6 @@
 use std::ops::Not;
 
+use log::info;
 use log::warn;
 
 use super::LearnedNogoodSortingStrategy;
@@ -30,6 +31,7 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
+use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
 use crate::engine::EventSink;
@@ -239,6 +241,7 @@ impl Propagator for NogoodPropagator {
                                         &mut self.watch_lists,
                                         nogood[1],
                                         nogood_id,
+                                        context.assignments,
                                     );
 
                                     // No propagation is taking place, go to the next nogood.
@@ -380,6 +383,7 @@ impl Propagator for NogoodPropagator {
                                         &mut self.watch_lists,
                                         nogood[1],
                                         nogood_id,
+                                        context.assignments,
                                     );
 
                                     // No propagation is taking place, go to the next nogood.
@@ -557,6 +561,7 @@ impl Propagator for NogoodPropagator {
                                             &mut self.watch_lists,
                                             nogood[1],
                                             nogood_id,
+                                            context.assignments,
                                         );
                                     }
 
@@ -718,6 +723,7 @@ impl Propagator for NogoodPropagator {
                                         &mut self.watch_lists,
                                         nogood[1],
                                         nogood_id,
+                                        context.assignments,
                                     );
 
                                     // No propagation is taking place, go to the next nogood.
@@ -966,6 +972,7 @@ impl NogoodPropagator {
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
+            context.assignments,
         );
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
@@ -973,6 +980,7 @@ impl NogoodPropagator {
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
+            context.assignments,
         );
 
         // Then we propagate the asserting predicate and as reason we give the index to the
@@ -1076,6 +1084,7 @@ impl NogoodPropagator {
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
+                context.assignments,
             );
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
@@ -1083,6 +1092,7 @@ impl NogoodPropagator {
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
+                context.assignments,
             );
 
             Ok(())
@@ -1099,6 +1109,7 @@ impl NogoodPropagator {
         watch_lists: &mut KeyedVec<DomainId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
+        assignments: &Assignments,
     ) {
         // First we resize the watch list to accomodate the new nogood
         if predicate.get_domain().id as usize >= watch_lists.len() {
@@ -1108,7 +1119,8 @@ impl NogoodPropagator {
             );
         }
 
-        domain_faithfulness.watch_predicate(predicate, stateful_trail);
+        info!("Watching predicate: {predicate}");
+        domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
 
         // Then we add this nogood to the watch list of the new watcher.
         match predicate {

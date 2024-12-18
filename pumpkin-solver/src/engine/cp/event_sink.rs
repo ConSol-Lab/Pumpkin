@@ -30,6 +30,7 @@ impl EventSink {
         }
         event_sink
     }
+
     pub(crate) fn grow(&mut self) {
         let _ = self.present.push(EnumSet::new());
     }
