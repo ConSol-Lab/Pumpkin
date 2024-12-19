@@ -1,15 +1,12 @@
 use core::f64;
-use std::cmp::min;
 use std::collections::VecDeque;
 use std::rc::Rc;
-use std::usize;
 
 use itertools::Itertools;
 use russcip::Model;
 use russcip::ObjSense;
 use russcip::ProblemOrSolving;
 use russcip::WithSolutions;
-use russcip::WithSolvingStats;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -102,11 +99,9 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             for (index_rhs, (duration_rhs, (start_rhs, finish_rhs))) in
                 durations.iter().take(index_lhs).zip(&intervals).enumerate()
             {
-                if self.parameters.static_incompatibilities[index_lhs][index_rhs]
-                    && duration_lhs + duration_rhs
-                        > finish_rhs.max(finish_lhs) - start_rhs.min(start_lhs)
+                if self.parameters.static_incompatibilities[index_lhs][index_rhs] &&
+                        duration_lhs + duration_rhs > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
-                    // eprintln!("Trivial clique {index_lhs} {index_rhs}");
                     return Some(
                         [index_lhs, index_rhs]
                             .iter()
@@ -116,126 +111,114 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 }
             }
         }
-        return None;
-        // Decompose the problem into the one of finding the conflict that fits into
-        // an interval [x..y), with x and y being the start/finish points for some of the intervals
+        // Split the timeline by the start and finish points from all intervals
         let mut time_points = intervals.iter().flat_map(|x| [x.0, x.1]).collect_vec();
         time_points.sort();
         time_points.dedup();
-        let mut best_clique: Option<Vec<usize>> = None;
-        let mut candidate_intervals = (0..time_points.len())
-            .flat_map(|rhs_index| {
-                let rhs = time_points[rhs_index];
-                let all_tasks = all_tasks.clone();
-                let intervals = intervals.clone();
-                let durations = durations.clone();
-                time_points[0..rhs_index].iter().filter_map(move |&lhs| {
-                    let total_duration = (0..all_tasks.len())
-                        .filter(|&ix| lhs <= intervals[ix].0 && intervals[ix].1 <= rhs)
-                        .map(|ix| durations[ix])
-                        .sum::<i32>();
-                    if total_duration > rhs - lhs {
-                        Some((lhs, rhs))
-                    } else {
-                        None
-                    }
-                })
+        // Construct a MIP model for finding an conflict-generating clique
+        // of smallest cardinality
+        let mut model = Model::new()
+            .hide_output()
+            .include_default_plugins()
+            .create_prob("conflict_discovery")
+            .set_obj_sense(ObjSense::Minimize);
+        // Binary variables encoding interval selection
+        let interval_vars = durations
+            .iter()
+            .enumerate()
+            .map(|(ix, _)| {
+                model.add_var(
+                    0.,
+                    1.,
+                    1.,
+                    format!("x{ix}").as_str(),
+                    russcip::VarType::Binary,
+                )
             })
             .collect_vec();
-        candidate_intervals.sort_by_key(|(lhs, rhs)| {
-            -(0..all_tasks.len())
-                .filter(|&ix| *lhs <= intervals[ix].0 && intervals[ix].1 <= *rhs)
-                .map(|ix| durations[ix])
-                .sum::<i32>()
-        });
-        for (lhs, rhs) in candidate_intervals.iter().take(5).cloned() {
-            // for rhs_index in 0..time_points.len() {
-            //     let rhs = time_points[rhs_index];
-            //     for &lhs in time_points[0..rhs_index].iter() {
-            // Filter the fitting intervals and construct the clique-finding MIP
-            let indices = (0..all_tasks.len())
-                .filter(|&ix| lhs <= intervals[ix].0 && intervals[ix].1 <= rhs)
-                .collect_vec();
-            let mut model = Model::new()
-                .hide_output()
-                .include_default_plugins()
-                .create_prob("conflict_discovery")
-                .set_obj_sense(ObjSense::Minimize);
-            // Binary variables encoding interval selection
-            let vars = indices
-                .iter()
-                .map(|ix| {
-                    model.add_var(
+        // Binary variables encoding time segment selection
+        let time_segments = time_points
+            .iter().skip(1)
+            .zip(time_points.iter())
+            .map(|(&finish, &start)| (start, finish))
+            .collect_vec();
+        let time_segment_vars = time_segments
+            .iter()
+            .enumerate()
+            .map(|(ix, _)| {
+                model.add_var(
+                    0.,
+                    1.,
+                    0.,
+                    format!("t{ix}").as_str(),
+                    russcip::VarType::Binary,
+                )
+            })
+            .collect_vec();
+        // Duration bound
+        model.add_cons(
+            interval_vars.iter().chain(time_segment_vars.iter()).cloned().collect_vec(),
+            &durations.iter()
+                .cloned()
+                .chain(time_segments.iter().map(|(start, finish)| start - finish))
+                .map(|x| x as f64)
+                .collect_vec(),
+            1.0,
+            f64::INFINITY,
+            "duration",
+        );
+        // Interval choice implies choosing all contained time spand
+        for ((int_lhs, int_rhs), int_var) in intervals.iter().zip(interval_vars.iter()) {
+            for ((ts_lhs, ts_rhs), ts_var) in time_segments.iter().zip(time_segment_vars.iter()) {
+                if int_lhs <= ts_lhs && ts_rhs <= int_rhs {
+                    model.add_cons(
+                        vec![int_var.clone(), ts_var.clone()],
+                        &[-1.0, 1.0],
                         0.,
-                        1.,
-                        1.,
-                        format!("x{ix}").as_str(),
-                        russcip::VarType::Binary,
-                    )
-                })
-                .collect_vec();
-            // Duration bound
-            model.add_cons(
-                vars.clone(),
-                &indices.iter().map(|&ix| durations[ix] as f64).collect_vec(),
-                (rhs - lhs + 1) as f64,
-                f64::INFINITY,
-                "duration",
-            );
-            // Clique constraints
-            for (j, &b) in indices.iter().enumerate() {
-                for (i, &a) in indices[0..j].iter().enumerate() {
-                    if self.parameters.static_incompatibilities[a][b] {
-                        // Static incompatible tasks, do not constrain
-                    }
-                    // else if intervals[a].0.max(intervals[b].0)
-                    //     >= intervals[a].1.min(intervals[b].1)
-                    // {
-                    //     // Disjoint intervals, do not constrain
-                    // }
-                    else {
-                        // Forbid choosing both intervals
-                        model.add_cons(
-                            vec![vars[i].clone(), vars[j].clone()],
-                            &[1.0, 1.0],
-                            0.,
-                            1.,
-                            format!("clique_{}_{}", a, b).as_str(),
-                        );
-                    }
-                }
-            }
-            let solved_model = model.solve();
-            let mut new_clique = vec![];
-            match solved_model.status() {
-                russcip::Status::Optimal => {
-                    // An optimal clique is discovered, store it
-                    let sol = solved_model.best_sol().unwrap();
-                    for (i, var) in vars.iter().enumerate() {
-                        if sol.val(var.clone()) > 1e-3 {
-                            new_clique.push(indices[i]);
-                        }
-                    }
-                    // eprintln!("{lhs}..{rhs} {new_clique:?}");
-                    if new_clique.len()
-                        < best_clique.as_ref().map(|x| x.len()).unwrap_or(usize::MAX)
-                    {
-                        best_clique = Some(new_clique);
-                    }
-                }
-                russcip::Status::Infeasible => {
-                    // No conflict exists, keep going
-                }
-                _ => {
-                    // Miscellaneous reason, stay away
+                        f64::INFINITY,
+                        format!("contain_impl_{}_{}_{}_{}", int_lhs, int_rhs, ts_lhs, ts_rhs).as_str()
+                    );
                 }
             }
         }
-        if let Some(indices) = best_clique.as_ref() {
-            eprintln!("The best clique is {indices:?}");
-        };
-        best_clique
-            .map(|indices: Vec<usize>| indices.iter().map(|&ix| all_tasks[ix].clone()).collect())
+        // Clique constraints
+        for (index_lhs, lhs_var) in interval_vars.iter().enumerate() {
+            for (index_rhs, rhs_var) in interval_vars.iter().enumerate() {
+                if self.parameters.static_incompatibilities[index_lhs][index_rhs]
+                {
+                    // Forbid choosing both intervals
+                    model.add_cons(
+                        vec![lhs_var.clone(), rhs_var.clone()],
+                        &[1.0, 1.0],
+                        0.,
+                        1.,
+                        format!("clique_{}_{}", index_lhs, index_rhs).as_str(),
+                    );
+                }
+            }
+        }
+        let solved_model = model.solve();
+        match solved_model.status() {
+            russcip::Status::Optimal => {
+                // An optimal clique is discovered, store it
+                let sol = solved_model.best_sol().unwrap();
+                Some(all_tasks.iter().enumerate().filter_map(|(ix, task)|  {
+                    if sol.val(interval_vars[ix].clone()) > 1e-3 {
+                        Some(task.clone())
+                    } else {
+                        None
+                    }
+                }).collect())
+            }
+            russcip::Status::Infeasible => {
+                // No conflict exists, keep going
+                None
+            }
+            _ => {
+                // Miscellaneous reason, stay away
+                None
+            }
+        }
     }
 }
 
