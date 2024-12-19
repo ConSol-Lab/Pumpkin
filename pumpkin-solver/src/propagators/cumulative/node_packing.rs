@@ -1,6 +1,7 @@
 use core::f64;
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::usize;
 
 use itertools::Itertools;
 use russcip::Model;
@@ -92,8 +93,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 )
             })
             .collect_vec();
-
-        //// Try finding a conflicting *pair* of tasks
+        // Try finding a conflicting *pair* of tasks
         for (index_lhs, (duration_lhs, (start_lhs, finish_lhs))) in
             durations.iter().zip(&intervals).enumerate()
         {
@@ -113,6 +113,49 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 }
             }
         }
+        // Run a greedy heuristic from all intervals
+        for (seed_index, (mut start, mut finish)) in intervals.iter().enumerate() {
+            let mut clique = vec![seed_index];
+            let mut remaining = (0..all_tasks.len()).filter(|&ix| ix != seed_index).collect_vec();
+            loop {
+                // Keep the intervals that not in the clique and can be added to a clique
+                remaining.retain(|&remaining_ix| {
+                    !clique.contains(&remaining_ix) && clique
+                        .iter()
+                        .all(|&clique_ix| self.parameters.static_incompatibilities[clique_ix][remaining_ix])
+                });
+                // Choose the interval that is not disconnected from [start, finish)
+                // and minimizes the length added to the interval, breaking ties
+                // in favor of intervals with longer durations.
+                let next_ix = remaining.iter().filter(|&&remaining_ix| {
+                    let (rem_start, rem_finish) = intervals[remaining_ix];
+                    if rem_start > finish || rem_finish < start {
+                        return false;
+                    }
+                    true
+                }).min_by_key(|&&remaining_ix| {
+                    let new_length = finish.max(intervals[remaining_ix].1) - start.min(intervals[remaining_ix].0);
+                    let new_duration = durations[remaining_ix];
+                    (new_length, -new_duration)
+                });
+                if let Some(&next_ix) = next_ix {
+                    clique.push(next_ix);
+                    start = start.min(intervals[next_ix].0);
+                    finish = finish.max(intervals[next_ix].1);
+                } else {
+                    break;
+                }
+            }
+            // Update the best clique if the overflow condition holds
+            if clique.iter().map(|&ix| durations[ix]).sum::<i32>() > finish - start {
+                return Some(clique
+                    .iter()
+                    .map(|&task_index| all_tasks[task_index].clone())
+                    .collect_vec()
+                );
+            }
+        }
+        return None;
         // Split the timeline by the start and finish points from all intervals
         let mut time_points = intervals.iter().flat_map(|x| [x.0, x.1]).collect_vec();
         time_points.sort();
