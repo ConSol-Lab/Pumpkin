@@ -15,7 +15,7 @@ use crate::variables::DomainId;
 
 #[derive(Default, Debug)]
 pub(crate) struct DomainFaithfulness {
-    predicate_to_id: PredicateIdGenerator,
+    pub(crate) predicate_to_id: PredicateIdGenerator,
 
     domain_id_to_faithfullness: KeyedVec<DomainId, Faithfullness>,
 
@@ -38,6 +38,14 @@ impl DomainFaithfulness {
 
     pub(crate) fn get_predicate_for_id(&self, predicate_id: PredicateId) -> Predicate {
         self.predicate_to_id.get_predicate(predicate_id).unwrap()
+    }
+
+    pub(crate) fn get_id_for_predicate(&mut self, predicate: Predicate) -> Option<PredicateId> {
+        if !self.predicate_to_id.has_id_for_predicate(predicate) {
+            return None;
+        }
+
+        Some(self.predicate_to_id.get_id(predicate))
     }
 
     pub(crate) fn has_been_updated(
