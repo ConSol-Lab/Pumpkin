@@ -8,6 +8,7 @@ use super::PropagationContextMut;
 use super::PropagatorInitialisationContext;
 #[cfg(doc)]
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropagationStatusCP;
 #[cfg(doc)]
 use crate::create_statistics_struct;
@@ -118,6 +119,10 @@ pub(crate) trait Propagator: Downcast {
         _event: OpaqueDomainEvent,
     ) {
     }
+
+    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {}
+
+    fn notify_predicate_id_falsified(&mut self, predicate_id: PredicateId) {}
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.

@@ -7,7 +7,7 @@ pub(crate) struct NogoodWatchList {
 }
 
 impl NogoodWatchList {
-    pub(crate) fn drain_watchers(&mut self) -> impl Iterator<Item = NogoodId> + use<'_> {
+    pub(crate) fn drain_watchers(&mut self) -> impl Iterator<Item = NogoodId> + '_ {
         self.watchers.drain(..)
     }
 

@@ -151,7 +151,12 @@ impl Propagator for NogoodPropagator {
         0
     }
 
+    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {
+        self.updated_predicate_ids.push(predicate_id);
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
+        info!("Nogood Propagator Propagating");
         pumpkin_assert_advanced!(self.debug_is_properly_watched(&mut context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
@@ -165,11 +170,14 @@ impl Propagator for NogoodPropagator {
             );
         }
 
-        let old_trail_position = context.assignments.trail.len() - 1;
-
         // TODO: should drop all elements afterwards
         let updates = self.updated_predicate_ids.drain(..).collect::<Vec<_>>();
         for predicate_id in updates {
+            pumpkin_assert_moderate!(context.is_predicate_satisfied(
+                context
+                    .domain_faithfulness
+                    .get_predicate_for_id(predicate_id)
+            ));
             let mut index = 0;
             while index < self.watch_lists[predicate_id].watchers.len() {
                 let nogood_id = self.watch_lists[predicate_id].watchers[index];
@@ -240,9 +248,6 @@ impl Propagator for NogoodPropagator {
                 let result = context.post_predicate(!nogood[0], reason);
                 // If the propagation lead to a conflict.
                 if let Err(e) = result {
-                    // Stop any further propagation and report the conflict.
-                    // Readd the remaining watchers to the watch list.
-                    todo!();
                     return Err(e.into());
                 }
                 index += 1;
@@ -295,7 +300,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated, reason = "should be refactored later")]
+                #[allow(deprecated)]
                 context.assignments(),
             );
 
@@ -370,6 +375,8 @@ impl NogoodPropagator {
             .learned_clause_statistics
             .average_lbd
             .add_term(lbd as u64);
+
+        info!("Adding learned nogood: {:?}", nogood,);
 
         // Add the nogood to the database.
         //
@@ -541,7 +548,6 @@ impl NogoodPropagator {
             );
         }
 
-        info!("Watching predicate: {predicate}");
         let predicate_id =
             domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
         while watch_lists.len() <= predicate_id.index() {

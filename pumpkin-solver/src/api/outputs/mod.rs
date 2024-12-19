@@ -15,7 +15,6 @@ use crate::Solver;
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "these will not be stored in bulk, so this is not an issue"
 )]
 pub enum SatisfactionResult {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].
@@ -31,7 +30,6 @@ pub enum SatisfactionResult {
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "these will not be stored in bulk, so this is not an issue"
 )]
 pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].

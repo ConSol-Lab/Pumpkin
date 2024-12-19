@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use clap::ValueEnum;
 use drcp_format::steps::StepId;
+use log::info;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
@@ -31,6 +32,7 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
+use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -367,38 +369,29 @@ impl ConstraintSatisfactionSolver {
             }
         }
 
-        let falsified = self
-            .domain_faithfulness
-            .drain_falsified_predicates()
-            .collect::<Vec<_>>();
-        let satisfied = self
-            .domain_faithfulness
-            .drain_satisfied_predicates()
-            .collect::<Vec<_>>();
-        if !falsified.is_empty() {
-            println!(
-                "Falsified: {:?}",
-                falsified
-                    .iter()
-                    .map(|predicate_id| self
-                        .domain_faithfulness
-                        .get_predicate_for_id(*predicate_id))
-                    .collect::<Vec<_>>()
-            );
-        }
-        if !satisfied.is_empty() {
-            println!(
-                "Satisfied: {:?}",
-                satisfied
-                    .iter()
-                    .map(|predicate_id| self
-                        .domain_faithfulness
-                        .get_predicate_for_id(*predicate_id))
-                    .collect::<Vec<_>>()
-            );
-        }
+        self.notify_predicate_id_satisfied();
+        self.notify_predicate_id_falsified();
 
         self.last_notified_cp_trail_index = self.assignments.num_trail_entries();
+    }
+
+    fn notify_predicate_id_falsified(&mut self) {
+        // At the moment this does nothing
+    }
+
+    fn notify_predicate_id_satisfied(&mut self) {
+        for predicate_id in self
+            .domain_faithfulness
+            .drain_satisfied_predicates()
+            .collect::<Vec<_>>()
+        {
+            let nogood_propagator = &mut self.propagators[Self::get_nogood_propagator_id()];
+            info!(
+                "Detected {}",
+                self.domain_faithfulness.get_predicate_for_id(predicate_id)
+            );
+            nogood_propagator.notify_predicate_id_satisfied(predicate_id);
+        }
     }
 
     /// This is a temporary accessor to help refactoring.
@@ -944,6 +937,10 @@ impl ConstraintSatisfactionSolver {
         self.assignments.increase_decision_level();
         self.stateful_trail.increase_decision_level();
         self.reason_store.increase_decision_level();
+        info!(
+            "New decision level: {}",
+            self.assignments.get_decision_level()
+        )
     }
 
     /// Changes the state based on the conflict analysis. It performs the following:
@@ -1122,10 +1119,7 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
-    )]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn backtrack<BrancherType: Brancher + ?Sized>(
         assignments: &mut Assignments,
         last_notified_cp_trail_index: &mut usize,
@@ -1139,6 +1133,7 @@ impl ConstraintSatisfactionSolver {
         brancher: &mut BrancherType,
         stateful_trail: &mut Trail<StateChange>,
     ) {
+        info!("Backtracking to level {backtrack_level}");
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
         brancher.on_backtrack();
@@ -1226,6 +1221,7 @@ impl ConstraintSatisfactionSolver {
 
     /// Main propagation loop.
     pub(crate) fn propagate(&mut self) {
+        info!("Started propagation loop...");
         // Record the number of predicates on the trail for statistics purposes.
         let num_assigned_variables_old = self.assignments.num_trail_entries();
         // The initial domain events are due to the decision predicate.
@@ -1319,6 +1315,7 @@ impl ConstraintSatisfactionSolver {
             self.state.is_conflicting()
                 || DebugHelper::debug_fixed_point_propagation(&self.assignments, &self.propagators,)
         );
+        info!("Exited propagation loop...")
     }
 
     /// Introduces any root-level propagations to the proof by introducing them as
