@@ -92,15 +92,17 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 )
             })
             .collect_vec();
-        // Try finding a conflicting *pair* of tasks
+
+        //// Try finding a conflicting *pair* of tasks
         for (index_lhs, (duration_lhs, (start_lhs, finish_lhs))) in
             durations.iter().zip(&intervals).enumerate()
         {
             for (index_rhs, (duration_rhs, (start_rhs, finish_rhs))) in
                 durations.iter().take(index_lhs).zip(&intervals).enumerate()
             {
-                if self.parameters.static_incompatibilities[index_lhs][index_rhs] &&
-                        duration_lhs + duration_rhs > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
+                if self.parameters.static_incompatibilities[index_lhs][index_rhs]
+                    && duration_lhs + duration_rhs
+                        > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
                     return Some(
                         [index_lhs, index_rhs]
@@ -138,7 +140,8 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             .collect_vec();
         // Binary variables encoding time segment selection
         let time_segments = time_points
-            .iter().skip(1)
+            .iter()
+            .skip(1)
             .zip(time_points.iter())
             .map(|(&finish, &start)| (start, finish))
             .collect_vec();
@@ -157,8 +160,13 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             .collect_vec();
         // Duration bound
         model.add_cons(
-            interval_vars.iter().chain(time_segment_vars.iter()).cloned().collect_vec(),
-            &durations.iter()
+            interval_vars
+                .iter()
+                .chain(time_segment_vars.iter())
+                .cloned()
+                .collect_vec(),
+            &durations
+                .iter()
                 .cloned()
                 .chain(time_segments.iter().map(|(start, finish)| start - finish))
                 .map(|x| x as f64)
@@ -176,7 +184,8 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                         &[-1.0, 1.0],
                         0.,
                         f64::INFINITY,
-                        format!("contain_impl_{}_{}_{}_{}", int_lhs, int_rhs, ts_lhs, ts_rhs).as_str()
+                        format!("contain_impl_{}_{}_{}_{}", int_lhs, int_rhs, ts_lhs, ts_rhs)
+                            .as_str(),
                     );
                 }
             }
@@ -184,8 +193,10 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         // Clique constraints
         for (index_lhs, lhs_var) in interval_vars.iter().enumerate() {
             for (index_rhs, rhs_var) in interval_vars.iter().enumerate() {
-                if self.parameters.static_incompatibilities[index_lhs][index_rhs]
-                {
+                if index_lhs == index_rhs {
+                    continue;
+                }
+                if !self.parameters.static_incompatibilities[index_lhs][index_rhs] {
                     // Forbid choosing both intervals
                     model.add_cons(
                         vec![lhs_var.clone(), rhs_var.clone()],
@@ -202,13 +213,37 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             russcip::Status::Optimal => {
                 // An optimal clique is discovered, store it
                 let sol = solved_model.best_sol().unwrap();
-                Some(all_tasks.iter().enumerate().filter_map(|(ix, task)|  {
-                    if sol.val(interval_vars[ix].clone()) > 1e-3 {
-                        Some(task.clone())
-                    } else {
-                        None
-                    }
-                }).collect())
+                println!("{}", sol.obj_val());
+                let collect = all_tasks
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ix, task)| {
+                        if sol.val(interval_vars[ix].clone()) > 1e-3 {
+                            Some(task.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let info = all_tasks
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ix, task)| {
+                        if sol.val(interval_vars[ix].clone()) > 1e-3 {
+                            Some((ix, durations[ix], intervals[ix]))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                println!("{info:?}");
+                if info.len() == 2 {
+                    let incompatible =
+                        self.parameters.static_incompatibilities[info[0].0][info[1].0];
+                    println!("{incompatible}");
+                }
+
+                Some(collect)
             }
             russcip::Status::Infeasible => {
                 // No conflict exists, keep going
