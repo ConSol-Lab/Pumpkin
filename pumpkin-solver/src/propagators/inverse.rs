@@ -1,3 +1,5 @@
+use flatzinc::predicates;
+
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
@@ -5,25 +7,30 @@ use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::{LocalId, PropagationContextMut, Propagator, PropagatorInitialisationContext};
 use crate::engine::variables::IntegerVariable;
 use std::collections::HashSet;
+use std::vec;
+use crate::predicate;
+use crate::predicates::Predicate;
+use crate::predicates::PropositionalConjunction;
+use log::debug;
 
 /// Propagator for the inverse constraint.
 /// 
 /// This propagator enforces the relationship between two arrays of integer variables (`lhs` and `rhs`),
 /// such that `lhs[i] = j` implies `rhs[j] = i`, and vice versa.
 #[derive(Clone, Debug)]
-pub(crate) struct InversePropagator<VA, VB, const N: usize> {
-    lhs: [VA; N],
-    rhs: [VB; N],
+pub(crate) struct InversePropagator<VA, VB> {
+    lhs: Vec<VA>,
+    rhs: Vec<VB>,
 }
 
-impl<VA, VB, const N: usize> InversePropagator<VA, VB, N> {
-    pub(crate) fn new(lhs: [VA; N], rhs: [VB; N]) -> Self {
+impl<VA, VB> InversePropagator<VA, VB> {
+    pub(crate) fn new(lhs: Vec<VA>, rhs: Vec<VB>) -> Self {
         Self { lhs, rhs }
     }
 }
 
-impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static, const N: usize> Propagator
-    for InversePropagator<VA, VB, N>
+impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static> Propagator
+    for InversePropagator<VA, VB>
 {
     fn name(&self) -> &str {
         "Inverse"
@@ -33,12 +40,14 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static, const N: usiz
     fn initialise_at_root(
         &mut self,
         context: &mut PropagatorInitialisationContext,
-    ) -> Result<(), crate::predicates::PropositionalConjunction> {
+    ) -> Result<(), PropositionalConjunction> {
         for (i, var) in self.lhs.iter().enumerate() {
+            //debug!("I am adding var with id {i} to lhs");
             context.register(var.clone(), DomainEvents::ANY_INT, LocalId::from(i.try_into().unwrap()));
         }
         for (i, var) in self.rhs.iter().enumerate() {
-            context.register(var.clone(), DomainEvents::ANY_INT, LocalId::from((N + i).try_into().unwrap()));
+            //debug!("I am adding var with id {i} to rhs");
+            context.register(var.clone(), DomainEvents::ANY_INT, LocalId::from((self.lhs.len() + i).try_into().unwrap()));
         }
         Ok(())
     }
@@ -48,60 +57,202 @@ impl<VA: IntegerVariable + 'static, VB: IntegerVariable + 'static, const N: usiz
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
+        let n = self.lhs.len(); // dynamically determine size
         // enforce arc consistency
-        for i in 0..N {
+        for i in 0..n {
             let lhs_values: Vec<_> = context.iterate_domain(&self.lhs[i]).collect();
             for value in lhs_values {
                 // remove illegal vals
-                if value < 0 || value >= N as i32 {
-                    context.remove(&self.lhs[i], value, conjunction!([self.lhs[i] != value]))?;
-                    continue;
-                }
-    
+                // if value < 1 || value > n as i32 {
+                //     context.remove(&self.lhs[i], value, conjunction!([self.lhs[i] != value]))?;
+                //     continue;
+                // }
                 // if lhs[i] = j rhs[j] must include i
                 let is_in_rhs = context
-                    .iterate_domain(&self.rhs[value as usize])
-                    .any(|v| v == i as i32);
+                    .iterate_domain(&self.rhs[(value-1) as usize])
+                    .any(|v| v == (i+1) as i32);
                 if !is_in_rhs {
-                    context.remove(&self.lhs[i], value, conjunction!([self.rhs[value as usize] != i as i32]))?;
+                    context.remove(&self.lhs[i], value, conjunction!([self.rhs[(value-1) as usize] != (i +1) as i32]))?;
                 }
             }
-    
+            //debug!("I made it through lhs");
             let rhs_values: Vec<_> = context.iterate_domain(&self.rhs[i]).collect();
             for value in rhs_values {
-                //remove illegal vals
-                if value < 0 || value >= N as i32 {
-                    context.remove(&self.rhs[i], value, conjunction!([self.rhs[i] != value]))?;
-                    continue;
-                }
-    
-                // if rhs[i] = j lhs[j] must include i
+                // remove illegal vals
+                // if value < 1 || value > n as i32 {
+                //     context.remove(&self.rhs[i], value, conjunction!([self.rhs[i] != value]))?;
+                //     continue;
+                // }
+                // if lhs[i] = j rhs[j] must include i
                 let is_in_lhs = context
-                    .iterate_domain(&self.lhs[value as usize])
-                    .any(|v| v == i as i32);
+                    .iterate_domain(&self.lhs[(value-1) as usize])
+                    .any(|v| v == (i+1) as i32);
                 if !is_in_lhs {
-                    context.remove(&self.rhs[i], value, conjunction!([self.lhs[value as usize] != i as i32]))?;
+                    context.remove(&self.rhs[i], value, conjunction!([self.lhs[(value-1) as usize] != (i +1) as i32]))?;
                 }
+            }
+            //debug!("I made it through rhs");
+        }
+        // debug!("In lhs the vars:");
+        // for i in 0..n {
+        //     debug!("   {i} have domains containing:");
+        //     let lhs_values: Vec<_> = context.iterate_domain(&self.lhs[i]).collect();
+        //     for value in lhs_values {
+        //         let val = value - 1; 
+        //         debug!("      {val}");
+        //     }
+        // }
+        // debug!("In rhs the vars:");
+        // for i in 0..n {
+        //     debug!("   {i} have domains containing:");
+        //     let rhs_values: Vec<_> = context.iterate_domain(&self.rhs[i]).collect();
+        //     for value in rhs_values {
+        //         let val = value - 1; 
+        //         debug!("      {val}");
+        //     }
+        // }
+        let mut graph = vec![vec![]; 2 * n];
+        for i in 0..n {
+            for value in context.iterate_domain(&self.lhs[i]) {
+                let j = (value-1) as usize;
+                graph[i].push(n + j);
+                graph[n + j].push(i);
             }
         }
 
-        let mut graph = vec![vec![]; 2 * N];
-        for i in 0..N {
-            for value in context.iterate_domain(&self.lhs[i]) {
-                let j = value as usize;
-                graph[i].push(N + j);
-                graph[N + j].push(i);
-            }
-        }
 
         // Compute maximum matching
-        let matching = maximum_matching(&graph, N);
+        let matching = maximum_matching(&graph, n);
         if matching.iter().any(|x| x.is_none()) {
-            let dm_result = dm_decomposition(&graph, &matching, N);
+            let (d1, c1, a1, d2, c2, a2) = dm_decomposition(&graph, &matching, n);
+            //debug!("i did dm decomp");
+            let mut predicates_res: Vec<Predicate> = Vec::new();
+            // predicates_res.push(predicate!(self.lhs[0] != (n+1) as i32));
 
-            return Err(conjunction!().into());//todo
+
+            //------------------------------------------------------------------------------//
+            //******************************************************************************//
+            //******************************NAIVE EXPLANATION*******************************//
+            //******************************************************************************//
+            //------------------------------------------------------------------------------//
+            // debug!("{:?}", &graph);
+
+            // for var in 0..n{
+            //     let domain_values: HashSet<i32> = context.iterate_domain(&self.lhs[var]).collect();
+            //     let ub = context.upper_bound(&self.lhs[var]);
+            //     let lb = context.lower_bound(&self.lhs[var]);
+            //     if ub == lb {
+            //         debug!("upper and lower are equal");
+            //         //predicates_res.push(predicate!(self.lhs[var] != lb));
+            //         //continue;
+            //     }
+            //     predicates_res.push(predicate!(self.lhs[var] >= lb));
+            //     predicates_res.push(predicate!(self.lhs[var] <= ub));
+            //     for value in lb..(ub+1){
+            //         if !domain_values.contains(&(value)) && value >= lb && value <= ub{
+            //             predicates_res.push(predicate!(self.lhs[var] != value));
+            //         }
+            //     }
+            // }
+            // for var in 0..n{
+            //     let domain_values: HashSet<i32> = context.iterate_domain(&self.rhs[var]).collect();
+            //     let ub = context.upper_bound(&self.rhs[var]);
+            //     let lb = context.lower_bound(&self.rhs[var]);
+            //     if ub == lb {
+            //         debug!("upper and lower are equal");
+            //         //predicates_res.push(predicate!(self.rhs[var] != lb));
+            //         //continue;
+            //     }
+            //     predicates_res.push(predicate!(self.rhs[var] >= lb));
+            //     predicates_res.push(predicate!(self.rhs[var] <= ub));
+            //     for value in lb..(ub+1){
+            //         if !domain_values.contains(&(value)) && value >= lb && value <= ub{
+            //             predicates_res.push(predicate!(self.rhs[var] != value));
+            //         }
+            //     }
+            // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            for var in &d1 {
+                let var1 = var.clone();
+                if var1 <= n {
+                    let domain_values: HashSet<i32> = context.iterate_domain(&self.lhs[var1]).collect();
+                    let ub = context.upper_bound(&self.lhs[var1]);
+                    let lb = context.lower_bound(&self.lhs[var1]);
+                    predicates_res.push(predicate!(self.lhs[var1] >= lb));
+                    predicates_res.push(predicate!(self.lhs[var1] <= ub));
+                    for value in lb..(ub+1){
+                        if !domain_values.contains(&(value)) && value >= lb && value <= ub{
+                            predicates_res.push(predicate!(self.lhs[var1] != value));
+                        }
+                    }
+                }
+            }
+            // for var in &d2 {
+            //     debug!("{var}");
+            //     let var1 = var-n;
+            //     if var1 <= n {
+            //         let domain_values: HashSet<i32> = context.iterate_domain(&self.rhs[var1]).collect();
+            //         let ub = context.upper_bound(&self.rhs[var1]);
+            //         let lb = context.lower_bound(&self.rhs[var1]);
+            //         if ub == lb {
+            //             debug!("upper and lower are equal");
+            //             predicates_res.push(predicate!(self.rhs[var1] != lb));
+            //             continue;
+            //         }
+            //         predicates_res.push(predicate!(self.rhs[var1] >= lb));
+            //         predicates_res.push(predicate!(self.rhs[var1] <= ub));
+            //         for value in 0..n as i32 {
+            //             if !domain_values.contains(&(value+1)) && value+1 >= lb && value+1 <= ub{
+            //                 predicates_res.push(predicate!(self.rhs[var1] != value+1));
+            //             }
+            //         }
+            //     }
+            // }
+            // debug!("i added preds for d1");
+            // // Add predicates for c1
+            // debug!("c1 contains the following");
+            for var in c1 {
+                if var <= n {
+                    let domain_values: HashSet<i32> = context.iterate_domain(&self.lhs[var]).collect();
+                    for value in a2.iter().chain(d2.iter()).cloned() {
+                        if value >= n && !domain_values.contains(&((value - n + 1) as i32)) {
+                            predicates_res.push(predicate!(self.lhs[var] != (value - n + 1) as i32));
+                        }
+                    }
+                }
+            }
+
+            // for var in c2 {
+            //     let var1 = var-n;
+            //     if var1 <= n {
+            //         let domain_values: HashSet<i32> = context.iterate_domain(&self.rhs[var1]).collect();
+            //         for value in a1.iter().chain(d1.iter()).cloned() {
+            //             if value >= n && !domain_values.contains(&((value + 1) as i32)) {
+            //                 //println!("index lhs with: {}",var);
+            //                 //println!("does not contain: {}",value-n);
+            //                 predicates_res.push(predicate!(self.rhs[var1] != (value + 1) as i32));
+            //             }
+            //         }
+            //     }
+            // }
+            //debug!("{:?}",predicates_res);
+            // Return failure with combined predicates
+            return Err(PropositionalConjunction::new(predicates_res).into());
         }
-
         Ok(())
     }    
 }
@@ -149,6 +300,7 @@ fn alternating_bfs(
     matching: &[Option<usize>],
     n: usize,
 ) -> (HashSet<usize>, HashSet<usize>) {
+    //debug!("{:?}", graph);
     use std::collections::{HashSet, VecDeque};
 
     let mut d1 = HashSet::new(); // even level set
@@ -157,12 +309,15 @@ fn alternating_bfs(
     let mut visited = HashSet::new();
 
     // initialize the queue with exposed vertices
+    //debug!("exposed vertices are:");
     for &v in exposed_vertices {
+        //debug!("{v}");
         queue.push_back((v, 0)); // (vertex, level)
         visited.insert(v);
     }
 
     while let Some((current, level)) = queue.pop_front() {
+        
         if level % 2 == 0 {
             d1.insert(current);
         } else {
@@ -236,21 +391,21 @@ mod tests {
         let mut solver = TestSolver::default();
 
         const N: usize = 3; 
-        let lhs: [DomainId; N] = [solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1)];
-        let rhs: [DomainId; N] = [solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1)];
+        let lhs: [DomainId; N] = [solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1)];
+        let rhs: [DomainId; N] = [solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1)];
 
-        let propagator = InversePropagator::new(lhs, rhs);
+        let propagator = InversePropagator::new(lhs.to_vec(), rhs.to_vec());
         let propagator_id = solver.new_propagator(propagator).unwrap();
 
         solver.propagate_until_fixed_point(propagator_id).unwrap();
         for i in 0..N {
             for j in 0..N {
-                let contains_lhs = lhs[i].contains(&solver.assignments, j as i32);
-                let contains_rhs = rhs[j].contains(&solver.assignments, i as i32);
+                let contains_lhs = lhs[i].contains(&solver.assignments, (j+1) as i32);
+                let contains_rhs = rhs[j].contains(&solver.assignments, (i+1) as i32);
                 assert_eq!(
                     contains_lhs, contains_rhs,
                     "Initial consistency failed: lhs[{i}] = {j} and rhs[{j}] = {i}"
@@ -264,22 +419,22 @@ mod tests {
     fn test_inverse_propagator_removal() {
         let mut solver = TestSolver::default();
 
-        const N: usize = 3;
-        let lhs: [DomainId; N] = [solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1)];
-        let rhs: [DomainId; N] = [solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1),
-                                solver.new_variable(0, N as i32 - 1)];
+        const N: usize = 3; 
+        let lhs: [DomainId; N] = [solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1)];
+        let rhs: [DomainId; N] = [solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1),
+                                solver.new_variable(1, (N+1) as i32 - 1)];
 
-        let propagator = InversePropagator::new(lhs, rhs);
+        let propagator = InversePropagator::new(lhs.to_vec(), rhs.to_vec());
         let propagator_id = solver.new_propagator(propagator).unwrap();
 
         lhs[0].remove(&mut solver.assignments, 2, None).unwrap();
         solver.propagate_until_fixed_point(propagator_id).unwrap();
 
         assert!(
-            !rhs[2].contains(&solver.assignments, 0),
+            !rhs[1].contains(&solver.assignments, 1),
             "rhs[2] should not contain 0 after removal from lhs[0]"
         );
     }
@@ -300,7 +455,7 @@ mod tests {
                                 solver.new_variable(0, N as i32 - 1),
                                 solver.new_variable(0, N as i32 - 1)];
 
-        let propagator = InversePropagator::new(lhs, rhs);
+        let propagator = InversePropagator::new(lhs.to_vec(), rhs.to_vec());
         let propagator_id = solver.new_propagator(propagator).unwrap();
 
         lhs[0].set_lower_bound(&mut solver.assignments, 3, None).unwrap();
@@ -335,7 +490,7 @@ mod tests {
             solver.new_variable(0, N as i32 - 1),
         ];
     
-        let propagator = InversePropagator::new(lhs, rhs);
+        let propagator = InversePropagator::new(lhs.to_vec(), rhs.to_vec());
         let propagator_id = solver.new_propagator(propagator).unwrap();
 
         lhs[0].remove(&mut solver.assignments, 1, None).unwrap();
@@ -494,5 +649,36 @@ mod tests {
         assert_eq!(d2, create_hashset(vec![8,9]));
         assert_eq!(c2, create_hashset(vec![6,7]));
         assert_eq!(a2, create_hashset(vec![5]));
+    }
+
+    
+    //TEST FULL PROPOGATION
+    #[test]
+    fn test_partial_matching_propogation_error() {
+        let mut solver = TestSolver::default();
+
+        const N: usize = 5;
+        let lhs: [DomainId; N] = [
+            solver.new_variable(0, 0),
+            solver.new_variable(0, 0),
+            solver.new_variable(0, 1),
+            solver.new_variable(1, 2),
+            solver.new_variable(1, 4),
+        ];
+        let rhs: [DomainId; N] = [
+            solver.new_variable(0, 2),
+            solver.new_variable(2, 3),
+            solver.new_variable(3, 4),
+            solver.new_variable(4, 4),
+            solver.new_variable(4, 4),
+        ];
+    
+        let propagator = InversePropagator::new(lhs.to_vec(), rhs.to_vec());
+        let propagator_id = solver.new_propagator(propagator).unwrap();
+
+        let result = solver.propagate(propagator_id);
+        let mut predicates_res = Vec::<Predicate>::new();
+        assert_eq!(result,Err(PropositionalConjunction::new(predicates_res).into()))
+
     }
 }

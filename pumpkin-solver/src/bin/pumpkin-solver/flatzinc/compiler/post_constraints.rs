@@ -201,6 +201,7 @@ pub(crate) fn run(
 
             "pumpkin_cumulative" => compile_cumulative(context, exprs, &options)?,
             "pumpkin_cumulative_var" => todo!("The `cumulative` constraint with variable duration/resource consumption/bound is not implemented yet!"),
+            "pumpkin_inverse" => compile_inverse(context, exprs,annos)?,
             unknown => todo!("unsupported constraint {unknown}"),
         };
 
@@ -691,4 +692,16 @@ fn compile_all_different(
     Ok(constraints::all_different(variables)
         .post(context.solver, None)
         .is_ok())
+}
+
+fn compile_inverse(
+    context: &mut CompilationContext,
+    exprs: &[flatzinc::Expr],
+    _: &[flatzinc::Annotation],
+) -> Result<bool, FlatZincError> {
+    check_parameters!(exprs, 2, "fzn_inverse");
+    let lhs = context.resolve_integer_variable_array(&exprs[0])?.to_vec();
+    let rhs = context.resolve_integer_variable_array(&exprs[1])?.to_vec();
+    Ok(constraints::inverse(lhs,rhs) .post(context.solver, None)
+    .is_ok())
 }
