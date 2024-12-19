@@ -1,10 +1,16 @@
 //! A simple model for disjunctive scheduling using reified constraints
 //! Given a set of tasks and their processing times, it finds a schedule such that none of the jobs
-//! overlap It thus finds a schedule such that either s_i >= s_j + p_j or s_j >= s_i + p_i (i.e.
-//! either job i starts after j or job j starts after i)
+//! overlap. The optimal schedule is thus all tasks scheduled right after each other.
+//!
+//! For two tasks x and y, either x ends before y starts, or y ends before x starts. So if s_i is
+//! the start time of task i and p_i is then we can express the condition that x ends before y
+//! starts as s_x + p_x <= s_y, and that y ends before x starts as s_y + p_y <= s_x.
+//!
+//! To ensure that one of these occurs, we create two Boolean variables, l_xy and l_yx, to signify
+//! the two possibilities, and then post the constraint (l_xy \/ l_yx).
 
 use pumpkin_solver::constraints;
-use pumpkin_solver::constraints::Constraint;
+use pumpkin_solver::constraints::NegatableConstraint;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::termination::Indefinite;
@@ -38,8 +44,8 @@ fn main() {
         .map(|i| solver.new_bounded_integer(0, (horizon - processing_times[i]) as i32))
         .collect::<Vec<_>>();
 
-    // Literal which indicates precedence (i.e. if precedence_literals[x][y] => s_y + p_y <= s_x
-    // which is equal to s_y - s_x <= -p_y)
+    // Literal which indicates precedence (i.e. precedence_literals[x][y] <=> x ends before y
+    // starts)
     let precedence_literals = (0..n_tasks)
         .map(|_| {
             (0..n_tasks)
@@ -53,17 +59,14 @@ fn main() {
             if x == y {
                 continue;
             }
+            // precedence_literals[x][y] <=> x ends before y starts
             let literal = precedence_literals[x][y];
-            let variables = vec![start_variables[y].scaled(1), start_variables[x].scaled(-1)];
-            // literal => s_y - s_x <= -p_y)
-            let _ =
-                constraints::less_than_or_equals(variables.clone(), -(processing_times[y] as i32))
-                    .implied_by(&mut solver, literal, None);
-
-            //-literal => -s_y + s_x <= p_y)
+            // literal <=> (s_x + p_x <= s_y)
+            // equivelent to literal <=> (s_x - s_y <= -p_x)
+            // So the variables are -s_y and s_x, and the rhs is -p_x
             let variables = vec![start_variables[y].scaled(-1), start_variables[x].scaled(1)];
-            let _ = constraints::less_than_or_equals(variables.clone(), processing_times[y] as i32)
-                .implied_by(&mut solver, literal, None);
+            let _ = constraints::less_than_or_equals(variables, -(processing_times[x] as i32))
+                .reify(&mut solver, literal, None);
 
             // Either x starts before y or y start before x
             let _ = solver.add_clause([
