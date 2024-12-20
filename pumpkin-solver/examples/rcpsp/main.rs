@@ -51,6 +51,11 @@ struct Args {
     #[arg(short = 'c', long)]
     use_cumulative_disjointness: bool,
 
+    /// Determines whether to use fixed search (smallest, indomain-min) or a strategy alternating
+    /// between (smallest, indomain-min), and VSIDS
+    #[arg(short = 'c', long)]
+    use_fixed_search: bool,
+
     /// The maximum number of rotations performed by the node-packing propagator
     #[arg(short='o', long, default_value_t=usize::MAX)]
     number_of_cycles: usize,
@@ -302,9 +307,13 @@ fn run() -> SchedulingResult<()> {
         );
     });
 
-    let mut brancher = AlternatingBrancher::new(
-        &solver,
-        IndependentVariableValueBrancher::new(
+    let mut termination = Combinator::new(
+        OsSignal::install(),
+        args.time_limit
+            .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
+    );
+    let result = if args.use_fixed_search {
+        let mut brancher = IndependentVariableValueBrancher::new(
             Smallest::new(
                 &start_variables
                     .into_iter()
@@ -312,17 +321,26 @@ fn run() -> SchedulingResult<()> {
                     .collect::<Vec<_>>(),
             ),
             InDomainMin,
-        ),
-        SwitchToDefaultAfterFirstSolution,
-    );
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    } else {
+        let mut brancher = AlternatingBrancher::new(
+            &solver,
+            IndependentVariableValueBrancher::new(
+                Smallest::new(
+                    &start_variables
+                        .into_iter()
+                        .chain(std::iter::once(makespan))
+                        .collect::<Vec<_>>(),
+                ),
+                InDomainMin,
+            ),
+            SwitchToDefaultAfterFirstSolution,
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    };
 
-    let mut termination = Combinator::new(
-        OsSignal::install(),
-        args.time_limit
-            .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
-    );
-
-    match solver.minimise(&mut brancher, &mut termination, makespan) {
+    match result {
         pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
             println!(
                 "Found optimal solution with makespan {}",
