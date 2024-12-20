@@ -53,7 +53,7 @@ struct Args {
 
     /// Determines whether to use fixed search (smallest, indomain-min) or a strategy alternating
     /// between (smallest, indomain-min), and VSIDS
-    #[arg(short = 'c', long)]
+    #[arg(short = 's', long)]
     use_fixed_search: bool,
 
     /// The maximum number of rotations performed by the node-packing propagator
