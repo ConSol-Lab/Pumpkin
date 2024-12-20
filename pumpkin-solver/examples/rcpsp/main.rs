@@ -19,6 +19,8 @@ use pumpkin_solver::branching::branchers::independent_variable_value_brancher::I
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::Smallest;
 use pumpkin_solver::constraints;
+use pumpkin_solver::options::CumulativeOptions;
+use pumpkin_solver::options::CumulativePropagationMethod;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::Combinator;
@@ -45,8 +47,12 @@ struct Args {
     #[arg(short = 'n', long)]
     use_node_packing: bool,
 
+    /// Enables the cumulative to mine for disjointness
+    #[arg(short = 'c', long)]
+    use_cumulative_disjointness: bool,
+
     /// The maximum number of rotations performed by the node-packing propagator
-    #[arg(short='c', long, default_value_t=usize::MAX)]
+    #[arg(short='o', long, default_value_t=usize::MAX)]
     number_of_cycles: usize,
 
     #[arg(short = 't', long = "time-limit")]
@@ -180,6 +186,7 @@ fn run() -> SchedulingResult<()> {
 
     let mut incompatibility_matrix: Vec<Vec<Literal>> =
         Vec::with_capacity(rcpsp_instance.processing_times.len());
+
     for index in 0..rcpsp_instance.processing_times.len() {
         let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
         for other_index in 0..rcpsp_instance.processing_times.len() {
@@ -236,7 +243,7 @@ fn run() -> SchedulingResult<()> {
     for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
     {
         let result = solver
-            .add_constraint(constraints::cumulative(
+            .add_constraint(constraints::cumulative_with_options(
                 start_variables.clone(),
                 rcpsp_instance
                     .processing_times
@@ -248,6 +255,18 @@ fn run() -> SchedulingResult<()> {
                     .map(|&value| value as i32)
                     .collect::<Vec<_>>(),
                 rcpsp_instance.resource_capacities[resource_index] as i32,
+                CumulativeOptions::new(
+                    false,
+                    pumpkin_solver::options::CumulativeExplanationType::BigStep,
+                    false,
+                    CumulativePropagationMethod::default(),
+                    false,
+                    if args.use_cumulative_disjointness {
+                        Some(incompatibility_matrix.clone())
+                    } else {
+                        None
+                    },
+                ),
             ))
             .post();
         if result.is_err() {

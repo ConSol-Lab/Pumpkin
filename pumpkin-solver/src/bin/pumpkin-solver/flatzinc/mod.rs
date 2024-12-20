@@ -33,7 +33,7 @@ use crate::flatzinc::error::FlatZincError;
 const MSG_UNKNOWN: &str = "=====UNKNOWN=====";
 const MSG_UNSATISFIABLE: &str = "=====UNSATISFIABLE=====";
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct FlatZincOptions {
     /// If `true`, the solver will not strictly keep to the search annotations in the flatzinc.
     pub(crate) free_search: bool,
@@ -59,7 +59,7 @@ pub(crate) fn solve(
         time_limit.map(TimeBudget::starting_now),
     );
 
-    let instance = parse_and_compile(&mut solver, instance, options)?;
+    let instance = parse_and_compile(&mut solver, instance, options.clone())?;
     let outputs = instance.outputs.clone();
 
     let mut brancher = if options.free_search {

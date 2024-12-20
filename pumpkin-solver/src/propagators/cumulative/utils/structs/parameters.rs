@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
 use super::Task;
+use crate::containers::KeyedVec;
+use crate::engine::propagation::LocalId;
 use crate::propagators::CumulativePropagatorOptions;
 use crate::variables::IntegerVariable;
 
@@ -19,6 +21,7 @@ pub(crate) struct CumulativeParameters<Var> {
     pub(crate) capacity: i32,
     /// The [`CumulativeOptions`] which influence the behaviour of the cumulative propagator(s).
     pub(crate) options: CumulativePropagatorOptions,
+    pub(crate) mapping: KeyedVec<LocalId, usize>,
 }
 
 impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
@@ -26,6 +29,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
         tasks: Vec<Task<Var>>,
         capacity: i32,
         options: CumulativePropagatorOptions,
+        mapping: KeyedVec<LocalId, usize>,
     ) -> CumulativeParameters<Var> {
         let tasks = tasks
             .into_iter()
@@ -37,6 +41,7 @@ impl<Var: IntegerVariable + 'static> CumulativeParameters<Var> {
             tasks: tasks.clone(),
             capacity,
             options,
+            mapping,
         }
     }
 }

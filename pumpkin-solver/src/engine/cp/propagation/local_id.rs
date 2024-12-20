@@ -1,3 +1,5 @@
+use crate::containers::StorageKey;
+
 /// A local id uniquely identifies a variable within a specific propagator. A local id can be
 /// thought of as the index of the variable in the propagator.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -10,6 +12,16 @@ impl LocalId {
 
     pub(crate) fn unpack(self) -> u32 {
         self.0
+    }
+}
+
+impl StorageKey for LocalId {
+    fn index(&self) -> usize {
+        self.0 as usize
+    }
+
+    fn create_from_index(index: usize) -> Self {
+        LocalId(index as u32)
     }
 }
 

@@ -160,6 +160,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::find_synchronised_conflict;
+    use crate::containers::KeyedVec;
     use crate::engine::propagation::LocalId;
     use crate::engine::test_solver::TestSolver;
     use crate::propagators::CumulativeParameters;
@@ -197,8 +198,12 @@ mod tests {
             },
         ];
 
-        let parameters =
-            CumulativeParameters::new(tasks, 1, CumulativePropagatorOptions::default());
+        let parameters = CumulativeParameters::new(
+            tasks,
+            1,
+            CumulativePropagatorOptions::default(),
+            KeyedVec::default(),
+        );
 
         let mut time_table = PerPointTimeTableType::default();
         let _ = time_table.insert(

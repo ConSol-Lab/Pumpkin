@@ -61,10 +61,12 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
     ) -> Self {
         let parameters = NodePackingParameters {
             tasks: create_tasks(arg_tasks)
+                .0
                 .into_iter()
                 .map(Rc::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
+
             disjointness,
         };
 

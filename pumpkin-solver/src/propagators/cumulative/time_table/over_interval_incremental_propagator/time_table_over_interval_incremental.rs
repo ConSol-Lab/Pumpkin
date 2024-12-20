@@ -46,6 +46,8 @@ use crate::propagators::UpdatableStructures;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_extreme;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
 
 /// [`Propagator`] responsible for using time-table reasoning to propagate the [Cumulative](https://sofdem.github.io/gccat/gccat/Ccumulative.html) constraint
 /// where a time-table is a structure which stores the mandatory resource usage of the tasks at
@@ -98,8 +100,8 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let (tasks, mapping) = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options, mapping);
         let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalIncrementalPropagator {
@@ -328,6 +330,10 @@ impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool>
 impl<Var: IntegerVariable + 'static, const SYNCHRONISE: bool> Propagator
     for TimeTableOverIntervalIncrementalPropagator<Var, SYNCHRONISE>
 {
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.updatable_structures.statistics.log(statistic_logger)
+    }
+
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         pumpkin_assert_advanced!(
             check_bounds_equal_at_propagation(

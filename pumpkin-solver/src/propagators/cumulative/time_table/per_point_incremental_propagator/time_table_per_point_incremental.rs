@@ -94,8 +94,8 @@ impl<Var: IntegerVariable + 'static + Debug, const SYNCHRONISE: bool>
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTablePerPointIncrementalPropagator<Var, SYNCHRONISE> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let (tasks, mapping) = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options, mapping);
         let updatable_structures = UpdatableStructures::new(&parameters);
         TimeTablePerPointIncrementalPropagator {
             time_table: BTreeMap::new(),

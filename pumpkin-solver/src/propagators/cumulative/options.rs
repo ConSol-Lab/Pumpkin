@@ -3,8 +3,9 @@ use std::fmt::Display;
 use clap::ValueEnum;
 
 use super::CumulativeExplanationType;
+use crate::variables::Literal;
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct CumulativePropagatorOptions {
     /// Specifies whether it is allowed to create holes in the domain; if this parameter is set to
     /// false then it will only adjust the bounds when appropriate rather than removing values from
@@ -17,9 +18,10 @@ pub(crate) struct CumulativePropagatorOptions {
     pub(crate) generate_sequence: bool,
     /// Determines whether to incrementally backtrack or to calculate from scratch
     pub(crate) incremental_backtracking: bool,
+    pub(crate) incompatibility_matrix: Option<Vec<Vec<Literal>>>,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CumulativeOptions {
     /// The propagation method which is used for the cumulative constraints; currently all of them
     /// are variations of time-tabling. The default is incremental time-tabling reasoning over
@@ -36,6 +38,7 @@ impl CumulativeOptions {
         generate_sequence: bool,
         propagation_method: CumulativePropagationMethod,
         incremental_backtracking: bool,
+        incompatibility_matrix: Option<Vec<Vec<Literal>>>,
     ) -> Self {
         Self {
             propagation_method,
@@ -44,6 +47,7 @@ impl CumulativeOptions {
                 explanation_type,
                 generate_sequence,
                 incremental_backtracking,
+                incompatibility_matrix,
             },
         }
     }

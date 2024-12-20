@@ -241,7 +241,7 @@ fn compile_cumulative(
         durations.iter().copied(),
         resource_requirements.iter().copied(),
         resource_capacity,
-        options.cumulative_options,
+        options.cumulative_options.clone(),
     )
     .post(context.solver, None);
     Ok(post_result.is_ok())

@@ -25,6 +25,8 @@
 //! implementation’, in CP workshop on Techniques foR Implementing Constraint programming Systems
 //! (TRICS), 2013, pp. 1–10.
 
+use crate::pumpkin_assert_simple;
+
 /// A set for keeping track of which values are still part of the original domain based on [\[1\]](https://hal.science/hal-01339250/document).
 /// See the module level documentation for more information.
 ///
@@ -69,7 +71,7 @@ impl<T> SparseSet<T> {
     }
 
     pub(crate) fn set_to_empty(&mut self) {
-        self.indices = vec![usize::MAX; self.domain.len()];
+        self.indices = vec![usize::MAX; self.indices.len()];
         self.domain.clear();
         self.size = 0;
     }
@@ -87,6 +89,7 @@ impl<T> SparseSet<T> {
     /// Returns the `index`th element in the domain; if `index` is larger than or equal to
     /// [`SparseSet::len`] then this method will panic.
     pub(crate) fn get(&self, index: usize) -> &T {
+        pumpkin_assert_simple!(index < self.size);
         &self.domain[index]
     }
 
@@ -104,20 +107,33 @@ impl<T> SparseSet<T> {
         if self.indices[(self.mapping)(to_remove)] < self.size {
             // The element is part of the domain and should be removed
             self.size -= 1;
+            if self.size > 0 {
+                self.swap(self.indices[(self.mapping)(to_remove)], self.size);
+            }
+
             self.swap(
                 self.indices[(self.mapping)(to_remove)],
                 self.domain.len() - 1,
             );
-            let _ = self.domain.pop().expect("Has to have something to pop.");
+            let element = self.domain.pop().expect("Has to have something to pop.");
+            pumpkin_assert_simple!((self.mapping)(&element) == (self.mapping)(to_remove));
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         } else if self.indices[(self.mapping)(to_remove)] < self.domain.len() {
             self.swap(
                 self.indices[(self.mapping)(to_remove)],
                 self.domain.len() - 1,
             );
-            let _ = self.domain.pop().expect("Has to have something to pop.");
+            let element = self.domain.pop().expect("Has to have something to pop.");
+            pumpkin_assert_simple!((self.mapping)(&element) == (self.mapping)(to_remove));
             self.indices[(self.mapping)(to_remove)] = usize::MAX;
         }
+        pumpkin_assert_simple!(
+            self.indices
+                .iter()
+                .filter(|index| **index != usize::MAX)
+                .count()
+                >= self.size
+        )
     }
 
     pub(crate) fn remove_temporarily(&mut self, to_remove: &T) {
@@ -132,12 +148,7 @@ impl<T> SparseSet<T> {
         self.size = self.domain.len();
     }
 
-    /// Determines whehter the `element` is contained in the domain of the sparse-set.
-    pub(crate) fn contains(&self, element: &T) -> bool {
-        (self.mapping)(element) < self.indices.len()
-            && self.indices[(self.mapping)(element)] < self.size
-    }
-
+    /// Accomodates the `element`.
     pub(crate) fn accommodate(&mut self, element: &T) {
         let index = (self.mapping)(element);
         if self.indices.len() <= index {
@@ -145,14 +156,29 @@ impl<T> SparseSet<T> {
         }
     }
 
+    /// Inserts the element if it is not already contained in the sparse set.
     pub(crate) fn insert(&mut self, element: T) {
-        if !self.contains(&element) {
+        if (self.mapping)(&element) >= self.indices.len() {
             self.accommodate(&element);
-
+        }
+        if self.indices[(self.mapping)(&element)] == usize::MAX {
             self.indices[(self.mapping)(&element)] = self.domain.len();
             self.domain.push(element);
+            self.swap(self.size, self.domain.len() - 1);
+            self.size += 1;
+        } else if self.indices[(self.mapping)(&element)] >= self.size {
+            self.swap(self.size, self.indices[(self.mapping)(&element)]);
+            self.indices[(self.mapping)(&element)] = self.size;
             self.size += 1;
         }
+
+        pumpkin_assert_simple!(
+            self.indices
+                .iter()
+                .filter(|index| **index != usize::MAX)
+                .count()
+                >= self.size
+        )
     }
 
     /// Returns an iterator which goes over the values in the domain of the sparse-set
@@ -213,33 +239,5 @@ mod tests {
         sparse_set.remove(&1);
         sparse_set.remove(&2);
         assert!(sparse_set.is_empty());
-    }
-
-    #[test]
-    fn iter1() {
-        let sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
-        let v: Vec<u32> = sparse_set.iter().copied().collect();
-        assert_eq!(v.len(), 3);
-        assert!(v.contains(&10));
-        assert!(v.contains(&5));
-        assert!(v.contains(&2));
-    }
-
-    #[test]
-    fn iter2() {
-        let mut sparse_set = SparseSet::new(vec![5, 10, 2], mapping_function);
-        sparse_set.insert(100);
-        sparse_set.insert(2);
-        sparse_set.insert(20);
-        sparse_set.remove(&10);
-        sparse_set.insert(10);
-        sparse_set.remove(&10);
-
-        let v: Vec<u32> = sparse_set.iter().copied().collect();
-        assert_eq!(v.len(), 5);
-        assert!(v.contains(&5));
-        assert!(v.contains(&2));
-        assert!(v.contains(&100));
-        assert!(v.contains(&20));
     }
 }

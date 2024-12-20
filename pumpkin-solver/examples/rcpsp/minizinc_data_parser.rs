@@ -27,7 +27,7 @@ pub(crate) struct DataFile {
     values: HashMap<Box<str>, DataValue>,
 }
 
-#[allow(variant_size_differences, reason = "These are not stored in bulk")]
+#[allow(variant_size_differences, reason = "will not be stored in bulk")]
 #[derive(Debug, Error)]
 pub(crate) enum DznError {
     #[error("failed to read source: {0}")]
