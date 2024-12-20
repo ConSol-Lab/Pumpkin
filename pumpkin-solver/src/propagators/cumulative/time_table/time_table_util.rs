@@ -318,7 +318,7 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
 
     for task in updatable_structures.get_unfixed_tasks() {
         for other_task in updatable_structures.get_unfixed_tasks() {
-            if task.id == other_task.id {
+            if task.id <= other_task.id {
                 continue;
             }
 
@@ -335,14 +335,8 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                 continue;
             }
 
-            for profile in &time_table {
-                if intersection.is_empty() {
-                    // context.assign_literal(literal, value, reason);
-                    // predicate!(x >= lb_x) /\ predicate!(x <= ub_x) /\ predicate!(y >= lb_y) /\
-                    // predicate!(y <= ub_y) /\ expl(all_profiles which removed time-points)
-                    println!("{task:?} - {other_task:?}");
-                    break;
-                }
+            let mut profiles_contributing_to_disjointness = Vec::new();
+            for (index, profile) in time_table.iter().enumerate() {
                 let profile_range: RangeSet2<i32> = RangeSet::from(profile.start..profile.end + 1);
                 if profile_range.intersects(&intersection)
                     && task.resource_usage + other_task.resource_usage + profile.height
@@ -360,8 +354,30 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
                         profile.end,
                     )
                 {
+                    profiles_contributing_to_disjointness.push(index);
                     intersection.difference_with(&profile_range);
                 }
+            }
+            if intersection.is_empty() {
+                // context.assign_literal(literal, value, reason);
+                // predicate!(x >= lb_x) /\ predicate!(x <= ub_x) /\ predicate!(y >= lb_y) /\
+                // predicate!(y <= ub_y) /\ expl(all_profiles which removed time-points)
+                println!(
+                        "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage, {} were found to be disjoint due to {:?}",
+                        parameters.capacity,
+                        context.lower_bound(&task.start_variable),
+                        context.upper_bound(&task.start_variable) + task.processing_time,
+                        task.resource_usage,
+                        context.lower_bound(&other_task.start_variable),
+                        context.upper_bound(&other_task.start_variable)
+                            + other_task.processing_time,
+                        other_task.resource_usage,
+                        profiles_contributing_to_disjointness
+                            .iter()
+                            .map(|profile_index| &time_table[*profile_index])
+                            .collect::<Vec<_>>()
+                    );
+                break;
             }
         }
     }
