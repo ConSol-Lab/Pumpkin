@@ -1,0 +1,29 @@
+[local]
+processes = 6
+inputs = "rcpsp/data_psplib/j60/*.dzn"
+# inputs = "rcpsp-micro/*.dzn"
+results_header = "run_name,elapsed_time,error_code,makespan,is_optimal,stats\n"
+
+[programs.pumpkin]
+binary = "$PUMPKIN_BUILD_DIR/examples/rcpsp"
+flags = ["-t", "300"]
+# flags = ["-t", "10"]
+post_process = "./postprocess-pumpkin.sh"
+
+# [programs.ortools]
+# binary = "minizinc"
+# flags = ["-a", "-s", "--time-limit", "60000", "--solver", "cpsatlp", "../../../rcpsp/rcpsp.mzn"]
+# post_process = "./postprocess-ortools.sh"
+
+[[runs]]
+program = "pumpkin"
+name = "std"
+
+[[runs]]
+program = "pumpkin"
+add_flags = ["-n"]
+name = "node-packing"
+
+# [[runs]]
+# program = "ortools"
+# name = "ortools"
