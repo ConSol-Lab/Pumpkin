@@ -662,6 +662,7 @@ impl Assignments {
             .is_some_and(|truth_value| truth_value)
     }
 
+    #[allow(unused, reason = "will be part of public API")]
     pub(crate) fn is_predicate_falsified(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| !truth_value)

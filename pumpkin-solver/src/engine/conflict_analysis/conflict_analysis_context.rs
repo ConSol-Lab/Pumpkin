@@ -135,7 +135,7 @@ impl<'a> ConflictAnalysisContext<'a> {
         current_nogood: CurrentNogood<'_>,
         reason_store: &'a mut ReasonStore,
         propagators: &'a mut PropagatorStore,
-        proof_log: &'a mut ProofLog,
+        proof_log: &mut ProofLog,
         unit_nogood_step_ids: &HashMap<Predicate, StepId>,
     ) -> &'a [Predicate] {
         // TODO: this function could be put into the reason store
