@@ -1,16 +1,15 @@
-use flatzinc::predicates;
-
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::{LocalId, PropagationContextMut, Propagator, PropagatorInitialisationContext};
 use crate::engine::variables::IntegerVariable;
-use std::collections::HashSet;
+use crate::basic_types::HashSet;
 use std::vec;
 use crate::predicate;
 use crate::predicates::Predicate;
 use crate::predicates::PropositionalConjunction;
+use std::collections::VecDeque;
 use log::debug;
 
 /// Propagator for the inverse constraint.
@@ -301,10 +300,9 @@ fn alternating_bfs(
     n: usize,
 ) -> (HashSet<usize>, HashSet<usize>) {
     //debug!("{:?}", graph);
-    use std::collections::{HashSet, VecDeque};
 
-    let mut d1 = HashSet::new(); // even level set
-    let mut a2 = HashSet::new(); // odd level set
+    let mut d1:HashSet<usize> = HashSet::default(); // even level set
+    let mut a2:HashSet<usize> = HashSet::default(); // odd level set
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
 
