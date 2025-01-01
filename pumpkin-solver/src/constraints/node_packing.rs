@@ -3,13 +3,14 @@ use crate::propagators::ArgTask;
 use crate::propagators::NodePackingPropagator;
 use crate::pumpkin_assert_simple;
 use crate::variables::IntegerVariable;
+use crate::variables::Literal;
 
 pub fn node_packing<Var: IntegerVariable + 'static>(
     start_times: &[Var],
     durations: &[i32],
     num_cycles: usize,
     makespan_variable: Var,
-    static_incompatibilities: Vec<Vec<bool>>,
+    disjointness: Vec<Vec<Literal>>,
 ) -> impl Constraint {
     pumpkin_assert_simple!(
         start_times.len() == durations.len(),
@@ -29,6 +30,6 @@ same!"
             })
             .collect::<Vec<_>>(),
         makespan_variable,
-        static_incompatibilities,
+        disjointness,
     )
 }

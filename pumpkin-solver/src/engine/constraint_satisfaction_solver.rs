@@ -38,7 +38,9 @@ use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
 use crate::engine::predicates::predicate::Predicate;
+use crate::engine::propagation::CurrentNogood;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -1033,10 +1035,7 @@ impl ConstraintSatisfactionSolver {
         self.restart_strategy.notify_restart();
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "This method requires this many arguments, though a backtracking context could be considered; for now this function needs to be used by conflict analysis"
-    )]
+    #[allow(clippy::too_many_arguments, reason = "Should be refactored")]
     pub(crate) fn backtrack<BrancherType: Brancher + ?Sized>(
         assignments: &mut Assignments,
         last_notified_cp_trail_index: &mut usize,
@@ -1114,7 +1113,11 @@ impl ConstraintSatisfactionSolver {
         // Look up the reason for the bound that changed.
         // The reason for changing the bound cannot be a decision, so we can safely unwrap.
         let reason_changing_bound = reason_store
-            .get_or_compute(entry.reason.unwrap(), assignments, propagators)
+            .get_or_compute(
+                entry.reason.unwrap(),
+                ExplanationContext::from(&*assignments),
+                propagators,
+            )
             .unwrap();
 
         let mut empty_domain_reason: Vec<Predicate> = vec![
@@ -1241,7 +1244,11 @@ impl ConstraintSatisfactionSolver {
             // Get the conjunction of predicates explaining the propagation.
             let reason = self
                 .reason_store
-                .get_or_compute(reason, &self.assignments, &mut self.propagators)
+                .get_or_compute(
+                    reason,
+                    ExplanationContext::new(&self.assignments, CurrentNogood::empty()),
+                    &mut self.propagators,
+                )
                 .expect("Reason ref is valid");
 
             let propagated = entry.predicate;
@@ -1317,7 +1324,7 @@ impl ConstraintSatisfactionSolver {
     /// If the solver is already in a conflicting state, i.e. a previous call to this method
     /// already returned `false`, calling this again will not alter the solver in any way, and
     /// `false` will be returned again.
-    pub fn add_propagator(
+    pub(crate) fn add_propagator(
         &mut self,
         propagator_to_add: impl Propagator + 'static,
         tag: Option<NonZero<u32>>,

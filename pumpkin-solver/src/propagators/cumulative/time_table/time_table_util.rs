@@ -5,7 +5,13 @@
 use std::cmp::max;
 use std::rc::Rc;
 
+use log::info;
+use range_collections::RangeSet;
+use range_collections::RangeSet2;
+
+use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
+use crate::conjunction;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -13,6 +19,7 @@ use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
+use crate::propagators::cumulative::time_table::explanations::big_step::create_big_step_propagation_explanation;
 use crate::propagators::cumulative::time_table::propagation_handler::CumulativePropagationHandler;
 use crate::propagators::CumulativeParameters;
 use crate::propagators::ResourceProfile;
@@ -246,12 +253,14 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
     updatable_structures: &mut UpdatableStructures<Var>,
     parameters: &CumulativeParameters<Var>,
 ) -> PropagationStatusCP {
+    let time_table = time_table.collect::<Vec<_>>();
+
     // We create the structure responsible for propagations and explanations
     let mut propagation_handler =
         CumulativePropagationHandler::new(parameters.options.explanation_type);
 
     // Then we go over all of the profiles in the time-table
-    'profile_loop: for profile in time_table {
+    'profile_loop: for profile in time_table.iter() {
         // We indicate to the propagation handler that we cannot re-use an existing profile
         // explanation
         propagation_handler.next_profile();
@@ -310,7 +319,120 @@ fn propagate_single_profiles<'a, Var: IntegerVariable + 'static>(
             }
         }
     }
+
+    find_disjointness(updatable_structures, context, time_table, parameters)?;
+
     updatable_structures.restore_temporarily_removed();
+    Ok(())
+}
+
+fn find_disjointness<Var: IntegerVariable + 'static>(
+    updatable_structures: &mut UpdatableStructures<Var>,
+    context: &mut PropagationContextMut,
+    time_table: Vec<&ResourceProfile<Var>>,
+    parameters: &CumulativeParameters<Var>,
+) -> PropagationStatusCP {
+    if let Some(incompatibility_matrix) = &parameters.options.incompatibility_matrix {
+        for task in updatable_structures.unfixed_tasks.iter() {
+            for other_task in updatable_structures.unfixed_tasks.iter() {
+                if task.id <= other_task.id
+                    || context.is_literal_true(
+                        &incompatibility_matrix[parameters.mapping[task.id]]
+                            [parameters.mapping[other_task.id]],
+                    )
+                {
+                    continue;
+                }
+
+                let task_range: RangeSet2<i32> = RangeSet::from(
+                    context.lower_bound(&task.start_variable)
+                        ..context.upper_bound(&task.start_variable) + task.processing_time,
+                );
+                let other_task_range: RangeSet2<i32> = RangeSet::from(
+                    context.lower_bound(&other_task.start_variable)
+                        ..context.upper_bound(&other_task.start_variable)
+                            + other_task.processing_time,
+                );
+                let mut intersection: RangeSet2<i32> = task_range.intersection(&other_task_range);
+                if intersection.is_empty() {
+                    continue;
+                }
+
+                let mut profiles_contributing_to_disjointness = Vec::new();
+                for (index, profile) in time_table.iter().enumerate() {
+                    let profile_range: RangeSet2<i32> =
+                        RangeSet::from(profile.start..profile.end + 1);
+                    if profile_range.intersects(&intersection)
+                        && task.resource_usage + other_task.resource_usage + profile.height
+                            > parameters.capacity
+                        && !has_mandatory_part_in_interval(
+                            context.as_readonly(),
+                            task,
+                            profile.start,
+                            profile.end,
+                        )
+                        && !has_mandatory_part_in_interval(
+                            context.as_readonly(),
+                            other_task,
+                            profile.start,
+                            profile.end,
+                        )
+                    {
+                        profiles_contributing_to_disjointness.push(index);
+                        intersection.difference_with(&profile_range);
+                    }
+                }
+                if intersection.is_empty() {
+                    updatable_structures.statistics.num_disjointess_found += 1;
+                    updatable_structures
+                        .statistics
+                        .average_number_of_profiles_in_disjointness
+                        .add_term(profiles_contributing_to_disjointness.len());
+                    // context.assign_literal(literal, value, reason);
+                    // predicate!(x >= lb_x) /\ predicate!(x <= ub_x) /\ predicate!(y >= lb_y) /\
+                    // predicate!(y <= ub_y) /\ expl(all_profiles which removed time-points)
+                    let lb_x = context.lower_bound(&task.start_variable);
+                    let ub_x = context.upper_bound(&task.start_variable);
+                    let lb_y = context.lower_bound(&other_task.start_variable);
+                    let ub_y = context.upper_bound(&other_task.start_variable);
+                    let mut explanation = conjunction!(
+                        [task.start_variable >= lb_x]
+                            & [task.start_variable <= ub_x]
+                            & [other_task.start_variable >= lb_y]
+                            & [other_task.start_variable <= ub_y]
+                    );
+                    for profile in profiles_contributing_to_disjointness.iter() {
+                        let profile_explanation =
+                            create_big_step_propagation_explanation(time_table[*profile]);
+                        explanation = explanation
+                            .extend_and_remove_duplicates(profile_explanation.into_iter());
+                    }
+                    context.assign_literal(
+                        &incompatibility_matrix[parameters.mapping[task.id]]
+                            [parameters.mapping[other_task.id]],
+                        true,
+                        explanation,
+                    )?;
+                    info!(
+                        "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage, {} were found to be disjoint due to {:?}",
+                        parameters.capacity,
+                        context.lower_bound(&task.start_variable),
+                        context.upper_bound(&task.start_variable) + task.processing_time,
+                        task.resource_usage,
+                        context.lower_bound(&other_task.start_variable),
+                        context.upper_bound(&other_task.start_variable)
+                            + other_task.processing_time,
+                        other_task.resource_usage,
+                        profiles_contributing_to_disjointness
+                            .iter()
+                            .map(|profile_index| &time_table[*profile_index])
+                            .collect::<Vec<_>>()
+                    );
+                    break;
+                }
+            }
+        }
+    }
     Ok(())
 }
 

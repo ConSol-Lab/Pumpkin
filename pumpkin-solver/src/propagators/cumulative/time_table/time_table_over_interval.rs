@@ -75,8 +75,8 @@ impl<Var: IntegerVariable + 'static> TimeTableOverIntervalPropagator<Var> {
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTableOverIntervalPropagator<Var> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let (tasks, mapping) = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options, mapping);
         let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTableOverIntervalPropagator {

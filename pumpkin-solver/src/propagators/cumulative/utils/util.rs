@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use enumset::enum_set;
 
+use crate::containers::KeyedVec;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
@@ -21,15 +22,18 @@ use crate::propagators::Task;
 /// It sorts [`Task`]s on non-decreasing resource usage and removes [`Task`]s with resource usage 0.
 pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
-) -> Vec<Task<Var>> {
+) -> (Vec<Task<Var>>, KeyedVec<LocalId, usize>) {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
     let mut ordered_tasks = arg_tasks.to_vec();
     ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
 
+    let mut mapping: KeyedVec<LocalId, usize> = KeyedVec::new();
+
     let mut id = 0;
-    ordered_tasks
+    let tasks = ordered_tasks
         .iter()
-        .filter_map(|x| {
+        .enumerate()
+        .filter_map(|(index, x)| {
             // We only add tasks which have a non-zero resource usage
             if x.resource_usage > 0 {
                 let return_value = Some(Task {
@@ -38,6 +42,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
                 });
+                let _ = mapping.push(index);
 
                 id += 1;
                 return_value
@@ -45,7 +50,8 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                 None
             }
         })
-        .collect::<Vec<Task<Var>>>()
+        .collect::<Vec<Task<Var>>>();
+    (tasks, mapping)
 }
 
 pub(crate) fn register_tasks<Var: IntegerVariable + 'static>(

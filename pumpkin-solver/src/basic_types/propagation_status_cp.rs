@@ -8,7 +8,7 @@ use crate::predicates::Predicate;
 pub(crate) type PropagationStatusCP = Result<(), Inconsistency>;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Inconsistency {
+pub(crate) enum Inconsistency {
     EmptyDomain,
     Conflict(PropositionalConjunction),
 }

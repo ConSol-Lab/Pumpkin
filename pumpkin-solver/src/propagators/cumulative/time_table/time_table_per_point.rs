@@ -68,8 +68,8 @@ impl<Var: IntegerVariable + 'static> TimeTablePerPointPropagator<Var> {
         capacity: i32,
         cumulative_options: CumulativePropagatorOptions,
     ) -> TimeTablePerPointPropagator<Var> {
-        let tasks = create_tasks(arg_tasks);
-        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options);
+        let (tasks, mapping) = create_tasks(arg_tasks);
+        let parameters = CumulativeParameters::new(tasks, capacity, cumulative_options, mapping);
         let updatable_structures = UpdatableStructures::new(&parameters);
 
         TimeTablePerPointPropagator {

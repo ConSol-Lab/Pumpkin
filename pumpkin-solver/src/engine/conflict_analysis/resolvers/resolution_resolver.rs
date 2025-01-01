@@ -9,6 +9,7 @@ use crate::engine::conflict_analysis::minimisers::Mode;
 use crate::engine::conflict_analysis::minimisers::RecursiveMinimiser;
 use crate::engine::conflict_analysis::ConflictAnalysisContext;
 use crate::engine::conflict_analysis::LearnedNogood;
+use crate::engine::propagation::CurrentNogood;
 use crate::engine::Assignments;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_advanced;
@@ -66,7 +67,7 @@ impl ConflictResolver for ResolutionResolver {
     fn resolve_conflict(&mut self, context: &mut ConflictAnalysisContext) -> Option<LearnedNogood> {
         self.clean_up();
 
-        let conflict_nogood = context.get_conflict_nogood();
+        let conflict_nogood = context.get_conflict_nogood(context.is_completing_proof);
 
         let maximum_decision_level_in_conflict = conflict_nogood
             .iter()
@@ -152,6 +153,11 @@ impl ConflictResolver for ResolutionResolver {
                         let reason = ConflictAnalysisContext::get_propagation_reason(
                             predicate,
                             context.assignments,
+                            CurrentNogood::new(
+                                &self.to_process_heap,
+                                &self.processed_nogood_predicates,
+                                &self.predicate_id_generator,
+                            ),
                             context.reason_store,
                             context.propagators,
                             context.proof_log,
@@ -208,6 +214,11 @@ impl ConflictResolver for ResolutionResolver {
                     let reason = ConflictAnalysisContext::get_propagation_reason(
                         predicate,
                         context.assignments,
+                        CurrentNogood::new(
+                            &self.to_process_heap,
+                            &self.processed_nogood_predicates,
+                            &self.predicate_id_generator,
+                        ),
                         context.reason_store,
                         context.propagators,
                         context.proof_log,
@@ -230,6 +241,11 @@ impl ConflictResolver for ResolutionResolver {
             let reason = ConflictAnalysisContext::get_propagation_reason(
                 next_predicate,
                 context.assignments,
+                CurrentNogood::new(
+                    &self.to_process_heap,
+                    &self.processed_nogood_predicates,
+                    &self.predicate_id_generator,
+                ),
                 context.reason_store,
                 context.propagators,
                 context.proof_log,

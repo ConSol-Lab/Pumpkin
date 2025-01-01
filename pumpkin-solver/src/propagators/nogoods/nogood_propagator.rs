@@ -18,6 +18,7 @@ use crate::engine::opaque_domain_event::OpaqueDomainEvent;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::propagation_context::HasAssignments;
 use crate::engine::propagation::EnqueueDecision;
+use crate::engine::propagation::ExplanationContext;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagationContextMut;
@@ -27,14 +28,12 @@ use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
 use crate::engine::variables::DomainId;
-use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::EventSink;
 use crate::engine::IntDomainEvent;
 use crate::engine::SolverStatistics;
 use crate::predicate;
 use crate::propagators::nogoods::Nogood;
-use crate::propagators::nogoods::NogoodWatcher;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
@@ -168,16 +167,17 @@ impl Propagator for NogoodPropagator {
 
                     // Effectively, resizing the watch list to size zero,
                     // and in the loop add some of the old watchers back.
-                    let num_watchers = self.watch_lists[updated_domain_id].lower_bound.len();
+                    let num_watchers =
+                        self.watch_lists[updated_domain_id].num_lower_bound_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id].lower_bound
-                            [current_index]
+                        let right_hand_side = self.watch_lists[updated_domain_id]
+                            .get_lower_bound_watcher_at_index(current_index)
                             .right_hand_side;
 
                         if old_lower_bound < right_hand_side && right_hand_side <= new_lower_bound {
-                            let nogood_id = self.watch_lists[updated_domain_id].lower_bound
-                                [current_index]
+                            let nogood_id = self.watch_lists[updated_domain_id]
+                                .get_lower_bound_watcher_at_index(current_index)
                                 .nogood_id;
 
                             let nogood = &mut self.nogoods[nogood_id].predicates;
@@ -201,8 +201,11 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
-                                self.watch_lists[updated_domain_id].lower_bound[end_index] =
-                                    self.watch_lists[updated_domain_id].lower_bound[current_index];
+                                self.watch_lists[updated_domain_id]
+                                    .set_lower_bound_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
                                 current_index += 1;
                                 end_index += 1;
                                 continue;
@@ -243,8 +246,8 @@ impl Propagator for NogoodPropagator {
                             }
 
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].lower_bound[end_index] =
-                                self.watch_lists[updated_domain_id].lower_bound[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_lower_bound_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
 
@@ -265,21 +268,23 @@ impl Propagator for NogoodPropagator {
                                 // Stop any further propagation and report the conflict.
                                 // Readd the remaining watchers to the watch list.
                                 while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id].lower_bound[end_index] =
-                                        self.watch_lists[updated_domain_id].lower_bound
-                                            [current_index];
+                                    self.watch_lists[updated_domain_id]
+                                        .set_lower_bound_watcher_to_other_watcher(
+                                            end_index,
+                                            current_index,
+                                        );
+
                                     current_index += 1;
                                     end_index += 1;
                                 }
                                 self.watch_lists[updated_domain_id]
-                                    .lower_bound
-                                    .truncate(end_index);
+                                    .truncate_lower_bound_watchers(end_index);
                                 return Err(e.into());
                             }
                         } else {
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].lower_bound[end_index] =
-                                self.watch_lists[updated_domain_id].lower_bound[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_lower_bound_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
                         }
@@ -287,8 +292,7 @@ impl Propagator for NogoodPropagator {
                     // Went through all the watchers.
                     if num_watchers > 0 {
                         self.watch_lists[updated_domain_id]
-                            .lower_bound
-                            .truncate(end_index);
+                            .truncate_lower_bound_watchers(end_index);
                     }
                 }
                 IntDomainEvent::UpperBound => {
@@ -302,16 +306,17 @@ impl Propagator for NogoodPropagator {
 
                     // Effectively, resizing the watch list to size zero,
                     // and in the loop add some of the old watchers back.
-                    let num_watchers = self.watch_lists[updated_domain_id].upper_bound.len();
+                    let num_watchers =
+                        self.watch_lists[updated_domain_id].num_upper_bound_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id].upper_bound
-                            [current_index]
+                        let right_hand_side = self.watch_lists[updated_domain_id]
+                            .get_upper_bound_watcher_at_index(current_index)
                             .right_hand_side;
 
                         if old_upper_bound > right_hand_side && right_hand_side >= new_upper_bound {
-                            let nogood_id = self.watch_lists[updated_domain_id].upper_bound
-                                [current_index]
+                            let nogood_id = self.watch_lists[updated_domain_id]
+                                .get_upper_bound_watcher_at_index(current_index)
                                 .nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
@@ -334,8 +339,11 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
-                                self.watch_lists[updated_domain_id].upper_bound[end_index] =
-                                    self.watch_lists[updated_domain_id].upper_bound[current_index];
+                                self.watch_lists[updated_domain_id]
+                                    .set_upper_bound_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
                                 current_index += 1;
                                 end_index += 1;
                                 continue;
@@ -374,8 +382,8 @@ impl Propagator for NogoodPropagator {
                             }
 
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].upper_bound[end_index] =
-                                self.watch_lists[updated_domain_id].upper_bound[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_upper_bound_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
 
@@ -396,21 +404,22 @@ impl Propagator for NogoodPropagator {
                                 // Stop any further propagation and report the conflict.
                                 // Readd the remaining watchers to the watch list.
                                 while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id].upper_bound[end_index] =
-                                        self.watch_lists[updated_domain_id].upper_bound
-                                            [current_index];
+                                    self.watch_lists[updated_domain_id]
+                                        .set_upper_bound_watcher_to_other_watcher(
+                                            end_index,
+                                            current_index,
+                                        );
                                     current_index += 1;
                                     end_index += 1;
                                 }
                                 self.watch_lists[updated_domain_id]
-                                    .upper_bound
-                                    .truncate(end_index);
+                                    .truncate_upper_bound_watchers(end_index);
                                 return Err(e.into());
                             }
                         } else {
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].upper_bound[end_index] =
-                                self.watch_lists[updated_domain_id].upper_bound[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_upper_bound_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
                         }
@@ -418,8 +427,7 @@ impl Propagator for NogoodPropagator {
                     // Went through all the watchers.
                     if num_watchers > 0 {
                         self.watch_lists[updated_domain_id]
-                            .upper_bound
-                            .truncate(end_index);
+                            .truncate_upper_bound_watchers(end_index);
                     }
                 }
                 IntDomainEvent::Removal => {
@@ -437,11 +445,13 @@ impl Propagator for NogoodPropagator {
 
                     // Effectively, resizing the watch list to size zero,
                     // and in the loop add some of the old watchers back.
-                    let num_watchers = self.watch_lists[updated_domain_id].hole.len();
+                    let num_watchers =
+                        self.watch_lists[updated_domain_id].num_inequality_watchers();
                     // Iterate through all watchers.
                     while current_index < num_watchers {
-                        let right_hand_side =
-                            self.watch_lists[updated_domain_id].hole[current_index].right_hand_side;
+                        let right_hand_side = self.watch_lists[updated_domain_id]
+                            .get_inequality_watcher_at_index(current_index)
+                            .right_hand_side;
 
                         let update_domain = updated_domain_id;
                         // Only look at the watcher if:
@@ -456,8 +466,9 @@ impl Propagator for NogoodPropagator {
                                     update_domain != right_hand_side
                                 )))
                         {
-                            let nogood_id =
-                                self.watch_lists[updated_domain_id].hole[current_index].nogood_id;
+                            let nogood_id = self.watch_lists[updated_domain_id]
+                                .get_inequality_watcher_at_index(current_index)
+                                .nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -479,8 +490,11 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
-                                self.watch_lists[updated_domain_id].hole[end_index] =
-                                    self.watch_lists[updated_domain_id].hole[current_index];
+                                self.watch_lists[updated_domain_id]
+                                    .set_inequality_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
                                 current_index += 1;
                                 end_index += 1;
                                 continue;
@@ -537,10 +551,15 @@ impl Propagator for NogoodPropagator {
                                 if let Some(new_rhs) = kept_watcher_new_rhs {
                                     // Keep the current watch for this predicate,
                                     // and update its right hand side.
-                                    self.watch_lists[updated_domain_id].hole[end_index] =
-                                        self.watch_lists[updated_domain_id].hole[current_index];
-                                    self.watch_lists[updated_domain_id].hole[end_index]
-                                        .right_hand_side = new_rhs;
+                                    self.watch_lists[updated_domain_id]
+                                        .set_inequality_watcher_to_other_watcher(
+                                            end_index,
+                                            current_index,
+                                        );
+                                    self.watch_lists[updated_domain_id]
+                                        .set_right_hand_side_of_inequality_watcher_at_index(
+                                            end_index, new_rhs,
+                                        );
 
                                     end_index += 1;
                                     current_index += 1;
@@ -557,8 +576,8 @@ impl Propagator for NogoodPropagator {
                             }
 
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].hole[end_index] =
-                                self.watch_lists[updated_domain_id].hole[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_inequality_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
 
@@ -579,25 +598,30 @@ impl Propagator for NogoodPropagator {
                                 // Stop any further propagation and report the conflict.
                                 // Readd the remaining watchers to the watch list.
                                 while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id].hole[end_index] =
-                                        self.watch_lists[updated_domain_id].hole[current_index];
+                                    self.watch_lists[updated_domain_id]
+                                        .set_inequality_watcher_to_other_watcher(
+                                            end_index,
+                                            current_index,
+                                        );
                                     current_index += 1;
                                     end_index += 1;
                                 }
-                                self.watch_lists[updated_domain_id].hole.truncate(end_index);
+
+                                self.watch_lists[updated_domain_id]
+                                    .truncate_inequality_watchers(end_index);
                                 return Err(e.into());
                             }
                         } else {
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].hole[end_index] =
-                                self.watch_lists[updated_domain_id].hole[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_inequality_watcher_to_other_watcher(end_index, current_index);
                             end_index += 1;
                             current_index += 1;
                         }
                     }
                     // Went through all the watchers.
                     if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id].hole.truncate(end_index);
+                        self.watch_lists[updated_domain_id].truncate_inequality_watchers(end_index);
                     }
                 }
                 IntDomainEvent::Assign => {
@@ -609,17 +633,18 @@ impl Propagator for NogoodPropagator {
 
                     // Effectively, resizing the watch list to size zero,
                     // and in the loop add some of the old watchers back.
-                    let num_watchers = self.watch_lists[updated_domain_id].equals.len();
+                    let num_watchers = self.watch_lists[updated_domain_id].num_equality_watchers();
                     // Iterate through all watchers.
 
                     while current_index < num_watchers {
-                        let right_hand_side = self.watch_lists[updated_domain_id].equals
-                            [current_index]
+                        let right_hand_side = self.watch_lists[updated_domain_id]
+                            .get_equality_watcher_at_index(current_index)
                             .right_hand_side;
 
                         if assigned_value == right_hand_side {
-                            let nogood_id =
-                                self.watch_lists[updated_domain_id].equals[current_index].nogood_id;
+                            let nogood_id = self.watch_lists[updated_domain_id]
+                                .get_equality_watcher_at_index(current_index)
+                                .nogood_id;
                             let nogood = &mut self.nogoods[nogood_id].predicates;
 
                             let is_watched_predicate = |predicate: Predicate| {
@@ -641,8 +666,11 @@ impl Propagator for NogoodPropagator {
                             if context.is_predicate_falsified(nogood[0]) {
                                 // Keep the watchers, the nogood is falsified,
                                 // no propagation can take place.
-                                self.watch_lists[updated_domain_id].equals[end_index] =
-                                    self.watch_lists[updated_domain_id].equals[current_index];
+                                self.watch_lists[updated_domain_id]
+                                    .set_equality_watcher_to_other_watcher(
+                                        end_index,
+                                        current_index,
+                                    );
                                 current_index += 1;
                                 end_index += 1;
                                 continue;
@@ -683,11 +711,10 @@ impl Propagator for NogoodPropagator {
                                 continue;
                             }
 
-                            // println!("\tok going in");
-
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].equals[end_index] =
-                                self.watch_lists[updated_domain_id].equals[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_equality_watcher_to_other_watcher(end_index, current_index);
+
                             end_index += 1;
                             current_index += 1;
 
@@ -705,33 +732,34 @@ impl Propagator for NogoodPropagator {
                             let result = context.post_predicate(!nogood[0], reason);
                             // If the propagation lead to a conflict.
                             if let Err(e) = result {
-                                //  println!("erroni!");
                                 // Stop any further propagation and report the conflict.
                                 // Readd the remaining watchers to the watch list.
                                 while current_index < num_watchers {
-                                    self.watch_lists[updated_domain_id].equals[end_index] =
-                                        self.watch_lists[updated_domain_id].equals[current_index];
+                                    self.watch_lists[updated_domain_id]
+                                        .set_equality_watcher_to_other_watcher(
+                                            end_index,
+                                            current_index,
+                                        );
+
                                     current_index += 1;
                                     end_index += 1;
                                 }
                                 self.watch_lists[updated_domain_id]
-                                    .equals
-                                    .truncate(end_index);
+                                    .truncate_equality_watchers(end_index);
                                 return Err(e.into());
                             }
                         } else {
                             // Keep the current watch for this predicate.
-                            self.watch_lists[updated_domain_id].equals[end_index] =
-                                self.watch_lists[updated_domain_id].equals[current_index];
+                            self.watch_lists[updated_domain_id]
+                                .set_equality_watcher_to_other_watcher(end_index, current_index);
+
                             end_index += 1;
                             current_index += 1;
                         }
                     }
                     // Went through all the watchers.
                     if num_watchers > 0 {
-                        self.watch_lists[updated_domain_id]
-                            .equals
-                            .truncate(end_index);
+                        self.watch_lists[updated_domain_id].truncate_equality_watchers(end_index);
                     }
                 }
             }
@@ -798,7 +826,7 @@ impl Propagator for NogoodPropagator {
     ///
     /// In case of the noogood propagator, lazy explanations internally also update information
     /// about the LBD and activity of the nogood, which is used when cleaning up nogoods.
-    fn lazy_explanation(&mut self, code: u64, assignments: &Assignments) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let id = NogoodId { id: code as u32 };
 
         // Update the LBD and activity of the nogood, if appropriate.
@@ -813,9 +841,11 @@ impl Propagator for NogoodPropagator {
             // LBD update.
             // Note that we do not need to take into account the propagated predicate (in position
             // zero), since it will share a decision level with one of the other predicates.
-            let current_lbd = self
-                .lbd_helper
-                .compute_lbd(&self.nogoods[id].predicates.as_slice()[1..], assignments);
+            let current_lbd = self.lbd_helper.compute_lbd(
+                &self.nogoods[id].predicates.as_slice()[1..],
+                #[allow(deprecated, reason = "Should be refactored")]
+                context.assignments(),
+            );
 
             // The nogood keeps track of the best lbd encountered.
             if current_lbd < self.nogoods[id].lbd {
@@ -1049,31 +1079,25 @@ impl NogoodPropagator {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => watch_lists[domain_id].lower_bound.push(NogoodWatcher {
-                right_hand_side: lower_bound,
-                nogood_id,
-            }),
+            } => watch_lists[domain_id].add_lower_bound_watcher(nogood_id, lower_bound),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => watch_lists[domain_id].upper_bound.push(NogoodWatcher {
-                right_hand_side: upper_bound,
-                nogood_id,
-            }),
+            } => {
+                watch_lists[domain_id].add_upper_bound_watcher(nogood_id, upper_bound);
+            }
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => watch_lists[domain_id].hole.push(NogoodWatcher {
-                right_hand_side: not_equal_constant,
-                nogood_id,
-            }),
+            } => {
+                watch_lists[domain_id].add_inequality_watcher(nogood_id, not_equal_constant);
+            }
             Predicate::Equal {
                 domain_id,
                 equality_constant,
-            } => watch_lists[domain_id].equals.push(NogoodWatcher {
-                right_hand_side: equality_constant,
-                nogood_id,
-            }),
+            } => {
+                watch_lists[domain_id].add_equality_watcher(nogood_id, equality_constant);
+            }
         }
     }
 
@@ -1083,31 +1107,23 @@ impl NogoodPropagator {
         watching_predicate: Predicate,
         id: NogoodId,
     ) {
-        let find_and_remove_watcher = |watch_list: &mut Vec<NogoodWatcher>, value: i32| {
-            let position = watch_list
-                .iter()
-                .position(|w| w.right_hand_side == value && w.nogood_id == id)
-                .expect("NogoodWatcher must be present.");
-            let _ = watch_list.swap_remove(position);
-        };
-
         match watching_predicate {
             Predicate::LowerBound {
                 domain_id,
                 lower_bound,
-            } => (find_and_remove_watcher)(&mut watch_lists[domain_id].lower_bound, lower_bound),
+            } => watch_lists[domain_id].remove_lower_bound_watcher(id, lower_bound),
             Predicate::UpperBound {
                 domain_id,
                 upper_bound,
-            } => (find_and_remove_watcher)(&mut watch_lists[domain_id].upper_bound, upper_bound),
+            } => watch_lists[domain_id].remove_upper_bound_watcher(id, upper_bound),
             Predicate::NotEqual {
                 domain_id,
                 not_equal_constant,
-            } => (find_and_remove_watcher)(&mut watch_lists[domain_id].hole, not_equal_constant),
+            } => watch_lists[domain_id].remove_inequality_watcher(id, not_equal_constant),
             Predicate::Equal {
                 domain_id,
                 equality_constant,
-            } => (find_and_remove_watcher)(&mut watch_lists[domain_id].equals, equality_constant),
+            } => watch_lists[domain_id].remove_equality_watcher(id, equality_constant),
         }
     }
 }
@@ -1365,37 +1381,34 @@ impl NogoodPropagator {
 
     /// Checks for each nogood whether the first two predicates in the nogood are being watched
     fn debug_is_properly_watched(&self) -> bool {
-        let is_watching =
-            |predicate: Predicate, nogood_id: NogoodId| -> bool {
-                match predicate {
-                    Predicate::LowerBound {
-                        domain_id,
-                        lower_bound,
-                    } => self.watch_lists[domain_id]
-                        .lower_bound
-                        .iter()
-                        .any(|w| w.right_hand_side == lower_bound && w.nogood_id == nogood_id),
-                    Predicate::UpperBound {
-                        domain_id,
-                        upper_bound,
-                    } => self.watch_lists[domain_id]
-                        .upper_bound
-                        .iter()
-                        .any(|w| w.right_hand_side == upper_bound && w.nogood_id == nogood_id),
-                    Predicate::NotEqual {
-                        domain_id,
-                        not_equal_constant,
-                    } => self.watch_lists[domain_id].hole.iter().any(|w| {
-                        w.right_hand_side == not_equal_constant && w.nogood_id == nogood_id
-                    }),
-                    Predicate::Equal {
-                        domain_id,
-                        equality_constant,
-                    } => self.watch_lists[domain_id].equals.iter().any(|w| {
-                        w.right_hand_side == equality_constant && w.nogood_id == nogood_id
-                    }),
-                }
-            };
+        let is_watching = |predicate: Predicate, nogood_id: NogoodId| -> bool {
+            match predicate {
+                Predicate::LowerBound {
+                    domain_id,
+                    lower_bound,
+                } => self.watch_lists[domain_id]
+                    .iter_lower_bound_watchers()
+                    .any(|w| w.right_hand_side == lower_bound && w.nogood_id == nogood_id),
+                Predicate::UpperBound {
+                    domain_id,
+                    upper_bound,
+                } => self.watch_lists[domain_id]
+                    .iter_upper_bound_watchers()
+                    .any(|w| w.right_hand_side == upper_bound && w.nogood_id == nogood_id),
+                Predicate::NotEqual {
+                    domain_id,
+                    not_equal_constant,
+                } => self.watch_lists[domain_id]
+                    .iter_inequality_watchers()
+                    .any(|w| w.right_hand_side == not_equal_constant && w.nogood_id == nogood_id),
+                Predicate::Equal {
+                    domain_id,
+                    equality_constant,
+                } => self.watch_lists[domain_id]
+                    .iter_equality_watchers()
+                    .any(|w| w.right_hand_side == equality_constant && w.nogood_id == nogood_id),
+            }
+        };
 
         for nogood in self.nogoods.iter().enumerate() {
             let nogood_id = NogoodId {

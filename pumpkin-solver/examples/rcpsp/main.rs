@@ -19,11 +19,14 @@ use pumpkin_solver::branching::branchers::independent_variable_value_brancher::I
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::Smallest;
 use pumpkin_solver::constraints;
+use pumpkin_solver::options::CumulativeOptions;
+use pumpkin_solver::options::CumulativePropagationMethod;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::variables::Literal;
 use pumpkin_solver::variables::TransformableVariable;
 use pumpkin_solver::Solver;
 use rcpsp_instance::parse_rcpsp_dzn;
@@ -44,8 +47,17 @@ struct Args {
     #[arg(short = 'n', long)]
     use_node_packing: bool,
 
+    /// Enables the cumulative to mine for disjointness
+    #[arg(short = 'c', long)]
+    use_cumulative_disjointness: bool,
+
+    /// Determines whether to use fixed search (smallest, indomain-min) or a strategy alternating
+    /// between (smallest, indomain-min), and VSIDS
+    #[arg(short = 's', long)]
+    use_fixed_search: bool,
+
     /// The maximum number of rotations performed by the node-packing propagator
-    #[arg(short='c', long, default_value_t=usize::MAX)]
+    #[arg(short='o', long, default_value_t=usize::MAX)]
     number_of_cycles: usize,
 
     #[arg(short = 't', long = "time-limit")]
@@ -172,39 +184,50 @@ fn run() -> SchedulingResult<()> {
         panic!("Adding precedence for makespan led to unsatisfiability");
     }
 
-    let mut incompatibility_matrix = vec![
-        vec![false; rcpsp_instance.processing_times.len()];
-        rcpsp_instance.processing_times.len()
-    ];
-
     let (transitive_closure, rev_map) = create_transitive_closure_of_graph(
         &rcpsp_instance.dependencies,
         rcpsp_instance.processing_times.len() as u32,
     );
 
-    // Keep track of the resource infeasibilities and the incompatibilities due to precedence
-    // constraints
+    let mut incompatibility_matrix: Vec<Vec<Literal>> =
+        Vec::with_capacity(rcpsp_instance.processing_times.len());
+
     for index in 0..rcpsp_instance.processing_times.len() {
+        let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
         for other_index in 0..rcpsp_instance.processing_times.len() {
-            if index == other_index {
-                continue;
-            }
-            for resource_index in 0..rcpsp_instance.resource_capacities.len() {
-                if rcpsp_instance.resource_requirements[resource_index][index]
-                    + rcpsp_instance.resource_requirements[resource_index][other_index]
-                    > rcpsp_instance.resource_capacities[resource_index]
-                {
-                    incompatibility_matrix[index][other_index] = true;
-                    incompatibility_matrix[other_index][index] = true;
+            let result = match index.cmp(&other_index) {
+                std::cmp::Ordering::Less => {
+                    let mut is_resource_infeasible = false;
+                    for resource_index in 0..rcpsp_instance.resource_capacities.len() {
+                        if rcpsp_instance.resource_requirements[resource_index][index]
+                            + rcpsp_instance.resource_requirements[resource_index][other_index]
+                            > rcpsp_instance.resource_capacities[resource_index]
+                        {
+                            is_resource_infeasible = true;
+                            break;
+                        }
+                    }
+                    let mut is_connected_by_precedence = false;
+                    if !is_resource_infeasible
+                        && (transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
+                            || transitive_closure
+                                .contains_edge(rev_map[other_index], rev_map[index]))
+                    {
+                        is_connected_by_precedence = true;
+                    }
+
+                    if is_resource_infeasible || is_connected_by_precedence {
+                        solver.get_true_literal()
+                    } else {
+                        solver.new_literal()
+                    }
                 }
-            }
-            if transitive_closure.contains_edge(rev_map[index], rev_map[other_index])
-                || transitive_closure.contains_edge(rev_map[other_index], rev_map[index])
-            {
-                incompatibility_matrix[index][other_index] = true;
-                incompatibility_matrix[other_index][index] = true;
-            }
+                std::cmp::Ordering::Equal => solver.get_false_literal(),
+                std::cmp::Ordering::Greater => incompatibility_matrix[other_index][index],
+            };
+            new_vec.push(result);
         }
+        incompatibility_matrix.push(new_vec)
     }
 
     for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {
@@ -225,7 +248,7 @@ fn run() -> SchedulingResult<()> {
     for (resource_index, resource_usages) in rcpsp_instance.resource_requirements.iter().enumerate()
     {
         let result = solver
-            .add_constraint(constraints::cumulative(
+            .add_constraint(constraints::cumulative_with_options(
                 start_variables.clone(),
                 rcpsp_instance
                     .processing_times
@@ -237,6 +260,18 @@ fn run() -> SchedulingResult<()> {
                     .map(|&value| value as i32)
                     .collect::<Vec<_>>(),
                 rcpsp_instance.resource_capacities[resource_index] as i32,
+                CumulativeOptions::new(
+                    false,
+                    pumpkin_solver::options::CumulativeExplanationType::BigStep,
+                    false,
+                    CumulativePropagationMethod::default(),
+                    false,
+                    if args.use_cumulative_disjointness {
+                        Some(incompatibility_matrix.clone())
+                    } else {
+                        None
+                    },
+                ),
             ))
             .post();
         if result.is_err() {
@@ -272,9 +307,13 @@ fn run() -> SchedulingResult<()> {
         );
     });
 
-    let mut brancher = AlternatingBrancher::new(
-        &solver,
-        IndependentVariableValueBrancher::new(
+    let mut termination = Combinator::new(
+        OsSignal::install(),
+        args.time_limit
+            .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
+    );
+    let result = if args.use_fixed_search {
+        let mut brancher = IndependentVariableValueBrancher::new(
             Smallest::new(
                 &start_variables
                     .into_iter()
@@ -282,17 +321,26 @@ fn run() -> SchedulingResult<()> {
                     .collect::<Vec<_>>(),
             ),
             InDomainMin,
-        ),
-        SwitchToDefaultAfterFirstSolution,
-    );
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    } else {
+        let mut brancher = AlternatingBrancher::new(
+            &solver,
+            IndependentVariableValueBrancher::new(
+                Smallest::new(
+                    &start_variables
+                        .into_iter()
+                        .chain(std::iter::once(makespan))
+                        .collect::<Vec<_>>(),
+                ),
+                InDomainMin,
+            ),
+            SwitchToDefaultAfterFirstSolution,
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    };
 
-    let mut termination = Combinator::new(
-        OsSignal::install(),
-        args.time_limit
-            .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
-    );
-
-    match solver.minimise(&mut brancher, &mut termination, makespan) {
+    match result {
         pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
             println!(
                 "Found optimal solution with makespan {}",
