@@ -19,7 +19,8 @@ use crate::math::num_ext::NumExt;
 /// domain of `x`.
 #[derive(Clone, Copy, Hash, Eq, PartialEq)]
 pub struct AffineView<Inner> {
-    inner: Inner,
+    // HACK
+    pub(crate) inner: Inner,
     scale: i32,
     offset: i32,
 }

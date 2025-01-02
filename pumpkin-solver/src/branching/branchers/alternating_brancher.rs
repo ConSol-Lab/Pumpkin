@@ -7,6 +7,7 @@ use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
+use crate::engine::DomainEvents;
 use crate::DefaultBrancher;
 use crate::Solver;
 
@@ -69,6 +70,22 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
             is_using_default_brancher: false,
             other_brancher,
             default_brancher: solver.default_brancher(),
+            strategy,
+            has_considered_restart: false,
+        }
+    }
+
+    pub fn with_blacklist(
+        solver: &Solver,
+        other_brancher: OtherBrancher,
+        blacklist: &[DomainId],
+        strategy: AlternatingStrategy,
+    ) -> Self {
+        Self {
+            even_number_of_solutions: true,
+            is_using_default_brancher: false,
+            other_brancher,
+            default_brancher: solver.blacklist_brancher(blacklist),
             strategy,
             has_considered_restart: false,
         }

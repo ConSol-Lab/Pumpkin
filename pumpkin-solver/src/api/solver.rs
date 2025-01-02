@@ -704,6 +704,10 @@ impl Solver {
     pub fn default_brancher(&self) -> DefaultBrancher {
         DefaultBrancher::default_over_all_variables(&self.satisfaction_solver.assignments)
     }
+
+    pub fn blacklist_brancher(&self, blacklist: &[DomainId]) -> DefaultBrancher {
+        DefaultBrancher::default_with_blacklist(&self.satisfaction_solver.assignments, blacklist)
+    }
 }
 
 /// Proof logging methods

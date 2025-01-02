@@ -27,6 +27,10 @@ impl Literal {
         }
     }
 
+    pub fn domain_id(&self) -> DomainId {
+        self.integer_variable.inner
+    }
+
     #[cfg(test)]
     pub fn test_new(domain_id: DomainId) -> Literal {
         Literal {

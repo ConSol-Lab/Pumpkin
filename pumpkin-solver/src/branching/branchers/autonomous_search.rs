@@ -11,6 +11,7 @@ use crate::containers::StorageKey;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::Assignments;
 use crate::results::Solution;
+use crate::variables::DomainId;
 use crate::DefaultBrancher;
 /// A [`Brancher`] that combines [VSIDS \[1\]](https://dl.acm.org/doi/pdf/10.1145/378239.379017)
 /// and [Solution-based phase saving \[2\]](https://people.eng.unimelb.edu.au/pstuckey/papers/lns-restarts.pdf).
@@ -97,6 +98,29 @@ impl DefaultBrancher {
     /// [`Smallest`] with [`InDomainMin`].
     pub fn default_over_all_variables(assignments: &Assignments) -> DefaultBrancher {
         let variables = assignments.get_domains().collect::<Vec<_>>();
+        AutonomousSearch {
+            predicate_id_info: PredicateIdGenerator::default(),
+            heap: KeyValueHeap::default(),
+            dormant_predicates: vec![],
+            increment: DEFAULT_VSIDS_INCREMENT,
+            max_threshold: DEFAULT_VSIDS_MAX_THRESHOLD,
+            decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
+            best_known_solution: None,
+            backup_brancher: IndependentVariableValueBrancher::new(
+                Smallest::new(&variables),
+                InDomainMin,
+            ),
+        }
+    }
+
+    pub fn default_with_blacklist(
+        assignments: &Assignments,
+        blacklist: &[DomainId],
+    ) -> DefaultBrancher {
+        let variables = assignments
+            .get_domains()
+            .filter(|domain_id| !blacklist.contains(domain_id))
+            .collect::<Vec<_>>();
         AutonomousSearch {
             predicate_id_info: PredicateIdGenerator::default(),
             heap: KeyValueHeap::default(),

@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::usize;
@@ -29,7 +28,9 @@ use crate::variables::Literal;
 create_statistics_struct!(NodePackingStatistics {
     n_calls: usize,
     n_conflicts: usize,
-    average_clique_size: CumulativeMovingAverage<u64>,
+    n_trivial_conflicts: usize,
+    average_clique_size: CumulativeMovingAverage<usize>,
+    average_backjump_height: CumulativeMovingAverage<usize>,
 });
 
 pub(crate) struct NodePackingPropagator<Var> {
@@ -77,7 +78,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         self.parameters.tasks.to_vec().into()
     }
 
-    fn find_conflict(&self, context: PropagationContext<'_>) -> Option<Vec<Rc<Task<Var>>>> {
+    fn find_conflict(&self, context: PropagationContext<'_>) -> Option<Vec<usize>> {
         let all_tasks = self.create_initial_activity_list();
         let durations = all_tasks
             .iter()
@@ -103,12 +104,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                     && duration_lhs + duration_rhs
                         > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
-                    return Some(
-                        [index_lhs, index_rhs]
-                            .iter()
-                            .map(|&ix| all_tasks[ix].clone())
-                            .collect(),
-                    );
+                    return Some([index_lhs, index_rhs].to_vec());
                 }
             }
         }
@@ -154,12 +150,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             }
             // Update the best clique if the overflow condition holds
             if clique.iter().map(|&ix| durations[ix]).sum::<i32>() > finish - start {
-                return Some(
-                    clique
-                        .iter()
-                        .map(|&task_index| all_tasks[task_index].clone())
-                        .collect_vec(),
-                );
+                return Some(clique);
             }
         }
         None
@@ -330,30 +321,58 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         self.statistics.n_calls += 1;
         if let Some(clique) = self.find_conflict(context.as_readonly()) {
             self.statistics.n_conflicts += 1;
-            self.statistics
-                .average_clique_size
-                .add_term(clique.len() as u64);
+            if clique.len() == 2 {
+                self.statistics.n_trivial_conflicts += 1;
+            }
+            self.statistics.average_clique_size.add_term(clique.len());
+            let tasks = self.create_initial_activity_list();
             let est = clique
                 .iter()
-                .map(|task| context.lower_bound(&task.start_variable))
+                .map(|&task_ix| context.lower_bound(&tasks[task_ix].start_variable))
                 .min()
                 .expect("Empty clique");
             let lft = clique
                 .iter()
-                .map(|task| context.upper_bound(&task.start_variable) + task.processing_time)
+                .map(|&task_ix| {
+                    let task = &tasks[task_ix];
+                    context.upper_bound(&task.start_variable) + task.processing_time
+                })
                 .max()
                 .expect("Empty clique");
-            // eprintln!("Tasks {clique:?} do not fit in [{est},{lft}]");
-            Err(crate::basic_types::Inconsistency::Conflict(
-                clique
+            let nogood = clique
+                .iter()
+                .flat_map(|&task_ix| {
+                    let task = &tasks[task_ix];
+                    [
+                        predicate!(task.start_variable >= est),
+                        predicate!(task.start_variable <= lft - task.processing_time),
+                    ]
+                })
+                .chain(clique.iter().tuple_combinations::<(_, _)>().map(
+                    |(&task_lhs_ix, &task_rhs_ix)| {
+                        let disjoint = self.parameters.disjointness[task_lhs_ix][task_rhs_ix];
+                        predicate!(disjoint == 1)
+                    },
+                ))
+                .collect_vec();
+            let backjump_height = context.get_decision_level()
+                - nogood
                     .iter()
-                    .flat_map(|task| {
-                        [
-                            predicate!(task.start_variable >= est),
-                            predicate!(task.start_variable <= lft - task.processing_time),
-                        ]
+                    .map(|pred| {
+                        context
+                            .assignments
+                            .get_decision_level_for_predicate(pred)
+                            .unwrap_or(0)
                     })
-                    .collect(),
+                    .sorted_by(|lhs, rhs| lhs.cmp(rhs).reverse())
+                    .dedup()
+                    .nth(1)
+                    .unwrap_or(0);
+            self.statistics
+                .average_backjump_height
+                .add_term(backjump_height);
+            Err(crate::basic_types::Inconsistency::Conflict(
+                nogood.into_iter().collect(),
             ))
         } else {
             Ok(())
@@ -365,25 +384,36 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
         if let Some(clique) = self.find_conflict(context.as_readonly()) {
+            let tasks = self.create_initial_activity_list();
             let est = clique
                 .iter()
-                .map(|task| context.lower_bound(&task.start_variable))
+                .map(|&task_ix| context.lower_bound(&tasks[task_ix].start_variable))
                 .min()
                 .expect("Empty clique");
-            let lst = clique
+            let lft = clique
                 .iter()
-                .map(|task| context.upper_bound(&task.start_variable))
+                .map(|&task_ix| {
+                    let task = &tasks[task_ix];
+                    context.upper_bound(&task.start_variable) + task.processing_time
+                })
                 .max()
                 .expect("Empty clique");
             Err(crate::basic_types::Inconsistency::Conflict(
                 clique
                     .iter()
-                    .flat_map(|task| {
+                    .flat_map(|&task_ix| {
+                        let task = &tasks[task_ix];
                         [
                             predicate!(task.start_variable >= est),
-                            predicate!(task.start_variable <= lst),
+                            predicate!(task.start_variable <= lft - task.processing_time),
                         ]
                     })
+                    .chain(clique.iter().tuple_combinations::<(_, _)>().map(
+                        |(&task_lhs_ix, &task_rhs_ix)| {
+                            let disjoint = self.parameters.disjointness[task_lhs_ix][task_rhs_ix];
+                            predicate!(disjoint == 1)
+                        },
+                    ))
                     .collect(),
             ))
         } else {

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use clap::Parser;
 use convert_case::Case;
+use itertools::Itertools;
 use log::info;
 use log::LevelFilter;
 use petgraph::adj::List;
@@ -50,11 +51,6 @@ struct Args {
     /// Enables the cumulative to mine for disjointness
     #[arg(short = 'c', long)]
     use_cumulative_disjointness: bool,
-
-    /// Determines whether to use fixed search (smallest, indomain-min) or a strategy alternating
-    /// between (smallest, indomain-min), and VSIDS
-    #[arg(short = 's', long)]
-    use_fixed_search: bool,
 
     /// The maximum number of rotations performed by the node-packing propagator
     #[arg(short='o', long, default_value_t=usize::MAX)]
@@ -312,8 +308,9 @@ fn run() -> SchedulingResult<()> {
         args.time_limit
             .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
     );
-    let result = if args.use_fixed_search {
-        let mut brancher = IndependentVariableValueBrancher::new(
+    let mut brancher = AlternatingBrancher::with_blacklist(
+        &solver,
+        IndependentVariableValueBrancher::new(
             Smallest::new(
                 &start_variables
                     .into_iter()
@@ -321,24 +318,17 @@ fn run() -> SchedulingResult<()> {
                     .collect::<Vec<_>>(),
             ),
             InDomainMin,
-        );
-        solver.minimise(&mut brancher, &mut termination, makespan)
-    } else {
-        let mut brancher = AlternatingBrancher::new(
-            &solver,
-            IndependentVariableValueBrancher::new(
-                Smallest::new(
-                    &start_variables
-                        .into_iter()
-                        .chain(std::iter::once(makespan))
-                        .collect::<Vec<_>>(),
-                ),
-                InDomainMin,
-            ),
-            SwitchToDefaultAfterFirstSolution,
-        );
-        solver.minimise(&mut brancher, &mut termination, makespan)
-    };
+        ),
+        &incompatibility_matrix
+            .iter()
+            .flat_map(|row| row.iter().map(|lit| lit.domain_id()))
+            .collect_vec(),
+        SwitchToDefaultAfterFirstSolution,
+    );
+    let result = solver.minimise(&mut brancher, &mut termination, makespan);
+
+    println!("------------------Final Statistics------------------");
+    solver.log_statistics();
 
     match result {
         pumpkin_solver::results::OptimisationResult::Optimal(solution) => {
@@ -348,20 +338,15 @@ fn run() -> SchedulingResult<()> {
             )
         }
         pumpkin_solver::results::OptimisationResult::Satisfiable(solution) => {
-            println!("------------------Final Statistics------------------");
-            solver.log_statistics();
             println!(
                 "Found satisfiable solution with makespan {}",
                 solution.get_integer_value(makespan)
             )
         }
         pumpkin_solver::results::OptimisationResult::Unsatisfiable => {
-            solver.log_statistics();
             println!("Unsatisfiable")
         }
         pumpkin_solver::results::OptimisationResult::Unknown => {
-            println!("------------------Final Statistics------------------");
-            solver.log_statistics();
             println!("Unknown")
         }
     }
