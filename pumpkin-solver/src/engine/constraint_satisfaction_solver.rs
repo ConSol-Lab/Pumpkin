@@ -32,7 +32,6 @@ use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::HashMap;
 use crate::basic_types::Inconsistency;
-use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;

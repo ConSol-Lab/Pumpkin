@@ -11,7 +11,6 @@ mod watch_list_cp;
 
 pub(crate) use assignments::Assignments;
 pub(crate) use assignments::EmptyDomain;
-pub(crate) use event_sink::*;
 pub(crate) use propagator_queue::PropagatorQueue;
 pub(crate) use stateful::*;
 pub(crate) use watch_list_cp::IntDomainEvent;

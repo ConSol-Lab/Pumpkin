@@ -28,7 +28,6 @@ use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::reason::Reason;
 use crate::engine::reason::ReasonStore;
-use crate::engine::variables::DomainId;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
@@ -157,7 +156,7 @@ impl Propagator for NogoodPropagator {
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
         info!("Nogood Propagator Propagating");
-        pumpkin_assert_advanced!(self.debug_is_properly_watched(&mut context.domain_faithfulness));
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
@@ -254,7 +253,7 @@ impl Propagator for NogoodPropagator {
             }
         }
 
-        pumpkin_assert_advanced!(self.debug_is_properly_watched(&mut context.domain_faithfulness));
+        pumpkin_assert_advanced!(self.debug_is_properly_watched(context.domain_faithfulness));
 
         Ok(())
     }

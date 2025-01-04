@@ -13,9 +13,7 @@ use crate::Solver;
 
 /// The result of a call to [`Solver::satisfy`].
 #[derive(Debug)]
-#[allow(
-    clippy::large_enum_variant,
-)]
+#[allow(clippy::large_enum_variant)]
 pub enum SatisfactionResult {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),
@@ -28,9 +26,7 @@ pub enum SatisfactionResult {
 
 /// The result of a call to [`Solver::satisfy_under_assumptions`].
 #[derive(Debug)]
-#[allow(
-    clippy::large_enum_variant,
-)]
+#[allow(clippy::large_enum_variant)]
 pub enum SatisfactionResultUnderAssumptions<'solver, 'brancher, B: Brancher> {
     /// Indicates that a solution was found and provides the corresponding [`Solution`].
     Satisfiable(Solution),

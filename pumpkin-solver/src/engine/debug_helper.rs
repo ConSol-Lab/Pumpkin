@@ -462,7 +462,7 @@ impl DebugHelper {
             let negated_predicate = predicate.not();
             let outcome = assignments_clone.post_predicate(negated_predicate, None);
 
-            if let Ok(_) = outcome {
+            if outcome.is_ok() {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
                 let mut domain_faithfulness = DomainFaithfulness::default();
