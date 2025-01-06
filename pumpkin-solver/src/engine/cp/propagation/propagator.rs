@@ -120,9 +120,9 @@ pub(crate) trait Propagator: Downcast {
     ) {
     }
 
-    fn notify_predicate_id_satisfied(&mut self, predicate_id: PredicateId) {}
+    fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
 
-    fn notify_predicate_id_falsified(&mut self, predicate_id: PredicateId) {}
+    fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then
     /// update its internal data structures given the new variable domains.

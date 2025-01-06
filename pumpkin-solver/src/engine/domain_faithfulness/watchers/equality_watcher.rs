@@ -1,76 +1,29 @@
 use super::DomainWatcher;
 use super::FaithfullnessWatcher;
+use super::HasWatcher;
 use super::PredicateId;
-use super::StatefulInt;
 use crate::basic_types::Trail;
 use crate::engine::Assignments;
 use crate::engine::StateChange;
 use crate::predicate;
 use crate::predicates::Predicate;
-use crate::variables::DomainId;
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct EqualityWatcher {
     watcher: FaithfullnessWatcher,
 }
 
+impl HasWatcher for EqualityWatcher {
+    fn get_watcher(&self) -> &FaithfullnessWatcher {
+        &self.watcher
+    }
+
+    fn get_watcher_mut(&mut self) -> &mut FaithfullnessWatcher {
+        &mut self.watcher
+    }
+}
+
 impl DomainWatcher for EqualityWatcher {
-    fn set_domain_id(&mut self, domain_id: DomainId) {
-        self.watcher.domain_id = domain_id;
-    }
-
-    fn get_ids(&self) -> &Vec<PredicateId> {
-        &self.watcher.ids
-    }
-
-    fn get_ids_mut(&mut self) -> &mut Vec<PredicateId> {
-        &mut self.watcher.ids
-    }
-
-    fn get_values(&self) -> &Vec<i32> {
-        &self.watcher.values
-    }
-
-    fn get_values_mut(&mut self) -> &mut Vec<i32> {
-        &mut self.watcher.values
-    }
-
-    fn get_smaller(&self) -> &Vec<i64> {
-        &self.watcher.s
-    }
-
-    fn get_smaller_mut(&mut self) -> &mut Vec<i64> {
-        &mut self.watcher.s
-    }
-
-    fn get_greater(&self) -> &Vec<i64> {
-        &self.watcher.g
-    }
-
-    fn get_greater_mut(&mut self) -> &mut Vec<i64> {
-        &mut self.watcher.g
-    }
-
-    fn get_min_unassigned(&self) -> &StatefulInt {
-        &self.watcher.min_unassigned
-    }
-
-    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.watcher.min_unassigned
-    }
-
-    fn get_max_unassigned(&self) -> &StatefulInt {
-        &self.watcher.max_unassigned
-    }
-
-    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.watcher.max_unassigned
-    }
-
-    fn is_empty(&self) -> bool {
-        self.watcher.values.is_empty()
-    }
-
     fn get_predicate_for_value(&self, value: i32) -> Predicate {
         predicate!(self.watcher.domain_id == value)
     }
@@ -123,7 +76,7 @@ impl DomainWatcher for EqualityWatcher {
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         assignments: &Assignments,
-        predicate_id: Option<PredicateId>,
+        _predicate_id: Option<PredicateId>,
     ) {
         self.check_for_updated_sentinel(assignments, stateful_trail);
 

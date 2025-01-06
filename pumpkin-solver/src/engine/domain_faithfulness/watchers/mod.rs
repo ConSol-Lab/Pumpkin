@@ -44,7 +44,12 @@ impl Default for FaithfullnessWatcher {
     }
 }
 
-pub(crate) trait DomainWatcher {
+pub(crate) trait HasWatcher {
+    fn get_watcher(&self) -> &FaithfullnessWatcher;
+    fn get_watcher_mut(&mut self) -> &mut FaithfullnessWatcher;
+}
+
+pub(crate) trait DomainWatcherInformation {
     fn set_domain_id(&mut self, domain_id: DomainId);
 
     fn get_ids(&self) -> &Vec<PredicateId>;
@@ -66,7 +71,67 @@ pub(crate) trait DomainWatcher {
     fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt;
 
     fn is_empty(&self) -> bool;
+}
 
+impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
+    fn set_domain_id(&mut self, domain_id: DomainId) {
+        self.get_watcher_mut().domain_id = domain_id;
+    }
+
+    fn get_ids(&self) -> &Vec<PredicateId> {
+        &self.get_watcher().ids
+    }
+
+    fn get_ids_mut(&mut self) -> &mut Vec<PredicateId> {
+        &mut self.get_watcher_mut().ids
+    }
+
+    fn get_values(&self) -> &Vec<i32> {
+        &self.get_watcher().values
+    }
+
+    fn get_values_mut(&mut self) -> &mut Vec<i32> {
+        &mut self.get_watcher_mut().values
+    }
+
+    fn get_smaller(&self) -> &Vec<i64> {
+        &self.get_watcher().s
+    }
+
+    fn get_smaller_mut(&mut self) -> &mut Vec<i64> {
+        &mut self.get_watcher_mut().s
+    }
+
+    fn get_greater(&self) -> &Vec<i64> {
+        &self.get_watcher().g
+    }
+
+    fn get_greater_mut(&mut self) -> &mut Vec<i64> {
+        &mut self.get_watcher_mut().g
+    }
+
+    fn get_min_unassigned(&self) -> &StatefulInt {
+        &self.get_watcher().min_unassigned
+    }
+
+    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt {
+        &mut self.get_watcher_mut().min_unassigned
+    }
+
+    fn get_max_unassigned(&self) -> &StatefulInt {
+        &self.get_watcher().max_unassigned
+    }
+
+    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt {
+        &mut self.get_watcher_mut().max_unassigned
+    }
+
+    fn is_empty(&self) -> bool {
+        self.get_watcher().values.is_empty()
+    }
+}
+
+pub(crate) trait DomainWatcher: DomainWatcherInformation {
     fn get_predicate_for_value(&self, value: i32) -> Predicate;
 
     fn check_for_updated_sentinel(

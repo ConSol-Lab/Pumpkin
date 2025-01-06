@@ -1,4 +1,5 @@
 use super::watchers::DomainWatcher;
+use super::watchers::DomainWatcherInformation;
 use super::watchers::EqualityWatcher;
 use super::watchers::InequalityWatcher;
 use super::watchers::LowerBoundWatcher;
