@@ -19,9 +19,15 @@ pub(crate) struct DomainFaithfulness {
 
     falsified_predicates: Vec<PredicateId>,
     satisfied_predicates: Vec<PredicateId>,
+
+    last_updated: usize,
 }
 
 impl DomainFaithfulness {
+    pub(crate) fn backtrack_has_occurred(&mut self) {
+        self.last_updated += 1;
+    }
+
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }
@@ -65,6 +71,7 @@ impl DomainFaithfulness {
             self.predicate_to_id
                 .has_id_for_predicate(predicate)
                 .then(|| self.predicate_to_id.get_id(predicate)),
+            self.last_updated,
         );
     }
 

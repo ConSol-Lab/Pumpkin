@@ -28,6 +28,7 @@ pub(crate) struct FaithfullnessWatcher {
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
+    last_updated: usize,
 }
 
 impl Default for FaithfullnessWatcher {
@@ -40,6 +41,7 @@ impl Default for FaithfullnessWatcher {
             g: Vec::default(),
             values: Vec::default(),
             ids: Vec::default(),
+            last_updated: 0,
         }
     }
 }
@@ -71,6 +73,9 @@ pub(crate) trait DomainWatcherInformation {
     fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt;
 
     fn is_empty(&self) -> bool;
+
+    fn is_equal_to_last_updated(&self, last_updated: usize) -> bool;
+    fn set_last_updated(&mut self, last_updated: usize);
 }
 
 impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
@@ -129,6 +134,14 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
     fn is_empty(&self) -> bool {
         self.get_watcher().values.is_empty()
     }
+
+    fn is_equal_to_last_updated(&self, last_updated: usize) -> bool {
+        self.get_watcher().last_updated == last_updated
+    }
+
+    fn set_last_updated(&mut self, last_updated: usize) {
+        self.get_watcher_mut().last_updated = last_updated
+    }
 }
 
 pub(crate) trait DomainWatcher: DomainWatcherInformation {
@@ -138,19 +151,21 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         &mut self,
         assignments: &Assignments,
         stateful_trail: &mut Trail<StateChange>,
+        last_updated: usize,
     ) {
+        if self.is_equal_to_last_updated(last_updated) {
+            return;
+        }
+
         if self.get_min_unassigned().read() == i64::MAX {
             let mut min_index = i64::MAX;
             let mut min_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
                 let predicate = self.get_predicate_for_value(*value);
-                if assignments
-                    .get_decision_level_for_predicate(&predicate)
-                    .is_none()
-                    || assignments
-                        .get_decision_level_for_predicate(&predicate)
-                        .unwrap()
-                        == assignments.get_decision_level()
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                         && *value < min_value
                 {
                     min_index = index as i64;
@@ -167,13 +182,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                     break;
                 }
                 let predicate = self.get_predicate_for_value(self.get_values()[smaller as usize]);
-                if assignments
-                    .get_decision_level_for_predicate(&predicate)
-                    .is_none()
-                    || assignments
-                        .get_decision_level_for_predicate(&predicate)
-                        .unwrap()
-                        == assignments.get_decision_level()
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                 {
                     self.get_min_unassigned_mut()
                         .assign(smaller, stateful_trail);
@@ -187,13 +199,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             let mut max_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
                 let predicate = self.get_predicate_for_value(*value);
-                if assignments
-                    .get_decision_level_for_predicate(&predicate)
-                    .is_none()
-                    || assignments
-                        .get_decision_level_for_predicate(&predicate)
-                        .unwrap()
-                        == assignments.get_decision_level()
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                         && *value > max_value
                 {
                     max_index = index as i64;
@@ -210,13 +219,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                     break;
                 }
                 let predicate = self.get_predicate_for_value(self.get_values()[larger as usize]);
-                if assignments
-                    .get_decision_level_for_predicate(&predicate)
-                    .is_none()
-                    || assignments
-                        .get_decision_level_for_predicate(&predicate)
-                        .unwrap()
-                        == assignments.get_decision_level()
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                 {
                     self.get_max_unassigned_mut().assign(larger, stateful_trail);
                 } else {
@@ -345,5 +351,6 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         satisfied_predicates: &mut Vec<PredicateId>,
         assignments: &Assignments,
         predicate_id: Option<PredicateId>,
+        last_updated: usize,
     );
 }

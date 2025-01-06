@@ -17,6 +17,7 @@ use crate::engine::reason::ReasonStore;
 use crate::engine::solver_statistics::SolverStatistics;
 use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
+use crate::engine::DomainFaithfulness;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
 use crate::engine::StateChange;
@@ -51,6 +52,7 @@ pub(crate) struct ConflictAnalysisContext<'a> {
     pub(crate) is_completing_proof: bool,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
     pub(crate) stateful_trail: &'a mut Trail<StateChange>,
+    pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -86,6 +88,7 @@ impl<'a> ConflictAnalysisContext<'a> {
             backtrack_level,
             self.brancher,
             self.stateful_trail,
+            self.domain_faithfulness,
         )
     }
 

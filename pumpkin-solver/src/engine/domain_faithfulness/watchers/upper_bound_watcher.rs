@@ -77,8 +77,9 @@ impl DomainWatcher for UpperBoundWatcher {
         satisfied_predicates: &mut Vec<PredicateId>,
         assignments: &Assignments,
         _predicate_id: Option<PredicateId>,
+        last_updated: usize,
     ) {
-        self.check_for_updated_sentinel(assignments, stateful_trail);
+        self.check_for_updated_sentinel(assignments, stateful_trail, last_updated);
 
         match predicate {
             Predicate::LowerBound {

@@ -441,6 +441,7 @@ impl ConstraintSatisfactionSolver {
             is_completing_proof: true,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             stateful_trail: &mut self.stateful_trail,
+            domain_faithfulness: &mut self.domain_faithfulness,
         };
 
         let result = self
@@ -727,6 +728,7 @@ impl ConstraintSatisfactionSolver {
                     is_completing_proof: false,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
                     stateful_trail: &mut self.stateful_trail,
+                    domain_faithfulness: &mut self.domain_faithfulness,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -798,6 +800,7 @@ impl ConstraintSatisfactionSolver {
                 0,
                 brancher,
                 &mut self.stateful_trail,
+                &mut self.domain_faithfulness,
             );
             self.state.declare_ready();
         }
@@ -975,6 +978,7 @@ impl ConstraintSatisfactionSolver {
             is_completing_proof: false,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
             stateful_trail: &mut self.stateful_trail,
+            domain_faithfulness: &mut self.domain_faithfulness,
         };
 
         let learned_nogood = self
@@ -1113,6 +1117,7 @@ impl ConstraintSatisfactionSolver {
             0,
             brancher,
             &mut self.stateful_trail,
+            &mut self.domain_faithfulness,
         );
 
         self.restart_strategy.notify_restart();
@@ -1131,10 +1136,12 @@ impl ConstraintSatisfactionSolver {
         backtrack_level: usize,
         brancher: &mut BrancherType,
         stateful_trail: &mut Trail<StateChange>,
+        domain_faithfulness: &mut DomainFaithfulness,
     ) {
         info!("Backtracking to level {backtrack_level}");
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
 
+        domain_faithfulness.backtrack_has_occurred();
         brancher.on_backtrack();
 
         assignments
