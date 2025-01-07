@@ -161,12 +161,14 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             let mut min_index = i64::MAX;
             let mut min_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
+                if *value >= min_value {
+                    continue;
+                }
                 let predicate = self.get_predicate_for_value(*value);
                 let decision_level_predicate =
                     assignments.get_decision_level_for_predicate(&predicate);
                 if decision_level_predicate.is_none()
                     || decision_level_predicate.unwrap() == assignments.get_decision_level()
-                        && *value < min_value
                 {
                     min_index = index as i64;
                     min_value = *value;
@@ -198,12 +200,14 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
             let mut max_index = i64::MAX;
             let mut max_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
+                if *value <= max_value {
+                    continue;
+                }
                 let predicate = self.get_predicate_for_value(*value);
                 let decision_level_predicate =
                     assignments.get_decision_level_for_predicate(&predicate);
                 if decision_level_predicate.is_none()
                     || decision_level_predicate.unwrap() == assignments.get_decision_level()
-                        && *value > max_value
                 {
                     max_index = index as i64;
                     max_value = *value;
