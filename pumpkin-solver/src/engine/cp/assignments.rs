@@ -403,13 +403,6 @@ impl Assignments {
             .map(|u| u.decision_level)
     }
 
-    pub(crate) fn is_assigned_at_previous_decision_level(&self, predicate: Predicate) -> bool {
-        pumpkin_assert_moderate!(self.is_predicate_satisfied(predicate));
-        pumpkin_assert_moderate!({ self.get_decision_level_for_predicate(&predicate).is_some() });
-        self.domains[predicate.get_domain()]
-            .is_assigned_at_previous_decision_level(predicate, self.get_decision_level())
-    }
-
     pub fn get_domain_descriptions(&self) -> Vec<Predicate> {
         let mut descriptions: Vec<Predicate> = vec![];
         for domain in self.domains.iter().enumerate() {
@@ -670,10 +663,6 @@ impl Assignments {
                 }
             }
         }
-    }
-
-    pub(crate) fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
-        self.evaluate_predicate(predicate).is_some()
     }
 
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
@@ -1358,91 +1347,6 @@ impl IntegerDomain {
             .iter()
             .filter(move |entry| entry.decision_level == decision_level)
             .map(|entry| entry.removed_value)
-    }
-
-    fn is_assigned_at_previous_decision_level(
-        &self,
-        predicate: Predicate,
-        current_decision_level: usize,
-    ) -> bool {
-        let result = match predicate {
-            Predicate::LowerBound {
-                domain_id: _,
-                lower_bound,
-            } => self
-                .lower_bound_updates
-                .iter()
-                .rev()
-                .find(|u| u.decision_level < current_decision_level)
-                .is_some_and(|u| u.bound >= lower_bound),
-            Predicate::UpperBound {
-                domain_id: _,
-                upper_bound,
-            } => self
-                .upper_bound_updates
-                .iter()
-                .rev()
-                .find(|u| u.decision_level < current_decision_level)
-                .is_some_and(|u| u.bound <= upper_bound),
-            Predicate::NotEqual {
-                domain_id,
-                not_equal_constant,
-            } => {
-                if (self.upper_bound() < not_equal_constant
-                    && self.is_assigned_at_previous_decision_level(
-                        Predicate::UpperBound {
-                            domain_id,
-                            upper_bound: not_equal_constant - 1,
-                        },
-                        current_decision_level,
-                    ))
-                    || (self.lower_bound() > not_equal_constant
-                        && self.is_assigned_at_previous_decision_level(
-                            Predicate::LowerBound {
-                                domain_id,
-                                lower_bound: not_equal_constant + 1,
-                            },
-                            current_decision_level,
-                        ))
-                {
-                    return true;
-                }
-                if let Some(u) = self.holes.get(&not_equal_constant) {
-                    u.decision_level < current_decision_level
-                } else {
-                    return false;
-                }
-            }
-            Predicate::Equal {
-                domain_id,
-                equality_constant,
-            } => {
-                let lower_bound_previous_decision_level = self
-                    .is_assigned_at_previous_decision_level(
-                        Predicate::UpperBound {
-                            domain_id,
-                            upper_bound: equality_constant,
-                        },
-                        current_decision_level,
-                    );
-                let upper_bound_at_previous_decision_level = self
-                    .is_assigned_at_previous_decision_level(
-                        Predicate::LowerBound {
-                            domain_id,
-                            lower_bound: equality_constant,
-                        },
-                        current_decision_level,
-                    );
-                lower_bound_previous_decision_level && upper_bound_at_previous_decision_level
-            }
-        };
-        pumpkin_assert_moderate!(match result {
-            true =>
-                self.get_update_info(&predicate).unwrap().decision_level < current_decision_level,
-            false =>
-                self.get_update_info(&predicate).unwrap().decision_level == current_decision_level,
-        });
-        result
     }
 }
 

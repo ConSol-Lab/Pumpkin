@@ -28,7 +28,6 @@ pub(crate) struct FaithfullnessWatcher {
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
-
     last_updated: usize,
 }
 
@@ -148,21 +147,26 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
 pub(crate) trait DomainWatcher: DomainWatcherInformation {
     fn get_predicate_for_value(&self, value: i32) -> Predicate;
 
-    fn check_for_updated_min_sentinel(
+    fn check_for_updated_sentinel(
         &mut self,
         assignments: &Assignments,
         stateful_trail: &mut Trail<StateChange>,
+        last_updated: usize,
     ) {
+        if self.is_equal_to_last_updated(last_updated) {
+            return;
+        }
+
         if self.get_min_unassigned().read() == i64::MAX {
             let mut min_index = i64::MAX;
             let mut min_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
-                if *value >= min_value {
-                    continue;
-                }
                 let predicate = self.get_predicate_for_value(*value);
-                if !assignments.is_predicate_satisfied(predicate)
-                    || !assignments.is_assigned_at_previous_decision_level(predicate)
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
+                        && *value < min_value
                 {
                     min_index = index as i64;
                     min_value = *value;
@@ -178,8 +182,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                     break;
                 }
                 let predicate = self.get_predicate_for_value(self.get_values()[smaller as usize]);
-                if !assignments.is_predicate_satisfied(predicate)
-                    || !assignments.is_assigned_at_previous_decision_level(predicate)
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                 {
                     self.get_min_unassigned_mut()
                         .assign(smaller, stateful_trail);
@@ -188,23 +194,16 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                 }
             }
         }
-    }
-
-    fn check_for_updated_max_sentinel(
-        &mut self,
-        assignments: &Assignments,
-        stateful_trail: &mut Trail<StateChange>,
-    ) {
         if self.get_max_unassigned().read() == i64::MAX {
             let mut max_index = i64::MAX;
             let mut max_value = i32::MAX;
             for (index, value) in self.get_values().iter().enumerate() {
-                if *value <= max_value {
-                    continue;
-                }
                 let predicate = self.get_predicate_for_value(*value);
-                if !assignments.is_predicate_satisfied(predicate)
-                    || !assignments.is_assigned_at_previous_decision_level(predicate)
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
+                        && *value > max_value
                 {
                     max_index = index as i64;
                     max_value = *value;
@@ -220,8 +219,10 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                     break;
                 }
                 let predicate = self.get_predicate_for_value(self.get_values()[larger as usize]);
-                if !assignments.is_predicate_satisfied(predicate)
-                    || !assignments.is_assigned_at_previous_decision_level(predicate)
+                let decision_level_predicate =
+                    assignments.get_decision_level_for_predicate(&predicate);
+                if decision_level_predicate.is_none()
+                    || decision_level_predicate.unwrap() == assignments.get_decision_level()
                 {
                     self.get_max_unassigned_mut().assign(larger, stateful_trail);
                 } else {
@@ -229,21 +230,6 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
                 }
             }
         }
-    }
-
-    fn check_for_updated_sentinel(
-        &mut self,
-        assignments: &Assignments,
-        stateful_trail: &mut Trail<StateChange>,
-        last_updated: usize,
-    ) {
-        if self.is_equal_to_last_updated(last_updated) {
-            return;
-        }
-
-        self.check_for_updated_min_sentinel(assignments, stateful_trail);
-        self.check_for_updated_max_sentinel(assignments, stateful_trail);
-        self.set_last_updated(last_updated);
     }
 
     fn find_sentinels(
@@ -257,6 +243,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         predicate_id: PredicateId,
         satisfied_predicates: &mut Vec<PredicateId>,
     ) {
+        info!("Satisfied: {predicate_id:?}");
         satisfied_predicates.push(predicate_id)
     }
 
@@ -266,6 +253,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         satisfied_predicates: &mut Vec<PredicateId>,
     ) {
         let predicate_id = self.get_ids()[index];
+        info!("Satisfied: {predicate_id:?}");
         satisfied_predicates.push(predicate_id)
     }
 
