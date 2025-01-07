@@ -1336,7 +1336,20 @@ impl ConstraintSatisfactionSolver {
                     continue;
                 }
 
-                if let Some(step_id) = self.unit_nogood_step_ids.get(&trail_entry.predicate) {
+                if let Some(step_id) = self
+                    .unit_nogood_step_ids
+                    .get(&trail_entry.predicate)
+                    .or_else(|| {
+                        // It could be the case that we attempt to get the reason for the predicate
+                        // [x >= v] but that the corresponding unit nogood idea is the one for the
+                        // predicate [x == v]
+                        let domain_id = trail_entry.predicate.get_domain();
+                        let right_hand_side = trail_entry.predicate.get_right_hand_side();
+
+                        self.unit_nogood_step_ids
+                            .get(&predicate!(domain_id == right_hand_side))
+                    })
+                {
                     self.internal_parameters.proof_log.add_propagation(*step_id);
                 } else {
                     panic!(
