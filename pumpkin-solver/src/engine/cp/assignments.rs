@@ -665,6 +665,10 @@ impl Assignments {
         }
     }
 
+    pub(crate) fn is_predicate_assigned(&self, predicate: Predicate) -> bool {
+        self.evaluate_predicate(predicate).is_some()
+    }
+
     pub(crate) fn is_predicate_satisfied(&self, predicate: Predicate) -> bool {
         self.evaluate_predicate(predicate)
             .is_some_and(|truth_value| truth_value)

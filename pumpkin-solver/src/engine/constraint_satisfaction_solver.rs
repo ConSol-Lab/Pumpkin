@@ -313,6 +313,7 @@ impl ConstraintSatisfactionSolver {
             // Special case: the nogood propagator is notified about each event.
             match event {
                 IntDomainEvent::Assign => {
+                    info!("Reached eq");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
                         &mut self.stateful_trail,
@@ -320,6 +321,7 @@ impl ConstraintSatisfactionSolver {
                     );
                 }
                 IntDomainEvent::LowerBound => {
+                    info!("Reached lb");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
                         &mut self.stateful_trail,
@@ -327,22 +329,25 @@ impl ConstraintSatisfactionSolver {
                     );
                 }
                 IntDomainEvent::UpperBound => {
+                    info!("Reached ub");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
                         &mut self.stateful_trail,
                         &self.assignments,
                     );
                 }
-                IntDomainEvent::Removal => self
-                    .assignments
-                    .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
-                    .for_each(|value| {
-                        self.domain_faithfulness.has_been_updated(
-                            predicate!(domain != value),
-                            &mut self.stateful_trail,
-                            &self.assignments,
-                        );
-                    }),
+                IntDomainEvent::Removal => {
+                    info!("Reached ineq");
+                    self.assignments
+                        .get_holes_on_decision_level(domain, self.assignments.get_decision_level())
+                        .for_each(|value| {
+                            self.domain_faithfulness.has_been_updated(
+                                predicate!(domain != value),
+                                &mut self.stateful_trail,
+                                &self.assignments,
+                            );
+                        })
+                }
             }
             Self::notify_nogood_propagator(
                 event,
@@ -385,10 +390,6 @@ impl ConstraintSatisfactionSolver {
             .collect::<Vec<_>>()
         {
             let nogood_propagator = &mut self.propagators[Self::get_nogood_propagator_id()];
-            info!(
-                "Detected {}",
-                self.domain_faithfulness.get_predicate_for_id(predicate_id)
-            );
             nogood_propagator.notify_predicate_id_satisfied(predicate_id);
         }
     }

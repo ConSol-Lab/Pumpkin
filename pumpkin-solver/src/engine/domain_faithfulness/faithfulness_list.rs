@@ -114,10 +114,19 @@ impl Faithfullness {
         }
     }
 
-    pub(crate) fn set_domain_id(&mut self, domain_id: DomainId) {
-        self.lower_bound.set_domain_id(domain_id);
-        self.upper_bound.set_domain_id(domain_id);
-        self.inequality.set_domain_id(domain_id);
-        self.equality.set_domain_id(domain_id);
+    pub(crate) fn initialise(
+        &mut self,
+        domain_id: DomainId,
+        initial_lower_bound: i32,
+        initial_upper_bound: i32,
+    ) {
+        self.lower_bound
+            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
+        self.upper_bound
+            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
+        self.inequality
+            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
+        self.equality
+            .initialise(domain_id, initial_lower_bound, initial_upper_bound);
     }
 }

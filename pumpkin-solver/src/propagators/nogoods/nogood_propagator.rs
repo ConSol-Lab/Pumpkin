@@ -172,11 +172,29 @@ impl Propagator for NogoodPropagator {
         // TODO: should drop all elements afterwards
         let updates = self.updated_predicate_ids.drain(..).collect::<Vec<_>>();
         for predicate_id in updates {
-            pumpkin_assert_moderate!(context.is_predicate_satisfied(
+            pumpkin_assert_moderate!(
+                context.is_predicate_satisfied(
+                    context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                ),
+                "The predicate {} should be satisfied but was not - bounds: {}, {}",
                 context
                     .domain_faithfulness
-                    .get_predicate_for_id(predicate_id)
-            ));
+                    .get_predicate_for_id(predicate_id),
+                context.lower_bound(
+                    &context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                        .get_domain()
+                ),
+                context.upper_bound(
+                    &context
+                        .domain_faithfulness
+                        .get_predicate_for_id(predicate_id)
+                        .get_domain()
+                )
+            );
             let mut index = 0;
             while index < self.watch_lists[predicate_id].watchers.len() {
                 let nogood_id = self.watch_lists[predicate_id].watchers[index];
@@ -797,6 +815,19 @@ impl NogoodPropagator {
                 .find(|predicate| context.evaluate_predicate(**predicate).is_none())
                 .unwrap()
                 .not();
+
+            //println!(
+            //    "Debug Propagating {propagated_predicate} - {:?}",
+            //    nogood
+            //        .predicates
+            //        .iter()
+            //        .map(|predicate| (
+            //            predicate,
+            //            context.lower_bound(&predicate.get_domain()),
+            //            context.upper_bound(&predicate.get_domain())
+            //        ))
+            //        .collect::<Vec<_>>()
+            //);
 
             assert!(nogood
                 .predicates

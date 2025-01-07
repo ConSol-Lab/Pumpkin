@@ -18,7 +18,7 @@ pub(crate) struct DomainFaithfulness {
     domain_id_to_faithfullness: KeyedVec<DomainId, Faithfullness>,
 
     falsified_predicates: Vec<PredicateId>,
-    satisfied_predicates: Vec<PredicateId>,
+    pub(crate) satisfied_predicates: Vec<PredicateId>,
 
     last_updated: usize,
 }
@@ -59,7 +59,11 @@ impl DomainFaithfulness {
             return;
         }
 
-        info!("Faithfulness updated: {predicate}");
+        info!(
+            "Faithfulness updated: {predicate} - {}, {}",
+            assignments.get_lower_bound(predicate.get_domain()),
+            assignments.get_upper_bound(predicate.get_domain())
+        );
 
         // Otherwise we update the structures
         self.domain_id_to_faithfullness[predicate.get_domain()].has_been_updated(
@@ -89,14 +93,18 @@ impl DomainFaithfulness {
 
         if !has_id_for_predicate {
             info!("Adding watcher for {predicate} with id {id:?}");
+
             while self.domain_id_to_faithfullness.len() <= predicate.get_domain().index() {
                 let _ = self
                     .domain_id_to_faithfullness
                     .push(Faithfullness::default());
             }
 
-            self.domain_id_to_faithfullness[predicate.get_domain()]
-                .set_domain_id(predicate.get_domain());
+            self.domain_id_to_faithfullness[predicate.get_domain()].initialise(
+                predicate.get_domain(),
+                assignments.get_initial_lower_bound(predicate.get_domain()),
+                assignments.get_initial_upper_bound(predicate.get_domain()),
+            );
 
             // Then we update the structures
             self.domain_id_to_faithfullness[predicate.get_domain()].watch_predicate(
