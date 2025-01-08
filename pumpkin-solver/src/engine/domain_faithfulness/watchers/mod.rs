@@ -207,19 +207,6 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
 
         let new_index = self.get_values().len() as i64;
 
-        // We might need to update the sentinels
-        if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
-            if value > self.get_values()[self.get_min_unassigned().read() as usize] {
-                self.get_min_unassigned_mut()
-                    .assign(new_index, stateful_trail);
-            }
-
-            if value < self.get_values()[self.get_max_unassigned().read() as usize] {
-                self.get_max_unassigned_mut()
-                    .assign(new_index, stateful_trail);
-            }
-        }
-
         let mut index_largest_value_smaller_than = i64::MAX;
         let mut largest_value_smaller_than = i32::MIN;
 
@@ -265,6 +252,19 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         if let Some(same_index) = same_value {
             self.get_ids_mut()[same_index] = predicate_id;
         } else {
+            // We might need to update the sentinels
+            if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
+                if value > self.get_values()[self.get_min_unassigned().read() as usize] {
+                    self.get_min_unassigned_mut()
+                        .assign(new_index, stateful_trail);
+                }
+
+                if value < self.get_values()[self.get_max_unassigned().read() as usize] {
+                    self.get_max_unassigned_mut()
+                        .assign(new_index, stateful_trail);
+                }
+            }
+
             self.get_values_mut().push(value);
             self.get_ids_mut().push(predicate_id);
             self.get_smaller_mut()
