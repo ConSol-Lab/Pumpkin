@@ -170,8 +170,7 @@ impl Propagator for NogoodPropagator {
         }
 
         // TODO: should drop all elements afterwards
-        let updates = self.updated_predicate_ids.drain(..).collect::<Vec<_>>();
-        for predicate_id in updates {
+        for predicate_id in self.updated_predicate_ids.drain(..) {
             pumpkin_assert_moderate!(
                 context.is_predicate_satisfied(
                     context
