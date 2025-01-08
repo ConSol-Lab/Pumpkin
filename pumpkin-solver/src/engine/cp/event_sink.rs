@@ -54,10 +54,6 @@ impl EventSink {
             present: &mut self.present,
         }
     }
-
-    pub(crate) fn num_domains(&self) -> usize {
-        self.present.len()
-    }
 }
 
 pub(crate) struct Drain<'a> {

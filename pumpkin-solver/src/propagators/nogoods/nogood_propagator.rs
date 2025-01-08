@@ -246,7 +246,7 @@ impl Propagator for NogoodPropagator {
 
                 if found_new_watch {
                     // We remove the current watcher
-                    self.watch_lists[predicate_id].watchers.swap_remove(index);
+                    let _ = self.watch_lists[predicate_id].watchers.swap_remove(index);
                     continue;
                 }
 
@@ -567,7 +567,7 @@ impl NogoodPropagator {
         let predicate_id =
             domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
         while watch_lists.len() <= predicate_id.index() {
-            watch_lists.push(NogoodWatchList::default());
+            let _ = watch_lists.push(NogoodWatchList::default());
         }
         watch_lists[predicate_id].add_watcher(nogood_id);
     }
@@ -815,7 +815,7 @@ impl NogoodPropagator {
                 .unwrap()
                 .not();
 
-            //println!(
+            // println!(
             //    "Debug Propagating {propagated_predicate} - {:?}",
             //    nogood
             //        .predicates

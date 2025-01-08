@@ -28,7 +28,6 @@ pub(crate) struct FaithfullnessWatcher {
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
-    last_updated: usize,
 }
 
 impl Default for FaithfullnessWatcher {
@@ -41,7 +40,6 @@ impl Default for FaithfullnessWatcher {
             g: Vec::default(),
             values: Vec::default(),
             ids: Vec::default(),
-            last_updated: 0,
         }
     }
 }
@@ -78,9 +76,6 @@ pub(crate) trait DomainWatcherInformation {
     fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt;
 
     fn is_empty(&self) -> bool;
-
-    fn is_equal_to_last_updated(&self, last_updated: usize) -> bool;
-    fn set_last_updated(&mut self, last_updated: usize);
 }
 
 impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
@@ -159,14 +154,6 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
 
     fn is_empty(&self) -> bool {
         self.get_watcher().values.is_empty()
-    }
-
-    fn is_equal_to_last_updated(&self, last_updated: usize) -> bool {
-        self.get_watcher().last_updated == last_updated
-    }
-
-    fn set_last_updated(&mut self, last_updated: usize) {
-        self.get_watcher_mut().last_updated = last_updated
     }
 }
 
@@ -299,8 +286,6 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         stateful_trail: &mut Trail<StateChange>,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
-        assignments: &Assignments,
         predicate_id: Option<PredicateId>,
-        last_updated: usize,
     );
 }

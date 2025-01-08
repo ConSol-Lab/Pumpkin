@@ -122,6 +122,7 @@ pub(crate) trait Propagator: Downcast {
 
     fn notify_predicate_id_satisfied(&mut self, _predicate_id: PredicateId) {}
 
+    #[allow(dead_code)]
     fn notify_predicate_id_falsified(&mut self, _predicate_id: PredicateId) {}
 
     /// Called each time the [`ConstraintSatisfactionSolver`] backtracks, the propagator can then

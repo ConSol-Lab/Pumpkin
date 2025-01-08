@@ -3,7 +3,6 @@ use super::FaithfullnessWatcher;
 use super::HasWatcher;
 use super::PredicateId;
 use crate::basic_types::Trail;
-use crate::engine::Assignments;
 use crate::engine::StateChange;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -34,9 +33,7 @@ impl DomainWatcher for UpperBoundWatcher {
         stateful_trail: &mut Trail<StateChange>,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
-        assignments: &Assignments,
         _predicate_id: Option<PredicateId>,
-        last_updated: usize,
     ) {
         match predicate {
             Predicate::LowerBound {

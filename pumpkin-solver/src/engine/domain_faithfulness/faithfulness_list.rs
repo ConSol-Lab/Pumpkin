@@ -61,9 +61,7 @@ impl Faithfullness {
         stateful_trail: &mut Trail<StateChange>,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
-        assignments: &Assignments,
         predicate_id: Option<PredicateId>,
-        last_updated: usize,
     ) {
         if !self.lower_bound.is_empty() {
             self.lower_bound.has_been_updated(
@@ -71,9 +69,7 @@ impl Faithfullness {
                 stateful_trail,
                 falsified_predicates,
                 satisfied_predicates,
-                assignments,
                 None,
-                last_updated,
             );
         }
 
@@ -83,9 +79,7 @@ impl Faithfullness {
                 stateful_trail,
                 falsified_predicates,
                 satisfied_predicates,
-                assignments,
                 None,
-                last_updated,
             );
         }
 
@@ -95,9 +89,7 @@ impl Faithfullness {
                 stateful_trail,
                 falsified_predicates,
                 satisfied_predicates,
-                assignments,
                 predicate_id,
-                last_updated,
             );
         }
 
@@ -107,9 +99,7 @@ impl Faithfullness {
                 stateful_trail,
                 falsified_predicates,
                 satisfied_predicates,
-                assignments,
                 None,
-                last_updated,
             );
         }
     }

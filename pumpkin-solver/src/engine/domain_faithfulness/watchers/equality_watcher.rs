@@ -3,7 +3,6 @@ use super::FaithfullnessWatcher;
 use super::HasWatcher;
 use super::PredicateId;
 use crate::basic_types::Trail;
-use crate::engine::Assignments;
 use crate::engine::StateChange;
 use crate::predicate;
 use crate::predicates::Predicate;
@@ -34,9 +33,7 @@ impl DomainWatcher for EqualityWatcher {
         stateful_trail: &mut Trail<StateChange>,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
-        assignments: &Assignments,
         _predicate_id: Option<PredicateId>,
-        last_updated: usize,
     ) {
         match predicate {
             Predicate::LowerBound {
@@ -83,8 +80,7 @@ impl DomainWatcher for EqualityWatcher {
                     smaller = self.watcher.s[smaller as usize];
                 }
 
-                let mut greater = self.watcher.g[self.watcher.min_unassigned.read() as usize];
-
+                let greater = self.watcher.g[self.watcher.min_unassigned.read() as usize];
                 if greater == self.watcher.s[self.watcher.max_unassigned.read() as usize]
                     && self.watcher.values[greater as usize] == equality_constant
                 {

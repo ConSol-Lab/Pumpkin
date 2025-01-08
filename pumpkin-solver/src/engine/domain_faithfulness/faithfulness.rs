@@ -28,6 +28,7 @@ impl DomainFaithfulness {
         self.last_updated += 1;
     }
 
+    #[allow(dead_code)]
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }
@@ -71,11 +72,9 @@ impl DomainFaithfulness {
             stateful_trail,
             &mut self.falsified_predicates,
             &mut self.satisfied_predicates,
-            assignments,
             self.predicate_to_id
                 .has_id_for_predicate(predicate)
                 .then(|| self.predicate_to_id.get_id(predicate)),
-            self.last_updated,
         );
     }
 
