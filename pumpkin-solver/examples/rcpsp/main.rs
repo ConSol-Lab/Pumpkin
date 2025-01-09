@@ -61,6 +61,11 @@ struct Args {
 
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
+
+    /// Determines whether to use fixed search (smallest, indomain-min) or a strategy alternating
+    /// between (smallest, indomain-min), and VSIDS
+    #[arg(short = 'f', long)]
+    use_fixed_search: bool,
 }
 
 pub fn main() {
@@ -308,9 +313,9 @@ fn run() -> SchedulingResult<()> {
         args.time_limit
             .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
     );
-    let mut brancher = AlternatingBrancher::with_blacklist(
-        &solver,
-        IndependentVariableValueBrancher::new(
+
+    let result = if args.use_fixed_search {
+        let mut brancher = IndependentVariableValueBrancher::new(
             Smallest::new(
                 &start_variables
                     .into_iter()
@@ -318,14 +323,28 @@ fn run() -> SchedulingResult<()> {
                     .collect::<Vec<_>>(),
             ),
             InDomainMin,
-        ),
-        &incompatibility_matrix
-            .iter()
-            .flat_map(|row| row.iter().map(|lit| lit.domain_id()))
-            .collect_vec(),
-        SwitchToDefaultAfterFirstSolution,
-    );
-    let result = solver.minimise(&mut brancher, &mut termination, makespan);
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    } else {
+        let mut brancher = AlternatingBrancher::with_blacklist(
+            &solver,
+            IndependentVariableValueBrancher::new(
+                Smallest::new(
+                    &start_variables
+                        .into_iter()
+                        .chain(std::iter::once(makespan))
+                        .collect::<Vec<_>>(),
+                ),
+                InDomainMin,
+            ),
+            &incompatibility_matrix
+                .iter()
+                .flat_map(|row| row.iter().map(|lit| lit.domain_id()))
+                .collect_vec(),
+            SwitchToDefaultAfterFirstSolution,
+        );
+        solver.minimise(&mut brancher, &mut termination, makespan)
+    };
 
     println!("------------------Final Statistics------------------");
     solver.log_statistics();

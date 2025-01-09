@@ -35,7 +35,6 @@ create_statistics_struct!(NodePackingStatistics {
     average_clique_size: CumulativeMovingAverage<usize>,
     average_backjump_height: CumulativeMovingAverage<usize>,
 
-    num_non_overlapping_found: usize,
 });
 
 pub(crate) struct NodePackingPropagator<Var> {
@@ -89,12 +88,9 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         &mut self,
         context: &mut PropagationContextMut<'_>,
     ) -> Result<Option<Vec<usize>>, EmptyDomain> {
-        let all_tasks = self.create_initial_activity_list();
-        let durations = all_tasks
-            .iter()
-            .map(|task| task.processing_time)
-            .collect_vec();
-        let intervals = all_tasks
+        let intervals = self
+            .parameters
+            .tasks
             .iter()
             .map(|task| {
                 (
@@ -104,19 +100,17 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             })
             .collect_vec();
         // Try finding a conflicting *pair* of tasks
-        for (index_lhs, (duration_lhs, (start_lhs, finish_lhs))) in
-            durations.iter().zip(&intervals).enumerate()
-        {
-            for (index_rhs, (duration_rhs, (start_rhs, finish_rhs))) in
-                durations.iter().take(index_lhs).zip(&intervals).enumerate()
-            {
-                if self.are_disjoint(
-                    context,
-                    &all_tasks[index_lhs],
-                    &all_tasks[index_rhs],
-                    &intervals,
-                )? && duration_lhs + duration_rhs
-                    > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
+        for (index_lhs, (start_lhs, finish_lhs)) in intervals.iter().enumerate() {
+            let lhs = &self.parameters.tasks[index_lhs];
+            for (index_rhs, (start_rhs, finish_rhs)) in intervals.iter().enumerate() {
+                if index_rhs == index_lhs {
+                    continue;
+                }
+                let rhs = &self.parameters.tasks[index_rhs];
+
+                if self.are_disjoint(context, lhs, rhs, &intervals)?
+                    && lhs.processing_time + rhs.processing_time
+                        > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
                     return Ok(Some([index_lhs, index_rhs].to_vec()));
                 }
@@ -125,22 +119,26 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         // Run a greedy heuristic from all intervals
         for (seed_index, (mut start, mut finish)) in intervals.iter().enumerate() {
             let mut clique = vec![seed_index];
-            let mut remaining = (0..all_tasks.len())
+            let mut remaining = (0..self.parameters.tasks.len())
                 .filter(|&ix| ix != seed_index)
                 .collect_vec();
+            let mut last_selected = &self.parameters.tasks[seed_index];
             loop {
                 // Keep the intervals that not in the clique and can be added to a clique
+                //
+                // Note that we only need to check whether it is compatible with the currently
+                // selected index to be added to the clique since it is necessarily incompatible
+                // with all the elements that came before it
                 remaining.retain(|&remaining_ix| {
                     !clique.contains(&remaining_ix)
-                        && clique.iter().all(|&clique_ix| {
-                            self.are_disjoint(
+                        && self
+                            .are_disjoint(
                                 context,
-                                &all_tasks[clique_ix],
-                                &all_tasks[remaining_ix],
+                                last_selected,
+                                &self.parameters.tasks[remaining_ix],
                                 &intervals,
                             )
-                            .expect("The conflict should have been found when detecting the pairs")
-                        })
+                            .expect("Should not be an error here")
                 });
                 // Choose the interval that is not disconnected from [start, finish)
                 // and minimizes the length added to the interval, breaking ties
@@ -157,19 +155,29 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                     .min_by_key(|&&remaining_ix| {
                         let new_length = finish.max(intervals[remaining_ix].1)
                             - start.min(intervals[remaining_ix].0);
-                        let new_duration = durations[remaining_ix];
-                        (new_length, -new_duration)
+                        let new_duration = self.parameters.tasks[remaining_ix].processing_time;
+                        (
+                            new_length,
+                            -new_duration,
+                            -self.parameters.tasks[remaining_ix].resource_usage,
+                        )
                     });
                 if let Some(&next_ix) = next_ix {
                     clique.push(next_ix);
                     start = start.min(intervals[next_ix].0);
                     finish = finish.max(intervals[next_ix].1);
+                    last_selected = &self.parameters.tasks[next_ix];
                 } else {
                     break;
                 }
             }
             // Update the best clique if the overflow condition holds
-            if clique.iter().map(|&ix| durations[ix]).sum::<i32>() > finish - start {
+            if clique
+                .iter()
+                .map(|&ix| self.parameters.tasks[ix].processing_time)
+                .sum::<i32>()
+                > finish - start
+            {
                 return Ok(Some(clique));
             }
         }
@@ -323,7 +331,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
     }
 
     fn are_disjoint(
-        &mut self,
+        &self,
         context: &mut PropagationContextMut<'_>,
         task_lhs: &Rc<Task<Var>>,
         task_rhs: &Rc<Task<Var>>,
@@ -339,7 +347,6 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 intervals[task_rhs.id.unpack() as usize],
             )
         {
-            self.statistics.num_non_overlapping_found += 1;
             context.assign_literal(
                 &self.parameters.disjointness[self.parameters.mapping[task_lhs.id]]
                     [self.parameters.mapping[task_rhs.id]],

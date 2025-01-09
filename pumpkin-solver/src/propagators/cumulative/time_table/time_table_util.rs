@@ -407,14 +407,8 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                         explanation = explanation
                             .extend_and_remove_duplicates(profile_explanation.into_iter());
                     }
-                    context.assign_literal(
-                        &incompatibility_matrix[parameters.mapping[task.id]]
-                            [parameters.mapping[other_task.id]],
-                        true,
-                        explanation,
-                    )?;
                     info!(
-                        "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage, {} were found to be disjoint due to {:?}",
+                        "Resource capacity: {} - Task 1: [{}, {}) with resource usage {} - Task 2 [{}, {}) with resource usage {} were found to be disjoint due to {:?} - Explanation: {:?}",
                         parameters.capacity,
                         context.lower_bound(&task.start_variable),
                         context.upper_bound(&task.start_variable) + task.processing_time,
@@ -427,7 +421,14 @@ fn find_disjointness<Var: IntegerVariable + 'static>(
                             .iter()
                             .map(|profile_index| &time_table[*profile_index])
                             .collect::<Vec<_>>()
+                            , explanation
                     );
+                    context.assign_literal(
+                        &incompatibility_matrix[parameters.mapping[task.id]]
+                            [parameters.mapping[other_task.id]],
+                        true,
+                        explanation,
+                    )?;
                     break;
                 }
             }
