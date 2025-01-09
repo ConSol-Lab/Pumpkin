@@ -7,6 +7,7 @@ use itertools::Itertools;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
+use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -48,6 +49,7 @@ pub(crate) struct NodePackingParameters<Var> {
     /// The capacity of the resource (i.e. how much resource consumption can be maximally
     /// accomodated at each time point)
     pub(crate) disjointness: Vec<Vec<Literal>>,
+    pub(crate) mapping: KeyedVec<LocalId, usize>,
 }
 
 impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
@@ -56,15 +58,16 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         makespan_variable: Var,
         disjointness: Vec<Vec<Literal>>,
     ) -> Self {
+        let (tasks, mapping) = create_tasks(arg_tasks);
         let parameters = NodePackingParameters {
-            tasks: create_tasks(arg_tasks)
-                .0
+            tasks: tasks
                 .into_iter()
                 .map(Rc::new)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
 
             disjointness,
+            mapping,
         };
 
         NodePackingPropagator {
@@ -100,7 +103,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             for (index_rhs, (duration_rhs, (start_rhs, finish_rhs))) in
                 durations.iter().take(index_lhs).zip(&intervals).enumerate()
             {
-                if self.are_disjoint(context, index_lhs, index_rhs)
+                if self.are_disjoint(context, &all_tasks[index_lhs], &all_tasks[index_rhs])
                     && duration_lhs + duration_rhs
                         > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
@@ -118,9 +121,13 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 // Keep the intervals that not in the clique and can be added to a clique
                 remaining.retain(|&remaining_ix| {
                     !clique.contains(&remaining_ix)
-                        && clique
-                            .iter()
-                            .all(|&clique_ix| self.are_disjoint(context, clique_ix, remaining_ix))
+                        && clique.iter().all(|&clique_ix| {
+                            self.are_disjoint(
+                                context,
+                                &all_tasks[clique_ix],
+                                &all_tasks[remaining_ix],
+                            )
+                        })
                 });
                 // Choose the interval that is not disconnected from [start, finish)
                 // and minimizes the length added to the interval, breaking ties
@@ -301,10 +308,13 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
     fn are_disjoint(
         &self,
         context: PropagationContext<'_>,
-        index_lhs: usize,
-        index_rhs: usize,
+        task_lhs: &Rc<Task<Var>>,
+        task_rhs: &Rc<Task<Var>>,
     ) -> bool {
-        context.is_literal_true(&self.parameters.disjointness[index_lhs][index_rhs])
+        context.is_literal_true(
+            &self.parameters.disjointness[self.parameters.mapping[task_lhs.id]]
+                [self.parameters.mapping[task_rhs.id]],
+        )
     }
 }
 
