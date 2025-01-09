@@ -7,6 +7,7 @@ use itertools::Itertools;
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::PropagationStatusCP;
+use crate::conjunction;
 use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::propagation::LocalId;
@@ -16,6 +17,7 @@ use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::propagation::ReadDomains;
 use crate::engine::DomainEvents;
+use crate::engine::EmptyDomain;
 use crate::predicate;
 use crate::predicates::PropositionalConjunction;
 use crate::propagators::util::create_tasks;
@@ -32,6 +34,8 @@ create_statistics_struct!(NodePackingStatistics {
     n_trivial_conflicts: usize,
     average_clique_size: CumulativeMovingAverage<usize>,
     average_backjump_height: CumulativeMovingAverage<usize>,
+
+    num_non_overlapping_found: usize,
 });
 
 pub(crate) struct NodePackingPropagator<Var> {
@@ -81,7 +85,10 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         self.parameters.tasks.to_vec().into()
     }
 
-    fn find_conflict(&self, context: PropagationContext<'_>) -> Option<Vec<usize>> {
+    fn find_conflict(
+        &mut self,
+        context: &mut PropagationContextMut<'_>,
+    ) -> Result<Option<Vec<usize>>, EmptyDomain> {
         let all_tasks = self.create_initial_activity_list();
         let durations = all_tasks
             .iter()
@@ -103,11 +110,15 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             for (index_rhs, (duration_rhs, (start_rhs, finish_rhs))) in
                 durations.iter().take(index_lhs).zip(&intervals).enumerate()
             {
-                if self.are_disjoint(context, &all_tasks[index_lhs], &all_tasks[index_rhs])
-                    && duration_lhs + duration_rhs
-                        > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
+                if self.are_disjoint(
+                    context,
+                    &all_tasks[index_lhs],
+                    &all_tasks[index_rhs],
+                    &intervals,
+                )? && duration_lhs + duration_rhs
+                    > finish_rhs.max(finish_lhs) - start_lhs.min(start_rhs)
                 {
-                    return Some([index_lhs, index_rhs].to_vec());
+                    return Ok(Some([index_lhs, index_rhs].to_vec()));
                 }
             }
         }
@@ -126,7 +137,9 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                                 context,
                                 &all_tasks[clique_ix],
                                 &all_tasks[remaining_ix],
+                                &intervals,
                             )
+                            .expect("The conflict should have been found when detecting the pairs")
                         })
                 });
                 // Choose the interval that is not disconnected from [start, finish)
@@ -157,10 +170,10 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
             }
             // Update the best clique if the overflow condition holds
             if clique.iter().map(|&ix| durations[ix]).sum::<i32>() > finish - start {
-                return Some(clique);
+                return Ok(Some(clique));
             }
         }
-        None
+        Ok(None)
         // TODO Commenting out the MIP model construction so far; to be revisited
         // // Split the timeline by the start and finish points from all intervals
         // let mut time_points = intervals.iter().flat_map(|x| [x.0, x.1]).collect_vec();
@@ -305,16 +318,41 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         // }
     }
 
+    fn are_overlapping(interval_1: (i32, i32), interval_2: (i32, i32)) -> bool {
+        interval_1.0 <= interval_2.1 && interval_2.0 <= interval_1.1
+    }
+
     fn are_disjoint(
-        &self,
-        context: PropagationContext<'_>,
+        &mut self,
+        context: &mut PropagationContextMut<'_>,
         task_lhs: &Rc<Task<Var>>,
         task_rhs: &Rc<Task<Var>>,
-    ) -> bool {
-        context.is_literal_true(
+        intervals: &Vec<(i32, i32)>,
+    ) -> Result<bool, EmptyDomain> {
+        let is_literal_true = context.is_literal_true(
             &self.parameters.disjointness[self.parameters.mapping[task_lhs.id]]
                 [self.parameters.mapping[task_rhs.id]],
-        )
+        );
+        if !is_literal_true
+            && !Self::are_overlapping(
+                intervals[task_lhs.id.unpack() as usize],
+                intervals[task_rhs.id.unpack() as usize],
+            )
+        {
+            self.statistics.num_non_overlapping_found += 1;
+            context.assign_literal(
+                &self.parameters.disjointness[self.parameters.mapping[task_lhs.id]]
+                    [self.parameters.mapping[task_rhs.id]],
+                true,
+                conjunction!(
+                    [task_lhs.start_variable >= intervals[task_lhs.id.unpack() as usize].0]
+                        & [task_lhs.start_variable <= intervals[task_lhs.id.unpack() as usize].1]
+                        & [task_rhs.start_variable >= intervals[task_rhs.id.unpack() as usize].0]
+                        & [task_rhs.start_variable <= intervals[task_rhs.id.unpack() as usize].1]
+                ),
+            )?;
+        }
+        Ok(is_literal_true)
     }
 }
 
@@ -329,7 +367,7 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> PropagationStatusCP {
         self.statistics.n_calls += 1;
-        if let Some(clique) = self.find_conflict(context.as_readonly()) {
+        if let Some(clique) = self.find_conflict(&mut context)? {
             self.statistics.n_conflicts += 1;
             if clique.len() == 2 {
                 self.statistics.n_trivial_conflicts += 1;
@@ -393,7 +431,8 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
         &self,
         mut context: PropagationContextMut,
     ) -> PropagationStatusCP {
-        if let Some(clique) = self.find_conflict(context.as_readonly()) {
+        todo!();
+        if let Some(clique) = self.find_conflict(&mut context)? {
             let tasks = self.create_initial_activity_list();
             let est = clique
                 .iter()
