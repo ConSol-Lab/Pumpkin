@@ -299,12 +299,18 @@ fn run() -> SchedulingResult<()> {
         }
     }
 
+    let other = start_variables.clone();
+
     solver.with_solution_callback(move |callback_arguments| {
         println!("-----------------------------------------");
         callback_arguments.log_statistics();
         println!(
-            "Found solution with makespan {}",
-            callback_arguments.solution.get_integer_value(makespan)
+            "Found solution with makespan {} - {:?}",
+            callback_arguments.solution.get_integer_value(makespan),
+            other
+                .iter()
+                .map(|variable| callback_arguments.solution.get_integer_value(*variable))
+                .collect::<Vec<_>>()
         );
     });
 

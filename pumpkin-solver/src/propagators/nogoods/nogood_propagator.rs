@@ -12,6 +12,7 @@ use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::conjunction;
 use crate::containers::KeyedVec;
+use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
@@ -37,6 +38,12 @@ use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
+use crate::statistics::Statistic;
+use crate::statistics::StatisticLogger;
+
+create_statistics_struct!(NogoodStatistics {
+    num_nogoods_removed: usize,
+});
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
 /// at the same time).
@@ -73,6 +80,7 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+    statistics: NogoodStatistics,
 }
 
 /// A struct which keeps track of which nogoods are considered "high" LBD and which nogoods are
@@ -135,6 +143,10 @@ impl Propagator for NogoodPropagator {
 
     fn priority(&self) -> u32 {
         0
+    }
+
+    fn log_statistics(&self, statistic_logger: StatisticLogger) {
+        self.statistics.log(statistic_logger)
     }
 
     fn propagate(&mut self, mut context: PropagationContextMut) -> Result<(), Inconsistency> {
@@ -1234,6 +1246,8 @@ impl NogoodPropagator {
             if self.is_nogood_propagating(context, reason_store, id) {
                 continue;
             }
+
+            self.statistics.num_nogoods_removed += 1;
 
             // Remove the nogood from the watch list.
             Self::remove_nogood_from_watch_list(

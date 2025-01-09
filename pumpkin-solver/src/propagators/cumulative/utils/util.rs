@@ -24,16 +24,19 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
     arg_tasks: &[ArgTask<Var>],
 ) -> (Vec<Task<Var>>, KeyedVec<LocalId, usize>) {
     // We order the tasks by non-decreasing resource usage, this allows certain optimizations
-    let mut ordered_tasks = arg_tasks.to_vec();
-    ordered_tasks.sort_by(|a, b| b.resource_usage.cmp(&a.resource_usage));
+    let mut ordered_tasks = arg_tasks
+        .iter()
+        .enumerate()
+        .map(|(index, arg_task)| (arg_task, index))
+        .collect::<Vec<_>>();
+    ordered_tasks.sort_by(|(a, _), (b, _)| b.resource_usage.cmp(&a.resource_usage));
 
     let mut mapping: KeyedVec<LocalId, usize> = KeyedVec::new();
 
     let mut id = 0;
     let tasks = ordered_tasks
         .iter()
-        .enumerate()
-        .filter_map(|(index, x)| {
+        .filter_map(|(x, index)| {
             // We only add tasks which have a non-zero resource usage
             if x.resource_usage > 0 {
                 let return_value = Some(Task {
@@ -42,7 +45,7 @@ pub(crate) fn create_tasks<Var: IntegerVariable + 'static>(
                     resource_usage: x.resource_usage,
                     id: LocalId::from(id),
                 });
-                let _ = mapping.push(index);
+                let _ = mapping.push(*index);
 
                 id += 1;
                 return_value
