@@ -315,6 +315,7 @@ fn run() -> SchedulingResult<()> {
     );
 
     let result = if args.use_fixed_search {
+        info!("Using fixed search");
         let mut brancher = IndependentVariableValueBrancher::new(
             Smallest::new(
                 &start_variables
@@ -326,6 +327,7 @@ fn run() -> SchedulingResult<()> {
         );
         solver.minimise(&mut brancher, &mut termination, makespan)
     } else {
+        info!("Using alternating search");
         let mut brancher = AlternatingBrancher::with_blacklist(
             &solver,
             IndependentVariableValueBrancher::new(

@@ -1,8 +1,10 @@
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::usize;
 
 use itertools::Itertools;
+use log::info;
 
 use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
@@ -116,6 +118,7 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 }
             }
         }
+        return Ok(None);
         // Run a greedy heuristic from all intervals
         for (seed_index, (mut start, mut finish)) in intervals.iter().enumerate() {
             let mut clique = vec![seed_index];
@@ -247,8 +250,8 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
         // );
         // // Interval choice implies choosing all contained time spand
         // for ((int_lhs, int_rhs), int_var) in intervals.iter().zip(interval_vars.iter()) {
-        //     for ((ts_lhs, ts_rhs), ts_var) in time_segments.iter().zip(time_segment_vars.iter()) {
-        //         if int_lhs <= ts_lhs && ts_rhs <= int_rhs {
+        //     for ((ts_lhs, ts_rhs), ts_var) in time_segments.iter().zip(time_segment_vars.iter())
+        // {         if int_lhs <= ts_lhs && ts_rhs <= int_rhs {
         //             model.add_cons(
         //                 vec![int_var.clone(), ts_var.clone()],
         //                 &[-1.0, 1.0],
@@ -394,12 +397,18 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                 })
                 .max()
                 .expect("Empty clique");
+            let difference = clique
+                .iter()
+                .map(|idx| tasks[*idx].processing_time)
+                .sum::<i32>()
+                - (lft - est)
+                - 1;
             let nogood = clique
                 .iter()
                 .flat_map(|&task_ix| {
                     let task = &tasks[task_ix];
                     [
-                        predicate!(task.start_variable >= est),
+                        predicate!(task.start_variable >= est - difference),
                         predicate!(task.start_variable <= lft - task.processing_time),
                     ]
                 })
@@ -410,22 +419,7 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                     },
                 ))
                 .collect_vec();
-            let backjump_height = context.get_decision_level()
-                - nogood
-                    .iter()
-                    .map(|pred| {
-                        context
-                            .assignments
-                            .get_decision_level_for_predicate(pred)
-                            .unwrap_or(0)
-                    })
-                    .sorted_by(|lhs, rhs| lhs.cmp(rhs).reverse())
-                    .dedup()
-                    .nth(1)
-                    .unwrap_or(0);
-            self.statistics
-                .average_backjump_height
-                .add_term(backjump_height);
+            info!("Found cluster with explanation: {nogood:?}");
             Err(crate::basic_types::Inconsistency::Conflict(
                 nogood.into_iter().collect(),
             ))

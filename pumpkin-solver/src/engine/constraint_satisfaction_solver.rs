@@ -977,6 +977,20 @@ impl ConstraintSatisfactionSolver {
         )
     }
 
+    pub(crate) fn add_conflicting_nogood(
+        nogood_propagator: &mut dyn Propagator,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+        statistics: &mut SolverStatistics,
+    ) {
+        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => {
+                nogood_propagator.add_conflicting_nogood(nogood, context, statistics)
+            }
+            None => panic!("Provided propagator should be the nogood propagator"),
+        }
+    }
+
     pub(crate) fn add_asserting_nogood_to_nogood_propagator(
         nogood_propagator: &mut dyn Propagator,
         nogood: Vec<Predicate>,
@@ -1190,6 +1204,21 @@ impl ConstraintSatisfactionSolver {
                             &self.propagators[propagator_id],
                             propagator_id,
                         ));
+
+                        if self.propagators[propagator_id].name() == "NodePackingPropagator" {
+                            let mut context = PropagationContextMut::new(
+                                &mut self.assignments,
+                                &mut self.reason_store,
+                                &mut self.semantic_minimiser,
+                                propagator_id,
+                            );
+                            let _ = Self::add_conflicting_nogood(
+                                &mut self.propagators[Self::get_nogood_propagator_id()],
+                                conflict_nogood.clone().into(),
+                                &mut context,
+                                &mut self.solver_statistics,
+                            );
+                        }
 
                         let stored_conflict_info = StoredConflictInfo::Propagator {
                             conflict_nogood,

@@ -886,6 +886,47 @@ impl Propagator for NogoodPropagator {
 
 /// Functions for adding nogoods
 impl NogoodPropagator {
+    pub(crate) fn add_conflicting_nogood(
+        &mut self,
+        nogood: Vec<Predicate>,
+        context: &mut PropagationContextMut,
+        statistics: &mut SolverStatistics,
+    ) {
+        // We treat unit nogoods in a special way by adding it as a permanent nogood at the
+        // root-level; this is essentially the same as adding a predicate at the root level
+        if nogood.len() == 1 {
+            panic!("Cannot be unit")
+        }
+
+        // Add the nogood to the database.
+        //
+        // If there is an available nogood id, use it, otherwise allocate a fresh id.
+        let new_id = if let Some(reused_id) = self.delete_ids.pop() {
+            self.nogoods[reused_id] = Nogood::new_learned_nogood(nogood.into(), 0);
+            reused_id
+        } else {
+            let new_nogood_id = NogoodId {
+                id: self.nogoods.len() as u32,
+            };
+            let _ = self
+                .nogoods
+                .push(Nogood::new_learned_nogood(nogood.into(), 0));
+            new_nogood_id
+        };
+
+        // Now we add two watchers to the first two predicates in the nogood
+        NogoodPropagator::add_watcher(
+            &mut self.watch_lists,
+            self.nogoods[new_id].predicates[0],
+            new_id,
+        );
+        NogoodPropagator::add_watcher(
+            &mut self.watch_lists,
+            self.nogoods[new_id].predicates[1],
+            new_id,
+        );
+    }
+
     /// Adds a nogood which has been learned during search.
     ///
     /// The first predicate should be asserting and the second predicate should contain the
