@@ -297,7 +297,11 @@ impl LearnedClauseManager {
         let mut codes: Vec<usize> = literals
             .iter()
             .filter_map(|lit| {
-                let level = assignments.get_literal_assignment_level(*lit);
+                let level = if assignments.is_literal_assigned(*lit) {
+                    assignments.get_literal_assignment_level(*lit)
+                } else {
+                    assignments.get_decision_level()
+                };
                 if level > 0 {
                     Some(level)
                 } else {

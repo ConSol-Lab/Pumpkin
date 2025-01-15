@@ -159,8 +159,10 @@ impl SemanticMinimiser {
         // Note that we take into account the effect of holes on the upper/lower bound after this
         // loop.
         for literal in nogood {
-            let predicate = variable_literal_mapping.get_predicates(*literal).next();
-            if let Some(predicate) = predicate {
+            let predicates = variable_literal_mapping.get_predicates(*literal);
+            let mut has_predicates = false;
+            for predicate in predicates {
+                has_predicates = true;
                 // If there is a corresponding predicate then we add it to the domain of that domain
                 // id
                 self.present_ids.insert(predicate.get_domain());
@@ -191,7 +193,8 @@ impl SemanticMinimiser {
                         self.domains[domain_id].assign(equality_constant);
                     }
                 }
-            } else if *literal != assignments_propositional.true_literal {
+            }
+            if !has_predicates && *literal != assignments_propositional.true_literal {
                 pumpkin_assert_simple!(
                     *literal != assignments_propositional.false_literal,
                     "Would indicate that the learned clause is always satisfied"
@@ -400,46 +403,61 @@ impl SimpleIntegerDomain {
         assignments_propositional: &AssignmentsPropositional,
         assignments_integer: &AssignmentsInteger,
     ) {
-        // Add the lower-bound to the description if it is different from the root-level bound
-        if self.lower_bound != original_domain.lower_bound {
+        if self.lower_bound == self.upper_bound
+            && (self.lower_bound != original_domain.lower_bound
+                || self.upper_bound != original_domain.upper_bound)
+        {
             description.push(
                 variable_literal_mappings.get_literal(
-                    predicate![domain_id >= self.lower_bound]
+                    predicate![domain_id == self.lower_bound]
                         .try_into()
                         .unwrap(),
                     assignments_propositional,
                     assignments_integer,
                 ),
             );
-        }
+        } else {
+            // Add the lower-bound to the description if it is different from the root-level bound
+            if self.lower_bound != original_domain.lower_bound {
+                description.push(
+                    variable_literal_mappings.get_literal(
+                        predicate![domain_id >= self.lower_bound]
+                            .try_into()
+                            .unwrap(),
+                        assignments_propositional,
+                        assignments_integer,
+                    ),
+                );
+            }
 
-        // Add the upper-bound to the description if it is different from the root-level bound
-        if self.upper_bound != original_domain.upper_bound {
-            description.push(
-                variable_literal_mappings.get_literal(
-                    predicate![domain_id <= self.upper_bound]
-                        .try_into()
-                        .unwrap(),
-                    assignments_propositional,
-                    assignments_integer,
-                ),
-            );
-        }
+            // Add the upper-bound to the description if it is different from the root-level bound
+            if self.upper_bound != original_domain.upper_bound {
+                description.push(
+                    variable_literal_mappings.get_literal(
+                        predicate![domain_id <= self.upper_bound]
+                            .try_into()
+                            .unwrap(),
+                        assignments_propositional,
+                        assignments_integer,
+                    ),
+                );
+            }
 
-        // Add holes to the description if they were not there at the root-level
-        for hole in self.holes.iter() {
-            // Only record holes that are within the lower and upper bound, that are not root
-            // assignments.
-            // Since bound values cannot be in the holes, we can use '<' or '>'.
-            if self.lower_bound < *hole
-                && *hole < self.upper_bound
-                && !original_domain.holes.contains(hole)
-            {
-                description.push(variable_literal_mappings.get_literal(
-                    predicate![domain_id != *hole].try_into().unwrap(),
-                    assignments_propositional,
-                    assignments_integer,
-                ));
+            // Add holes to the description if they were not there at the root-level
+            for hole in self.holes.iter() {
+                // Only record holes that are within the lower and upper bound, that are not root
+                // assignments.
+                // Since bound values cannot be in the holes, we can use '<' or '>'.
+                if self.lower_bound < *hole
+                    && *hole < self.upper_bound
+                    && !original_domain.holes.contains(hole)
+                {
+                    description.push(variable_literal_mappings.get_literal(
+                        predicate![domain_id != *hole].try_into().unwrap(),
+                        assignments_propositional,
+                        assignments_integer,
+                    ));
+                }
             }
         }
     }
