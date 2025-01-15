@@ -3,6 +3,9 @@ use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
 use crate::branching::value_selection::InDomainMin;
+use crate::branching::value_selection::InDomainSplit;
+use crate::branching::value_selection::ReverseInDomainSplit;
+use crate::branching::variable_selection::FirstFail;
 use crate::branching::variable_selection::Smallest;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
@@ -106,8 +109,8 @@ impl DefaultBrancher {
             decay_factor: DEFAULT_VSIDS_DECAY_FACTOR,
             best_known_solution: None,
             backup_brancher: IndependentVariableValueBrancher::new(
-                Smallest::new(&variables),
-                InDomainMin,
+                FirstFail::new(&variables),
+                InDomainSplit,
             ),
         }
     }
