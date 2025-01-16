@@ -20,16 +20,25 @@ use pumpkin_solver::branching::branchers::independent_variable_value_brancher::I
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::Smallest;
 use pumpkin_solver::constraints;
+use pumpkin_solver::options::ConflictResolver;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::options::CumulativePropagationMethod;
+use pumpkin_solver::options::LearnedNogoodSortingStrategy;
+use pumpkin_solver::options::LearningOptions;
+use pumpkin_solver::options::RestartOptions;
+use pumpkin_solver::options::SolverOptions;
+use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::Combinator;
+use pumpkin_solver::termination::DecisionBudget;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::variables::TransformableVariable;
 use pumpkin_solver::Solver;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
 use rcpsp_instance::parse_rcpsp_dzn;
 use rcpsp_instance::SchedulingError;
 use rcpsp_instance::SchedulingResult;
@@ -66,6 +75,13 @@ struct Args {
     /// between (smallest, indomain-min), and VSIDS
     #[arg(short = 'f', long)]
     use_fixed_search: bool,
+
+    #[arg(short = 'd', long = "decision-limit")]
+    decision_limit: Option<u64>,
+
+    /// Determines whether to allow clause database removal
+    #[arg(short = 'r', long = "no-removal")]
+    no_removal: bool,
 }
 
 pub fn main() {
@@ -152,7 +168,25 @@ fn run() -> SchedulingResult<()> {
         .init();
     info!("Logging successfully configured");
 
-    let mut solver = Solver::default();
+    let mut solver = Solver::with_options(SolverOptions {
+        restart_options: RestartOptions::default(),
+        learning_clause_minimisation: true,
+        random_generator: SmallRng::seed_from_u64(42),
+        proof_log: ProofLog::default(),
+        conflict_resolver: ConflictResolver::default(),
+        learning_options: if args.no_removal {
+            LearningOptions {
+                max_activity: 1e20,
+                activity_decay_factor: 0.99,
+                limit_num_high_lbd_nogoods: 4000,
+                nogood_sorting_strategy: LearnedNogoodSortingStrategy::Lbd,
+                lbd_threshold: u32::MAX,
+                activity_bump_increment: 1.0,
+            }
+        } else {
+            LearningOptions::default()
+        },
+    });
 
     let ub_variables: i32 = rcpsp_instance
         .processing_times
@@ -315,9 +349,13 @@ fn run() -> SchedulingResult<()> {
     });
 
     let mut termination = Combinator::new(
-        OsSignal::install(),
-        args.time_limit
-            .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
+        args.decision_limit
+            .map(|decision_limit| DecisionBudget::new(decision_limit)),
+        Combinator::new(
+            OsSignal::install(),
+            args.time_limit
+                .map(|time| TimeBudget::starting_now(Duration::from_secs(time))),
+        ),
     );
 
     let result = if args.use_fixed_search {

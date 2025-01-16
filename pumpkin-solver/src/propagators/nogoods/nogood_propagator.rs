@@ -6,6 +6,7 @@ use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
 use super::NogoodId;
 use super::NogoodWatchList;
+use crate::basic_types::moving_averages::CumulativeMovingAverage;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
@@ -42,6 +43,8 @@ use crate::statistics::StatisticLogger;
 
 create_statistics_struct!(NogoodStatistics {
     num_nogoods_removed: usize,
+    average_num_low_lbd: CumulativeMovingAverage<u64>,
+    average_num_high_lbd: CumulativeMovingAverage<u64>
 });
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
@@ -154,6 +157,13 @@ impl Propagator for NogoodPropagator {
         // First we perform nogood management to ensure that the database does not grow excessively
         // large with "bad" nogoods
         self.clean_up_learned_nogoods_if_needed(context.as_readonly(), context.reason_store);
+
+        self.statistics
+            .average_num_low_lbd
+            .add_term(self.learned_nogood_ids.low_lbd.len() as u64);
+        self.statistics
+            .average_num_high_lbd
+            .add_term(self.learned_nogood_ids.high_lbd.len() as u64);
 
         if self.watch_lists.len() <= context.assignments().num_domains() as usize {
             self.watch_lists.resize(

@@ -85,6 +85,7 @@ pub mod termination {
     //! The most common example would be [`TimeBudget`], which terminates the [`Solver`] whenever
     //! the time budget is exceeded.
     pub use crate::engine::termination::combinator::*;
+    pub use crate::engine::termination::decision_budget::*;
     pub use crate::engine::termination::indefinite::*;
     pub use crate::engine::termination::os_signal::*;
     pub use crate::engine::termination::time_budget::*;

@@ -4,6 +4,7 @@
 //! certain time budget to complete its search.
 
 pub(crate) mod combinator;
+pub(crate) mod decision_budget;
 pub(crate) mod indefinite;
 pub(crate) mod os_signal;
 pub(crate) mod time_budget;
@@ -13,6 +14,7 @@ pub(crate) mod time_budget;
 pub trait TerminationCondition {
     /// Returns `true` when the solver should stop, `false` otherwise.
     fn should_stop(&mut self) -> bool;
+    fn decision_has_been_made(&mut self) {}
 }
 
 impl<T: TerminationCondition> TerminationCondition for Option<T> {
@@ -20,6 +22,13 @@ impl<T: TerminationCondition> TerminationCondition for Option<T> {
         match self {
             Some(t) => t.should_stop(),
             None => false,
+        }
+    }
+
+    fn decision_has_been_made(&mut self) {
+        match self {
+            Some(t) => t.decision_has_been_made(),
+            None => {}
         }
     }
 }

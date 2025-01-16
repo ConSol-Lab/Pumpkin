@@ -767,7 +767,7 @@ impl ConstraintSatisfactionSolver {
                     self.restart_during_search(brancher);
                 }
 
-                let branching_result = self.make_next_decision(brancher);
+                let branching_result = self.make_next_decision(brancher, termination);
 
                 if let Err(flag) = branching_result {
                     return flag;
@@ -808,6 +808,7 @@ impl ConstraintSatisfactionSolver {
     fn make_next_decision(
         &mut self,
         brancher: &mut impl Brancher,
+        termination: &mut impl TerminationCondition,
     ) -> Result<(), CSPSolverExecutionFlag> {
         // Set the next decision to be an assumption, if there are assumptions left.
         // Currently assumptions are implemented by adding an assumption predicate
@@ -851,6 +852,8 @@ impl ConstraintSatisfactionSolver {
         );
 
         self.solver_statistics.engine_statistics.num_decisions += 1;
+        termination.decision_has_been_made();
+
         self.assignments
             .post_predicate(decision_predicate, None)
             .expect("Decisions are expected not to fail.");
