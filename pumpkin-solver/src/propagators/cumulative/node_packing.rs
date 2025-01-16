@@ -401,18 +401,12 @@ impl<Var: IntegerVariable + 'static> Propagator for NodePackingPropagator<Var> {
                 })
                 .max()
                 .expect("Empty clique");
-            let difference = clique
-                .iter()
-                .map(|idx| tasks[*idx].processing_time)
-                .sum::<i32>()
-                - (lft - est)
-                - 1;
             let nogood = clique
                 .iter()
                 .flat_map(|&task_ix| {
                     let task = &tasks[task_ix];
                     [
-                        predicate!(task.start_variable >= est - difference),
+                        predicate!(task.start_variable >= est),
                         predicate!(task.start_variable <= lft - task.processing_time),
                     ]
                 })
