@@ -356,9 +356,13 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 true,
                 conjunction!(
                     [task_lhs.start_variable >= intervals[task_lhs.id.unpack() as usize].0]
-                        & [task_lhs.start_variable <= intervals[task_lhs.id.unpack() as usize].1]
+                        & [task_lhs.start_variable
+                            <= intervals[task_lhs.id.unpack() as usize].1
+                                - task_lhs.processing_time]
                         & [task_rhs.start_variable >= intervals[task_rhs.id.unpack() as usize].0]
-                        & [task_rhs.start_variable <= intervals[task_rhs.id.unpack() as usize].1]
+                        & [task_rhs.start_variable
+                            <= intervals[task_rhs.id.unpack() as usize].1
+                                - task_rhs.processing_time]
                 ),
             )?;
         }
