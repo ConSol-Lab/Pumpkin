@@ -10,7 +10,6 @@ use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
-use crate::conjunction;
 use crate::containers::KeyedVec;
 use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
@@ -1054,6 +1053,11 @@ impl NogoodPropagator {
             return Ok(());
         }
 
+        // After preprocessing the nogood may propagate. If that happens, there is no reason for
+        // the propagation which breaks the proof logging. Therefore, we keep the original nogood
+        // here so we can construct a reason for the propagation later.
+        let mut input_nogood = nogood.clone();
+
         // Then we pre-process the nogood such that (among others) it does not contain duplicates
         Self::preprocess_nogood(&mut nogood, context);
 
@@ -1068,8 +1072,12 @@ impl NogoodPropagator {
                 // return success
                 Ok(())
             } else {
+                // Get the reason for the propagation.
+                input_nogood.retain(|&p| p != nogood[0]);
+
                 // Post the negated predicate at the root to respect the nogood.
-                let result = context.post_predicate(!nogood[0], conjunction!());
+                let result = context
+                    .post_predicate(!nogood[0], PropositionalConjunction::from(input_nogood));
                 match result {
                     Ok(_) => Ok(()),
                     Err(_) => {

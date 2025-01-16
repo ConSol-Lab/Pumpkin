@@ -95,6 +95,19 @@ impl<OtherBrancher: Brancher> AlternatingBrancher<OtherBrancher> {
     fn toggle_brancher(&mut self) {
         self.is_using_default_brancher = !self.is_using_default_brancher
     }
+
+    /// Returns true if only the default strategy is used from now on and false otherwise.
+    ///
+    /// This is important if [`AlternatingStrategy::SwitchToDefaultAfterFirstSolution`] is used as
+    /// the strategy.
+    fn will_always_use_default(&self) -> bool {
+        match self.strategy {
+            AlternatingStrategy::SwitchToDefaultAfterFirstSolution => {
+                self.is_using_default_brancher
+            }
+            _ => false,
+        }
+    }
 }
 
 impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
@@ -114,13 +127,19 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.other_brancher
-            .on_appearance_in_conflict_predicate(predicate)
+        self.default_brancher
+            .on_appearance_in_conflict_predicate(predicate);
+        if !self.will_always_use_default() {
+            self.other_brancher
+                .on_appearance_in_conflict_predicate(predicate)
+        }
     }
 
     fn on_conflict(&mut self) {
-        self.other_brancher.on_conflict();
-        self.default_brancher.on_conflict()
+        self.default_brancher.on_conflict();
+        if !self.will_always_use_default() {
+            self.other_brancher.on_conflict();
+        }
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
@@ -137,8 +156,8 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
                 }
             }
             AlternatingStrategy::SwitchToDefaultAfterFirstSolution => {
-                // Switch only the first time, not that `even_number_of_solutions` is initialised to
-                // true
+                // Switch only the first time, note that `even_number_of_solutions` is initialised
+                // to true
                 if self.even_number_of_solutions {
                     self.even_number_of_solutions = false;
                     self.is_using_default_brancher = true;
@@ -147,12 +166,17 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
             _ => {}
         }
 
-        self.other_brancher.on_solution(solution);
-        self.default_brancher.on_solution(solution)
+        self.default_brancher.on_solution(solution);
+        if !self.will_always_use_default() {
+            self.other_brancher.on_solution(solution);
+        }
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
-        self.other_brancher.on_unassign_integer(variable, value)
+        self.default_brancher.on_unassign_integer(variable, value);
+        if !self.will_always_use_default() {
+            self.other_brancher.on_unassign_integer(variable, value)
+        }
     }
 
     fn on_restart(&mut self) {
@@ -190,12 +214,16 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
 
     fn on_backtrack(&mut self) {
         self.default_brancher.on_backtrack();
-        self.other_brancher.on_backtrack();
+        if !self.will_always_use_default() {
+            self.other_brancher.on_backtrack();
+        }
     }
 
     fn synchronise(&mut self, assignments: &Assignments) {
         self.default_brancher.synchronise(assignments);
-        self.other_brancher.synchronise(assignments);
+        if !self.will_always_use_default() {
+            self.other_brancher.synchronise(assignments);
+        }
     }
 }
 
