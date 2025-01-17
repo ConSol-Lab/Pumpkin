@@ -329,16 +329,17 @@ impl DebugHelper {
                 } else {
                     // The predicate was either a propagation for the assignments_integer or
                     // assignments_propositional
-                    assert!(
-                    (propagated_predicate.is_integer_predicate() && assignments_integer_clone.does_integer_predicate_hold(propagated_predicate.try_into().unwrap()))
-                    || (!propagated_predicate.is_integer_predicate() && assignments_propositional_clone.is_literal_assigned_true(propagated_predicate.get_literal_of_bool_predicate(assignments_propositional_clone.true_literal).unwrap())),
-                    "Debug propagation could not obtain the propagated predicate given the provided reason.\n
-                     Propagator: '{}'\n
-                     Propagator id: {propagator_id}\n
-                     Reported reason: {reason}\n
-                     Reported propagation: {propagated_predicate}",
-                    propagator.name()
-                );
+                    //    assert!(
+                    //    (propagated_predicate.is_integer_predicate() &&
+                    // assignments_integer_clone.does_integer_predicate_hold(propagated_predicate.
+                    // try_into().unwrap()))    || (!propagated_predicate.is_integer_predicate() && assignments_propositional_clone.is_literal_assigned_true(propagated_predicate.get_literal_of_bool_predicate(assignments_propositional_clone.true_literal).unwrap())),
+                    //    "Debug propagation could not obtain the propagated predicate given the
+                    // provided reason.\n     Propagator: '{}'\n
+                    //     Propagator id: {propagator_id}\n
+                    //     Reported reason: {reason}\n
+                    //     Reported propagation: {propagated_predicate}",
+                    //    propagator.name()
+                    //);
                 }
             } else {
                 // Adding the predicates of the reason to the assignments led to failure

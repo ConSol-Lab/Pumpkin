@@ -75,4 +75,3 @@ mod tests {
         assert!(constant_average.value() == 20.0);
     }
 }
-

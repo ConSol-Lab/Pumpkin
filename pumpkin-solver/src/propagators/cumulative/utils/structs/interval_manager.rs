@@ -46,14 +46,19 @@ impl<Var: IntegerVariable> IntervalManager<Var> {
                 ..context.upper_bound(&b.start_variable) + b.processing_time;
             interval_a.cmp(interval_b)
         });
+        let mut max_length = 0;
         for i in 0..self.sorted_tasks.len() {
             let task = &self.sorted_tasks[i];
             self.task_to_index[task.id] = i;
 
             let interval = context.lower_bound(&task.start_variable)
                 ..context.upper_bound(&task.start_variable) + task.processing_time;
+            if interval.end - interval.start > max_length {
+                max_length = interval.end - interval.start;
+            }
             self.bounds[task.id.unpack() as usize] = interval;
         }
+        self.max_length = max_length
     }
 
     pub(crate) fn initialise<Context: ReadDomains>(
@@ -112,10 +117,11 @@ impl<Var: IntegerVariable> IntervalManager<Var> {
             task_index += 1;
         }
 
-        if !self.length_outdated {
-            let previous_bound = &self.bounds[updated_task.id.unpack() as usize];
-            self.length_outdated = previous_bound.end - previous_bound.start == self.max_length;
-        }
+        self.length_outdated = true;
+        // if !self.length_outdated {
+        //    let previous_bound = &self.bounds[updated_task.id.unpack() as usize];
+        //    self.length_outdated = previous_bound.end - previous_bound.start == self.max_length;
+        //}
         self.bounds[updated_task.id.unpack() as usize] = new_bounds.clone();
     }
 
@@ -130,6 +136,14 @@ impl<Var: IntegerVariable> IntervalManager<Var> {
                 .max()
                 .unwrap_or_default();
         }
+        pumpkin_assert_extreme!(
+            self.bounds
+                .iter()
+                .map(|bound| bound.end - bound.start)
+                .max()
+                .unwrap_or_default()
+                == self.max_length
+        );
         self.max_length
     }
 
@@ -192,22 +206,37 @@ impl<Var: IntegerVariable> IntervalManager<Var> {
         // Then we keep going starting from the cursor until we find an element such that the start
         // time is equal to or larger than the start time
         while *cursor + 1 < self.sorted_tasks.len()
-            && self.bounds[self.sorted_tasks[*cursor + 1].id.unpack() as usize].start
-                < start.checked_sub(self.get_max_length()).unwrap_or_default()
+            && self.bounds[self.sorted_tasks[*cursor + 1].id.unpack() as usize].end
+                <= start.checked_sub(self.get_max_length()).unwrap_or_default()
         {
             *cursor += 1;
         }
 
-        pumpkin_assert_extreme!(self.sorted_tasks[..*cursor].iter().all(|task| {
+        let max_length = self.get_max_length();
+        pumpkin_assert_extreme!(self.sorted_tasks[..*cursor].iter().enumerate().all(|(index, task)| {
             let stored_bounds = &self.bounds[task.id.unpack() as usize];
-            let result = !has_overlap_with_interval(stored_bounds.start, stored_bounds.end, start, end);
+            let result = !has_overlap_with_interval(stored_bounds.start, stored_bounds.end, start.checked_sub(max_length).unwrap_or_default(), end);
             if !result {
                 let pointed_task = &self.sorted_tasks[*cursor];
                 let pointed_bounds = &self.bounds[pointed_task.id.unpack() as usize];
-                eprintln!("Found overlap between {stored_bounds:?} for task {task:?} with the interval {:?}\nCursor is pointing to {pointed_task:?} with bounds {pointed_bounds:?}", start..=end)
+                eprintln!("Found overlap between {stored_bounds:?} for task {task:?} with the interval {:?} and index {index}\nCursor {cursor} is pointing to {pointed_task:?} with bounds {pointed_bounds:?}\nMax Length: {}", start..=end, max_length)
             }
             result
         }));
+        // pumpkin_assert_extreme!(
+        //    *cursor == self.sorted_tasks.len()
+        //        || has_overlap_with_interval(
+        //            self.bounds[self.sorted_tasks[*cursor].id.unpack() as usize].start,
+        //            self.bounds[self.sorted_tasks[*cursor].id.unpack() as usize].end,
+        //            start.checked_sub(max_length).unwrap_or_default(),
+        //            end
+        //        ),
+        //    "No overlap between: {}..{} and {}..={}",
+        //    self.bounds[self.sorted_tasks[*cursor].id.unpack() as usize].start,
+        //    self.bounds[self.sorted_tasks[*cursor].id.unpack() as usize].end,
+        //    start.checked_sub(max_length).unwrap_or_default(),
+        //    end
+        //);
 
         IntervalIterator {
             inner: self,

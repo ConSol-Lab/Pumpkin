@@ -11,4 +11,3 @@ pub(crate) trait MovingAverage<Term>: Debug {
     /// average
     fn adapt(&mut self, interval_length: u64);
 }
-
