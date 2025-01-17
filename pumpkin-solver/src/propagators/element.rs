@@ -139,7 +139,7 @@ where
             .array
             .iter()
             .enumerate()
-            .filter(|(idx, element)| context.contains(&self.index, *idx as i32))
+            .filter(|(idx, _)| context.contains(&self.index, *idx as i32))
             .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), (_, element)| {
                 (
                     i32::min(rhs_lb, context.lower_bound(element)),
