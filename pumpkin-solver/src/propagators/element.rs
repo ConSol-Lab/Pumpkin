@@ -93,14 +93,20 @@ where
         Ok(())
     }
 
-    fn lazy_explanation(&mut self, code: u64, _: ExplanationContext) -> &[Predicate] {
+    fn lazy_explanation(&mut self, code: u64, context: ExplanationContext) -> &[Predicate] {
         let payload = RightHandSideReason::from_bits(code);
 
         self.rhs_reason_buffer.clear();
         self.rhs_reason_buffer
-            .extend(self.array.iter().map(|variable| match payload.bound() {
-                Bound::Lower => predicate![variable >= payload.value()],
-                Bound::Upper => predicate![variable <= payload.value()],
+            .extend(self.array.iter().enumerate().map(|(idx, variable)| {
+                if self.index.contains(context.assignments(), idx as i32) {
+                    match payload.bound() {
+                        Bound::Lower => predicate![variable >= payload.value()],
+                        Bound::Upper => predicate![variable <= payload.value()],
+                    }
+                } else {
+                    predicate![self.index != idx as i32]
+                }
             }));
 
         &self.rhs_reason_buffer
@@ -129,15 +135,17 @@ where
         &self,
         context: &mut PropagationContextMut<'_>,
     ) -> PropagationStatusCP {
-        let (rhs_lb, rhs_ub) =
-            self.array
-                .iter()
-                .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), element| {
-                    (
-                        i32::min(rhs_lb, context.lower_bound(element)),
-                        i32::max(rhs_ub, context.upper_bound(element)),
-                    )
-                });
+        let (rhs_lb, rhs_ub) = self
+            .array
+            .iter()
+            .enumerate()
+            .filter(|(idx, element)| context.contains(&self.index, *idx as i32))
+            .fold((i32::MAX, i32::MIN), |(rhs_lb, rhs_ub), (_, element)| {
+                (
+                    i32::min(rhs_lb, context.lower_bound(element)),
+                    i32::max(rhs_ub, context.upper_bound(element)),
+                )
+            });
 
         context.set_lower_bound(
             &self.rhs,
