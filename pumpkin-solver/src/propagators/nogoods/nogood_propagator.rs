@@ -1,6 +1,10 @@
 use std::ops::Not;
 
+use itertools::Itertools;
+use log::info;
 use log::warn;
+use range_collections::RangeSet;
+use range_collections::RangeSet2;
 
 use super::LearnedNogoodSortingStrategy;
 use super::LearningOptions;
@@ -12,6 +16,7 @@ use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
 use crate::containers::KeyedVec;
+use crate::containers::StorageKey;
 use crate::create_statistics_struct;
 use crate::engine::conflict_analysis::Mode;
 use crate::engine::nogoods::Lbd;
@@ -40,11 +45,13 @@ use crate::pumpkin_assert_moderate;
 use crate::pumpkin_assert_simple;
 use crate::statistics::Statistic;
 use crate::statistics::StatisticLogger;
+use crate::variables::Literal;
 
 create_statistics_struct!(NogoodStatistics {
     num_nogoods_removed: usize,
     average_num_low_lbd: CumulativeMovingAverage<u64>,
-    average_num_high_lbd: CumulativeMovingAverage<u64>
+    average_num_high_lbd: CumulativeMovingAverage<u64>,
+    found_disjointness: usize,
 });
 
 /// A propagator which propagates nogoods (i.e. a list of [`Predicate`]s which cannot all be true
@@ -82,6 +89,8 @@ pub(crate) struct NogoodPropagator {
     parameters: LearningOptions,
     /// The nogoods which have been bumped.
     bumped_nogoods: Vec<NogoodId>,
+    incompatibility_matrix: Option<Vec<Vec<Literal>>>,
+    mapping: Option<KeyedVec<DomainId, usize>>,
     statistics: NogoodStatistics,
 }
 
@@ -133,6 +142,15 @@ impl NogoodPropagator {
             }
         }
         false
+    }
+
+    pub(crate) fn add_incompatability(
+        &mut self,
+        incompatibility_matrix: Option<Vec<Vec<Literal>>>,
+        mapping: Option<KeyedVec<DomainId, usize>>,
+    ) {
+        self.incompatibility_matrix = incompatibility_matrix;
+        self.mapping = mapping;
     }
 }
 
@@ -788,6 +806,117 @@ impl Propagator for NogoodPropagator {
         self.last_index_on_trail = old_trail_position;
 
         pumpkin_assert_advanced!(self.debug_is_properly_watched());
+
+        if let Some(incompatability_matrix) = &self.incompatibility_matrix {
+            if let Some(mapping) = &self.mapping {
+                for nogood in self.nogoods.iter() {
+                    let filter = nogood
+                        .predicates
+                        .iter()
+                        .filter(|predicate| {
+                            !context.is_predicate_satisfied(**predicate)
+                                && !context.is_predicate_falsified(**predicate)
+                        })
+                        .map(|predicate| !(*predicate))
+                        .collect_vec();
+                    if filter.len() == 2
+                        && !nogood
+                            .predicates
+                            .iter()
+                            .any(|predicate| context.is_predicate_falsified(*predicate))
+                    {
+                        if filter[0].get_domain().index() >= mapping.len()
+                            || mapping[filter[0].get_domain()] == usize::MAX
+                            || filter[1].get_domain().index() >= mapping.len()
+                            || mapping[filter[1].get_domain()] == usize::MAX
+                            || context.is_literal_true(
+                                &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                    [mapping[filter[1].get_domain()]],
+                            )
+                        {
+                            continue;
+                        }
+
+                        let task_range: RangeSet2<i32> = RangeSet::from(
+                            context.lower_bound(&filter[0].get_domain())
+                                ..context.upper_bound(&filter[0].get_domain()),
+                        );
+                        let other_task_range: RangeSet2<i32> = RangeSet::from(
+                            context.lower_bound(&filter[1].get_domain())
+                                ..context.upper_bound(&filter[1].get_domain()),
+                        );
+                        let intersection: RangeSet2<i32> =
+                            task_range.intersection(&other_task_range);
+                        if intersection.is_empty() {
+                            continue;
+                        }
+
+                        if filter[0].get_domain() != filter[1].get_domain() {
+                            if filter[0].is_lower_bound_predicate()
+                                && filter[0].get_right_hand_side()
+                                    > context.upper_bound(&filter[1].get_domain())
+                                && filter[1].is_upper_bound_predicate()
+                                && filter[1].get_right_hand_side()
+                                    < context.lower_bound(&filter[0].get_domain())
+                            {
+                                info!(
+                                    "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                    filter[0].get_domain(),
+                                    context.lower_bound(&filter[0].get_domain()),
+                                    context.upper_bound(&filter[0].get_domain()),
+                                    filter[1].get_domain(),
+                                    context.lower_bound(&filter[1].get_domain()),
+                                    context.upper_bound(&filter[1].get_domain())
+                                );
+                                self.statistics.found_disjointness += 1;
+                                let explanation: PropositionalConjunction = nogood
+                                    .predicates
+                                    .iter()
+                                    .filter(|predicate| context.is_predicate_satisfied(**predicate))
+                                    .cloned()
+                                    .collect();
+                                context.assign_literal(
+                                    &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                        [mapping[filter[1].get_domain()]],
+                                    true,
+                                    explanation,
+                                )?;
+                            }
+                            if filter[1].is_lower_bound_predicate()
+                                && filter[1].get_right_hand_side()
+                                    > context.upper_bound(&filter[0].get_domain())
+                                && filter[0].is_upper_bound_predicate()
+                                && filter[0].get_right_hand_side()
+                                    < context.lower_bound(&filter[1].get_domain())
+                            {
+                                info!(
+                                    "{filter:?} - Var {}: {}, {} - Var {}: {}, {}",
+                                    filter[0].get_domain(),
+                                    context.lower_bound(&filter[0].get_domain()),
+                                    context.upper_bound(&filter[0].get_domain()),
+                                    filter[1].get_domain(),
+                                    context.lower_bound(&filter[1].get_domain()),
+                                    context.upper_bound(&filter[1].get_domain())
+                                );
+                                self.statistics.found_disjointness += 1;
+                                let explanation: PropositionalConjunction = nogood
+                                    .predicates
+                                    .iter()
+                                    .filter(|predicate| context.is_predicate_satisfied(**predicate))
+                                    .cloned()
+                                    .collect();
+                                context.assign_literal(
+                                    &incompatability_matrix[mapping[filter[0].get_domain()]]
+                                        [mapping[filter[1].get_domain()]],
+                                    true,
+                                    explanation,
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

@@ -34,6 +34,7 @@ use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
+use crate::containers::KeyedVec;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
 use crate::engine::cp::PropagatorQueue;
 use crate::engine::cp::WatchListCP;
@@ -989,6 +990,31 @@ impl ConstraintSatisfactionSolver {
         match nogood_propagator.downcast_mut::<NogoodPropagator>() {
             Some(nogood_propagator) => {
                 nogood_propagator.add_conflicting_nogood(nogood, context, statistics)
+            }
+            None => panic!("Provided propagator should be the nogood propagator"),
+        }
+    }
+
+    pub(crate) fn add_incompatibility(
+        &mut self,
+        incompatibility_matrix: Option<Vec<Vec<Literal>>>,
+        mapping: Option<KeyedVec<DomainId, usize>>,
+    ) {
+        Self::add_incompatibility_to_nogood_propagator(
+            &mut self.propagators[Self::get_nogood_propagator_id()],
+            incompatibility_matrix,
+            mapping,
+        )
+    }
+
+    pub(crate) fn add_incompatibility_to_nogood_propagator(
+        nogood_propagator: &mut dyn Propagator,
+        incompatibility_matrix: Option<Vec<Vec<Literal>>>,
+        mapping: Option<KeyedVec<DomainId, usize>>,
+    ) {
+        match nogood_propagator.downcast_mut::<NogoodPropagator>() {
+            Some(nogood_propagator) => {
+                nogood_propagator.add_incompatability(incompatibility_matrix, mapping)
             }
             None => panic!("Provided propagator should be the nogood propagator"),
         }

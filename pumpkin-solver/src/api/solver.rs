@@ -18,6 +18,7 @@ use crate::branching::variable_selection::Smallest;
 use crate::branching::variable_selection::VariableSelector;
 use crate::branching::Brancher;
 use crate::constraints::ConstraintPoster;
+use crate::containers::KeyedVec;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::propagation::Propagator;
 use crate::engine::termination::TerminationCondition;
@@ -118,6 +119,15 @@ impl std::fmt::Debug for Solver {
 }
 
 impl Solver {
+    pub fn add_incompatibility(
+        &mut self,
+        incompatibility_matrix: Option<Vec<Vec<Literal>>>,
+        mapping: Option<KeyedVec<DomainId, usize>>,
+    ) {
+        self.satisfaction_solver
+            .add_incompatibility(incompatibility_matrix, mapping);
+    }
+
     /// Creates a solver with the provided [`SolverOptions`].
     pub fn with_options(solver_options: SolverOptions) -> Self {
         let satisfaction_solver = ConstraintSatisfactionSolver::new(solver_options);

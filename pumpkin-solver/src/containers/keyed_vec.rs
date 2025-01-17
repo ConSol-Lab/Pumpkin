@@ -42,7 +42,7 @@ impl<Key, Value> KeyedVec<Key, Value> {
 }
 
 impl<Key: StorageKey, Value> KeyedVec<Key, Value> {
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.elements.len()
     }
 

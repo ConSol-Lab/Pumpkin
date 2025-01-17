@@ -20,6 +20,8 @@ use pumpkin_solver::branching::branchers::independent_variable_value_brancher::I
 use pumpkin_solver::branching::value_selection::InDomainMin;
 use pumpkin_solver::branching::variable_selection::Smallest;
 use pumpkin_solver::constraints;
+use pumpkin_solver::containers::KeyedVec;
+use pumpkin_solver::containers::StorageKey;
 use pumpkin_solver::options::ConflictResolver;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::options::CumulativePropagationMethod;
@@ -34,6 +36,7 @@ use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::DecisionBudget;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
+use pumpkin_solver::variables::DomainId;
 use pumpkin_solver::variables::Literal;
 use pumpkin_solver::variables::TransformableVariable;
 use pumpkin_solver::Solver;
@@ -60,6 +63,9 @@ struct Args {
     /// Enables the cumulative to mine for disjointness
     #[arg(short = 'c', long)]
     use_cumulative_disjointness: bool,
+
+    #[arg(short = 'o', long)]
+    use_nogood_disjointness: bool,
 
     /// The maximum number of rotations performed by the node-packing propagator
     #[arg(short='o', long, default_value_t=usize::MAX)]
@@ -129,6 +135,11 @@ fn create_transitive_closure_of_graph(
 
 fn run() -> SchedulingResult<()> {
     let args = Args::parse();
+
+    if !args.use_node_packing && (args.use_cumulative_disjointness || args.use_nogood_disjointness)
+    {
+        panic!("Node packing is disabled but cumulative or nogood disjointness mining is activated")
+    }
 
     if args.instance_path.extension().and_then(|ext| ext.to_str()) != Some("dzn") {
         return Err(SchedulingError::invalid_instance(
@@ -227,7 +238,14 @@ fn run() -> SchedulingResult<()> {
     let mut incompatibility_matrix: Vec<Vec<Literal>> =
         Vec::with_capacity(rcpsp_instance.processing_times.len());
 
+    let mut mapping: KeyedVec<DomainId, usize> = KeyedVec::default();
+
     for index in 0..rcpsp_instance.processing_times.len() {
+        while mapping.len() <= start_variables[index].index() {
+            let _ = mapping.push(usize::MAX);
+        }
+        mapping[start_variables[index]] = index;
+
         let mut new_vec = Vec::with_capacity(rcpsp_instance.processing_times.len());
         for other_index in 0..rcpsp_instance.processing_times.len() {
             let result = match index.cmp(&other_index) {
@@ -263,6 +281,10 @@ fn run() -> SchedulingResult<()> {
             new_vec.push(result);
         }
         incompatibility_matrix.push(new_vec)
+    }
+
+    if args.use_node_packing && args.use_nogood_disjointness {
+        solver.add_incompatibility(Some(incompatibility_matrix.clone()), Some(mapping.clone()));
     }
 
     for (task_index, dependencies) in rcpsp_instance.dependencies.iter().enumerate() {

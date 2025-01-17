@@ -118,7 +118,6 @@ impl<Var: IntegerVariable + Clone + 'static> NodePackingPropagator<Var> {
                 }
             }
         }
-        return Ok(None);
         // Run a greedy heuristic from all intervals
         for (seed_index, (mut start, mut finish)) in intervals.iter().enumerate() {
             let mut clique = vec![seed_index];
