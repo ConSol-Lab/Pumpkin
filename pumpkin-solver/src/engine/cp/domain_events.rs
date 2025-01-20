@@ -29,9 +29,6 @@ impl DomainEvents {
     #[allow(unused, reason = "will be part of public API at some point")]
     pub(crate) const UPPER_BOUND: DomainEvents =
         DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::UpperBound));
-    /// DomainEvents with only assigning to a single value.
-    pub(crate) const ASSIGN: DomainEvents =
-        DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::Assign));
 }
 
 impl DomainEvents {

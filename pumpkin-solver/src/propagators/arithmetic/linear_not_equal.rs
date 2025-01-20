@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use enumset::enum_set;
+use itertools::Itertools;
 
 use crate::basic_types::PropagationStatusCP;
 use crate::basic_types::PropositionalConjunction;
@@ -56,6 +57,34 @@ where
             should_recalculate_lhs: false,
         }
     }
+
+    fn propagate_inequality(
+        &self,
+        context: &mut PropagationContextMut,
+        terms: Vec<Var::AffineView>,
+        rhs: i32,
+        lb_lhs: i32,
+    ) -> PropagationStatusCP {
+        for (i, x_i) in terms.iter().enumerate() {
+            let bound = rhs - (lb_lhs - context.lower_bound(x_i));
+            if context.upper_bound(x_i) > bound {
+                let conjunction: PropositionalConjunction = terms
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(j, var)| {
+                        if i == j {
+                            return None;
+                        }
+                        Some(predicate![var >= context.lower_bound(var)])
+                    })
+                    .collect();
+
+                context.set_upper_bound(x_i, bound, conjunction)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<Var> Propagator for LinearNotEqualPropagator<Var>
@@ -81,22 +110,7 @@ where
         // We update the value of the left-hand side with the value of the newly fixed variable
         self.fixed_lhs += context.lower_bound(&self.terms[local_id.unpack() as usize]);
 
-        // Either the number of fixed variables is the number of terms - 1 in which case we can
-        // propagate if it has not been updated before; if it has been updated then we don't need to
-        // remove the value from its domain again.
-        let can_propagate = self.number_of_fixed_terms == self.terms.len() - 1
-            && !self.unfixed_variable_has_been_updated;
-        // Otherwise the number of fixed variables is equal to the number of terms in the following
-        // cases:
-        // - Either we can report a conflict
-        // - Or the sum of the values of the left-hand side is inaccurate and we should recalculate
-        let is_conflicting_or_outdated = self.number_of_fixed_terms == self.terms.len()
-            && (self.should_recalculate_lhs || self.fixed_lhs == self.rhs);
-        if can_propagate || is_conflicting_or_outdated {
-            EnqueueDecision::Enqueue
-        } else {
-            EnqueueDecision::Skip
-        }
+        EnqueueDecision::Enqueue
     }
 
     fn notify_backtrack(
@@ -137,7 +151,7 @@ where
         context: &mut PropagatorInitialisationContext,
     ) -> Result<(), PropositionalConjunction> {
         self.terms.iter().enumerate().for_each(|(i, x_i)| {
-            let _ = context.register(x_i.clone(), DomainEvents::ASSIGN, LocalId::from(i as u32));
+            let _ = context.register(x_i.clone(), DomainEvents::ANY_INT, LocalId::from(i as u32));
             let _ = context.register_for_backtrack_events(
                 x_i.clone(),
                 DomainEvents::create_with_int_events(enum_set!(
@@ -160,6 +174,29 @@ where
             self.should_recalculate_lhs = false;
         }
         pumpkin_assert_extreme!(self.is_propagator_state_consistent(context.as_readonly()));
+
+        // Find lower & upper bounds
+        let ub_lhs: i32 = self.terms.iter().map(|var| context.upper_bound(var)).sum();
+        let lb_lhs: i32 = self.terms.iter().map(|var| context.lower_bound(var)).sum();
+
+        if lb_lhs < self.rhs || ub_lhs > self.rhs {
+            // We don't have to do anything, it's already not equal
+            return Ok(());
+        }
+
+        if lb_lhs == self.rhs {
+            // We now know that lhs > rhs, so we can propagate -lhs <= -rhs - 1
+            let terms = self.terms.iter().map(|var| var.scaled(-1)).collect_vec();
+            let lb_lhs = terms.iter().map(|var| context.lower_bound(var)).sum();
+            self.propagate_inequality(&mut context, terms, -self.rhs - 1, lb_lhs)?
+        }
+
+        if ub_lhs == self.rhs {
+            // We now know that lhs < rhs, so we can propagate lhs <= rhs - 1
+            let terms = self.terms.iter().map(|var| var.scaled(1)).collect_vec();
+            let lb_lhs = lb_lhs;
+            self.propagate_inequality(&mut context, terms, self.rhs - 1, lb_lhs)?
+        }
 
         // If there is only 1 unfixed variable, then we can propagate
         if self.number_of_fixed_terms == self.terms.len() - 1 {
