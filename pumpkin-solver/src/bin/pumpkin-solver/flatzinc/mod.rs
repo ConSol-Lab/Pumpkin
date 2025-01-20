@@ -12,6 +12,7 @@ use std::time::Duration;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingBrancher;
 use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrategy;
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
+use pumpkin_solver::branching::Brancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
 use pumpkin_solver::options::CumulativeOptions;
@@ -20,6 +21,7 @@ use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
 use pumpkin_solver::results::Solution;
+use pumpkin_solver::statistics::StatisticLogger;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
 use pumpkin_solver::termination::TimeBudget;
@@ -95,6 +97,7 @@ pub(crate) fn solve(
                 let optimal_objective_value =
                     optimal_solution.get_integer_value(*objective_function.get_domain());
                 if !options.all_solutions {
+                    brancher.log_statistics(StatisticLogger::default());
                     solver.log_statistics();
                     print_solution_from_solver(&optimal_solution, &instance.outputs)
                 }
@@ -150,6 +153,7 @@ pub(crate) fn solve(
         None
     };
 
+    brancher.log_statistics(StatisticLogger::default());
     if let Some(value) = value {
         solver.log_statistics_with_objective(value as i64)
     } else {
