@@ -424,7 +424,7 @@ impl Solver {
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is minimised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]).
+    /// [`TerminationCondition`]). Uses a search strategy based on the provided [`SearchMode`].
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
@@ -453,7 +453,7 @@ impl Solver {
 
     /// Solves the model currently in the [`Solver`] to optimality where the provided
     /// `objective_variable` is maximised (or is indicated to terminate by the provided
-    /// [`TerminationCondition`]).
+    /// [`TerminationCondition`]). Uses a search strategy based on the provided [`SearchMode`].
     ///
     /// It returns an [`OptimisationResult`] which can be used to retrieve the optimal solution if
     /// it exists.
