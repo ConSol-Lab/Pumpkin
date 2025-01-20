@@ -25,6 +25,7 @@ pub mod results {
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
+    pub use crate::solver::SearchMode;
     #[cfg(doc)]
     use crate::Solver;
 }

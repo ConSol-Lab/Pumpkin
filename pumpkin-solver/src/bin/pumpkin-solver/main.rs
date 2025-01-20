@@ -32,6 +32,7 @@ use pumpkin_solver::proof::ProofLog;
 use pumpkin_solver::pumpkin_assert_simple;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
+use pumpkin_solver::results::SearchMode;
 use pumpkin_solver::results::Solution;
 use pumpkin_solver::statistics::configure_statistic_logging;
 use pumpkin_solver::termination::TimeBudget;
@@ -345,6 +346,10 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
+
+    /// Determine what type of search is used by the solver
+    #[arg(long = "search-mode", default_value_t)]
+    search_mode: SearchMode,
 }
 
 fn configure_logging(
@@ -548,6 +553,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_propagation_method,
                     args.cumulative_incremental_backtracking,
                 ),
+                search_mode: args.search_mode,
             },
         )?,
     }

@@ -19,6 +19,7 @@ use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
 use pumpkin_solver::results::ProblemSolution;
 use pumpkin_solver::results::SatisfactionResult;
+use pumpkin_solver::results::SearchMode;
 use pumpkin_solver::results::Solution;
 use pumpkin_solver::termination::Combinator;
 use pumpkin_solver::termination::OsSignal;
@@ -44,6 +45,9 @@ pub(crate) struct FlatZincOptions {
 
     /// Options used for the cumulative constraint (see [`cumulative`]).
     pub(crate) cumulative_options: CumulativeOptions,
+
+    /// Determines which type of search is performed by the solver
+    pub(crate) search_mode: SearchMode,
 }
 
 pub(crate) fn solve(
@@ -82,12 +86,18 @@ pub(crate) fn solve(
 
     let value = if let Some(objective_function) = &instance.objective_function {
         let result = match objective_function {
-            FlatzincObjective::Maximize(domain_id) => {
-                solver.maximise(&mut brancher, &mut termination, *domain_id)
-            }
-            FlatzincObjective::Minimize(domain_id) => {
-                solver.minimise(&mut brancher, &mut termination, *domain_id)
-            }
+            FlatzincObjective::Maximize(domain_id) => solver.maximise_with_search(
+                &mut brancher,
+                &mut termination,
+                *domain_id,
+                options.search_mode,
+            ),
+            FlatzincObjective::Minimize(domain_id) => solver.minimise_with_search(
+                &mut brancher,
+                &mut termination,
+                *domain_id,
+                options.search_mode,
+            ),
         };
 
         match result {
