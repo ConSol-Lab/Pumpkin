@@ -527,6 +527,15 @@ impl Solver {
         loop {
             self.satisfaction_solver.restore_state_at_root(brancher);
 
+            // We know that the objective value should be at least the value which we are currently
+            // attempting
+            //
+            // In the first iteration, this will add a trivial constraint
+            //
+            // In all subsequent iterations, if infeasibility is detected, then it will set the
+            // lower-bound of the objective variable to be +1 of the last value attempted)
+            let _ = self.add_clause([predicate!(objective_variable >= lower_bound)]);
+
             // It could be the case that due to learning and/or propagation we have learned that
             // the lower-bound of the variable is already larger; we take this into account by
             // updating the variable
@@ -536,7 +545,7 @@ impl Solver {
             );
 
             info!(
-                "Attempt to find solution with {}",
+                "LUS - Attempt to find solution with {}",
                 predicate!(objective_variable <= lower_bound)
             );
 
