@@ -118,12 +118,18 @@ impl SemanticMinimiser {
     }
 
     fn grow(&mut self, lower_bound: i32, upper_bound: i32, holes: Vec<i32>) {
-        let initial_domain = SimpleIntegerDomain {
+        let mut initial_domain = SimpleIntegerDomain {
             lower_bound,
             upper_bound,
             holes: HashSet::from_iter(holes.iter().cloned()),
             inconsistent: false,
         };
+
+        initial_domain.propagate_holes_on_lower_bound();
+        initial_domain.propagate_holes_on_upper_bound();
+        initial_domain.remove_redundant_holes();
+        initial_domain.update_consistency();
+
         let _ = self.original_domains.push(initial_domain.clone());
         let _ = self.domains.push(initial_domain);
     }
