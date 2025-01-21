@@ -11,8 +11,11 @@ use crate::branching::branchers::autonomous_search::AutonomousSearch;
 use crate::branching::branchers::independent_variable_value_brancher::IndependentVariableValueBrancher;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::value_selection::InDomainMin;
+use crate::branching::value_selection::InDomainSplit;
+use crate::branching::value_selection::ReverseInDomainSplit;
 #[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
+use crate::branching::variable_selection::FirstFail;
 use crate::branching::variable_selection::Smallest;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
@@ -758,7 +761,7 @@ impl Solver {
 pub type DefaultBrancher = AutonomousSearch<
     IndependentVariableValueBrancher<
         DomainId,
-        Smallest<DomainId, InOrderTieBreaker<DomainId, i32>>,
-        InDomainMin,
+        FirstFail<DomainId, InOrderTieBreaker<DomainId, i32>>,
+        InDomainSplit,
     >,
 >;

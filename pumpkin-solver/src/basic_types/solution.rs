@@ -1,4 +1,4 @@
-use crate::engine::propagation::propagation_context::HasAssignments;
+use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::variables::DomainGeneratorIterator;
 use crate::engine::variables::DomainId;
 use crate::engine::variables::Literal;

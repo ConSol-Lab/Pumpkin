@@ -1,10 +1,10 @@
 use crate::basic_types::PropagationStatusCP;
 use crate::conjunction;
-use crate::engine::cp::propagation::propagation_context::ReadDomains;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
 use crate::engine::propagation::PropagatorInitialisationContext;
+use crate::engine::propagation::ReadDomains;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::DomainEvents;
 use crate::predicates::PropositionalConjunction;

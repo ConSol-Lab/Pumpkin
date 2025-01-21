@@ -4,6 +4,7 @@ use super::time_table_util::propagate_based_on_timetable;
 use super::time_table_util::should_enqueue;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
+use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
 use crate::engine::propagation::PropagationContext;
@@ -109,7 +110,7 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
 
     fn notify(
         &mut self,
-        context: PropagationContext,
+        context: StatefulPropagationContext,
         local_id: LocalId,
         event: OpaqueDomainEvent,
     ) -> EnqueueDecision {
@@ -123,12 +124,12 @@ impl<Var: IntegerVariable + 'static> Propagator for TimeTableOverIntervalPropaga
             &self.parameters,
             &self.updatable_structures,
             &updated_task,
-            context,
+            context.as_readonly(),
             self.is_time_table_empty,
         );
 
         update_bounds_task(
-            context,
+            context.as_readonly(),
             self.updatable_structures.get_stored_bounds_mut(),
             &updated_task,
         );

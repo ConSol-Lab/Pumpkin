@@ -12,8 +12,10 @@ use super::propagation::store::PropagatorStore;
 use super::propagation::ExplanationContext;
 use super::reason::ReasonStore;
 use super::ConstraintSatisfactionSolver;
+use super::DomainFaithfulness;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropositionalConjunction;
+use crate::basic_types::Trail;
 use crate::engine::cp::Assignments;
 use crate::engine::propagation::PropagationContextMut;
 use crate::engine::propagation::Propagator;
@@ -72,11 +74,15 @@ impl DebugHelper {
 
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
+            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut trail = Trail::default();
             let context = PropagationContextMut::new(
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
+                &mut domain_faithfulness,
                 PropagatorId(propagator_id as u32),
+                &mut trail,
             );
             let propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
@@ -220,11 +226,15 @@ impl DebugHelper {
                 // Now propagate using the debug propagation method.
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
+                let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut trail = Trail::default();
                 let context = PropagationContextMut::new(
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
+                    &mut domain_faithfulness,
                     propagator_id,
+                    &mut trail,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 
@@ -329,11 +339,15 @@ impl DebugHelper {
                 loop {
                     let num_predicates_before = assignments_clone.num_trail_entries();
 
+                    let mut domain_faithfulness = DomainFaithfulness::default();
+                    let mut trail = Trail::default();
                     let context = PropagationContextMut::new(
                         &mut assignments_clone,
                         &mut reason_store,
                         &mut semantic_minimiser,
+                        &mut domain_faithfulness,
                         propagator_id,
+                        &mut trail,
                     );
                     let debug_propagation_status_cp =
                         propagator.debug_propagate_from_scratch(context);
@@ -389,11 +403,15 @@ impl DebugHelper {
             //  now propagate using the debug propagation method
             let mut reason_store = Default::default();
             let mut semantic_minimiser = SemanticMinimiser::default();
+            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut trail = Trail::default();
             let context = PropagationContextMut::new(
                 &mut assignments_clone,
                 &mut reason_store,
                 &mut semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator_id,
+                &mut trail,
             );
             let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
             assert!(
@@ -447,11 +465,15 @@ impl DebugHelper {
             if outcome.is_ok() {
                 let mut reason_store = Default::default();
                 let mut semantic_minimiser = SemanticMinimiser::default();
+                let mut domain_faithfulness = DomainFaithfulness::default();
+                let mut trail = Trail::default();
                 let context = PropagationContextMut::new(
                     &mut assignments_clone,
                     &mut reason_store,
                     &mut semantic_minimiser,
+                    &mut domain_faithfulness,
                     propagator_id,
+                    &mut trail,
                 );
                 let debug_propagation_status_cp = propagator.debug_propagate_from_scratch(context);
 

@@ -30,6 +30,7 @@ impl EventSink {
         }
         event_sink
     }
+
     pub(crate) fn grow(&mut self) {
         let _ = self.present.push(EnumSet::new());
     }
@@ -52,10 +53,6 @@ impl EventSink {
             drain: self.events.drain(..),
             present: &mut self.present,
         }
-    }
-
-    pub(crate) fn num_domains(&self) -> usize {
-        self.present.len()
     }
 }
 

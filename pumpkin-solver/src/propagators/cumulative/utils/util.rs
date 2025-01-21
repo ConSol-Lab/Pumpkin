@@ -9,7 +9,7 @@ use crate::containers::KeyedVec;
 use crate::engine::cp::propagation::ReadDomains;
 use crate::engine::domain_events::DomainEvents;
 use crate::engine::propagation::local_id::LocalId;
-use crate::engine::propagation::propagation_context::PropagationContext;
+use crate::engine::propagation::PropagationContext;
 use crate::engine::propagation::PropagatorInitialisationContext;
 use crate::engine::variables::IntegerVariable;
 use crate::engine::IntDomainEvent;
