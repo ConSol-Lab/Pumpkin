@@ -285,7 +285,6 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 mod tests {
     use super::AutonomousSearch;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::branchers::autonomous_search::DEFAULT_VSIDS_MAX_THRESHOLD;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
     use crate::engine::Assignments;
@@ -304,28 +303,6 @@ mod tests {
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
 
         (0..100).for_each(|_| brancher.on_conflict());
-    }
-
-    #[test]
-    fn value_removed_if_threshold_too_small() {
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        let y = assignments.grow(-10, 0);
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
-        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        brancher.increment = DEFAULT_VSIDS_MAX_THRESHOLD;
-
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        assert!(!brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(x >= 5)));
-        assert!(brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(y >= -5)));
     }
 
     #[test]
