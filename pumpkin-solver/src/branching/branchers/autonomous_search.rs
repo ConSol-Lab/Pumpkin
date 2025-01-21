@@ -132,10 +132,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         }
     }
 
-    fn minimum_activity_threshold(&self) -> f64 {
-        1_f64 / self.increment
-    }
-
     /// Resizes the heap to accommodate for the id.
     /// Recall that the underlying heap uses direct hashing.
     fn resize_heap(&mut self, id: PredicateId) {
@@ -149,6 +145,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
     fn bump_activity(&mut self, predicate: Predicate) {
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
+        self.heap.restore_key(id);
 
         // Scale the activities if the values are too large.
         // Also remove predicates that have activities close to zero.
@@ -157,21 +154,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             // Adjust heap values.
             self.heap.divide_values(self.max_threshold);
 
-            // Remove inactive predicates from the heap,
-            // and stage the ids for removal from the id generator.
-            self.predicate_id_info.iter().for_each(|predicate_id| {
-                // If the predicate does not reach the minimum activity threshold then we remove it
-                // from the heap and we remove its id from the generator
-                //
-                // Note that we check whether the current predicate being removed is not the
-                // predicate is being bumped, this is to prevent multiple IDs from being assigned.
-                if *self.heap.get_value(predicate_id) <= self.minimum_activity_threshold()
-                    && predicate_id != id
-                {
-                    self.heap.delete_key(predicate_id);
-                    self.predicate_id_info.delete_id(predicate_id);
-                }
-            });
             // Adjust increment. It is important to adjust the increment after the above code.
             self.increment /= self.max_threshold;
         }

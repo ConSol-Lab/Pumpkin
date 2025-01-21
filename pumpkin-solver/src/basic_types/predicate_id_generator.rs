@@ -73,13 +73,6 @@ impl PredicateIdGenerator {
         self.predicate_to_id.clear();
     }
 
-    /// Returns an iterator over all active predicate ids.
-    /// Note that constructing the iterator is not constant time,
-    /// since the function internally sortes the inactive predicate ids.
-    pub(crate) fn iter(&self) -> PredicateIdIterator {
-        PredicateIdIterator::new(self.next_id, self.deleted_ids.clone())
-    }
-
     pub(crate) fn replace_predicate(&mut self, predicate: Predicate, replacement: Predicate) {
         pumpkin_assert_moderate!(self.has_id_for_predicate(predicate));
         let predicate_id = self.get_id(predicate);
@@ -87,6 +80,7 @@ impl PredicateIdGenerator {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug)]
 pub(crate) struct PredicateIdIterator {
     sorted_deleted_ids: Vec<PredicateId>,
@@ -94,6 +88,7 @@ pub(crate) struct PredicateIdIterator {
     next_deleted: u32,
 }
 
+#[cfg(test)]
 impl PredicateIdIterator {
     fn new(end_id: u32, mut deleted_ids: Vec<PredicateId>) -> PredicateIdIterator {
         deleted_ids.sort();
@@ -136,6 +131,7 @@ impl PredicateIdIterator {
     }
 }
 
+#[cfg(test)]
 impl Iterator for PredicateIdIterator {
     type Item = PredicateId;
 
