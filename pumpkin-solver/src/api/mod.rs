@@ -1,4 +1,5 @@
 mod outputs;
+
 pub(crate) mod solver;
 
 pub mod results {
@@ -25,7 +26,6 @@ pub mod results {
     pub use crate::basic_types::Solution;
     #[cfg(doc)]
     use crate::results::unsatisfiable::UnsatisfiableUnderAssumptions;
-    pub use crate::solver::SearchMode;
     #[cfg(doc)]
     use crate::Solver;
 }
@@ -95,7 +95,7 @@ pub mod termination {
 }
 
 pub mod predicates {
-    //! Containts structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
+    //! Contains structures which represent certain [predicates](https://en.wikipedia.org/wiki/Predicate_(mathematical_logic)).
     //!
     //! The solver only utilizes the following types of predicates:
     //! - A [`Predicate::LowerBound`] of the form `[x >= v]`
@@ -110,6 +110,15 @@ pub mod predicates {
     pub use crate::engine::predicates::predicate_constructor::PredicateConstructor;
     #[cfg(doc)]
     use crate::variables::Literal;
+}
+
+pub mod optimisation {
+    //! Contains structures related to optimissation.
+    pub use crate::optimisation_search::lower_bounding_search::*;
+    pub use crate::optimisation_search::upper_bounding_search::*;
+    pub use crate::optimisation_search::OptimisationProcedure;
+    pub use crate::solver::OptimisationDirection;
+    pub use crate::solver::SearchMode;
 }
 
 pub use crate::basic_types::Function;
