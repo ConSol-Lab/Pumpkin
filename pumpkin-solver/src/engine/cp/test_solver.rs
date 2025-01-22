@@ -24,6 +24,7 @@ use crate::engine::variables::IntegerVariable;
 use crate::engine::variables::Literal;
 use crate::engine::Assignments;
 use crate::engine::DomainEvents;
+use crate::engine::DomainFaithfulness;
 use crate::engine::EmptyDomain;
 use crate::engine::WatchListCP;
 use crate::predicates::PropositionalConjunction;
@@ -36,6 +37,7 @@ pub(crate) struct TestSolver {
     pub reason_store: ReasonStore,
     pub semantic_minimiser: SemanticMinimiser,
     stateful_trail: Trail<StateChange>,
+    domain_faithfulness: DomainFaithfulness,
     watch_list: WatchListCP,
 }
 
@@ -46,6 +48,7 @@ impl Default for TestSolver {
             reason_store: Default::default(),
             propagator_store: Default::default(),
             semantic_minimiser: Default::default(),
+            domain_faithfulness: DomainFaithfulness::default(),
             watch_list: Default::default(),
             stateful_trail: Default::default(),
         };
@@ -83,7 +86,9 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.domain_faithfulness,
             PropagatorId(0),
+            &mut self.stateful_trail,
         );
         self.propagator_store[id].propagate(context)?;
 
@@ -177,7 +182,9 @@ impl TestSolver {
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
+            &mut self.domain_faithfulness,
             PropagatorId(0),
+            &mut self.stateful_trail,
         );
         self.propagator_store[propagator].propagate(context)
     }
@@ -195,7 +202,9 @@ impl TestSolver {
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
+                    &mut self.domain_faithfulness,
                     PropagatorId(0),
+                    &mut self.stateful_trail,
                 );
                 self.propagator_store[propagator].propagate(context)?;
                 self.notify_propagator(propagator);

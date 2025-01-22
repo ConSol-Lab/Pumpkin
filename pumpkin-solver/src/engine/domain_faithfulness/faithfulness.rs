@@ -28,7 +28,7 @@ impl DomainFaithfulness {
         self.last_updated += 1;
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Will be part of the public API")]
     pub(crate) fn drain_falsified_predicates(&mut self) -> impl Iterator<Item = PredicateId> + '_ {
         self.falsified_predicates.drain(..)
     }

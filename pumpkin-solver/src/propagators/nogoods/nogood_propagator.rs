@@ -315,7 +315,7 @@ impl Propagator for NogoodPropagator {
             // zero), since it will share a decision level with one of the other predicates.
             let current_lbd = self.lbd_helper.compute_lbd(
                 &self.nogoods[id].predicates.as_slice()[1..],
-                #[allow(deprecated)]
+                #[allow(deprecated, reason = "Should be changed when the API is changed")]
                 context.assignments(),
             );
 
@@ -909,11 +909,13 @@ impl NogoodPropagator {
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
+    use crate::basic_types::Trail;
     use crate::conjunction;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::test_solver::TestSolver;
+    use crate::engine::DomainFaithfulness;
     use crate::predicate;
 
     fn downcast_to_nogood_propagator(
@@ -939,6 +941,8 @@ mod tests {
             .expect("no empty domains");
 
         let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
+        let mut domain_faithfulness = DomainFaithfulness::default();
+        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -946,7 +950,9 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
+                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
@@ -979,6 +985,8 @@ mod tests {
         let propagator = solver
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
+        let mut domain_faithfulness = DomainFaithfulness::default();
+        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
@@ -986,7 +994,9 @@ mod tests {
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
+                &mut domain_faithfulness,
                 propagator,
+                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)

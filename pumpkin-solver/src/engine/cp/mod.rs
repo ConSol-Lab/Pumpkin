@@ -21,12 +21,14 @@ pub(crate) use watch_list_cp::Watchers;
 mod tests {
     use assignments::Assignments;
 
+    use crate::basic_types::Trail;
     use crate::conjunction;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::cp::assignments;
     use crate::engine::propagation::PropagationContextMut;
     use crate::engine::propagation::PropagatorId;
     use crate::engine::reason::ReasonStore;
+    use crate::engine::DomainFaithfulness;
 
     #[test]
     fn test_no_update_reason_store_if_no_update_lower_bound() {
@@ -37,11 +39,15 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
+            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut stateful_trail = Trail::default();
             let mut context = PropagationContextMut::new(
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
+                &mut domain_faithfulness,
                 PropagatorId(0),
+                &mut stateful_trail,
             );
 
             let result = context.set_lower_bound(&domain, 2, conjunction!());
@@ -60,11 +66,16 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
+            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut stateful_trail = Trail::default();
+
             let mut context = PropagationContextMut::new(
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
+                &mut domain_faithfulness,
                 PropagatorId(0),
+                &mut stateful_trail,
             );
 
             let result = context.set_upper_bound(&domain, 15, conjunction!());
@@ -83,11 +94,16 @@ mod tests {
         assert_eq!(reason_store.len(), 0);
         {
             let mut semantic_miniser = SemanticMinimiser::default();
+            let mut domain_faithfulness = DomainFaithfulness::default();
+            let mut stateful_trail = Trail::default();
+
             let mut context = PropagationContextMut::new(
                 &mut assignments,
                 &mut reason_store,
                 &mut semantic_miniser,
+                &mut domain_faithfulness,
                 PropagatorId(0),
+                &mut stateful_trail,
             );
 
             let result = context.remove(&domain, 15, conjunction!());

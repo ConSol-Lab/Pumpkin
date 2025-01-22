@@ -26,7 +26,7 @@ impl DomainEvents {
     pub(crate) const LOWER_BOUND: DomainEvents =
         DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::LowerBound));
     /// DomainEvents with only upper bound tightening.
-    #[allow(unused)]
+    #[allow(unused, reason = "Will be part of the public API")]
     pub(crate) const UPPER_BOUND: DomainEvents =
         DomainEvents::create_with_int_events(enum_set!(IntDomainEvent::UpperBound));
     /// DomainEvents with only assigning to a single value.
