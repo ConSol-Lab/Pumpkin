@@ -54,10 +54,9 @@ impl OptimisationProcedure for LowerBoundingSearch {
             brancher,
             solver,
         );
+        solver.satisfaction_solver.restore_state_at_root(brancher);
 
         loop {
-            solver.satisfaction_solver.restore_state_at_root(brancher);
-
             let assumption =
                 predicate!(objective_variable <= solver.lower_bound(&objective_variable));
 
@@ -105,6 +104,7 @@ impl OptimisationProcedure for LowerBoundingSearch {
                     return OptimisationResult::Optimal(best_solution);
                 }
                 CSPSolverExecutionFlag::Infeasible => {
+                    solver.satisfaction_solver.restore_state_at_root(brancher);
                     // We add the (hard) constraint that the negated assumption should hold (i.e.,
                     // the solution should be at least as large as the found solution)
                     let _ = solver.add_clause([!assumption]);
