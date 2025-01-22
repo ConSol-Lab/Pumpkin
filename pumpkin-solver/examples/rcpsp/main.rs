@@ -70,10 +70,6 @@ struct Args {
     #[arg(short = 'o', long)]
     use_nogood_disjointness: bool,
 
-    /// The maximum number of rotations performed by the node-packing propagator
-    #[arg(short='o', long, default_value_t=usize::MAX)]
-    number_of_cycles: usize,
-
     #[arg(short = 't', long = "time-limit")]
     time_limit: Option<u64>,
 
@@ -351,7 +347,6 @@ fn run() -> SchedulingResult<()> {
                     .iter()
                     .map(|&value| value as i32)
                     .collect::<Vec<_>>(),
-                args.number_of_cycles,
                 makespan,
                 incompatibility_matrix.clone(),
             ))

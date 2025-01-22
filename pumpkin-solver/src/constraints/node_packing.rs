@@ -8,7 +8,6 @@ use crate::variables::Literal;
 pub fn node_packing<Var: IntegerVariable + 'static>(
     start_times: &[Var],
     durations: &[i32],
-    num_cycles: usize,
     makespan_variable: Var,
     disjointness: Vec<Vec<Literal>>,
 ) -> impl Constraint {
