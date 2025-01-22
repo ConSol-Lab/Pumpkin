@@ -38,6 +38,10 @@ impl Literal {
         }
     }
 
+    pub fn get_integer_variable(&self) -> AffineView<DomainId> {
+        self.integer_variable
+    }
+
     pub fn get_true_predicate(&self) -> Predicate {
         self.lower_bound_predicate(1)
     }

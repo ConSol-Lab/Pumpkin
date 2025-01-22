@@ -451,12 +451,11 @@ fn compile_bool2int(
     let a = context.resolve_bool_variable(&exprs[0])?;
     let b = context.resolve_integer_variable(&exprs[1])?;
 
-    Ok(constraints::binary_equals(
-        a,
-        context.solver.new_literal_for_predicate(predicate!(b == 1)),
+    Ok(
+        constraints::binary_equals(a.get_integer_variable(), b.scaled(1))
+            .post(context.solver, None)
+            .is_ok(),
     )
-    .post(context.solver, None)
-    .is_ok())
 }
 
 fn compile_bool_or(
