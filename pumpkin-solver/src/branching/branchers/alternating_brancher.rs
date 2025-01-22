@@ -2,6 +2,7 @@
 //! on the strategy specified in [`AlternatingStrategy`].
 
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -207,6 +208,14 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         if !self.will_always_use_default() {
             self.other_brancher.synchronise(assignments);
         }
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        self.default_brancher
+            .get_relevant_brancher_events()
+            .into_iter()
+            .chain(self.other_brancher.get_relevant_brancher_events())
+            .collect()
     }
 }
 

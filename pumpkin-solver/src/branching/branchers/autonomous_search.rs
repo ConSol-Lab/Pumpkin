@@ -2,6 +2,7 @@ use super::independent_variable_value_brancher::IndependentVariableValueBrancher
 use crate::basic_types::PredicateId;
 use crate::basic_types::PredicateIdGenerator;
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::value_selection::InDomainMin;
 use crate::branching::variable_selection::Smallest;
 use crate::branching::Brancher;
@@ -296,6 +297,16 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 
     fn is_restart_pointless(&mut self) -> bool {
         false
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![
+            BrancherEvents::Solution,
+            BrancherEvents::Conflict,
+            BrancherEvents::Backtrack,
+            BrancherEvents::Synchronise,
+            BrancherEvents::AppearanceInConflictPredicate,
+        ]
     }
 }
 

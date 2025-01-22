@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use super::ValueSelector;
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
@@ -45,5 +46,9 @@ impl<Var> ValueSelector<Var> for DynamicValueSelector<Var> {
 
     fn is_restart_pointless(&mut self) -> bool {
         self.selector.is_restart_pointless()
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        self.selector.get_relevant_brancher_events()
     }
 }

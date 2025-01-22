@@ -1,3 +1,4 @@
+use crate::branching::brancher::BrancherEvents;
 #[cfg(doc)]
 use crate::branching::variable_selection::Smallest;
 use crate::branching::SelectionContext;
@@ -43,5 +44,9 @@ pub trait VariableSelector<Var> {
     /// could be that the restart is still performed.
     fn is_restart_pointless(&mut self) -> bool {
         true
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
     }
 }

@@ -1,3 +1,5 @@
+use enum_map::Enum;
+
 #[cfg(doc)]
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
@@ -81,4 +83,19 @@ pub trait Brancher {
     fn is_restart_pointless(&mut self) -> bool {
         true
     }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
+    }
+}
+
+#[derive(Debug, Clone, Copy, Enum, Hash, PartialEq, Eq)]
+pub enum BrancherEvents {
+    Conflict,
+    Backtrack,
+    Solution,
+    UnassignInteger,
+    AppearanceInConflictPredicate,
+    Restart,
+    Synchronise,
 }

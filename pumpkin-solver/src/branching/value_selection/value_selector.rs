@@ -1,4 +1,5 @@
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 #[cfg(doc)]
 use crate::branching::value_selection::InDomainMin;
 #[cfg(doc)]
@@ -42,5 +43,9 @@ pub trait ValueSelector<Var> {
     /// be that the restart is still performed.
     fn is_restart_pointless(&mut self) -> bool {
         true
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
     }
 }
