@@ -26,6 +26,7 @@ use maxsat::PseudoBooleanEncoding;
 use parsers::dimacs::parse_cnf;
 use parsers::dimacs::SolverArgs;
 use parsers::dimacs::SolverDimacsSink;
+use pumpkin_solver::optimisation::SearchMode;
 use pumpkin_solver::options::*;
 use pumpkin_solver::proof::Format;
 use pumpkin_solver::proof::ProofLog;
@@ -345,6 +346,10 @@ struct Args {
     /// Possible values: bool
     #[arg(long = "cumulative-incremental-backtracking")]
     cumulative_incremental_backtracking: bool,
+
+    /// Determine what type of search is used by the solver
+    #[arg(long = "search-mode", default_value_t)]
+    search_mode: SearchMode,
 }
 
 fn configure_logging(
@@ -549,6 +554,7 @@ fn run() -> PumpkinResult<()> {
                     args.cumulative_incremental_backtracking,
                     None,
                 ),
+                search_mode: args.search_mode,
             },
         )?,
     }

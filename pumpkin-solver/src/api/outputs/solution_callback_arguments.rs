@@ -31,7 +31,7 @@ impl<'a, 'b> SolutionCallbackArguments<'a, 'b> {
 
     /// Log the statistics of the [`Solver`].
     ///
-    /// If the solution was found using [`Solver::minimise`] or [`Solver::maximise`] then the
+    /// If the solution was found using [`Solver::optimise`] then the
     /// objective value of the current solution is included in the statistics.
     pub fn log_statistics(&self) {
         if let Some(objective_value) = self.objective_value {

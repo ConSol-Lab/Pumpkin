@@ -14,6 +14,10 @@ use pumpkin_solver::branching::branchers::alternating_brancher::AlternatingStrat
 use pumpkin_solver::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use pumpkin_solver::constraints::cumulative;
+use pumpkin_solver::optimisation::LowerBoundingSearch;
+use pumpkin_solver::optimisation::OptimisationDirection;
+use pumpkin_solver::optimisation::SearchMode;
+use pumpkin_solver::optimisation::UpperBoundingSearch;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::results::solution_iterator::IteratedSolution;
 use pumpkin_solver::results::OptimisationResult;
@@ -44,6 +48,9 @@ pub(crate) struct FlatZincOptions {
 
     /// Options used for the cumulative constraint (see [`cumulative`]).
     pub(crate) cumulative_options: CumulativeOptions,
+
+    /// Determines which type of search is performed by the solver
+    pub(crate) search_mode: SearchMode,
 }
 
 pub(crate) fn solve(
@@ -82,12 +89,38 @@ pub(crate) fn solve(
 
     let value = if let Some(objective_function) = &instance.objective_function {
         let result = match objective_function {
-            FlatzincObjective::Maximize(domain_id) => {
-                solver.maximise(&mut brancher, &mut termination, *domain_id)
-            }
-            FlatzincObjective::Minimize(domain_id) => {
-                solver.minimise(&mut brancher, &mut termination, *domain_id)
-            }
+            FlatzincObjective::Maximize(domain_id) => match options.search_mode {
+                SearchMode::UpperBounding => solver.optimise(
+                    &mut brancher,
+                    &mut termination,
+                    *domain_id,
+                    OptimisationDirection::Maximise,
+                    UpperBoundingSearch,
+                ),
+                SearchMode::LowerBounding => solver.optimise(
+                    &mut brancher,
+                    &mut termination,
+                    *domain_id,
+                    OptimisationDirection::Maximise,
+                    LowerBoundingSearch,
+                ),
+            },
+            FlatzincObjective::Minimize(domain_id) => match options.search_mode {
+                SearchMode::UpperBounding => solver.optimise(
+                    &mut brancher,
+                    &mut termination,
+                    *domain_id,
+                    OptimisationDirection::Minimise,
+                    UpperBoundingSearch,
+                ),
+                SearchMode::LowerBounding => solver.optimise(
+                    &mut brancher,
+                    &mut termination,
+                    *domain_id,
+                    OptimisationDirection::Minimise,
+                    LowerBoundingSearch,
+                ),
+            },
         };
 
         match result {
