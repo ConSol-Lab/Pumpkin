@@ -6,6 +6,7 @@ use crate::branching::Brancher;
 use crate::predicate;
 use crate::results::OptimisationResult;
 use crate::results::Solution;
+use crate::results::SolutionCallbackArguments;
 use crate::termination::TerminationCondition;
 use crate::variables::IntegerVariable;
 use crate::Solver;
@@ -54,14 +55,13 @@ impl OptimisationProcedure for LowerBoundingSearch {
             brancher,
             solver,
         );
+        solver.satisfaction_solver.restore_state_at_root(brancher);
 
         loop {
-            solver.satisfaction_solver.restore_state_at_root(brancher);
-
             let assumption =
                 predicate!(objective_variable <= solver.lower_bound(&objective_variable));
 
-            info!(
+            println!(
                 "Lower-Bounding Search - Attempting to find solution with assumption {assumption}"
             );
 
@@ -105,6 +105,12 @@ impl OptimisationProcedure for LowerBoundingSearch {
                     return OptimisationResult::Optimal(best_solution);
                 }
                 CSPSolverExecutionFlag::Infeasible => {
+                    (solver.solution_callback)(SolutionCallbackArguments::new(
+                        solver,
+                        &best_solution,
+                        Some(best_objective_value),
+                    ));
+                    solver.satisfaction_solver.restore_state_at_root(brancher);
                     // We add the (hard) constraint that the negated assumption should hold (i.e.,
                     // the solution should be at least as large as the found solution)
                     let _ = solver.add_clause([!assumption]);

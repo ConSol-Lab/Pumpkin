@@ -22,6 +22,9 @@ use pumpkin_solver::branching::variable_selection::Smallest;
 use pumpkin_solver::constraints;
 use pumpkin_solver::containers::KeyedVec;
 use pumpkin_solver::containers::StorageKey;
+use pumpkin_solver::optimisation::LowerBoundingSearch;
+use pumpkin_solver::optimisation::OptimisationDirection;
+use pumpkin_solver::optimisation::UpperBoundingSearch;
 use pumpkin_solver::options::ConflictResolver;
 use pumpkin_solver::options::CumulativeOptions;
 use pumpkin_solver::options::CumulativePropagationMethod;
@@ -88,6 +91,9 @@ struct Args {
     /// Determines whether to allow clause database removal
     #[arg(short = 'r', long = "no-removal")]
     no_removal: bool,
+
+    #[arg(short = 'l', long = "use-lower-bounding-search")]
+    use_lower_bounding_search: bool,
 }
 
 pub fn main() {
@@ -391,7 +397,23 @@ fn run() -> SchedulingResult<()> {
             ),
             InDomainMin,
         );
-        solver.minimise(&mut brancher, &mut termination, makespan)
+        if args.use_lower_bounding_search {
+            solver.optimise(
+                &mut brancher,
+                &mut termination,
+                makespan,
+                OptimisationDirection::Minimise,
+                LowerBoundingSearch,
+            )
+        } else {
+            solver.optimise(
+                &mut brancher,
+                &mut termination,
+                makespan,
+                OptimisationDirection::Minimise,
+                UpperBoundingSearch,
+            )
+        }
     } else {
         info!("Using alternating search");
         let mut brancher = AlternatingBrancher::with_blacklist(
@@ -411,7 +433,23 @@ fn run() -> SchedulingResult<()> {
                 .collect_vec(),
             SwitchToDefaultAfterFirstSolution,
         );
-        solver.minimise(&mut brancher, &mut termination, makespan)
+        if args.use_lower_bounding_search {
+            solver.optimise(
+                &mut brancher,
+                &mut termination,
+                makespan,
+                OptimisationDirection::Minimise,
+                LowerBoundingSearch,
+            )
+        } else {
+            solver.optimise(
+                &mut brancher,
+                &mut termination,
+                makespan,
+                OptimisationDirection::Minimise,
+                UpperBoundingSearch,
+            )
+        }
     };
 
     println!("------------------Final Statistics------------------");
