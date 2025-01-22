@@ -155,6 +155,10 @@ fn run() -> SchedulingResult<()> {
             args.instance_path.display(),
         ))?;
 
+    let path = instance_path.split("/").collect::<Vec<_>>();
+    println!("Collection {}", path[path.len() - 2]);
+    println!("Instance {}", path[path.len() - 1]);
+
     let instance_file = File::open(instance_path)?;
     let rcpsp_instance = parse_rcpsp_dzn(instance_file)?;
 
