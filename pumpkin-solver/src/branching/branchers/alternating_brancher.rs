@@ -211,9 +211,11 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
     }
 
     fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        self.default_brancher
-            .get_relevant_brancher_events()
+        // We require the restart event and on solution event for the alternating brancher itself;
+        // additionally, it will be interested in the events of its sub-branchers
+        [BrancherEvents::Restart, BrancherEvents::Solution]
             .into_iter()
+            .chain(self.default_brancher.get_relevant_brancher_events())
             .chain(self.other_brancher.get_relevant_brancher_events())
             .collect()
     }

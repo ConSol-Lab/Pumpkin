@@ -6,6 +6,8 @@ use crate::basic_types::SolutionReference;
 #[cfg(doc)]
 use crate::branching;
 #[cfg(doc)]
+use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
+#[cfg(doc)]
 use crate::branching::value_selection::ValueSelector;
 #[cfg(doc)]
 use crate::branching::variable_selection::VariableSelector;
@@ -84,18 +86,42 @@ pub trait Brancher {
         true
     }
 
+    /// Indicates which [`BrancherEvents`] are relevant for this particular [`Brancher`].
+    ///
+    /// This can be used by [`Brancher`]s such as the [`DynamicBrancher`] to determine upon which
+    /// events which [`Brancher`] should be called.
+    ///
+    /// By default, a [`Brancher`] is subscribed to all events.
     fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![]
+        vec![
+            BrancherEvents::Conflict,
+            BrancherEvents::Backtrack,
+            BrancherEvents::Solution,
+            BrancherEvents::UnassignInteger,
+            BrancherEvents::AppearanceInConflictPredicate,
+            BrancherEvents::Restart,
+            BrancherEvents::Synchronise,
+        ]
     }
 }
 
+/// The events which can occur for a [`Brancher`]. Used for returning which events are relevant in
+/// [`Brancher::get_relevant_brancher_events`], [`VariableSelector::get_relevant_brancher_events`],
+/// and [`ValueSelector::get_relevant_brancher_events`].
 #[derive(Debug, Clone, Copy, Enum, Hash, PartialEq, Eq)]
 pub enum BrancherEvents {
+    /// Event for when a conflict is detected
     Conflict,
+    /// Event for when a backtrack is performed
     Backtrack,
+    /// Event for when a solution has been found
     Solution,
+    /// Event for when an integer variable has become unassigned
     UnassignInteger,
+    /// Event for when a predicate appears during conflict analysis
     AppearanceInConflictPredicate,
+    /// Event for when a restart occurs
     Restart,
+    /// Event which is called with the new state after a backtrack has occurred
     Synchronise,
 }
