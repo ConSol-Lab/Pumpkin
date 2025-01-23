@@ -311,13 +311,16 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
     }
 
     fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
-        vec![
+        [
             BrancherEvents::Solution,
             BrancherEvents::Conflict,
             BrancherEvents::Backtrack,
             BrancherEvents::Synchronise,
             BrancherEvents::AppearanceInConflictPredicate,
         ]
+        .into_iter()
+        .chain(self.backup_brancher.get_relevant_brancher_events())
+        .collect()
     }
 }
 
