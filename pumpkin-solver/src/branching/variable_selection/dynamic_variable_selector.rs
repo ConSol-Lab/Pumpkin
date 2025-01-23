@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use super::VariableSelector;
+use crate::branching::brancher::BrancherEvents;
 #[cfg(doc)]
 use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 use crate::branching::SelectionContext;
@@ -44,5 +45,9 @@ impl<Var> VariableSelector<Var> for DynamicVariableSelector<Var> {
 
     fn is_restart_pointless(&mut self) -> bool {
         self.selector.is_restart_pointless()
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        self.selector.get_relevant_brancher_events()
     }
 }

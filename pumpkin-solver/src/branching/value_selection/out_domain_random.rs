@@ -1,3 +1,4 @@
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -26,6 +27,10 @@ impl ValueSelector<DomainId> for OutDomainRandom {
 
     fn is_restart_pointless(&mut self) -> bool {
         false
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
     }
 }
 

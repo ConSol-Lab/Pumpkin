@@ -1,3 +1,4 @@
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::value_selection::ValueSelector;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -15,6 +16,10 @@ impl<Var: IntegerVariable + Copy> ValueSelector<Var> for InDomainMax {
         decision_variable: Var,
     ) -> Predicate {
         predicate!(decision_variable >= context.upper_bound(decision_variable))
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
     }
 }
 

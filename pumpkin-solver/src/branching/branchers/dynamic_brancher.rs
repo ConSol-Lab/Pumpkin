@@ -6,7 +6,11 @@
 use std::cmp::min;
 use std::fmt::Debug;
 
+use enum_map::EnumMap;
+
+use crate::basic_types::HashSet;
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -29,6 +33,9 @@ use crate::statistics::StatisticLogger;
 pub struct DynamicBrancher {
     branchers: Vec<Box<dyn Brancher>>,
     brancher_index: usize,
+
+    relevant_event_to_index: EnumMap<BrancherEvents, Vec<usize>>,
+    relevant_events: Vec<BrancherEvents>,
 }
 
 impl Debug for DynamicBrancher {
@@ -41,14 +48,36 @@ impl DynamicBrancher {
     /// Creates a new [`DynamicBrancher`] with the provided `branchers`. It will attempt to use the
     /// `branchers` in the order in which they were provided.
     pub fn new(branchers: Vec<Box<dyn Brancher>>) -> Self {
+        let mut relevant_event_to_index: EnumMap<BrancherEvents, Vec<usize>> = EnumMap::default();
+        let mut relevant_events = HashSet::new();
+
+        // The dynamic brancher will reset the indices upon these events so they should be called
+        let _ = relevant_events.insert(BrancherEvents::Solution);
+        let _ = relevant_events.insert(BrancherEvents::Conflict);
+
+        branchers.iter().enumerate().for_each(|(index, brancher)| {
+            for event in brancher.get_relevant_brancher_events() {
+                relevant_event_to_index[event].push(index);
+                let _ = relevant_events.insert(event);
+            }
+        });
         Self {
             branchers,
             brancher_index: 0,
+
+            relevant_event_to_index,
+            relevant_events: relevant_events.into_iter().collect(),
         }
     }
 
     pub fn add_brancher(&mut self, brancher: Box<dyn Brancher>) {
-        self.branchers.push(brancher)
+        for event in brancher.get_relevant_brancher_events() {
+            self.relevant_event_to_index[event].push(self.branchers.len());
+            if !self.relevant_events.contains(&event) {
+                self.relevant_events.push(event);
+            }
+        }
+        self.branchers.push(brancher);
     }
 }
 
@@ -80,46 +109,50 @@ impl Brancher for DynamicBrancher {
         // A conflict has occurred, we do not know which brancher now can select a variable, reset
         // to the first one
         self.brancher_index = 0;
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_conflict());
+        self.relevant_event_to_index[BrancherEvents::Conflict]
+            .iter()
+            .for_each(|&brancher_index| self.branchers[brancher_index].on_conflict());
     }
 
     fn on_backtrack(&mut self) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_backtrack());
+        self.relevant_event_to_index[BrancherEvents::Backtrack]
+            .iter()
+            .for_each(|&brancher_index| self.branchers[brancher_index].on_backtrack());
     }
 
     fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_unassign_integer(variable, value));
+        self.relevant_event_to_index[BrancherEvents::UnassignInteger]
+            .iter()
+            .for_each(|&brancher_index| {
+                self.branchers[brancher_index].on_unassign_integer(variable, value)
+            });
     }
 
     fn on_appearance_in_conflict_predicate(&mut self, predicate: Predicate) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_appearance_in_conflict_predicate(predicate));
+        self.relevant_event_to_index[BrancherEvents::AppearanceInConflictPredicate]
+            .iter()
+            .for_each(|&brancher_index| {
+                self.branchers[brancher_index].on_appearance_in_conflict_predicate(predicate)
+            });
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
         self.brancher_index = 0;
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_solution(solution));
+        self.relevant_event_to_index[BrancherEvents::Solution]
+            .iter()
+            .for_each(|&brancher_index| self.branchers[brancher_index].on_solution(solution));
     }
 
     fn on_restart(&mut self) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.on_restart());
+        self.relevant_event_to_index[BrancherEvents::Restart]
+            .iter()
+            .for_each(|&brancher_index| self.branchers[brancher_index].on_restart());
     }
 
     fn synchronise(&mut self, assignments: &Assignments) {
-        self.branchers
-            .iter_mut()
-            .for_each(|brancher| brancher.synchronise(assignments));
+        self.relevant_event_to_index[BrancherEvents::Synchronise]
+            .iter()
+            .for_each(|&brancher_index| self.branchers[brancher_index].synchronise(assignments));
     }
 
     fn is_restart_pointless(&mut self) -> bool {
@@ -129,5 +162,9 @@ impl Brancher for DynamicBrancher {
         self.branchers[..=current_brancher_index]
             .iter_mut()
             .all(|brancher| brancher.is_restart_pointless())
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        self.relevant_events.clone()
     }
 }

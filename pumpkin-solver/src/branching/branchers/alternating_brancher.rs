@@ -2,6 +2,7 @@
 //! on the strategy specified in [`AlternatingStrategy`].
 
 use crate::basic_types::SolutionReference;
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
@@ -214,6 +215,16 @@ impl<OtherBrancher: Brancher> Brancher for AlternatingBrancher<OtherBrancher> {
         if !self.will_always_use_default() {
             self.other_brancher.synchronise(assignments);
         }
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        // We require the restart event and on solution event for the alternating brancher itself;
+        // additionally, it will be interested in the events of its sub-branchers
+        [BrancherEvents::Restart, BrancherEvents::Solution]
+            .into_iter()
+            .chain(self.default_brancher.get_relevant_brancher_events())
+            .chain(self.other_brancher.get_relevant_brancher_events())
+            .collect()
     }
 }
 

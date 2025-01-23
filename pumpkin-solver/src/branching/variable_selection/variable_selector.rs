@@ -1,5 +1,10 @@
+use crate::branching::brancher::BrancherEvents;
+#[cfg(doc)]
+use crate::branching::branchers::dynamic_brancher::DynamicBrancher;
 #[cfg(doc)]
 use crate::branching::variable_selection::Smallest;
+#[cfg(doc)]
+use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::predicates::predicate::Predicate;
 use crate::engine::variables::DomainId;
@@ -43,5 +48,23 @@ pub trait VariableSelector<Var> {
     /// could be that the restart is still performed.
     fn is_restart_pointless(&mut self) -> bool {
         true
+    }
+
+    /// Indicates which [`BrancherEvents`] are relevant for this particular [`VariableSelector`].
+    ///
+    /// This can be used by [`Brancher`]s such as the [`DynamicBrancher`] to determine upon which
+    /// events which [`VariableSelector`] should be called.
+    ///
+    /// By default, a [`VariableSelector`] is subscribed to all events.
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![
+            BrancherEvents::Conflict,
+            BrancherEvents::Backtrack,
+            BrancherEvents::Solution,
+            BrancherEvents::UnassignInteger,
+            BrancherEvents::AppearanceInConflictPredicate,
+            BrancherEvents::Restart,
+            BrancherEvents::Synchronise,
+        ]
     }
 }

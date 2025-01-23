@@ -1,5 +1,6 @@
 use log::warn;
 
+use crate::branching::brancher::BrancherEvents;
 use crate::branching::tie_breaking::Direction;
 use crate::branching::tie_breaking::InOrderTieBreaker;
 use crate::branching::tie_breaking::TieBreaker;
@@ -75,6 +76,10 @@ where
                     .consider(*variable, context.upper_bound(*variable));
             });
         self.tie_breaker.select()
+    }
+
+    fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
+        vec![]
     }
 }
 
