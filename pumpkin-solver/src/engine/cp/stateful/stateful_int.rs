@@ -85,36 +85,3 @@ impl PartialOrd<i64> for StatefulInt {
         Some(self.read().cmp(other))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::StatefulInt;
-    use crate::basic_types::Trail;
-
-    #[test]
-    fn test_write_resets() {
-        let mut trail = Trail::default();
-        let mut trailed_int = StatefulInt::new(0);
-
-        assert_eq!(trailed_int.read(), 0);
-
-        trail.increase_decision_level();
-        trailed_int.add_assign(5, &mut trail);
-
-        assert_eq!(trailed_int.read(), 5);
-
-        trailed_int.add_assign(5, &mut trail);
-        assert_eq!(trailed_int.read(), 10);
-
-        trail.increase_decision_level();
-        trailed_int.add_assign(1, &mut trail);
-
-        assert_eq!(trailed_int.read(), 11);
-
-        trail.synchronise(1).for_each(|change| change.undo());
-        assert_eq!(trailed_int.read(), 10);
-
-        trail.synchronise(0).for_each(|change| change.undo());
-        assert_eq!(trailed_int.read(), 0);
-    }
-}

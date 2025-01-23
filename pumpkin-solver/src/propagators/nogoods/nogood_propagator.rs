@@ -1502,6 +1502,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
@@ -1542,6 +1543,7 @@ mod tests {
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
