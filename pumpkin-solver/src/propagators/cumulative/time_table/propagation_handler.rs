@@ -426,7 +426,6 @@ pub(crate) mod test_propagation_handler {
     use super::create_conflict_explanation;
     use super::CumulativeExplanationType;
     use super::CumulativePropagationHandler;
-    use crate::basic_types::Trail;
     use crate::engine::conflict_analysis::SemanticMinimiser;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::ExplanationContext;
@@ -437,6 +436,7 @@ pub(crate) mod test_propagation_handler {
     use crate::engine::reason::ReasonStore;
     use crate::engine::Assignments;
     use crate::engine::DomainFaithfulness;
+    use crate::engine::StatefulAssignments;
     use crate::predicate;
     use crate::predicates::Predicate;
     use crate::predicates::PropositionalConjunction;
@@ -448,6 +448,7 @@ pub(crate) mod test_propagation_handler {
         propagation_handler: CumulativePropagationHandler,
         reason_store: ReasonStore,
         assignments: Assignments,
+        stateful_assignments: StatefulAssignments,
     }
 
     impl TestPropagationHandler {
@@ -456,10 +457,12 @@ pub(crate) mod test_propagation_handler {
 
             let reason_store = ReasonStore::default();
             let assignments = Assignments::default();
+            let stateful_assignments = StatefulAssignments::default();
             Self {
                 propagation_handler,
                 reason_store,
                 assignments,
+                stateful_assignments,
             }
         }
 
@@ -517,18 +520,17 @@ pub(crate) mod test_propagation_handler {
             };
 
             let mut domain_faithfulness = DomainFaithfulness::default();
-            let mut stateful_trail = Trail::default();
 
             let result = self
                 .propagation_handler
                 .propagate_lower_bound_with_explanations(
                     &mut PropagationContextMut::new(
+                        &mut self.stateful_assignments,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
                         &mut domain_faithfulness,
                         PropagatorId(0),
-                        &mut stateful_trail,
                     ),
                     &profile,
                     &Rc::new(propagating_task),
@@ -582,18 +584,17 @@ pub(crate) mod test_propagation_handler {
             };
 
             let mut domain_faithfulness = DomainFaithfulness::default();
-            let mut stateful_trail = Trail::default();
 
             let result = self
                 .propagation_handler
                 .propagate_chain_of_lower_bounds_with_explanations(
                     &mut PropagationContextMut::new(
+                        &mut self.stateful_assignments,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
                         &mut domain_faithfulness,
                         PropagatorId(0),
-                        &mut stateful_trail,
                     ),
                     &[&profile_y, &profile_z],
                     &Rc::new(propagating_task),
@@ -634,18 +635,17 @@ pub(crate) mod test_propagation_handler {
             };
 
             let mut domain_faithfulness = DomainFaithfulness::default();
-            let mut stateful_trail = Trail::default();
 
             let result = self
                 .propagation_handler
                 .propagate_upper_bound_with_explanations(
                     &mut PropagationContextMut::new(
+                        &mut self.stateful_assignments,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
                         &mut domain_faithfulness,
                         PropagatorId(0),
-                        &mut stateful_trail,
                     ),
                     &profile,
                     &Rc::new(propagating_task),
@@ -699,18 +699,17 @@ pub(crate) mod test_propagation_handler {
             };
 
             let mut domain_faithfulness = DomainFaithfulness::default();
-            let mut stateful_trail = Trail::default();
 
             let result = self
                 .propagation_handler
                 .propagate_chain_of_upper_bounds_with_explanations(
                     &mut PropagationContextMut::new(
+                        &mut self.stateful_assignments,
                         &mut self.assignments,
                         &mut self.reason_store,
                         &mut SemanticMinimiser::default(),
                         &mut domain_faithfulness,
                         PropagatorId(0),
-                        &mut stateful_trail,
                     ),
                     &[&profile_z, &profile_y],
                     &Rc::new(propagating_task),
