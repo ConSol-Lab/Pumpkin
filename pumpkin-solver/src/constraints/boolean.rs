@@ -3,7 +3,6 @@ use std::num::NonZero;
 use super::equals;
 use super::less_than_or_equals;
 use super::Constraint;
-use crate::predicate;
 use crate::variables::AffineView;
 use crate::variables::DomainId;
 use crate::variables::Literal;
@@ -49,7 +48,7 @@ impl Constraint for BooleanLessThanOrEqual {
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains(solver);
+        let domains = self.create_domains();
 
         less_than_or_equals(domains, self.rhs).post(solver, tag)
     }
@@ -60,34 +59,19 @@ impl Constraint for BooleanLessThanOrEqual {
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains(solver);
+        let domains = self.create_domains();
 
         less_than_or_equals(domains, self.rhs).implied_by(solver, reification_literal, tag)
     }
 }
 
 impl BooleanLessThanOrEqual {
-    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
-        let domains = self
-            .bools
+    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
+        self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| {
-                let corresponding_domain_id = solver.new_bounded_integer(0, 1);
-                // bool -> [domain = 1]
-                let _ = solver.add_clause([
-                    !(*bool).get_true_predicate(),
-                    predicate![corresponding_domain_id >= 1],
-                ]);
-                // !bool -> [domain = 0]
-                let _ = solver.add_clause([
-                    bool.get_true_predicate(),
-                    predicate![corresponding_domain_id <= 0],
-                ]);
-                corresponding_domain_id.scaled(self.weights[index])
-            })
-            .collect::<Vec<_>>();
-        domains
+            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
+            .collect()
     }
 }
 
@@ -103,7 +87,7 @@ impl Constraint for BooleanEqual {
         solver: &mut Solver,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains(solver);
+        let domains = self.create_domains();
 
         equals(domains, 0).post(solver, tag)
     }
@@ -114,31 +98,18 @@ impl Constraint for BooleanEqual {
         reification_literal: Literal,
         tag: Option<NonZero<u32>>,
     ) -> Result<(), ConstraintOperationError> {
-        let domains = self.create_domains(solver);
+        let domains = self.create_domains();
 
         equals(domains, 0).implied_by(solver, reification_literal, tag)
     }
 }
 
 impl BooleanEqual {
-    fn create_domains(&self, solver: &mut Solver) -> Vec<AffineView<DomainId>> {
+    fn create_domains(&self) -> Vec<AffineView<DomainId>> {
         self.bools
             .iter()
             .enumerate()
-            .map(|(index, bool)| {
-                let corresponding_domain_id = solver.new_bounded_integer(0, 1);
-                // bool -> [domain = 1]
-                let _ = solver.add_clause([
-                    !(*bool).get_true_predicate(),
-                    predicate![corresponding_domain_id >= 1],
-                ]);
-                // !bool -> [domain = 0]
-                let _ = solver.add_clause([
-                    (*bool).get_true_predicate(),
-                    predicate![corresponding_domain_id <= 0],
-                ]);
-                corresponding_domain_id.scaled(self.weights[index])
-            })
+            .map(|(index, bool)| bool.get_integer_variable().scaled(self.weights[index]))
             .chain(std::iter::once(self.rhs.scaled(-1)))
             .collect()
     }

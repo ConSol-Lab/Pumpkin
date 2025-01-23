@@ -898,7 +898,7 @@ impl IntegerDomain {
         self.lower_bound_updates
             .iter()
             .filter(|u| u.trail_position <= trail_position)
-            .last()
+            .next_back()
             .expect("Cannot fail")
             .bound
     }
@@ -939,7 +939,7 @@ impl IntegerDomain {
         self.upper_bound_updates
             .iter()
             .filter(|u| u.trail_position <= trail_position)
-            .last()
+            .next_back()
             .expect("Cannot fail")
             .bound
     }
