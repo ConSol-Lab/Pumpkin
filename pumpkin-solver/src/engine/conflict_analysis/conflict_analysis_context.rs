@@ -5,7 +5,6 @@ use drcp_format::steps::StepId;
 use super::minimisers::SemanticMinimiser;
 use crate::basic_types::HashMap;
 use crate::basic_types::StoredConflictInfo;
-use crate::basic_types::Trail;
 use crate::branching::Brancher;
 use crate::engine::constraint_satisfaction_solver::CSPSolverState;
 use crate::engine::predicates::predicate::Predicate;
@@ -20,7 +19,7 @@ use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
 use crate::engine::IntDomainEvent;
 use crate::engine::PropagatorQueue;
-use crate::engine::StateChange;
+use crate::engine::StatefulAssignments;
 use crate::engine::WatchListCP;
 use crate::predicate;
 use crate::proof::ProofLog;
@@ -51,8 +50,8 @@ pub(crate) struct ConflictAnalysisContext<'a> {
 
     pub(crate) is_completing_proof: bool,
     pub(crate) unit_nogood_step_ids: &'a HashMap<Predicate, StepId>,
-    pub(crate) stateful_trail: &'a mut Trail<StateChange>,
     pub(crate) domain_faithfulness: &'a mut DomainFaithfulness,
+    pub(crate) stateful_assignments: &'a mut StatefulAssignments,
 }
 
 impl Debug for ConflictAnalysisContext<'_> {
@@ -87,8 +86,8 @@ impl<'a> ConflictAnalysisContext<'a> {
             self.backtrack_event_drain,
             backtrack_level,
             self.brancher,
-            self.stateful_trail,
             self.domain_faithfulness,
+            self.stateful_assignments,
         )
     }
 

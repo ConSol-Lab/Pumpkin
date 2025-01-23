@@ -12,7 +12,6 @@ use crate::basic_types::ConstraintOperationError;
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PredicateId;
 use crate::basic_types::PropositionalConjunction;
-use crate::basic_types::Trail;
 use crate::containers::KeyedVec;
 use crate::containers::StorageKey;
 use crate::engine::conflict_analysis::Mode;
@@ -31,7 +30,7 @@ use crate::engine::Assignments;
 use crate::engine::ConstraintSatisfactionSolver;
 use crate::engine::DomainFaithfulness;
 use crate::engine::SolverStatistics;
-use crate::engine::StateChange;
+use crate::engine::StatefulAssignments;
 use crate::propagators::nogoods::Nogood;
 use crate::pumpkin_assert_advanced;
 use crate::pumpkin_assert_moderate;
@@ -231,7 +230,7 @@ impl Propagator for NogoodPropagator {
                         // Add this nogood to the watch list of the new watcher.
                         Self::add_watcher(
                             context.domain_faithfulness,
-                            context.stateful_trail,
+                            context.stateful_assignments,
                             &mut self.watch_lists,
                             nogood[1],
                             nogood_id,
@@ -412,7 +411,7 @@ impl NogoodPropagator {
         // Now we add two watchers to the first two predicates in the nogood
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[0],
             new_id,
@@ -420,7 +419,7 @@ impl NogoodPropagator {
         );
         NogoodPropagator::add_watcher(
             context.domain_faithfulness,
-            context.stateful_trail,
+            context.stateful_assignments,
             &mut self.watch_lists,
             self.nogoods[new_id].predicates[1],
             new_id,
@@ -533,7 +532,7 @@ impl NogoodPropagator {
 
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_trail,
+                context.stateful_assignments,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[0],
                 new_id,
@@ -541,7 +540,7 @@ impl NogoodPropagator {
             );
             NogoodPropagator::add_watcher(
                 context.domain_faithfulness,
-                context.stateful_trail,
+                context.stateful_assignments,
                 &mut self.watch_lists,
                 self.nogoods[new_id].predicates[1],
                 new_id,
@@ -558,7 +557,7 @@ impl NogoodPropagator {
     /// Adds a watcher to the predicate in the provided nogood with the provided [`NogoodId`].
     fn add_watcher(
         domain_faithfulness: &mut DomainFaithfulness,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
         watch_lists: &mut KeyedVec<PredicateId, NogoodWatchList>,
         predicate: Predicate,
         nogood_id: NogoodId,
@@ -573,7 +572,7 @@ impl NogoodPropagator {
         }
 
         let predicate_id =
-            domain_faithfulness.watch_predicate(predicate, stateful_trail, assignments);
+            domain_faithfulness.watch_predicate(predicate, stateful_assignments, assignments);
         while watch_lists.len() <= predicate_id.index() {
             let _ = watch_lists.push(NogoodWatchList::default());
         }
@@ -909,7 +908,6 @@ impl NogoodPropagator {
 #[cfg(test)]
 mod tests {
     use super::NogoodPropagator;
-    use crate::basic_types::Trail;
     use crate::conjunction;
     use crate::engine::propagation::store::PropagatorStore;
     use crate::engine::propagation::PropagationContextMut;
@@ -942,17 +940,16 @@ mod tests {
 
         let _ = solver.increase_lower_bound_and_notify(propagator, dummy.id, dummy, 1);
         let mut domain_faithfulness = DomainFaithfulness::default();
-        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut domain_faithfulness,
                 propagator,
-                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)
@@ -986,17 +983,16 @@ mod tests {
             .new_propagator(NogoodPropagator::default())
             .expect("no empty domains");
         let mut domain_faithfulness = DomainFaithfulness::default();
-        let mut stateful_trail = Trail::default();
 
         let nogood = conjunction!([a >= 2] & [b >= 1] & [c >= 10]);
         {
             let mut context = PropagationContextMut::new(
+                &mut solver.stateful_assignments,
                 &mut solver.assignments,
                 &mut solver.reason_store,
                 &mut solver.semantic_minimiser,
                 &mut domain_faithfulness,
                 propagator,
-                &mut stateful_trail,
             );
 
             downcast_to_nogood_propagator(propagator, &mut solver.propagator_store)

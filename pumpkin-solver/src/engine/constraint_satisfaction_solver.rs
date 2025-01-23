@@ -26,7 +26,7 @@ use super::variables::IntegerVariable;
 use super::variables::Literal;
 use super::DomainFaithfulness;
 use super::ResolutionResolver;
-use super::StateChange;
+use super::StatefulAssignments;
 use crate::basic_types::moving_averages::MovingAverage;
 use crate::basic_types::CSPSolverExecutionFlag;
 use crate::basic_types::ConstraintOperationError;
@@ -36,7 +36,6 @@ use crate::basic_types::PropositionalConjunction;
 use crate::basic_types::Random;
 use crate::basic_types::SolutionReference;
 use crate::basic_types::StoredConflictInfo;
-use crate::basic_types::Trail;
 use crate::branching::Brancher;
 use crate::branching::SelectionContext;
 use crate::engine::conflict_analysis::ConflictResolver as Resolver;
@@ -148,8 +147,8 @@ pub struct ConstraintSatisfactionSolver {
     /// The resolver which is used upon a conflict.
     conflict_resolver: Box<dyn Resolver>,
 
-    pub(crate) stateful_trail: Trail<StateChange>,
     pub(crate) domain_faithfulness: DomainFaithfulness,
+    pub(crate) stateful_assignments: StatefulAssignments,
 }
 
 impl Default for ConstraintSatisfactionSolver {
@@ -258,7 +257,7 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
     ) {
         pumpkin_assert_moderate!(
             propagators[Self::get_nogood_propagator_id()].name() == "NogoodPropagator"
@@ -275,7 +274,7 @@ impl ConstraintSatisfactionSolver {
             propagators,
             propagator_queue,
             assignments,
-            stateful_trail,
+            stateful_assignments,
         );
     }
 
@@ -286,9 +285,9 @@ impl ConstraintSatisfactionSolver {
         propagators: &mut PropagatorStore,
         propagator_queue: &mut PropagatorQueue,
         assignments: &mut Assignments,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
     ) {
-        let context = StatefulPropagationContext::new(stateful_trail, assignments);
+        let context = StatefulPropagationContext::new(stateful_assignments, assignments);
 
         let enqueue_decision = propagators[propagator_id].notify(context, local_id, event.into());
 
@@ -316,7 +315,7 @@ impl ConstraintSatisfactionSolver {
                     info!("Reached eq");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain == self.assignments.get_assigned_value(&domain).unwrap()),
-                        &mut self.stateful_trail,
+                        &mut self.stateful_assignments,
                         &self.assignments,
                     );
                 }
@@ -324,7 +323,7 @@ impl ConstraintSatisfactionSolver {
                     info!("Reached lb");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain >= self.assignments.get_lower_bound(domain)),
-                        &mut self.stateful_trail,
+                        &mut self.stateful_assignments,
                         &self.assignments,
                     );
                 }
@@ -332,7 +331,7 @@ impl ConstraintSatisfactionSolver {
                     info!("Reached ub");
                     self.domain_faithfulness.has_been_updated(
                         predicate!(domain <= self.assignments.get_upper_bound(domain)),
-                        &mut self.stateful_trail,
+                        &mut self.stateful_assignments,
                         &self.assignments,
                     );
                 }
@@ -343,7 +342,7 @@ impl ConstraintSatisfactionSolver {
                         .for_each(|value| {
                             self.domain_faithfulness.has_been_updated(
                                 predicate!(domain != value),
-                                &mut self.stateful_trail,
+                                &mut self.stateful_assignments,
                                 &self.assignments,
                             );
                         })
@@ -355,7 +354,7 @@ impl ConstraintSatisfactionSolver {
                 &mut self.propagators,
                 &mut self.propagator_queue,
                 &mut self.assignments,
-                &mut self.stateful_trail,
+                &mut self.stateful_assignments,
             );
             // Now notify other propagators subscribed to this event.
             for propagator_var in self.watch_list_cp.get_affected_propagators(event, domain) {
@@ -368,7 +367,7 @@ impl ConstraintSatisfactionSolver {
                     &mut self.propagators,
                     &mut self.propagator_queue,
                     &mut self.assignments,
-                    &mut self.stateful_trail,
+                    &mut self.stateful_assignments,
                 );
             }
         }
@@ -441,8 +440,8 @@ impl ConstraintSatisfactionSolver {
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: true,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
-            stateful_trail: &mut self.stateful_trail,
             domain_faithfulness: &mut self.domain_faithfulness,
+            stateful_assignments: &mut self.stateful_assignments,
         };
 
         let result = self
@@ -482,8 +481,8 @@ impl ConstraintSatisfactionSolver {
                 ConflictResolver::UIP => Box::new(ResolutionResolver::default()),
             },
             internal_parameters: solver_options,
-            stateful_trail: Trail::default(),
             domain_faithfulness: DomainFaithfulness::default(),
+            stateful_assignments: StatefulAssignments::default(),
         };
 
         // As a convention, the assignments contain a dummy domain_id=0, which represents a 0-1
@@ -728,8 +727,8 @@ impl ConstraintSatisfactionSolver {
                     proof_log: &mut self.internal_parameters.proof_log,
                     is_completing_proof: false,
                     unit_nogood_step_ids: &self.unit_nogood_step_ids,
-                    stateful_trail: &mut self.stateful_trail,
                     domain_faithfulness: &mut self.domain_faithfulness,
+                    stateful_assignments: &mut self.stateful_assignments,
                 };
 
                 let mut resolver = ResolutionResolver::with_mode(AnalysisMode::AllDecision);
@@ -800,8 +799,8 @@ impl ConstraintSatisfactionSolver {
                 &mut self.backtrack_event_drain,
                 0,
                 brancher,
-                &mut self.stateful_trail,
                 &mut self.domain_faithfulness,
+                &mut self.stateful_assignments,
             );
             self.state.declare_ready();
         }
@@ -938,7 +937,7 @@ impl ConstraintSatisfactionSolver {
 
     pub(crate) fn declare_new_decision_level(&mut self) {
         self.assignments.increase_decision_level();
-        self.stateful_trail.increase_decision_level();
+        self.stateful_assignments.increase_decision_level();
         self.reason_store.increase_decision_level();
         info!(
             "New decision level: {}",
@@ -978,8 +977,8 @@ impl ConstraintSatisfactionSolver {
             proof_log: &mut self.internal_parameters.proof_log,
             is_completing_proof: false,
             unit_nogood_step_ids: &self.unit_nogood_step_ids,
-            stateful_trail: &mut self.stateful_trail,
             domain_faithfulness: &mut self.domain_faithfulness,
+            stateful_assignments: &mut self.stateful_assignments,
         };
 
         let learned_nogood = self
@@ -1048,12 +1047,12 @@ impl ConstraintSatisfactionSolver {
 
     fn add_learned_nogood(&mut self, learned_nogood: LearnedNogood) {
         let mut context = PropagationContextMut::new(
+            &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.domain_faithfulness,
             Self::get_nogood_propagator_id(),
-            &mut self.stateful_trail,
         );
 
         ConstraintSatisfactionSolver::add_asserting_nogood_to_nogood_propagator(
@@ -1117,8 +1116,8 @@ impl ConstraintSatisfactionSolver {
             &mut self.backtrack_event_drain,
             0,
             brancher,
-            &mut self.stateful_trail,
             &mut self.domain_faithfulness,
+            &mut self.stateful_assignments,
         );
 
         self.restart_strategy.notify_restart();
@@ -1139,8 +1138,8 @@ impl ConstraintSatisfactionSolver {
         backtrack_event_drain: &mut Vec<(IntDomainEvent, DomainId)>,
         backtrack_level: usize,
         brancher: &mut BrancherType,
-        stateful_trail: &mut Trail<StateChange>,
         domain_faithfulness: &mut DomainFaithfulness,
+        stateful_assignments: &mut StatefulAssignments,
     ) {
         info!("Backtracking to level {backtrack_level}");
         pumpkin_assert_simple!(backtrack_level < assignments.get_decision_level());
@@ -1158,9 +1157,8 @@ impl ConstraintSatisfactionSolver {
             .for_each(|(domain_id, previous_value)| {
                 brancher.on_unassign_integer(*domain_id, *previous_value)
             });
-        stateful_trail
-            .synchronise(backtrack_level)
-            .for_each(|change| change.undo());
+
+        stateful_assignments.synchronise(backtrack_level);
 
         *last_notified_cp_trail_index = assignments.num_trail_entries();
 
@@ -1244,12 +1242,12 @@ impl ConstraintSatisfactionSolver {
             let propagation_status = {
                 let propagator = &mut self.propagators[propagator_id];
                 let context = PropagationContextMut::new(
+                    &mut self.stateful_assignments,
                     &mut self.assignments,
                     &mut self.reason_store,
                     &mut self.semantic_minimiser,
                     &mut self.domain_faithfulness,
                     propagator_id,
-                    &mut self.stateful_trail,
                 );
                 propagator.propagate(context)
             };
@@ -1288,6 +1286,7 @@ impl ConstraintSatisfactionSolver {
                     // A propagator-specific reason for the current conflict.
                     Inconsistency::Conflict(conflict_nogood) => {
                         pumpkin_assert_advanced!(DebugHelper::debug_reported_failure(
+                            &self.stateful_assignments,
                             &self.assignments,
                             &conflict_nogood,
                             &self.propagators[propagator_id],
@@ -1307,6 +1306,7 @@ impl ConstraintSatisfactionSolver {
                 DebugHelper::debug_check_propagations(
                     num_trail_entries_before,
                     propagator_id,
+                    &self.stateful_assignments,
                     &self.assignments,
                     &mut self.reason_store,
                     &mut self.propagators
@@ -1323,7 +1323,11 @@ impl ConstraintSatisfactionSolver {
         // since otherwise the state may be inconsistent.
         pumpkin_assert_extreme!(
             self.state.is_conflicting()
-                || DebugHelper::debug_fixed_point_propagation(&self.assignments, &self.propagators,)
+                || DebugHelper::debug_fixed_point_propagation(
+                    &self.stateful_assignments,
+                    &self.assignments,
+                    &self.propagators,
+                )
         );
         info!("Exited propagation loop...")
     }
@@ -1450,7 +1454,7 @@ impl ConstraintSatisfactionSolver {
 
         let mut initialisation_context = PropagatorInitialisationContext::new(
             &mut self.watch_list_cp,
-            &mut self.stateful_trail,
+            &mut self.stateful_assignments,
             new_propagator_id,
             &mut self.assignments,
         );
@@ -1500,12 +1504,12 @@ impl ConstraintSatisfactionSolver {
 
     pub fn add_nogood(&mut self, nogood: Vec<Predicate>) -> Result<(), ConstraintOperationError> {
         let mut propagation_context = PropagationContextMut::new(
+            &mut self.stateful_assignments,
             &mut self.assignments,
             &mut self.reason_store,
             &mut self.semantic_minimiser,
             &mut self.domain_faithfulness,
             Self::get_nogood_propagator_id(),
-            &mut self.stateful_trail,
         );
         let nogood_propagator_id = Self::get_nogood_propagator_id();
         ConstraintSatisfactionSolver::add_nogood_to_nogood_propagator(

@@ -164,7 +164,7 @@ pub(crate) trait Propagator: Downcast {
     /// inconsistency as well.
     fn detect_inconsistency(
         &self,
-        _context: PropagationContext,
+        _context: StatefulPropagationContext,
     ) -> Option<PropositionalConjunction> {
         None
     }

@@ -1,7 +1,6 @@
 use crate::basic_types::Inconsistency;
 use crate::basic_types::PropagationStatusCP;
 use crate::engine::opaque_domain_event::OpaqueDomainEvent;
-use crate::engine::propagation::contexts::HasAssignments;
 use crate::engine::propagation::contexts::StatefulPropagationContext;
 use crate::engine::propagation::EnqueueDecision;
 use crate::engine::propagation::LocalId;
@@ -58,11 +57,11 @@ impl<WrappedPropagator: Propagator> Propagator for ReifiedPropagator<WrappedProp
     ) -> EnqueueDecision {
         if local_id < self.reification_literal_id {
             let decision = self.propagator.notify(
-                StatefulPropagationContext::new(context.stateful_trail, context.assignments),
+                StatefulPropagationContext::new(context.stateful_assignments, context.assignments),
                 local_id,
                 event,
             );
-            self.filter_enqueue_decision(PropagationContext::new(context.assignments()), decision)
+            self.filter_enqueue_decision(context, decision)
         } else {
             pumpkin_assert_simple!(local_id == self.reification_literal_id);
             EnqueueDecision::Enqueue
@@ -168,7 +167,10 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         Prop: Propagator,
     {
         if !context.is_literal_fixed(&self.reification_literal) {
-            if let Some(conjunction) = self.propagator.detect_inconsistency(context.as_readonly()) {
+            if let Some(conjunction) = self
+                .propagator
+                .detect_inconsistency(context.as_stateful_readonly())
+            {
                 context.assign_literal(&self.reification_literal, false, conjunction)?;
             }
         }
@@ -176,7 +178,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
         Ok(())
     }
 
-    fn find_inconsistency(&mut self, context: PropagationContext<'_>) -> bool {
+    fn find_inconsistency(&mut self, context: StatefulPropagationContext<'_>) -> bool {
         if self.inconsistency.is_none() {
             self.inconsistency = self.propagator.detect_inconsistency(context);
         }
@@ -186,7 +188,7 @@ impl<Prop: Propagator> ReifiedPropagator<Prop> {
 
     fn filter_enqueue_decision(
         &mut self,
-        context: PropagationContext<'_>,
+        context: StatefulPropagationContext<'_>,
         decision: EnqueueDecision,
     ) -> EnqueueDecision {
         if decision == EnqueueDecision::Skip {
@@ -237,7 +239,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |_: PropagationContextMut| Err(t1.clone().into()),
-                    move |_: PropagationContext| Some(t2.clone()),
+                    move |_: StatefulPropagationContext| Some(t2.clone()),
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -264,7 +266,7 @@ mod tests {
                         ctx.set_lower_bound(&var, 3, conjunction!())?;
                         Ok(())
                     },
-                    |_: PropagationContext| None,
+                    |_: StatefulPropagationContext| None,
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -297,7 +299,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     move |_: PropagationContextMut| Err(conjunction!([var >= 1]).into()),
-                    |_: PropagationContext| None,
+                    |_: StatefulPropagationContext| None,
                     |_: &mut PropagatorInitialisationContext| Ok(()),
                 ),
                 reification_literal,
@@ -330,7 +332,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
-                    |_: PropagationContext| None,
+                    |_: StatefulPropagationContext| None,
                     move |_: &mut PropagatorInitialisationContext| Err(conjunction!([var >= 0])),
                 ),
                 reification_literal,
@@ -351,7 +353,7 @@ mod tests {
             .new_propagator(ReifiedPropagator::new(
                 GenericPropagator::new(
                     |_: PropagationContextMut| Ok(()),
-                    move |context: PropagationContext| {
+                    move |context: StatefulPropagationContext| {
                         if context.is_fixed(&var) {
                             Some(conjunction!([var == 5]))
                         } else {
@@ -380,7 +382,8 @@ mod tests {
         for GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP + 'static,
-        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction> + 'static,
+        ConsistencyCheck:
+            Fn(StatefulPropagationContext) -> Option<PropositionalConjunction> + 'static,
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>
             + 'static,
     {
@@ -397,7 +400,7 @@ mod tests {
 
         fn detect_inconsistency(
             &self,
-            context: PropagationContext,
+            context: StatefulPropagationContext,
         ) -> Option<PropositionalConjunction> {
             (self.consistency_check)(context)
         }
@@ -423,7 +426,7 @@ mod tests {
     impl<Propagation, ConsistencyCheck, Init> GenericPropagator<Propagation, ConsistencyCheck, Init>
     where
         Propagation: Fn(PropagationContextMut) -> PropagationStatusCP,
-        ConsistencyCheck: Fn(PropagationContext) -> Option<PropositionalConjunction>,
+        ConsistencyCheck: Fn(StatefulPropagationContext) -> Option<PropositionalConjunction>,
         Init: Fn(&mut PropagatorInitialisationContext) -> Result<(), PropositionalConjunction>,
     {
         pub(crate) fn new(

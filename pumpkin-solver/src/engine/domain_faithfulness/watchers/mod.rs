@@ -1,10 +1,9 @@
 use log::info;
 
 use crate::basic_types::PredicateId;
-use crate::basic_types::Trail;
 use crate::engine::Assignments;
-use crate::engine::StateChange;
-use crate::engine::StatefulInt;
+use crate::engine::StatefulAssignments;
+use crate::engine::StatefulInteger;
 use crate::predicates::Predicate;
 use crate::pumpkin_assert_simple;
 use crate::variables::DomainId;
@@ -23,19 +22,21 @@ pub(crate) struct FaithfullnessWatcher {
     domain_id: DomainId,
     s: Vec<i64>,
     g: Vec<i64>,
-    min_unassigned: StatefulInt,
-    max_unassigned: StatefulInt,
+    min_unassigned: StatefulInteger,
+    max_unassigned: StatefulInteger,
 
     values: Vec<i32>,
     ids: Vec<PredicateId>,
 }
 
-impl Default for FaithfullnessWatcher {
-    fn default() -> Self {
+impl FaithfullnessWatcher {
+    pub(super) fn new(stateful_assignments: &mut StatefulAssignments) -> Self {
+        let min_unassigned = stateful_assignments.grow(0);
+        let max_unassigned = stateful_assignments.grow(1);
         Self {
             domain_id: DomainId { id: 0 },
-            min_unassigned: StatefulInt::new(0),
-            max_unassigned: StatefulInt::new(1),
+            min_unassigned,
+            max_unassigned,
             s: Vec::default(),
             g: Vec::default(),
             values: Vec::default(),
@@ -69,11 +70,9 @@ pub(crate) trait DomainWatcherInformation {
     fn get_greater(&self) -> &Vec<i64>;
     fn get_greater_mut(&mut self) -> &mut Vec<i64>;
 
-    fn get_min_unassigned(&self) -> &StatefulInt;
-    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt;
+    fn get_min_unassigned(&self) -> StatefulInteger;
 
-    fn get_max_unassigned(&self) -> &StatefulInt;
-    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt;
+    fn get_max_unassigned(&self) -> StatefulInteger;
 
     fn is_empty(&self) -> bool;
 }
@@ -136,20 +135,12 @@ impl<Watcher: HasWatcher> DomainWatcherInformation for Watcher {
         &mut self.get_watcher_mut().g
     }
 
-    fn get_min_unassigned(&self) -> &StatefulInt {
-        &self.get_watcher().min_unassigned
+    fn get_min_unassigned(&self) -> StatefulInteger {
+        self.get_watcher().min_unassigned
     }
 
-    fn get_min_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.get_watcher_mut().min_unassigned
-    }
-
-    fn get_max_unassigned(&self) -> &StatefulInt {
-        &self.get_watcher().max_unassigned
-    }
-
-    fn get_max_unassigned_mut(&mut self) -> &mut StatefulInt {
-        &mut self.get_watcher_mut().max_unassigned
+    fn get_max_unassigned(&self) -> StatefulInteger {
+        self.get_watcher().max_unassigned
     }
 
     fn is_empty(&self) -> bool {
@@ -200,7 +191,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         &mut self,
         value: i32,
         predicate_id: PredicateId,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
         assignments: &Assignments,
     ) {
         pumpkin_assert_simple!(self.get_values().len() >= 2);
@@ -254,14 +245,18 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
         } else {
             // We might need to update the sentinels
             if assignments.is_predicate_assigned(self.get_predicate_for_value(value)) {
-                if value > self.get_values()[self.get_min_unassigned().read() as usize] {
-                    self.get_min_unassigned_mut()
-                        .assign(new_index, stateful_trail);
+                if value
+                    > self.get_values()
+                        [stateful_assignments.read(self.get_min_unassigned()) as usize]
+                {
+                    stateful_assignments.assign(self.get_min_unassigned(), new_index);
                 }
 
-                if value < self.get_values()[self.get_max_unassigned().read() as usize] {
-                    self.get_max_unassigned_mut()
-                        .assign(new_index, stateful_trail);
+                if value
+                    < self.get_values()
+                        [stateful_assignments.read(self.get_min_unassigned()) as usize]
+                {
+                    stateful_assignments.assign(self.get_max_unassigned(), new_index);
                 }
             }
 
@@ -283,7 +278,7 @@ pub(crate) trait DomainWatcher: DomainWatcherInformation {
     fn has_been_updated(
         &mut self,
         predicate: Predicate,
-        stateful_trail: &mut Trail<StateChange>,
+        stateful_assignments: &mut StatefulAssignments,
         falsified_predicates: &mut Vec<PredicateId>,
         satisfied_predicates: &mut Vec<PredicateId>,
         predicate_id: Option<PredicateId>,
