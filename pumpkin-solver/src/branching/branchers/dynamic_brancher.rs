@@ -50,6 +50,10 @@ impl DynamicBrancher {
         let mut relevant_event_to_index: EnumMap<BrancherEvents, Vec<usize>> = EnumMap::default();
         let mut relevant_events = HashSet::new();
 
+        // The dynamic brancher will reset the indices upon these events so they should be called
+        let _ = relevant_events.insert(BrancherEvents::Solution);
+        let _ = relevant_events.insert(BrancherEvents::Conflict);
+
         branchers.iter().enumerate().for_each(|(index, brancher)| {
             for event in brancher.get_relevant_brancher_events() {
                 relevant_event_to_index[event].push(index);
@@ -66,7 +70,13 @@ impl DynamicBrancher {
     }
 
     pub fn add_brancher(&mut self, brancher: Box<dyn Brancher>) {
-        self.branchers.push(brancher)
+        for event in brancher.get_relevant_brancher_events() {
+            self.relevant_event_to_index[event].push(self.branchers.len());
+            if !self.relevant_events.contains(&event) {
+                self.relevant_events.push(event);
+            }
+        }
+        self.branchers.push(brancher);
     }
 }
 
