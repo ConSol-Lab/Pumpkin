@@ -149,10 +149,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
         }
     }
 
-    fn minimum_activity_threshold(&self) -> f64 {
-        1_f64 / self.increment
-    }
-
     /// Resizes the heap to accommodate for the id.
     /// Recall that the underlying heap uses direct hashing.
     fn resize_heap(&mut self, id: PredicateId) {
@@ -168,6 +164,7 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             (!self.predicate_id_info.has_id_for_predicate(predicate)) as usize;
         let id = self.predicate_id_info.get_id(predicate);
         self.resize_heap(id);
+        self.heap.restore_key(id);
 
         // Scale the activities if the values are too large.
         // Also remove predicates that have activities close to zero.
@@ -176,22 +173,6 @@ impl<BackupSelector> AutonomousSearch<BackupSelector> {
             // Adjust heap values.
             self.heap.divide_values(self.max_threshold);
 
-            // Remove inactive predicates from the heap,
-            // and stage the ids for removal from the id generator.
-            self.predicate_id_info.iter().for_each(|predicate_id| {
-                // If the predicate does not reach the minimum activity threshold then we remove it
-                // from the heap and we remove its id from the generator
-                //
-                // Note that we check whether the current predicate being removed is not the
-                // predicate is being bumped, this is to prevent multiple IDs from being assigned.
-                if *self.heap.get_value(predicate_id) <= self.minimum_activity_threshold()
-                    && predicate_id != id
-                {
-                    self.statistics.num_predicates_removed += 1;
-                    self.heap.delete_key(predicate_id);
-                    self.predicate_id_info.delete_id(predicate_id);
-                }
-            });
             // Adjust increment. It is important to adjust the increment after the above code.
             self.increment /= self.max_threshold;
         }
@@ -334,7 +315,6 @@ impl<BackupBrancher: Brancher> Brancher for AutonomousSearch<BackupBrancher> {
 mod tests {
     use super::AutonomousSearch;
     use crate::basic_types::tests::TestRandom;
-    use crate::branching::branchers::autonomous_search::DEFAULT_VSIDS_MAX_THRESHOLD;
     use crate::branching::Brancher;
     use crate::branching::SelectionContext;
     use crate::engine::Assignments;
@@ -353,28 +333,6 @@ mod tests {
         brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
 
         (0..100).for_each(|_| brancher.on_conflict());
-    }
-
-    #[test]
-    fn value_removed_if_threshold_too_small() {
-        let mut assignments = Assignments::default();
-        let x = assignments.grow(0, 10);
-        let y = assignments.grow(-10, 0);
-
-        let mut brancher = AutonomousSearch::default_over_all_variables(&assignments);
-        brancher.on_appearance_in_conflict_predicate(predicate!(x >= 5));
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        brancher.increment = DEFAULT_VSIDS_MAX_THRESHOLD;
-
-        brancher.on_appearance_in_conflict_predicate(predicate!(y >= -5));
-
-        assert!(!brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(x >= 5)));
-        assert!(brancher
-            .predicate_id_info
-            .has_id_for_predicate(predicate!(y >= -5)));
     }
 
     #[test]
