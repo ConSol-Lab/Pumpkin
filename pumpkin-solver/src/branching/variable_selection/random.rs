@@ -58,6 +58,10 @@ impl VariableSelector<DomainId> for RandomSelector {
     fn get_relevant_brancher_events(&self) -> Vec<BrancherEvents> {
         vec![BrancherEvents::UnassignInteger]
     }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
