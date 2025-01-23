@@ -592,6 +592,7 @@ impl Solver {
             self,
             solution,
             objective_value,
+            brancher,
         ));
     }
 
